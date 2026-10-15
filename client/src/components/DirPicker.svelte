@@ -223,7 +223,7 @@
 		} else oninput();
 	}
 
-	/** Enter: open the highlighted folder, else the exact or only match, else whatever path was typed */
+	/** Enter: open the highlighted folder, else the exact or only match; on an already-listed "/path/" it confirms; else go to the typed path */
 	function submit() {
 		const v = typed.trim();
 		if (active >= 0 && shown[active]) return void go(shown[active].path);
@@ -231,6 +231,8 @@
 			const hit = shown.find((d) => d.name === part) ?? (shown.length === 1 ? shown[0] : undefined);
 			if (hit) return void go(hit.path);
 		}
+		// "/path/" already listed: a second Enter confirms it
+		if (v.startsWith("/") && v.endsWith("/") && !missing && listing && split(v).dir === listing.path && !saving) return void choose(listing.path);
 		void go(v);
 	}
 

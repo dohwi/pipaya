@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
 	import { t } from "../lib/i18n";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
@@ -38,9 +37,6 @@
 		}
 	}
 
-	onMount(() => {
-		if (scannable) void scan();
-	});
 </script>
 
 <div class="screen">
@@ -52,7 +48,7 @@
 			<p class="sub">{t("QR로 서버에 연결합니다.")}</p>
 			<ol class="steps">
 				<li><b>{t("PC에서 pipaya를 엽니다")}</b></li>
-				<li><b>{t("설정 → 서버 → 서버 선택 → ‘기기’ 탭의 ‘폰 추가’")}</b><span>{t("화면에 QR이 나타납니다.")}</span></li>
+				<li><b>{t("설정 → 폰으로 연결할 서버 이름 아래 ‘기기’ → ‘폰 추가’")}</b><span>{t("화면에 QR이 나타납니다.")}</span></li>
 				<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
 			</ol>
 			<button class="btn primary add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</button>

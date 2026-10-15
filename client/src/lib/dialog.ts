@@ -26,6 +26,61 @@ export interface LayerOpts {
 
 type Layer = { node: HTMLElement; opts: LayerOpts };
 const stack: Layer[] = [];
+type Back = { opts: { onclose?: () => void; dismissible?: boolean }; entry: boolean };
+const backs: Back[] = [];
+
+/*
+ * Back button / back swipe (mobile): every open modal owns one history entry, so "back" closes the top modal instead of
+ * leaving the page. When a modal is closed by other means (scrim, ✕, Esc) its entry is dropped with history.back(); the
+ * popstate that causes is ignored (`skip`).
+ */
+let skip = 0;
+
+function pushEntry(layer: Back) {
+	history.pushState({ ...(history.state ?? {}), modalLayer: true }, "");
+	layer.entry = true;
+}
+
+function dropEntry(layer: Back) {
+	if (!layer.entry) return;
+	layer.entry = false;
+	skip++;
+	history.back();
+}
+
+function onPop() {
+	if (skip > 0) {
+		skip--;
+		return;
+	}
+	let layer: Back | undefined;
+	for (let i = backs.length - 1; i >= 0; i--) {
+		if (backs[i]!.entry) {
+			layer = backs[i];
+			break;
+		}
+	}
+	if (!layer) return;
+	layer.entry = false; // the browser already took it
+	if (layer.opts.dismissible !== false) layer.opts.onclose?.();
+	// Still open afterwards (not dismissible, or onclose only stepped back inside it): it needs an entry for the next press.
+	setTimeout(() => {
+		if (backs.includes(layer) && !layer.entry) pushEntry(layer);
+	}, 0);
+}
+
+function track(layer: Back) {
+	if (!backs.length) window.addEventListener("popstate", onPop);
+	backs.push(layer);
+	pushEntry(layer);
+}
+
+function untrack(layer: Back) {
+	const i = backs.indexOf(layer);
+	if (i >= 0) backs.splice(i, 1);
+	dropEntry(layer);
+	if (!backs.length) window.removeEventListener("popstate", onPop);
+}
 
 const FOCUSABLE =
 	'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
@@ -83,10 +138,12 @@ function onWindowKey(e: KeyboardEvent) {
 
 export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	const layer: Layer = { node, opts };
+	const hist: Back = { opts, entry: false };
 	const current = document.activeElement instanceof HTMLElement && !node.contains(document.activeElement) ? document.activeElement : null;
 	const opener = opts.opener !== undefined ? opts.opener : current;
 	if (!stack.length) window.addEventListener("keydown", onWindowKey);
 	stack.push(layer);
+	track(hist);
 	if (!node.hasAttribute("tabindex")) node.tabIndex = -1;
 
 	const onKey = (e: KeyboardEvent) => {
@@ -113,11 +170,13 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	return {
 		update(next: LayerOpts) {
 			layer.opts = next;
+			hist.opts = next;
 		},
 		destroy() {
 			offKey();
 			const i = stack.indexOf(layer);
 			if (i >= 0) stack.splice(i, 1);
+			untrack(hist);
 			if (!stack.length) window.removeEventListener("keydown", onWindowKey);
 			const top = topLayer();
 			const back = opener?.isConnected && (!top || top.contains(opener)) ? opener : top;
@@ -135,6 +194,8 @@ export function nativeModal(dialog: HTMLDialogElement, opts: { onclose: () => vo
 	let current = opts;
 	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 	dialog.showModal();
+	const back: Back = { opts: { onclose: () => current.onclose() }, entry: false };
+	track(back);
 
 	const outside = (e: MouseEvent) => {
 		if (e.target !== dialog) return false;
@@ -160,6 +221,7 @@ export function nativeModal(dialog: HTMLDialogElement, opts: { onclose: () => vo
 		},
 		destroy() {
 			for (const off of offs) off();
+			untrack(back);
 			dialog.close();
 			if (opener?.isConnected) opener.focus();
 		},

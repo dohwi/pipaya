@@ -1143,7 +1143,7 @@ export const en: Record<string, string> = {
 	"서버 주소로 연결": "Connect with an address",
 	"QR로 서버에 연결합니다.": "Connect to your server with a QR code.",
 	"PC에서 pipaya를 엽니다": "Open pipaya on your PC",
-	"설정 → 서버 → 서버 선택 → ‘기기’ 탭의 ‘폰 추가’": "Settings → Server → pick the server → Devices tab → Add phone",
+	"설정 → 폰으로 연결할 서버 이름 아래 ‘기기’ → ‘폰 추가’": "Settings → under the name of the server to connect → Devices → Add phone",
 	"화면에 QR이 나타납니다.": "A QR code appears on screen.",
 	"아래 버튼으로 카메라를 열어 QR을 스캔합니다": "Open the camera with the button below and scan it",
 	"QR 스캔": "Scan QR",
