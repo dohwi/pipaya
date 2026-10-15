@@ -436,6 +436,17 @@ class AppStore {
    * It becomes the open server only when nothing else is open; existing remote servers are left as they are.
    */
   async ensureLocalServer() {
+    try {
+      await this.startLocalServer();
+    } finally {
+      this.localChecked = true;
+    }
+  }
+
+  /** False until the desktop app has tried to start its bundled server (so the empty-list screen does not flash). */
+  localChecked = $state(false);
+
+  private async startLocalServer() {
     if (!isTauri()) return;
     let info: { baseUrl: string; token: string };
     try {

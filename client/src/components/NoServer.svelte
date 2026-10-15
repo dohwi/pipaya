@@ -1,30 +1,46 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { t } from "../lib/i18n";
 	import PipayaLogo from "./PipayaLogo.svelte";
 	import Wordmark from "./Wordmark.svelte";
 	import Icon from "./Icon.svelte";
 	import Backdrop from "./Backdrop.svelte";
 	import { app } from "../lib/store.svelte";
-	import { copyText } from "../lib/clipboard";
-	import { viewport } from "../lib/viewport.svelte";
 	import { isTauri } from "../lib/tauri";
-	import { slidingIndicator } from "../lib/sliding-indicator";
+	import { notificationPlatform } from "../lib/notifications";
+	import { parsePairingLink } from "../lib/pairing";
 
-	const INSTALL = "curl -fsSL https://raw.githubusercontent.com/pipaya/main/install.sh | bash";
-	const INSTALL_DOCKER = "git clone https://github.com/dohwi/pipaya.git && cd pipaya && docker compose up -d --build";
+	/** The phone app: the QR comes from a PC that is already connected, and the camera is opened right here. */
+	const scannable = isTauri() && ["android", "ios"].includes(notificationPlatform());
 
-	/** The phone case: the QR comes from a PC that is already connected, so the phone only has to open this app. */
-	const phone = $derived(viewport.narrow);
+	let error = $state("");
+	let scanning = $state(false);
 
-	let route = $state<"have" | "none">("have");
-	let how = $state<"script" | "docker">("script");
-	let copied = $state(false);
-	const command = $derived(how === "script" ? INSTALL : INSTALL_DOCKER);
-
-	async function copy() {
-		copied = await copyText(command);
-		setTimeout(() => (copied = false), 1600);
+	async function scan() {
+		if (scanning) return;
+		error = "";
+		scanning = true;
+		try {
+			const { checkPermissions, requestPermissions, scan: startScan, Format } = await import("@tauri-apps/plugin-barcode-scanner");
+			let permission = await checkPermissions();
+			if (permission !== "granted") permission = await requestPermissions();
+			if (permission !== "granted") return void (error = t("카메라 권한이 필요합니다. 설정에서 카메라를 허용해 주세요."));
+			const result = await startScan({ windowed: false, formats: [Format.QRCode] });
+			const link = parsePairingLink(result.content);
+			if (link) app.connectByLink(link);
+			else error = t("pipaya 연결 QR이 아닙니다. PC 앱에 표시된 QR을 스캔해 주세요.");
+		} catch (e) {
+			// closing the camera without a code is not an error
+			const text = e instanceof Error ? e.message : String(e);
+			if (!/cancel/i.test(text)) error = t("카메라를 열지 못했습니다.");
+		} finally {
+			scanning = false;
+		}
 	}
+
+	onMount(() => {
+		if (scannable) void scan();
+	});
 </script>
 
 <div class="screen">
@@ -32,60 +48,27 @@
 	<div class="card">
 		<div class="logo"><PipayaLogo size={52} /></div>
 		<h1><Wordmark size={34} /></h1>
-		<p class="sub">{t("내 서버에서 코딩 에이전트를 돌리고, 어느 기기에서든 이어서 쓰는 클라이언트입니다.")}</p>
-
-		<div class="seg full" role="tablist" aria-label={t("시작 방법")} use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "calc(var(--radius) - 3px)" }}>
-			<button role="tab" aria-selected={route === "have"} class:on={route === "have"} onclick={() => (route = "have")}>{t("서버가 있어요")}</button>
-			<button role="tab" aria-selected={route === "none"} class:on={route === "none"} onclick={() => (route = "none")}>{t("처음이에요")}</button>
-		</div>
-
-		{#if route === "have"}
-			<div class="panel" role="tabpanel">
-				<button class="btn primary add" onclick={() => (app.serverForm = "new")}>
-					<Icon name="plus" /> {t("서버 주소로 연결")}
-				</button>
-				{#if phone}
-					<div class="tip">
-						<Icon name="server" />
-						<p><b>{t("QR로 한 번에 연결")}</b><br />{t("PC 앱에서 설정 → 서버 → 서버 선택 → ‘기기’ 탭의 ‘폰 추가’ QR을 폰 카메라로 스캔하면 이 앱이 열리면서 바로 연결됩니다.")}</p>
-					</div>
-				{:else}
-					<p class="hint">{t("주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.")}</p>
-				{/if}
-			</div>
+		{#if scannable}
+			<p class="sub">{t("QR로 서버에 연결합니다.")}</p>
+			<ol class="steps">
+				<li><b>{t("PC에서 pipaya를 엽니다")}</b></li>
+				<li><b>{t("설정 → 서버 → 서버 선택 → ‘기기’ 탭의 ‘폰 추가’")}</b><span>{t("화면에 QR이 나타납니다.")}</span></li>
+				<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
+			</ol>
+			<button class="btn primary add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</button>
+			{#if error}<p class="hint err" role="alert">{error}</p>{/if}
+			<button class="btn ghost" onclick={() => (app.serverForm = "new")}>{t("서버 주소로 연결")}</button>
 		{:else}
-			<div class="panel" role="tabpanel">
-				<ol class="steps">
-					<li>
-						<b>{t("서버를 설치합니다")}</b>
-						<span>{t("Linux/macOS 서버(PC, 홈서버, VPS)에서 한 줄이면 됩니다.")}</span>
-						<div class="how">
-							<button class:on={how === "script"} onclick={() => (how = "script")}>{t("바로 설치")}</button>
-							<button class:on={how === "docker"} onclick={() => (how = "docker")}>{t("Docker 샌드박스")}</button>
-						</div>
-						<div class="cmd">
-							<code>{command}</code>
-							<button class="iconbtn" onclick={copy} aria-label={t("명령 복사")} title={t("복사")}><Icon name={copied ? "check" : "copy"} /></button>
-						</div>
-					</li>
-					<li>
-						<b>{t("주소와 토큰을 확인합니다")}</b>
-						<span>{t("설치가 끝나면 서버 주소와 토큰 위치가 출력됩니다. 폰에서 쓰려면 Tailscale 주소를 권장합니다.")}</span>
-					</li>
-					<li>
-						<b>{t("여기서 서버를 추가합니다")}</b>
-						<button class="btn primary" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 추가")}</button>
-					</li>
-				</ol>
-				{#if isTauri()}
-					<p class="hint">{t("모델 API 키는 서버에만 저장되고 이 앱에는 남지 않습니다.")}</p>
-				{/if}
-			</div>
+			<p class="sub">{t("서버에 연결하려면 주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.")}</p>
+			<button class="btn primary add" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 주소로 연결")}</button>
 		{/if}
 	</div>
 </div>
 
 <style>
+	.err {
+		color: var(--danger, #d33);
+	}
 	.screen {
 		height: 100%;
 		display: grid;

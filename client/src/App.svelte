@@ -32,6 +32,8 @@
 	import { nativePushAdapter } from "./lib/native-push";
 	import { notificationRules } from "./lib/notification-rules";
 	import { t } from "./lib/i18n";
+	import { isTauri } from "./lib/tauri";
+	import { notificationPlatform } from "./lib/notifications";
 	import { listenForPairingLinks } from "./lib/pairing-intake";
 
 	// Load the transcript of every session on screen (all panes of the open group on a wide screen), drop the rest.
@@ -39,6 +41,7 @@
 		const ids = app.visibleIds;
 		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
 	});
+	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 
 	// Dialogs and settings panels load on first open, keeping them (and ModelConnections, Extensions, Backup…) out of the start-up chunk.
@@ -219,8 +222,11 @@
 {#snippet launcher()}<ExtensionPanels />{/snippet}
 
 {#if app.servers.length === 0}
-	<div class="extension-launcher fixed">{@render launcher()}</div>
-	<NoServer />
+	<!-- The desktop app starts its own server, so it never shows a start screen: wait for it. Only a phone (or a build without the bundled server) needs to ask. -->
+	{#if app.localChecked || !isTauri() || mobile}
+		<div class="extension-launcher fixed">{@render launcher()}</div>
+		<NoServer />
+	{/if}
 {:else}
 	<div class="app">
 		<div class="side" bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">

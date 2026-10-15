@@ -13,5 +13,7 @@
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Connect to your pipaya server on your local or Tailscale network.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Scan the QR code shown by your pipaya server to connect.</string>
 </dict>
 </plist>

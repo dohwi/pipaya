@@ -195,6 +195,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
 
+    // QR scanning for "connect to a server" is phone only.
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
     builder
         .invoke_handler(tauri::generate_handler![show_toast, local_server::local_server])
         .setup(|app| {
