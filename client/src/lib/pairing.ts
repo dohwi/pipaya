@@ -1,14 +1,14 @@
 /**
  * "Connect by QR": the link a PC shows as a QR code and a phone opens.
  *
- *   harness://connect?u=<server address>&c=<one-time code>[&n=<name>]
+ *   pipaya://connect?u=<server address>&c=<one-time code>[&n=<name>]
  *
  * The link never contains the access token. `c` is a code that works once for two minutes
  * (server/src/pairing.ts); the phone trades it for the token by calling the server.
  */
 import { normalizeUrl } from "./api";
 
-export const PAIRING_SCHEME = "harness:";
+export const PAIRING_SCHEME = "pipaya:";
 export const PAIRING_HOST = "connect";
 
 export interface PairingLink {

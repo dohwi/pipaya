@@ -98,11 +98,11 @@ curl -s -H "Authorization: Bearer $TOKEN" $URL/subagents \
 
 Edit one field: `jq '.settings | (.agents[] | select(.name=="explore") | .maxTurns) = 20 | {settings:.}'`. Remove: `.agents |= map(select(.name!="reviewer"))`. Turn all off: `.enabled = false`.
 
-Port and data dir may differ (`HARNESS_PORT`, `HARNESS_DATA_DIR`; the token file is `<data dir>/token`). Re-`GET` afterwards to confirm.
+Port and data dir may differ (`PIPAYA_PORT`, `PIPAYA_DATA_DIR`; the token file is `<data dir>/token`). Re-`GET` afterwards to confirm.
 
 ## Picking a helper by hand: `$name`
 
-In the message input the user can write `$name` (preceded by start or whitespace, followed by end, whitespace or `. , ; : ! ? )`). Only names of **currently available** (enabled) helpers count; unknown names, or a switched-off feature, are ignored. The server then adds a hidden `<harness-hint>` note (clients hide it) telling the model to call `delegate` with that agent. It is a strong hint, not a guarantee. The input has a menu and tints the token.
+In the message input the user can write `$name` (preceded by start or whitespace, followed by end, whitespace or `. , ; : ! ? )`). Only names of **currently available** (enabled) helpers count; unknown names, or a switched-off feature, are ignored. The server then adds a hidden `<pipaya-hint>` note (clients hide it) telling the model to call `delegate` with that agent. It is a strong hint, not a guarantee. The input has a menu and tints the token.
 
 ## Good helper design
 
@@ -113,4 +113,4 @@ In the message input the user can write `$name` (preceded by start or whitespace
 
 ## Source map (when you must read code)
 
-`server/src/subagent-settings.ts` (schema, limits, model resolution, merging files), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `$name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen). Docs: repo `docs/agent-loop.md`.
+`server/src/subagent-settings.ts` (schema, limits, model resolution, merging files), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `$name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen).

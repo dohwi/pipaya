@@ -1,4 +1,4 @@
-// Optional browser QA: NODE_PATH=/tmp/harness-extension-browser/node_modules node scripts/check-session-context.cjs
+// Optional browser QA: NODE_PATH=/tmp/pipaya-extension-browser/node_modules node scripts/check-session-context.cjs
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const baseUrl = process.env.CONTEXT_TEST_URL || 'http://localhost:1420';
@@ -77,12 +77,12 @@ const snapshot = {
   // Dark mode uses the same token-based styling as the rest of the application.
   await page.evaluate(async url=>{const {app}=await import(url);app.setTheme('dark');},storeUrl);
   assert(await dialog.evaluate(el=>getComputedStyle(el).backgroundColor!=='rgb(255, 255, 255)'),'dark dialog stayed white');
-  await page.screenshot({path:'/tmp/harness-session-context-dark.png'});
+  await page.screenshot({path:'/tmp/pipaya-session-context-dark.png'});
   await page.evaluate(async url=>{const {app}=await import(url);app.setTheme('light');},storeUrl);
   const box=await dialog.boundingBox();
   assert(Math.abs(box.x+box.width/2-640)<2,'desktop dialog is not horizontally centered');
   assert(box.y>=0 && box.y+box.height<=900,'desktop dialog is clipped vertically');
-  await page.screenshot({path:'/tmp/harness-session-context-desktop.png'});
+  await page.screenshot({path:'/tmp/pipaya-session-context-desktop.png'});
   // Modal focus cannot escape to the background, and Escape restores the opener.
   for(let i=0;i<10;i++){
    await page.keyboard.press('Tab');
@@ -101,7 +101,7 @@ const snapshot = {
   await dialog.getByText('아직 적용 전 · 다음 메시지부터 적용돼요',{exact:true}).waitFor();
   await dialog.getByText('적용된 AGENTS.md가 없습니다.',{exact:false}).waitFor();
   assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth),'mobile dialog overflow');
-  await page.screenshot({path:'/tmp/harness-session-context-mobile.png'});
+  await page.screenshot({path:'/tmp/pipaya-session-context-mobile.png'});
   mode='error';
   await dialog.getByRole('button',{name:'새로고침',exact:true}).click();
   await dialog.getByRole('alert').filter({hasText:'서버가 이 기능을 지원하지 않습니다'}).waitFor();

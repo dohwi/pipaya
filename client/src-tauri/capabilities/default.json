@@ -12,7 +12,7 @@
     "os:allow-hostname",
     "opener:default",
     "notification:default",
-    "harness-push:default",
+    "pipaya-push:default",
     "deep-link:default"
   ]
 }

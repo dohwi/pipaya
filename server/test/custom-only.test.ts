@@ -24,7 +24,7 @@ const api = async (method: string, path: string, body?: unknown) => {
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-custom-only-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-custom-only-"));
 	upstream = startEchoUpstream();
 	const cfg: Config = {
 		host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token-0123456789-abcdefghij",
@@ -42,10 +42,15 @@ afterAll(async () => {
 });
 
 // Tests run in order: the first ones observe the pristine server.
-describe("custom-only catalog", () => {
-	test("a fresh server has no providers, models or configuration", async () => {
-		expect((await api("GET", "/providers")).json.providers).toEqual([]);
-		expect((await api("GET", "/models")).json.models).toEqual([]);
+describe("built-in + custom catalog", () => {
+	test("a fresh server lists the SDK's built-in providers, none usable yet, and no configuration", async () => {
+		const providers = (await api("GET", "/providers")).json.providers;
+		const ids = providers.map((p: any) => p.id);
+		for (const id of ["openai", "anthropic", "google", "openrouter", "github-copilot"]) expect(ids).toContain(id);
+		expect(providers.every((p: any) => p.builtin)).toBe(true);
+		expect(providers.find((p: any) => p.id === "anthropic").loginMethods).toContain("oauth");
+		expect(providers.find((p: any) => p.id === "openai").loginMethods).toContain("oauth");
+		expect((await api("GET", "/models")).json.models.length).toBeGreaterThan(100);
 		expect((await api("GET", "/models?configured=true")).json.models).toEqual([]);
 		const config = (await api("GET", "/configuration")).json;
 		expect(config.providers).toEqual([]);
@@ -61,10 +66,13 @@ describe("custom-only catalog", () => {
 	});
 
 	test("credentials for unknown providers are rejected with 404 and not stored", async () => {
-		for (const id of ["openai", "faux", "nope"]) {
+		for (const id of ["faux", "nope"]) {
 			expect((await api("PUT", `/providers/${id}/credential`, { key: "secret-key" })).status).toBe(404);
 		}
-		expect((await api("GET", "/providers")).json.providers).toEqual([]);
+		expect((await api("GET", "/providers")).json.providers.map((p: any) => p.id)).not.toContain("nope");
+		expect((await api("POST", "/providers/nope/login", { type: "oauth" })).status).toBe(404);
+		expect((await api("POST", "/providers/deepseek/login", { type: "oauth" })).status).toBe(400); // no OAuth for this one
+		expect((await api("GET", "/logins/unknown")).status).toBe(404);
 	});
 
 	test("standard provider IDs are allowed for custom endpoints and sessions then work", async () => {
@@ -73,7 +81,9 @@ describe("custom-only catalog", () => {
 			expect(saved.status).toBe(200);
 			expect(saved.json.id).toBe(id);
 		}
-		expect((await api("GET", "/providers")).json.providers.map((p: any) => p.id).sort()).toEqual(["anthropic", "faux", "openai"]);
+		const listed = (await api("GET", "/providers")).json.providers;
+		expect(listed.find((p: any) => p.id === "faux").builtin).toBe(false);
+		expect(listed.find((p: any) => p.id === "openai").builtin).toBe(false); // the custom endpoint shadows the built-in one
 		expect((await api("PUT", "/providers/openai/credential", { key: "k" })).status).toBe(200);
 
 		const s = await api("POST", "/sessions", { provider: "openai", model: ECHO_MODEL.id, approval: "auto" });
@@ -93,30 +103,25 @@ describe("custom-only catalog", () => {
 	});
 });
 
-describe("legacy environment is inert", () => {
-	test("HARNESS_FAUX and provider API-key env vars register nothing; invalid env defaults are ignored", async () => {
-		const dir2 = mkdtempSync(join(tmpdir(), "harness-env-"));
+describe("legacy environment", () => {
+	test("PIPAYA_FAUX registers nothing; a default naming an unusable model is ignored", async () => {
+		const dir2 = mkdtempSync(join(tmpdir(), "pipaya-env-"));
 		const keys = { OPENAI_API_KEY: "sk-env-openai", ANTHROPIC_API_KEY: "sk-env-anthropic" };
 		const saved = Object.fromEntries(Object.keys(keys).map((k) => [k, process.env[k]]));
 		Object.assign(process.env, keys); // also visible to any ambient env-key discovery
 		let app2: App | undefined;
 		try {
 			const cfg = loadConfig({
-				HARNESS_DATA_DIR: dir2, HARNESS_TOKEN: "test-token-0123456789-abcdefghij", HARNESS_LOG_LEVEL: "silent", HARNESS_FAUX: "1", ...keys,
-				HARNESS_PROVIDER: "openai", HARNESS_MODEL: "gpt-4o",
+				PIPAYA_DATA_DIR: dir2, PIPAYA_TOKEN: "test-token-0123456789-abcdefghij", PIPAYA_LOG_LEVEL: "silent", PIPAYA_FAUX: "1", ...keys,
+				PIPAYA_PROVIDER: "openai", PIPAYA_MODEL: "gpt-4o",
 			});
 			expect("enableFaux" in cfg).toBe(false);
 			app2 = await buildApp(cfg, { strictResponses: true });
 			const get = async (url: string) => (await app2!.server.inject({ method: "GET", url, headers: auth })).json();
-			expect((await get("/providers")).providers).toEqual([]);
-			expect((await get("/models")).models).toEqual([]);
-			expect((await get("/models?configured=true")).models).toEqual([]);
+			expect((await get("/providers")).providers.map((p: any) => p.id)).not.toContain("faux");
 			const config = await get("/configuration");
 			expect(config.providers).toEqual([]);
-			expect(config.effectiveDefaults).toBeNull();
-			const created = await app2.server.inject({ method: "POST", url: "/sessions", headers: { ...auth, "content-type": "application/json" }, payload: "{}" });
-			expect(created.statusCode).toBe(400);
-			expect((await get("/sessions")).sessions).toEqual([]);
+			expect(config.effectiveDefaults).toEqual({ provider: "openai", model: "gpt-4o" }); // OPENAI_API_KEY from the environment is honored by the SDK
 		} finally {
 			await app2?.close();
 			for (const [k, v] of Object.entries(saved)) v === undefined ? delete process.env[k] : (process.env[k] = v);

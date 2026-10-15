@@ -7,7 +7,7 @@ import type { Database, Statement } from "bun:sqlite";
  * Ephemeral events (streaming deltas) have `id === 0`; they are delivered live
  * only and are never replayed.
  */
-export interface HarnessEvent {
+export interface PipayaEvent {
 	id: number;
 	sessionId: string | null;
 	type: string;
@@ -15,7 +15,7 @@ export interface HarnessEvent {
 	data: unknown;
 }
 
-type Listener = (event: HarnessEvent) => void;
+type Listener = (event: PipayaEvent) => void;
 
 interface EventRow {
 	id: number;
@@ -25,7 +25,7 @@ interface EventRow {
 	ts: number;
 }
 
-const toEvent = (r: EventRow): HarnessEvent => ({
+const toEvent = (r: EventRow): PipayaEvent => ({
 	id: r.id,
 	sessionId: r.session_id,
 	type: r.type,
@@ -49,14 +49,14 @@ export class EventBus {
 		this.selectLatest = db.query("SELECT COALESCE(MAX(id), 0) AS id FROM events");
 	}
 
-	publish(sessionId: string | null, type: string, data: unknown, opts: { ephemeral?: boolean } = {}): HarnessEvent {
+	publish(sessionId: string | null, type: string, data: unknown, opts: { ephemeral?: boolean } = {}): PipayaEvent {
 		const ts = Date.now();
 		let id = 0;
 		if (!opts.ephemeral) {
 			const res = this.insert.run({ sessionId, type, data: JSON.stringify(data ?? null), ts });
 			id = Number(res.lastInsertRowid);
 		}
-		const event: HarnessEvent = { id, sessionId, type, ts, data };
+		const event: PipayaEvent = { id, sessionId, type, ts, data };
 		for (const l of this.listeners) {
 			if (l.sessionId && l.sessionId !== sessionId) continue;
 			try {
@@ -75,7 +75,7 @@ export class EventBus {
 		return () => this.listeners.delete(entry);
 	}
 
-	history(opts: { sessionId?: string; after: number; limit: number }): HarnessEvent[] {
+	history(opts: { sessionId?: string; after: number; limit: number }): PipayaEvent[] {
 		const rows = (
 			opts.sessionId
 				? this.selectSession.all({ sessionId: opts.sessionId, after: opts.after, limit: opts.limit })

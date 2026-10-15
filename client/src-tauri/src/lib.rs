@@ -26,7 +26,7 @@ fn show_toast(app: tauri::AppHandle, title: String, body: Option<String>, sessio
                 let _ = w.set_focus();
             }
             if let Some(sid) = session_id.clone().filter(|s| !s.is_empty()) {
-                let _ = handle.emit("harness://open-session", sid);
+                let _ = handle.emit("pipaya://open-session", sid);
             }
             Ok(())
         })
@@ -44,7 +44,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_harness_push::init())
+        .plugin(tauri_plugin_pipaya_push::init())
         .plugin(tauri_plugin_deep_link::init());
 
     // Self-update is desktop only. Android installs go through the system package installer instead.

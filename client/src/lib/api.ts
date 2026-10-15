@@ -4,6 +4,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	Question,
 	ActivityInfo,
 	ConfigurationInfo,
+	LoginState,
 	CompactionResult,
 	ConnectionResult,
 	DirListing,
@@ -13,7 +14,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ApiFormat,
 	CustomProviderInput,
 	ModelSelection,
-	HarnessEvent,
+	PipayaEvent,
 	ModelInfo,
 	ProviderInfo,
 	SendMode,
@@ -147,6 +148,12 @@ export class Api {
 		this.req<{ ok: boolean }>("PUT", `/providers/${encodeURIComponent(id)}/credential`, { key });
 	removeCredential = (id: string) =>
 		this.req<{ ok: boolean }>("DELETE", `/providers/${encodeURIComponent(id)}/credential`);
+	startLogin = (id: string, type: "api_key" | "oauth") =>
+		this.req<LoginState>("POST", `/providers/${encodeURIComponent(id)}/login`, { type });
+	login = (loginId: string) => this.req<LoginState>("GET", `/logins/${encodeURIComponent(loginId)}`);
+	answerLogin = (loginId: string, promptId: number, value: string) =>
+		this.req<LoginState>("POST", `/logins/${encodeURIComponent(loginId)}/answer`, { promptId, value });
+	cancelLogin = (loginId: string) => this.req<LoginState>("POST", `/logins/${encodeURIComponent(loginId)}/cancel`);
 
 	/* ---------- extension settings (server is the source of truth) ---------- */
 	extensionSettings = (signal?: AbortSignal) =>
@@ -156,7 +163,7 @@ export class Api {
 	deleteExtension = (id: string, signal?: AbortSignal) =>
 		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
 
-	/* ---------- settings that belong to this server (docs/settings-scope.md) ---------- */
+	/* ---------- settings that belong to this server ---------- */
 	clientSettings = (signal?: AbortSignal) =>
 		this.req<{ settings: Record<string, { value: unknown; updatedAt: number }> }>("GET", "/client-settings", undefined, signal);
 	clientSetting = (key: string, signal?: AbortSignal) =>
@@ -289,7 +296,7 @@ export class Api {
 	 * dropped stream also loses live-only deltas and needs a full resync rather than a replay.
 	 */
 	subscribe(
-		handlers: { onEvent: (e: HarnessEvent) => void; onOpen?: () => void; onError?: () => void },
+		handlers: { onEvent: (e: PipayaEvent) => void; onOpen?: () => void; onError?: () => void },
 		after: number,
 	): () => void {
 		const url = `${this.conn.baseUrl}/events?after=${after}&token=${encodeURIComponent(this.conn.token)}`;
@@ -304,7 +311,7 @@ export class Api {
 		};
 		const onMessage = (m: MessageEvent) => {
 			try {
-				handlers.onEvent(JSON.parse(m.data) as HarnessEvent);
+				handlers.onEvent(JSON.parse(m.data) as PipayaEvent);
 			} catch {
 				/* ignore malformed frame */
 			}

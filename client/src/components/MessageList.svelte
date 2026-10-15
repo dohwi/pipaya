@@ -223,15 +223,15 @@
 	}
 	.row.wait {
 		display: flex;
-		align-items: flex-start;
-		gap: 12px;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
 		padding: 10px 0;
 	}
 	.avatar {
 		flex: none;
 		width: 30px;
 		height: 30px;
-		margin-top: 2px;
 		display: grid;
 		place-items: center;
 		border-radius: 50%;

@@ -7,11 +7,11 @@
 # Commands: server (default) | client | update | status | uninstall | help
 set -euo pipefail
 
-REPO_URL="${HARNESS_REPO:-https://github.com/dohwi/pipaya.git}"
-RELEASE_URL="${HARNESS_RELEASE_URL:-https://github.com/dohwi/pipaya/releases/download/latest}"
-BUN_VERSION="${HARNESS_BUN_VERSION:-1.3.14}"
-APP_DIR="${HARNESS_APP_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/pipaya}"
-DATA_DIR="${HARNESS_DATA_DIR:-$HOME/.pipaya}"
+REPO_URL="${PIPAYA_REPO:-https://github.com/dohwi/pipaya.git}"
+RELEASE_URL="${PIPAYA_RELEASE_URL:-https://github.com/dohwi/pipaya/releases/download/latest}"
+BUN_VERSION="${PIPAYA_BUN_VERSION:-1.3.14}"
+APP_DIR="${PIPAYA_APP_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/pipaya}"
+DATA_DIR="${PIPAYA_DATA_DIR:-$HOME/.pipaya}"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipaya"
 ENV_FILE="$CONF_DIR/server.env"
 UNIT_NAME="pipaya"
@@ -54,7 +54,7 @@ Server options
   --no-service     Install only; do not register or start a service
   -y, --yes        Do not ask before installing Bun
 
-Environment: HARNESS_DATA_DIR (default ~/.pipaya), HARNESS_BUN_VERSION, HARNESS_REPO
+Environment: PIPAYA_DATA_DIR (default ~/.pipaya), PIPAYA_BUN_VERSION, PIPAYA_REPO
 EOF
 }
 
@@ -120,7 +120,7 @@ fetch_code() {
 		git -C "$APP_DIR" fetch --quiet --depth 1 origin "$REF"
 		git -C "$APP_DIR" reset --quiet --hard FETCH_HEAD
 	else
-		[ ! -e "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ] || die "$APP_DIR exists and is not a harness checkout (use --dir)"
+		[ ! -e "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ] || die "$APP_DIR exists and is not a pipaya checkout (use --dir)"
 		mkdir -p "$(dirname "$APP_DIR")"
 		git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$APP_DIR"
 	fi
@@ -132,10 +132,10 @@ write_env() {
 	chmod 700 "$CONF_DIR"
 	umask 077
 	{
-		echo "HARNESS_HOST=$HOST"
-		echo "HARNESS_PORT=$PORT"
-		echo "HARNESS_APPROVAL=$APPROVAL"
-		echo "HARNESS_DATA_DIR=$DATA_DIR"
+		echo "PIPAYA_HOST=$HOST"
+		echo "PIPAYA_PORT=$PORT"
+		echo "PIPAYA_APPROVAL=$APPROVAL"
+		echo "PIPAYA_DATA_DIR=$DATA_DIR"
 		# Commands run by the agent need the tools of the installing user (git, node, ...).
 		echo "PATH=$(dirname "$(command -v bun)"):$PATH"
 	} >"$ENV_FILE"
@@ -144,8 +144,8 @@ write_env() {
 
 load_env() {
 	[ -f "$ENV_FILE" ] || return 0
-	HOST="$(sed -n 's/^HARNESS_HOST=//p' "$ENV_FILE" | head -n 1)"
-	PORT="$(sed -n 's/^HARNESS_PORT=//p' "$ENV_FILE" | head -n 1)"
+	HOST="$(sed -n 's/^PIPAYA_HOST=//p' "$ENV_FILE" | head -n 1)"
+	PORT="$(sed -n 's/^PIPAYA_PORT=//p' "$ENV_FILE" | head -n 1)"
 }
 
 xml_escape() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
@@ -198,10 +198,10 @@ install_launchd() {
 	<key>ProgramArguments</key><array><string>$(command -v bun | xml_escape)</string><string>src/index.ts</string></array>
 	<key>WorkingDirectory</key><string>$(printf '%s' "$APP_DIR/server" | xml_escape)</string>
 	<key>EnvironmentVariables</key><dict>
-		<key>HARNESS_HOST</key><string>$(printf '%s' "$HOST" | xml_escape)</string>
-		<key>HARNESS_PORT</key><string>$PORT</string>
-		<key>HARNESS_APPROVAL</key><string>$APPROVAL</string>
-		<key>HARNESS_DATA_DIR</key><string>$(printf '%s' "$DATA_DIR" | xml_escape)</string>
+		<key>PIPAYA_HOST</key><string>$(printf '%s' "$HOST" | xml_escape)</string>
+		<key>PIPAYA_PORT</key><string>$PORT</string>
+		<key>PIPAYA_APPROVAL</key><string>$APPROVAL</string>
+		<key>PIPAYA_DATA_DIR</key><string>$(printf '%s' "$DATA_DIR" | xml_escape)</string>
 		<key>PATH</key><string>$(printf '%s' "$path" | xml_escape)</string>
 	</dict>
 	<key>RunAtLoad</key><true/>
@@ -346,7 +346,7 @@ cmd_client() {
 	have curl || die "curl is required"
 	case "$(os)" in
 		macos)
-			local dest="${HARNESS_DOWNLOAD_DIR:-$HOME/Downloads}" name="harness-macos-arm64.dmg"
+			local dest="${PIPAYA_DOWNLOAD_DIR:-$HOME/Downloads}" name="pipaya-macos-arm64.dmg"
 			[ "$(uname -m)" = arm64 ] || die "the macOS build is for Apple Silicon only"
 			mkdir -p "$dest"
 			curl -fSL --proto '=https' --tlsv1.2 -o "$dest/SHA256SUMS.txt" "$RELEASE_URL/SHA256SUMS.txt"
@@ -359,7 +359,7 @@ cmd_client() {
 		linux)
 			say "There is no prebuilt Linux client. Build the desktop app from source (see client/README.md),"
 			say "or run the web client: cd client && bun install && bun run dev."
-			say "Android: $RELEASE_URL/harness-android-arm64.apk (verify with SHA256SUMS.txt)" ;;
+			say "Android: $RELEASE_URL/pipaya-android-arm64.apk (verify with SHA256SUMS.txt)" ;;
 		*) die "unsupported OS; on Windows run install.ps1" ;;
 	esac
 }

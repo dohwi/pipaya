@@ -185,5 +185,5 @@ export function readTemplateBody(path: string): string | null {
 export function templateCallHint(name: string, expanded: string, openTag: string): string {
 	const cut = expanded.length > MAX_INLINE_TEMPLATE_CHARS;
 	const text = cut ? `${expanded.slice(0, MAX_INLINE_TEMPLATE_CHARS)}\n[cut]` : expanded;
-	return `${openTag}The user invoked the saved prompt template "${name}" (written as ${TEMPLATE_CALL_PREFIX}${name}). The visible message is only a shortcut: treat the following as the user's actual request.\n\n${text}</harness-hint>`;
+	return `${openTag}The user invoked the saved prompt template "${name}" (written as ${TEMPLATE_CALL_PREFIX}${name}). The visible message is only a shortcut: treat the following as the user's actual request.\n\n${text}</pipaya-hint>`;
 }

@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { approvalText, lang as toLang, runText, testText, type Lang, type Text } from "./notification-text.ts";
-import type { EventBus, HarnessEvent } from "./events.ts";
+import type { EventBus, PipayaEvent } from "./events.ts";
 
 export type DevicePlatform = "desktop" | "android" | "ios" | "web";
 export type PushProvider = "fcm" | "apns";
@@ -175,7 +175,7 @@ export class NotificationService {
     if (previous) return { id: previous.id, delivered: 0, suppressed: true };
     // The limit exists to stop an extension from flooding the user. The server's own notices come from real events
     // (a run ended, a tool needs approval), so dropping the sixth one in ten seconds would lose something that mattered.
-    if (source !== "harness") {
+    if (source !== "pipaya") {
       const times = (this.rates.get(source) ?? []).filter(at => this.now() - at < 10_000);
       if (times.length >= 5) throw new Error("notifications limited to five per ten seconds");
       this.rates.set(source, [...times, this.now()]);
@@ -208,7 +208,7 @@ export class NotificationService {
     if (!live.enabled) return { ...base, status: "disabled" as const };
     // "test-" ids are only ever made here: the client shows these even while the window is in front.
     const lang = toLang((this.db.query("SELECT lang FROM notification_devices WHERE id = ?").get(deviceId) as { lang: string | null } | null)?.lang ?? live.lang);
-    const payload: NotificationPayload = { id: `test-${randomUUID()}`, at: this.now(), source: "harness", ...testText(lang), kind: "info" };
+    const payload: NotificationPayload = { id: `test-${randomUUID()}`, at: this.now(), source: "pipaya", ...testText(lang), kind: "info" };
     this.bus.publish(null, "notification", { deviceId, notification: payload }, { ephemeral: true });
     return { ...base, status: "sent" as const, id: payload.id };
   }
@@ -228,7 +228,7 @@ export class NotificationService {
       } catch { /* Never leak tokens into logs or interrupt agent runs. Retry on the next notification. */ }
     }
   }
-  private onEvent(e: HarnessEvent) {
+  private onEvent(e: PipayaEvent) {
     if (e.type === "approval_resolved") this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "approval_required");
     if (e.type === "run_started") this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? ""));
     if (!e.sessionId || !["run_finished", "approval_requested"].includes(e.type)) return;
@@ -240,7 +240,7 @@ export class NotificationService {
     try {
       if (!rules.length) {
         const facts = this.factsFor(e, kind);
-        this.send("harness", { ...wording({ title: "", facts }, "en"), kind, sessionId: e.sessionId, key: `event-${e.id}`, facts });
+        this.send("pipaya", { ...wording({ title: "", facts }, "en"), kind, sessionId: e.sessionId, key: `event-${e.id}`, facts });
       }
     } catch { /* rate limit must not break event processing */ }
     for (const row of rules) {
@@ -254,7 +254,7 @@ export class NotificationService {
     return { ...rest, ...wording(p, toLang(lang)) };
   }
   /** What a built-in notice is about, read from the session and its last answer. */
-  private factsFor(e: HarnessEvent, kind: string): BuiltinFacts {
+  private factsFor(e: PipayaEvent, kind: string): BuiltinFacts {
     const title = this.sessions?.title(e.sessionId!) ?? "";
     if (kind === "approval_required") {
       const d = e.data as { toolName?: string; args?: unknown };

@@ -26,7 +26,7 @@ async function boot(restrict: boolean) {
 }
 
 beforeAll(() => {
-	dir = realpathSync(mkdtempSync(join(tmpdir(), "harness-restrict-")));
+	dir = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-restrict-")));
 	ws = join(dir, "ws");
 	outside = join(dir, "elsewhere");
 	mkdirSync(ws, { recursive: true });
@@ -39,7 +39,7 @@ afterAll(() => {
 	rmSync(dir, { recursive: true, force: true });
 });
 
-describe("HARNESS_RESTRICT_WORKSPACE", () => {
+describe("PIPAYA_RESTRICT_WORKSPACE", () => {
 	test("off (default): any existing directory is allowed", async () => {
 		await boot(false);
 		expect((await call("POST", "/sessions", { cwd: outside })).status).toBe(201);

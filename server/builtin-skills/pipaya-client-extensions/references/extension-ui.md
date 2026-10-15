@@ -132,7 +132,7 @@ node scripts/build-extension.cjs \
 
 소스는 ES module이 아니라 `sdk` 변수가 주입되는 async 함수 본문입니다. 패키징은 문법/파일 크기만 확인하고 코드를 실행하지 않습니다. manifest·view·권한 검증은 클라이언트가 수행합니다. TypeScript 사용 시 `ExtensionSDK`, `UIPanelSpec`, `UINode`, `UIEvent`를 type-only로 가져와 개발 도구의 타입 검사를 붙이고, 최종 결과는 외부 import 없는 JS 함수 본문으로 만드세요.
 
-실제 Chromium UI 검증은 개발 서버 실행 후 `NODE_PATH=/tmp/harness-browser-qa/node_modules node scripts/check-extension-ui.cjs`로 실행합니다. Playwright 설치법은 [기본 확장 문서](extensions.md)의 검증 항목을 참고하세요.
+실제 Chromium UI 검증은 개발 서버 실행 후 `NODE_PATH=/tmp/pipaya-browser-qa/node_modules node scripts/check-extension-ui.cjs`로 실행합니다. Playwright 설치법은 [기본 확장 문서](extensions.md)의 검증 항목을 참고하세요.
 
 실행 예제는 폼·탭·통계·목록·표·코드·badge·alert와 composer 위젯을 함께 보여줍니다. `/workbench` 명령으로 열 수 있고 초안은 자동 전송하지 않습니다.
 

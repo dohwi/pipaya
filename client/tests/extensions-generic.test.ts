@@ -375,7 +375,7 @@ describe("renderers, SDK surface and brand neutrality", () => {
 	});
 	test("no leftover previous-brand names in src/ or tests/", async () => {
 		const REPO_SLUG = ["doh" + "wi", "pipaya"].join("/");
-		const pattern = new RegExp(["doo" + "hi", "doh" + "wi", "\uB3C4\uD718"].join("|"), "i");
+		const pattern = new RegExp(["doo" + "hi", "doh" + "wi", "har" + "ness", "\uB3C4\uD718"].join("|"), "i");
 		const hits: string[] = [];
 		for (const dir of ["src", "tests"]) {
 			for await (const file of new Glob("**/*").scan({ cwd: dir, onlyFiles: true })) {

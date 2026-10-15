@@ -34,7 +34,7 @@ const aged = async (days: number, extra: Record<string, unknown> = {}) => {
 const exists = async (id: string) => (await api("GET", `/sessions/${id}`)).status === 200;
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-retention-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-retention-"));
 	upstream = startEchoUpstream();
 	const cfg: Config = {
 		host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "test.db"), token: TOKEN, workspaceRoot: join(dir, "ws"),

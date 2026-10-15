@@ -2,7 +2,7 @@
 
 **English** · [한국어](README.ko.md) · [Project README](../README.md)
 
-API-only harness: `pi-agent-core` + Bun + Fastify + SQLite. REST for commands and configuration; SSE/WebSocket for progress.
+API-only pipaya: `pi-agent-core` + Bun + Fastify + SQLite. REST for commands and configuration; SSE/WebSocket for progress.
 The server does not serve HTML, frontend assets or API documentation pages, and runs independently of `client/`.
 
 ```bash
@@ -16,7 +16,7 @@ For a one-command install with a service, see the [project README](../README.md#
 
 ## Authentication
 
-Token: `$HARNESS_TOKEN`, or generated at `~/.pipaya/token`.
+Token: `$PIPAYA_TOKEN`, or generated at `~/.pipaya/token`.
 Send `Authorization: Bearer <token>` on all API calls except `GET /health`.
 Browser EventSource/WebSocket may use `?token=` **only** on `/events`, `/sessions/:id/events`, and `/ws`.
 CORS preflight is public to allow clients on a separate origin.
@@ -37,16 +37,16 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HARNESS_HOST` / `HARNESS_PORT` | `0.0.0.0` / `8787` | Listen address |
-| `HARNESS_DATA_DIR` | `~/.pipaya` | Database, token, default workspace |
-| `HARNESS_DB` | `<data>/harness.db` | SQLite path |
-| `HARNESS_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
-| `HARNESS_PROVIDER` / `HARNESS_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
-| `HARNESS_APPROVAL` | `ask` | `auto`, `ask`, or `readonly` |
-| `HARNESS_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
-| `HARNESS_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
-| `HARNESS_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see [client/docs/notifications.md](../client/docs/notifications.md) |
-| `HARNESS_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
+| `PIPAYA_HOST` / `PIPAYA_PORT` | `0.0.0.0` / `8787` | Listen address |
+| `PIPAYA_DATA_DIR` | `~/.pipaya` | Database, token, default workspace |
+| `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
+| `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
+| `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
+| `PIPAYA_APPROVAL` | `ask` | `auto`, `ask`, or `readonly` |
+| `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
+| `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
+| `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see client/docs/notifications.md |
+| `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
 
 A fresh server has an empty catalog: there are no built-in providers and no environment-based authentication.
 Saved custom providers and models are restored from SQLite on restart.
@@ -97,7 +97,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET | `/notifications/devices` | Devices that have connected with this token (`id`, `platform`, `name`, `os`, `app`, `live`, `push`, `lastSeen`); push tokens are never returned |
 | PUT/DELETE | `/notifications/devices/:id` | Device presence heartbeat (`platform`, `focused`, `enabled`, `visibleSessionIds`, optional `name`, optional mobile `push` token) / remove the device (it is told through a `device_revoked` event and stops reporting) |
 | POST | `/notifications/:id/received` | A device confirms it showed a notification, so delayed mobile push is skipped |
-| POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. Rate limited to 5 per 10 s per source; `source: "harness"` is reserved for built-in notices |
+| POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. Rate limited to 5 per 10 s per source; `source: "pipaya"` is reserved for built-in notices |
 | PUT/DELETE | `/notifications/rules/:owner/:id` | Per-extension rule that replaces the default notice for `run_finished` / `approval_requested` (max 5 per owner); `DELETE /notifications/rules/:owner` removes all |
 | GET | `/approvals?sessionId=` | Pending approvals |
 | POST | `/sessions/:id/approvals/:toolCallId` | `{approved,reason?}` |
@@ -141,7 +141,7 @@ All changes are server-side and shared by clients connected to that server.
 | GET | `/configuration` | Custom providers, saved/effective defaults; never returns secrets |
 | PUT | `/configuration/providers/:id` | Create/update a custom endpoint |
 | DELETE | `/configuration/providers/:id` | Remove endpoint and stored key |
-| PUT | `/configuration/defaults` | `{provider,model}`; JSON `null` resets to the startup default (`HARNESS_PROVIDER`/`HARNESS_MODEL`) or the first configured model |
+| PUT | `/configuration/defaults` | `{provider,model}`; JSON `null` resets to the startup default (`PIPAYA_PROVIDER`/`PIPAYA_MODEL`) or the first configured model |
 | POST | `/configuration/test` | `{provider,model}`; `{ok,durationMs,text?,error?}` |
 | GET | `/model-roles` | `{roles: {name: {provider,model}}}`. Named model slots such as `light` or `summary`; names are free-form (`^[a-z][a-z0-9-]{0,39}$`, max 20) |
 | PUT | `/model-roles` | `{roles}` replaces the whole table; every model must exist, `{roles:{}}` clears it. Emits `configuration_updated` with `scope: "model-roles"` |
@@ -209,9 +209,9 @@ Operations: `subscribe {sessionId?,after?,types?}`, `unsubscribe {sessionId?}`, 
 
 ```text
 ~/.pipaya/
-├── harness.db       # sessions, messages, events, model settings, defaults, credentials
-├── harness.db-wal   # SQLite managed
-├── harness.db-shm
+├── pipaya.db       # sessions, messages, events, model settings, defaults, credentials
+├── pipaya.db-wal   # SQLite managed
+├── pipaya.db-shm
 ├── token            # 0600
 └── workspace/
 ```
@@ -219,9 +219,9 @@ Operations: `subscribe {sessionId?,after?,types?}`, `unsubscribe {sessionId?}`, 
 SQLite provides indexed queries and transactional configuration updates. API keys are **unencrypted**;
 the default directory is created with `0700`, and new databases with `0600`.
 Use a SQLite-aware backup or stop/checkpoint before copying; do not copy only the database while it is running.
-Existing `server/data` is not auto-imported; set `HARNESS_DATA_DIR=./data` to keep using it.
+Existing `server/data` is not auto-imported; set `PIPAYA_DATA_DIR=./data` to keep using it.
 
-The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes do not inherit any `HARNESS_*` variable.
+The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes do not inherit any `PIPAYA_*` variable.
 
 Custom URLs intentionally allow LAN/Tailscale server-side requests; configure only trusted endpoints.
 `bash` is **not sandboxed** and runs as the server user. Keep approval policy `ask` or isolate the server in a container/VM.
@@ -229,4 +229,4 @@ Mutating tools (`write`, `edit`, `bash`) follow the approval policy.
 
 ### Built-in skills
 
-`harness-client-extensions` documents the client's extension system for agents that change the client. Its `references/` are copies of `client/docs/extension*.md`; after editing those, run `bun scripts/sync-builtin-skills.ts` (a test fails when they drift). Add another built-in skill by creating `builtin-skills/<name>/SKILL.md`.
+`pipaya-client-extensions` documents the client's extension system for agents that change the client. Its `references/` hold the extension documentation. Add another built-in skill by creating `builtin-skills/<name>/SKILL.md`.

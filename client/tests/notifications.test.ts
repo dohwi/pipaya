@@ -16,7 +16,7 @@ describe("structured notification contract", () => {
   });
 });
 test("Firebase Android resources select the correct application and escape XML", () => {
-  const config = { project_info: { project_number: "123", project_id: "test-project" }, client: [{ client_info: { android_client_info: { package_name: "wrong" }, mobilesdk_app_id: "wrong" }, api_key: [{ current_key: "wrong" }] }, { client_info: { android_client_info: { package_name: "pipaya.app" }, mobilesdk_app_id: "1:123:android:id" }, api_key: [{ current_key: "a&b" }] }] };
+  const config = { project_info: { project_number: "123", project_id: "test-project" }, client: [{ client_info: { android_client_info: { package_name: "wrong" }, mobilesdk_app_id: "wrong" }, api_key: [{ current_key: "wrong" }] }, { client_info: { android_client_info: { package_name: "work.pipaya.app" }, mobilesdk_app_id: "1:123:android:id" }, api_key: [{ current_key: "a&b" }] }] };
   const xml = firebaseResources(JSON.stringify(config)); expect(xml).toContain("1:123:android:id"); expect(xml).toContain("a&amp;b"); expect(xml).not.toContain("wrong");
   expect(() => firebaseResources("{}")).toThrow();
 });

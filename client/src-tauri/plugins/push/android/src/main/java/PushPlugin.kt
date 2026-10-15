@@ -88,7 +88,7 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
     @Volatile private var dlTotal = 0L
     @Volatile private var dlState = "idle" // idle | downloading | done | error
     @Volatile private var dlError = ""
-    private fun apkFile() = File(File(activity.cacheDir, "updates").apply { mkdirs() }, "harness-update.apk")
+    private fun apkFile() = File(File(activity.cacheDir, "updates").apply { mkdirs() }, "pipaya-update.apk")
 
     /**
      * Start downloading the APK into the app's cache. Only a link under this repository's `latest` release is taken: the
@@ -100,9 +100,9 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
         if (!url.startsWith("https://github.com/dohwi/pipaya/releases/download/latest/")) { invoke.reject("Unexpected update link"); return }
         if (dlState == "downloading") { invoke.resolve(); return }
         dlDone = 0; dlTotal = 0; dlState = "downloading"; dlError = ""
-        thread(name = "harness-apk-download") {
+        thread(name = "pipaya-apk-download") {
             val target = apkFile()
-            val part = File(target.parentFile, "harness-update.apk.part")
+            val part = File(target.parentFile, "pipaya-update.apk.part")
             try {
                 target.delete(); part.delete()
                 // GitHub answers with a redirect to its CDN; HttpURLConnection follows https -> https on its own
@@ -184,12 +184,12 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
          * importance, and the manifest points FCM at it. A channel's importance cannot be raised once it exists, hence
          * a new id rather than editing an old one.
          */
-        const val CHANNEL_ID = "harness_alerts"
+        const val CHANNEL_ID = "pipaya_alerts"
         fun createChannel(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-            val channel = NotificationChannel(CHANNEL_ID, "Harness", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(CHANNEL_ID, "Pipaya", NotificationManager.IMPORTANCE_HIGH)
             channel.description = "Task results and approval requests"
             manager.createNotificationChannel(channel)
         }

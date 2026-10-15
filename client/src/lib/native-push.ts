@@ -12,7 +12,7 @@ export function syncSystemBars(): void {
   if (!isTauri() || notificationPlatform() !== "android") return;
   const color = hexOf(getComputedStyle(document.documentElement).getPropertyValue("--bg"));
   if (!color) return;
-  void invoke("plugin:harness-push|set_system_bars", { color, dark: document.documentElement.dataset.theme !== "light" }).catch(() => {});
+  void invoke("plugin:pipaya-push|set_system_bars", { color, dark: document.documentElement.dataset.theme !== "light" }).catch(() => {});
 }
 /**
  * Paints the desktop window frame (macOS title bar, Windows title bar) to match the app theme. Without this the frame follows the
@@ -26,7 +26,7 @@ export function syncWindowTheme(pref: "system" | "dark" | "light"): void {
 export function nativePushAdapter(): NativePushAdapter | undefined {
   if (!isTauri() || notificationPlatform() !== "android") return undefined;
   const register = async (): Promise<PushRegistration | null> => {
-    const value = await invoke<Partial<PushRegistration>>("plugin:harness-push|register");
+    const value = await invoke<Partial<PushRegistration>>("plugin:pipaya-push|register");
     return value?.provider === "fcm" && typeof value.token === "string" && value.token ? { provider: "fcm", token: value.token } : null;
   };
   return {
@@ -37,7 +37,7 @@ export function nativePushAdapter(): NativePushAdapter | undefined {
       return () => document.removeEventListener("visibilitychange", update);
     },
     async onTap(handler) {
-      const update = () => { void invoke<{ sessionId?: string; notificationId?: string }>("plugin:harness-push|pending_tap").then(data => { if (data?.sessionId) handler(data); }).catch(() => {}); };
+      const update = () => { void invoke<{ sessionId?: string; notificationId?: string }>("plugin:pipaya-push|pending_tap").then(data => { if (data?.sessionId) handler(data); }).catch(() => {}); };
       document.addEventListener("visibilitychange", update); window.addEventListener("focus", update); update();
       return () => { document.removeEventListener("visibilitychange", update); window.removeEventListener("focus", update); };
     },

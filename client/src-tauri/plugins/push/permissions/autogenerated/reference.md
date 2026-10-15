@@ -24,7 +24,7 @@ Native push registration and tap metadata for the trusted host
 <tr>
 <td>
 
-`harness-push:allow-device-name`
+`pipaya-push:allow-device-name`
 
 </td>
 <td>
@@ -37,7 +37,7 @@ Enables the device_name command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-device-name`
+`pipaya-push:deny-device-name`
 
 </td>
 <td>
@@ -50,7 +50,7 @@ Denies the device_name command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-download-apk`
+`pipaya-push:allow-download-apk`
 
 </td>
 <td>
@@ -63,7 +63,7 @@ Enables the download_apk command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-download-apk`
+`pipaya-push:deny-download-apk`
 
 </td>
 <td>
@@ -76,7 +76,7 @@ Denies the download_apk command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-install-apk`
+`pipaya-push:allow-install-apk`
 
 </td>
 <td>
@@ -89,7 +89,7 @@ Enables the install_apk command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-install-apk`
+`pipaya-push:deny-install-apk`
 
 </td>
 <td>
@@ -102,7 +102,7 @@ Denies the install_apk command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-pending-tap`
+`pipaya-push:allow-pending-tap`
 
 </td>
 <td>
@@ -115,7 +115,7 @@ Enables the pending_tap command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-pending-tap`
+`pipaya-push:deny-pending-tap`
 
 </td>
 <td>
@@ -128,7 +128,7 @@ Denies the pending_tap command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-register`
+`pipaya-push:allow-register`
 
 </td>
 <td>
@@ -141,7 +141,7 @@ Enables the register command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-register`
+`pipaya-push:deny-register`
 
 </td>
 <td>
@@ -154,7 +154,7 @@ Denies the register command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-set-system-bars`
+`pipaya-push:allow-set-system-bars`
 
 </td>
 <td>
@@ -167,7 +167,7 @@ Enables the set_system_bars command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-set-system-bars`
+`pipaya-push:deny-set-system-bars`
 
 </td>
 <td>
@@ -180,7 +180,7 @@ Denies the set_system_bars command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:allow-update-progress`
+`pipaya-push:allow-update-progress`
 
 </td>
 <td>
@@ -193,7 +193,7 @@ Enables the update_progress command without any pre-configured scope.
 <tr>
 <td>
 
-`harness-push:deny-update-progress`
+`pipaya-push:deny-update-progress`
 
 </td>
 <td>

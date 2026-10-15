@@ -126,8 +126,8 @@ export function safeReadPath(cwd: string, p: string, roots: string[] = []): stri
 
 /**
  * Environment variables model-run commands may inherit. Everything else (cloud credentials, the FCM
- * service account path, the server's own HARNESS_* settings, ...) is withheld. Extra names can be
- * passed through with HARNESS_BASH_ENV=NAME1,NAME2.
+ * service account path, the server's own PIPAYA_* settings, ...) is withheld. Extra names can be
+ * passed through with PIPAYA_BASH_ENV=NAME1,NAME2.
  */
 const CHILD_ENV_ALLOW = new Set([
 	"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "NO_COLOR", "TZ", "TMPDIR", "PWD",
@@ -141,11 +141,11 @@ const CHILD_ENV_ALLOW_PREFIXES = ["LC_", "XDG_", "MISE_"];
 
 export function buildChildEnv(source: Record<string, string | undefined> = process.env): Record<string, string> {
 	const extra = new Set(
-		(source.HARNESS_BASH_ENV ?? "").split(",").map((s) => s.trim()).filter((s) => s && !s.startsWith("HARNESS_")),
+		(source.PIPAYA_BASH_ENV ?? "").split(",").map((s) => s.trim()).filter((s) => s && !s.startsWith("PIPAYA_")),
 	);
 	const env: Record<string, string> = {};
 	for (const [k, v] of Object.entries(source)) {
-		if (v === undefined || k.startsWith("HARNESS_")) continue;
+		if (v === undefined || k.startsWith("PIPAYA_")) continue;
 		if (CHILD_ENV_ALLOW.has(k) || extra.has(k) || CHILD_ENV_ALLOW_PREFIXES.some((p) => k.startsWith(p))) env[k] = v;
 	}
 	return env;

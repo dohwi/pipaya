@@ -115,9 +115,9 @@ class Updater {
 		this.progress = 0;
 		this.error = "";
 		try {
-			await invoke("plugin:harness-push|download_apk", { url: this.apkLink() });
+			await invoke("plugin:pipaya-push|download_apk", { url: this.apkLink() });
 			for (let i = 0; i < 20 * 60 * 10; i++) {
-				const s = await invoke<{ state: string; done: number; total: number; error: string }>("plugin:harness-push|update_progress");
+				const s = await invoke<{ state: string; done: number; total: number; error: string }>("plugin:pipaya-push|update_progress");
 				if (s.state === "error") throw new Error(s.error || "download failed");
 				if (s.total > 0) this.progress = Math.min(1, s.done / s.total);
 				if (s.state === "done") break;
@@ -134,7 +134,7 @@ class Updater {
 
 	/** Opens the system installer. The first time, Android asks the user to allow installs from this app; then try again. */
 	private async openInstaller(invoke: typeof import("@tauri-apps/api/core").invoke): Promise<void> {
-		const r = await invoke<{ needsPermission?: boolean }>("plugin:harness-push|install_apk");
+		const r = await invoke<{ needsPermission?: boolean }>("plugin:pipaya-push|install_apk");
 		if (r?.needsPermission) {
 			// the settings page is open; when the user comes back with the switch on, install again
 			this.phase = "ready-install";

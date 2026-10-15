@@ -20,7 +20,7 @@ const api = async (method: any, url: string, payload?: unknown, auth = true) => 
 const ja = { name: "日本語", messages: { "설정": "設定", "모델 {n}개": "{n}個のモデル" } };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-locales-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-locales-"));
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
@@ -116,7 +116,7 @@ describe("locale packs", () => {
 	test("enforces the message and pack limits", async () => {
 		const many = Object.fromEntries(Array.from({ length: MAX_LOCALE_MESSAGES + 1 }, (_, i) => [`k${i}`, "v"]));
 		expect((await api("PUT", "/locales/de", { name: "Deutsch", messages: many })).status).toBe(413);
-		const store = new LocaleStore(mkdtempSync(join(tmpdir(), "harness-locales-limit-")));
+		const store = new LocaleStore(mkdtempSync(join(tmpdir(), "pipaya-locales-limit-")));
 		for (let i = 0; i < MAX_LOCALES; i++) store.save(`x${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`, { name: "n", messages: { a: "b" } });
 		expect(() => store.save("zz", { name: "n", messages: { a: "b" } })).toThrow(/at most/);
 		expect(() => store.save("xaa", { name: "n2", messages: { a: "b" } })).not.toThrow(); // replacing is allowed at the cap

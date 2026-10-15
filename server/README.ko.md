@@ -16,7 +16,7 @@ bun run start
 
 ## Authentication
 
-토큰: `$HARNESS_TOKEN`, 없으면 `~/.pipaya/token`에 생성됩니다.
+토큰: `$PIPAYA_TOKEN`, 없으면 `~/.pipaya/token`에 생성됩니다.
 `GET /health`를 제외한 모든 API 호출에 `Authorization: Bearer <token>`을 보냅니다.
 브라우저 EventSource/WebSocket은 `/events`, `/sessions/:id/events`, `/ws`**에서만** `?token=`을 쓸 수 있습니다.
 CORS preflight는 다른 origin의 클라이언트를 위해 공개입니다.
@@ -37,16 +37,16 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HARNESS_HOST` / `HARNESS_PORT` | `0.0.0.0` / `8787` | 수신 주소 |
-| `HARNESS_DATA_DIR` | `~/.pipaya` | 데이터베이스, 토큰, 기본 워크스페이스 |
-| `HARNESS_DB` | `<data>/harness.db` | SQLite 경로 |
-| `HARNESS_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
-| `HARNESS_PROVIDER` / `HARNESS_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
-| `HARNESS_APPROVAL` | `ask` | `auto`, `ask`, `readonly` |
-| `HARNESS_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
-| `HARNESS_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
-| `HARNESS_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. [client/docs/notifications.md](../client/docs/notifications.md) 참고 |
-| `HARNESS_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
+| `PIPAYA_HOST` / `PIPAYA_PORT` | `0.0.0.0` / `8787` | 수신 주소 |
+| `PIPAYA_DATA_DIR` | `~/.pipaya` | 데이터베이스, 토큰, 기본 워크스페이스 |
+| `PIPAYA_DB` | `<data>/pipaya.db` | SQLite 경로 |
+| `PIPAYA_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
+| `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
+| `PIPAYA_APPROVAL` | `ask` | `auto`, `ask`, `readonly` |
+| `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
+| `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
+| `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |
+| `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
 
 새 서버의 카탈로그는 비어 있습니다. 내장 프로바이더도, 환경변수 기반 인증도 없습니다.
 저장된 커스텀 프로바이더와 모델은 재시작해도 SQLite에서 복원됩니다.
@@ -96,7 +96,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | GET | `/notifications/devices` | 이 토큰으로 접속한 기기 목록(`id`, `platform`, `name`, `os`, `app`, `live`, `push`, `lastSeen`). 푸시 토큰은 돌려주지 않음 |
 | PUT/DELETE | `/notifications/devices/:id` | 기기 접속 상태(`platform`, `focused`, `enabled`, `visibleSessionIds`, 선택적 `name`, 선택적 모바일 `push` 토큰) 전송 / 기기 해지(`device_revoked` 이벤트로 알리고 해당 기기는 보고를 멈춤) |
 | POST | `/notifications/:id/received` | 기기가 알림을 표시했음을 확인하여 지연된 모바일 푸시를 건너뜀 |
-| POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. source당 10초에 5회로 제한. `source: "harness"`는 내장 알림용으로 예약됨 |
+| POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. source당 10초에 5회로 제한. `source: "pipaya"`는 내장 알림용으로 예약됨 |
 | PUT/DELETE | `/notifications/rules/:owner/:id` | `run_finished` / `approval_requested`의 기본 알림을 대체하는 확장별 규칙(소유자당 최대 5개). `DELETE /notifications/rules/:owner`는 전부 삭제 |
 | GET | `/approvals?sessionId=` | 대기 중인 승인 |
 | POST | `/sessions/:id/approvals/:toolCallId` | `{approved,reason?}` |
@@ -139,7 +139,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | GET | `/configuration` | 커스텀 프로바이더, 저장된/실제 기본값. 비밀 값은 반환하지 않음 |
 | PUT | `/configuration/providers/:id` | 커스텀 엔드포인트 생성/수정 |
 | DELETE | `/configuration/providers/:id` | 엔드포인트와 저장된 키 삭제 |
-| PUT | `/configuration/defaults` | `{provider,model}`. JSON `null`은 시작 기본값(`HARNESS_PROVIDER`/`HARNESS_MODEL`) 또는 처음 구성된 모델로 되돌림 |
+| PUT | `/configuration/defaults` | `{provider,model}`. JSON `null`은 시작 기본값(`PIPAYA_PROVIDER`/`PIPAYA_MODEL`) 또는 처음 구성된 모델로 되돌림 |
 | POST | `/configuration/test` | `{provider,model}`; `{ok,durationMs,text?,error?}` |
 
 커스텀 프로바이더 본문:
@@ -204,9 +204,9 @@ WebSocket `/ws`: `{id?,op,...args}`를 보내고 `{type:"ack",id,ok,result|error
 
 ```text
 ~/.pipaya/
-├── harness.db       # 세션, 메시지, 이벤트, 모델 설정, 기본값, 자격 증명
-├── harness.db-wal   # SQLite가 관리
-├── harness.db-shm
+├── pipaya.db       # 세션, 메시지, 이벤트, 모델 설정, 기본값, 자격 증명
+├── pipaya.db-wal   # SQLite가 관리
+├── pipaya.db-shm
 ├── token            # 0600
 ├── locales/         # 언어팩 (0700)
 └── workspace/
@@ -215,9 +215,9 @@ WebSocket `/ws`: `{id?,op,...args}`를 보내고 `{type:"ack",id,ok,result|error
 SQLite는 인덱스 조회와 트랜잭션 기반 설정 갱신을 제공합니다. API 키는 **암호화되지 않습니다**.
 기본 디렉터리는 `0700`, 새 데이터베이스는 `0600`으로 만들어집니다.
 백업은 SQLite를 인식하는 방식을 쓰거나 중지/체크포인트 후 복사하세요. 실행 중에 데이터베이스 파일만 복사하지 마세요.
-기존 `server/data`는 자동으로 가져오지 않습니다. 계속 쓰려면 `HARNESS_DATA_DIR=./data`로 지정하세요.
+기존 `server/data`는 자동으로 가져오지 않습니다. 계속 쓰려면 `PIPAYA_DATA_DIR=./data`로 지정하세요.
 
-인증 토큰과 데이터 디렉터리는 로그에 출력되지 않으며 `?token=`은 가려집니다. `bash` 자식 프로세스는 `HARNESS_*` 변수를 하나도 상속하지 않습니다.
+인증 토큰과 데이터 디렉터리는 로그에 출력되지 않으며 `?token=`은 가려집니다. `bash` 자식 프로세스는 `PIPAYA_*` 변수를 하나도 상속하지 않습니다.
 
 커스텀 URL은 LAN/Tailscale에 대한 서버 측 요청을 의도적으로 허용합니다. 신뢰하는 엔드포인트만 설정하세요.
 `bash`는 **샌드박스되지 않으며** 서버 사용자 권한으로 실행됩니다. 승인 정책을 `ask`로 두거나 컨테이너/VM에서 서버를 격리하세요.
@@ -225,4 +225,4 @@ SQLite는 인덱스 조회와 트랜잭션 기반 설정 갱신을 제공합니�
 
 ### Built-in skills
 
-`harness-client-extensions`는 클라이언트를 수정하는 에이전트를 위해 클라이언트의 확장 시스템을 설명합니다. `references/`는 `client/docs/extension*.md`의 사본입니다. 원본을 고친 뒤에는 `bun scripts/sync-builtin-skills.ts`를 실행하세요(사본이 어긋나면 테스트가 실패합니다). 다른 내장 스킬은 `builtin-skills/<name>/SKILL.md`를 만들어 추가합니다.
+`pipaya-client-extensions`는 클라이언트를 수정하는 에이전트를 위해 클라이언트의 확장 시스템을 설명합니다. `references/`에 확장 문서가 들어 있습니다. 다른 내장 스킬은 `builtin-skills/<name>/SKILL.md`를 만들어 추가합니다.

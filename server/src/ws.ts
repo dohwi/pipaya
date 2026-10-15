@@ -20,7 +20,7 @@ import type { SessionManager } from "./sessions.ts";
  *
  * server -> client
  *   { type: "ack", id, ok: true, result? } | { type: "ack", id, ok: false, error: { code, message } }
- *   { type: "event", event: HarnessEvent }
+ *   { type: "event", event: PipayaEvent }
  *   { type: "hello", subscriptions: [...] }   on connect
  *
  * Liveness: the server sends a protocol ping every 30 s and drops a socket that missed the previous one (browsers answer on

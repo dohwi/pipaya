@@ -95,7 +95,7 @@ manifest에 선택 필드 `settings`(최대 20개)를 선언하면 설정 화면
 
 manifest의 `settingsScope: "local"`은 해당 확장 설정을 기기에만 저장하며 작업 서버에서 읽거나 쓰지 않습니다. 기본값은 `"server"`입니다. 인증 정보를 사용하는 확장은 로컬 scope를 권장합니다. 가져온 configuration은 공통 로컬 설정을 사용하며 작업 서버의 설정 미러링을 중단합니다.
 
-기본 scope의 확장 설정은 연결한 harness 서버에 **인증된 요청**으로 저장되며, 서버 쪽 파일은 `<dataDir>/extensions/<id>/settings.json`입니다. 브라우저의 `localStorage`는 캐시/오프라인 대체용입니다.
+기본 scope의 확장 설정은 연결한 pipaya 서버에 **인증된 요청**으로 저장되며, 서버 쪽 파일은 `<dataDir>/extensions/<id>/settings.json`입니다. 브라우저의 `localStorage`는 캐시/오프라인 대체용입니다.
 
 | 요청 | 용도 |
 |---|---|
@@ -267,7 +267,7 @@ const data = await sdk.http.getJson('/some/path?x=1'); // 인자는 정확히 1�
 
 기본 origin은 없으며 설정 `httpOrigin`(스키마가 있으면 검증된 값)이 없으면 `설정에 httpOrigin이 필요합니다` 오류입니다. `httpOrigin`은 순수 http(s) origin(경로는 `/`만, 자격 증명·query·fragment 금지)이어야 합니다. `path`는 단일 `/`로 시작해야 하며 `//`, 백슬래시, 제어문자·공백, `..`/`.` 세그먼트, fragment, 스킴은 거부합니다. query는 허용합니다.
 
-GET만 사용하며 `credentials: 'omit'`, `redirect: 'error'`, `cache: 'no-store'`, `referrerPolicy: 'no-referrer'`, `Accept: application/json`입니다. Authorization·Cookie·harness 토큰은 전달하지 않습니다. 3.5초 timeout(SDK 5초 이내), 스트리밍 본문 최대 2MiB, JSON 파싱 오류는 안전한 메시지로 반환하고 오류에 요청 URL을 포함하지 않습니다. 결과는 깊이 32 이하의 일반 JSON으로 깊은 복사합니다. CORS는 대상 서버에서 허용해야 합니다. 서버 측 프록시는 없습니다.
+GET만 사용하며 `credentials: 'omit'`, `redirect: 'error'`, `cache: 'no-store'`, `referrerPolicy: 'no-referrer'`, `Accept: application/json`입니다. Authorization·Cookie·pipaya 토큰은 전달하지 않습니다. 3.5초 timeout(SDK 5초 이내), 스트리밍 본문 최대 2MiB, JSON 파싱 오류는 안전한 메시지로 반환하고 오류에 요청 URL을 포함하지 않습니다. 결과는 깊이 32 이하의 일반 JSON으로 깊은 복사합니다. CORS는 대상 서버에서 허용해야 합니다. 서버 측 프록시는 없습니다.
 
 확장별로 같은 `path`의 진행 중 요청은 하나로 병합하고, 이전 시작 후 2초 이내 같은 경로를 다시 요청하면 `너무 자주` 오류를 반환합니다(캐시 없음, 서로 다른 경로는 독립, 동시에 최대 4개). 비활성화·다시 불러오기·안전 모드에서 요청을 취소하며 이전 generation의 응답은 새 인스턴스로 전달되지 않습니다. 공개 타입(`NavbarItemSpec`, `IconSpec`, `UIGaugeNode` 등)은 `src/lib/extensions/sdk.ts`에서 재노출합니다.
 
@@ -314,7 +314,7 @@ const response = await sdk.http.requestJson({
 
 **브라우저 샌드박스는 운영체제 프로세스 격리나 메모리/CPU 할당량 보장이 아닙니다.** 악의적인 대용량 메모리 할당, 브라우저/WebView 취약점까지 방어한다고 주장하지 않습니다. 검토하지 않은 확장은 실행하지 마세요. Tauri 플랫폼별 Worker/CSP 동작은 실제 배포 WebView에서 확인해야 합니다. 지원하지 않는 환경에서는 활성화 오류로 종료되며 앱 realm에서 실행하는 대체 경로는 없습니다.
 
-호스트 전체 CSP는 별도 보안 과제입니다. 이 기능은 기존 Tauri 전역 CSP 설정을 완화하지 않습니다. 시스템 알림을 위해 신뢰된 앱 호스트에는 Tauri `notification` 및 `harness-push` 권한이 있지만, 확장 Worker에는 Tauri API나 OS 권한을 직접 전달하지 않습니다. 임의 코드를 앱에서 `import()`하는 방식도 쓰지 않습니다.
+호스트 전체 CSP는 별도 보안 과제입니다. 이 기능은 기존 Tauri 전역 CSP 설정을 완화하지 않습니다. 시스템 알림을 위해 신뢰된 앱 호스트에는 Tauri `notification` 및 `pipaya-push` 권한이 있지만, 확장 Worker에는 Tauri API나 OS 권한을 직접 전달하지 않습니다. 임의 코드를 앱에서 `import()`하는 방식도 쓰지 않습니다.
 
 ## 문제 복구
 
@@ -333,9 +333,9 @@ bun run build
 실제 브라우저 격리/관리/입력창/heartbeat 검증은 개발 서버 실행 후 `scripts/check-extensions.cjs`를 사용합니다. Playwright는 선택적 QA 의존성이며 앱 의존성을 추가하지 않습니다.
 
 ```sh
-npm install --prefix /tmp/harness-browser-qa playwright
-/tmp/harness-browser-qa/node_modules/.bin/playwright install chromium
-NODE_PATH=/tmp/harness-browser-qa/node_modules node scripts/check-extensions.cjs
+npm install --prefix /tmp/pipaya-browser-qa playwright
+/tmp/pipaya-browser-qa/node_modules/.bin/playwright install chromium
+NODE_PATH=/tmp/pipaya-browser-qa/node_modules node scripts/check-extensions.cjs
 ```
 
 기본 접속 주소는 `http://localhost:1420`입니다. 다른 환경에서는 `EXTENSION_TEST_URL`로 바꿉니다. 이 스크립트는 테스트 브라우저의 새 프로필에만 패키지를 설치하고 개발 서버 모듈을 사용합니다. Tauri WebView의 네이티브 QA를 대신하지 않습니다.

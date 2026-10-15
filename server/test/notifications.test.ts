@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { openDb } from "../src/db.ts";
-import { EventBus, type HarnessEvent } from "../src/events.ts";
+import { EventBus, type PipayaEvent } from "../src/events.ts";
 import { NotificationService, type DevicePresence, type NotificationPayload, type PushTransports } from "../src/notifications.ts";
 import { buildApp } from "../src/app.ts";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -12,7 +12,7 @@ const pause = () => new Promise(resolve => setTimeout(resolve, 30));
 function setup(transports: PushTransports = {}, escalateMs = 0) {
   const db = openDb(":memory:"); const bus = new EventBus(db); let now = 1000; const policy = { escalateMs };
   const service = new NotificationService(db, bus, transports, () => now, 5, () => policy.escalateMs);
-  const events: HarnessEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
+  const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
   disposals.push(async () => { await service.close(); db.close(); });
   return { db, bus, service, events, policy, advance: () => { now += 46_000; }, tick: (ms: number) => { now += ms; } };
 }
@@ -206,7 +206,7 @@ describe("unread on the PC: escalate to the phone (Discord style)", () => {
 });
 
 test("notification API requires bearer auth and strictly validates registration/rules", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "harness-notifications-"));
+  const dir = mkdtempSync(join(tmpdir(), "pipaya-notifications-"));
   const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
   disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
   const headers = { authorization: "Bearer t" };
@@ -217,9 +217,9 @@ test("notification API requires bearer auth and strictly validates registration/
   expect((await app.server.inject({ method: "PUT", url: "/notifications/devices/pc", headers: jsonHeaders, payload: { ...presence("desktop"), push: { provider: "fcm", token: "token" } } })).statusCode).toBe(400);
   expect((await app.server.inject({ method: "PUT", url: "/notifications/rules/ext/done", headers: jsonHeaders, payload: { event: "message_end", title: "no" } })).statusCode).toBe(400);
   expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "ext", notification: { title: "request", kind: "user_request" } } })).statusCode).toBe(200);
-  // "harness" is the source of the built-in notices (the client translates their titles), so an extension cannot use it.
-  expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "harness", notification: { title: "Approval required", kind: "approval_required" } } })).statusCode).toBe(400);
-  expect((await app.server.inject({ method: "PUT", url: "/notifications/rules/harness/done", headers: jsonHeaders, payload: { event: "run_finished", title: "x" } })).statusCode).toBe(400);
+  // "pipaya" is the source of the built-in notices (the client translates their titles), so an extension cannot use it.
+  expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "pipaya", notification: { title: "Approval required", kind: "approval_required" } } })).statusCode).toBe(400);
+  expect((await app.server.inject({ method: "PUT", url: "/notifications/rules/pipaya/done", headers: jsonHeaders, payload: { event: "run_finished", title: "x" } })).statusCode).toBe(400);
 });
 
 test("built-in notices are written in the language of the device that gets them", () => {
@@ -321,7 +321,7 @@ describe("device list", () => {
     expect(service.forget("phone")).toBe(false); expect(revoked).toHaveLength(1);
   });
   test("over HTTP: GET lists, DELETE removes, both need the token", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "harness-devices-"));
+    const dir = mkdtempSync(join(tmpdir(), "pipaya-devices-"));
     const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
     disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
     const auth = { authorization: "Bearer t" }, headers = { ...auth, "content-type": "application/json" };

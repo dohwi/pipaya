@@ -25,21 +25,21 @@ describe("$agent mentions", () => {
 });
 
 describe("/skill:name calls", () => {
-	const names = ["harness-usage", "release-notes"];
+	const names = ["pipaya-usage", "release-notes"];
 
 	test("finds known skills once, anywhere after whitespace", () => {
-		expect(mentionedSkills("/skill:release-notes then /skill:harness-usage. /skill:release-notes", names)).toEqual(["release-notes", "harness-usage"]);
+		expect(mentionedSkills("/skill:release-notes then /skill:pipaya-usage. /skill:release-notes", names)).toEqual(["release-notes", "pipaya-usage"]);
 	});
 
 	test("ignores unknown names, mid-word and plain commands", () => {
-		expect(mentionedSkills("/skill:nobody a/skill:harness-usage /skill: /compact", names)).toEqual([]);
+		expect(mentionedSkills("/skill:nobody a/skill:pipaya-usage /skill: /compact", names)).toEqual([]);
 	});
 
 	test("hint inlines the skill text under the marker clients hide", () => {
-		const hint = skillCallHint({ name: "harness-usage", path: "/s/harness-usage/SKILL.md" }, "# Body", HINT_OPEN);
+		const hint = skillCallHint({ name: "pipaya-usage", path: "/s/pipaya-usage/SKILL.md" }, "# Body", HINT_OPEN);
 		expect(hint.startsWith(HINT_OPEN)).toBe(true);
-		expect(hint).toContain("/skill:harness-usage");
+		expect(hint).toContain("/skill:pipaya-usage");
 		expect(hint).toContain("# Body");
-		expect(hint).toContain("/s/harness-usage");
+		expect(hint).toContain("/s/pipaya-usage");
 	});
 });

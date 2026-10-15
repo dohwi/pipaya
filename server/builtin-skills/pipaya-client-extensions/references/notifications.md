@@ -3,7 +3,7 @@
 ## 정책
 
 - **설정 → 일반 → 시스템 알림**에서 사용자가 직접 OS 권한을 허용합니다. 기본은 꺼짐이며 확장은 권한창을 자동으로 띄울 수 없습니다.
-- 같은 harness 서버의 Bearer 토큰을 사용하는 기기들은 한 사용자로 취급합니다. 서버별로 독립이고 다중 사용자 계정 시스템은 아닙니다.
+- 같은 pipaya 서버의 Bearer 토큰을 사용하는 기기들은 한 사용자로 취급합니다. 서버별로 독립이고 다중 사용자 계정 시스템은 아닙니다.
 - 어느 기기든 앱 창이 보이고 포커스가 있으면 OS/푸시 알림을 억제합니다. 다른 세션을 보고 있어도 OS 알림은 억제하고 기존 읽지 않음 표시·앱 내부 알림·승인 UI는 유지합니다.
 - 아무 창도 보고 있지 않으면 하나의 기기에만 라이브 OS 알림을 전달합니다. 데스크톱 우선, 그다음 최근 접속 창입니다.
 - **PC에서 읽지 않으면 폰으로 (Discord 방식)**: PC가 알림을 표시했더라도 설정한 시간(기본 3분, 1분~1시간 또는 끔) 동안 어느 기기에서도 앱 창을 열어 보지 않으면 서버가 모바일로도 푸시합니다. 그 사이 한 번이라도 앱을 보면 취소하고, 승인 처리·새 실행 시작으로 불필요해진 알림도 취소합니다. 대기 중인 푸시는 DB에 저장되어 서버를 재시작해도 이어지며, 10분 넘게 지난 것은 버립니다. 이 시간은 서버 단위 설정(`notificationPolicy`)이라 같은 서버에 연결한 모든 기기에 똑같이 적용됩니다. 설정 → 일반 → 시스템 알림에서 바꿉니다.
@@ -30,18 +30,18 @@ Android OS 설정의 **강제 종료(force-stop)**는 일반적인 프로세스 
 
 ## Android FCM 설정
 
-1. Firebase 프로젝트에 Android 앱 `pipaya.app`를 등록합니다.
-2. 내려받은 `google-services.json`을 저장소 밖(`~/.secrets/harness/google-services.json`)에 보관합니다.
-3. Android 프로젝트 초기화 후 빌드 준비 스크립트를 실행합니다 (`~/.secrets/harness/google-services.json`에 있으면 자동 인식되며, 다른 경로일 경우 `HARNESS_FIREBASE_ANDROID_CONFIG` 지정 가능).
+1. Firebase 프로젝트에 Android 앱 `work.pipaya.app`를 등록합니다.
+2. 내려받은 `google-services.json`을 저장소 밖(`~/.secrets/pipaya/google-services.json`)에 보관합니다.
+3. Android 프로젝트 초기화 후 빌드 준비 스크립트를 실행합니다 (`~/.secrets/pipaya/google-services.json`에 있으면 자동 인식되며, 다른 경로일 경우 `PIPAYA_FIREBASE_ANDROID_CONFIG` 지정 가능).
 
 ```sh
 cd client
 bun run android:init
-# ~/.secrets/harness/google-services.json 에 파일이 있으면 환경 변수 없이 바로 실행 가능:
+# ~/.secrets/pipaya/google-services.json 에 파일이 있으면 환경 변수 없이 바로 실행 가능:
 bun run android:prepare
 
 # 다른 위치에 보관 중인 경우 환경 변수로 경로 지정:
-# HARNESS_FIREBASE_ANDROID_CONFIG=~/.secrets/harness/google-services.json bun run android:prepare
+# PIPAYA_FIREBASE_ANDROID_CONFIG=~/.secrets/pipaya/google-services.json bun run android:prepare
 
 # 기존 Android 서명용 환경 변수도 그대로 필요
 bun run build:android
@@ -49,15 +49,15 @@ bun run build:android
 
 준비 스크립트는 올바른 application ID를 검증하고 Firebase public 앱 설정을 생성된 Android resource에 넣습니다. Firebase 서비스 계정 비밀키를 APK에 넣지 마세요. 설정이 없으면 APK는 정상 빌드되지만 원격 푸시 등록은 지원하지 않는 것으로 표시합니다. CI도 `android:prepare` 전에 같은 환경 변수와 파일을 공급해야 합니다. 현재 기본 릴리스 CI는 Firebase 파일을 자동 복원하지 않습니다.
 
-서버에서는 Google Application Default Credentials를 사용합니다. `~/.secrets/harness/firebase-adminsdk.json`이 존재하면 자동으로 인식하며, 명시적으로 지정할 수도 있습니다.
+서버에서는 Google Application Default Credentials를 사용합니다. `~/.secrets/pipaya/firebase-adminsdk.json`이 존재하면 자동으로 인식하며, 명시적으로 지정할 수도 있습니다.
 
 ```sh
-# ~/.secrets/harness/firebase-adminsdk.json 이 있으면 HARNESS_PUSH_FCM=1 만으로 동작
-HARNESS_PUSH_FCM=1 bun run start
+# ~/.secrets/pipaya/firebase-adminsdk.json 이 있으면 PIPAYA_PUSH_FCM=1 만으로 동작
+PIPAYA_PUSH_FCM=1 bun run start
 
 # 또는 명시적 경로 지정
-HARNESS_PUSH_FCM=1 \
-GOOGLE_APPLICATION_CREDENTIALS="$HOME/.secrets/harness/firebase-adminsdk.json" \
+PIPAYA_PUSH_FCM=1 \
+GOOGLE_APPLICATION_CREDENTIALS="$HOME/.secrets/pipaya/firebase-adminsdk.json" \
 bun run start
 ```
 

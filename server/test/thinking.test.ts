@@ -11,7 +11,7 @@ describe("thinking levels", () => {
 	});
 
 	test("v3 sessions with off migrate to medium without changing other strengths or settings", () => {
-		const dir = mkdtempSync(join(tmpdir(), "harness-thinking-"));
+		const dir = mkdtempSync(join(tmpdir(), "pipaya-thinking-"));
 		const path = join(dir, "db.sqlite");
 		let db = openDb(path);
 		try {

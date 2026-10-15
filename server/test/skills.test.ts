@@ -5,12 +5,11 @@ import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { BUILTIN_SKILLS_DIR, discoverSkills, parseFrontmatter, skillsPrompt } from "../src/skills.ts";
-import { CLIENT_DOCS, EXTENSION_DOCS, SKILL_REFERENCES } from "../scripts/sync-builtin-skills.ts";
 import { safeReadPath } from "../src/tools.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 function fixture() {
-	const root = realpathSync(mkdtempSync(join(tmpdir(), "harness-skills-")));
+	const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-skills-")));
 	const home = join(root, "home");
 	const repo = join(root, "repo");
 	const cwd = join(repo, "packages", "app");
@@ -65,7 +64,7 @@ describe("skill discovery", () => {
 	});
 
 	test("global dir is not treated as a project dir when home is an ancestor of cwd; no repo => cwd bucket", () => {
-		const root = realpathSync(mkdtempSync(join(tmpdir(), "harness-skills-")));
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-skills-")));
 		try {
 			const home = join(root, "home");
 			const cwd = join(home, "work", "x");
@@ -422,7 +421,7 @@ describe("skills picked up from disk without restarting", () => {
 });
 
 describe("built-in skills", () => {
-	const BUILTIN = "harness-client-extensions";
+	const BUILTIN = "pipaya-client-extensions";
 
 	test("ship with the server: valid, lowest priority, referenced docs exist", () => {
 		const f = fixture();
@@ -441,25 +440,18 @@ describe("built-in skills", () => {
 		}
 	});
 
-	test("harness-usage ships with valid frontmatter and existing references", () => {
+	test("pipaya-usage ships with valid frontmatter and existing references", () => {
 		const f = fixture();
 		try {
 			const r = discoverSkills(f.cwd, { home: f.home });
 			expect(r.warnings).toEqual([]);
-			const usage = r.skills.find((s) => s.name === "harness-usage")!;
+			const usage = r.skills.find((s) => s.name === "pipaya-usage")!;
 			expect(usage).toMatchObject({ scope: "builtin", modelInvocable: true });
 			const refs = [...readFileSync(usage.path, "utf8").matchAll(/`(references\/[\w.-]+\.md)`/g)].map((m) => m[1]!);
 			expect(refs.length).toBeGreaterThan(0);
 			for (const ref of new Set(refs)) expect(existsSync(join(usage.baseDir, ref))).toBe(true);
 		} finally {
 			f.cleanup();
-		}
-	});
-
-	test("bundled doc copies match client/docs (run `bun scripts/sync-builtin-skills.ts`)", () => {
-		for (const name of EXTENSION_DOCS) {
-			const source = readFileSync(join(CLIENT_DOCS, name), "utf8").replace("[문서 지도](README.md) · ", "");
-			expect(readFileSync(join(SKILL_REFERENCES, name), "utf8")).toBe(source);
 		}
 	});
 
@@ -498,7 +490,7 @@ describe("built-in skills", () => {
 			expect(listed.skills.find((s: any) => s.name === BUILTIN)).toMatchObject({ scope: "builtin", enabled: true, globalEnabled: true, override: null });
 
 			const id = (await api("POST", "/sessions", { cwd: f.cwd })).json.id as string;
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => [k.name, k.scope])).toEqual([[BUILTIN, "builtin"], ["harness-usage", "builtin"]]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => [k.name, k.scope])).toEqual([[BUILTIN, "builtin"], ["pipaya-usage", "builtin"]]);
 			await send(id, "hi");
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/context`)).json.effectiveSystemPrompt)).toContain(`- ${BUILTIN}: `);
 
@@ -507,9 +499,9 @@ describe("built-in skills", () => {
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("확장 구조와 변경 가이드");
 
 			await api("PUT", `/skills/${BUILTIN}`, { scope: "global", enabled: false, cwd: f.cwd });
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([expect.objectContaining({ name: "harness-usage" })]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([expect.objectContaining({ name: "pipaya-usage" })]);
 			await api("PUT", `/skills/${BUILTIN}`, { scope: "global", enabled: true, cwd: f.cwd });
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => k.name)).toEqual([BUILTIN, "harness-usage"]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => k.name)).toEqual([BUILTIN, "pipaya-usage"]);
 		} finally {
 			await app.close();
 			upstream.stop();

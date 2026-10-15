@@ -6,13 +6,13 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import { Api, ApiError } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
-import type { HarnessEvent } from "../src/lib/types";
+import type { PipayaEvent } from "../src/lib/types";
 
 let ChatState: typeof ChatStateType;
 let dir: string;
 beforeAll(async () => {
 	// Compile the real rune module with Svelte, rather than substituting fake $state globals.
-	dir = await mkdtemp(join(tmpdir(), "harness-compaction-"));
+	dir = await mkdtemp(join(tmpdir(), "pipaya-compaction-"));
 	const build = await Bun.build({
 		entrypoints: [resolve("src/lib/chat.svelte.ts")], target: "bun",
 		plugins: [{ name: "runes", setup(builder) {
@@ -43,7 +43,7 @@ function setup(overrides: Record<string, unknown> = {}) {
 	};
 	return { chat: new ChatState("session", api as unknown as Api), api };
 }
-const event = (type: string, data: unknown = {}): HarnessEvent => ({ id: 1, sessionId: "session", type, data, ts: Date.now() });
+const event = (type: string, data: unknown = {}): PipayaEvent => ({ id: 1, sessionId: "session", type, data, ts: Date.now() });
 
 describe("pi compaction state", () => {
 	test("reload restores server compaction and unknown context", async () => {

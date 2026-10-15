@@ -9,7 +9,7 @@ export const REPO = "dohwi/pipaya";
 export const RELEASE_API = `https://api.github.com/repos/${REPO}/releases/tags/latest`;
 /** The only place an APK link may point to; anything else in the API response is ignored. */
 export const DOWNLOAD_PREFIX = `https://github.com/${REPO}/releases/download/latest/`;
-export const APK_NAME = "harness-android-arm64.apk";
+export const APK_NAME = "pipaya-android-arm64.apk";
 
 export interface ReleaseInfo {
 	version: string;

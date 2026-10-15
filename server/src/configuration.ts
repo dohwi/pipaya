@@ -7,7 +7,7 @@ import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.l
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import type { Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
-import type { ModelRegistry } from "./models.ts";
+import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Thinking } from "./schemas.ts";
 import { catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
 import { isInside } from "./tools.ts";
@@ -73,7 +73,7 @@ export const WorkdirBody = Type.Object({ path: Type.Union([Type.String({ minLeng
 export const WorkdirInfo = Type.Object({
 	saved: Type.Union([Type.String(), Type.Null()]),
 	effective: Type.String({ description: "Where a session without an explicit cwd starts, and what relative cwd values resolve against" }),
-	fallback: Type.String({ description: "Startup default (HARNESS_WORKSPACE), used when nothing is saved" }),
+	fallback: Type.String({ description: "Startup default (PIPAYA_WORKSPACE), used when nothing is saved" }),
 });
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
 export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo });
@@ -240,6 +240,8 @@ export class Configuration {
 			this.db.query("DELETE FROM custom_providers WHERE id = $id").run({ id });
 		});
 		this.registry.models.deleteProvider(id);
+		const builtin = builtinProvider(id); // a custom endpoint may have shadowed a built-in provider: bring it back
+		if (builtin) this.registry.models.setProvider(builtin);
 	}
 
 	setDefaults(selection: DefaultModelSelection | null) {

@@ -26,7 +26,7 @@ describe("createCorsPolicy", () => {
 		}
 		expect(policy.allows(undefined)).toBe(false);
 	});
-	test("HARNESS_CORS_ORIGINS adds exact origins or '*'", () => {
+	test("PIPAYA_CORS_ORIGINS adds exact origins or '*'", () => {
 		const extra = createCorsPolicy("https://app.example.com/, https://b.example.com");
 		expect(extra.allows("https://app.example.com")).toBe(true);
 		expect(extra.allows("https://b.example.com")).toBe(true);

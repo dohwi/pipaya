@@ -12,6 +12,6 @@
         <true/>
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Connect to your harness server on your local or Tailscale network.</string>
+    <string>Connect to your pipaya server on your local or Tailscale network.</string>
 </dict>
 </plist>

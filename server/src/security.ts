@@ -27,7 +27,7 @@ export interface CorsPolicy {
 
 /**
  * Default: Tauri app origins plus loopback/Tailscale/LAN hosts on any port.
- * `extra` (HARNESS_CORS_ORIGINS, comma separated) adds exact origins; "*" allows every origin.
+ * `extra` (PIPAYA_CORS_ORIGINS, comma separated) adds exact origins; "*" allows every origin.
  */
 export function createCorsPolicy(extra: string | undefined): CorsPolicy {
 	const entries = (extra ?? "").split(",").map((s) => s.trim()).filter(Boolean);

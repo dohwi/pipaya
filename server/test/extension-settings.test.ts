@@ -26,7 +26,7 @@ const rawPut = async (id: string, payload: string) => {
 const entries = () => (existsSync(root()) ? readdirSync(root()) : []);
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-ext-settings-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-ext-settings-"));
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
@@ -79,7 +79,7 @@ describe("extension settings", () => {
 	});
 
 	test("invalid ids are rejected without touching the filesystem", async () => {
-		const fresh = mkdtempSync(join(tmpdir(), "harness-ext-ids-"));
+		const fresh = mkdtempSync(join(tmpdir(), "pipaya-ext-ids-"));
 		try {
 			const store = new ExtensionSettings(fresh);
 			const bad = ["../x", "A", "A.b", "a_b", "1a", "sync/x", "a/b.c", "..", ".", "a..b", "a.b.", ".a.b", "a_b.c", "1a.b", "a.b ", `a.${"b".repeat(80)}`, "a\\b.c", ""];
@@ -212,7 +212,7 @@ describe("extension settings", () => {
 	});
 
 	test("at most 100 extension folders can be created; existing ones can still be updated", () => {
-		const fresh = mkdtempSync(join(tmpdir(), "harness-ext-cap-"));
+		const fresh = mkdtempSync(join(tmpdir(), "pipaya-ext-cap-"));
 		try {
 			const store = new ExtensionSettings(fresh);
 			for (let i = 0; i < MAX_EXTENSIONS; i++) store.save(`ext.n${i}`, { i });

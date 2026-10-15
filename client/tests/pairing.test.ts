@@ -4,25 +4,25 @@ import { buildPairingLink, isLoopbackUrl, isPlainHttpOnOpenNetwork, parsePairing
 describe("connection link", () => {
 	test("round-trips address, code and name", () => {
 		const link = buildPairingLink("http://100.85.51.107:8787", "abcDEF123_-xyz", "집 서버");
-		expect(link.startsWith("harness://connect?")).toBe(true);
+		expect(link.startsWith("pipaya://connect?")).toBe(true);
 		expect(parsePairingLink(link)).toEqual({ baseUrl: "http://100.85.51.107:8787", code: "abcDEF123_-xyz", name: "집 서버" });
 	});
 	test("the link never carries a token", () => {
 		expect(buildPairingLink("https://h.example", "code-code-code")).not.toMatch(/token/i);
 	});
 	test("a bare address gets http:// and a trailing slash is dropped", () => {
-		expect(parsePairingLink("harness://connect?u=100.1.2.3:8787/&c=abcdefgh12")?.baseUrl).toBe("http://100.1.2.3:8787");
+		expect(parsePairingLink("pipaya://connect?u=100.1.2.3:8787/&c=abcdefgh12")?.baseUrl).toBe("http://100.1.2.3:8787");
 	});
 	test("anything else is not a connection link", () => {
 		for (const bad of [
-			"", "garbage", "https://connect?u=http://x&c=abcdefgh12", "harness://other?u=http://x&c=abcdefgh12",
-			"harness://connect?c=abcdefgh12", "harness://connect?u=http://x", "harness://connect?u=http://x&c=short",
-			"harness://connect?u=javascript:alert(1)&c=abcdefgh12", "harness://connect?u=ftp://x&c=abcdefgh12",
-			"harness://connect?u=http://user:pw@x:1&c=abcdefgh12",
+			"", "garbage", "https://connect?u=http://x&c=abcdefgh12", "pipaya://other?u=http://x&c=abcdefgh12",
+			"pipaya://connect?c=abcdefgh12", "pipaya://connect?u=http://x", "pipaya://connect?u=http://x&c=short",
+			"pipaya://connect?u=javascript:alert(1)&c=abcdefgh12", "pipaya://connect?u=ftp://x&c=abcdefgh12",
+			"pipaya://connect?u=http://user:pw@x:1&c=abcdefgh12",
 		]) expect(parsePairingLink(bad)).toBeNull();
 	});
 	test("an over-long name is cut", () => {
-		expect(parsePairingLink(`harness://connect?u=http://x:1&c=abcdefgh12&n=${"a".repeat(200)}`)?.name).toHaveLength(40);
+		expect(parsePairingLink(`pipaya://connect?u=http://x:1&c=abcdefgh12&n=${"a".repeat(200)}`)?.name).toHaveLength(40);
 	});
 	test("loopback addresses are recognised: a phone cannot reach them", () => {
 		for (const u of ["http://localhost:8787", "http://127.0.0.1:8787", "http://[::1]:8787", "http://0.0.0.0:1"]) expect(isLoopbackUrl(u)).toBe(true);

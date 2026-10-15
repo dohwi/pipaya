@@ -30,7 +30,7 @@ async function loadRunes(name: string) {
 }
 
 beforeAll(async () => {
-	dir = await mkdtemp(join(tmpdir(), "harness-store-parts-"));
+	dir = await mkdtemp(join(tmpdir(), "pipaya-store-parts-"));
 	({ Feedback, NOTICE_MAX } = await loadRunes("feedback"));
 	// sidebar.svelte.ts reads localStorage at construction only; reorder is a pure function
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };

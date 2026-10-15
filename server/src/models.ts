@@ -1,4 +1,5 @@
-import { createModels, getSupportedThinkingLevels, type Api, type CredentialStore, type Model, type MutableModels } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, type Api, type CredentialStore, type Model, type MutableModels } from "@earendil-works/pi-ai";
+import { builtinModels, builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import type { ThinkingLevel } from "./store.ts";
 
 export interface ModelRegistry {
@@ -7,9 +8,14 @@ export interface ModelRegistry {
 	defaultSelection?: () => { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null;
 }
 
-/** Starts empty. Configuration loads only user-registered endpoints and models. */
+/** Starts with every pi-ai built-in provider (OpenAI, Anthropic, Google, OpenRouter, Copilot …); Configuration adds the user's own endpoints on top. */
 export function createModelRegistry(credentials: CredentialStore): ModelRegistry {
-	return { models: createModels({ credentials }) };
+	return { models: builtinModels({ credentials }) };
+}
+
+/** A fresh copy of the built-in provider with this id, if there is one (a custom endpoint may have replaced it). */
+export function builtinProvider(id: string) {
+	return builtinProviders().find((p) => p.id === id);
 }
 
 export interface ModelInfo {

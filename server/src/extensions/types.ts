@@ -120,7 +120,7 @@ export interface ExtensionAPI {
 	/** The original built-in tool, e.g. to wrap `bash` from an override of the same name. */
 	builtinTool(name: string, cwd: string): import("@earendil-works/pi-agent-core").AgentTool<any> | undefined;
 	registerFlag(name: string, flag?: ExtensionFlag): void;
-	/** Value of a flag: environment `HARNESS_FLAG_<NAME>`, otherwise the default. */
+	/** Value of a flag: environment `PIPAYA_FLAG_<NAME>`, otherwise the default. */
 	getFlag(name: string): boolean | string | undefined;
 	/** Publish a custom event to clients (`extension_event`). `sessionId: null` = global. */
 	emit(sessionId: string | null, type: string, data?: unknown, opts?: { ephemeral?: boolean }): void;

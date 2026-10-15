@@ -23,7 +23,7 @@ const api = async (method: any, url: string, payload?: unknown) => {
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-subagent-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-subagent-"));
 	ws = join(dir, "ws");
 	mkdirSync(ws, { recursive: true });
 	writeFileSync(join(ws, "notes.txt"), "the answer is 42\n");
@@ -152,14 +152,14 @@ describe("delegate (read-only sub-agent)", () => {
 		await api("POST", `/sessions/${id}/messages`, { text: "$explore where is the login flow?" });
 		await untilIdle(id);
 		const sent = JSON.stringify(upstream.requests.at(0)?.body.messages);
-		expect(sent).toContain("<harness-hint>");
+		expect(sent).toContain("<pipaya-hint>");
 		expect(sent).toContain('agent=\\"explore\\"');
 
 		const id2 = await newSession();
 		upstream.requests.length = 0;
 		await api("POST", `/sessions/${id2}/messages`, { text: "$nobody costs $5" });
 		await untilIdle(id2);
-		expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<harness-hint>");
+		expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<pipaya-hint>");
 	});
 
 	test("the system prompt lists the enabled helpers by name and description, and follows settings changes", async () => {
@@ -203,7 +203,7 @@ describe("delegate (read-only sub-agent)", () => {
 			await untilIdle(id);
 			const sent = JSON.stringify(upstream.requests.at(0)?.body.messages);
 			expect(sent).not.toContain("# Sub-agents");
-			expect(sent).not.toContain("<harness-hint>");
+			expect(sent).not.toContain("<pipaya-hint>");
 		} finally {
 			await api("PUT", "/subagents", { settings: cur });
 		}
@@ -217,7 +217,7 @@ describe("delegate (read-only sub-agent)", () => {
 			upstream.requests.length = 0;
 			await api("POST", `/sessions/${id}/messages`, { text: "$explore hi" });
 			await untilIdle(id);
-			expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<harness-hint>");
+			expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<pipaya-hint>");
 		} finally {
 			await api("PUT", "/subagents", { settings: cur });
 		}

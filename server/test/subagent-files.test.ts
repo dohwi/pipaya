@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { agentsPrompt, buildSystemPrompt } from "../src/context.ts";
 import { loadAgentFiles, parseAgentFile } from "../src/subagent-files.ts";
 
-const root = mkdtempSync(join(tmpdir(), "harness-agentfiles-"));
+const root = mkdtempSync(join(tmpdir(), "pipaya-agentfiles-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const put = (rel: string, text: string) => {
 	const p = join(root, rel);

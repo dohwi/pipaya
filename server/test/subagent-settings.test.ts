@@ -25,7 +25,7 @@ const api = async (method: any, url: string, payload?: unknown, auth = true) => 
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-subagent-settings-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-subagent-settings-"));
 	ws = join(dir, "ws");
 	mkdirSync(ws, { recursive: true });
 	writeFileSync(join(ws, "a.txt"), "hello\n");

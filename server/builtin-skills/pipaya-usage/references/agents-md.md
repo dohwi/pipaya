@@ -41,7 +41,7 @@ Follows the [Agent Skills](https://agentskills.io/specification) layout: `<name>
 |---|---|
 | Global | `~/.agents/skills/` of the server's user |
 | Project | `.pi/skills/` and `.agents/skills/` from the working directory up to the git root (up to `/` without a repo) |
-| Built-in | `server/builtin-skills/` (shipped with the server; on by default; currently `harness-client-extensions`, `harness-usage`) |
+| Built-in | `server/builtin-skills/` (shipped with the server; on by default; currently `pipaya-client-extensions`, `pipaya-usage`) |
 
 - Name clash: nearer folder > project > global > built-in. Shadowing a built-in with the same name gives no warning.
 - Unreadable skills are skipped and listed in `GET /skills` `warnings` (also on top of the skills window).
@@ -52,8 +52,8 @@ Follows the [Agent Skills](https://agentskills.io/specification) layout: `<name>
 - Sessions without the `read` tool are not told about skills.
 - The system message is rewritten only when the enabled set really changed, so the provider's prompt cache survives other edits.
 
-Adding a skill: create `~/.agents/skills/<name>/SKILL.md` (global) or `<repo>/.agents/skills/<name>/SKILL.md` (project); `name` must match the folder. The description is what makes the model open it, so state *when* to read it. A **built-in** skill is `server/builtin-skills/<name>/SKILL.md` in the harness repo; the Docker image copies that folder.
+Adding a skill: create `~/.agents/skills/<name>/SKILL.md` (global) or `<repo>/.agents/skills/<name>/SKILL.md` (project); `name` must match the folder. The description is what makes the model open it, so state *when* to read it. A **built-in** skill is `server/builtin-skills/<name>/SKILL.md` in the pipaya repo; the Docker image copies that folder.
 
 ## Source map
 
-`server/src/context.ts` (discovery, limits, snapshot), `skills.ts` (discovery, priority, built-in dir), `skills-routes.ts` (API). Docs: repo `docs/skills-context.md`, `docs/agent-loop.md`.
+`server/src/context.ts` (discovery, limits, snapshot), `skills.ts` (discovery, priority, built-in dir), `skills-routes.ts` (API).

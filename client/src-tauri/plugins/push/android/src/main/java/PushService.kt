@@ -10,6 +10,6 @@ class PushService : FirebaseMessagingService() {
         PushPlugin.createChannel(this) // the channel must exist before the first push, which can arrive with the app never opened
     }
     override fun onNewToken(token: String) {
-        getSharedPreferences("harness-push", MODE_PRIVATE).edit().putString("token", token).apply()
+        getSharedPreferences("pipaya-push", MODE_PRIVATE).edit().putString("token", token).apply()
     }
 }

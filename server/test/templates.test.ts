@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { discoverTemplates, expandTemplate, parseTemplateCall, templateCallHint } from "../src/templates.ts";
 
 function fixture() {
-	const root = realpathSync(mkdtempSync(join(tmpdir(), "harness-templates-")));
+	const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-templates-")));
 	const home = join(root, "home");
 	const repo = join(root, "repo");
 	const cwd = join(repo, "packages", "app");
@@ -66,9 +66,9 @@ describe("template calls", () => {
 	});
 
 	test("hint carries the expanded text", () => {
-		const hint = templateCallHint("review", "BODY", "<harness-hint>");
-		expect(hint.startsWith("<harness-hint>")).toBe(true);
+		const hint = templateCallHint("review", "BODY", "<pipaya-hint>");
+		expect(hint.startsWith("<pipaya-hint>")).toBe(true);
 		expect(hint).toContain("BODY");
-		expect(hint.endsWith("</harness-hint>")).toBe(true);
+		expect(hint.endsWith("</pipaya-hint>")).toBe(true);
 	});
 });

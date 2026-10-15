@@ -33,7 +33,7 @@ describe("release parsing", () => {
 		expect(parseRelease(release())).toEqual({ version: "0.1.12", apkUrl: `${DOWNLOAD_PREFIX}${APK_NAME}` });
 	});
 	test("ignores an APK link that does not point at this repository's latest release", () => {
-		const evil = release({ assets: [{ name: APK_NAME, browser_download_url: "https://evil.example/harness.apk" }] });
+		const evil = release({ assets: [{ name: APK_NAME, browser_download_url: "https://evil.example/pipaya.apk" }] });
 		expect(parseRelease(evil)).toEqual({ version: "0.1.12", apkUrl: null });
 		const other = release({ assets: [{ name: APK_NAME, browser_download_url: "https://github.com/someone/else/releases/download/latest/x.apk" }] });
 		expect(parseRelease(other)?.apkUrl).toBeNull();

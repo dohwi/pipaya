@@ -1,11 +1,11 @@
 ---
-name: harness-client-extensions
+name: pipaya-client-extensions
 description: Read this before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - the extension SDK (permissions, sdk methods, manifest, packages), declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens (extension panel dialog, Settings > Extensions manager, import and approval modals) and their visual design - or when writing an extension package for the client. Not for the server's agent tools or model providers.
 ---
 
-# Harness client extensions
+# Pipaya client extensions
 
-The harness client has its own extension system (SDK v1). Extension code runs in a sandboxed Worker and can only send **validated data**; the host renders everything. It is separate from the server's agent tools and model providers.
+The pipaya client has its own extension system (SDK v1). Extension code runs in a sandboxed Worker and can only send **validated data**; the host renders everything. It is separate from the server's agent tools and model providers.
 
 The docs below are bundled with this skill, in `references/` next to this file. Read them with the `read` tool before you edit. Source paths inside them (`src/lib/extensions/...`, `src/components/...`, `tests/...`, `examples/extensions/...`) are relative to the client project root, the directory that contains `src/lib/extensions/` (normally `<repo>/client`). If you cannot find it from the working directory, ask the user where the client source is instead of guessing.
 
@@ -38,6 +38,6 @@ The docs below are bundled with this skill, in `references/` next to this file. 
 ## Finish every change with
 
 1. Tests next to the change: `tests/extensions-*.test.ts` (client) and `test/extension-settings.test.ts` (server) as relevant.
-2. Docs updated in the same change: the matching table in the extension docs. Doc numbers come from code; if you change a limit, change the doc. In the harness repo the docs live in `client/docs/` - after editing them run `bun scripts/sync-builtin-skills.ts` in `server/` so this skill's copies follow.
+2. Docs updated in the same change: the matching table in the extension docs. Doc numbers come from code; if you change a limit, change the doc. The docs live in this skill's `references/`.
 3. From the client root: `bun run check`, `bun test tests`, `bun run build`.
 4. For visible changes, look at it: `bun run dev` (binds `0.0.0.0:1420`), Playwright screenshots at 1280 and 390 px, dark and light. State which surfaces you could not check.

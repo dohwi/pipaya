@@ -218,7 +218,12 @@
 		}
 	}
 
-	/* assistant */
+	/* assistant: avatar on top, reply fills the full width below it */
+	.row.assistant {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
 	.avatar {
 		flex: none;
 		width: 30px;

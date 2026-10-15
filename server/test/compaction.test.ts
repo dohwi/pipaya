@@ -24,7 +24,7 @@ const api = async (method: any, url: string, payload?: unknown) => {
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-compaction-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-compaction-"));
 	ws = join(dir, "ws");
 	mkdirSync(ws, { recursive: true });
 	upstream = startEchoUpstream();

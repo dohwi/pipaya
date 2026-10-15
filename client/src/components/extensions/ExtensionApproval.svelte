@@ -21,7 +21,7 @@
 </script>
 <dialog bind:this={dialog} oncancel={(event) => { event.preventDefault(); app.resolveExtension(false); }} onclose={() => { shown = null; app.extensionApproval && app.resolveExtension(false); }} aria-labelledby="extension-approval-title">
   {#if shown}
-    <h2 id="extension-approval-title">harness · {t("확장 설정 접근 승인")}</h2>
+    <h2 id="extension-approval-title">pipaya · {t("확장 설정 접근 승인")}</h2>
     <p>{t("확장 요청입니다. 승인한 범위만 앱에서 수행합니다.")}</p>
     <pre>{shown.message}</pre>
     <div class="buttons">

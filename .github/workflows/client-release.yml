@@ -79,13 +79,13 @@ jobs:
           sig = Path(str(files[0]) + ".sig")
           if not sig.is_file() or not sig.read_text().strip():
               raise SystemExit("Missing updater signature for the Windows installer")
-          shutil.copyfile(files[0], "release-assets/harness-windows-x64-setup.exe")
-          shutil.copyfile(sig, "release-assets/harness-windows-x64-setup.exe.sig")
+          shutil.copyfile(files[0], "release-assets/pipaya-windows-x64-setup.exe")
+          shutil.copyfile(sig, "release-assets/pipaya-windows-x64-setup.exe.sig")
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-release
-          path: client/release-assets/harness-windows-x64-setup.exe*
+          path: client/release-assets/pipaya-windows-x64-setup.exe*
           if-no-files-found: error
           retention-days: 3
 
@@ -148,17 +148,17 @@ jobs:
               finally:
                   subprocess.run(["hdiutil", "detach", mount], check=True)
           Path("release-assets").mkdir()
-          shutil.copyfile(files[0], "release-assets/harness-macos-arm64.dmg")
+          shutil.copyfile(files[0], "release-assets/pipaya-macos-arm64.dmg")
           update = list((bundle / "macos").glob("*.app.tar.gz"))
           if len(update) != 1 or not Path(str(update[0]) + ".sig").read_text().strip():
               raise SystemExit(f"Expected one signed macOS update bundle, got {update}")
-          shutil.copyfile(update[0], "release-assets/harness-macos-arm64.app.tar.gz")
-          shutil.copyfile(str(update[0]) + ".sig", "release-assets/harness-macos-arm64.app.tar.gz.sig")
+          shutil.copyfile(update[0], "release-assets/pipaya-macos-arm64.app.tar.gz")
+          shutil.copyfile(str(update[0]) + ".sig", "release-assets/pipaya-macos-arm64.app.tar.gz.sig")
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-release
-          path: client/release-assets/harness-macos-arm64.*
+          path: client/release-assets/pipaya-macos-arm64.*
           if-no-files-found: error
           retention-days: 3
 
@@ -219,7 +219,7 @@ jobs:
                       raise SystemExit("Expected one app in IPA Payload")
                   app = apps[0]
                   info = plistlib.loads((app / "Info.plist").read_bytes())
-                  if info["CFBundleIdentifier"] != "pipaya.app":
+                  if info["CFBundleIdentifier"] != "work.pipaya.app":
                       raise SystemExit("Unexpected app identifier")
                   if info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
                       raise SystemExit("IPA is not an iPhone device build")
@@ -232,7 +232,7 @@ jobs:
                   if not info.get("NSAppTransportSecurity", {}).get("NSAllowsArbitraryLoads"):
                       raise SystemExit("User-configured HTTP endpoints are not enabled")
           Path("release-assets").mkdir()
-          shutil.copyfile(files[0], "release-assets/harness-ios-arm64-unsigned.ipa")
+          shutil.copyfile(files[0], "release-assets/pipaya-ios-arm64-unsigned.ipa")
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -269,7 +269,7 @@ jobs:
         run: |
           sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.13846066"
           echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.13846066" >> "$GITHUB_ENV"
-          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/harness-android-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/pipaya-android-release.jks" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           targets: aarch64-linux-android
@@ -295,15 +295,15 @@ jobs:
           PY
       - name: Restore Firebase configuration for mobile push
         env:
-          FIREBASE_CONFIG: ${{ secrets.HARNESS_FIREBASE_ANDROID_CONFIG }}
+          FIREBASE_CONFIG: ${{ secrets.PIPAYA_FIREBASE_ANDROID_CONFIG }}
         run: |
           # Without it the app still builds and runs, but the phone never gets a push token.
           if [ -z "$FIREBASE_CONFIG" ]; then
-            echo "::warning::HARNESS_FIREBASE_ANDROID_CONFIG is not set: this APK cannot receive mobile push notifications"
+            echo "::warning::PIPAYA_FIREBASE_ANDROID_CONFIG is not set: this APK cannot receive mobile push notifications"
           else
             umask 077
             printf '%s' "$FIREBASE_CONFIG" > "$RUNNER_TEMP/google-services.json"
-            echo "HARNESS_FIREBASE_ANDROID_CONFIG=$RUNNER_TEMP/google-services.json" >> "$GITHUB_ENV"
+            echo "PIPAYA_FIREBASE_ANDROID_CONFIG=$RUNNER_TEMP/google-services.json" >> "$GITHUB_ENV"
           fi
       - name: Initialize Android project and configure release
         run: |
@@ -330,7 +330,7 @@ jobs:
           tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/37.0.0"
           subprocess.run([str(tools / "apksigner"), "verify", "--verbose", str(files[0])], check=True)
           Path("release-assets").mkdir()
-          shutil.copyfile(files[0], "release-assets/harness-android-arm64.apk")
+          shutil.copyfile(files[0], "release-assets/pipaya-android-arm64.apk")
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -357,7 +357,7 @@ jobs:
           path: release-assets
       - name: Generate checksums
         working-directory: release-assets
-        run: sha256sum harness-windows-x64-setup.exe harness-macos-arm64.dmg harness-ios-arm64-unsigned.ipa harness-android-arm64.apk > SHA256SUMS.txt
+        run: sha256sum pipaya-windows-x64-setup.exe pipaya-macos-arm64.dmg pipaya-ios-arm64-unsigned.ipa pipaya-android-arm64.apk > SHA256SUMS.txt
       - name: Generate updater manifest
         working-directory: release-assets
         env:
@@ -375,8 +375,8 @@ jobs:
               return text
           base = os.environ["BASE"]
           platforms = {
-              "windows-x86_64": {"signature": sig("harness-windows-x64-setup.exe"), "url": f"{base}/harness-windows-x64-setup.exe"},
-              "darwin-aarch64": {"signature": sig("harness-macos-arm64.app.tar.gz"), "url": f"{base}/harness-macos-arm64.app.tar.gz"},
+              "windows-x86_64": {"signature": sig("pipaya-windows-x64-setup.exe"), "url": f"{base}/pipaya-windows-x64-setup.exe"},
+              "darwin-aarch64": {"signature": sig("pipaya-macos-arm64.app.tar.gz"), "url": f"{base}/pipaya-macos-arm64.app.tar.gz"},
           }
           manifest = {"version": f"0.1.{os.environ['NUMBER']}", "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": platforms}
           Path("latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -394,7 +394,7 @@ jobs:
               return;
             }
             const tag = 'latest';
-            const names = ['harness-windows-x64-setup.exe', 'harness-windows-x64-setup.exe.sig', 'harness-macos-arm64.dmg', 'harness-macos-arm64.app.tar.gz', 'harness-macos-arm64.app.tar.gz.sig', 'harness-ios-arm64-unsigned.ipa', 'harness-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
+            const names = ['pipaya-windows-x64-setup.exe', 'pipaya-windows-x64-setup.exe.sig', 'pipaya-macos-arm64.dmg', 'pipaya-macos-arm64.app.tar.gz', 'pipaya-macos-arm64.app.tar.gz.sig', 'pipaya-ios-arm64-unsigned.ipa', 'pipaya-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
             // Validate every payload before touching the existing release.
             const payloads = names.map(name => ({ name, data: fs.readFileSync(`release-assets/${name}`) }));
             if (payloads.some(asset => asset.data.length === 0)) throw new Error('Empty release asset');
@@ -406,10 +406,10 @@ jobs:
               `Version: 0.1.${process.env.GITHUB_RUN_NUMBER}`,
               `Build: [GitHub Actions](${run})`,
               '',
-              '- Windows x64: `harness-windows-x64-setup.exe` (unsigned installer; SmartScreen may warn).',
-              '- macOS Apple Silicon: `harness-macos-arm64.dmg` (ad-hoc signed, not notarized; Gatekeeper may block the first launch).',
-              '- iOS ARM64: `harness-ios-arm64-unsigned.ipa` (UNSIGNED; requires re-signing and provisioning, not directly installable or TestFlight-ready).',
-              '- Android ARM64: `harness-android-arm64.apk` (release APK signed with the persistent project key).',
+              '- Windows x64: `pipaya-windows-x64-setup.exe` (unsigned installer; SmartScreen may warn).',
+              '- macOS Apple Silicon: `pipaya-macos-arm64.dmg` (ad-hoc signed, not notarized; Gatekeeper may block the first launch).',
+              '- iOS ARM64: `pipaya-ios-arm64-unsigned.ipa` (UNSIGNED; requires re-signing and provisioning, not directly installable or TestFlight-ready).',
+              '- Android ARM64: `pipaya-android-arm64.apk` (release APK signed with the persistent project key).',
               '- macOS: copy the app to Applications, then use System Settings → Privacy & Security → Open Anyway if blocked (only for a trusted download).',
               '- Verify downloads using `SHA256SUMS.txt`.',
               '',

@@ -2,9 +2,9 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 // Optional browser QA dependency, intentionally not needed by bun test/build.
-// npm install --prefix /tmp/harness-browser-qa playwright
-// /tmp/harness-browser-qa/node_modules/.bin/playwright install chromium
-// NODE_PATH=/tmp/harness-browser-qa/node_modules node scripts/check-extensions.cjs
+// npm install --prefix /tmp/pipaya-browser-qa playwright
+// /tmp/pipaya-browser-qa/node_modules/.bin/playwright install chromium
+// NODE_PATH=/tmp/pipaya-browser-qa/node_modules node scripts/check-extensions.cjs
 const baseUrl = process.env.EXTENSION_TEST_URL || 'http://localhost:1420';
 const example = name => JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'examples', 'extensions', name), 'utf8'));
 (async () => {

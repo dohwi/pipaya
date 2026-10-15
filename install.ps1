@@ -8,8 +8,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$base = if ($env:HARNESS_RELEASE_URL) { $env:HARNESS_RELEASE_URL } else { 'https://github.com/dohwi/pipaya/releases/download/latest' }
-$name = 'harness-windows-x64-setup.exe'
+$base = if ($env:PIPAYA_RELEASE_URL) { $env:PIPAYA_RELEASE_URL } else { 'https://github.com/dohwi/pipaya/releases/download/latest' }
+$name = 'pipaya-windows-x64-setup.exe'
 $dir = Join-Path ([IO.Path]::GetTempPath()) ('pipaya-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $dir | Out-Null
 

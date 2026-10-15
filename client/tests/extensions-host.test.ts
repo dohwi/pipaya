@@ -58,7 +58,7 @@ defineGlobal("document", {
 const runtimes = () => ((globalThis as any).__fakeRuntimes ??= []) as FakeRuntime[];
 
 beforeAll(async () => {
-	dir = await mkdtemp(join(tmpdir(), "harness-extensions-host-"));
+	dir = await mkdtemp(join(tmpdir(), "pipaya-extensions-host-"));
 	const fakeFile = join(dir, "fake-runtime.js");
 	await writeFile(fakeFile, FAKE_RUNTIME);
 	const build = await Bun.build({

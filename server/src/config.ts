@@ -15,7 +15,7 @@ export interface Config {
 	token: string;
 	/** The default working directory for new sessions. */
 	workspaceRoot: string;
-	/** HARNESS_RESTRICT_WORKSPACE=1: sessions, the folder picker and the default working directory stay inside workspaceRoot. */
+	/** PIPAYA_RESTRICT_WORKSPACE=1: sessions, the folder picker and the default working directory stay inside workspaceRoot. */
 	restrictWorkspace?: boolean;
 	defaultProvider?: string;
 	defaultModel?: string;
@@ -36,13 +36,13 @@ function int(value: string | undefined, fallback: number): number {
 
 export const MIN_TOKEN_LENGTH = 24;
 
-/** Use HARNESS_TOKEN if set, otherwise create and persist one in the data dir. */
+/** Use PIPAYA_TOKEN if set, otherwise create and persist one in the data dir. */
 function resolveToken(env: Record<string, string | undefined>, dataDir: string): string {
-	if (env.HARNESS_TOKEN) {
-		const supplied = env.HARNESS_TOKEN.trim();
+	if (env.PIPAYA_TOKEN) {
+		const supplied = env.PIPAYA_TOKEN.trim();
 		if (supplied.length < MIN_TOKEN_LENGTH) {
 			throw new Error(
-				`HARNESS_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters (omit it to auto-generate one, or use: openssl rand -base64url 32)`,
+				`PIPAYA_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters (omit it to auto-generate one, or use: openssl rand -base64url 32)`,
 			);
 		}
 		return supplied;
@@ -60,29 +60,29 @@ function resolveToken(env: Record<string, string | undefined>, dataDir: string):
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-	const dataDir = resolve(env.HARNESS_DATA_DIR ?? join(homedir(), ".pipaya"));
+	const dataDir = resolve(env.PIPAYA_DATA_DIR ?? join(homedir(), ".pipaya"));
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
-	const approval = (env.HARNESS_APPROVAL ?? "ask") as ApprovalPolicy;
+	const approval = (env.PIPAYA_APPROVAL ?? "ask") as ApprovalPolicy;
 	if (!APPROVAL_POLICIES.includes(approval)) {
-		throw new Error(`HARNESS_APPROVAL must be one of ${APPROVAL_POLICIES.join(", ")}`);
+		throw new Error(`PIPAYA_APPROVAL must be one of ${APPROVAL_POLICIES.join(", ")}`);
 	}
 
 	return {
-		host: env.HARNESS_HOST ?? "0.0.0.0",
-		port: int(env.HARNESS_PORT, 8787),
+		host: env.PIPAYA_HOST ?? "0.0.0.0",
+		port: int(env.PIPAYA_PORT, 8787),
 		dataDir,
-		dbPath: env.HARNESS_DB ?? join(dataDir, "harness.db"),
+		dbPath: env.PIPAYA_DB ?? join(dataDir, "pipaya.db"),
 		token: resolveToken(env, dataDir),
-		workspaceRoot: resolve(env.HARNESS_WORKSPACE ?? join(dataDir, "workspace")),
-		restrictWorkspace: env.HARNESS_RESTRICT_WORKSPACE === "1",
-		defaultProvider: env.HARNESS_PROVIDER,
-		defaultModel: env.HARNESS_MODEL,
+		workspaceRoot: resolve(env.PIPAYA_WORKSPACE ?? join(dataDir, "workspace")),
+		restrictWorkspace: env.PIPAYA_RESTRICT_WORKSPACE === "1",
+		defaultProvider: env.PIPAYA_PROVIDER,
+		defaultModel: env.PIPAYA_MODEL,
 		defaultApproval: approval,
-		approvalTimeoutMs: int(env.HARNESS_APPROVAL_TIMEOUT_MS, 10 * 60_000),
-		logLevel: env.HARNESS_LOG_LEVEL ?? "info",
-		corsOrigins: env.HARNESS_CORS_ORIGINS,
+		approvalTimeoutMs: int(env.PIPAYA_APPROVAL_TIMEOUT_MS, 10 * 60_000),
+		logLevel: env.PIPAYA_LOG_LEVEL ?? "info",
+		corsOrigins: env.PIPAYA_CORS_ORIGINS,
 		// On by default; it only takes effect when Firebase credentials exist (see createPushTransports). "0" turns it off.
-		pushEnabled: env.HARNESS_PUSH_FCM !== "0",
+		pushEnabled: env.PIPAYA_PUSH_FCM !== "0",
 	};
 }

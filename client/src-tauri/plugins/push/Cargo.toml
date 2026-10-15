@@ -1,8 +1,8 @@
 [package]
-name = "tauri-plugin-harness-push"
+name = "tauri-plugin-pipaya-push"
 version = "0.1.0"
 edition = "2021"
-links = "tauri-plugin-harness-push"
+links = "tauri-plugin-pipaya-push"
 
 [build-dependencies]
 tauri-plugin = { version = "2", features = ["build"] }

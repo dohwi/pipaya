@@ -9,7 +9,7 @@ import type {
 	ChatItem,
 	CompactionResult,
 	ContextUsage,
-	HarnessEvent,
+	PipayaEvent,
 	ImageBlock,
 	StreamDelta,
 	ToolRun,
@@ -54,7 +54,7 @@ function assistantFields(m: AssistantMessage) {
 function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[] } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	// The server appends a note when the user wrote $agent; it is for the model, not for the transcript.
-	const shown = Array.isArray(m.content) ? m.content.filter((c) => !(c?.type === "text" && String(c.text ?? "").startsWith("<harness-hint>"))) : m.content;
+	const shown = Array.isArray(m.content) ? m.content.filter((c) => !(c?.type === "text" && String(c.text ?? "").startsWith("<pipaya-hint>"))) : m.content;
 	return { text: textOf(shown), images };
 }
 
@@ -164,7 +164,7 @@ export class ChatState {
 
 	private lastSeq = -1;
 	private syncing = false;
-	private buffer: HarnessEvent[] = [];
+	private buffer: PipayaEvent[] = [];
 	private token = 0;
 
 	constructor(
@@ -240,7 +240,7 @@ export class ChatState {
 		}
 	}
 
-	apply(e: HarnessEvent): void {
+	apply(e: PipayaEvent): void {
 		if (this.syncing) this.buffer.push(e);
 		else this.reduce(e);
 	}
@@ -325,7 +325,7 @@ export class ChatState {
 		}
 	}
 
-	private reduce(e: HarnessEvent): void {
+	private reduce(e: PipayaEvent): void {
 		const d = e.data;
 		switch (e.type) {
 			case "context_updated":

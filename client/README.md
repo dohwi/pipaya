@@ -2,7 +2,7 @@
 
 **English** · [한국어](README.ko.md) · [Project README](../README.md)
 
-Svelte 5 + Vite + Tauri 2 chat client for the harness server (REST + SSE).
+Svelte 5 + Vite + Tauri 2 chat client for the pipaya server (REST + SSE).
 
 ```bash
 cd client && bun install
@@ -18,17 +18,16 @@ On first launch enter the server URL and the token from `~/.pipaya/token`.
 ## Native builds and downloads
 
 Downloads for every platform and the checksum-verifying installers are listed under [Client](../README.md#client) in the project README.
-Client changes pushed to `main` automatically build all four platforms and replace the assets in the single `latest` release after all checks succeed. Installed Windows and macOS apps update themselves; Android notifies you of a new build ([details](docs/releases.md#in-app-updates)).
+Client changes pushed to `main` automatically build all four platforms and replace the assets in the single `latest` release after all checks succeed. Installed Windows and macOS apps update themselves; Android notifies you of a new build (details).
 
-See [build, signing, and release instructions](docs/releases.md) for toolchains, GitHub Secrets, local build commands, and server connectivity.
+See build, signing, and release instructions for toolchains, GitHub Secrets, local build commands, and server connectivity.
 
 ## Language
 
 The UI ships in **English and Korean** and follows the device language (Settings → General → Language lets you pick one or follow the system). Korean is the source language: `t("설정")` uses the Korean text as the lookup key, and `src/lib/locales/en.ts` maps it to English. A missing translation falls back to the Korean text, so nothing is ever blank.
 
 - Check coverage: `node scripts/extract-i18n.cjs` lists strings used in code but missing from `en.ts`, and entries that are no longer used (it exits with 1 when something is missing).
-- More languages are added with a language-pack extension (see [docs/extensions.md](docs/extensions.md)); packs are shared across devices through the server.
-- The documentation under `docs/` is written in Korean.
+- More languages are added with a language-pack extension; packs are shared across devices through the server.
 
 ## Model connections (custom only)
 
@@ -45,7 +44,7 @@ Chat is unavailable until one usable connection exists. Connections are saved pe
 - Older turns are summarized while recent turns and the original transcript are kept. The summary model call costs tokens and may omit details.
 - Sending messages and changing the model are blocked while compaction runs; the stop button requests cancellation. The server's automatic compaction progress is shown too.
 - The current context and the cumulative billed tokens are shown separately. An old server's estimate is marked `~`, and usage not yet measured right after compaction shows `—`.
-- **Needs backend support:** the server currently uses the low-level `pi-agent-core`, so this client work alone does not reduce real tokens. The [backend request and REST/SSE contract](docs/compaction-backend.md) must be implemented. Unsupported servers show a notice.
+- **Needs backend support:** the server currently uses the low-level `pi-agent-core`, so this client work alone does not reduce real tokens. The backend request and REST/SSE contract must be implemented. Unsupported servers show a notice.
 
 Verify with `bun run test` (REST contract and real Svelte rune state module tests), `bun run check` and `bun run build`.
 

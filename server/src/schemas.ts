@@ -275,8 +275,22 @@ export const ProviderInfo = Type.Object({
 	name: Type.String(),
 	configured: Type.Boolean(),
 	storedCredential: Nullable(Type.String({ description: "Credential type kept in SQLite, if any" })),
+	loginMethods: Type.Array(Type.Union([Type.Literal("api_key"), Type.Literal("oauth")]), { description: "How a client can sign in: \"api_key\" = paste a key (PUT credential), \"oauth\" = browser/device login (POST /providers/:id/login)" }),
+	oauthLabel: Type.Optional(Type.String({ description: "Label of the OAuth option, e.g. \"Sign in with ChatGPT\"" })),
+	builtin: Type.Boolean({ description: "Ships with the SDK (false = user-defined endpoint or extension)" }),
 });
 export const ProviderList = Type.Object({ providers: Type.Array(ProviderInfo) });
+export const LoginStartBody = Type.Object({ type: Type.Union([Type.Literal("api_key"), Type.Literal("oauth")]) }, { additionalProperties: false });
+export const LoginAnswerBody = Type.Object({ promptId: Type.Integer(), value: Type.String({ maxLength: 10_000 }) }, { additionalProperties: false });
+export const LoginState = Type.Object({
+	id: Type.String(),
+	providerId: Type.String(),
+	type: Type.Union([Type.Literal("api_key"), Type.Literal("oauth")]),
+	status: Type.Union([Type.Literal("running"), Type.Literal("done"), Type.Literal("error"), Type.Literal("cancelled")]),
+	events: Type.Array(Type.Unknown(), { description: "Announcements so far: {type:\"auth_url\",url} to open, {type:\"device_code\",userCode,verificationUri}, {type:\"info\"|\"progress\",message}" }),
+	prompt: Nullable(Type.Unknown({ description: "Open question: {id,type:\"text\"|\"secret\"|\"manual_code\"|\"select\",message,options?}; answer it via POST /logins/:id/answer" })),
+	error: Type.Optional(Type.String()),
+});
 export const CredentialBody = Type.Object({ key: Type.String({ minLength: 1 }) });
 export const Ok = Type.Object({ ok: Type.Boolean() });
 
@@ -295,7 +309,7 @@ export const Health = Type.Object({
 
 // ── Events ──────────────────────────────────────────────────────────────────
 
-export const HarnessEventSchema = Type.Object(
+export const PipayaEventSchema = Type.Object(
 	{
 		id: Type.Integer({ description: "Global cursor for persisted events; 0 for ephemeral events" }),
 		sessionId: Nullable(Type.String()),
@@ -316,7 +330,7 @@ export const HistoryQuery = Type.Object({
 	after: Type.Optional(Type.Integer({ minimum: 0, default: 0 })),
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000, default: 200 })),
 });
-export const HistoryResult = Type.Object({ events: Type.Array(HarnessEventSchema), latestId: Type.Integer() });
+export const HistoryResult = Type.Object({ events: Type.Array(PipayaEventSchema), latestId: Type.Integer() });
 
 const Message = Type.Unknown({ description: "pi-agent-core AgentMessage" });
 const ToolRef = { toolCallId: Type.String(), toolName: Type.String() };

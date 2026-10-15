@@ -28,14 +28,14 @@ export function registerNotificationRoutes(server: FastifyInstance, service: Not
   app.post("/notifications", {
     schema: { body: Type.Object({ source: owner, notification: spec }, { additionalProperties: false }) },
     handler: async req => {
-      if (req.body.source === "harness") throw badRequest("source \"harness\" is reserved for built-in notifications");
+      if (req.body.source === "pipaya") throw badRequest("source \"pipaya\" is reserved for built-in notifications");
       if (req.body.notification.sessionId && !sessionExists(req.body.notification.sessionId)) throw badRequest("unknown notification session");
       try { return service.send(req.body.source, req.body.notification); } catch { throw new HttpError(429, "notification_limit", "notification rate limit reached"); }
     },
   });
   app.put("/notifications/rules/:owner/:id", {
     schema: { params: Type.Object({ owner, id }), body: Type.Object({ event: Type.Union([Type.Literal("run_finished"), Type.Literal("approval_requested")]), title: text(100), body: Type.Optional(text(300)) }, { additionalProperties: false }) },
-    handler: async req => { if (req.params.owner === "harness") throw badRequest("owner \"harness\" is reserved"); try { service.setRule(req.params.owner, req.params.id, req.body); } catch { throw badRequest("notification rule limit reached"); } return { ok: true }; },
+    handler: async req => { if (req.params.owner === "pipaya") throw badRequest("owner \"pipaya\" is reserved"); try { service.setRule(req.params.owner, req.params.id, req.body); } catch { throw badRequest("notification rule limit reached"); } return { ok: true }; },
   });
   app.delete("/notifications/rules/:owner", { schema: { params: Type.Object({ owner }) }, handler: async req => { service.removeRules(req.params.owner); return { ok: true }; } });
   app.delete("/notifications/rules/:owner/:id", { schema: { params: Type.Object({ owner, id }) }, handler: async req => { service.removeRule(req.params.owner, req.params.id); return { ok: true }; } });

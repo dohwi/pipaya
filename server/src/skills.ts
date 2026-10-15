@@ -379,7 +379,7 @@ export class SkillService {
 	}
 }
 
-/** Prefix of a manual skill call written in a message, e.g. `/skill:harness-usage`. */
+/** Prefix of a manual skill call written in a message, e.g. `/skill:pipaya-usage`. */
 export const SKILL_CALL_PREFIX = "/skill:";
 const MAX_INLINE_SKILL_CHARS = 40_000;
 
@@ -400,7 +400,7 @@ export function mentionedSkills(text: string, names: string[]): string[] {
 export function skillCallHint(skill: Pick<Skill, "name" | "path">, body: string, openTag: string): string {
 	const cut = body.length > MAX_INLINE_SKILL_CHARS;
 	const text = cut ? `${body.slice(0, MAX_INLINE_SKILL_CHARS)}\n[cut: read the rest from the file]` : body;
-	return `${openTag}The user explicitly invoked the skill "${skill.name}" (written as ${SKILL_CALL_PREFIX}${skill.name}). Follow it for this request. Its file is ${skill.path}; resolve relative paths in it against ${dirname(skill.path)}.\n\n${text}</harness-hint>`;
+	return `${openTag}The user explicitly invoked the skill "${skill.name}" (written as ${SKILL_CALL_PREFIX}${skill.name}). Follow it for this request. Its file is ${skill.path}; resolve relative paths in it against ${dirname(skill.path)}.\n\n${text}</pipaya-hint>`;
 }
 
 /** Reads a skill file for inlining; null when it cannot be read. */

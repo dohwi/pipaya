@@ -2753,7 +2753,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
- "tauri-plugin-harness-push",
+ "tauri-plugin-pipaya-push",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-os",
@@ -4020,7 +4020,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-harness-push"
+name = "tauri-plugin-pipaya-push"
 version = "0.1.0"
 dependencies = [
  "serde_json",

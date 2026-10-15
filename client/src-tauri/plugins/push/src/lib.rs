@@ -118,7 +118,7 @@ async fn install_apk<R: Runtime>(_app: tauri::AppHandle<R>) -> Result<serde_json
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("harness-push")
+    Builder::new("pipaya-push")
         .invoke_handler(tauri::generate_handler![register, pending_tap, set_system_bars, device_name, download_apk, update_progress, install_apk])
         .setup(|_app, _api| {
             #[cfg(target_os = "android")]

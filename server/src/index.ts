@@ -20,4 +20,4 @@ process.on("SIGTERM", () => void stop("SIGTERM"));
 await app.server.listen({ host: cfg.host, port: cfg.port });
 app.server.log.info(`workspace: ${cfg.workspaceRoot}`);
 app.server.log.info(`db: ${cfg.dbPath}`);
-if (!process.env.HARNESS_TOKEN) app.server.log.info(`auth token: ${cfg.dataDir}/token`);
+if (!process.env.PIPAYA_TOKEN) app.server.log.info(`auth token: ${cfg.dataDir}/token`);

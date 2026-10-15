@@ -55,7 +55,7 @@ export function finishReport(raw: string, stoppedEarly: boolean, max = MAX_REPOR
 }
 
 /** Wrapper of the note added to a user message; clients hide text blocks that start with it. */
-export const HINT_OPEN = "<harness-hint>";
+export const HINT_OPEN = "<pipaya-hint>";
 
 /** Names written as `$name` in a message, limited to helpers that exist, in order of appearance, without repeats. */
 export function mentionedAgents(text: string, names: string[]): string[] {
@@ -70,7 +70,7 @@ export function mentionedAgents(text: string, names: string[]): string[] {
 /** Tells the model the user chose these helpers by hand, so it calls `delegate` with them instead of guessing. */
 export function agentHint(agents: string[]): string {
 	const list = agents.map((a) => `"${a}"`).join(", ");
-	return `${HINT_OPEN}The user explicitly asked for the sub-agent ${list} (written as $name). Use the delegate tool with agent=${list} for the matching part of the request.</harness-hint>`;
+	return `${HINT_OPEN}The user explicitly asked for the sub-agent ${list} (written as $name). Use the delegate tool with agent=${list} for the matching part of the request.</pipaya-hint>`;
 }
 
 const textOf = (m: AgentMessage): string =>

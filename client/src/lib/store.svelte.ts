@@ -28,7 +28,7 @@ import type {
   ApprovalPolicy,
   Group,
   DefaultModelSelection,
-  HarnessEvent,
+  PipayaEvent,
   ImageBlock,
   ModelInfo,
   ModelSelection,
@@ -827,7 +827,7 @@ class AppStore {
 
   /* ---------- events ---------- */
 
-  private handle(e: HarnessEvent) {
+  private handle(e: PipayaEvent) {
     const sid = e.sessionId;
     // Only metadata is forwarded, never event data, messages, tool args or credentials.
     if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "approval_requested" || e.type === "approval_resolved") {

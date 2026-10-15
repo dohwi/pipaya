@@ -20,7 +20,7 @@ const api = async (method: any, url: string, payload?: unknown, auth = true) => 
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-settings-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-settings-"));
 	upstream = Bun.serve({ hostname: "0.0.0.0", port: 0, async fetch(req) {
 		requests.push({ path: new URL(req.url).pathname, key: req.headers.get("authorization"), body: await req.json() });
 		if (new URL(req.url).pathname.endsWith("/messages")) {
@@ -85,7 +85,7 @@ describe("settings", () => {
 		expect(openai.body.id).toBe("openai");
 		expect((await api("GET", "/models?provider=openai")).body.models.map((m: any) => m.id)).toEqual(["test-model"]);
 		expect((await api("DELETE", "/configuration/providers/openai")).status).toBe(200);
-		expect((await api("GET", "/models?provider=openai")).body.models).toHaveLength(0);
+		expect((await api("GET", "/models?provider=openai")).body.models.map((m: any) => m.id)).not.toContain("test-model"); // the built-in provider is back
 		expect((await api("PUT", "/configuration/providers/Bad id", body())).status).toBe(400);
 		expect((await api("PUT", "/configuration/providers/invalid", { ...body(), models: [body().models[0], body().models[0]] })).status).toBe(400);
 		expect((await api("PUT", "/configuration/providers/invalid", { ...body(), models: [{ ...body().models[0], maxTokens: 99999 }] })).status).toBe(400);
@@ -185,19 +185,19 @@ describe("settings", () => {
 	});
 
 	test("config honors data directory overrides", () => {
-		const conf = loadConfig({ HARNESS_DATA_DIR: dir, HARNESS_TOKEN: "explicit-token-0123456789-abcdef" });
+		const conf = loadConfig({ PIPAYA_DATA_DIR: dir, PIPAYA_TOKEN: "explicit-token-0123456789-abcdef" });
 		expect(conf.dataDir).toBe(dir);
 		expect(conf.workspaceRoot).toBe(join(dir, "workspace"));
 		expect(conf.token).toBe("explicit-token-0123456789-abcdef");
 	});
 });
 
-describe("HARNESS_TOKEN strength", () => {
+describe("PIPAYA_TOKEN strength", () => {
 	test("a short explicit token is refused at startup", () => {
-		const d = mkdtempSync(join(tmpdir(), "harness-tok-"));
+		const d = mkdtempSync(join(tmpdir(), "pipaya-tok-"));
 		try {
-			expect(() => loadConfig({ HARNESS_DATA_DIR: d, HARNESS_TOKEN: "short" })).toThrow("at least");
-			expect(loadConfig({ HARNESS_DATA_DIR: d }).token.length).toBeGreaterThanOrEqual(24);
+			expect(() => loadConfig({ PIPAYA_DATA_DIR: d, PIPAYA_TOKEN: "short" })).toThrow("at least");
+			expect(loadConfig({ PIPAYA_DATA_DIR: d }).token.length).toBeGreaterThanOrEqual(24);
 		} finally {
 			rmSync(d, { recursive: true, force: true });
 		}

@@ -4,7 +4,7 @@ import { HttpError, badRequest } from "./errors.ts";
 /**
  * Client settings that belong to THIS server: every client connected to it sees the same value.
  * Anything a device decides for itself (theme, shortcuts, sound, language, sidebar, server list and tokens)
- * is deliberately absent and stays on the device. See docs/settings-scope.md.
+ * is deliberately absent and stays on the device.
  */
 export const SERVER_SCOPED_KEYS = ["favModels", "extensions", "notificationPolicy"] as const;
 export type ClientSettingKey = (typeof SERVER_SCOPED_KEYS)[number];

@@ -31,7 +31,7 @@ const say = (sid: string, seq: number, message: object) => { const db = new Data
 const finishRun = (sid = "s1") => app.bus.publish(sid, "run_finished", { status: "ok" });
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-notify-e2e-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-notify-e2e-"));
 	app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false, pushTransports: transports, mobileDelayMs: 40, strictResponses: true });
 });
 afterAll(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });

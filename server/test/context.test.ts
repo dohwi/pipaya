@@ -12,7 +12,7 @@ import { SessionStore, type SessionRecord } from "../src/store.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 function fixture() {
-	const root = mkdtempSync(join(tmpdir(), "harness-context-"));
+	const root = mkdtempSync(join(tmpdir(), "pipaya-context-"));
 	const home = join(root, "home");
 	const cwd = join(root, "project", "nested");
 	mkdirSync(join(home, ".agents"), { recursive: true });

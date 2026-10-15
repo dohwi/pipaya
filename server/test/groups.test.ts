@@ -26,7 +26,7 @@ const split = (a: Layout, b: Layout, dir: "row" | "col" = "row", ratio = 0.5): L
 const mk = async () => (await api("POST", "/sessions", {})).json?.id as string | undefined;
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-groups-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-groups-"));
 	upstream = startEchoUpstream();
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });

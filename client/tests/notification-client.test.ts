@@ -26,7 +26,7 @@ function fakeApi() {
     } as any,
   };
 }
-const payload = (id: string, over: object = {}) => ({ id, at: Date.now(), source: "harness", title: "Task completed", kind: "task_completed", sessionId: "s1", ...over });
+const payload = (id: string, over: object = {}) => ({ id, at: Date.now(), source: "pipaya", title: "Task completed", kind: "task_completed", sessionId: "s1", ...over });
 beforeEach(() => { state.visible = "hidden"; state.focus = false; state.permission = "granted"; shown.length = 0; localStorage.clear(); });
 
 describe("notification client", () => {

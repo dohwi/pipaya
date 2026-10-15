@@ -13,7 +13,7 @@ function bash(cwd: string) {
 
 describe("bash tool stops reliably", () => {
 	test("timeout kills a grandchild that holds stdout open, and returns promptly", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "harness-kill-"));
+		const dir = mkdtempSync(join(tmpdir(), "pipaya-kill-"));
 		try {
 			const started = Date.now();
 			const run = bash(dir).execute("t1", { command: "sleep 300 & echo $! > pid; wait", timeout: 1 } as never, undefined as never);
@@ -28,7 +28,7 @@ describe("bash tool stops reliably", () => {
 	});
 
 	test("abort signal kills the whole process tree", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "harness-kill-"));
+		const dir = mkdtempSync(join(tmpdir(), "pipaya-kill-"));
 		try {
 			const ctl = new AbortController();
 			const started = Date.now();
@@ -44,7 +44,7 @@ describe("bash tool stops reliably", () => {
 	});
 
 	test("a daemonised descendant that escapes the group cannot hang the tool after a kill", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "harness-kill-"));
+		const dir = mkdtempSync(join(tmpdir(), "pipaya-kill-"));
 		try {
 			const started = Date.now();
 			// `setsid` inside gives the child a new session/group, so only the pipe-grace fallback can save us.

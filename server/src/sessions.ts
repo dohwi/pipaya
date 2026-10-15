@@ -83,7 +83,7 @@ interface Live {
 const FORCE_STOP_MS = 8000;
 
 /** A single run is stopped after this many model calls (a user can simply send another message to continue). */
-const MAX_RUN_TURNS = Number(process.env.HARNESS_MAX_RUN_TURNS) > 0 ? Number(process.env.HARNESS_MAX_RUN_TURNS) : 200;
+const MAX_RUN_TURNS = Number(process.env.PIPAYA_MAX_RUN_TURNS) > 0 ? Number(process.env.PIPAYA_MAX_RUN_TURNS) : 200;
 /** The same tool call (same name + arguments) this many turns in a row counts as a stuck loop. */
 const MAX_REPEATED_CALLS = 6;
 

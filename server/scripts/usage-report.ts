@@ -1,7 +1,7 @@
-// Read-only token report: bun scripts/usage-report.ts [path/to/harness.db]
+// Read-only token report: bun scripts/usage-report.ts [path/to/pipaya.db]
 // Shows per session: calls, prompt size, cache hit %, output, cost; then how much of the tool output the 10 biggest results take.
 import { Database } from "bun:sqlite";
-const db = new Database(process.argv[2] ?? "data/harness.db", { readonly: true });
+const db = new Database(process.argv[2] ?? "data/pipaya.db", { readonly: true });
 const rows = db.query("SELECT s.id, s.title, s.provider, s.model, m.data FROM messages m JOIN sessions s ON s.id = m.session_id WHERE m.role = 'assistant'").all() as any[];
 type A = { calls: number; input: number; cacheRead: number; cacheWrite: number; output: number; cost: number; title: string; model: string };
 const by = new Map<string, A>();

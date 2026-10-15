@@ -48,7 +48,7 @@ beforeAll(async () => {
   for (const name of ["localStorage", "location", "document"]) {
     originalGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
   }
-  dir = await mkdtemp(join(tmpdir(), "harness-extensions-ui-host-"));
+  dir = await mkdtemp(join(tmpdir(), "pipaya-extensions-ui-host-"));
   const fakeFile = join(dir, "fake-runtime.js");
   await writeFile(fakeFile, FAKE_RUNTIME);
   const build = await Bun.build({

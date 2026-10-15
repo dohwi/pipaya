@@ -1,5 +1,5 @@
 /**
- * Opens connection links (`harness://connect?...`) that reach the app: a phone camera that opens the app, a link tapped
+ * Opens connection links (`pipaya://connect?...`) that reach the app: a phone camera that opens the app, a link tapped
  * in a message, or, on desktop, the link passed on the command line. Each link is handled once.
  */
 import { isTauri } from "./tauri";

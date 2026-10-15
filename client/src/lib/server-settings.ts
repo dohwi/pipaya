@@ -1,5 +1,5 @@
 /**
- * Settings that belong to a SERVER (docs/settings-scope.md): every client connected to that server shows the same value.
+ * Settings that belong to a SERVER: every client connected to that server shows the same value.
  * This engine keeps one local copy per server in step with `GET/PUT /client-settings/:key`:
  *
  *  - an edit is uploaded after a short debounce, so other devices see it within a second or so;

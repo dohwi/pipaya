@@ -221,6 +221,30 @@ export interface ProviderInfo {
 	name: string;
 	configured: boolean;
 	storedCredential: string | null;
+	/** "api_key": interactive key setup, "oauth": browser/device sign-in */
+	loginMethods?: ("api_key" | "oauth")[];
+	oauthLabel?: string;
+	/** Ships with the SDK (false = user-defined endpoint or extension) */
+	builtin?: boolean;
+}
+
+export type LoginEvent =
+	| { type: "info"; message: string; links?: { url: string; label?: string }[] }
+	| { type: "auth_url"; url: string; instructions?: string }
+	| { type: "device_code"; userCode: string; verificationUri: string }
+	| { type: "progress"; message: string };
+export type LoginPrompt = { id: number; message: string; placeholder?: string } & (
+	| { type: "text" | "secret" | "manual_code" }
+	| { type: "select"; options: { id: string; label: string; description?: string }[] }
+);
+export interface LoginState {
+	id: string;
+	providerId: string;
+	type: "api_key" | "oauth";
+	status: "running" | "done" | "error" | "cancelled";
+	events: LoginEvent[];
+	prompt: LoginPrompt | null;
+	error?: string;
 }
 
 export interface ActivityInfo {
@@ -290,7 +314,7 @@ export interface WorkdirInfo {
 	saved: string | null;
 	/** Where a new session starts, and what relative paths resolve against */
 	effective: string;
-	/** The server's startup default (HARNESS_WORKSPACE) */
+	/** The server's startup default (PIPAYA_WORKSPACE) */
 	fallback: string;
 }
 
@@ -407,7 +431,7 @@ export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 /* ---------- event envelope ---------- */
 
-export interface HarnessEvent<T = any> {
+export interface PipayaEvent<T = any> {
 	id: number;
 	sessionId: string | null;
 	type: string;

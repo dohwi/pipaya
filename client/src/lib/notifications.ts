@@ -31,7 +31,7 @@ export function browserFromAgent(ua: string = navigator.userAgent): string {
 async function androidDeviceName(): Promise<string> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const r = await invoke<{ name?: string } | null>("plugin:harness-push|device_name");
+    const r = await invoke<{ name?: string } | null>("plugin:pipaya-push|device_name");
     return typeof r?.name === "string" ? r.name.trim().slice(0, 60) : "";
   } catch { return ""; }
 }
@@ -122,7 +122,7 @@ export class NotificationClient {
     // Shorter than the server's phone focus window (25 s), so a phone that stays in front keeps counting as looked at.
     this.timer = setInterval(update, 10_000);
     if (isTauri() && isWindows()) void import("@tauri-apps/api/event").then(async ev => {
-      const off = await ev.listen<string>("harness://open-session", e => { if (e.payload) this.openSession(e.payload); });
+      const off = await ev.listen<string>("pipaya://open-session", e => { if (e.payload) this.openSession(e.payload); });
       this.cleanup.push(off);
     }).catch(() => {});
     if (isTauri()) void import("@tauri-apps/plugin-notification").then(async plugin => {
@@ -225,8 +225,8 @@ export class NotificationClient {
         // no lastShown here: the click is handled exactly by the toast, not guessed from a later focus
       } else if (isTauri()) {
         const plugin = await import("@tauri-apps/plugin-notification");
-        // "ic_stat_harness" is the status-bar glyph made by scripts/make-icons.py; Android's own default is a generic "i" bubble
-        plugin.sendNotification({ title, body: payload.body, icon: "ic_stat_harness", extra: { sessionId: payload.sessionId ?? "", notificationId: payload.id }, autoCancel: true });
+        // "ic_stat_pipaya" is the status-bar glyph made by scripts/make-icons.py; Android's own default is a generic "i" bubble
+        plugin.sendNotification({ title, body: payload.body, icon: "ic_stat_pipaya", extra: { sessionId: payload.sessionId ?? "", notificationId: payload.id }, autoCancel: true });
         if (payload.sessionId && !["android", "ios"].includes(notificationPlatform())) this.lastShown = { sid: payload.sessionId, at: Date.now() };
       } else {
         const notification = new Notification(title, { body: payload.body, tag: payload.sessionId ?? payload.id });

@@ -141,7 +141,7 @@ def notification_icon():
         a.paste(small, ((size - small.width) // 2, (size - small.height) // 2))
         out = Image.new("RGBA", (size, size), (255, 255, 255, 0))
         out.putalpha(a)
-        save(out, base / f"drawable-{dens}" / "ic_stat_harness.png")
+        save(out, base / f"drawable-{dens}" / "ic_stat_pipaya.png")
 
 def ios():
     """iOS masks the icon itself; it must be a square without transparency (the App Store rejects an alpha channel)."""

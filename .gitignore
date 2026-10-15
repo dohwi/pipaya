@@ -43,7 +43,7 @@ google-services.json
 *firebase*.json
 *-adminsdk-*.json
 
-# harness runtime data (db, token, workspace)
+# pipaya runtime data (db, token, workspace)
 data/
 *.db
 *.db-shm

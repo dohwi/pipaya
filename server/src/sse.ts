@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type { EventBus, HarnessEvent } from "./events.ts";
+import type { EventBus, PipayaEvent } from "./events.ts";
 import type { CorsPolicy } from "./security.ts";
 
 const HEARTBEAT_MS = 15_000;
 const REPLAY_LIMIT = 5000;
 
-export const encodeSse = (e: HarnessEvent): string =>
+export const encodeSse = (e: PipayaEvent): string =>
 	`${e.id ? `id: ${e.id}\n` : ""}event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`;
 
 /**
@@ -42,10 +42,10 @@ export function streamEvents(
 
 	let lastSent = after ?? 0;
 	let replaying = after !== undefined;
-	const buffered: HarnessEvent[] = [];
-	const wants = (e: HarnessEvent) => !opts.types || opts.types.has(e.type);
+	const buffered: PipayaEvent[] = [];
+	const wants = (e: PipayaEvent) => !opts.types || opts.types.has(e.type);
 
-	const send = (e: HarnessEvent) => {
+	const send = (e: PipayaEvent) => {
 		if (!wants(e)) return;
 		if (e.id !== 0) {
 			if (e.id <= lastSent) return;

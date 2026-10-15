@@ -30,7 +30,7 @@ export interface HostAdapter {
   reservedCommands(): string[];
   /** Authenticated connection of the open server; settings sync is skipped (local only) without one. */
   connection?(): Connection | null;
-  /** Id of the open server: the installed list is kept per server (docs/settings-scope.md) */
+  /** Id of the open server: the installed list is kept per server */
   serverId?(): string | null;
   /** The list of installed packages changed; it is shared with every client of this server */
   listChanged?(): void;
@@ -44,8 +44,8 @@ export interface HostAdapter {
   };
 }
 /**
- * Where an extension is installed. "server": part of the open server's work, shared by every device connected to it
- * (docs/settings-scope.md). "device": only on this device, kept whichever server is open, never sent to a server.
+ * Where an extension is installed. "server": part of the open server's work, shared by every device connected to it;
+ * "device": only on this device, kept whichever server is open, never sent to a server.
  */
 export type ExtensionScope = "server" | "device";
 export interface InstalledExtension {
@@ -391,7 +391,7 @@ export class ExtensionHost {
     if (!this.applyingRemote) this.adapter?.listChanged?.();
   }
 
-  /* ---------- the list is per server (docs/settings-scope.md) ---------- */
+  /* ---------- the list is per server ---------- */
 
   private applyingRemote = false;
 

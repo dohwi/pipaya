@@ -19,7 +19,7 @@ let commands: {
 };
 
 beforeAll(async () => {
-	dir = await mkdtemp(join(tmpdir(), "harness-compact-command-"));
+	dir = await mkdtemp(join(tmpdir(), "pipaya-compact-command-"));
 	// Bundle the real command registry with a local store double; no global module mocks.
 	const build = await Bun.build({
 		entrypoints: [resolve("src/lib/commands.ts")], target: "bun",
@@ -133,12 +133,12 @@ describe("default commands", () => {
 });
 
 describe("/skill:name calls", () => {
-	const skills = [{ name: "harness-usage" }, { name: "release-notes" }];
+	const skills = [{ name: "pipaya-usage" }, { name: "release-notes" }];
 
 	test("are not client commands and are never rejected as unknown", () => {
-		expect(commands.parseSlash("/skill:harness-usage check")).toBeNull();
-		expect(commands.isSkillCall("  /skill:harness-usage check")).toBe(true);
-		expect(commands.isCommandInput("/skill:harness-usage check")).toBe(false);
+		expect(commands.parseSlash("/skill:pipaya-usage check")).toBeNull();
+		expect(commands.isSkillCall("  /skill:pipaya-usage check")).toBe(true);
+		expect(commands.isCommandInput("/skill:pipaya-usage check")).toBe(false);
 		expect(commands.isCommandInput("/nope check")).toBe(true);
 	});
 
@@ -148,9 +148,9 @@ describe("/skill:name calls", () => {
 	});
 
 	test("matches by full name, prefix and part of the name", () => {
-		expect(commands.matchSkills(skills, "").map((k) => k.name)).toEqual(["harness-usage", "release-notes"]);
+		expect(commands.matchSkills(skills, "").map((k) => k.name)).toEqual(["pipaya-usage", "release-notes"]);
 		expect(commands.matchSkills(skills, "skill:rel").map((k) => k.name)).toEqual(["release-notes"]);
-		expect(commands.matchSkills(skills, "usage").map((k) => k.name)).toEqual(["harness-usage"]);
+		expect(commands.matchSkills(skills, "usage").map((k) => k.name)).toEqual(["pipaya-usage"]);
 		expect(commands.matchSkills(skills, "zzz")).toEqual([]);
 	});
 });

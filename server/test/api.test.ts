@@ -33,7 +33,7 @@ const untilIdle = async (id: string) => {
 };
 
 beforeAll(async () => {
-	dir = mkdtempSync(join(tmpdir(), "harness-test-"));
+	dir = mkdtempSync(join(tmpdir(), "pipaya-test-"));
 	upstream = startEchoUpstream();
 	const cfg: Config = {
 		host: "0.0.0.0",
@@ -257,7 +257,7 @@ describe("auth & meta", () => {
 
 describe("working directories", () => {
 	test("sessions can start in any existing directory, and the default is configurable", async () => {
-		const other = mkdtempSync(join(tmpdir(), "harness-elsewhere-"));
+		const other = mkdtempSync(join(tmpdir(), "pipaya-elsewhere-"));
 		try {
 			const outside = await api("POST", "/sessions", { cwd: other });
 			expect(outside.status).toBe(201);
@@ -292,7 +292,7 @@ describe("working directories", () => {
 	});
 
 	test("directory browser lists folders only and creates new ones", async () => {
-		const root = mkdtempSync(join(tmpdir(), "harness-fs-"));
+		const root = mkdtempSync(join(tmpdir(), "pipaya-fs-"));
 		try {
 			await api("POST", "/fs/dirs", { parent: root, name: "alpha" });
 			await api("POST", "/fs/dirs", { parent: root, name: ".hidden" });
@@ -325,9 +325,9 @@ describe("sessions", () => {
 		const badModel = await api("POST", "/sessions", { provider: "echo", model: "nope" });
 		expect(badModel.status).toBe(400);
 		// outside the default directory is allowed only for directories that already exist
-		const missing = await api("POST", "/sessions", { cwd: "/nonexistent-harness-dir/x" });
+		const missing = await api("POST", "/sessions", { cwd: "/nonexistent-pipaya-dir/x" });
 		expect(missing.status).toBe(400);
-		const escapedMissing = await api("POST", "/sessions", { cwd: "../../nonexistent-harness-dir" });
+		const escapedMissing = await api("POST", "/sessions", { cwd: "../../nonexistent-pipaya-dir" });
 		expect(escapedMissing.status).toBe(400);
 		const badTool = await api("POST", "/sessions", { tools: ["rm_rf"] });
 		expect(badTool.status).toBe(400);

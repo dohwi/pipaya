@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { fcmMessage } from "../src/push.ts";
 
-const payload = { id: "n1", at: 1, source: "harness", title: "Task completed", sessionId: "s1", kind: "task_completed" } as any;
+const payload = { id: "n1", at: 1, source: "pipaya", title: "Task completed", sessionId: "s1", kind: "task_completed" } as any;
 
 describe("push message", () => {
   test("Android is told which status-bar icon to draw", () => {
     const m = fcmMessage("tok", payload, "android") as any;
-    expect(m.android.notification.icon).toBe("ic_stat_harness");
+    expect(m.android.notification.icon).toBe("ic_stat_pipaya");
     expect(m.android.notification.tag).toBe("s1");
   });
   test("Android is told to use the high-importance channel, so the push pops up with a sound", () => {
     const m = fcmMessage("tok", payload, "android") as any;
-    expect(m.android.notification.channelId).toBe("harness_alerts");
+    expect(m.android.notification.channelId).toBe("pipaya_alerts");
     expect(m.android.priority).toBe("high");
   });
   test("carries only the title, an optional body and ids: nothing from the conversation", () => {

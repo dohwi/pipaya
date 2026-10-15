@@ -44,7 +44,7 @@
 	function exportFile() {
 		try {
 			const doc = extensions.exportConfiguration(parts);
-			download(doc, `harness-settings-${stamp()}.json`, true);
+			download(doc, `pipaya-settings-${stamp()}.json`, true);
 			exported = t("서버 {servers}개 · 확장 {extensions}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, extensions: doc.extensions.length, keys: Object.keys(doc.keybindings ?? {}).length });
 		} catch (e) {
 			app.toast(e instanceof Error ? e.message : t("내보내지 못했습니다"), "error");
@@ -166,7 +166,7 @@
 			<input type="file" accept="application/json,.json" disabled={reading} onchange={pick} />
 			<Icon name="file" />
 			<span class="dt">{reading ? t("파일을 읽는 중…") : t("설정 파일을 끌어다 놓거나 눌러서 고르세요")}</span>
-			<span class="ds">{t("harness에서 내보낸 JSON · 최대 4MiB")}</span>
+			<span class="ds">{t("pipaya에서 내보낸 JSON · 최대 4MiB")}</span>
 		</label>
 		{#if loadError}<p class="callout danger" role="alert"><Icon name="alert" /><span>{loadError}</span></p>{/if}
 	{:else}

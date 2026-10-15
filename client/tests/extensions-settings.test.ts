@@ -156,7 +156,7 @@ defineGlobal("document", { documentElement: { style: { setProperty() {}, removeP
 const realFetch = globalThis.fetch;
 
 beforeAll(async () => {
-	dir = await mkdtemp(join(tmpdir(), "harness-extensions-settings-"));
+	dir = await mkdtemp(join(tmpdir(), "pipaya-extensions-settings-"));
 	const fakeFile = join(dir, "fake-runtime.js");
 	await writeFile(fakeFile, FAKE_RUNTIME);
 	// Host and i18n go into one bundle, so the tests and the host share a single i18n instance.

@@ -11,6 +11,7 @@
 	import Badge from "./Badge.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
+	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import { indexCatalog } from "../lib/catalog-match";
 	import type {
 		ApiFormat,
@@ -262,21 +263,31 @@
 	}
 	let matchFor = $state<number | null>(null);
 
-	function startNew() {
+	/** Local runtimes that speak the OpenAI-compatible API without a key. The URL is reached from the server, so localhost means the server's machine. */
+	const localPresets = [
+		{ name: "Ollama", id: "ollama", baseUrl: "http://localhost:11434/v1" },
+		{ name: "LM Studio", id: "lm-studio", baseUrl: "http://localhost:1234/v1" },
+		{ name: "llama.cpp", id: "llama-cpp", baseUrl: "http://localhost:8080/v1" },
+		{ name: "vLLM", id: "vllm", baseUrl: "http://localhost:8000/v1" },
+	];
+
+	function startNew(preset?: (typeof localPresets)[number]) {
 		void ensureCatalog();
 		formError = "";
 		discoverNote = "";
 		editing = null;
 		form = {
 			isNew: true,
-			id: "",
-			idTouched: false,
-			name: "",
-			baseUrl: "",
+			id: preset?.id ?? "",
+			idTouched: Boolean(preset),
+			name: preset?.name ?? "",
+			baseUrl: preset?.baseUrl ?? "",
 			api: "openai-completions",
 			authRequired: false,
 			rows: [newRow()],
 		};
+		// Local servers list their installed models: fill them in right away (a failure just shows the hint).
+		if (preset) void discover();
 	}
 
 	function startEdit(p: CustomProvider) {
@@ -494,6 +505,8 @@
 
 		<CompactionSection {serverId} {models} providers={providerList} />
 
+		<ProviderAccounts {serverId} onchange={() => void load(serverId)} />
+
 		<section>
 			<div class="label">{t("연결 ({n})", { n: cfg.providers.length })}</div>
 			{#if cfg.providers.length}
@@ -568,6 +581,10 @@
 
 			{#if !form}
 				<button class="btn dashed" onclick={() => startNew()}><Icon name="plus" /> {t("연결 추가")}</button>
+				<div class="label">{t("로컬 모델 (서버 PC에서 실행 중인 것)")}</div>
+				{#each localPresets as p (p.id)}
+					<button class="btn dashed" disabled={cfg?.providers.some((x) => x.id === p.id)} onclick={() => startNew(p)}><Icon name="plus" /> {p.name}</button>
+				{/each}
 			{/if}
 		</section>
 

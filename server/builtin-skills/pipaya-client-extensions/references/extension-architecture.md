@@ -1,7 +1,5 @@
 # 확장 구조와 변경 가이드
 
-> 이 문서와 `extensions.md`·`extension-ui.md`·`extension-screen-design.md`는 서버에 **내장 스킬**(`harness-client-extensions`)로 묶여 에이전트에게 제공됩니다. 고친 뒤에는 `cd server && bun scripts/sync-builtin-skills.ts`로 사본을 갱신하세요(서버 테스트가 어긋남을 잡습니다).
-
 클라이언트 확장(SDK v1)이 코드 어디에 있고 어떻게 움직이는지, 기능을 추가할 때 무엇을 함께 고쳐야 하는지 정리합니다. 사용자 관점의 규칙은 [extensions.md](extensions.md), UI 노드는 [extension-ui.md](extension-ui.md), 화면 디자인은 [extension-screen-design.md](extension-screen-design.md)입니다. 서버의 에이전트 도구·모델 확장과는 **별개**입니다.
 
 ## 1. 한눈에 보기
