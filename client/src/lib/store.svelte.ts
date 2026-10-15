@@ -777,6 +777,8 @@ class AppStore {
       this.models = models;
       this.providers = providers;
       this.tools = tools.tools;
+      // New chats follow the server's approval default, not whatever the browser last remembered.
+      if (tools.defaultApproval) this.updateDraft({ approval: tools.defaultApproval });
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;

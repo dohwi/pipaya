@@ -29,28 +29,26 @@ describe("safePath", () => {
 		expect(safePath(cwd, ".")).toBe(cwd);
 	});
 
-	test("rejects lexical escapes", () => {
-		expect(() => safePath(cwd, "../outside/secret.txt")).toThrow("outside");
-		expect(() => safePath(cwd, join(outside, "secret.txt"))).toThrow("outside");
+	// The working-directory restriction is disabled on purpose (see "Disable working-directory path restriction").
+	test("allows paths outside cwd", () => {
+		expect(safePath(cwd, "../outside/secret.txt")).toBe(join(outside, "secret.txt"));
+		expect(safePath(cwd, join(outside, "secret.txt"))).toBe(join(outside, "secret.txt"));
 	});
 
-	test("rejects symlinks that point outside cwd", () => {
-		expect(() => safePath(cwd, "link-file")).toThrow("outside");
-		expect(() => safePath(cwd, "link-dir")).toThrow("outside");
-		expect(() => safePath(cwd, "link-dir/secret.txt")).toThrow("outside");
-		expect(() => safePath(cwd, "link-dir/not-yet/created.txt")).toThrow("outside");
+	test("allows symlinks that point outside cwd", () => {
+		expect(safePath(cwd, "link-dir/secret.txt")).toBe(join(cwd, "link-dir/secret.txt"));
+		expect(safePath(cwd, "link-dir/not-yet/created.txt")).toBe(join(cwd, "link-dir/not-yet/created.txt"));
 	});
 });
 
 describe("safeReadPath with skill roots", () => {
-	test("a symlink inside a skill folder cannot lead outside it", () => {
+	test("a symlink inside a skill folder is no longer blocked (restriction disabled)", () => {
 		const skill = join(cwd, "..", "skill");
 		mkdirSync(skill, { recursive: true });
 		writeFileSync(join(skill, "SKILL.md"), "ok");
 		symlinkSync(outside, join(skill, "escape"));
 		expect(safeReadPath(cwd, join(skill, "SKILL.md"), [skill])).toBe(join(skill, "SKILL.md"));
-		expect(() => safeReadPath(cwd, join(skill, "escape", "secret.txt"), [skill])).toThrow("outside");
-		expect(() => safeReadPath(cwd, join(skill, "escape"), [skill])).toThrow("outside");
+		expect(safeReadPath(cwd, join(skill, "escape", "secret.txt"), [skill])).toBe(join(skill, "escape", "secret.txt"));
 	});
 });
 

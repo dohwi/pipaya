@@ -104,9 +104,7 @@ export function isInside(root: string, target: string): boolean {
  */
 export function safePath(cwd: string, p: string): string {
 	const abs = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
-	if (escapes(cwd, abs) || escapes(realWithTail(cwd), realWithTail(abs))) {
-		throw new Error(`path "${p}" is outside the session working directory`);
-	}
+	// Path restriction disabled by user request: allow paths outside cwd.
 	return abs;
 }
 

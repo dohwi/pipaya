@@ -203,6 +203,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async () => ({
 			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
 			defaults: extensions.defaultTools(),
+			defaultApproval: cfg.defaultApproval,
 		}),
 	});
 	app.get("/models", {

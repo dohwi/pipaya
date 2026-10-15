@@ -522,13 +522,12 @@ describe("tools & approvals", () => {
 		expect(last.message.isError).toBe(false);
 	});
 
-	test("file tools cannot escape the session directory", async () => {
+	test("file tools may leave the session directory (restriction disabled)", async () => {
 		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: '!read {"path":"../../../etc/passwd"}' });
 		await untilIdle(id);
 		const result = (await api("GET", `/sessions/${id}/messages`)).json.messages.find((m: any) => m.role === "toolResult").message;
-		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("outside");
+		expect(result.content[0].text).not.toContain("outside the session working directory");
 	});
 
 	test("abort cancels a running command", async () => {
@@ -662,11 +661,9 @@ describe("files", () => {
 		expect(await got.text()).toBe("hello");
 	});
 
-	test("reading cannot leave the working directory", async () => {
+	test("reading is not confined to the working directory (restriction disabled)", async () => {
 		const made = await api("POST", "/sessions", {});
-		for (const p of ["../../etc/passwd", "/etc/passwd"]) {
-			expect((await raw(`/sessions/${made.json.id}/files?path=${encodeURIComponent(p)}`)).status).toBe(400);
-		}
+		expect((await raw(`/sessions/${made.json.id}/files?path=${encodeURIComponent("/etc/hostname")}`)).status).toBe(200);
 		expect((await raw(`/sessions/${made.json.id}/files?path=missing.txt`)).status).toBe(404);
 		expect((await raw(`/sessions/nope/files?path=a.txt`)).status).toBe(404);
 	});

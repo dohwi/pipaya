@@ -141,7 +141,7 @@ export class Api {
 	latestEventId = () =>
 		this.req<{ latestId: number }>("GET", "/events/history?after=0&limit=1").then((r) => r.latestId);
 
-	tools = (signal?: AbortSignal) => this.req<{ tools: ToolInfo[]; defaults: string[] }>("GET", "/tools", undefined, signal);
+	tools = (signal?: AbortSignal) => this.req<{ tools: ToolInfo[]; defaults: string[]; defaultApproval?: ApprovalPolicy }>("GET", "/tools", undefined, signal);
 	models = () => this.req<{ models: ModelInfo[] }>("GET", "/models?configured=true").then((r) => r.models);
 	providers = () => this.req<{ providers: ProviderInfo[] }>("GET", "/providers").then((r) => r.providers);
 	setCredential = (id: string, key: string) =>

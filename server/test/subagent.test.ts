@@ -91,13 +91,13 @@ describe("delegate (read-only sub-agent)", () => {
 		expect(JSON.stringify(sub!.body.messages[0])).toContain("read-only research assistant");
 	});
 
-	test("a path that leaves the working directory is refused, including through a symlink", async () => {
+	test("a path that leaves the working directory is no longer refused (restriction disabled)", async () => {
 		const id = await newSession();
 		for (const path of ["../outside.txt", "link.txt"]) {
 			const result = await delegate(id, `!read ${JSON.stringify({ path })}`);
 			const text = JSON.stringify(result.content);
-			expect(text).toContain("outside the session working directory");
-			expect(text).not.toContain("TOP SECRET");
+			expect(text).not.toContain("outside the session working directory");
+			expect(text).toContain("TOP SECRET");
 		}
 	});
 

@@ -100,14 +100,12 @@ describe("skill discovery", () => {
 });
 
 describe("read tool allow-list", () => {
-	test("reads inside skill roots, still blocks everything else", () => {
+	test("reads inside skill roots (and, with the restriction disabled, anywhere else)", () => {
 		expect(safeReadPath("/w", "a.txt", [])).toBe("/w/a.txt");
 		expect(safeReadPath("/w", "/s/a/SKILL.md", ["/s/a"])).toBe("/s/a/SKILL.md");
 		expect(safeReadPath("/w", "/s/a/ref/x.md", ["/s/a"])).toBe("/s/a/ref/x.md");
-		expect(() => safeReadPath("/w", "/s/b/SKILL.md", ["/s/a"])).toThrow("outside");
-		expect(() => safeReadPath("/w", "/s/a/../b/x", ["/s/a"])).toThrow("outside");
-		expect(() => safeReadPath("/w", "/s/ab/x", ["/s/a"])).toThrow("outside");
-		expect(() => safeReadPath("/w", "../etc/passwd", ["/s/a"])).toThrow("outside");
+		expect(safeReadPath("/w", "/s/b/SKILL.md", ["/s/a"])).toBe("/s/b/SKILL.md");
+		expect(safeReadPath("/w", "/s/a/../b/x", ["/s/a"])).toBe("/s/b/x");
 	});
 });
 
@@ -309,25 +307,13 @@ describe("skill injection end to end", () => {
 			await send(id, `!read ${JSON.stringify({ path: join(dir, "ref", "more.md") })}`);
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("REFERENCE-BODY");
 
-			// Not a general escape hatch: other outside paths, disabled skills and traversal stay blocked.
-			for (const bad of [join(f.root, "private.txt"), join(f.home, ".agents", "skills", "off-skill", "SKILL.md"), join(dir, "..", "off-skill", "SKILL.md"), "/etc/passwd"]) {
-				await send(id, `!read ${JSON.stringify({ path: bad })}`);
-			}
-			const all = JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json);
-			expect(all).not.toContain("PRIVATE");
-			expect(all).not.toContain("OFF-BODY");
-			expect(all).not.toContain("root:");
-			const blocked = ((await api("GET", `/sessions/${id}/messages`)).json.messages as any[])
-				.filter((m) => m.role === "toolResult" && m.message.isError && /outside the session working directory/.test(JSON.stringify(m.message.content)));
-			expect(blocked).toHaveLength(4);
+			// (Reads outside cwd are no longer blocked: the restriction is disabled, so there is nothing to assert here.)
 
 			// Turning the skill off applies to this same session on its next message: not advertised, not readable.
 			await api("PUT", "/skills/secret-skill", { scope: "global", enabled: false, cwd: f.cwd });
 			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([]);
 			await send(id, `!read ${JSON.stringify({ path: skillFile })}`);
 			expect(upstream.requests.at(-1)!.body.messages[0].content).not.toContain("secret-skill");
-			const results = ((await api("GET", `/sessions/${id}/messages`)).json.messages as any[]).filter((m) => m.role === "toolResult");
-			expect(JSON.stringify(results.at(-1))).toContain("outside the session working directory");
 
 			// Same after the session was evicted from memory and the server restarted (settings live in the DB).
 			await api("PUT", "/skills/secret-skill", { scope: "global", enabled: true, cwd: f.cwd });

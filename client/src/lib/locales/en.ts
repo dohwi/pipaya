@@ -457,7 +457,6 @@ export const en: Record<string, string> = {
 	"언어 · 테마 · 도구 승인 · 알림음": "Language · theme · tool approval · notification sound",
 	"단축키": "Shortcuts",
 	"키 지정과 초기화": "Assign and reset keys",
-	"연결, 기본 폴더, 모델, 대화 관리": "Connections, default folder, models, chat management",
 	"가져오기와 관리": "Import and manage",
 	"백업": "Backup",
 	"설정 내보내기 · 가져오기": "Export and import settings",
@@ -483,12 +482,6 @@ export const en: Record<string, string> = {
 	"크기": "Volume",
 	"알림음 크기": "Notification volume",
 	"보고 있는 대화가 끝날 때는 울리지 않습니다. 승인 요청은 보고 있어도 울립니다.": "No sound when the chat you're viewing finishes. Approval requests still sound even while you're viewing.",
-	"서버 목록 ({n})": "Servers ({n})",
-	"{name} 설정 열기": "Open settings for {name}",
-	"전환": "Switch",
-	"사용 중": "In use",
-	"{name} 설정": "Settings for {name}",
-	"서버 설정 · 모델 연결": "Server settings · model connections",
 
 	/* ---- shortcuts ---- */
 	"모델 · 추론": "Model · reasoning",

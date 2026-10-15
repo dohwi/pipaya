@@ -313,6 +313,7 @@ export const Ok = Type.Object({ ok: Type.Boolean() });
 export const ToolList = Type.Object({
 	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), mutating: Type.Boolean() })),
 	defaults: Type.Array(Type.String()),
+	defaultApproval: Type.Optional(Approval),
 });
 
 /** Without the token only `ok` is returned: load figures are nobody's business but the owner's. */
