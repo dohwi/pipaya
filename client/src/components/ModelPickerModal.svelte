@@ -341,7 +341,8 @@
 	}
 	.seg {
 		display: grid;
-		grid-template-columns: repeat(6, 1fr);
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(0, 1fr);
 	}
 	.seg button {
 		padding: 0;

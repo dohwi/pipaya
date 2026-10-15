@@ -335,6 +335,8 @@ export interface ConfigurationInfo {
 	defaults: DefaultModelSelection | null;
 	/** What new sessions really use (saved default, else the server's startup default) */
 	effectiveDefaults: DefaultModelSelection | null;
+	/** Tool approval new sessions start with; saved on the server (older servers omit it) */
+	approval?: { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy };
 }
 
 export interface ConnectionResult {

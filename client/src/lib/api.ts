@@ -212,6 +212,8 @@ export class Api {
 		this.req<{ ok: boolean }>("DELETE", `/configuration/providers/${encodeURIComponent(id)}`);
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
+	setDefaultApproval = (approval: ApprovalPolicy | null) =>
+		this.req<{ saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy }>("PUT", "/configuration/approval", { approval });
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
 	listDirs = (path?: string, hidden = false) =>
 		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`);

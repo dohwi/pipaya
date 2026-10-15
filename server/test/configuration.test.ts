@@ -131,6 +131,23 @@ describe("settings", () => {
 		}
 	});
 
+	test("default tool approval is saved on the server and applies to new sessions", async () => {
+		expect((await api("GET", "/configuration")).body.approval).toEqual({ saved: null, effective: "ask", fallback: "ask" });
+		expect((await api("PUT", "/configuration/approval", { approval: "bogus" })).status).toBe(400);
+		expect((await api("PUT", "/configuration/approval", { approval: "auto" })).body).toEqual({ saved: "auto", effective: "auto", fallback: "ask" });
+		expect((await api("GET", "/tools")).body.defaultApproval).toBe("auto");
+		const id = (await api("POST", "/sessions", {})).body.id;
+		expect((await api("GET", `/sessions/${id}`)).body.approval).toBe("auto");
+		await app.close();
+		app = await buildApp(cfg, { strictResponses: true });
+		expect((await api("GET", "/configuration")).body.approval.effective).toBe("auto");
+		expect((await api("PUT", "/configuration/approval", { approval: null })).body).toEqual({ saved: null, effective: "ask", fallback: "ask" });
+		const id2 = (await api("POST", "/sessions", {})).body;
+		expect(id2.approval).toBe("ask");
+		await api("DELETE", `/sessions/${id}`);
+		await api("DELETE", `/sessions/${id2.id}`);
+	});
+
 	test("default settings persist across restart and apply only to new sessions", async () => {
 		expect((await api("PUT", "/configuration/providers/second-test", { ...body(), name: "Second test" })).status).toBe(200);
 		const before = (await api("POST", "/sessions", { provider: "second-test", model: "test-model" })).body;

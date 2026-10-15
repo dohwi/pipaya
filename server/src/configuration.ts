@@ -5,10 +5,10 @@ import { createProvider, getSupportedThinkingLevels, type Model, type ProviderSt
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
-import type { Config } from "./config.ts";
+import { APPROVAL_POLICIES, type ApprovalPolicy, type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
-import { Thinking } from "./schemas.ts";
+import { Approval, Thinking } from "./schemas.ts";
 import { catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
 import { isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
@@ -76,7 +76,9 @@ export const WorkdirInfo = Type.Object({
 	fallback: Type.String({ description: "Startup default (PIPAYA_WORKSPACE), used when nothing is saved" }),
 });
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
-export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo });
+export const ApprovalBody = Type.Object({ approval: Type.Union([Approval, Type.Null()], { description: "Default tool approval for new sessions; null restores the startup default (PIPAYA_APPROVAL)" }) }, { additionalProperties: false });
+export const ApprovalInfo = Type.Object({ saved: Type.Union([Approval, Type.Null()]), effective: Approval, fallback: Approval });
+export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo) });
 export const ConnectionResult = Type.Object({ ok: Type.Boolean(), durationMs: Type.Integer(), text: Type.Optional(Type.String()), error: Type.Optional(Type.String()) });
 export type CustomProvider = Static<typeof CustomProviderBody> & { id: string };
 export type ModelSelection = Static<typeof Selection>;
@@ -98,6 +100,21 @@ export class Configuration {
 	) {
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
 		registry.defaultSelection = () => this.effectiveDefaults();
+	}
+
+	/** The tool approval new sessions start with. Saved on the server, so every client sees the same one. */
+	approvalInfo(): { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy } {
+		const row = this.db.query("SELECT data FROM settings WHERE key = 'default_approval'").get() as { data: string } | null;
+		const parsed: unknown = row ? JSON.parse(row.data) : null;
+		const saved = APPROVAL_POLICIES.find((p) => p === parsed) ?? null;
+		// The startup value (PIPAYA_APPROVAL) is the fallback; a value saved on the server wins.
+		return { saved, effective: saved ?? this.cfg.defaultApproval, fallback: this.cfg.defaultApproval };
+	}
+
+	setApproval(approval: ApprovalPolicy | null) {
+		if (approval === null) this.db.query("DELETE FROM settings WHERE key = 'default_approval'").run();
+		else this.db.query("INSERT INTO settings (key, data) VALUES ('default_approval', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(approval) });
+		return this.approvalInfo();
 	}
 
 	list(): CustomProvider[] {
@@ -145,7 +162,7 @@ export class Configuration {
 	async snapshot() {
 		return {
 			providers: await Promise.all(this.list().map((p) => this.describe(p))),
-			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(),
+			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(),
 		};
 	}
 

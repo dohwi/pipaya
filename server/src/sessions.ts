@@ -121,6 +121,8 @@ export class SessionManager {
 		private compaction?: CompactionSettings,
 		private ext?: ExtensionHost,
 		private templates?: TemplateService,
+		/** The approval a new session starts with (saved server setting, else the startup default). */
+		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -143,7 +145,7 @@ export class SessionManager {
 			thinkingLevel: input.thinkingLevel ?? this.registry.defaultSelection?.()?.thinkingLevel ?? "medium",
 			systemPrompt: input.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
 			tools,
-			approval: input.approval ?? this.cfg.defaultApproval,
+			approval: input.approval ?? this.defaultApproval(),
 			parentId,
 			closed: false,
 			createdAt: now,

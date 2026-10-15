@@ -778,7 +778,8 @@ class AppStore {
       this.providers = providers;
       this.tools = tools.tools;
       // New chats follow the server's approval default, not whatever the browser last remembered.
-      if (tools.defaultApproval) this.updateDraft({ approval: tools.defaultApproval });
+      const serverApproval = config?.approval?.effective ?? tools.defaultApproval;
+      if (serverApproval) this.updateDraft({ approval: serverApproval });
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
@@ -1013,6 +1014,11 @@ class AppStore {
       case "configuration_updated":
         this.configTick++;
         void this.refreshProviders();
+        if ((e.data as { scope?: string } | undefined)?.scope === "approval") {
+          // The server's default changed (here or from another client): new chats follow it.
+          const eff = (e.data as { effective?: ApprovalPolicy }).effective;
+          if (eff) this.updateDraft({ approval: eff });
+        }
         if ((e.data as { scope?: string } | undefined)?.scope === "workdir") {
           this.workdirInfo = {
             saved: (e.data as WorkdirInfo).saved,
@@ -2018,6 +2024,15 @@ class AppStore {
     const s = this.session(id);
     if (!s || !this.api) {
       this.updateDraft(patch);
+      // A new chat's approval is the server's default: store it there, not only in this browser.
+      if (patch.approval && this.api) {
+        try {
+          await this.api.setDefaultApproval(patch.approval);
+        } catch (e) {
+          this.fail(e, t("변경하지 못했습니다"), id);
+          return false;
+        }
+      }
       return true;
     }
     try {
