@@ -31,6 +31,18 @@
 	/** Shift held and the divider under the pointer: its whole continuing line lights up as one long line. */
 	let linkKeyDown = $state(false);
 	let hover = $state<Path | null>(null);
+	/** Which half of the hovered divider the pointer is on (what a plain drag would grab). */
+	let hoverSide = $state<0 | 1>(0);
+	/** Which half of the divider (by its length) the point is on: 0 = upper / left. */
+	function sideOf(e: { clientX: number; clientY: number }, d: Divider): 0 | 1 {
+		if (!box) return 0;
+		const r = box.getBoundingClientRect();
+		const along = d.dir === "row" ? ((e.clientY - r.top) / r.height - d.area.y) / d.area.h : ((e.clientX - r.left) / r.width - d.area.x) / d.area.w;
+		return along < 0.5 ? 0 : 1;
+	}
+	/** Plain hover on a 2x2 line only moves one half when dragged; preview just that half. */
+	const halfOf = (d: Divider): 0 | 1 | null =>
+		!active && !linkKeyDown && hover && key(d) === (hover.join("") || "root") && detach(group.layout, d.path, 0) ? hoverSide : null;
 	const lit = $derived.by(() => {
 		if (active) return new Set(linked.map((p) => p.join("") || "root"));
 		if (!linkKeyDown || !hover) return new Set<string>();
@@ -105,7 +117,7 @@
 		linked = [];
 		// The pointer may have left the divider mid-drag, and no pointerenter follows the drop.
 		hover = dividerAt(e);
-		if (e.shiftKey) linkKeyDown = true;
+		linkKeyDown = e.shiftKey;
 	}
 	// A drag in progress when the group goes away must not leave listeners on the window.
 	$effect(() => () => {
@@ -183,16 +195,22 @@
 		<div
 			class="div {d.dir}"
 			class:on={active === key(d) || lit.has(key(d))}
+			class:hot={hover !== null && !active && key(d) === (hover.join("") || "root")}
+			style:--from={halfOf(d) === 1 ? "50%" : "0%"}
+			style:--to={halfOf(d) === 0 ? "50%" : "0%"}
 			data-divider={key(d)}
 			onpointerenter={(e) => {
 				hover = d.path;
+				hoverSide = sideOf(e, d);
 				// Only ever turn Shift on here: the enter the browser fires after a layout change carries no modifiers.
 				if (e.shiftKey) linkKeyDown = true;
 			}}
 			onpointermove={(e) => {
 				if (active) return;
 				hover = d.path;
-				if (e.shiftKey) linkKeyDown = true;
+				hoverSide = sideOf(e, d);
+				// A real pointer move carries the real modifiers, so a missed Shift release can't leave the long line lit.
+				linkKeyDown = e.shiftKey;
 			}}
 			onpointerleave={() => {
 				if (!active) hover = null;
@@ -272,18 +290,18 @@
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.div.row::after {
-		top: 0;
-		bottom: 0;
+		top: var(--from, 0%);
+		bottom: var(--to, 0%);
 		left: 3.5px;
 		width: 2px;
 	}
 	.div.col::after {
-		left: 0;
-		right: 0;
+		left: var(--from, 0%);
+		right: var(--to, 0%);
 		top: 3.5px;
 		height: 2px;
 	}
-	.div:hover::after,
+	.div.hot::after,
 	.div:focus-visible::after,
 	.div.on::after {
 		opacity: 0.55;

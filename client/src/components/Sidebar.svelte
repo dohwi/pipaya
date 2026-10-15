@@ -318,7 +318,7 @@
 
 <aside class="side">
 	<div class="brandrow">
-		<PipayaLogo size={26} />
+		<PipayaLogo color size={26} />
 		<Wordmark size={16} />
 		<button class="iconbtn fold" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 접기")} title={t("사이드바 접기") + hint}><Icon name="sidebar" /></button>
 	</div>

@@ -63,7 +63,7 @@ def mask(size: int, inset: float, shape: str, radius: float = 0.22) -> Image.Ima
         d.polygon(pts, fill=255)
     else:
         d.rounded_rectangle([a, a, b, b], radius=(b - a) * radius, fill=255)
-    return m.resize((size, size), Image.LANCZOS)
+    return m.resize((size, size), Image.BOX)  # area average: LANCZOS rings and leaves stray alpha outside the shape
 
 
 def framed(glyph: float) -> Image.Image:
@@ -93,13 +93,46 @@ def tauri_icon(source: Image.Image, out: Path):
         subprocess.run(["bun", "run", "tauri", "icon", str(src), "-o", str(out)], check=True, cwd=ROOT.parent, stdout=subprocess.DEVNULL)
 
 
+WIN_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
+BORDER = (0, 0, 0)  # hairline around the white tile, so it does not melt into a light taskbar
+BORDER_ALPHA = 0.16
+
+
+def win_tile(size: int) -> Image.Image:
+    """One Windows icon size, drawn for that size: a rounded white tile with a clean anti-aliased edge and a hairline border.
+    Resizing a finished 1024px icon down to 16/32px leaves ragged corners and a dark fringe, so each size is built from the master."""
+    img = framed(WIN_GLYPH).resize((size, size), Image.LANCZOS).convert("RGBA")
+    outer = mask(size, 0.0, "round", 0.2)
+    if size >= 24:
+        w = max(1.0, size / 128) / size  # ~1px at 128px and below, thicker on the big sizes
+        inner = mask(size, w, "round", 0.2)
+        ring = ImageChops.subtract(outer, inner)
+        edge = Image.new("RGBA", img.size, BORDER + (0,))
+        edge.putalpha(ring.point(lambda v: round(v * BORDER_ALPHA)))
+        img = Image.alpha_composite(img, edge)
+    img.putalpha(outer)
+    return img
+
+
+def windows_icons(tmp: Path):
+    tiles = {s: win_tile(s) for s in WIN_SIZES}
+    big = tiles[256]
+    big.save(ICONS / "icon.ico", format="ICO", sizes=[(s, s) for s in WIN_SIZES], append_images=[tiles[s] for s in WIN_SIZES if s != 256])
+    for name, size in {"32x32.png": 32, "64x64.png": 64, "128x128.png": 128, "128x128@2x.png": 256}.items():
+        save(tiles[size], ICONS / name)
+    save(win_tile(512), ICONS / "icon.png")
+    for p in (tmp / "win").glob("Square*Logo.png"):
+        n = Image.open(p).size[0]
+        save(win_tile(n) if n in tiles else win_tile(n), ICONS / p.name)
+    save(win_tile(50), ICONS / "StoreLogo.png")
+
+
 def desktop():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         # Windows / Linux: rounded square, full size
         tauri_icon(shaped(1024, 0.0, "round", 0.2, WIN_GLYPH), tmp / "win")
-        for name in ["icon.ico", "icon.png", "32x32.png", "64x64.png", "128x128.png", "128x128@2x.png", "StoreLogo.png", *(p.name for p in (tmp / "win").glob("Square*Logo.png"))]:
-            shutil.copyfile(tmp / "win" / name, ICONS / name)
+        windows_icons(tmp)
         # macOS: squircle with the standard ~10% transparent margin
         tauri_icon(shaped(1024, 0.098, "squircle", glyph=MAC_GLYPH), tmp / "mac")
         shutil.copyfile(tmp / "mac" / "icon.icns", ICONS / "icon.icns")

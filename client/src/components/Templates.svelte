@@ -2,6 +2,7 @@
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
 	import { t } from "../lib/i18n";
+	import { app } from "../lib/store.svelte";
 	import { holdClosing } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import { errorText, type Api } from "../lib/api";
@@ -19,6 +20,8 @@
 
 	$effect(() => {
 		refresh;
+		// Files added or edited on disk arrive as skills_updated.
+		app.skillsTick;
 		const controller = new AbortController();
 		error = "";
 		api.templates(target.cwd, controller.signal)

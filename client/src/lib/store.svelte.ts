@@ -1348,11 +1348,18 @@ class AppStore {
   /** Reopen a closed session and show it. */
   async resume(id: string): Promise<boolean> {
     if (!this.api) return false;
+    // Resumed from inside a group: the session takes the focused pane's place instead of opening outside the group.
+    const from = this.activeId;
+    const g = from ? this.groupOf(from) : undefined;
     try {
       const s = await this.api.patchSession(id, { closed: false });
       const i = this.sessions.findIndex((x) => x.id === id);
       if (i >= 0) this.sessions.splice(i, 1);
       this.sessions.unshift(s);
+      if (g && from && from !== id && !layoutHas(g.layout, id)) {
+        await this.saveLayout(g.id, replaceSession(g.layout, from, id));
+        void this.refreshGroups();
+      }
       await this.openSession(id, true);
       return true;
     } catch (e) {
@@ -1954,6 +1961,12 @@ class AppStore {
     try {
       const s = await this.api.forkSession(id, atSeq);
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
+      // Forked from inside a group: the branch joins that group, right beside its source.
+      const g = this.groupOf(id);
+      if (g && !layoutHas(g.layout, s.id)) {
+        if (panesOf(g.layout).length < MAX_PANES) await this.dropSession(s.id, id, "right");
+        else this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+      }
       await this.openSession(s.id, true);
       this.toast(t("새 대화로 분기했습니다"), "ok", s.id);
       return true;

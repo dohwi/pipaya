@@ -20,6 +20,7 @@ FACE_C, FS = (64, 89), .78
 DARK = dict(trunk="#7a5b44", leaf="#4a9443", fruit="#f08a24", eye="#fbf3e2")
 LIGHT = dict(trunk="#5a4130", leaf="#2f6d2d", fruit="#f08a24", eye="#fbf3e2")
 ICON_BG = "#FFFFFF"
+ICON_FG = "#111111"  # 앱 아이콘·파비콘은 흑백
 
 FACES = {
     "block": ["M-14 -5.5L-6 -5.5L-6 5.5L-14 5.5Z", "M6 -5.5L14 -5.5L14 5.5L6 5.5Z"],
@@ -90,6 +91,16 @@ def color_svg(face="block", pal=DARK, animated=False, title="pipaya"):
     )
 
 
+def mono_body(face, fg, mid="k", animated=False):
+    knock = "".join(f'<circle cx="{x}" cy="{y}" r="{FRUIT_KNOCK}" fill="#000"/>' for x, y in FRUITS)
+    fr = "".join(f'<circle cx="{x}" cy="{y}" r="{FRUIT_R}"/>' for x, y in FRUITS)
+    return (
+        f'<g fill="{fg}"><defs><mask id="{mid}" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128"><rect width="128" height="128" fill="#fff"/>'
+        f'{knock}{eyes(face, "#000", animated)}</mask></defs>'
+        f'<g mask="url(#{mid})"><path d="{TRUNK}"/>{crown()}{fronds(fg)}</g>{fr}</g>'
+    )
+
+
 def mono_svg(face="block", animated=False, title="pipaya"):
     knock = "".join(f'<circle cx="{x}" cy="{y}" r="{FRUIT_KNOCK}" fill="#000"/>' for x, y in FRUITS)
     fr = "".join(f'<circle cx="{x}" cy="{y}" r="{FRUIT_R}"/>' for x, y in FRUITS)
@@ -102,6 +113,10 @@ def mono_svg(face="block", animated=False, title="pipaya"):
     )
 
 
+def mono_svg_fixed():
+    return mono_svg().replace("currentColor", ICON_FG)
+
+
 ICON_SCALE = 6.6  # 128 그리드 -> 1024 캔버스 배율. 나무 높이(약 105)가 캔버스의 약 68%가 된다.
 ICON_CENTER = (64, 65.5)  # 아트워크 bbox의 중심 (128 그리드). 이 점을 캔버스 중앙에 맞춘다.
 
@@ -112,12 +127,13 @@ def app_icon(glyph_only=False):
     bg = "" if glyph_only else f'<rect width="1024" height="1024" fill="{ICON_BG}"/>'
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">'
-        f'{bg}<g transform="translate({num(tx)} {num(ty)}) scale({ICON_SCALE})">{color_body("block", LIGHT, False)}</g></svg>\n'
+        f'{bg}<g transform="translate({num(tx)} {num(ty)}) scale({ICON_SCALE})">{mono_body("block", ICON_FG, "ki")}</g></svg>\n'
     )
 
 
 def main():
     (OUT / "faces").mkdir(parents=True, exist_ok=True)
+    (OUT / "favicon.svg").write_text(mono_svg_fixed())
     (OUT / "pipaya.svg").write_text(color_svg())
     (OUT / "pipaya-light.svg").write_text(color_svg(pal=LIGHT))
     (OUT / "pipaya-mono.svg").write_text(mono_svg())

@@ -152,11 +152,13 @@ describe("pi compaction state", () => {
 		expect(chat.compacting).toBe(false);
 	});
 
-	test("new inputs invalidate a pre-compaction measurement until context_updated", () => {
+	test("new inputs keep the last measurement (no flash of an empty status line) until the next usage or context_updated", () => {
 		const { chat } = setup();
 		chat.context = context;
 		chat.apply(event("message_end", { seq: 0, message: { role: "user", content: "new input", timestamp: 1 } }));
-		expect(chat.context?.tokens).toBeNull();
+		expect(chat.context?.tokens).toBe(1000);
+		chat.apply(event("message_end", { seq: 1, message: { role: "assistant", content: [], usage: { totalTokens: 1500 }, timestamp: 2 } as never }));
+		expect(chat.context?.tokens).toBe(1500);
 		chat.apply(event("context_updated", { context: { ...context, tokens: 1200 } }));
 		expect(chat.context?.tokens).toBe(1200);
 	});

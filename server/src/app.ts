@@ -40,6 +40,7 @@ import * as S from "./schemas.ts";
 import { SessionManager } from "./sessions.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
+import { AgentsWatcher } from "./agents-watch.ts";
 import { TemplateService } from "./templates.ts";
 import { registerTemplateRoutes } from "./templates-routes.ts";
 import { streamEvents } from "./sse.ts";
@@ -446,11 +447,15 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 
 	await extensions.load();
 	retention.start();
+	// Skills, prompt templates and AGENTS.md live in plain files: tell open clients when they change on disk.
+	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
+	agentsWatch.start();
 	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);
 	prune.unref?.();
 	return { server, sessions, bus, retention, async close() {
 		clearInterval(prune);
 		retention.stop();
+		agentsWatch.stop();
 		await notifications.close();
 		await push.close();
 		sessions.shutdown();

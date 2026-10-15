@@ -355,8 +355,8 @@ export const EVENTS: EventDef[] = [
 	},
 	{
 		type: "skills_updated", persisted: true,
-		description: "A skill was switched on/off globally, for a project or for one session (event sessionId is null; the payload's sessionId names the session for scope session; refetch GET /skills). Running sessions pick the change up on their next message",
-		data: Type.Object({ name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]), project: Type.String() }),
+		description: "A skill was switched on/off globally, for a project or for one session (event sessionId is null; the payload's sessionId names the session for scope session; refetch GET /skills). Also published (empty name, source \"files\") when files under ~/.agents or a project's .agents/.pi change on disk, e.g. a skill or prompt template was added or edited (refetch GET /skills and GET /templates). Running sessions pick the change up on their next message",
+		data: Type.Object({ name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]), project: Type.String(), source: Type.Optional(Type.Literal("files")) }),
 	},
 	{
 		type: "extension_settings_updated", persisted: true,
