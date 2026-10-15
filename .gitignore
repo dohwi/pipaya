@@ -58,3 +58,7 @@ build/
 
 # desktop sidecar (built by scripts/build-sidecar.ts)
 client/src-tauri/binaries/
+
+# agent instructions (local only)
+AGENTS.md
+.agents/
