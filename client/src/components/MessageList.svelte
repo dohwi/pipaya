@@ -4,9 +4,7 @@
 	import { tick, untrack } from "svelte";
 	import Icon from "./Icon.svelte";
 	import Message from "./Message.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
 	import WorkBox from "./WorkBox.svelte";
-	import { faceFor } from "../lib/faces";
 	import { app } from "../lib/store.svelte";
 	import type { ChatState } from "../lib/chat.svelte";
 	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../lib/types";
@@ -101,10 +99,14 @@
 		const n = chat.bottomRequest;
 		if (n === seenRequest) return;
 		seenRequest = n;
+		// Pin right away; from here on the ResizeObserver keeps following any height change until the user scrolls up.
 		stuck = true;
-		void tick().then(() => toBottom());
-		// The optimistic bubble / queued chip may lay out a frame later.
-		requestAnimationFrame(() => toBottom());
+		showJump = false;
+		void tick().then(() => {
+			if (!scroller) return;
+			scroller.scrollTop = scroller.scrollHeight;
+			lastTop = scroller.scrollTop;
+		});
 	});
 
 	// The answer is complete: settle at the bottom, unless the user is reading further up.
@@ -209,7 +211,6 @@
 			{/each}
 			{#if waitingFirst}
 				<div class="row wait">
-					<div class="avatar"><PipayaLogo size={22} eyes face={faceFor(chat.id)} blink /></div>
 					<div class="content"><WorkBox steps={[]} live /></div>
 				</div>
 			{/if}
@@ -235,17 +236,6 @@
 		align-items: stretch;
 		gap: 8px;
 		padding: 10px 0;
-	}
-	.avatar {
-		flex: none;
-		width: 36px;
-		height: 36px;
-		display: grid;
-		place-items: center;
-		border-radius: 50%;
-		border: 1px solid var(--border-strong);
-		background: var(--bg-elev);
-		color: var(--text);
 	}
 	.content {
 		flex: none;

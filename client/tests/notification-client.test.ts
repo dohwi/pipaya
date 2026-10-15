@@ -58,9 +58,11 @@ describe("notification client", () => {
 
   test("switched off, or permission taken away: nothing is shown", async () => {
     const c = new NotificationClient(); const { api } = fakeApi(); c.connect(api);
-    await c.receive(c.id, payload("n6")); expect(shown).toHaveLength(0); // never switched on
+    await c.receive(c.id, payload("n6")); expect(shown).toHaveLength(1); // on by default
+    await c.setEnabled(false);
+    await c.receive(c.id, payload("n6b")); expect(shown).toHaveLength(1); // switched off
     await c.setEnabled(true); state.permission = "denied";
-    await c.receive(c.id, payload("n7")); expect(shown).toHaveLength(0);
+    await c.receive(c.id, payload("n7")); expect(shown).toHaveLength(1);
   });
 
   test("the app reports whether it is being looked at, and says so the moment it is", async () => {
@@ -75,7 +77,7 @@ describe("notification client", () => {
   });
 
   test("turning notifications on without OS permission is refused with a message", async () => {
-    const c = new NotificationClient(); const { api } = fakeApi(); c.connect(api); state.permission = "denied";
+    const c = new NotificationClient(); const { api } = fakeApi(); c.connect(api); await c.setEnabled(false); state.permission = "denied";
     await expect(c.setEnabled(true)).rejects.toThrow();
     expect(c.enabled).toBe(false);
   });
@@ -95,7 +97,7 @@ describe("notification client", () => {
   });
 
   test("a test names the step that stopped it", async () => {
-    const off = new NotificationClient(); const a = fakeApi(); off.connect(a.api);
+    const off = new NotificationClient(); const a = fakeApi(); off.connect(a.api); await off.setEnabled(false);
     expect((await off.test()).step).toBe("not_enabled");
     const none = new NotificationClient(); expect((await none.test()).step).toBe("no_server");
     const c = new NotificationClient(); const { api } = fakeApi(); c.connect(api); await c.setEnabled(true);

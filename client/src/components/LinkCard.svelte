@@ -2,7 +2,7 @@
 	import { isPlainHttpOnOpenNetwork } from "../lib/pairing";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
+	import PipayaMark from "./PipayaMark.svelte";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
@@ -20,7 +20,7 @@
 	<Modal onclose={() => app.closeLinking()} dismissible={link.state !== "working"} label={t("서버 연결")} live="polite" width="360px" gutter="32px" layer={4} sheet={false}>
 	<div class="card">
 		<div class="mark" class:ok={link.state === "done"} class:bad={link.state === "failed"}>
-			{#if link.state === "working"}<PipayaLogo size={34} />
+			{#if link.state === "working"}<PipayaMark size={34} />
 			{:else if link.state === "confirm"}<Icon name="alert" />
 			{:else if link.state === "done"}<Icon name="check" />
 			{:else}<Icon name="alert" />{/if}

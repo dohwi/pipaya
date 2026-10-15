@@ -6,6 +6,7 @@
 	import { compact } from "../lib/format";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
 	import type { ModelInfo, ProviderInfo, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -50,7 +51,7 @@
 	const phone = isPhone();
 
 	let filter = $state("");
-	/** What is highlighted now. Nothing is saved until "선택", so a stray tap on a row cannot change a setting. */
+	/** What is highlighted now. Every click is applied at once through `onpick`; the dialog stays open. */
 	// svelte-ignore state_referenced_locally
 	let sel = $state<{ provider: string; model: string } | null>(value);
 	// svelte-ignore state_referenced_locally

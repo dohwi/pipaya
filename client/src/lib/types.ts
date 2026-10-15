@@ -406,6 +406,8 @@ export interface AssistantMessage {
 	content: (TextBlock | ThinkingBlock | ToolCallBlock)[];
 	provider?: string;
 	model?: string;
+	/** Reasoning strength the reply was written with; absent for models without reasoning and for older replies. */
+	thinkingLevel?: ThinkingLevel;
 	stopReason: StopReason;
 	errorMessage?: string;
 	durationMs?: number;
@@ -485,7 +487,10 @@ export interface AssistantItem {
 	streaming: boolean;
 	stopReason: StopReason;
 	error?: string;
+	/** The provider/model that wrote this reply, kept so the logo above it stays the one used at the time. */
+	provider?: string;
 	model?: string;
+	thinkingLevel?: ThinkingLevel;
 	durationMs?: number;
 	tokens?: number;
 	usage?: AssistantMessage["usage"];

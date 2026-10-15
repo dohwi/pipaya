@@ -21,7 +21,6 @@
 	});
 
 	function pick(c: { provider: string; model: string; thinkingLevel?: import("../lib/types").ThinkingLevel } | null) {
-		open = false;
 		if (!c) return;
 		// The model and its strength are one choice: send both together so the chat never holds a mismatched pair.
 		void app.configure({ provider: c.provider, model: c.model, ...(c.thinkingLevel ? { thinkingLevel: c.thinkingLevel } : {}) }, pane.id);
@@ -72,7 +71,7 @@
 		white-space: nowrap;
 		max-width: 38vw;
 	}
-	.trigger :global(svg) {
+	.trigger :global(svg:not(.model)) {
 		width: 15px;
 		height: 15px;
 		flex: none;

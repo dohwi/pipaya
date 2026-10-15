@@ -8,8 +8,7 @@
 	import Composer from "./Composer.svelte";
 	import DropLayer from "./DropLayer.svelte";
 	import SessionToasts from "./SessionToasts.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
-	import { faceFor } from "../lib/faces";
+	import PipayaMark from "./PipayaMark.svelte";
 	import { activityOf } from "../lib/activity";
 	import { dragSource } from "../lib/dnd.svelte";
 	import { setPane } from "../lib/pane";
@@ -62,7 +61,7 @@
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
 			<div class="hello" aria-hidden="true">
-				<PipayaLogo size={144} eyes face={faceFor(id)} blink />
+				<PipayaMark size={144} />
 			</div>
 		{/if}
 		{#if chat}
@@ -198,6 +197,7 @@
 		pointer-events: none;
 		user-select: none;
 		color: var(--text-faint);
+		opacity: 0.35;
 	}
 	.empty {
 		flex: 1;

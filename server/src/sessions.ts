@@ -802,6 +802,11 @@ export class SessionManager {
 				return;
 			case "message_end": {
 				const seq = live.nextSeq++;
+				// Remember the reasoning strength this reply was written with (the session's setting can change later).
+				const st = live.agent.state;
+				if (event.message.role === "assistant" && st.model?.reasoning && st.thinkingLevel && st.thinkingLevel !== "off") {
+					(event.message as { thinkingLevel?: string }).thinkingLevel = st.thinkingLevel;
+				}
 				this.store.appendMessage(sessionId, seq, event.message);
 				pub("message_end", { seq, message: event.message });
 				this.ext?.notify("message_end", { sessionId, message: event.message, seq }, sessionId);

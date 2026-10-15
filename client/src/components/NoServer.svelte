@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { t } from "../lib/i18n";
-	import PipayaLogo from "./PipayaLogo.svelte";
+	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
 	import Icon from "./Icon.svelte";
 	import Backdrop from "./Backdrop.svelte";
@@ -46,7 +46,7 @@
 <div class="screen">
 	<Backdrop />
 	<div class="card">
-		<div class="logo"><PipayaLogo size={52} /></div>
+		<div class="logo"><PipayaMark size={52} /></div>
 		<h1><Wordmark size={34} /></h1>
 		{#if scannable}
 			<p class="sub">{t("QR로 서버에 연결합니다.")}</p>

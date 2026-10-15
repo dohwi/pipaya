@@ -1,15 +1,14 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
-	import { faceFor } from "../lib/faces";
+	import PipayaMark from "./PipayaMark.svelte";
 	import { app } from "../lib/store.svelte";
 
 	const noModel = $derived(!app.models.some((m) => m.configured));
 </script>
 
 <div class="welcome">
-	<div class="face" aria-hidden="true"><PipayaLogo size={144} eyes face={faceFor(null)} blink /></div>
+	<div class="face" aria-hidden="true"><PipayaMark size={144} /></div>
 	<div class="copy">
 		<h1>{t("무엇을 함께 작업할까요?")}</h1>
 		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
@@ -49,6 +48,7 @@
 		position: relative;
 		margin-bottom: 20px;
 		color: var(--text-faint);
+		opacity: 0.35;
 		user-select: none;
 	}
 	.copy {

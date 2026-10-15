@@ -1,15 +1,28 @@
 <script lang="ts">
-	import PipayaLogo from "./PipayaLogo.svelte";
-	import { faceFor } from "../lib/faces";
+	import ModelLogo from "./ModelLogo.svelte";
+	import { app } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, type Activity } from "../lib/activity";
 
-	/** A session's agent: its own pipaya expression (stable per session), tinted and badged by what it is doing. */
+	/** A session's agent: the (monochrome) logo of the model that did its last work; the dot shows what it is doing. */
 	let { id, state = "idle", size = 20 }: { id: string; state?: Activity; size?: number } = $props();
+
+	/** The model that wrote the last reply; a session with no reply yet (or not loaded) uses its current model. */
+	const logoModel = $derived.by(() => {
+		const items = app.chatOf(id)?.items;
+		if (items) {
+			for (let i = items.length - 1; i >= 0; i--) {
+				const it = items[i]!;
+				if (it.kind === "assistant" && it.model) return { provider: it.provider, model: it.model };
+			}
+		}
+		const e = app.effectiveOf(id);
+		return { provider: e.provider, model: e.model };
+	});
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<PipayaLogo {size} eyes face={faceFor(id)} blink={state === "working"} />
-	{#if state !== "idle"}<i class="badge"></i>{/if}
+	<span class="logo"><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
+	{#if state !== "idle"}<i class="badge" style="animation-delay:{-(Date.now() % 1200)}ms"></i>{/if}
 </span>
 
 <style>
@@ -19,7 +32,18 @@
 		display: inline-grid;
 		place-items: center;
 		color: var(--text-faint);
-		transition: color var(--motion-fast) var(--ease-std);
+	}
+	.logo {
+		display: inline-grid;
+		color: var(--text-dim);
+		transition: color 0.2s;
+	}
+	/* the logo takes the state colour too, not just the dot */
+	.working .logo,
+	.asking .logo,
+	.done .logo,
+	.failed .logo {
+		color: inherit;
 	}
 	.working {
 		color: var(--info);

@@ -7,11 +7,13 @@
 
 	/**
 	 * Lists the messages that were queued (follow_up) or steered but not delivered yet, and removes them one at a
-	 * time. Click the x, or press Delete / Backspace / Enter on a focused row.
+	 * time. Like the slash menu: ↑/↓ moves the highlight, Enter / Delete / Backspace or a click removes the row.
 	 */
 	const chat = $derived(app.chatOf(app.queueDialog));
 	const items = $derived(chat?.queued ?? []);
 	let listEl = $state<HTMLElement | null>(null);
+	// The highlighted row, like the slash menu: arrows move it, Enter / Delete removes it.
+	let index = $state(0);
 
 	const close = () => (app.queueDialog = null);
 
@@ -20,32 +22,38 @@
 		if (!chat || !items.length) close();
 	});
 
+	// Keep the highlight inside the list as rows disappear.
+	$effect(() => {
+		if (index > items.length - 1) index = Math.max(0, items.length - 1);
+	});
+
+	$effect(() => {
+		index;
+		listEl?.querySelector<HTMLElement>(`[data-i="${index}"]`)?.scrollIntoView({ block: "nearest" });
+	});
+
 	async function remove(i: number) {
 		const item = items[i];
 		if (!item) return;
+		index = i;
 		await app.cancelQueued({ mode: item.mode, text: item.text });
-		// Keep the keyboard on the list: focus the row that took this one's place.
-		queueMicrotask(() => {
-			const rows = listEl?.querySelectorAll<HTMLElement>(".rm");
-			rows?.[Math.min(i, rows.length - 1)]?.focus();
-		});
 	}
 
 	function onKey(e: KeyboardEvent) {
-		const rows = [...(listEl?.querySelectorAll<HTMLElement>(".rm") ?? [])];
-		const at = rows.indexOf(document.activeElement as HTMLElement);
-		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+		if (e.isComposing) return;
+		const n = items.length;
+		if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
 			e.preventDefault();
-			if (!rows.length) return;
-			rows[(Math.max(at, 0) + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length]?.focus();
-		} else if ((e.key === "Delete" || e.key === "Backspace") && at >= 0) {
+			index = (index + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
+		} else if (n && !(e.target as HTMLElement).closest("button") && (e.key === "Enter" || e.key === "Delete" || e.key === "Backspace")) {
 			e.preventDefault();
-			void remove(at);
+			void remove(index);
 		}
 	}
 
-	function focusFirst(node: HTMLElement) {
-		queueMicrotask(() => node.querySelector<HTMLElement>(".rm")?.focus());
+	// Focus the list itself (not a button) so the highlighted row, not an x, is what shows.
+	function focusList(node: HTMLElement) {
+		queueMicrotask(() => node.focus());
 	}
 </script>
 
@@ -57,12 +65,21 @@
 		<h2>{t("대기열 관리")}</h2>
 		<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
 	</div>
-	<ul bind:this={listEl} use:focusFirst>
+	<ul bind:this={listEl} use:focusList tabindex="-1" role="listbox" aria-label={t("대기열 관리")}>
 		{#each items as q, i (q.mode + "\u0000" + q.text + "\u0000" + i)}
-			<li>
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<li
+				class:on={i === index}
+				role="option"
+				aria-selected={i === index}
+				data-i={i}
+				title={q.text}
+				onmousemove={() => (index = i)}
+				onclick={() => remove(i)}
+			>
 				<Badge variant="outline" size="sm" mono square tone={q.mode === "steer" ? "accent" : "neutral"}>{q.mode === "steer" ? t("끼워 넣기") : t("대기열")}</Badge>
-				<span class="qt" title={q.text}>{q.text}</span>
-				<button type="button" class="iconbtn sm rm" onclick={() => remove(i)} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
+				<span class="qt">{q.text}</span>
+				<span class="rm" aria-hidden="true"><Icon name="x" /></span>
 			</li>
 		{:else}
 			<li class="empty">{t("대기 중인 메시지가 없습니다")}</li>
@@ -101,8 +118,22 @@
 		border-radius: var(--radius);
 		font-size: var(--fs-sm);
 	}
-	li:hover {
-		background: var(--bg-hover);
+	ul:focus {
+		outline: none;
+	}
+	li:not(.empty) {
+		cursor: pointer;
+	}
+	li.on {
+		background: var(--bg-active);
+	}
+	.rm {
+		flex: none;
+		display: inline-flex;
+		color: var(--text-faint);
+	}
+	li.on .rm {
+		color: var(--text);
 	}
 	.qt {
 		flex: 1;

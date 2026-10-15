@@ -2,13 +2,11 @@
 	import { t } from "../lib/i18n";
 	import { slide } from "svelte/transition";
 	import Icon from "./Icon.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
-	import { faceFor } from "../lib/faces";
 	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
 	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
@@ -100,7 +98,6 @@
 	</div>
 {:else}
 	<div class="row assistant" class:fresh={parts[0]?.fresh}>
-		<div class="avatar" class:live><PipayaLogo size={22} eyes face={faceFor(pane.id)} blink={live} /></div>
 		<div class="content">
 			{#each segments as seg, n (seg.i)}
 				{#if seg.kind === "work"}
@@ -134,6 +131,7 @@
 					{/if}
 					<span class="stats">
 						{#if tail.model}{tail.model}{/if}
+						{#if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
 						{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
 						{#if took}· {duration(took)}{/if}
 					</span>
@@ -219,31 +217,11 @@
 		}
 	}
 
-	/* assistant: avatar on top, reply fills the full width below it */
+	/* assistant: the reply fills the full width */
 	.row.assistant {
 		flex-direction: column;
 		align-items: stretch;
 		gap: 8px;
-	}
-	.avatar {
-		flex: none;
-		width: 36px;
-		height: 36px;
-		margin-top: 2px;
-		display: grid;
-		place-items: center;
-		border-radius: 50%;
-		border: 1px solid var(--border-strong);
-		background: var(--bg-elev);
-		color: var(--text);
-	}
-	.avatar.live {
-		animation: pulse 1.2s ease-in-out infinite;
-	}
-	@keyframes pulse {
-		50% {
-			box-shadow: 0 0 0 5px var(--accent-soft);
-		}
 	}
 	.content {
 		flex: none;
@@ -299,10 +277,6 @@
 	@media (max-width: 640px) {
 		.row {
 			gap: 10px;
-		}
-		.avatar {
-			width: 32px;
-			height: 32px;
 		}
 	}
 </style>

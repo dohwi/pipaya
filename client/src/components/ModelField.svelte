@@ -59,7 +59,7 @@
 		{allowUnset}
 		{unsetLabel}
 		title={label}
-		onpick={(c) => { open = false; onpick(c); }}
+		{onpick}
 		{onfav}
 		{onmanage}
 		onclose={() => (open = false)}
@@ -97,7 +97,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.trigger :global(svg) {
+	.trigger :global(svg:not(.model)) {
 		width: 15px;
 		height: 15px;
 		flex: none;

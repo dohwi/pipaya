@@ -15,7 +15,7 @@ logo/
 ```
 
 표정: block · slit · pixel · happy · focus · curious · wink · sleepy
-(좌표는 `client/src/lib/faces.ts`와 같고, `at` 오프셋 없이 눈 영역 중심을 항상 줄기 중심에 맞춘다.)
+(표정 시안용이다. 앱에서는 눈 없는 `PipayaMark`를 쓰며 `client/src/lib/faces.ts`는 삭제했다. `at` 오프셋 없이 눈 영역 중심을 항상 줄기 중심에 맞춘다.)
 
 ## 다시 만들기
 
@@ -31,7 +31,9 @@ python3 logo/build.py
 cd logo && python3 -m http.server 4747 --bind 0.0.0.0
 ```
 
-## 아직 적용하지 않은 것
+## 앱 적용 상태
 
-- `client/src/lib/faces.ts`
-- `client/src-tauri/app-icon.svg` → `app-icon.png` → `client/scripts/make-icons.py`
+- 사이드바·레일·빈 화면 등은 `client/src/components/PipayaMark.svelte` (a-crop, 눈 없음). 기하는 `build_mark.py` 기준.
+- 에이전트 로고는 모델 회사 마크(`ModelLogo.svelte`, `lib/brand.ts`), 알 수 없는 모델은 `PipayaMark`.
+- 앱 아이콘은 `client/src-tauri/app-icon.svg` → `client/scripts/make-icons.py`로 적용 완료.
+- `build_papaya.py`, `build_small.py`는 시안 생성기 (`svg/papaya/`, `svg/small/`, `papaya.html`, `small.html`, `mark.html`).

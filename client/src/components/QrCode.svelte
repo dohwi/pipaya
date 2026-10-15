@@ -1,6 +1,6 @@
 <script lang="ts">
 	import qrcode from "qrcode-generator";
-	import PipayaLogo from "./PipayaLogo.svelte";
+	import PipayaMark from "./PipayaMark.svelte";
 
 	let { value, size = 232 }: { value: string; size?: number } = $props();
 
@@ -45,7 +45,7 @@
 		<rect width={view} height={view} fill="#fff" />
 		<path d={path} fill="#111" />
 	</svg>
-	<span class="plate" style="width:{plate}px;height:{plate}px"><PipayaLogo size={Math.round(plate * 0.62)} /></span>
+	<span class="plate" style="width:{plate}px;height:{plate}px"><PipayaMark size={Math.round(plate * 0.62)} /></span>
 </div>
 
 <style>

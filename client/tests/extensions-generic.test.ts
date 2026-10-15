@@ -366,9 +366,11 @@ describe("renderers, SDK surface and brand neutrality", () => {
 	});
 	test("no AI brand or product name appears anywhere under src/", async () => {
 		const pattern = /claude|gemini|antigravity|quota-monitor|quota/i;
+		// The model logo shown next to an agent has to recognise model families by name; only these files may.
+		const LOGO_FILES = new Set(["lib/brand.ts", "lib/brand-marks.ts", "components/ModelLogo.svelte"]);
 		const hits: string[] = [];
 		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) {
-			if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file)) continue;
+			if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file) || LOGO_FILES.has(file)) continue;
 			if (pattern.test(await Bun.file(`src/${file}`).text())) hits.push(file);
 		}
 		expect(hits).toEqual([]);

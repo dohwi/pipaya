@@ -82,7 +82,8 @@ function deviceId() {
 }
 /** Presence is per window; durable push identity is supplied by a native adapter. */
 export class NotificationClient {
-  enabled = localStorage.getItem(ENABLED) === "1";
+  // On by default; only an explicit opt-out ("0") turns it off. OS permission is still requested/checked separately.
+  enabled = localStorage.getItem(ENABLED) !== "0";
   readonly id = isTauri() && ["android", "ios"].includes(notificationPlatform()) ? (() => {
     let id = localStorage.getItem(DEVICE);
     if (!id) { id = newDeviceId(); localStorage.setItem(DEVICE, id); }
