@@ -4,11 +4,12 @@
 	import { app } from "../lib/store.svelte";
 	import { errorText } from "../lib/api";
 	import { copyText } from "../lib/clipboard";
-	import { previewKind, sizeLabel } from "../lib/files";
+	import { parseTable, previewKind, sizeLabel } from "../lib/files";
+	import Markdown from "./Markdown.svelte";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
-	/** Preview of a file in the session's working directory: an image, text, or just a download for anything else. */
+	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
 	const open = $derived(app.filePreview);
 	const close = () => (app.filePreview = null);
 
@@ -22,6 +23,8 @@
 	let copied = $state(false);
 
 	const kind = $derived(open ? previewKind(open.file.name, open.file.mimeType) : "other");
+
+	const table = $derived(kind === "table" && text !== null ? parseTable(text, /\.tsv$/i.test(open?.file.name ?? "") ? "\t" : ",") : null);
 
 	function revoke() {
 		if (url) URL.revokeObjectURL(url);
@@ -44,7 +47,7 @@
 				size = blob.size;
 				// the server names the type; trust the file name for the preview kind, and always hand the browser the right type
 				const k = previewKind(f.file.name, blob.type || f.file.mimeType);
-				if (k === "text") {
+				if (k === "text" || k === "markdown" || k === "table") {
 					const raw = await blob.text();
 					truncated = raw.length > MAX_TEXT;
 					text = truncated ? raw.slice(0, MAX_TEXT) : raw;
@@ -91,6 +94,28 @@
 				<button type="button" class="pic" onclick={() => app.openImage([{ src: url!, mimeType: open.file.mimeType ?? "image/png" }])} aria-label={t("이미지 크게 보기")}>
 					<img src={url} alt={open.file.name} />
 				</button>
+			{:else if kind === "pdf" && url}
+				<iframe class="pdf" src={url} title={open.file.name}></iframe>
+			{:else if kind === "audio" && url}
+				<!-- svelte-ignore a11y_media_has_caption -->
+				<audio class="media" src={url} controls preload="metadata"></audio>
+			{:else if kind === "video" && url}
+				<!-- svelte-ignore a11y_media_has_caption -->
+				<video class="media" src={url} controls preload="metadata" playsinline></video>
+			{:else if kind === "markdown" && text !== null}
+				<Markdown {text} sessionId={open.sessionId} />
+				{#if truncated}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
+			{:else if table}
+				<div class="tablewrap">
+					<table>
+						<tbody>
+							{#each table.rows as r, i}
+								<tr>{#each r as c}{#if i === 0}<th>{c}</th>{:else}<td>{c}</td>{/if}{/each}</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				{#if truncated || table.more}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
 			{:else if text !== null}
 				<pre>{text}</pre>
 				{#if truncated}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
@@ -118,6 +143,41 @@
 		max-width: 100%;
 		max-height: 70vh;
 		border-radius: var(--radius);
+	}
+	.pdf {
+		display: block;
+		width: 100%;
+		height: 70vh;
+		border: 0;
+		border-radius: var(--radius);
+		background: #fff;
+	}
+	.media {
+		display: block;
+		width: 100%;
+		max-height: 70vh;
+		border-radius: var(--radius);
+	}
+	.tablewrap {
+		overflow: auto;
+		max-height: 70vh;
+	}
+	table {
+		border-collapse: collapse;
+		font-size: var(--fs-sm);
+	}
+	th,
+	td {
+		padding: 4px 10px;
+		border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+		text-align: left;
+		white-space: nowrap;
+	}
+	th {
+		position: sticky;
+		top: 0;
+		background: var(--bg-elev, var(--bg, #222));
+		font-weight: 600;
 	}
 	pre {
 		margin: 0;

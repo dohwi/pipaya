@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, isWorkdirPath, previewKind, sizeLabel } from "../src/lib/files";
+import { cleanWorkdirPath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
 describe("working-directory links", () => {
 	test("only relative paths inside the directory count", () => {
@@ -18,9 +18,21 @@ describe("previews", () => {
 	test("kind follows the type, then the name", () => {
 		expect(previewKind("a.png", "image/png")).toBe("image");
 		expect(previewKind("a.JPG")).toBe("image");
-		expect(previewKind("notes.md", "application/octet-stream")).toBe("text");
+		expect(previewKind("notes.md", "application/octet-stream")).toBe("markdown");
+		expect(previewKind("a.csv", "text/csv")).toBe("table");
+		expect(previewKind("a.mp3")).toBe("audio");
+		expect(previewKind("a.mp4", "video/mp4")).toBe("video");
+		expect(previewKind("main.py")).toBe("text");
 		expect(previewKind("data", "application/json")).toBe("text");
-		expect(previewKind("a.pdf", "application/pdf")).toBe("other");
+		expect(previewKind("a.pdf", "application/pdf")).toBe("pdf");
+		expect(previewKind("a.zip", "application/zip")).toBe("other");
+	});
+	test("tables: quotes, escaped quotes, newlines in cells, BOM, row cap", () => {
+		expect(parseTable('\uFEFFa,b\r\n"x,1","he said ""hi"""\n"l1\nl2",z', ",").rows).toEqual([["a", "b"], ["x,1", 'he said "hi"'], ["l1\nl2", "z"]]);
+		expect(parseTable("a\tb\n1\t2", "\t").rows).toEqual([["a", "b"], ["1", "2"]]);
+		const r = parseTable("1\n2\n3\n", ",", 2);
+		expect(r.rows.length).toBe(2);
+		expect(r.more).toBe(true);
 	});
 	test("sizes are short", () => {
 		expect(sizeLabel(512)).toBe("512 B");

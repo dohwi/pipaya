@@ -12,12 +12,17 @@ export interface FileDraft extends UploadFile {
 	preview?: string;
 }
 
-export type PreviewKind = "image" | "text" | "other";
+export type PreviewKind = "image" | "pdf" | "audio" | "video" | "markdown" | "table" | "text" | "other";
 
 const TEXT_EXT = /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|xml|html?|css|[cm]?[jt]sx?|svelte|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|sh|sql|diff|patch|env)$/i;
 
 export function previewKind(name: string, mimeType = ""): PreviewKind {
 	if (/^image\/(png|jpe?g|gif|webp|bmp|avif|svg\+xml)$/.test(mimeType) || /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(name)) return "image";
+	if (mimeType === "application/pdf" || /\.pdf$/i.test(name)) return "pdf";
+	if (/^audio\//.test(mimeType) || /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus)$/i.test(name)) return "audio";
+	if (/^video\/(mp4|webm|ogg|quicktime)$/.test(mimeType) || /\.(mp4|m4v|webm|ogv|mov)$/i.test(name)) return "video";
+	if (/\.(md|markdown)$/i.test(name)) return "markdown";
+	if (/\.(csv|tsv)$/i.test(name)) return "table";
 	if (mimeType.startsWith("text/") || mimeType === "application/json" || TEXT_EXT.test(name)) return "text";
 	return "other";
 }
@@ -71,4 +76,31 @@ export function cleanWorkdirPath(href: string): string {
 	} catch {
 		return bare;
 	}
+}
+
+/** Parse CSV/TSV (quotes, escaped quotes, newlines inside quotes). Small and forgiving; for previews only. */
+export function parseTable(src: string, delimiter: string, maxRows = 1000): { rows: string[][]; more: boolean } {
+	const rows: string[][] = [];
+	let row: string[] = [];
+	let cell = "";
+	let quoted = false;
+	let more = false;
+	const text = src.replace(/^\uFEFF/, "");
+	for (let i = 0; i < text.length; i++) {
+		const c = text[i]!;
+		if (quoted) {
+			if (c === '"') {
+				if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false;
+			} else cell += c;
+		} else if (c === '"' && cell === "") quoted = true;
+		else if (c === delimiter) { row.push(cell); cell = ""; }
+		else if (c === "\n" || c === "\r") {
+			if (c === "\r" && text[i + 1] === "\n") i++;
+			row.push(cell); cell = "";
+			rows.push(row); row = [];
+			if (rows.length >= maxRows) { more = i < text.length - 1; return { rows, more }; }
+		} else cell += c;
+	}
+	if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+	return { rows, more };
 }

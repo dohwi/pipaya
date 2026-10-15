@@ -33,6 +33,7 @@
         "object-src": "'none'",
         "base-uri": "'none'",
         "form-action": "'none'",
+        "media-src": "'self' blob:",
         "frame-src": "blob: data:"
       },
       "devCsp": {
@@ -47,6 +48,7 @@
         "object-src": "'none'",
         "base-uri": "'none'",
         "form-action": "'none'",
+        "media-src": "'self' blob:",
         "frame-src": "blob: data:"
       }
     }

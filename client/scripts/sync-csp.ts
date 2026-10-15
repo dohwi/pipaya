@@ -30,6 +30,7 @@ export function buildCsp(dev = false): Record<string, string> {
 		"object-src": "'none'",
 		"base-uri": "'none'",
 		"form-action": "'none'",
+		"media-src": "'self' blob:",
 		"frame-src": "blob: data:",
 	};
 }

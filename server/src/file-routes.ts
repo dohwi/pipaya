@@ -20,6 +20,8 @@ const MIME: Record<string, string> = {
 	svg: "image/svg+xml", pdf: "application/pdf", json: "application/json", csv: "text/csv", md: "text/markdown", markdown: "text/markdown",
 	txt: "text/plain", log: "text/plain", html: "text/plain", htm: "text/plain", css: "text/css", js: "text/plain", ts: "text/plain",
 	xml: "text/plain", yaml: "text/plain", yml: "text/plain", zip: "application/zip",
+	tsv: "text/tab-separated-values", mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac",
+	flac: "audio/flac", opus: "audio/ogg", mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", ogv: "video/ogg", mov: "video/quicktime",
 };
 export const mimeOf = (file: string) => MIME[extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
 
