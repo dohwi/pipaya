@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { slide } from "svelte/transition";
 	import Icon from "./Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";

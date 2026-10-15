@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { surfaceIn, surfaceOut } from "../lib/motion";
+	import { chipIn, chipOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 	import type { Attachment } from "../lib/images";
 	import Icon from "./Icon.svelte";
@@ -18,7 +18,7 @@
 <!-- |global: the {#if} that shows this strip is the composer's, not this component's (see tests/motion.test.ts) -->
 <div class="thumbs" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>
 	{#each attachments as a (a.id)}
-		<div class="thumb">
+		<div class="thumb" animate:reflow in:chipIn out:chipOut>
 			<button class="open" onclick={() => open(a.id)} aria-label={t("{name} 크게 보기", { name: a.name })}>
 				<img src={a.preview} alt={a.name} />
 			</button>

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { fly } from "svelte/transition";
-	import { collapseIn, collapseOut, fadeIn, fadeOut } from "../lib/motion";
+	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import { sheetPull } from "../lib/sheet";
@@ -16,8 +15,9 @@
 	/** `live`: the agent is still working and this box is the newest thing in the reply. */
 	let { steps, live = false }: { steps: Step[]; live?: boolean } = $props();
 
-	const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-	const ms = reduced ? 0 : 240;
+	/** The status line rolls: the old line leaves upward as the new one comes in from below. */
+	const rollIn = (_: Element) => ({ duration: ms("normal"), easing: easeEnter, css: (t: number, u: number) => `opacity:${t.toFixed(3)};transform:translateY(${(u * 14).toFixed(2)}px)` });
+	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number, u: number) => `opacity:${t.toFixed(3)};transform:translateY(${(-u * 14).toFixed(2)}px)` });
 
 	const pane = getPane();
 	const runOf = (id: string): ToolRun => (id && app.chatOf(pane.id)?.tools[id]) || { state: "pending", output: "" };
@@ -103,7 +103,7 @@
 	<button class="box wide" onclick={() => (modal = true)} aria-haspopup="dialog" aria-label={t("작업 {n}단계 자세히 보기", { n: steps.length })}>
 		<span class="roll" aria-live="polite">
 			{#key line.key}
-				<span class="line" in:fly={{ y: 14, duration: ms }} out:fly={{ y: -14, duration: ms }}>
+				<span class="line" in:rollIn out:rollOut>
 					<span class="tbadge {line.kind}" class:bare={!line.name} style={badgeStyle(line.kind)}>
 						<Icon name={line.icon} />
 						{#if line.name}<span class="tb-label" class:shimmer={line.shimmer}>{line.name}</span>{/if}

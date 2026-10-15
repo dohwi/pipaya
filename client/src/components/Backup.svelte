@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Badge from "./Badge.svelte";
+	import { collapseIn, collapseOut } from "../lib/motion";
 	import { localeTag, msg, t, tc } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Switch from "./Switch.svelte";
@@ -267,7 +268,7 @@
 			{/if}
 		</div>
 		{#if confirmingRestore}
-			<div class="confirm" role="group" aria-label={t("되돌리기 확인")}>
+			<div class="confirm" in:collapseIn out:collapseOut role="group" aria-label={t("되돌리기 확인")}>
 				<p>{t("서버 목록, 이 기기의 확장, 앱 설정, 단축키를 가져오기 전으로 되돌립니다. 그 사이에 바꾼 내용은 사라지고, 확장은 모두 꺼진 상태가 됩니다.")}</p>
 				<div class="actions">
 					<button type="button" class="btn sm" onclick={() => (confirmingRestore = false)}>{t("취소")}</button>

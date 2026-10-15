@@ -9,7 +9,7 @@
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
 	import Switch from "./Switch.svelte";
-	import { collapseIn, collapseOut } from "../lib/motion";
+	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
@@ -237,7 +237,7 @@
 					{#if !folded[g.cwd]}
 						<ul in:collapseIn out:collapseOut>
 							{#each g.list as s (s.id)}
-								<li class:on={picked[s.id]}>
+								<li class:on={picked[s.id]} animate:reflow in:rowIn out:rowOut>
 									<label>
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />
 										<span class="title">{s.title || t("제목 없음")}</span>

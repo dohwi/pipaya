@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { flip } from "svelte/animate";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "./Icon.svelte";
 	import CountdownClose from "./CountdownClose.svelte";
-	import { ms, surfaceIn, surfaceOut } from "../lib/motion";
+	import { reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 
 	/**
@@ -28,7 +27,7 @@
 	<div class="stack" aria-live="polite">
 		{#each app.feedback.notices as n (n.id)}
 			{@const failed = n.tone === "failed"}
-			<div class="row" class:failed role={failed ? "alert" : "status"} animate:flip={{ duration: ms("fast") }} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }}>
+			<div class="row" class:failed role={failed ? "alert" : "status"} animate:reflow in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }}>
 				<button class="go" onclick={() => go(n.id, n.sid)}>
 					<AgentBadge id={n.sid} state={n.tone} size={18} />
 					<span class="title">{app.session(n.sid)?.title ?? t("대화")}</span>

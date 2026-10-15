@@ -3,7 +3,7 @@
 	import Badge from "./Badge.svelte";
 	import Switch from "./Switch.svelte";
 	import { t } from "../lib/i18n";
-	import { holdClosing } from "../lib/motion";
+	import { holdClosing, reflow, rowIn, rowOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../lib/api";
@@ -99,7 +99,7 @@
 	<ul class="list">
 		{#each shown as s (s.name)}
 {@const on = effective(s, mode)}
-<li class="item" class:off={!on || !s.modelInvocable}>
+<li class="item" class:off={!on || !s.modelInvocable} animate:reflow in:rowIn out:rowOut>
 	<span class="switch" title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없어요")}>
 		<Switch
 			checked={on && s.modelInvocable}

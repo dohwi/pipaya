@@ -36,7 +36,7 @@
 	.logo {
 		display: inline-grid;
 		color: var(--text-dim);
-		transition: color 0.2s;
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	/* the logo takes the state colour too, not just the dot */
 	.working .logo,

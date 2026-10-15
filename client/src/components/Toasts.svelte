@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { surfaceIn, surfaceOut, ms } from "../lib/motion";
-	import { flip } from "svelte/animate";
+	import { reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 	import { viewport } from "../lib/viewport.svelte";
 	import CountdownClose from "./CountdownClose.svelte";
@@ -54,7 +53,7 @@
 	aria-live="polite"
 >
 	{#each app.globalToasts as t (t.id)}
-		<div class="strip {t.tone}" role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }} animate:flip={{ duration: ms("fast") }}>
+		<div class="strip {t.tone}" role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }} animate:reflow>
 			<span class="msg">{t.text}</span>
 			<CountdownClose ms={t.ms} onclick={() => app.feedback.dismissToast(t.id)} />
 		</div>

@@ -170,3 +170,22 @@ describe("modals mounted by their parent animate", () => {
 		}
 	});
 });
+
+describe("motion goes through lib/motion", () => {
+	const { readFileSync, readdirSync } = require("node:fs") as typeof import("node:fs");
+	const { join } = require("node:path") as typeof import("node:path");
+	const root = new URL("../src/", import.meta.url).pathname;
+	const files = (dir: string): string[] =>
+		readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith(".svelte") ? [join(dir, e.name)] : []));
+	test("no component imports svelte/transition or svelte/animate itself (tokens + reduced motion live in one place)", () => {
+		for (const f of files(root)) {
+			expect(readFileSync(f, "utf8"), f).not.toMatch(/from "svelte\/(transition|animate)"/);
+		}
+	});
+	test("no hard-coded transition durations in component styles", () => {
+		for (const f of files(root)) {
+			const css = readFileSync(f, "utf8").match(/<style[\s\S]*?<\/style>/)?.[0] ?? "";
+			expect(css, f).not.toMatch(/transition:[^;]*[\s,](?:[1-9]\d*|\d*\.\d*[1-9])m?s\b/);
+		}
+	});
+});

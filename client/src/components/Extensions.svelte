@@ -318,8 +318,8 @@
 				onchange={(next) => (next ? enable(id) : disable(id))}
 			/>
 		</div>
-		{#if entry.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
-		{#if problem}<p class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
+		{#if entry.error}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
+		{#if problem}<p in:collapseIn out:collapseOut class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
 		{#if unfolded[id]}
 			<div class="detail" in:collapseIn out:collapseOut>
 				<div class="detail-in">
@@ -330,7 +330,7 @@
 						<button type="button" class="btn danger sm end" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
 					</div>
 					{#if removing === id}
-						<div class="confirm" role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
+						<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
 							<p id="extension-remove-{id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
 							<div class="row">
 								<button type="button" class="btn sm" disabled={busy[id]} onclick={() => remove(id, true)}>{t("설정 유지하고 삭제")}</button>
@@ -380,7 +380,7 @@
 			<button type="button" class="btn danger sm end" disabled={busy[key]} aria-expanded={removing === key} onclick={(event) => askRemove(key, event)}>{t("삭제")}</button>
 		</div>
 		{#if removing === key}
-			<div class="confirm" role="group" aria-labelledby="extension-remove-{key}" tabindex="-1" use:focusConfirm>
+			<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{key}" tabindex="-1" use:focusConfirm>
 				{#if item.id}
 					<p id="extension-remove-{key}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
 					<div class="row">
@@ -402,11 +402,11 @@
 
 <div class="extensions">
 	<div class="feedback" aria-live="polite" aria-atomic="true">
-		{#if error}<p class="callout danger"><Icon name="alert" /><span>{error}</span></p>{/if}
-		{#if notice}<p class="callout ok"><Icon name="check" /><span>{notice}</span></p>{/if}
+		{#if error}<p in:collapseIn out:collapseOut class="callout danger"><Icon name="alert" /><span>{error}</span></p>{/if}
+		{#if notice}<p in:collapseIn out:collapseOut class="callout ok"><Icon name="check" /><span>{notice}</span></p>{/if}
 	</div>
-	{#if extensions.syncNotice}<p class="callout warn" role="status"><Icon name="alert" /><span>{extensions.syncNotice}</span></p>{/if}
-	{#if extensions.loadError}<p class="callout danger" role="status"><Icon name="alert" /><span>{extensions.loadError}</span></p>{/if}
+	{#if extensions.syncNotice}<p in:collapseIn out:collapseOut class="callout warn" role="status"><Icon name="alert" /><span>{extensions.syncNotice}</span></p>{/if}
+	{#if extensions.loadError}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{extensions.loadError}</span></p>{/if}
 
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">

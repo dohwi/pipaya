@@ -12,6 +12,7 @@
 <script lang="ts">
 	import Icon from "./Icon.svelte";
 	import { portal } from "../lib/dialog";
+	import { surfaceIn, surfaceOut } from "../lib/motion";
 
 	/**
 	 * The small "more" menu next to a sidebar row. Hover opens it with a mouse (and a short grace period lets the pointer
@@ -98,6 +99,8 @@
 		use:portal
 		bind:this={el}
 		class="sbmenu"
+		in:surfaceIn={{ y: -4 }}
+		out:surfaceOut={{ y: -4 }}
 		role="menu"
 		tabindex="-1"
 		style:top="{shown.top}px"
@@ -125,13 +128,6 @@
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		box-shadow: var(--shadow);
-		animation: mi-in var(--motion-fast) var(--ease-std);
-	}
-	@keyframes mi-in {
-		from {
-			opacity: 0;
-			translate: -4px 0;
-		}
 	}
 	.mi {
 		display: flex;

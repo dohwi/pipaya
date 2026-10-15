@@ -181,3 +181,34 @@ export function closeAnimated(dialog: HTMLDialogElement): () => void {
 		delete dialog.dataset.closing;
 	};
 }
+
+/* ---------- lists: rows added, removed or reordered in a keyed {#each} ---------- */
+import { flip } from "svelte/animate";
+/**
+ * `animate:reflow` on the direct child of a keyed {#each}: the rows that stay slide to their new place instead of
+ * jumping when one is added or removed. Pair with `in:rowIn out:rowOut` on the same element.
+ */
+export function reflow(node: Element, rects: { from: DOMRect; to: DOMRect }) {
+	return flip(node, rects, { duration: ms("normal"), easing: easeEnter });
+}
+/** A row joining a list: opens its height and fades in. */
+export const rowIn = (node: Element) => {
+	const s = slide(node, { duration: ms("normal"), easing: easeEnter });
+	return { ...s, css: (t: number, u: number) => `${s.css!(t, u)};opacity:${t.toFixed(3)}` };
+};
+/** A row leaving a list: fades while its height closes. */
+export const rowOut = (node: Element) => {
+	const s = slide(node, { duration: ms("fast"), easing: easeExit });
+	return { ...s, css: (t: number, u: number) => `${s.css!(t, u)};opacity:${t.toFixed(3)}` };
+};
+/** A chip leaving a horizontal strip: shrinks in place (the neighbours `reflow` into the gap). */
+export const chipOut = (node: Element) => ({
+	duration: ms("fast"),
+	easing: easeExit,
+	css: (t: number) => `opacity:${t.toFixed(3)};transform:scale(${(0.85 + 0.15 * t).toFixed(4)})`,
+});
+export const chipIn = (node: Element) => ({
+	duration: ms("normal"),
+	easing: easeEnter,
+	css: (t: number) => `opacity:${t.toFixed(3)};transform:scale(${(0.85 + 0.15 * t).toFixed(4)})`,
+});

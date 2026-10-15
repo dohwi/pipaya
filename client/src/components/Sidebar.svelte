@@ -13,6 +13,7 @@
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
+	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarBlocks, type DirBlock, type GroupBlock } from "../lib/nav";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -345,6 +346,7 @@
 				</div>
 
 				{#if !sfold}
+				<div class="fold" in:collapseIn out:collapseOut>
 					{#if n.state === "offline" || n.state === "unauthorized"}
 						<div class="nosess warnline">{t(statusText[n.state])}{n.loaded ? ` · ${t("마지막으로 확인된 목록")}` : ""}</div>
 					{/if}
@@ -369,7 +371,9 @@
 							<button class="dirnew" onclick={() => newIn(n, asWorkdir(n, d.path))} aria-label={t("{name}에서 새 대화", { name: pretty(n, d.path) })} title={t("이 디렉터리에서 새 대화")}><Icon name="plus" /></button>
 						</div>
 						{#if !dfold}
-							{#each d.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+							<div class="fold" in:collapseIn out:collapseOut>
+								{#each d.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+							</div>
 						{/if}
 						</div>
 					{/each}
@@ -406,10 +410,13 @@
 								{/if}
 							</div>
 							{#if !gfold}
-								{#each b.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+								<div class="fold" in:collapseIn out:collapseOut>
+									{#each b.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+								</div>
 							{/if}
 						</div>
 					{/each}
+				</div>
 				{/if}
 			</section>
 		{/each}

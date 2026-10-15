@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Notice from "./Notice.svelte";
+	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import Badge from "./Badge.svelte";
 	import { onDestroy, onMount } from "svelte";
 	import { t } from "../lib/i18n";
@@ -129,7 +130,7 @@
 	{:else if devices}
 		<ul>
 			{#each devices as d (d.id)}
-				<li class:live={d.live}>
+				<li class:live={d.live} animate:reflow in:rowIn out:rowOut>
 					<span class="kind" class:on={d.live} title={d.live ? t("연결됨") : t("연결 끊김")}><Icon name={icon(d.platform)} /></span>
 					<div class="meta">
 						<span class="name">
@@ -155,7 +156,7 @@
 			<p class="hint">{t("기기마다 따로 발급된 접속 권한입니다. 취소하면 그 기기만 즉시 접속이 끊기고, 다른 기기와 서버 토큰은 그대로입니다.")}</p>
 			<ul>
 				{#each paired as p (p.id)}
-					<li>
+					<li animate:reflow in:rowIn out:rowOut>
 						<span class="kind"><Icon name="phone" /></span>
 						<div class="meta">
 							<span class="name">{p.name}</span>

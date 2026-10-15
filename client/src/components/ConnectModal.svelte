@@ -8,6 +8,7 @@
 	import { copyText } from "../lib/clipboard";
 	import { openExternal } from "../lib/tauri";
 	import { slidingIndicator } from "../lib/sliding-indicator";
+	import { paneIn } from "../lib/motion";
 	import type { LoginState, ProviderInfo } from "../lib/types";
 
 	/**
@@ -291,6 +292,8 @@
 				<p class="hint lead">{tab === "oauth" ? t("계정으로 로그인해 구독이나 계정에 묶인 모델을 씁니다. 키를 직접 다룰 필요가 없습니다.") : t("API 키로 연결합니다. 로컬 모델과 OpenAI 호환 주소도 여기서 추가합니다.")}</p>
 				<div class="search"><Icon name="search" /><input class="field" placeholder={t("검색")} bind:value={query} aria-label={t("검색")} autocomplete="off" spellcheck="false" /></div>
 
+				{#key tab}
+				<div class="tabpane" in:paneIn={{ x: tab === "oauth" ? -18 : 18 }}>
 				{#if tab === "oauth"}
 					<ul class="list">
 						{#each oauthList as p (p.id)}
@@ -341,6 +344,8 @@
 						</li>
 					</ul>
 				{/if}
+				</div>
+				{/key}
 			{/if}
 		</div>
 	</div>
@@ -359,6 +364,7 @@
 	.search .field { width: 100%; padding-left: 34px; }
 	.group { margin-top: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+	.tabpane { display: flex; flex-direction: column; gap: 12px; }
 	.item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, var(--bg)); color: var(--text); }
 	.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
 	.item:disabled { opacity: 0.55; cursor: default; }

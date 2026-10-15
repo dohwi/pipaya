@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import { t } from "../lib/i18n";
 	import { Api, ApiError, errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
@@ -193,7 +194,7 @@
 
 			{#each settings.agents as a (a.name)}
 				{@const info = infoOf(a)}
-				<div class="agent" class:dim={!a.enabled}>
+				<div class="agent" class:dim={!a.enabled} animate:reflow in:rowIn out:rowOut>
 					<Accordion variant="box" open={openNames[a.name] ?? false} onchange={(o) => (openNames[a.name] = o)}>
 						{#snippet head()}
 							<span class="aname">{a.name}</span>

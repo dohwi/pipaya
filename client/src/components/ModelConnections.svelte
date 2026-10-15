@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { msg, t, tc } from "../lib/i18n";
+	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
@@ -515,7 +516,7 @@
 			{#if cfg.providers.length}
 				<div class="plist">
 					{#each cfg.providers as p (p.id)}
-						<div class="prov">
+						<div class="prov" animate:reflow in:rowIn out:rowOut>
 							<div class="phead">
 								<div class="pname">
 									<span class="ptitle">{p.name}</span>
@@ -569,7 +570,7 @@
 								{/if}
 							</div>
 							{#if keyFor === p.id}
-								<form class="keyform" onsubmit={(e) => { e.preventDefault(); void saveKey(p); }}>
+								<form class="keyform" in:collapseIn out:collapseOut onsubmit={(e) => { e.preventDefault(); void saveKey(p); }}>
 									<!-- svelte-ignore a11y_autofocus -->
 									<input class="field" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
 									<button class="btn primary" disabled={busy || !keyValue.trim()}>{t("저장")}</button>
@@ -748,7 +749,7 @@
 										<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
 									</button>
 								</div>
-								{#if discoverNote}<p class="note" role="status">{discoverNote}</p>{/if}
+								{#if discoverNote}<p class="note" role="status" in:collapseIn out:collapseOut>{discoverNote}</p>{/if}
 								<div class="mpick">
 									{#each form.rows as r, i (i)}
 										<button type="button" class="mitem" onclick={() => openModel(i)}>
@@ -772,7 +773,7 @@
 					</div>
 
 					<footer>
-						{#if formError}<div class="ferr" role="alert"><Icon name="alert" /><span>{formError}</span></div>{/if}
+						{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
 						<div class="fbtns">
 							{#if editing !== null}
 								<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
