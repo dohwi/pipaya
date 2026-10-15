@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pipaya logo</title>
+<style>
+:root{--bg:#161616;--fg:#ededed;--card:#202020;--line:#333;--mut:#8a8a8a;--trunk:#7a5b44;--leaf:#4a9443;--fruit:#f08a24;--eye:#fbf3e2}
+body.light{--bg:#f6f3ec;--fg:#1f1f1f;--card:#fff;--line:#ddd;--mut:#777;--trunk:#5a4130;--leaf:#2f6d2d;--eye:#fbf3e2}
+*{box-sizing:border-box}
+body{margin:0 auto;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;padding:32px;max-width:1100px}
+h1{margin:0 0 4px;font-size:22px}h2{font-size:14px;margin:36px 0 12px;color:var(--mut);font-weight:600;letter-spacing:.04em}
+.s{color:var(--mut);margin:0 0 20px}
+button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+button.on{background:var(--fg);color:var(--bg)}
+.bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;display:grid;place-items:center;gap:16px}
+.card small{color:var(--mut)}
+.sizes{display:flex;gap:20px;align-items:end}
+.faces{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.faces .card{padding:16px;gap:8px;cursor:pointer}
+.faces .card.on{outline:2px solid var(--fg)}
+.mono{color:var(--fg)}
+.tiles{display:flex;gap:16px;flex-wrap:wrap}
+.tile{width:128px;height:128px;border-radius:22%;display:grid;place-items:center}
+.eye{transform-box:fill-box;transform-origin:center}
+.blink .eye{animation:b 3s infinite}
+@keyframes b{0%,26.667%{transform:scaleY(1)}28.667%,29.333%{transform:scaleY(.07)}32.667%,63.333%{transform:scaleY(1)}65.333%,66%{transform:scaleY(.07)}69.333%,100%{transform:scaleY(1)}}
+@media(prefers-reduced-motion:reduce){.blink .eye{animation:none}}
+</style></head><body>
+<h1>pipaya</h1>
+<p class="s">pi agent + papaya · 128 그리드 · 표정 8종 · 깜빡임 (두희 마크와 같은 3초 타이밍)</p>
+<div class="bar">
+  <button id="theme">다크 / 라이트</button>
+  <button id="blink" class="on">깜빡임 켜짐</button>
+</div>
+<div class="hero">
+  <div class="card"><div id="heroC"></div><div class="sizes" id="sizesC"></div><small>투톤 (색 로고)</small></div>
+  <div class="card mono"><div id="heroM"></div><div class="sizes" id="sizesM"></div><small>단색 (currentColor · PipayaLogo)</small></div>
+</div>
+<h2>표정 · 클릭해서 위에서 보기</h2>
+<div class="faces" id="faces"></div>
+<h2>앱 아이콘 · 단순 확대</h2>
+<div class="tiles" id="tiles"></div>
+<script>
+const FACES={
+ block:{at:[0,0],eyes:["M-14 -5.5L-6 -5.5L-6 5.5L-14 5.5Z","M6 -5.5L14 -5.5L14 5.5L6 5.5Z"]},
+ slit:{at:[0,0],eyes:["M-15 -2L-5 -2L-5 2L-15 2Z","M5 -2L15 -2L15 2L5 2Z"]},
+ pixel:{at:[0,0],eyes:["M-14 -5L-8 -5L-6 -3L-6 5L-12 5L-14 3Z","M6 -3L8 -5L14 -5L14 3L12 5L6 5Z"]},
+ happy:{at:[0,-.87],eyes:["M-15 2L-11 -3L-9 -3L-5 2L-7 4.5L-10 1L-13 4.5Z","M5 2L9 -3L11 -3L15 2L13 4.5L10 1L7 4.5Z"]},
+ focus:{at:[0,0],eyes:["M-15 -5L-5 -1L-5 5L-15 1Z","M5 -1L15 -5L15 1L5 5Z"]},
+ curious:{at:[-4.43,0],eyes:["M-14 -3L-6 -3L-6 3L-14 3Z","M5 -6.5L14 -6.5L14 6.5L5 6.5Z"]},
+ wink:{at:[4.37,-.27],eyes:["M-14 -5.5L-6 -5.5L-6 5.5L-14 5.5Z","M5 2L9 -3L11 -3L15 2L13 4.5L10 1L7 4.5Z"]},
+ sleepy:{at:[0,.19],eyes:["M-15 -2L-5 -2L-7 2L-13 2Z","M5 -2L15 -2L13 2L7 2Z"]},
+};
+const TRUNK="M52 60H76L84 118H44Z";
+const LEAF="M0 0C-11 -12 -11 -30 0 -46C11 -30 11 -12 0 0Z";
+const CFG=[[-80,.8],[-42,.95],[0,1],[42,.95],[80,.8]];
+const FACE_C=[64,89], FS=.78;
+let uid=0, cur='block';
+function fronds(fill){return CFG.map(([a,k])=>`<path d="${LEAF}" transform="translate(64 59) rotate(${a}) scale(.92 ${k})" fill="${fill}"/>`).join('')}
+// 눈 전체 영역(bbox)의 중심을 항상 줄기 중심(FACE_C)에 맞춘다. faces.ts 의 at 오프셋은 쓰지 않는다.
+const BOX={};
+for(const [n,F] of Object.entries(FACES)){
+  const xs=[],ys=[];
+  F.eyes.forEach(d=>{const v=d.match(/-?\d+(\.\d+)?/g).map(Number);for(let i=0;i<v.length;i+=2){xs.push(v[i]);ys.push(v[i+1])}});
+  BOX[n]=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2];
+}
+function eyes(f,fill){const F=FACES[f],[cx,cy]=BOX[f];return `<g transform="translate(${FACE_C[0]-cx*FS} ${FACE_C[1]-cy*FS}) scale(${FS})" fill="${fill}">${F.eyes.map(d=>`<path class="eye" d="${d}"/>`).join('')}</g>`}
+function color(f,size,blink){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 128 128" class="${blink?'blink':''}" role="img" aria-label="pipaya">
+   <path d="${TRUNK}" fill="var(--trunk)"/><g fill="var(--leaf)"><ellipse cx="64" cy="53.5" rx="5.5" ry="7.5"/></g>${fronds('var(--leaf)')}
+   <circle cx="58" cy="64" r="5.2" fill="var(--fruit)"/><circle cx="70" cy="64" r="5.2" fill="var(--fruit)"/>
+   ${eyes(f,'var(--eye)')}</svg>`}
+function mono(f,size,blink){
+  const id='m'+(uid++);
+  // 열매 둘레를 r=8.2 만큼 비워서(노크아웃) 줄기·잎과 붙지 않고 열매 두 개가 또렷이 보이게 한다
+  return `<svg width="${size}" height="${size}" viewBox="0 0 128 128" class="${blink?'blink':''}" fill="currentColor" role="img" aria-label="pipaya">
+   <defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128"><rect width="128" height="128" fill="#fff"/>
+     <circle cx="58" cy="64" r="8.2" fill="#000"/><circle cx="70" cy="64" r="8.2" fill="#000"/>${eyes(f,'#000')}</mask></defs>
+   <g mask="url(#${id})"><path d="${TRUNK}"/><ellipse cx="64" cy="53.5" rx="5.5" ry="7.5"/>${fronds('currentColor')}</g>
+   <circle cx="58" cy="64" r="5.2"/><circle cx="70" cy="64" r="5.2"/></svg>`}
+const blinkOn=()=>document.getElementById('blink').classList.contains('on');
+function render(){
+  const b=blinkOn();
+  heroC.innerHTML=color(cur,200,b); heroM.innerHTML=mono(cur,200,b);
+  sizesC.innerHTML=[64,32,20].map(s=>color(cur,s,b)).join('');
+  sizesM.innerHTML=[64,32,20].map(s=>mono(cur,s,b)).join('');
+  faces.innerHTML=Object.keys(FACES).map(n=>`<div class="card ${n===cur?'on':''}" data-f="${n}">${color(n,72,b)}<small>${n}</small></div>`).join('');
+  tiles.innerHTML=
+   `<div class="tile" style="background:#161616">${color(cur,92,b)}</div>`+
+   `<div class="tile" style="background:#f3ead8;--trunk:#5a4130;--leaf:#2f6d2d">${color(cur,92,b)}</div>`+
+   `<div class="tile" style="background:#2f6d2d;color:#f3ead8">${mono(cur,92,b)}</div>`+
+   `<div class="tile" style="background:#f08a24;color:#1f1f1f">${mono(cur,92,b)}</div>`;
+}
+faces.onclick=e=>{const c=e.target.closest('[data-f]');if(c){cur=c.dataset.f;render()}};
+theme.onclick=()=>document.body.classList.toggle('light');
+blink.onclick=()=>{blink.classList.toggle('on');blink.textContent=blinkOn()?'깜빡임 켜짐':'깜빡임 꺼짐';render()};
+render();
+</script></body></html>

@@ -1,0 +1,97 @@
+<script lang="ts">
+	import { t } from "../lib/i18n";
+	import Icon from "./Icon.svelte";
+	import PipayaLogo from "./PipayaLogo.svelte";
+	import { faceFor } from "../lib/faces";
+	import { app } from "../lib/store.svelte";
+
+	const noModel = $derived(!app.models.some((m) => m.configured));
+</script>
+
+<div class="welcome">
+	<div class="face" aria-hidden="true"><PipayaLogo size={112} eyes face={faceFor(null)} blink /></div>
+	<div class="copy">
+		<h1>{t("무엇을 함께 작업할까요?")}</h1>
+		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
+	</div>
+
+	{#if noModel && app.sessionsLoaded}
+		<div class="warn">
+			<Icon name="key" />
+			<span>{t("사용할 수 있는 모델이 아직 없습니다.")}</span>
+			<button class="btn sm" onclick={() => (app.connectionsOpen = true)}>{t("모델 연결")}</button>
+		</div>
+	{/if}
+</div>
+
+<style>
+	.welcome {
+		margin: auto;
+		width: 100%;
+		max-width: 680px;
+		min-height: min(420px, 100%);
+		padding: 24px 18px;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		animation: fade var(--motion-slow) var(--ease) both;
+	}
+	@keyframes fade {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+	}
+	.face {
+		position: relative;
+		margin-bottom: 20px;
+		color: var(--text-faint);
+		user-select: none;
+	}
+	.copy {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+	h1 {
+		text-wrap: balance;
+		margin: 0;
+		font-size: clamp(22px, 5vw, 30px);
+		font-weight: 650;
+		letter-spacing: -0.03em;
+		line-height: 1.15;
+	}
+	.sub {
+		margin: 8px 0 0;
+		font-size: var(--fs-md);
+		color: var(--text-dim);
+		text-wrap: balance;
+	}
+	.warn {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+		justify-content: center;
+		position: relative;
+		margin-top: 24px;
+		padding: 10px 14px;
+		border-radius: var(--radius);
+		background: var(--warn-soft);
+		color: var(--warn);
+		font-size: var(--fs-md);
+	}
+	.warn :global(svg) {
+		width: 18px;
+		height: 18px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+</style>

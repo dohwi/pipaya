@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-download-apk"
+description = "Enables the download_apk command without any pre-configured scope."
+commands.allow = ["download_apk"]
+
+[[permission]]
+identifier = "deny-download-apk"
+description = "Denies the download_apk command without any pre-configured scope."
+commands.deny = ["download_apk"]

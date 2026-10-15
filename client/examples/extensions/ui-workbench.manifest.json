@@ -1,0 +1,8 @@
+{
+  "id": "example.ui-workbench",
+  "name": "UI 워크벤치",
+  "version": "1.0.0",
+  "sdkVersion": 1,
+  "description": "폼·탭·통계·표·목록과 입력창 위젯을 조합한 확장 FE 예제",
+  "permissions": ["ui", "composer", "commands", "storage"]
+}

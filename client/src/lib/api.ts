@@ -1,0 +1,408 @@
+import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, RetentionInfo, RetentionPolicy, SubAgentSettings, SubAgentSettingsInfo,
+	AgentMessage,
+	Approval,
+	Question,
+	ActivityInfo,
+	ConfigurationInfo,
+	CompactionResult,
+	ConnectionResult,
+	DirListing,
+	Group,
+	WorkdirInfo,
+	CustomProvider,
+	ApiFormat,
+	CustomProviderInput,
+	ModelSelection,
+	HarnessEvent,
+	ModelInfo,
+	ProviderInfo,
+	SendMode,
+	Session,
+	SessionDetail,
+	SessionContext,
+	SkillList,
+	TemplateList,
+	ToolInfo,
+	Usage,
+	WorkspaceInfo,
+	ApprovalPolicy,
+	ThinkingLevel,
+} from "./types";
+import { t } from "./i18n";
+
+export class ApiError extends Error {
+	constructor(
+		readonly status: number,
+		readonly code: string,
+		message: string,
+	) {
+		super(message);
+	}
+}
+
+export interface Connection {
+	baseUrl: string;
+	token: string;
+}
+
+export interface StoredMessage {
+	seq: number;
+	role: string;
+	createdAt: number;
+	message: AgentMessage;
+}
+
+export interface CreateSessionInput {
+	title?: string;
+	cwd?: string;
+	provider?: string;
+	model?: string;
+	thinkingLevel?: ThinkingLevel;
+	systemPrompt?: string;
+	tools?: string[];
+	approval?: ApprovalPolicy;
+}
+
+export interface PatchSessionInput {
+	title?: string;
+	provider?: string;
+	model?: string;
+	thinkingLevel?: ThinkingLevel;
+	approval?: ApprovalPolicy;
+	closed?: boolean;
+}
+
+export const normalizeUrl = (url: string): string => {
+	let u = url.trim().replace(/\/+$/, "");
+	if (u && !/^https?:\/\//i.test(u)) u = `http://${u}`;
+	return u;
+};
+
+export class Api {
+	constructor(private conn: Connection) {}
+
+	get baseUrl() {
+		return this.conn.baseUrl;
+	}
+
+	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+		let res: Response;
+		try {
+			res = await fetch(this.conn.baseUrl + path, {
+				method,
+				signal,
+				headers: {
+					Authorization: `Bearer ${this.conn.token}`,
+					...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+				},
+				body: body !== undefined ? JSON.stringify(body) : undefined,
+			});
+		} catch (e) {
+			if ((e as Error).name === "AbortError") throw e;
+			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
+		}
+		if (res.status === 204) return undefined as T;
+		const text = await res.text();
+		let json: any;
+		try {
+			json = text ? JSON.parse(text) : undefined;
+		} catch {
+			json = undefined;
+		}
+		if (!res.ok) {
+			throw new ApiError(res.status, json?.error?.code ?? "http_error", json?.error?.message ?? res.statusText);
+		}
+		return json as T;
+	}
+
+	/** Access tokens issued to paired devices (admin token only). The secret itself is never listed. */
+	deviceTokens() { return this.req<{ tokens: { id: string; name: string; createdAt: number; lastUsedAt: number | null }[] }>("GET", "/devices/tokens", undefined, AbortSignal.timeout(5000)); }
+	revokeDeviceToken(id: string) { return this.req("DELETE", `/devices/tokens/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5000)); }
+	notificationStatus() { return this.req<{ pushConfigured: boolean; providers: ("fcm" | "apns")[] }>("GET", "/notifications/status"); }
+	notificationPresence(id: string, presence: { platform: "desktop" | "android" | "ios" | "web"; focused: boolean; enabled: boolean; visibleSessionIds: string[]; lang?: string; name?: string; os?: string; app?: string; push?: { provider: "fcm" | "apns"; token: string } | null }) { return this.req("PUT", `/notifications/devices/${encodeURIComponent(id)}`, presence, AbortSignal.timeout(3500)); }
+	notificationDevices() { return this.req<{ devices: import("./notification-contract").NotificationDevice[] }>("GET", "/notifications/devices", undefined, AbortSignal.timeout(5000)); }
+	removeNotificationDevice(id: string) { return this.req("DELETE", `/notifications/devices/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5000)); }
+	testNotification(deviceId: string) { return this.req<import("./notification-contract").NotificationTestResult>("POST", `/notifications/devices/${encodeURIComponent(deviceId)}/test`, {}, AbortSignal.timeout(5000)); }
+	notificationReceived(id: string) { return this.req("POST", `/notifications/${encodeURIComponent(id)}/received`, {}, AbortSignal.timeout(3500)); }
+	sendNotification(source: string, notification: import("./notification-contract").NotificationSpec) { return this.req<import("./notification-contract").NotificationResult>("POST", "/notifications", { source, notification }, AbortSignal.timeout(3500)); }
+	setNotificationRule(owner: string, id: string, rule: import("./notification-contract").NotificationRule) { return this.req("PUT", `/notifications/rules/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`, rule, AbortSignal.timeout(3500)); }
+	revokeNotificationRules(owner: string) { return this.req("DELETE", `/notifications/rules/${encodeURIComponent(owner)}`, undefined, AbortSignal.timeout(3500)); }
+	removeNotificationRule(owner: string, id: string) { return this.req("DELETE", `/notifications/rules/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(3500)); }
+
+	/** Public endpoint; also used to validate a URL before a token is known. */
+	async health(signal?: AbortSignal) {
+		const res = await fetch(`${this.conn.baseUrl}/health`, { signal });
+		if (!res.ok) throw new ApiError(res.status, "http_error", res.statusText);
+		return (await res.json()) as { ok: boolean; uptimeMs: number; runningSessions: number; subscribers: number };
+	}
+
+	/** Newest persisted event id; used as the starting cursor so we do not replay all history. */
+	latestEventId = () =>
+		this.req<{ latestId: number }>("GET", "/events/history?after=0&limit=1").then((r) => r.latestId);
+
+	tools = (signal?: AbortSignal) => this.req<{ tools: ToolInfo[]; defaults: string[] }>("GET", "/tools", undefined, signal);
+	models = () => this.req<{ models: ModelInfo[] }>("GET", "/models").then((r) => r.models);
+	providers = () => this.req<{ providers: ProviderInfo[] }>("GET", "/providers").then((r) => r.providers);
+	setCredential = (id: string, key: string) =>
+		this.req<{ ok: boolean }>("PUT", `/providers/${encodeURIComponent(id)}/credential`, { key });
+	removeCredential = (id: string) =>
+		this.req<{ ok: boolean }>("DELETE", `/providers/${encodeURIComponent(id)}/credential`);
+
+	/* ---------- extension settings (server is the source of truth) ---------- */
+	extensionSettings = (signal?: AbortSignal) =>
+		this.req<{ settings: Record<string, Record<string, unknown>> }>("GET", "/extensions/settings", undefined, signal);
+	saveExtensionSettings = (id: string, settings: Record<string, unknown>, signal?: AbortSignal) =>
+		this.req<{ settings: Record<string, unknown> }>("PUT", `/extensions/${encodeURIComponent(id)}/settings`, { settings }, signal);
+	deleteExtension = (id: string, signal?: AbortSignal) =>
+		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
+
+	/* ---------- settings that belong to this server (docs/settings-scope.md) ---------- */
+	clientSettings = (signal?: AbortSignal) =>
+		this.req<{ settings: Record<string, { value: unknown; updatedAt: number }> }>("GET", "/client-settings", undefined, signal);
+	clientSetting = (key: string, signal?: AbortSignal) =>
+		this.req<{ value: unknown; updatedAt: number }>("GET", `/client-settings/${encodeURIComponent(key)}`, undefined, signal);
+	putClientSetting = (key: string, value: unknown, at: number, origin: string, signal?: AbortSignal) =>
+		this.req<{ value: unknown; updatedAt: number; applied: boolean }>("PUT", `/client-settings/${encodeURIComponent(key)}`, { value, at, origin }, signal);
+
+	/* ---------- connect another device by QR (server/src/pairing.ts) ---------- */
+	createPairing = (signal?: AbortSignal) =>
+		this.req<{ code: string; expiresAt: number }>("POST", "/pairing", {}, signal);
+	revokePairing = (signal?: AbortSignal) => this.req<{ ok: boolean }>("DELETE", "/pairing", undefined, signal);
+
+	/* ---------- UI language packs ---------- */
+	locales = (signal?: AbortSignal) =>
+		this.req<{ locales: { tag: string; name: string; owner?: string; messages: number; updatedAt: number }[] }>("GET", "/locales", undefined, signal).then((r) => r.locales);
+	locale = (tag: string, signal?: AbortSignal) =>
+		this.req<{ tag: string; name: string; owner?: string; messages: Record<string, string>; updatedAt: number }>("GET", `/locales/${encodeURIComponent(tag)}`, undefined, signal);
+	saveLocale = (tag: string, pack: { name: string; messages: Record<string, string>; owner?: string }, signal?: AbortSignal) =>
+		this.req<{ tag: string; updatedAt: number }>("PUT", `/locales/${encodeURIComponent(tag)}`, pack, signal);
+	deleteLocale = (tag: string, owner?: string, signal?: AbortSignal) =>
+		this.req<{ ok: boolean }>("DELETE", `/locales/${encodeURIComponent(tag)}${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`, undefined, signal);
+
+	activity = () => this.req<ActivityInfo>("GET", "/activity");
+
+	/* ---------- model connection settings ---------- */
+	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
+	catalog = () => this.req<{ models: CatalogModel[] }>("GET", "/configuration/catalog");
+	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string }) =>
+		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);
+	saveCustomProvider = (id: string, input: CustomProviderInput) =>
+		this.req<CustomProvider>("PUT", `/configuration/providers/${encodeURIComponent(id)}`, input);
+	deleteCustomProvider = (id: string) =>
+		this.req<{ ok: boolean }>("DELETE", `/configuration/providers/${encodeURIComponent(id)}`);
+	setDefaultModel = (sel: DefaultModelSelection | null) =>
+		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
+	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
+	listDirs = (path?: string, hidden = false) =>
+		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`);
+	listFiles = (cwd: string, q: string, signal?: AbortSignal) =>
+		this.req<{ entries: { path: string; dir: boolean }[] }>("GET", `/fs/files?${new URLSearchParams({ cwd, q })}`, undefined, signal);
+	makeDir = (parent: string, name: string) => this.req<{ path: string }>("POST", "/fs/dirs", { parent, name });
+	testModel = (sel: ModelSelection) => this.req<ConnectionResult>("POST", "/configuration/test", sel);
+
+	/* ---------- sub-agents ---------- */
+	/** `setSubagents` replaces the whole list. */
+	subagents = () => this.req<SubAgentSettingsInfo>("GET", "/subagents");
+	setSubagents = (settings: SubAgentSettings) => this.req<SubAgentSettingsInfo>("PUT", "/subagents", { settings });
+
+	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
+	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);
+
+	/** `closed`: false = active only (the sidebar), true = closed only (/resume). */
+	listSessions = (limit = 100, closed?: boolean) =>
+		this.req<{ sessions: Session[]; nextBefore: number | null }>(
+			"GET",
+			`/sessions?limit=${limit}${closed === undefined ? "" : `&closed=${closed}`}`,
+		);
+	/** One page of every session, active and closed, newest first. `before` is the previous page's `nextBefore`. */
+	listSessionsPage = (limit = 200, before?: number) =>
+		this.req<{ sessions: Session[]; nextBefore: number | null }>("GET", `/sessions?limit=${limit}${before === undefined ? "" : `&before=${before}`}`);
+	workspace = () => this.req<WorkspaceInfo>("GET", "/workspace");
+	createSession = (input: CreateSessionInput = {}) => this.req<Session>("POST", "/sessions", input);
+	getSession = (id: string) => this.req<SessionDetail>("GET", `/sessions/${id}`);
+	sessionContext = (id: string, signal?: AbortSignal) =>
+		this.req<SessionContext>("GET", `/sessions/${encodeURIComponent(id)}/context`, undefined, signal);
+	skills = (cwd?: string, signal?: AbortSignal, sessionId?: string | null) => {
+		const q = new URLSearchParams();
+		if (cwd) q.set("cwd", cwd);
+		if (sessionId) q.set("sessionId", sessionId);
+		return this.req<SkillList>("GET", `/skills${q.size ? `?${q}` : ""}`, undefined, signal);
+	};
+	/** scope "project"/"session": enabled null removes the override. "session" needs sessionId. */
+	setSkill = (name: string, body: { scope: "global" | "project" | "session"; enabled: boolean | null; cwd?: string; sessionId?: string }) =>
+		this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}`, body);
+	templates = (cwd?: string, signal?: AbortSignal) =>
+		this.req<TemplateList>("GET", `/templates${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
+	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
+	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);
+	/** Delete several at once. Ones running or waiting for the user are skipped and come back in `skipped`. */
+	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids });
+	retention = () => this.req<RetentionInfo>("GET", "/sessions/retention");
+	setRetention = (policy: RetentionPolicy) => this.req<RetentionInfo>("PUT", "/sessions/retention", policy);
+	forkSession = (id: string, atSeq?: number, title?: string) =>
+		this.req<Session>("POST", `/sessions/${id}/fork`, { atSeq, title });
+	usage = (id: string) => this.req<Usage>("GET", `/sessions/${id}/usage`);
+
+	messages = (id: string, after?: number) =>
+		this.req<{ messages: StoredMessage[] }>(
+			"GET",
+			`/sessions/${id}/messages?limit=5000${after !== undefined ? `&after=${after}` : ""}`,
+		).then((r) => r.messages);
+	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[]) =>
+		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
+			text,
+			mode,
+			...(images?.length ? { images } : {}),
+		});
+	abort = (id: string) => this.req<{ aborted: boolean }>("POST", `/sessions/${id}/abort`);
+	cancelQueued = (id: string, mode: "steer" | "follow_up", text: string) =>
+		this.req<{ cancelled: boolean }>("POST", `/sessions/${id}/queue/cancel`, { mode, text });
+	retry = (id: string) => this.req<{ accepted: "retry" }>("POST", `/sessions/${id}/retry`);
+	/** Resolves only after the server has durably committed the compacted model context. */
+	compactSession = (id: string, customInstructions?: string) =>
+		this.req<CompactionResult>("POST", `/sessions/${id}/compact`, {
+			...(customInstructions?.trim() ? { customInstructions: customInstructions.trim() } : {}),
+		});
+
+	/* ---------- session groups ---------- */
+	groups = () => this.req<{ groups: Group[] }>("GET", "/groups").then((r) => r.groups);
+	createGroup = (input: { name?: string; layout: Group["layout"] }) => this.req<Group>("POST", "/groups", input);
+	patchGroup = (id: string, patch: { name?: string; layout?: Group["layout"] }) =>
+		this.req<Group>("PATCH", `/groups/${id}`, patch);
+	deleteGroup = (id: string) => this.req<{ ok: boolean }>("DELETE", `/groups/${id}`);
+
+	approvals = () => this.req<{ approvals: Approval[] }>("GET", "/approvals").then((r) => r.approvals);
+	decide = (sessionId: string, toolCallId: string, approved: boolean, reason?: string) =>
+		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/approvals/${encodeURIComponent(toolCallId)}`, {
+			approved,
+			reason,
+		});
+
+	questions = () =>
+		this.req<{ questions: Question[] }>("GET", "/questions").then((r) => r.questions).catch(() => [] as Question[]);
+	answer = (sessionId: string, toolCallId: string, answer: string) =>
+		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, { answer });
+
+	/**
+	 * Subscribe to the global event stream. EventSource cannot set headers, so the token goes in the
+	 * query string. `after` is the replay cursor; the caller owns reconnects (see AppStore) because a
+	 * dropped stream also loses live-only deltas and needs a full resync rather than a replay.
+	 */
+	subscribe(
+		handlers: { onEvent: (e: HarnessEvent) => void; onOpen?: () => void; onError?: () => void },
+		after: number,
+	): () => void {
+		const url = `${this.conn.baseUrl}/events?after=${after}&token=${encodeURIComponent(this.conn.token)}`;
+		const es = new EventSource(url);
+		let dead = false;
+		es.onopen = () => handlers.onOpen?.();
+		es.onerror = () => {
+			if (dead) return;
+			dead = true;
+			es.close();
+			handlers.onError?.();
+		};
+		const onMessage = (m: MessageEvent) => {
+			try {
+				handlers.onEvent(JSON.parse(m.data) as HarnessEvent);
+			} catch {
+				/* ignore malformed frame */
+			}
+		};
+		for (const t of EVENT_TYPES) es.addEventListener(t, onMessage as EventListener);
+		return () => {
+			dead = true;
+			es.close();
+		};
+	}
+}
+
+/** Every event name the server can send. EventSource only delivers names registered here, so a missing one is dropped without an error. */
+export const EVENT_TYPES = [
+	"session_created",
+	"session_updated",
+	"session_deleted",
+	"session_forked",
+	"group_created",
+	"group_updated",
+	"group_deleted",
+	"run_started",
+	"run_finished",
+	"run_limit",
+	"compaction_started",
+	"compaction_finished",
+	"compaction_failed",
+	"context_updated",
+	"agent_start",
+	"agent_end",
+	"turn_start",
+	"turn_end",
+	"message_start",
+	"message_update",
+	"message_end",
+	"tool_execution_start",
+	"tool_execution_update",
+	"tool_execution_end",
+	"approval_requested",
+	"approval_resolved",
+	"question_requested",
+	"question_resolved",
+	"message_queued",
+	"message_dequeued",
+	"provider_updated",
+	"configuration_updated",
+	"skills_updated",
+	"locales_updated",
+	"client_settings_updated",
+	"notification",
+	"device_revoked",
+];
+
+/* ---------- helpers for the server list ---------- */
+
+export type ServerProbe = "online" | "offline" | "unauthorized";
+
+/** User-facing (Korean) text for any error thrown by the client. */
+export function errorText(e: unknown): string {
+	if (e instanceof ApiError) {
+		if (e.status === 0) return t("서버에 연결할 수 없습니다");
+		if (e.status === 401 || e.status === 403) return t("토큰이 거부되었습니다");
+		if (e.code === "not_found") return t("대상을 찾을 수 없습니다");
+		return e.message;
+	}
+	return (e as Error)?.message || t("문제가 발생했습니다");
+}
+
+/** Throws if the server is unreachable or rejects the token. `/health` is public, so `/tools` proves the token. */
+export async function verifyServer(baseUrl: string, token: string, timeoutMs = 8000): Promise<void> {
+	const ctl = new AbortController();
+	const timer = setTimeout(() => ctl.abort(), timeoutMs);
+	try {
+		const api = new Api({ baseUrl, token });
+		await api.health(ctl.signal);
+		await api.tools(ctl.signal);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+export function describeConnectError(e: unknown, baseUrl: string): string {
+	if (e instanceof ApiError) {
+		if (e.status === 401 || e.status === 403) return t("서버가 토큰을 거부했습니다. 토큰을 다시 확인하세요.");
+		if (e.status === 0) return t("{url}에 연결할 수 없습니다. 주소와 서버 실행 여부를 확인하세요.", { url: baseUrl });
+		return e.message;
+	}
+	if ((e as Error)?.name === "AbortError") return t("서버 응답 시간이 초과되었습니다.");
+	if (e instanceof TypeError) return t("{url}에 연결할 수 없습니다. 주소와 서버 실행 여부를 확인하세요.", { url: baseUrl });
+	return (e as Error)?.message || t("연결하지 못했습니다.");
+}
+
+/** Quick reachability check used for the status dots of servers that are not currently open. */
+export async function probeServer(baseUrl: string, token: string): Promise<ServerProbe> {
+	try {
+		await verifyServer(baseUrl, token, 4000);
+		return "online";
+	} catch (e) {
+		return e instanceof ApiError && (e.status === 401 || e.status === 403) ? "unauthorized" : "offline";
+	}
+}

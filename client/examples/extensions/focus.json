@@ -1,0 +1,17 @@
+{
+  "manifest": {
+    "id": "example.focus",
+    "name": "Focus · 테마와 리뷰 초안",
+    "version": "1.0.0",
+    "sdkVersion": 1,
+    "description": "차분한 블루 테마와 /review 프롬프트 초안. 메시지는 직접 확인 후 전송하세요.",
+    "permissions": ["commands", "composer"]
+  },
+  "theme": {
+    "dark": { "--accent": "#93c5fd", "--accent-fg": "#172033", "--radius": "8px" },
+    "light": { "--accent": "#2563eb", "--accent-fg": "#ffffff", "--radius": "8px" }
+  },
+  "commands": [
+    { "name": "review", "description": "코드 리뷰 초안 넣기", "template": "현재 변경사항을 정확성·보안·테스트 관점에서 리뷰해 주세요.\n특히 확인할 내용: {{args}}" }
+  ]
+}

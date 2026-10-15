@@ -1,0 +1,300 @@
+<script lang="ts">
+	import { t } from "../lib/i18n";
+	import { collapseIn, collapseOut } from "../lib/motion";
+	import Icon from "./Icon.svelte";
+	import QuestionReply from "./QuestionReply.svelte";
+	import { app } from "../lib/store.svelte";
+	import { getPane } from "../lib/pane";
+	import { clip, duration } from "../lib/format";
+	import { badgeStyle, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
+	import type { ToolRun } from "../lib/types";
+
+	let { id, name, args }: { id: string; name: string; args: Record<string, unknown> } = $props();
+
+	const pane = getPane();
+	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
+	let open = $state(false);
+	let denying = $state(false);
+	let reason = $state("");
+
+	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
+	const summary = $derived(toolSummary(name, args));
+	const kind = $derived(toolKind(name, args));
+
+	const awaiting = $derived(run.state === "awaiting_approval");
+	/** An `ask_user` call: the card asks a question instead of asking for permission. */
+	const asking = $derived(awaiting && !!run.question);
+	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
+	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
+	const label = $derived(
+		{
+			pending: t("준비 중"),
+			awaiting_approval: run.question ? t("답변 필요") : t("승인 필요"),
+			running: t("실행 중"),
+			done: exitCode ? t("종료 코드 {code}", { code: exitCode }) : t("완료"),
+			error: t("실패"),
+			denied: t("거부됨"),
+			skipped: t("실행 안 됨"),
+		}[run.state],
+	);
+	const tone = $derived(
+		run.state === "done" && !exitCode ? "ok" : run.state === "awaiting_approval" ? "warn" : run.state === "running" || run.state === "pending" ? "accent" : run.state === "skipped" ? "" : "danger",
+	);
+
+	// Pending approvals open by default so the thing being approved is visible.
+	$effect(() => {
+		if (awaiting) open = true;
+	});
+
+	const body = $derived.by(() => {
+		if (name === "write") return str(args.content);
+		if (name === "edit") return null;
+		return str(args.command ?? "");
+	});
+
+	function deny() {
+		void app.decide(id, false, reason.trim() || undefined, pane.id);
+		denying = false;
+		reason = "";
+	}
+</script>
+
+<div class="card" class:awaiting data-state={run.state}>
+	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
+		<span class="ico"><Icon name={toolIcon(name)} /></span>
+		<span class="name">{name}</span>
+		<span class="sum mono">{summary}</span>
+		<span class="meta">
+			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
+			<span class="chip {tone}">{label}</span>
+			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
+			<span class="chev" class:open><Icon name="chevron-right" /></span>
+		</span>
+	</button>
+
+	{#if open}
+		<div class="body" in:collapseIn out:collapseOut>
+			{#if name === "edit"}
+				<div class="diff mono">
+					<div class="del">{str(args.oldText)}</div>
+					<div class="add">{str(args.newText)}</div>
+				</div>
+			{:else if name === "bash"}
+				<pre class="mono cmd"><span class="prompt">$</span> {str(args.command)}</pre>
+			{:else if name === "write"}
+				<pre class="mono">{clip(body ?? "", 6000)}</pre>
+			{:else if name === "ask_user"}
+				<div class="q">{str(args.question)}</div>
+				{#if answer}<div class="a"><span class="label">{t("답변")}</span> {answer}</div>{/if}
+			{:else if name !== "read" && name !== "ls"}
+				<pre class="mono">{JSON.stringify(args, null, 2)}</pre>
+			{/if}
+
+			{#if run.output && name !== "ask_user"}
+				<div class="label">{t("출력")}</div>
+				<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>
+			{:else if run.state === "denied"}
+				<div class="denied">{t("거부됨")}{run.denyReason ? `: ${run.denyReason}` : ""}</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#if asking && run.question}
+		<div in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
+	{:else if awaiting}
+		<div class="approve" in:collapseIn out:collapseOut>
+			{#if denying}
+				<input
+					class="field reason"
+					placeholder={t("사유 (선택)")}
+					bind:value={reason}
+					onkeydown={(e) => e.key === "Enter" && deny()}
+				/>
+				<button class="btn danger" onclick={deny}>{t("거부")}</button>
+				<button class="btn ghost" onclick={() => (denying = false)}>{t("취소")}</button>
+			{:else}
+				<span class="ask"><Icon name="shield" /> {t("실행할까요?")}</span>
+				<button class="btn" onclick={() => (denying = true)}>{t("거부")}</button>
+				<button class="btn primary" onclick={() => app.decide(id, true, undefined, pane.id)}><Icon name="check" /> {t("승인")}</button>
+			{/if}
+		</div>
+	{/if}
+</div>
+
+<style>
+	.card {
+		margin: 8px 0;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+		overflow: hidden;
+		transition: border-color var(--motion-fast) var(--ease-std);
+	}
+	.card.awaiting {
+		border-color: var(--warn);
+		box-shadow: 0 0 0 3px var(--warn-soft);
+	}
+	.head {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: 100%;
+		padding: 9px 12px;
+		text-align: left;
+		min-height: 44px;
+	}
+	.ico {
+		display: grid;
+		color: var(--text-dim);
+	}
+	.ico :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.name {
+		font-weight: 600;
+		font-size: var(--fs-sm);
+	}
+	.sum {
+		flex: 1;
+		min-width: 0;
+		font-size: var(--fs-xs);
+		color: var(--text-dim);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--text-dim);
+	}
+	.dur {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+	}
+	.chev {
+		display: grid;
+		color: var(--text-faint);
+		transition: transform var(--motion-fast) var(--ease);
+	}
+	.chev.open {
+		transform: rotate(90deg);
+	}
+	.chev :global(svg) {
+		width: 15px;
+		height: 15px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.body {
+		padding: 0 12px 12px;
+	}
+	.label {
+		margin: 10px 0 5px;
+		font-family: var(--mono);
+		font-size: var(--fs-2xs);
+		letter-spacing: 0.04em;
+		text-transform: lowercase;
+		color: var(--text-faint);
+		font-weight: 500;
+	}
+	pre {
+		margin: 0;
+		padding: 10px 12px;
+		max-height: 320px;
+		overflow: auto;
+		border-radius: var(--radius-sm);
+		background: var(--bg-code);
+		font-size: var(--fs-xs);
+		line-height: 1.5;
+		white-space: pre-wrap;
+		word-break: break-all;
+	}
+	.cmd .prompt {
+		color: var(--text-faint);
+		user-select: none;
+	}
+	.out.err {
+		color: var(--danger);
+	}
+	.diff {
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		font-size: var(--fs-xs);
+	}
+	.diff div {
+		padding: 8px 12px;
+		white-space: pre-wrap;
+		word-break: break-all;
+		max-height: 200px;
+		overflow: auto;
+	}
+	.del {
+		background: var(--danger-soft);
+		color: var(--danger);
+	}
+	.add {
+		background: var(--ok-soft);
+		color: var(--ok);
+	}
+	.denied {
+		margin-top: 8px;
+		color: var(--danger);
+		font-size: var(--fs-sm);
+	}
+	.q {
+		font-size: var(--fs-sm);
+		line-height: 1.5;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.a {
+		margin-top: 8px;
+		font-size: var(--fs-sm);
+		color: var(--text-dim);
+	}
+	.approve {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 12px;
+		border-top: 1px solid var(--border);
+		background: var(--warn-soft);
+	}
+	.ask {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		flex: 1;
+		font-weight: 600;
+		color: var(--warn);
+		font-size: var(--fs-sm);
+	}
+	.ask :global(svg) {
+		width: 17px;
+		height: 17px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.reason {
+		flex: 1;
+		min-width: 0;
+		height: 38px;
+	}
+	.approve .btn {
+		height: 38px;
+	}
+</style>

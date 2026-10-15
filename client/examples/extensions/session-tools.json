@@ -1,0 +1,11 @@
+{
+  "manifest": {
+    "id": "example.session-tools",
+    "name": "세션 도우미 · SDK 예제",
+    "version": "1.0.0",
+    "sdkVersion": 1,
+    "description": "입력창 초안 액션, 세션 상태, 확장별 저장소와 설정을 보여주는 격리 실행 예제입니다.",
+    "permissions": ["commands", "composer", "status", "context", "storage", "events", "notifications"]
+  },
+  "code": "const settings = await sdk.settings.get();\nlet count = (await sdk.storage.get('count')) || 0;\nawait sdk.status.set('usage', `초안 ${count}회`);\nasync function draft(arg = '') {\n  const ctx = await sdk.context.get();\n  await sdk.composer.setText(`${settings.prefix || '현재 작업 진행 상황을 요약하고 다음 단계를 제안해 주세요.'}\\n${arg}`);\n  count++;\n  await sdk.storage.set('count', count);\n  await sdk.status.set('usage', `초안 ${count}회 · ${ctx.model || '모델 미선택'}`);\n}\nawait sdk.commands.register({name: 'summary', description: '작업 요약 초안', args: '[추가 지침]'}, draft);\nawait sdk.composer.registerAction({id: 'summary', label: '요약 초안'}, () => draft());\nawait sdk.events.on(async event => {\n  if (event.type === 'run_finished') await sdk.status.set('run', event.status === 'error' ? '작업 실패' : '작업 완료');\n});\nawait sdk.log('세션 도우미 시작');"
+}

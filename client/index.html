@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+		/>
+		<meta name="color-scheme" content="dark light" />
+		<meta name="theme-color" content="#161616" />
+		<link rel="icon" href="/favicon.svg?v=pipaya" type="image/svg+xml" />
+		<link rel="icon" href="/favicon-32.png?v=pipaya" type="image/png" sizes="32x32" />
+		<link rel="alternate icon" href="/favicon.ico?v=pipaya" sizes="any" />
+		<link rel="apple-touch-icon" href="/apple-icon.png?v=pipaya" />
+		<link rel="preload" href="/fonts/manrope-variable.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/suit-regular.woff2" as="font" type="font/woff2" crossorigin />
+		<title>pipaya</title>
+		<script>
+			// Apply the saved theme before first paint to avoid a flash.
+			try {
+				var t = localStorage.getItem("pipaya.theme") || "system";
+				var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+				document.documentElement.dataset.theme = dark ? "dark" : "light";
+				document.querySelector('meta[name="theme-color"]').setAttribute("content", dark ? "#161616" : "#ffffff");
+			} catch (e) {}
+			// Same for the language (the app sets it again once loaded).
+			try {
+				var l = localStorage.getItem("pipaya.lang");
+				// "system" or nothing saved: follow the browser (the app picks among language packs once it loads)
+				if (!l || l === "system" || !/^[a-z]{2,3}(-[a-z0-9]{2,8}){0,3}$/.test(l)) l = /^ko\b/i.test((navigator.languages && navigator.languages[0]) || navigator.language || "ko") ? "ko" : "en";
+				document.documentElement.lang = l;
+			} catch (e) {}
+		</script>
+	</head>
+	<body>
+		<div id="app"></div>
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>

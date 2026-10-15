@@ -1,0 +1,49 @@
+# pipaya server in a container (Sandbox).
+#
+#   docker compose up -d --build
+#   docker compose exec harness cat /data/token     # the auth token
+#
+# The agent's bash/write/edit tools then run inside this container, not on your host.
+# Settings can go in a `.env` file next to this file (see the variables below).
+name: pipaya
+
+services:
+  harness:
+    build: ./server
+    image: pipaya-server:local
+    restart: unless-stopped
+    ports:
+      # Loopback only by default. To reach it from another device use a private network such as
+      # Tailscale (HARNESS_BIND=<tailscale-ip>), never a public address.
+      - "${HARNESS_BIND:-127.0.0.1}:${HARNESS_PORT:-8787}:8787"
+    environment:
+      HARNESS_APPROVAL: ${HARNESS_APPROVAL:-ask}
+      # Leave empty to generate a token in /data/token.
+      HARNESS_TOKEN: ${HARNESS_TOKEN:-}
+      HARNESS_CORS_ORIGINS: ${HARNESS_CORS_ORIGINS:-}
+    volumes:
+      # Sessions, API keys and the token. Back this up.
+      - data:/data
+      # What the agent can work on. Set HARNESS_WORKSPACE_DIR to a host folder (for example ~/projects)
+      # to give it a project; anything in that folder can be changed or deleted by the agent.
+      - ${HARNESS_WORKSPACE_DIR:-workspace}:/workspace
+    # Hardening: no root, no extra privileges, read-only system files, bounded resources.
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+      - /home/harness:size=256m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: ${HARNESS_MEM_LIMIT:-2g}
+    cpus: ${HARNESS_CPUS:-2}
+    # To use a model server on the host (for example Ollama), uncomment and register
+    # http://host.docker.internal:11434/v1 as the connection URL. This lets the container reach host services.
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+volumes:
+  data:
+  workspace:

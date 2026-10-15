@@ -1,0 +1,45 @@
+/**
+ * Local persistence for the app's own state: every key it keeps in localStorage, and the read/write pair that also
+ * mirrors writes to durable storage (so a WebView that clears localStorage gets them back; see durable-storage.ts).
+ */
+import { setDurableSetting } from "./durable-storage";
+
+export const K = {
+  servers: "pipaya.servers",
+  currentServer: "pipaya.server",
+  legacyConn: "pipaya.conn", // single-server builds stored one connection here
+  theme: "pipaya.theme",
+  active: "pipaya.active", // per server: pipaya.active.<serverId>
+  draft: "pipaya.draft",
+  sidebar: "pipaya.sidebar", // "1" when collapsed (desktop)
+  sidebarW: "pipaya.sidebar.w", // desktop width in px
+  workdir: "pipaya.workdir", // per server: pipaya.workdir.<serverId>
+  sound: "pipaya.sound", // notification sounds on/off
+  volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
+  volumeV1: "pipaya.volume", // old scale, 0-100 where 70 was the base loudness
+  escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
+  favModels: "pipaya.fav.models", // "<provider>\u0000<modelId>"; per server: pipaya.fav.models.<serverId> (legacy: one global list)
+  keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
+  folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
+  groupOrder: "pipaya.grouporder", // sidebar group order set by dragging: { <serverId>: [groupId, ...] }
+  dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
+};
+
+export function read<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function write(key: string, value: unknown) {
+  try {
+    const json = JSON.stringify(value);
+    localStorage.setItem(key, json);
+    void setDurableSetting(key, json);
+  } catch {
+    /* storage unavailable */
+  }
+}

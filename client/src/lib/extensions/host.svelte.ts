@@ -1,0 +1,984 @@
+import { HttpReader } from "./http";
+import { addLocalPack, LocalizedError, msg, removeLocalPacks, t } from "../i18n";
+import { parseNotification, parseNotificationRule, type NotificationSpec, type NotificationResult, type NotificationRule, type NotificationStatus } from "../notification-contract";
+import {
+  ConfigurationManager, CONFIGURATION_GRANT, SETTINGS_SOURCE, applyWithBackup, parseConfiguration, planConfiguration, publicSettings, restoreBackup,
+  type ConfigurationDocument, type ConfigurationPlan,
+} from "./configuration";
+import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
+import { JsonTransport } from "./transport";
+import { NAVBAR_LIMITS, navbarId, parseNavbarItem, type NavbarItem } from "./navbar";
+import { Api, normalizeUrl, type Connection } from "../api";
+import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission } from "./schema";
+import { ExtensionRuntime } from "./runtime";
+import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
+
+import type { ExtensionContext, ExtensionEvent } from "./sdk";
+export type { ExtensionContext } from "./sdk";
+export interface HostAdapter {
+  prefill(text: string): void;
+  notify(text: string): void;
+  systemNotifications?: {
+    send(owner: string, spec: NotificationSpec): Promise<NotificationResult>;
+    status(): Promise<NotificationStatus>;
+    register(owner: string, id: string, rule: NotificationRule): Promise<void>;
+    remove(owner: string, id: string): Promise<void>;
+    revoke(owner: string): Promise<void>;
+  };
+  context(): ExtensionContext;
+  dark(): boolean;
+  reservedCommands(): string[];
+  /** Authenticated connection of the open server; settings sync is skipped (local only) without one. */
+  connection?(): Connection | null;
+  /** Id of the open server: the installed list is kept per server (docs/settings-scope.md) */
+  serverId?(): string | null;
+  /** The list of installed packages changed; it is shared with every client of this server */
+  listChanged?(): void;
+  configuration?: {
+    capture(): Pick<ConfigurationDocument, "servers" | "preferences" | "keybindings">;
+    apply(document: ConfigurationDocument): void;
+    applyBackground?(document: ConfigurationDocument): void;
+    backup(): unknown;
+    restore(value: unknown): void;
+    confirm(message: string): Promise<boolean>;
+  };
+}
+/**
+ * Where an extension is installed. "server": part of the open server's work, shared by every device connected to it
+ * (docs/settings-scope.md). "device": only on this device, kept whichever server is open, never sent to a server.
+ */
+export type ExtensionScope = "server" | "device";
+export interface InstalledExtension {
+  package: ExtensionPackage;
+  scope: ExtensionScope;
+  enabled: boolean;
+  state: "disabled" | "starting" | "active" | "error";
+  error?: string;
+  settings: Record<string, unknown>;
+  /** False until the user explicitly saved the settings of a newly installed package that declares a schema. */
+  configured: boolean;
+}
+/** A stored entry this version cannot read. Kept untouched so a newer version can still read it. */
+export interface UnreadableExtension { raw: unknown; id?: string; name?: string; reason: string; scope?: ExtensionScope }
+export interface ExtensionCommand { owner: string; name: string; desc: string; args?: string; run(arg: string): Promise<void> }
+export interface ComposerAction { owner: string; id: string; label: string; run(): Promise<void> }
+export interface StatusItem { owner: string; id: string; text: string }
+export interface ExtensionPanel extends Omit<UIPanelSpec, "view"> {
+  owner: string;
+  view: UINode;
+  /** "danger" paints the launcher badge red; set by the extension through ui.update(id, view, {tone}). */
+  tone?: UITone;
+  revision: number;
+  run(event: UIEvent): Promise<void>;
+}
+export interface ExtensionLog { owner: string; text: string; at: number }
+const KEY = "pipaya.extensions.v1";
+const SAFE = "pipaya.extensions.safe";
+/** JSON array of the extension ids whose enable() is currently in flight. */
+const BOOT = "pipaya.extensions.booting";
+const KEPT = "pipaya.extensions.kept";
+const CORRUPT = "pipaya.extensions.v1.corrupt";
+/** The extensions installed on this device only (the server ones live under `KEY.<serverId>`). */
+const DEVICE_KEY = "pipaya.extensions.device.v1";
+const DEVICE_CORRUPT = "pipaya.extensions.device.v1.corrupt";
+const MAX_ENTRIES = 50;
+const STORE = "pipaya.extension.storage.";
+const SYNC_FETCH_MS = 3000;
+const SYNC_PUT_MS = 10000;
+export const SYNC_SAVE_FAILED = msg("서버에 저장하지 못해 이 브라우저에만 저장됨");
+export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 활성화할 수 있습니다");
+export const BOOT_INTERRUPTED = msg("시작이 완료되지 않아 비활성화했습니다");
+export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
+
+function string(value: unknown, max: number, label = msg("문자열")): string {
+  if (typeof value !== "string" || !value.trim() || value.length > max) throw new LocalizedError(t("잘못된 {label}", { label: t(label) }));
+  return value;
+}
+function object(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new LocalizedError(t("객체가 필요합니다"));
+  return value as Record<string, unknown>;
+}
+/** Run a request with a hard deadline, even if the fetch implementation ignores the abort signal. */
+async function within<T>(ms: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new LocalizedError(t("시간 초과"))); }, ms); });
+  try { return await Promise.race([task(controller.signal), deadline]); } finally { clearTimeout(timer); }
+}
+function plain(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+/**
+ * A plain-JSON copy. Deliberately JSON rather than structuredClone: extension settings come from extension code and must
+ * stay JSON (undefined and functions dropped, the same shape the server stores), and a Svelte $state proxy cannot be
+ * structured-cloned at all.
+ */
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+/** Best-effort id/name of a stored entry that failed to parse. */
+function identify(raw: unknown): { id?: string; name?: string } {
+  const entry = plain(raw);
+  const manifest = plain(plain(entry?.package)?.manifest) ?? plain(entry?.manifest);
+  const out: { id?: string; name?: string } = {};
+  if (typeof manifest?.id === "string" && manifest.id) out.id = manifest.id.slice(0, 80);
+  if (typeof manifest?.name === "string" && manifest.name) out.name = manifest.name.slice(0, 80);
+  return out;
+}
+function localId(value: unknown): string {
+  const id = string(value, 40, "ID");
+  if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new LocalizedError(t("ID는 소문자·숫자·하이픈만 사용할 수 있습니다"));
+  return id;
+}
+
+/** Shortcuts are the user's own: they go into a settings file, but an extension asking for the settings never gets them. */
+function withoutKeybindings<T extends { keybindings?: unknown }>(doc: T, strip: boolean): Omit<T, "keybindings"> & Partial<Pick<T, "keybindings">> {
+  if (!strip) return doc;
+  const { keybindings: _omit, ...rest } = doc;
+  return rest;
+}
+
+export class ExtensionHost {
+  installed = $state<InstalledExtension[]>([]);
+  commands = $state.raw<ExtensionCommand[]>([]);
+  actions = $state.raw<ComposerAction[]>([]);
+  statuses = $state<StatusItem[]>([]);
+  navbar = $state.raw<NavbarItem[]>([]);
+  private httpReader = new HttpReader();
+  logs = $state<ExtensionLog[]>([]);
+  panels = $state.raw<ExtensionPanel[]>([]);
+  activePanel = $state<string | null>(null);
+  panelOpen = $state(false);
+  safeMode = $state(false);
+  loadError = $state("");
+  /** Stored entries this version cannot parse; written back unchanged by save(). */
+  unreadable = $state<UnreadableExtension[]>([]);
+  private adapter: HostAdapter | null = null;
+  private runtimes = new Map<string, ExtensionRuntime>();
+  private subscribed = new Set<string>();
+  private pendingPanelOpens = new Map<string, string>();
+  private themes = new Set<string>();
+  private generations = new Map<string, number>();
+  private initialized = false;
+  private booting = new Map<string, number>();
+  /** Raw storage text of a corrupt list; backed up once before the first write over it. */
+  private corruptRaw: string | null = null;
+  private deviceCorruptRaw: string | null = null;
+  /** The shared list as last reported to the server sync, so a change to a device extension does not trigger an upload. */
+  private lastShared: string | null = null;
+  private notificationTimes = new Map<string, number[]>();
+  /** Non-blocking message shown while settings exist only in this browser. */
+  syncNotice = $state("");
+  /** Ids whose latest settings have not reached the server yet (retried on the next save). */
+  private unsynced = new Set<string>();
+  private touched = new Set<string>();
+  /** Last settings payload read from the server, used to restore settings of a reinstalled id. */
+  private remote: Record<string, unknown> = {};
+  private puts = new Map<string, Promise<void>>();
+  private configurations = new Map<string, ConfigurationManager>();
+  private transport = new JsonTransport();
+  /** Settings go to the server only for a server extension whose manifest does not keep them local. */
+  private sharesSettings(entry: InstalledExtension): boolean { return entry.scope === "server" && entry.package.manifest.settingsScope !== "local"; }
+  private localSettings(): boolean { return localStorage.getItem(SETTINGS_SOURCE) === "local"; }
+
+  /** Storage key of the open server's list (the old single list when no server is open) */
+  private listKey(): string {
+    const id = this.adapter?.serverId?.() ?? null;
+    return id ? `${KEY}.${id}` : KEY;
+  }
+  /** The open server's list; a device that only has the old single list lends it to the first server it opens, then retires it. */
+  private storedList(): string | null {
+    const key = this.listKey();
+    const own = localStorage.getItem(key);
+    if (own !== null || key === KEY) return own;
+    const legacy = localStorage.getItem(KEY);
+    if (legacy !== null) { localStorage.setItem(key, legacy); localStorage.removeItem(KEY); }
+    return legacy;
+  }
+  private ready!: () => void;
+  private readyPromise = new Promise<void>(resolve => { this.ready = resolve; });
+  /** Resolves once init() has loaded the list of the server that was open at launch */
+  whenReady(): Promise<void> { return this.readyPromise; }
+
+  /** Parse one stored list into `installed` / `unreadable`. A device extension wins over a server one with the same id. */
+  private readList(text: string | null, scope: ExtensionScope) {
+    try {
+      const raw: unknown = JSON.parse(text ?? "[]");
+      if (!Array.isArray(raw) || raw.length > MAX_ENTRIES) throw new LocalizedError(t("잘못된 확장 목록"));
+      for (const item of raw) {
+        try {
+          const entry = object(item);
+          const pkg = parsePackage(entry.package);
+          if (this.installed.some(e => e.package.manifest.id === pkg.manifest.id)) throw new LocalizedError(t("중복 확장 ID"));
+          this.installed.push({ package: pkg, scope, enabled: entry.enabled === true, state: "disabled", configured: entry.configured !== false, settings: plain(entry.settings) ?? {} });
+        } catch (e) { this.unreadable.push({ raw: item, scope, ...identify(item), reason: e instanceof Error ? e.message : String(e) }); }
+      }
+    } catch (e) {
+      this.loadError = t("확장 설정을 읽지 못했습니다: {error}", { error: e instanceof Error ? e.message : String(e) });
+      if (scope === "device") this.deviceCorruptRaw = text; else this.corruptRaw = text;
+    }
+  }
+
+  /**
+   * Read the installed lists and the recovery state. Called at launch (both lists) and whenever the open server
+   * changes (only the server's list: the device's own extensions stay as they are).
+   */
+  private loadList(opts: { device: boolean } = { device: true }) {
+    let booting: string[] = [];
+    try {
+      this.safeMode = localStorage.getItem(SAFE) === "1" || new URLSearchParams(location.search).get("extensions") === "off";
+      booting = this.bootingIds();
+    } catch { /* treat as normal mode */ }
+    this.lastShared = null;
+    // Device extensions first, so one that shares an id with a server extension is the one that stays.
+    if (opts.device) this.readList(localStorage.getItem(DEVICE_KEY), "device");
+    this.readList(this.storedList(), "server");
+    // Only the extensions whose start never finished are switched off; everything else starts normally.
+    if (booting.length) {
+      let changed = false;
+      for (const e of this.installed) {
+        if (!booting.includes(e.package.manifest.id)) continue;
+        e.enabled = false; e.state = "disabled"; e.error = t(BOOT_INTERRUPTED); changed = true;
+      }
+      this.writeBooting([]);
+      if (changed) { try { this.save(); } catch { /* ignore */ } }
+    }
+  }
+
+  init(adapter: HostAdapter) {
+    this.adapter = adapter;
+    if (this.initialized) return;
+    this.initialized = true;
+    this.loadList();
+    this.ready();
+    void this.boot();
+  }
+
+  /** Read this server's settings, then start every extension that is switched on, one at a time. */
+  private async boot() {
+    if (!this.adapter) return;
+    const connection = this.adapter.connection?.() ?? null;
+    // An extension that is already running (a device extension, across a server switch) is left alone.
+    const enabled = this.safeMode ? [] : this.installed.filter(e => e.enabled && e.state !== "active" && e.state !== "starting");
+    if (!connection && !enabled.length) return;
+    await (async () => {
+      // The server is the source of truth for settings: read it before any extension starts.
+      if (connection && !this.localSettings()) await this.syncSettings(connection).catch(() => {});
+      if (this.safeMode || !enabled.length) return;
+      // Start sequentially, so recovery and the UI remain responsive.
+      for (const e of enabled) {
+        if (this.safeMode || !e.enabled) continue;
+        const id = e.package.manifest.id;
+        const problem = this.configRequired(id) ? t(CONFIG_REQUIRED) : this.settingsProblem(id);
+        if (problem) { e.enabled = false; e.state = "disabled"; e.error = problem; try { this.save(); } catch { /* ignore */ } continue; }
+        await this.enable(id).catch(() => {});
+      }
+    })();
+  }
+
+  private bootingIds(): string[] {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(BOOT) ?? "[]");
+      return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+    } catch { return []; }
+  }
+  private writeBooting(ids: string[]) {
+    try { if (ids.length) localStorage.setItem(BOOT, JSON.stringify(ids)); else localStorage.removeItem(BOOT); } catch { /* ignore */ }
+  }
+  private markBooting(id: string) {
+    const count = this.booting.get(id) ?? 0;
+    this.booting.set(id, count + 1);
+    const ids = this.bootingIds();
+    if (!ids.includes(id)) this.writeBooting([...ids, id]);
+  }
+  private unmarkBooting(id: string) {
+    const count = (this.booting.get(id) ?? 1) - 1;
+    if (count > 0) { this.booting.set(id, count); return; }
+    this.booting.delete(id);
+    this.writeBooting(this.bootingIds().filter(other => other !== id));
+  }
+
+  /** True while a newly installed package with a settings schema still waits for its first explicit save. */
+  configRequired(id: string): boolean {
+    const entry = this.find(id);
+    return !!entry.package.manifest.settings && !entry.configured;
+  }
+
+  /** Reason the extension cannot be enabled because of its settings schema, or "" when it can. */
+  settingsProblem(id: string): string {
+    const fields = this.find(id).package.manifest.settings;
+    if (!fields) return "";
+    const { ok, errors } = resolveSettings(fields, this.find(id).settings);
+    return ok ? "" : t("필수 설정을 확인하세요 — {detail}", { detail: describeSettingErrors(fields, errors) });
+  }
+  /** Settings as the extension sees them: schema-resolved when declared, otherwise the raw object. */
+  effectiveSettings(id: string): Record<string, unknown> {
+    const entry = this.find(id);
+    const fields = entry.package.manifest.settings;
+    if (!fields) return clone(entry.settings);
+    return { ...resolveSettings(fields, entry.settings).values };
+  }
+
+  private async syncSettings(connection: Connection) {
+    const api = new Api(connection);
+    let remote: Record<string, unknown>;
+    try {
+      const res = await within(SYNC_FETCH_MS, signal => api.extensionSettings(signal));
+      if (!res || typeof res.settings !== "object" || !res.settings || Array.isArray(res.settings)) throw new LocalizedError(t("잘못된 응답"));
+      remote = res.settings;
+    } catch {
+      this.syncNotice = SYNC_LOAD_FAILED;
+      return;
+    }
+    if (this.localSettings()) return;
+    this.remote = remote;
+    let changed = false;
+    for (const entry of this.installed) {
+      const id = entry.package.manifest.id;
+      if (this.touched.has(id) || !this.sharesSettings(entry)) continue;
+      const value = Object.hasOwn(remote, id) ? remote[id] : undefined;
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        entry.settings = clone(value as Record<string, unknown>); changed = true;
+        if (entry.package.manifest.settings && !entry.configured) entry.configured = true; // the server already holds this id's settings
+      } else if (value === undefined && Object.keys(entry.settings).length) {
+        void this.push(id); // migration: the server has nothing for this id yet
+      }
+    }
+    if (changed) { try { this.save(); } catch { /* cache only */ } }
+    if (this.syncNotice === SYNC_LOAD_FAILED) this.syncNotice = "";
+  }
+  /** Best-effort PUT of the current settings; failures are surfaced via syncNotice and retried on the next save. */
+  private push(id: string): Promise<void> {
+    const connection = this.adapter?.connection?.() ?? null;
+    if (!connection || this.localSettings()) return Promise.resolve();
+    const run = async () => {
+      const entry = this.installed.find(e => e.package.manifest.id === id);
+      if (!entry || this.localSettings() || !this.sharesSettings(entry)) return;
+      try {
+        await within(SYNC_PUT_MS, signal => new Api(connection).saveExtensionSettings(id, clone(entry.settings), signal));
+        this.unsynced.delete(id); this.remote[id] = clone(entry.settings);
+        if (!this.unsynced.size && this.syncNotice === SYNC_SAVE_FAILED) this.syncNotice = "";
+      } catch {
+        this.unsynced.add(id); this.syncNotice = SYNC_SAVE_FAILED;
+      }
+    };
+    const next = (this.puts.get(id) ?? Promise.resolve()).then(run, run);
+    this.puts.set(id, next);
+    void next.finally(() => { if (this.puts.get(id) === next) this.puts.delete(id); });
+    return next;
+  }
+
+  private save() {
+    if (this.corruptRaw !== null) {
+      // Never lose the unreadable list: back it up once, before the first write over it.
+      localStorage.setItem(CORRUPT, this.corruptRaw);
+      this.corruptRaw = null;
+    }
+    if (this.deviceCorruptRaw !== null) {
+      localStorage.setItem(DEVICE_CORRUPT, this.deviceCorruptRaw);
+      this.deviceCorruptRaw = null;
+    }
+    const stored = (scope: ExtensionScope) => [
+      ...this.installed.filter(e => e.scope === scope).map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured })),
+      ...this.unreadable.filter(u => (u.scope ?? "server") === scope).map(u => u.raw),
+    ];
+    localStorage.setItem(this.listKey(), JSON.stringify(stored("server")));
+    const device = stored("device");
+    if (device.length) localStorage.setItem(DEVICE_KEY, JSON.stringify(device));
+    else localStorage.removeItem(DEVICE_KEY);
+    // Only a change to the shared (server) list is worth telling the server about.
+    const shared = JSON.stringify(this.packages() ?? null);
+    if (shared === this.lastShared) return;
+    this.lastShared = shared;
+    if (!this.applyingRemote) this.adapter?.listChanged?.();
+  }
+
+  /* ---------- the list is per server (docs/settings-scope.md) ---------- */
+
+  private applyingRemote = false;
+
+  /** Installed packages in a stable order: what is shared with the other clients of this server. Activation and consent stay on the device. */
+  packages(): unknown[] | undefined {
+    const shared = this.installed.filter(e => e.scope === "server");
+    if (localStorage.getItem(this.listKey()) === null && !shared.length) return undefined;
+    return shared.map(e => clone(e.package)).sort((a, b) => (a.manifest.id < b.manifest.id ? -1 : 1));
+  }
+
+  /** Make this device's installed list match the server's: new packages arrive switched off, changed ones lose consent, removed ones go. */
+  applyPackages(value: unknown) {
+    if (!Array.isArray(value) || value.length > MAX_ENTRIES) return;
+    const wanted = new Map<string, ExtensionPackage>();
+    for (const item of value) { try { const pkg = parsePackage(item); wanted.set(pkg.manifest.id, pkg); } catch { /* a package this version cannot read stays out */ } }
+    this.applyingRemote = true;
+    try {
+      for (const e of [...this.installed]) {
+        const id = e.package.manifest.id;
+        if (e.scope !== "server") continue; // this device's own extensions are not the server's to remove
+        if (!wanted.has(id)) { try { this.remove(id, { keepSettings: true }); } catch { /* keep what is there */ } }
+      }
+      for (const [id, pkg] of wanted) {
+        const old = this.installed.find(e => e.package.manifest.id === id);
+        if (old && old.scope !== "server") continue; // a device extension with this id stays as it is
+        if (old && canonical(old.package) === canonical(pkg)) continue;
+        try { this.install(pkg, "server"); } catch { /* over the limit: leave it out */ }
+      }
+    } finally { this.applyingRemote = false; }
+    try { this.save(); } catch { /* cache only */ }
+  }
+
+  /** The open server changed: put that server's extensions in place of the previous one's. */
+  async switchServer() {
+    if (!this.initialized) return;
+    this.booting.clear(); this.writeBooting([]);
+    for (const e of this.installed) if (e.scope === "server") this.cleanup(e.package.manifest.id);
+    this.installed = this.installed.filter(e => e.scope === "device");
+    this.unreadable = this.unreadable.filter(u => u.scope === "device");
+    this.remote = {}; this.touched.clear(); this.unsynced.clear();
+    this.loadError = ""; this.syncNotice = ""; this.corruptRaw = null; this.panelOpen = false; this.activePanel = null;
+    this.loadList({ device: false });
+    this.applyThemes();
+    await this.boot();
+  }
+
+  private keptMap(): Map<string, Record<string, unknown>> {
+    const out = new Map<string, Record<string, unknown>>();
+    try {
+      const stored = plain(JSON.parse(localStorage.getItem(KEPT) ?? "{}"));
+      for (const [id, value] of Object.entries(stored ?? {})) { const v = plain(value); if (v) out.set(id, v); }
+    } catch { /* treat as empty */ }
+    return out;
+  }
+  private writeKept(map: Map<string, Record<string, unknown>>) {
+    try { if (map.size) localStorage.setItem(KEPT, JSON.stringify(Object.fromEntries(map))); else localStorage.removeItem(KEPT); } catch { /* best effort */ }
+  }
+  private keepLocal(id: string, settings: Record<string, unknown>) {
+    const map = this.keptMap();
+    map.delete(id); map.set(id, clone(settings));
+    for (const key of [...map.keys()]) { if (map.size <= MAX_ENTRIES) break; map.delete(key); }
+    this.writeKept(map);
+  }
+  private dropKept(id: string) {
+    const map = this.keptMap();
+    if (map.delete(id)) this.writeKept(map);
+  }
+  /** Delete the server copy (best effort), the local kept copy and the remote cache of an id. */
+  private discardSettings(id: string, local = false) {
+    this.dropKept(id); delete this.remote[id];
+    const connection = this.adapter?.connection?.() ?? null;
+    if (connection && !this.localSettings() && !local) void within(SYNC_PUT_MS, signal => new Api(connection).deleteExtension(id, signal)).catch(() => {});
+  }
+  find(id: string) { const e = this.installed.find(e => e.package.manifest.id === id); if (!e) throw new LocalizedError(t("확장을 찾을 수 없습니다")); return e; }
+  /**
+   * True when `next` may replace the running same-id extension without asking for consent again:
+   * the installed one is enabled, safe mode is off, and `next` requests no permission the installed version lacks.
+   * Call this BEFORE `install`, which always drops activation.
+   */
+  canResume(next: ExtensionPackage): boolean {
+    const old = this.installed.find(e => e.package.manifest.id === next.manifest.id);
+    if (!old || !old.enabled || this.safeMode) return false;
+    return next.manifest.permissions.every(p => old.package.manifest.permissions.includes(p));
+  }
+  install(input: unknown, scope: ExtensionScope = "server") {
+    const pkg = parsePackage(input);
+    const id = pkg.manifest.id;
+    const old = this.installed.find(e => e.package.manifest.id === id);
+    // Every replacement loses activation consent, including code-only changes. Other extensions are never touched.
+    const fields = pkg.manifest.settings;
+    if (old) {
+      this.disable(id); old.package = pkg; old.error = undefined;
+      if (fields) old.settings = fillSettingDefaults(fields, old.settings);
+    } else {
+      const takeover = this.unreadable.findIndex(u => u.id === id);
+      if (takeover < 0 && this.installed.length + this.unreadable.length >= MAX_ENTRIES) throw new LocalizedError(t("확장은 최대 50개까지 설치할 수 있습니다"));
+      // A reinstalled id gets back what it had: the unreadable entry's own settings, else the server's, else the kept copy.
+      const rawEntry = takeover >= 0 ? plain(this.unreadable[takeover]!.raw) : undefined;
+      const stored = plain(rawEntry?.settings);
+      const remote = scope === "server" && pkg.manifest.settingsScope !== "local" && !this.localSettings() && Object.hasOwn(this.remote, id) ? plain(this.remote[id]) : undefined;
+      const kept = this.keptMap().get(id);
+      const known = (stored && Object.keys(stored).length ? stored : undefined) ?? remote ?? kept;
+      const fromLocalOnly = known !== undefined && known !== remote;
+      const base: Record<string, unknown> = known ? clone(known) : {};
+      const configured = !fields || (takeover >= 0 ? rawEntry?.configured !== false : known !== undefined);
+      if (takeover >= 0) this.unreadable = this.unreadable.filter((_, i) => i !== takeover);
+      this.installed.push({ package: pkg, scope, enabled: false, state: "disabled", configured, settings: fields ? fillSettingDefaults(fields, base) : base });
+      this.dropKept(id);
+      if (fromLocalOnly && Object.keys(base).length) void this.push(id); // the server does not have these yet
+    }
+    this.save();
+    return id;
+  }
+  async enable(id: string) {
+    if (!this.adapter) throw new LocalizedError(t("확장 호스트가 준비되지 않았습니다"));
+    if (this.safeMode) throw new LocalizedError(t("안전 모드를 먼저 해제하세요"));
+    this.find(id);
+    if (this.configRequired(id)) throw new LocalizedError(t(CONFIG_REQUIRED));
+    const problem = this.settingsProblem(id);
+    if (problem) throw new Error(problem);
+    // Only this id is marked while it starts; a page reload in the middle disables just this extension.
+    this.markBooting(id);
+    try { await this.start(id); } finally { this.unmarkBooting(id); }
+  }
+  private async start(id: string) {
+    const entry = this.find(id);
+    this.cleanup(id);
+    const generation = (this.generations.get(id) ?? 0) + 1;
+    this.generations.set(id, generation);
+    entry.enabled = true; entry.state = "starting"; entry.error = undefined;
+    const pkg = entry.package;
+    const current = () => this.generations.get(id) === generation && entry.enabled;
+    try {
+      this.installLocales(id, pkg);
+      for (const c of pkg.commands ?? []) this.registerCommand(id, c.name, c.description, "[input]", async arg => { if (!current()) throw new LocalizedError(t("비활성화된 확장입니다")); this.adapter!.prefill(c.template.split("{{args}}").join(arg)); });
+      if (pkg.code) {
+        const runtime: ExtensionRuntime = new ExtensionRuntime({
+          request: (method, args) => { if (!current()) throw new LocalizedError(t("비활성화된 확장입니다")); return this.request(id, method, args, runtime); },
+          failed: error => { if (current()) this.failure(id, error); },
+        });
+        this.runtimes.set(id, runtime);
+        await runtime.start(pkg);
+      }
+      if (!current()) return;
+      entry.state = "active";
+      const openId = this.pendingPanelOpens.get(id);
+      this.pendingPanelOpens.delete(id);
+      if (openId && !this.panelOpen && this.panels.some(p => p.owner === id && p.id === openId)) {
+        this.activePanel = `${id}:${openId}`; this.panelOpen = true;
+      }
+      this.applyThemes(); this.save(); this.log(id, t("활성화됨"));
+    } catch (e) {
+      if (current()) this.failure(id, e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  }
+  private failure(id: string, error: string) {
+    this.revokeNotifications(id);
+    const entry = this.find(id);
+    entry.enabled = false; entry.state = "error"; entry.error = error.slice(0, 500);
+    this.cleanup(id); this.applyThemes();
+    try { this.save(); } catch { /* still tear down on persistence failure */ }
+    this.log(id, error); this.adapter?.notify(t("확장 중지: {name} · {error}", { name: entry.package.manifest.name, error: error.slice(0, 120) }));
+  }
+  /**
+   * Language packs of an extension: usable at once on this device, and published to the server so every other client
+   * gets them too. Publishing is best effort (offline, or a server from before language packs) and never blocks start.
+   */
+  private installLocales(id: string, pkg: ExtensionPackage) {
+    if (!pkg.locales?.length || !pkg.manifest.permissions.includes("locales")) return;
+    for (const pack of pkg.locales) addLocalPack(id, pack);
+    const connection = this.adapter?.connection?.() ?? null;
+    if (!connection) return;
+    const api = new Api(connection);
+    for (const pack of pkg.locales) {
+      void within(SYNC_PUT_MS, signal => api.saveLocale(pack.tag, { name: pack.name, messages: pack.messages, owner: id }, signal))
+        .catch(() => this.log(id, t("언어팩 {tag}을(를) 서버에 올리지 못했습니다", { tag: pack.tag })));
+    }
+  }
+  private cleanup(id: string) {
+    removeLocalPacks(id);
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
+    this.runtimes.get(id)?.stop(); this.runtimes.delete(id);
+    this.httpReader.cleanup(id);
+    this.configurations.get(id)?.cleanup(); this.configurations.delete(id);
+    this.transport.cleanup(id);
+    this.navbar = this.navbar.filter(item => item.owner !== id);
+    this.pendingPanelOpens.delete(id);
+    this.subscribed.delete(id); this.notificationTimes.delete(id);
+    this.commands = this.commands.filter(c => c.owner !== id);
+    this.actions = this.actions.filter(c => c.owner !== id);
+    this.statuses = this.statuses.filter(c => c.owner !== id);
+    this.panels = this.panels.filter(p => p.owner !== id);
+    if (this.activePanel?.startsWith(id + ":")) { this.activePanel = null; this.panelOpen = false; }
+  }
+  private revokeNotifications(id: string) {
+    if (!this.find(id).package.manifest.permissions.includes("system-notifications")) return;
+    void this.adapter?.systemNotifications?.revoke(id).catch(() => this.adapter?.notify(t("서버 알림 규칙을 해제하지 못했습니다. 서버에 연결한 뒤 다시 비활성화해 주세요.")));
+  }
+  disable(id: string) {
+    this.revokeNotifications(id);
+    const e = this.find(id); e.enabled = false; e.state = "disabled"; e.error = undefined;
+    this.cleanup(id); this.applyThemes(); this.save();
+  }
+  /** Removes the package, its private storage and stops it. `keepSettings` decides what happens to the settings. */
+  remove(id: string, opts: { keepSettings: boolean }) {
+    const keep = opts?.keepSettings !== false;
+    const removed = this.find(id);
+    const settings = removed.settings;
+    this.unpublishLocales(removed.package);
+    this.disable(id); this.installed = this.installed.filter(e => e.package.manifest.id !== id);
+    localStorage.removeItem(STORE + id); localStorage.removeItem(CONFIGURATION_GRANT + id); this.save();
+    if (keep) {
+      // Offline fallback; an unsynced local value is newer than the cached server copy.
+      if (this.unsynced.has(id)) delete this.remote[id];
+      if (removed.configured) this.keepLocal(id, settings);
+    } else this.discardSettings(id, !this.sharesSettings(removed));
+    this.unsynced.delete(id); this.touched.delete(id);
+  }
+  /** Removing an extension takes down the language packs it published (only its own; best effort). */
+  private unpublishLocales(pkg: ExtensionPackage) {
+    const connection = this.adapter?.connection?.() ?? null;
+    if (!connection || !pkg.locales?.length) return;
+    const api = new Api(connection);
+    for (const pack of pkg.locales) void within(SYNC_PUT_MS, signal => api.deleteLocale(pack.tag, pkg.manifest.id, signal)).catch(() => {});
+  }
+  /** Deletes a stored entry this version cannot read (see `unreadable`). */
+  removeUnreadable(index: number, opts: { keepSettings: boolean }) {
+    const item = this.unreadable[index];
+    if (!item) throw new LocalizedError(t("확장을 찾을 수 없습니다"));
+    const settings = plain(plain(item.raw)?.settings);
+    this.unreadable = this.unreadable.filter((_, i) => i !== index);
+    this.save();
+    const id = item.id;
+    if (!id || this.installed.some(e => e.package.manifest.id === id)) return;
+    try { localStorage.removeItem(STORE + id); localStorage.removeItem(CONFIGURATION_GRANT + id); } catch { /* ignore */ }
+    if (opts?.keepSettings !== false) { if (settings && Object.keys(settings).length) this.keepLocal(id, settings); }
+    else this.discardSettings(id);
+  }
+  setSafeMode(on: boolean) {
+    // Persist the recovery switch before doing anything else.
+    localStorage.setItem(SAFE, on ? "1" : "0"); this.safeMode = on;
+    for (const e of this.installed) {
+      this.revokeNotifications(e.package.manifest.id);
+      this.cleanup(e.package.manifest.id); e.state = "disabled"; e.enabled = false;
+    }
+    this.applyThemes(); this.save();
+    // Leaving safe mode intentionally requires explicit reactivation, even after restart.
+  }
+  stop() {
+    // A deliberate teardown (e.g. HMR) is not a crash: do not leave in-flight start markers behind.
+    this.booting.clear(); this.writeBooting([]);
+    for (const e of this.installed) this.cleanup(e.package.manifest.id);
+  }
+  /** Validates and stores settings locally at once, then mirrors them to the server (never rejects). */
+  setSettings(id: string, input: unknown): Promise<void> {
+    const settings = object(input);
+    if (JSON.stringify(settings).length > 16000) throw new LocalizedError(t("설정은 최대 16KB입니다"));
+    const entry = this.find(id);
+    let next: Record<string, unknown> = clone(settings);
+    const fields = entry.package.manifest.settings;
+    if (fields) {
+      const { values, errors, ok } = resolveSettings(fields, next);
+      if (!ok) throw new LocalizedError(t("설정이 올바르지 않습니다 — {detail}", { detail: describeSettingErrors(fields, errors) }));
+      next = { ...values };
+    }
+    entry.settings = next; entry.configured = true; this.save();
+    this.touched.add(id);
+    // A successful save also retries earlier saves that never reached the server.
+    const pending = [id, ...[...this.unsynced].filter(other => other !== id && this.installed.some(e => e.package.manifest.id === other))];
+    return Promise.all(pending.map(other => this.push(other))).then(() => {});
+  }
+  applyThemes() {
+    if (typeof document === "undefined") return;
+    for (const key of this.themes) document.documentElement.style.removeProperty(key);
+    this.themes.clear();
+    if (this.safeMode) return;
+    for (const e of this.installed) if (e.state === "active") {
+      const tokens = this.adapter?.dark() ? e.package.theme?.dark : e.package.theme?.light;
+      for (const [key, value] of Object.entries(tokens ?? {})) { document.documentElement.style.setProperty(key, value); this.themes.add(key); }
+    }
+  }
+  log(owner: string, text: string) { this.logs = [...this.logs.slice(-99), { owner, text: text.slice(0, 1000), at: Date.now() }]; }
+  private require(id: string, permission: Permission) {
+    if (!this.find(id).package.manifest.permissions.includes(permission)) throw new LocalizedError(t("권한 없음: {permission}", { permission }));
+  }
+  private registerCommand(owner: string, name: string, desc: string, args: string | undefined, run: (arg: string) => Promise<void>) {
+    name = localId(name);
+    if (this.adapter!.reservedCommands().includes(name) || this.commands.some(c => c.name === name)) throw new LocalizedError(t("명령 이름 충돌: /{name}", { name }));
+    if (this.commands.filter(c => c.owner === owner).length >= 20) throw new LocalizedError(t("명령은 확장당 최대 20개입니다"));
+    this.commands = [...this.commands, { owner, name, desc, args, run }];
+  }
+  openPanel(owner: string, id: string) {
+    const panel = this.panels.find(p => p.owner === owner && p.id === id && p.placement !== "composer");
+    if (!panel || this.find(owner).state !== "active") throw new LocalizedError(t("활성 패널을 찾을 수 없습니다"));
+    this.activePanel = `${owner}:${id}`; this.panelOpen = true;
+  }
+  closePanel() { this.panelOpen = false; }
+  /** The four operations of a configuration transfer. `id` is the extension asking (left out of it); "" for the user. */
+  private configIO(id: string): {
+    capture(): ConfigurationDocument; backup(): unknown; apply(document: ConfigurationDocument): void; restore(value: unknown): void;
+  } {
+    const adapter = this.adapter?.configuration;
+    if (!adapter) throw new LocalizedError(t("이 클라이언트는 설정 내보내기를 지원하지 않습니다"));
+    return {
+      capture: () => ({ schemaVersion: 1 as const, ...withoutKeybindings(adapter.capture(), id !== ""), extensions: this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: clone(e.package), enabled: e.enabled, settings: publicSettings(e.settings, e.package.manifest.settings ?? []) })) }),
+      backup: () => ({ app: adapter.backup(), entries: clone(this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: e.package, scope: e.scope, enabled: e.enabled, settings: e.settings, configured: e.configured }))), unreadable: clone(this.unreadable), localSettings: this.localSettings() }),
+      apply: document => {
+        const newCount = document.extensions.filter(e => !this.installed.some(old => old.package.manifest.id === e.package.manifest.id) && !this.unreadable.some(old => old.id === e.package.manifest.id)).length;
+        if (this.installed.length + this.unreadable.length + newCount > MAX_ENTRIES) throw new LocalizedError(t("확장 최대 50개 한도를 초과합니다"));
+        localStorage.setItem(SETTINGS_SOURCE, "local");
+        for (const entry of document.extensions) {
+          // A file carries this device's extensions, so they come back as device extensions. One that already exists
+          // keeps the place it has (replacing a server extension from a file must not move it off the server).
+          const target = this.install(entry.package, this.installed.find(e => e.package.manifest.id === entry.package.manifest.id)?.scope ?? "device");
+          const installed = this.find(target);
+          // Preserve local secrets / schema-less values. Only public settings are replaced.
+          installed.settings = { ...installed.settings, ...clone(entry.settings) };
+          installed.configured = false;
+          this.touched.add(target);
+        }
+        this.save(); adapter.apply(document);
+        this.syncNotice = msg("가져온 로컬 설정을 사용합니다");
+      },
+      restore: value => {
+        const raw = object(value);
+        if (!Array.isArray(raw.entries) || !Array.isArray(raw.unreadable)) throw new LocalizedError(t("잘못된 로컬 백업"));
+        const entries = raw.entries.map(item => { const e = object(item); return { package: parsePackage(e.package), scope: (e.scope === "device" ? "device" : "server") as ExtensionScope, enabled: false, state: "disabled" as const, settings: clone(object(e.settings)), configured: e.configured !== false }; });
+        const kept = this.installed.filter(e => e.package.manifest.id === id);
+        if (entries.some(e => e.package.manifest.id === id) || entries.length + raw.unreadable.length + kept.length > MAX_ENTRIES) throw new LocalizedError(t("잘못된 로컬 백업"));
+        for (const e of this.installed) if (e.package.manifest.id !== id) this.cleanup(e.package.manifest.id);
+        this.installed = [...this.installed.filter(e => e.package.manifest.id === id), ...entries];
+        this.unreadable = clone(raw.unreadable) as UnreadableExtension[];
+        localStorage.setItem(SETTINGS_SOURCE, raw.localSettings === true ? "local" : "server");
+        this.save(); this.applyThemes(); adapter.restore(raw.app);
+      },
+    };
+  }
+  private configuration(id: string): ConfigurationManager {
+    const existing = this.configurations.get(id);
+    if (existing) return existing;
+    const adapter = this.adapter?.configuration;
+    if (!adapter) throw new LocalizedError(t("이 클라이언트는 설정 내보내기를 지원하지 않습니다"));
+    const approvalKey = () => this.grantKey(id);
+    let approvedKey = "";
+    const client = new ConfigurationManager({
+      ...this.configIO(id),
+      authorize: () => { if (approvedKey !== approvalKey()) throw new LocalizedError(t("설정이 변경되어 다시 승인이 필요합니다")); localStorage.setItem(CONFIGURATION_GRANT + id, approvedKey); },
+      confirm: async message => {
+        approvedKey = approvalKey();
+        const approved = await adapter.confirm(`[${this.find(id).package.manifest.name}]\n${message}`);
+        if (this.configurations.get(id) !== client || !this.find(id).enabled) return false;
+        return approved;
+      },
+    });
+    this.configurations.set(id, client); return client;
+  }
+  private grantKey(id: string): string { return sha256(canonical({ package: this.find(id).package, settings: this.effectiveSettings(id) })); }
+  private granted(id: string): boolean { return localStorage.getItem(CONFIGURATION_GRANT + id) === this.grantKey(id); }
+  private requireGrant(id: string) { this.require(id, "configuration-background"); if (!this.granted(id)) throw new LocalizedError(t("자동 설정 접근 승인이 필요합니다")); }
+  /** Settings-only background apply; new code/activation always needs explicit consent. */
+  private applyBackground(id: string, input: unknown, expected: unknown) {
+    this.requireGrant(id);
+    const document = parseConfiguration(input, id), io = this.configIO(id), before = parseConfiguration(io.capture(), id);
+    if (typeof expected !== "string" || configurationFingerprint(before) !== expected) throw new LocalizedError(t("로컬 설정 충돌: 다시 읽으세요"));
+    const packages = (doc: ConfigurationDocument) => canonical(doc.extensions.map(e => ({ package: e.package, enabled: e.enabled })).sort((a,b) => a.package.manifest.id.localeCompare(b.package.manifest.id)));
+    if (packages(document) !== packages(before)) throw new LocalizedError(t("확장 코드·설치·활성 상태 변경은 수동 가져오기로 승인해야 합니다"));
+    applyWithBackup({ ...io, apply: doc => {
+      localStorage.setItem(SETTINGS_SOURCE, "local");
+      for (const entry of doc.extensions) {
+        const installed = this.find(entry.package.manifest.id);
+        if (canonical(publicSettings(installed.settings, installed.package.manifest.settings ?? [])) !== canonical(entry.settings)) {
+          const settings = { ...installed.settings };
+          for (const key of Object.keys(publicSettings(settings, installed.package.manifest.settings ?? []))) delete settings[key];
+          installed.settings = { ...settings, ...clone(entry.settings) }; this.touched.add(installed.package.manifest.id);
+        }
+      }
+      this.save(); const app = this.adapter!.configuration!; (app.applyBackground ?? app.apply)(doc);
+    } }, document);
+    const applied = parseConfiguration(io.capture(), id), fingerprint = configurationFingerprint(applied);
+    for (const e of applied.extensions) {
+      const old = before.extensions.find(b => b.package.manifest.id === e.package.manifest.id)!;
+      if (e.enabled && canonical(old.settings) !== canonical(e.settings)) void this.start(e.package.manifest.id).catch(() => {});
+    }
+    return { document: applied, fingerprint };
+  }
+  /* ---------- settings transfer driven by the user (the same engine as the SDK, with no extension in between) ---------- */
+
+  /** The settings as a document, limited to the parts the user ticked. */
+  exportConfiguration(parts: { servers: boolean; extensions: boolean; preferences: boolean; keybindings?: boolean }): ConfigurationDocument {
+    const doc = this.configIO("").capture();
+    // Only what belongs to this device goes into the file. Server extensions are the server's: a device that connects
+    // to that server gets them from it, so they are left out here.
+    const device = new Set(this.installed.filter(e => e.scope === "device").map(e => e.package.manifest.id));
+    const { keybindings, ...rest } = doc;
+    return parseConfiguration({
+      ...rest,
+      servers: parts.servers ? doc.servers : [],
+      extensions: parts.extensions ? doc.extensions.filter(e => device.has(e.package.manifest.id)) : [],
+      preferences: parts.preferences ? doc.preferences : {},
+      ...(parts.keybindings !== false && keybindings ? { keybindings } : {}),
+    });
+  }
+  /** What importing `doc` would change, without changing anything. */
+  planImport(doc: ConfigurationDocument): ConfigurationPlan {
+    const app = this.adapter?.configuration?.capture();
+    if (!app) throw new LocalizedError(t("이 클라이언트는 설정 가져오기를 지원하지 않습니다"));
+    return planConfiguration(doc, {
+      servers: app.servers.map(s => ({ name: s.name, baseUrl: normalizeUrl(s.baseUrl) })),
+      extensions: this.installed.map(e => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version })),
+      unreadable: this.unreadable,
+      preferences: app.preferences,
+      keybindings: app.keybindings,
+    });
+  }
+  /** Back up, then apply. Extensions come in disabled; a failure puts everything back. */
+  importConfiguration(doc: ConfigurationDocument) { applyWithBackup(this.configIO(""), parseConfiguration(doc)); }
+  /** Back to the state saved before the last import. */
+  restoreConfiguration() { restoreBackup(this.configIO("")); }
+
+  private request(id: string, method: string, args: unknown[], runtime: ExtensionRuntime): unknown {
+    const execute = (token: string, arg = "") => runtime.execute(token, arg);
+    switch (method) {
+      case "configuration.authorize": {
+        this.require(id, "configuration-background"); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다"));
+        return this.configuration(id).start("authorize", id);
+      }
+      case "configuration.revoke": {
+        this.require(id, "configuration-background"); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다"));
+        localStorage.removeItem(CONFIGURATION_GRANT + id); this.configurations.get(id)?.cleanup(); return;
+      }
+      case "configuration.access": {
+        this.require(id, "configuration-background"); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다")); return { authorized: this.granted(id) };
+      }
+      case "configuration.read": {
+        this.requireGrant(id); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다"));
+        const document = parseConfiguration(this.configIO(id).capture(), id); return { document, fingerprint: configurationFingerprint(document) };
+      }
+      case "configuration.applyBackground": {
+        this.requireGrant(id); if (args.length !== 2) throw new LocalizedError(t("document와 fingerprint가 필요합니다")); return this.applyBackground(id, args[0], args[1]);
+      }
+      case "configuration.export":
+      case "configuration.apply":
+      case "configuration.restore":
+      case "configuration.status": {
+        this.require(id, "configuration");
+        if (args.length !== (method === "configuration.apply" ? 1 : 0)) throw new LocalizedError(t("잘못된 configuration 인자"));
+        const manager = this.configuration(id);
+        if (method === "configuration.status") return manager.status();
+        return manager.start(method === "configuration.export" ? "export" : method === "configuration.apply" ? "apply" : "restore", id, args[0]);
+      }
+      case "http.requestJson": {
+        this.require(id, "http-write");
+        if (args.length !== 1) throw new LocalizedError(t("requestJson은 요청 객체 하나가 필요합니다"));
+        const generation = this.generations.get(id);
+        return this.transport.request(id, this.effectiveSettings(id), args[0], () => this.generations.get(id) === generation && this.find(id).enabled);
+      }
+      case "ui.registerPanel": {
+        this.require(id, "ui"); const spec = parsePanelSpec(args[0]); const token = string(args[1], 40);
+        if (this.panels.some(p => p.owner === id && p.id === spec.id)) throw new LocalizedError(t("중복 패널 ID"));
+        if (this.panels.filter(p => p.owner === id).length >= 5) throw new LocalizedError(t("확장당 패널은 최대 5개입니다"));
+        const generation = this.generations.get(id);
+        const panel: ExtensionPanel = { ...spec, owner: id, revision: 0, run: async event => {
+          const current = this.panels.find(p => p.owner === id && p.id === spec.id);
+          if (this.generations.get(id) !== generation || !current || current.run !== panel.run || this.find(id).state !== "active") throw new LocalizedError(t("비활성화된 패널입니다"));
+          await runtime.execute(token, validateUIEvent(current.view, event));
+        } };
+        this.panels = [...this.panels, panel]; return;
+      }
+      case "ui.update": {
+        this.require(id, "ui"); const panelId = localId(args[0]); const view = parseView(args[1]);
+        const opts = args[2] === undefined ? {} : object(args[2]);
+        if (opts.tone !== undefined && !["neutral", "info", "success", "warning", "danger"].includes(opts.tone as string)) throw new LocalizedError(t("잘못된 tone"));
+        const tone = opts.tone as UITone | undefined;
+        const index = this.panels.findIndex(p => p.owner === id && p.id === panelId);
+        if (index < 0) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        this.panels = this.panels.map((p, i) => i === index ? { ...p, view, tone, revision: p.revision + 1 } : p); return;
+      }
+      case "ui.open": {
+        this.require(id, "ui"); const panelId = localId(args[0]);
+        const panel = this.panels.find(p => p.owner === id && p.id === panelId);
+        if (!panel || panel.placement === "composer") throw new LocalizedError(t("별도 패널을 찾을 수 없습니다"));
+        // Do not destroy another active panel's draft during asynchronous boot.
+        if (this.find(id).state === "starting" && this.panelOpen) {
+          this.pendingPanelOpens.set(id, panelId); return;
+        }
+        this.activePanel = `${id}:${panelId}`; this.panelOpen = true; return;
+      }
+      case "ui.close": {
+        this.require(id, "ui"); const panelId = localId(args[0]);
+        if (!this.panels.some(p => p.owner === id && p.id === panelId)) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        if (this.pendingPanelOpens.get(id) === panelId) this.pendingPanelOpens.delete(id);
+        if (this.activePanel === `${id}:${panelId}`) this.panelOpen = false; return;
+      }
+      case "ui.remove": {
+        this.require(id, "ui"); const panelId = localId(args[0]);
+        this.panels = this.panels.filter(p => p.owner !== id || p.id !== panelId);
+        if (this.pendingPanelOpens.get(id) === panelId) this.pendingPanelOpens.delete(id);
+        if (this.activePanel === `${id}:${panelId}`) { this.activePanel = null; this.panelOpen = false; } return;
+      }
+      case "commands.register": {
+        this.require(id, "commands"); const s = object(args[0]); const token = string(args[1], 40);
+        this.registerCommand(id, localId(s.name), string(s.description, 200), s.args === undefined ? undefined : string(s.args, 80), arg => execute(token, arg)); return;
+      }
+      case "composer.registerAction": {
+        this.require(id, "composer"); const s = object(args[0]); const token = string(args[1], 40); const actionId = localId(s.id);
+        if (this.actions.filter(a => a.owner === id).length >= 10 || this.actions.some(a => a.owner === id && a.id === actionId)) throw new LocalizedError(t("입력창 액션 제한 또는 중복 ID"));
+        this.actions = [...this.actions, { owner: id, id: actionId, label: string(s.label, 40), run: () => execute(token) }]; return;
+      }
+      case "composer.setText": this.require(id, "composer"); this.adapter!.prefill(string(args[0], 16000)); return;
+      case "navbar.set": {
+        this.require(id, "navbar");
+        if (args.length !== 2) throw new LocalizedError(t("navbar.set은 ID와 spec 두 인자가 필요합니다"));
+        const itemId = navbarId(args[0]); const spec = parseNavbarItem(args[1]);
+        const mine = this.navbar.filter(item => item.owner === id);
+        if (!mine.some(item => item.id === itemId) && mine.length >= NAVBAR_LIMITS.items) throw new LocalizedError(t("navbar 항목은 확장당 최대 {n}개입니다", { n: NAVBAR_LIMITS.items }));
+        const next: NavbarItem = { owner: id, id: itemId, ...spec };
+        this.navbar = mine.some(item => item.id === itemId)
+          ? this.navbar.map(item => item.owner === id && item.id === itemId ? next : item)
+          : [...this.navbar, next];
+        return;
+      }
+      case "navbar.remove": {
+        this.require(id, "navbar");
+        if (args.length !== 1) throw new LocalizedError(t("navbar.remove는 ID 한 개가 필요합니다"));
+        const itemId = navbarId(args[0]);
+        this.navbar = this.navbar.filter(item => item.owner !== id || item.id !== itemId); return;
+      }
+      case "http.getJson": {
+        this.require(id, "http");
+        if (args.length !== 1) throw new LocalizedError(t("http.getJson은 경로 한 개가 필요합니다"));
+        const generation = this.generations.get(id);
+        return this.httpReader.getJson(id, this.effectiveSettings(id).httpOrigin, args[0],
+          () => this.generations.get(id) === generation && this.find(id).enabled);
+      }
+      case "status.set": {
+        this.require(id, "status"); const itemId = localId(args[0]); const text = string(args[1], 120);
+        const existing = this.statuses.find(s => s.owner === id && s.id === itemId);
+        if (existing) existing.text = text;
+        else { if (this.statuses.filter(s => s.owner === id).length >= 10) throw new LocalizedError(t("상태 항목은 최대 10개입니다")); this.statuses.push({ owner: id, id: itemId, text }); } return;
+      }
+      case "status.remove": this.require(id, "status"); this.statuses = this.statuses.filter(s => s.owner !== id || s.id !== localId(args[0])); return;
+      case "context.get": {
+        this.require(id, "context");
+        const c = this.adapter!.context();
+        return { sessionId: c.sessionId, model: c.model, provider: c.provider, running: c.running, online: c.online };
+      }
+      case "events.subscribe": this.require(id, "events"); this.subscribed.add(id); return;
+      case "notifications.send":
+      case "notifications.status":
+      case "notifications.register":
+      case "notifications.remove": {
+        this.require(id, "system-notifications");
+        const adapter = this.adapter?.systemNotifications;
+        if (!adapter) throw new LocalizedError(t("이 클라이언트는 시스템 알림을 지원하지 않습니다"));
+        const count = method === "notifications.status" ? 0 : method === "notifications.register" ? 2 : 1;
+        if (args.length !== count) throw new LocalizedError(t("잘못된 알림 인자"));
+        if (method === "notifications.status") return adapter.status();
+        if (method === "notifications.remove") return adapter.remove(id, localId(args[0]));
+        if (method === "notifications.register") return adapter.register(id, localId(args[0]), parseNotificationRule(args[1]));
+        const spec = parseNotification(args[0]);
+        return adapter.send(id, { ...spec, title: `[${this.find(id).package.manifest.name}] ${spec.title}` });
+      }
+      case "notifications.show": {
+        this.require(id, "notifications"); const text = string(args[0], 300);
+        const recent = (this.notificationTimes.get(id) ?? []).filter(at => Date.now() - at < 10000);
+        if (recent.length >= 5) throw new LocalizedError(t("확장 알림은 10초에 최대 5개입니다"));
+        this.notificationTimes.set(id, [...recent, Date.now()]);
+        this.adapter!.notify(`[${this.find(id).package.manifest.name}] ${text}`); return;
+      }
+      case "settings.get": return this.effectiveSettings(id);
+      case "storage.get": { this.require(id, "storage"); const key = string(args[0], 80); const data = object(JSON.parse(localStorage.getItem(STORE + id) ?? "{}")); return Object.hasOwn(data, key) ? data[key] : null; }
+      case "storage.set": {
+        this.require(id, "storage"); const key = string(args[0], 80);
+        if (["__proto__", "constructor", "prototype"].includes(key)) throw new LocalizedError(t("사용할 수 없는 저장소 키"));
+        const data = object(JSON.parse(localStorage.getItem(STORE + id) ?? "{}"));
+        data[key] = args[1] ?? null; const json = JSON.stringify(data);
+        if (json.length > 32000) throw new LocalizedError(t("확장 저장소는 최대 32KB입니다")); localStorage.setItem(STORE + id, json); return;
+      }
+      case "log": this.log(id, string(args[0], 1000)); return;
+      default: throw new LocalizedError(t("지원하지 않는 SDK 메서드: {method}", { method }));
+    }
+  }
+  emit(event: ExtensionEvent) {
+    if (this.safeMode) return;
+    const safe = { type: event.type, sessionId: event.sessionId, at: event.at, ...(event.status === undefined ? {} : { status: event.status }) };
+    for (const id of this.subscribed) this.runtimes.get(id)?.event(safe);
+  }
+}
+export const extensions = new ExtensionHost();

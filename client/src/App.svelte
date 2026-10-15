@@ -1,0 +1,531 @@
+<script lang="ts">
+	import { onMount, untrack } from "svelte";
+	import { fadeIn, fadeOut } from "./lib/motion";
+	import Icon from "./components/Icon.svelte";
+	import Sidebar from "./components/Sidebar.svelte";
+	import Rail from "./components/Rail.svelte";
+	import { drag } from "./lib/dnd.svelte";
+	import { cancelChord, onShortcut, onShortcutCapture, onShortcutUp, resetKeyboard } from "./lib/actions";
+	import Header from "./components/Header.svelte";
+	import Pane from "./components/Pane.svelte";
+	import GroupView from "./components/GroupView.svelte";
+	import SessionStrip from "./components/SessionStrip.svelte";
+	import Palette from "./components/Palette.svelte";
+	import NoServer from "./components/NoServer.svelte";
+	import Toasts from "./components/Toasts.svelte";
+	import Lazy from "./components/Lazy.svelte";
+	import UpdateBanner from "./components/UpdateBanner.svelte";
+	import DoneNotice from "./components/DoneNotice.svelte";
+	import ChordStrip from "./components/ChordStrip.svelte";
+	import { updater } from "./lib/updater.svelte";
+	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
+	import CloseConfirm from "./components/CloseConfirm.svelte";
+	import { guardWindowClose } from "./lib/window-close";
+	import ExtensionApproval from "./components/extensions/ExtensionApproval.svelte";
+	import { app, SIDEBAR_W } from "./lib/store.svelte";
+	import { armSound } from "./lib/sound";
+	import { extensions } from "./lib/extensions/host.svelte";
+	import { COMMANDS } from "./lib/commands";
+	import { viewport } from "./lib/viewport.svelte";
+	import { notifications } from "./lib/notifications";
+	import { nativePushAdapter } from "./lib/native-push";
+	import { notificationRules } from "./lib/notification-rules";
+	import { t } from "./lib/i18n";
+	import { listenForPairingLinks } from "./lib/pairing-intake";
+
+	// Load the transcript of every session on screen (all panes of the open group on a wide screen), drop the rest.
+	$effect(() => {
+		const ids = app.visibleIds;
+		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
+	});
+	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
+
+	// Dialogs and settings panels load on first open, keeping them (and ModelConnections, Extensions, Backup…) out of the start-up chunk.
+	const load = {
+		settings: () => import("./components/Settings.svelte"),
+		modelSettings: () => import("./components/ModelSettings.svelte"),
+		skills: () => import("./components/Skills.svelte"),
+		templates: () => import("./components/Templates.svelte"),
+		lightbox: () => import("./components/Lightbox.svelte"),
+		queue: () => import("./components/QueueModal.svelte"),
+		dirPicker: () => import("./components/DirPicker.svelte"),
+		serverForm: () => import("./components/ServerForm.svelte"),
+		linkCard: () => import("./components/LinkCard.svelte"),
+	};
+
+	// "작업 완료" on what is on screen is read as soon as the user comes back to the window or clicks on it (blank space included).
+	onMount(() => {
+		const seen = () => app.markSeen();
+		const visible = () => document.visibilityState === "visible" && seen();
+		window.addEventListener("pointerdown", seen, true);
+		window.addEventListener("focus", seen);
+		document.addEventListener("visibilitychange", visible);
+		return () => {
+			window.removeEventListener("pointerdown", seen, true);
+			window.removeEventListener("focus", seen);
+			document.removeEventListener("visibilitychange", visible);
+		};
+	});
+
+	onMount(() => guardWindowClose(() => app.requestClose()));
+
+	onMount(() => {
+		armSound();
+		app.init();
+		let stopLinks = () => {};
+		let gone = false;
+		void listenForPairingLinks(link => app.connectByLink(link)).then(stop => { if (gone) stop(); else stopLinks = stop; });
+		// A few seconds after launch, so the check never competes with connecting to the server.
+		const updateTimer = setTimeout(() => updater.autoCheck(), 5000);
+		notifications.init(() => app.visibleIds, sid => { void app.openAny(sid); }, nativePushAdapter());
+		const api = () => { if (!app.api) throw new Error(t("서버에 연결해 주세요")); return app.api; };
+		extensions.init({
+			prefill: text => { app.prefill = text; },
+			notify: text => app.toast(text),
+			systemNotifications: {
+				send: (owner, spec) => api().sendNotification(owner, spec),
+				status: () => notifications.status(),
+				register: async (owner, id, rule) => { await notificationRules.register(api(), owner, id, rule); },
+				remove: async (owner, id) => { await notificationRules.remove(api(), owner, id); },
+				revoke: async owner => { await notificationRules.revoke(api(), owner); },
+			},
+			context: () => ({ sessionId: app.activeId, model: app.effective.model, provider: app.effective.provider, running: app.runningHere, online: app.net === "online" }),
+			dark: () => app.prefs.resolvedDark,
+			reservedCommands: () => COMMANDS.map(c => c.name),
+			connection: () => app.conn,
+			serverId: () => app.serverId,
+			listChanged: () => app.listChanged(),
+			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.confirmExtension(message) },
+		});
+		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); };
+	});
+
+	// Drag the sidebar edge to resize it (desktop).
+	let resizing = $state(false);
+	let gripFrom = { x: 0, w: 0 };
+	function gripDown(e: PointerEvent) {
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		gripFrom = { x: e.clientX, w: app.sidebar.width };
+		resizing = true;
+		document.body.style.userSelect = "none";
+	}
+	function gripMove(e: PointerEvent) {
+		if (resizing) app.sidebar.setWidth(gripFrom.w + e.clientX - gripFrom.x, false);
+	}
+	function gripUp() {
+		if (!resizing) return;
+		resizing = false;
+		document.body.style.userSelect = "";
+		app.sidebar.setWidth(app.sidebar.width); // persist once, at the end of the drag
+	}
+	function gripKey(e: KeyboardEvent) {
+		const d = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
+		if (!d) return;
+		e.preventDefault();
+		app.sidebar.setWidth(app.sidebar.width + d * (e.shiftKey ? 4 : 1));
+	}
+
+	// Swipe sideways anywhere to drag the drawer open / shut: it follows the finger, and settles on release by
+	// distance or flick speed (touch only, narrow screens only, never while a dialog is up).
+	let sideEl: HTMLElement | undefined = $state();
+	let startX = 0;
+	let startY = 0;
+	let lastX = 0;
+	let lastT = 0;
+	let vx = 0; // px/ms, smoothed
+	let tracking = false;
+	let locked = false; // decided: this gesture is a horizontal drag of the drawer
+	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
+	let drawerW = $state(320);
+	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging).
+	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], pre, table, .grip";
+	const MODAL = 'dialog[open], [role="dialog"], [role="alertdialog"]';
+	function scrollsSideways(el: Element | null): boolean {
+		for (; el && el !== document.body; el = el.parentElement) {
+			if (el.scrollWidth > el.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowX)) return true;
+		}
+		return false;
+	}
+	function touchStart(e: TouchEvent) {
+		tracking = locked = false;
+		swipe = null;
+		if (e.touches.length !== 1 || !viewport.narrow) return; // the drawer only exists on narrow screens
+		if (document.querySelector(MODAL)) return;
+		const t = e.touches[0]!;
+		startX = lastX = t.clientX;
+		startY = t.clientY;
+		lastT = e.timeStamp;
+		vx = 0;
+		if (!app.sidebar.open && t.clientX >= 24) {
+			const el = e.target instanceof Element ? e.target : null;
+			if (el?.closest(NO_SWIPE) || scrollsSideways(el)) return;
+			if (getSelection()?.toString()) return; // adjusting a text selection
+		}
+		drawerW = sideEl?.offsetWidth || 320;
+		tracking = true;
+	}
+	function touchMove(e: TouchEvent) {
+		if (!tracking) return;
+		if (drag.id || e.touches.length !== 1) return cancelSwipe(); // a session is being carried, not the drawer swiped
+		const t = e.touches[0]!;
+		const dx = t.clientX - startX;
+		const dy = t.clientY - startY;
+		if (!locked) {
+			if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return cancelSwipe(); // vertical scroll
+			if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+			if (app.sidebar.open ? dx > 0 : dx < 0) return cancelSwipe(); // wrong direction for the current state
+			locked = true;
+		}
+		const dt = e.timeStamp - lastT;
+		if (dt > 0) vx = 0.6 * vx + 0.4 * ((t.clientX - lastX) / dt);
+		lastX = t.clientX;
+		lastT = e.timeStamp;
+		swipe = Math.max(0, Math.min(drawerW, (app.sidebar.open ? drawerW : 0) + dx));
+	}
+	function cancelSwipe() {
+		tracking = locked = false;
+		swipe = null;
+	}
+	function touchEnd() {
+		if (!tracking || !locked || swipe === null) return cancelSwipe();
+		const open = swipe / drawerW > 0.35 ? vx > -0.35 : vx > 0.35;
+		app.sidebar.open = open;
+		cancelSwipe();
+	}
+</script>
+
+<svelte:head>
+	<title>pipaya</title>
+</svelte:head>
+
+<svelte:window
+	ontouchstart={touchStart}
+	ontouchmove={touchMove}
+	ontouchend={touchEnd}
+	ontouchcancel={cancelSwipe}
+	onkeydowncapture={onShortcutCapture}
+	onkeydown={onShortcut}
+	onkeyup={onShortcutUp}
+	onpointerdowncapture={cancelChord}
+	onblur={resetKeyboard}
+/>
+
+{#snippet launcher()}<ExtensionPanels />{/snippet}
+
+{#if app.servers.length === 0}
+	<div class="extension-launcher fixed">{@render launcher()}</div>
+	<NoServer />
+{:else}
+	<div class="app">
+		<div class="side" bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">
+			<div class="full"><Sidebar /></div>
+			<div class="rail-slot"><Rail /></div>
+			{#if !app.sidebar.collapsed}
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+				<div
+					class="grip"
+					role="separator"
+					aria-orientation="vertical"
+					aria-label={t("사이드바 너비 조절")}
+					aria-valuemin={SIDEBAR_W.min}
+					aria-valuemax={SIDEBAR_W.max}
+					aria-valuenow={app.sidebar.width}
+					tabindex="0"
+					title={t("끌어서 너비 조절 · 더블 클릭으로 원래 크기")}
+					onpointerdown={gripDown}
+					onpointermove={gripMove}
+					onpointerup={gripUp}
+					onpointercancel={gripUp}
+					ondblclick={() => app.sidebar.setWidth(SIDEBAR_W.def)}
+					onkeydown={gripKey}
+				></div>
+			{/if}
+		</div>
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<div class="scrim" class:show={app.sidebar.open} class:dragging={swipe !== null} style:opacity={swipe !== null ? swipe / drawerW : undefined} onclick={() => (app.sidebar.open = false)}></div>
+
+		<main>
+			<Header />
+			{#if viewport.narrow}<SessionStrip />{/if}
+
+			{#if app.net !== "online"}
+				<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
+					{#if app.net === "connecting"}
+						<span class="spinner"></span> {t("연결하는 중…")}
+					{:else if app.net === "unauthorized"}
+						<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
+						<button onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
+					{:else}
+						<Icon name="wifi-off" /> {t("서버에 다시 연결하는 중…")}
+						<button onclick={() => app.sync()}>{t("지금 재시도")}</button>
+					{/if}
+				</div>
+			{/if}
+
+			<div class="stage">
+				<!-- One column for everything pinned to the top of the stage: notices first, the extension button below them, so they never overlap -->
+				<div class="overlay">
+					{#if viewport.narrow || group}<DoneNotice />{/if}
+					<div class="extension-launcher">{@render launcher()}</div>
+				</div>
+				{#if group}
+					<GroupView {group} />
+				{:else}
+					<Pane id={app.activeId} />
+				{/if}
+			</div>
+		</main>
+
+		{#if app.connectionsOpen}<Lazy load={load.modelSettings} />{/if}
+	</div>
+{/if}
+
+{#if app.settingsOpen}<Lazy load={load.settings} />{/if}
+{#if app.skillsDialog && app.api}
+	{#key app.serverId}<Lazy load={load.skills} dialog={app.skillsDialog} api={app.api} onclose={() => (app.skillsDialog = null)} />{/key}
+{/if}
+{#if app.templatesDialog && app.api}
+	{#key app.serverId}<Lazy load={load.templates} dialog={app.templatesDialog} api={app.api} onclose={() => (app.templatesDialog = null)} />{/key}
+{/if}
+{#if app.servers.length === 0}
+	<button class="extension-entry" onclick={() => app.openSettings("extensions")}>{t("설정 · 확장")}</button>
+{/if}
+
+{#if app.viewer}
+	<Lazy load={load.lightbox} onclose={() => (app.viewer = null)} />
+{/if}
+
+{#if app.queueDialog}
+	<Lazy load={load.queue} />
+{/if}
+
+{#if app.dirPicker}
+	<Lazy load={load.dirPicker} onclose={() => (app.dirPicker = false)} />
+{/if}
+
+{#if app.serverForm}
+	{#key app.serverForm}<Lazy load={load.serverForm} target={app.serverForm} />{/key}
+{/if}
+
+{#if app.linking}<Lazy load={load.linkCard} />{/if}
+<Palette />
+<Toasts />
+<UpdateBanner />
+<ChordStrip />
+<ExtensionApproval />
+<CloseConfirm />
+
+<style>
+	.overlay {
+		position: absolute;
+		z-index: 20;
+		top: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		flex-direction: column;
+		/* only the things inside catch taps; the transcript underneath stays scrollable */
+		pointer-events: none;
+	}
+	.extension-launcher {
+		align-self: flex-end;
+		margin: 16px 16px 0 0;
+		pointer-events: auto;
+	}
+	.extension-launcher:empty {
+		display: none;
+	}
+	/* no server yet: there is no stage, so it floats as before */
+	.extension-launcher.fixed {
+		position: fixed;
+		right: 0;
+		top: calc(64px + var(--sat));
+		z-index: 20;
+	}
+	.extension-entry {
+		position: fixed;
+		right: 16px;
+		bottom: calc(16px + var(--sab));
+		padding: 8px 14px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+	}
+	.app {
+		display: flex;
+		height: 100%;
+		height: 100dvh;
+		overflow: hidden;
+	}
+	.side {
+		flex: none;
+		width: var(--sidebar-w);
+		height: 100%;
+	}
+	main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		position: relative;
+		padding-right: var(--sar);
+	}
+	.stage {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		position: relative;
+	}
+	.scrim {
+		display: none;
+	}
+	.banner {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		padding: 6px 12px;
+		font-size: 13px;
+		background: var(--accent-soft);
+		color: var(--accent);
+		flex: none;
+	}
+	.banner.bad {
+		background: var(--warn-soft);
+		color: var(--warn);
+	}
+	.banner :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.banner button {
+		padding: 3px 10px;
+		border-radius: var(--radius);
+		background: var(--bg);
+		font-weight: 600;
+		font-size: 12.5px;
+	}
+	.banner .spinner {
+		width: 12px;
+		height: 12px;
+	}
+
+	.grip {
+		display: none;
+	}
+	@media (min-width: 861px) {
+		.side {
+			position: relative;
+			transition:
+				width var(--motion-normal) var(--ease),
+				visibility 0s;
+		}
+		.side.resizing {
+			transition: none; /* follow the pointer exactly */
+		}
+		.side.collapsed .grip {
+			display: none;
+		}
+		.grip {
+			display: block;
+			position: absolute;
+			z-index: 20;
+			top: 0;
+			bottom: 0;
+			right: -4px;
+			width: 9px;
+			cursor: col-resize;
+			touch-action: none;
+		}
+		.grip::after {
+			content: "";
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 4px;
+			width: 2px;
+			background: var(--accent);
+			opacity: 0;
+			transition: opacity var(--motion-fast) var(--ease-std);
+		}
+		.grip:hover::after,
+		.grip:focus-visible::after,
+		.side.resizing .grip::after {
+			opacity: 0.55;
+		}
+		.grip:focus-visible {
+			outline: none;
+		}
+		.full,
+		.rail-slot {
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+		}
+		.rail-slot {
+			display: none;
+		}
+		/* Folded: not gone, but a slim rail of the active sessions' agents */
+		.side.collapsed {
+			width: var(--rail-w);
+		}
+		.side.collapsed .full {
+			display: none; /* out of the tab order too */
+		}
+		.side.collapsed .rail-slot {
+			display: block;
+		}
+	}
+
+	@media (max-width: 860px) {
+		.rail-slot {
+			display: none;
+		}
+		.full {
+			height: 100%;
+		}
+		.side {
+			position: fixed;
+			z-index: 50;
+			left: 0;
+			top: 0;
+			bottom: 0;
+			width: min(320px, 86vw);
+			translate: -102% 0;
+			transition: translate var(--motion-normal) var(--ease);
+			box-shadow: none;
+		}
+		.side.open {
+			translate: 0 0;
+			box-shadow: var(--shadow);
+		}
+		.scrim {
+			display: block;
+			position: fixed;
+			inset: 0;
+			z-index: 49;
+			background: var(--scrim);
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity var(--motion-normal) var(--ease-std);
+		}
+		.side.dragging,
+		.scrim.dragging {
+			transition: none; /* follow the finger exactly */
+		}
+		.side.dragging {
+			box-shadow: var(--shadow);
+		}
+		.scrim.show {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
+</style>

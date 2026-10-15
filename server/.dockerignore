@@ -1,0 +1,13 @@
+node_modules
+data
+test
+scripts
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+token
+Dockerfile
+.dockerignore
+README*.md

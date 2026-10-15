@@ -1,0 +1,1033 @@
+/* ---------- fonts (same stack as the original design: Manrope / SUIT for Hangul / JetBrains Mono) ---------- */
+@font-face {
+	font-family: "Manrope";
+	src: url("/fonts/manrope-variable.woff2") format("woff2");
+	font-weight: 200 800;
+	font-display: swap;
+}
+@font-face {
+	font-family: "JetBrains Mono";
+	src: url("/fonts/jetbrainsmono-variable.woff2") format("woff2");
+	font-weight: 100 800;
+	font-display: swap;
+}
+@font-face {
+	font-family: "SUIT";
+	src: url("/fonts/suit-regular.woff2") format("woff2");
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: "SUIT";
+	src: url("/fonts/suit-medium.woff2") format("woff2");
+	font-weight: 500;
+	font-display: swap;
+}
+@font-face {
+	font-family: "SUIT";
+	src: url("/fonts/suit-semibold.woff2") format("woff2");
+	font-weight: 600;
+	font-display: swap;
+}
+@font-face {
+	font-family: "SUIT";
+	src: url("/fonts/suit-bold.woff2") format("woff2");
+	font-weight: 700;
+	font-display: swap;
+}
+
+/* ---------- design tokens (design tokens: monochrome, accent by contrast, not hue) ---------- */
+:root {
+	--font: "Manrope", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+	--mono: "JetBrains Mono", "SUIT", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+	--radius: 12px; /* card */
+	--radius-panel: 16px;
+	--radius-sm: 8px; /* controls */
+	--radius-pill: 999px; /* buttons, chips, avatars */
+	--radius-xs: 4px; /* inline marks, tiny badges */
+
+	/* Type scale. Components pick a step instead of a raw px size so text stays on one ladder. */
+	--fs-2xs: 11px; /* mono labels, counters */
+	--fs-xs: 12px; /* meta, hints */
+	--fs-sm: 13px; /* secondary text, compact controls */
+	--fs-md: 14px; /* dense body: lists, panels */
+	--fs-base: 15px; /* page body, card titles */
+	--fs-lg: 16px; /* section titles; also the minimum for inputs on iOS (smaller zooms the page) */
+	--fs-xl: 18px; /* dialog titles */
+	--fs-2xl: 20px; /* big numbers, the drop-zone label */
+
+	/* dialog widths: S confirm / M form / L list+settings / XL workspace; the gutter keeps them off the screen edge */
+	--modal-gutter: 24px;
+	--modal-w-s: 420px;
+	--modal-w-m: 480px;
+	--modal-w-l: 560px;
+	--modal-w-xl: 720px;
+	/* Stacking scale. A dialog is a scrim + a panel pair; a dialog opened from another sits one layer higher.
+	   layer 1: dialogs opened from the main screen (settings, palette, work details, model picker)
+	   layer 2: opened from a layer-1 dialog (server form)  layer 3: from layer 2 (folder picker, extension dialogs)
+	   layer 4: confirmations and connection cards that must be seen above everything else */
+	--z-scrim-1: 60;
+	--z-modal-1: 61;
+	--z-scrim-2: 70;
+	--z-modal-2: 71;
+	--z-scrim-3: 80;
+	--z-modal-3: 81;
+	--z-scrim-4: 90;
+	--z-modal-4: 91;
+	--z-notice: 50; /* toast strips: above the page, behind every dialog and its scrim */
+	--z-dropzone: 55; /* "drop files here" over the page: above the strips, below any dialog */
+	--z-toast: 100;
+	--z-lightbox: 120;
+	--z-tooltip: 130; /* hover cards lifted to <body>: above everything, they never take input focus */
+	/* Motion (Material profile). lib/motion.ts reads --motion-* so JS and CSS stay in sync. */
+	--motion-fast: 180ms; /* exits, hover, small state changes */
+	--motion-normal: 360ms; /* entrances */
+	--motion-slow: 460ms; /* progress, large movements */
+	--ease: cubic-bezier(0.22, 1, 0.36, 1); /* entrance: emphasized-decelerate */
+	--ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15); /* exit: emphasized-accelerate */
+	--ease-std: cubic-bezier(0.2, 0, 0, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	--sat: env(safe-area-inset-top, 0px);
+	--sab: env(safe-area-inset-bottom, 0px);
+	--sal: env(safe-area-inset-left, 0px);
+	--sar: env(safe-area-inset-right, 0px);
+
+	--sidebar-w: 288px;
+	--rail-w: 56px;
+	--content-w: 760px;
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--bg: #161616;
+	--bg-side: #191919;
+	--bg-elev: #1c1c1c;
+	--bg-hover: #242424;
+	--bg-active: #2b2b2b;
+	--bg-code: #121212;
+	--border: #2e2e2e;
+	--border-strong: #3f3f3f;
+	--text: #ededed;
+	--text-dim: #a0a0a0;
+	--text-faint: #8b8b93;
+	--user-bg: #242424;
+	--accent: #e4e4e7;
+	--accent-hover: #ffffff;
+	--accent-fg: #18181b;
+	--accent-soft: rgba(237, 237, 237, 0.1);
+	--grid-line: rgba(255, 255, 255, 0.065);
+	--grid-lit: rgba(255, 255, 255, 0.2);
+	--glow: rgba(255, 255, 255, 0.045);
+	--lv-minimal: #94a3b8;
+	--lv-low: #38bdf8;
+	--lv-medium: #a78bfa;
+	--lv-high: #f472b6;
+	--lv-xhigh: #fb923c;
+	--lv-max: #f87171;
+	/* composer mention marks: # image (violet), @ file (mint), sub-agent (amber) */
+	--mark-img: #c4b5fd;
+	--mark-file: #86efac;
+	--mark-agent: #fcd34d;
+	--info: #5aa9ff;
+	--ok: #3ecf8e;
+	--warn: #f5a524;
+	--danger: #f4616c;
+	--info-soft: rgba(90, 169, 255, 0.16);
+	--ok-soft: rgba(62, 207, 142, 0.14);
+	--warn-soft: rgba(245, 165, 36, 0.14);
+	--danger-soft: rgba(244, 97, 108, 0.14);
+	--shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+	--shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.28);
+	--scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="light"] {
+	color-scheme: light;
+	--bg: #ffffff;
+	--bg-side: #fafafa;
+	--bg-elev: #fafafa;
+	--bg-hover: #f4f4f5;
+	--bg-active: #ececee;
+	--bg-code: #f4f4f5;
+	--border: #ededed;
+	--border-strong: #d4d4d8;
+	--text: #0a0a0b;
+	--text-dim: #52525b;
+	--text-faint: #71717a;
+	--user-bg: #f4f4f5;
+	--accent: #18181b;
+	--accent-hover: #000000;
+	--accent-fg: #ffffff;
+	--accent-soft: rgba(24, 24, 27, 0.07);
+	--grid-line: rgba(0, 0, 0, 0.055);
+	--grid-lit: rgba(0, 0, 0, 0.16);
+	--glow: rgba(0, 0, 0, 0.018);
+	--lv-minimal: #64748b;
+	--lv-low: #0284c7;
+	--lv-medium: #7c4dff;
+	--lv-high: #db2777;
+	--lv-xhigh: #ea580c;
+	--lv-max: #dc2626;
+	--mark-img: #8b5cf6;
+	--mark-file: #10b981;
+	--mark-agent: #f59e0b;
+	--info: #1d6fe0;
+	--ok: #12a36a;
+	--warn: #b86e00;
+	--danger: #d6303d;
+	--info-soft: rgba(29, 111, 224, 0.1);
+	--ok-soft: rgba(18, 163, 106, 0.1);
+	--warn-soft: rgba(184, 110, 0, 0.1);
+	--danger-soft: rgba(214, 48, 61, 0.09);
+	--shadow: 0 10px 40px rgba(20, 25, 40, 0.14);
+	--shadow-soft: 0 2px 10px rgba(20, 25, 40, 0.08);
+	--scrim: rgba(10, 12, 18, 0.4);
+}
+
+/* ---------- reset ---------- */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+html,
+body,
+#app {
+	height: 100%;
+	margin: 0;
+}
+html {
+	-webkit-text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+body {
+	font-family: var(--font);
+	font-size: var(--fs-base);
+	line-height: 1.55;
+	color: var(--text);
+	background: var(--bg);
+	overflow: hidden;
+	overscroll-behavior: none;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+	font-feature-settings: "ss01", "cv11";
+}
+h1,
+h2,
+h3,
+h4 {
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+button {
+	background: none;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+button:disabled {
+	cursor: not-allowed;
+}
+a {
+	color: var(--text);
+}
+::selection {
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+/* a modal dialog is not a control: its focus ring would float detached around the whole card */
+dialog:focus,
+dialog:focus-visible {
+	outline: none;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+	outline: none;
+}
+
+/* thin scrollbars on desktop */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--border-strong);
+	border-radius: var(--radius-sm);
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* ---------- shared bits ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 38px;
+	padding: 0 18px;
+	border-radius: var(--radius-pill);
+	background: var(--bg-elev);
+	border: 1px solid var(--border);
+	font-weight: 500;
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+	transition:
+		background var(--motion-fast) var(--ease-std),
+		transform var(--motion-fast) var(--ease),
+		border-color var(--motion-fast) var(--ease-std);
+	user-select: none;
+}
+.btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+.btn:active:not(:disabled) {
+	transform: scale(0.94);
+}
+.btn:disabled {
+	opacity: 0.5;
+}
+/* the one compact size; `small` was an alias and is gone */
+.btn.sm {
+	height: 34px;
+	padding: 0 12px;
+	font-size: var(--fs-sm);
+}
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-fg);
+}
+.btn.primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+.btn.danger {
+	color: var(--danger);
+}
+.btn.ghost {
+	background: transparent;
+	border-color: transparent;
+}
+/* Full-width dashed "add" slot, centered, used under lists */
+.btn.dashed {
+	width: 100%;
+	height: 44px;
+	background: transparent;
+	border: 1px dashed var(--border-strong);
+	color: var(--text-dim);
+}
+.btn.dashed:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+.btn.ghost:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.iconbtn {
+	display: inline-grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	color: var(--text-dim);
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+	transition:
+		background var(--motion-fast) var(--ease-std),
+		color var(--motion-fast) var(--ease-std),
+		transform var(--motion-fast) var(--ease);
+	flex: none;
+}
+.iconbtn.sm {
+	width: 32px;
+	height: 32px;
+}
+.iconbtn.sm svg {
+	width: 16px;
+	height: 16px;
+}
+.iconbtn:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+.iconbtn:active:not(:disabled) {
+	transform: scale(0.88);
+}
+.iconbtn:focus-visible,
+.btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.iconbtn svg,
+.btn svg {
+	width: 19px;
+	height: 19px;
+	stroke: currentColor;
+	fill: none;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.field {
+	width: 100%;
+	height: 42px;
+	padding: 0 12px;
+	background: var(--bg);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	transition:
+		border-color var(--motion-fast) var(--ease-std),
+		box-shadow var(--motion-fast) var(--ease-std);
+	font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */
+}
+.field:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* select: same field chrome, custom chevron (native arrow and popup-button look differ per OS) */
+select.field {
+	appearance: none;
+	-webkit-appearance: none;
+	padding-right: 36px;
+	cursor: pointer;
+	background-repeat: no-repeat;
+	background-position: right 12px center;
+	background-size: 16px;
+}
+select.field:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+:root[data-theme="dark"] {
+	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	--checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2318181b' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+:root[data-theme="light"] {
+	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	--checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+select.field {
+	background-image: var(--chevron);
+}
+
+/* checkbox: monochrome, filled with the accent when checked (task-list boxes) */
+input[type="checkbox"] {
+	appearance: none;
+	-webkit-appearance: none;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	border: 1px solid var(--border-strong);
+	border-radius: 5px;
+	background: var(--bg) center / 78% no-repeat;
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) var(--ease-std),
+		border-color var(--motion-fast) var(--ease-std),
+		box-shadow var(--motion-fast) var(--ease-std),
+		transform var(--motion-fast) var(--ease);
+}
+input[type="checkbox"]:hover:not(:disabled) {
+	border-color: var(--text-dim);
+}
+input[type="checkbox"]:active:not(:disabled) {
+	transform: scale(0.9);
+}
+input[type="checkbox"]:checked {
+	background-color: var(--accent);
+	border-color: var(--accent);
+	background-image: var(--checkmark);
+}
+input[type="checkbox"]:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 22px;
+	padding: 0 9px;
+	border-radius: var(--radius-pill);
+	font-size: var(--fs-2xs);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	background: var(--bg-elev);
+	color: var(--text-dim);
+	white-space: nowrap;
+}
+.chip.ok {
+	background: var(--ok-soft);
+	color: var(--ok);
+}
+.chip.warn {
+	background: var(--warn-soft);
+	color: var(--warn);
+}
+.chip.danger {
+	background: var(--danger-soft);
+	color: var(--danger);
+}
+.chip.accent {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+/* Reasoning level: each strength has its own colour, cool and quiet at the bottom, warm and loud at the top.
+   Set data-level on an element and it (and anything inside) reads --lv / --lv-soft. */
+[data-level="minimal"] {
+	--lv: var(--lv-minimal);
+}
+[data-level="low"] {
+	--lv: var(--lv-low);
+}
+[data-level="medium"] {
+	--lv: var(--lv-medium);
+}
+[data-level="high"] {
+	--lv: var(--lv-high);
+}
+[data-level="xhigh"] {
+	--lv: var(--lv-xhigh);
+}
+[data-level="max"] {
+	--lv: var(--lv-max);
+}
+[data-level] {
+	--lv-soft: color-mix(in srgb, var(--lv) 14%, transparent);
+}
+.chip.think {
+	background: var(--lv-soft);
+	color: var(--lv);
+}
+
+.mono {
+	font-family: var(--mono);
+}
+
+/* section labels are mono, like metadata */
+.eyebrow {
+	font-family: var(--mono);
+	font-size: var(--fs-2xs);
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+/* `$ command` prompt with a blinking block cursor */
+.prompt-line {
+	display: inline-flex;
+	align-items: center;
+	font-family: var(--mono);
+	font-size: var(--fs-md);
+	color: var(--text-faint);
+	white-space: nowrap;
+}
+.prompt-line .cursor {
+	display: inline-block;
+	width: 0.48em;
+	height: 1.05em;
+	margin-left: 0.35em;
+	background: currentColor;
+	animation: blink-cursor 1.2s steps(1, end) infinite;
+}
+@keyframes blink-cursor {
+	50% {
+		opacity: 0;
+	}
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.spinner {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	animation: spin 0.7s linear infinite;
+	flex: none;
+}
+
+/* Baseline feedback for every interactive element that has no transition of its own. :where() keeps the
+   specificity at zero, so component rules (and .theme-switching) still win. Only opacity-class properties
+   and geometry animate for state; the theme flip is instant via .theme-switching. */
+:where(button, summary, a, [role="button"], [role="option"]) {
+	transition:
+		background-color var(--motion-fast) var(--ease-std),
+		color var(--motion-fast) var(--ease-std),
+		border-color var(--motion-fast) var(--ease-std),
+		opacity var(--motion-fast) var(--ease-std);
+}
+:where(
+		button:not(.btn, .iconbtn, .wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:disabled),
+		[role="button"]:active
+	) {
+	scale: 0.97;
+}
+/* Row-shaped buttons (list rows, accordion heads, option rows, tabs) span a whole line: shrinking one by 3% on press
+   makes the entire row wobble sideways. They get a tint instead. Opt in with .wide; aria-expanded / option / tab
+   elements are covered automatically. Specificity is deliberately above the components' own :hover rules. */
+button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:disabled) {
+	background-color: var(--bg-active);
+}
+
+/* Segmented control (SegmentedControl): one track, one sliding marker. Pair with use:slidingIndicator.
+   Inner radius = outer radius - padding. Variants: .full stretches, .sm is the compact 32px size. */
+.seg {
+	position: relative;
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+.seg.full {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 1fr;
+	width: 100%;
+}
+.seg > button {
+	position: relative;
+	z-index: 1;
+	height: 34px;
+	padding: 0 12px;
+	border-radius: calc(var(--radius) - 3px);
+	color: var(--text-dim);
+	font-size: var(--fs-sm);
+	font-weight: 550;
+	transition: color var(--motion-fast) var(--ease-std);
+}
+.seg.sm > button {
+	height: 28px;
+	font-size: var(--fs-xs);
+}
+.seg > button:hover:not(:disabled) {
+	color: var(--text);
+}
+.seg > button.on {
+	color: var(--text);
+	background: var(--bg-active);
+}
+.seg:is([data-indicator-ready]) > button.on {
+	background: transparent;
+}
+.seg > button:disabled {
+	opacity: 0.4;
+}
+
+/* Sliding selection marker (lib/sliding-indicator.ts, Tabs). Only a change of target animates:
+   the action snaps the marker with an inline `transition: none` for first placement and layout reflow. */
+.slide-ind {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 0;
+	pointer-events: none;
+	border-radius: var(--radius);
+	background: var(--bg-active);
+}
+.slide-ind[data-variant="ring"] {
+	box-shadow: inset 0 0 0 1px var(--text-faint);
+}
+/* Drawn over the item (z-index 1) so the item keeps its own opaque fill; the ring is all that travels. */
+.slide-ind[data-variant="outline"] {
+	z-index: 1;
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--text);
+}
+.slide-ind[data-variant="accent"] {
+	z-index: 1;
+	border-radius: var(--radius-pill);
+	background: var(--accent-soft);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+.slide-ind[data-variant="level"] {
+	background: var(--lv-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
+}
+.slide-ind[data-variant="underline"] {
+	border-radius: 0;
+	background: var(--ind-color, var(--text));
+}
+[data-indicator-ready] > .slide-ind {
+	transition:
+		transform var(--motion-normal) var(--ease),
+		width var(--motion-normal) var(--ease),
+		height var(--motion-normal) var(--ease),
+		background-color var(--motion-normal) var(--ease),
+		box-shadow var(--motion-normal) var(--ease);
+}
+
+/* Material ripple (lib/ripple.ts appends the span on pointerdown). Hover colour stays below it via isolation. */
+.ripple {
+	position: absolute;
+	left: var(--x);
+	top: var(--y);
+	width: var(--d);
+	height: var(--d);
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0;
+	pointer-events: none;
+	z-index: -1;
+	animation: ripple 0.62s var(--ease) both;
+}
+.btn.primary .ripple {
+	background: var(--accent-fg);
+}
+@keyframes ripple {
+	0% {
+		opacity: 0.22;
+		transform: translate(-50%, -50%) scale(0);
+	}
+	45% {
+		opacity: 0.14;
+	}
+	100% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(1);
+	}
+}
+
+/* Native <dialog> modals: the ::backdrop is not a child, so it fades through a flag set by lib/motion.ts. */
+dialog[open] {
+	animation: dialog-in var(--motion-normal) var(--ease);
+}
+dialog[open]::backdrop {
+	animation: fade-in var(--motion-normal) var(--ease);
+}
+dialog[data-closing] {
+	animation: dialog-out var(--motion-fast) var(--ease-exit) forwards;
+	pointer-events: none;
+}
+dialog[data-closing]::backdrop {
+	animation: fade-out var(--motion-fast) var(--ease-exit) forwards;
+}
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes dialog-in {
+	from {
+		opacity: 0;
+		transform: translateY(18px) scale(0.94);
+	}
+}
+@keyframes dialog-out {
+	to {
+		opacity: 0;
+		transform: translateY(8px) scale(0.96);
+	}
+}
+@media (max-width: 640px) {
+	dialog[open] {
+		animation-name: sheet-in;
+	}
+	dialog[data-closing] {
+		animation-name: sheet-out;
+		animation-duration: calc(var(--motion-fast) * 1.35);
+	}
+	@keyframes sheet-in {
+		from {
+			transform: translateY(100%);
+		}
+	}
+	@keyframes sheet-out {
+		from {
+			transform: translateY(var(--pull, 0px));
+		}
+		to {
+			transform: translateY(100%);
+		}
+	}
+
+	/* Pull-down-to-dismiss (lib/sheet.ts): --pull is the finger's offset; transform keeps the drag on the compositor. */
+	[data-sheet] {
+		transform: translateY(var(--pull, 0px));
+		transition: transform var(--motion-normal) var(--ease);
+	}
+	[data-sheet][data-dragging] {
+		transition: none;
+	}
+	.sheet-handle {
+		position: relative;
+		touch-action: none;
+		cursor: grab;
+		user-select: none;
+	}
+	.sheet-handle::before {
+		content: "";
+		position: absolute;
+		top: 6px;
+		left: 50%;
+		width: 38px;
+		height: 4px;
+		margin-left: -19px;
+		border-radius: 2px;
+		background: var(--border-strong);
+		pointer-events: none;
+	}
+}
+
+/* While the theme flips, every colour must change on the same frame. Per-component
+   `transition: background .15s` otherwise leaves some surfaces dark while others are already light. */
+:root.theme-switching,
+:root.theme-switching *,
+:root.theme-switching *::before,
+:root.theme-switching *::after {
+	transition: none !important;
+}
+/* The selection marker moves in geometry only; colours still flip at once. Without this exception, picking a
+   theme card (which starts a theme switch) would teleport the ring instead of sliding it. */
+:root.theme-switching [data-indicator-ready] > .slide-ind {
+	transition:
+		transform var(--motion-normal) var(--ease),
+		width var(--motion-normal) var(--ease),
+		height var(--motion-normal) var(--ease) !important;
+}
+
+/* connection status dot (server switcher + settings) */
+.sdot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+.sdot.online {
+	background: var(--ok);
+}
+.sdot.offline {
+	background: var(--danger);
+}
+.sdot.unauthorized {
+	background: var(--warn);
+}
+.sdot.checking {
+	background: var(--text-faint);
+	animation: blink-cursor 1s ease-in-out infinite;
+}
+
+/*
+ * Shimmer: a band of light sweeping left to right across text while the agent works.
+ * --sh-base is the resting text colour, --sh-hi the colour of the band.
+ */
+.shimmer {
+	--sh-base: var(--text-faint);
+	--sh-hi: var(--text);
+	color: transparent;
+	/* the band rides on top of a solid base layer, so text is never uncovered when the band is off to one side */
+	background-image:
+		linear-gradient(100deg, transparent 0%, transparent 40%, var(--sh-hi) 50%, transparent 60%, transparent 100%),
+		linear-gradient(var(--sh-base), var(--sh-base));
+	background-size:
+		260% 100%,
+		100% 100%;
+	background-repeat: no-repeat;
+	-webkit-background-clip: text;
+	background-clip: text;
+	animation: shimmer 2.1s linear infinite;
+}
+@keyframes shimmer {
+	from {
+		background-position:
+			130% 0,
+			0 0;
+	}
+	to {
+		background-position:
+			-30% 0,
+			0 0;
+	}
+}
+
+/* Loading placeholder: a light band sweeps across a block while its content loads (sidebar, transcript). */
+.skeleton-bar {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--radius);
+	background: var(--bg-elev);
+}
+.skeleton-bar::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, var(--bg-hover), transparent);
+	transform: translateX(-100%);
+	animation: skeleton-sweep 1.4s linear infinite;
+}
+@keyframes skeleton-sweep {
+	to {
+		transform: translateX(100%);
+	}
+}
+
+/*
+ * Working glow: the outline of a box breathes softly in the thinking colour (--lv) while the agent works.
+ * Used on the user's prompt bubble and the composer box. --glow-base is the resting border colour.
+ */
+.glow-working {
+	--glow: var(--lv, var(--text-dim));
+	--glow-base: var(--border);
+	animation: glow-breathe 2.4s ease-in-out infinite;
+}
+/* extra specificity so it wins over the scoped `.bubble` / `.box` border rules (also the resting look when motion is reduced) */
+html .glow-working.glow-working {
+	border-color: color-mix(in srgb, var(--glow) 55%, var(--glow-base));
+}
+@keyframes glow-breathe {
+	0%,
+	100% {
+		border-color: color-mix(in srgb, var(--glow) 30%, var(--glow-base));
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--glow) 0%, transparent);
+	}
+	50% {
+		border-color: color-mix(in srgb, var(--glow) 70%, var(--glow-base));
+		box-shadow: 0 0 14px 0 color-mix(in srgb, var(--glow) 22%, transparent);
+	}
+}
+
+/* Tool badge: a tinted pill (icon + label) like the thinking badge. --th is the hue; each kind of tool sets its own. */
+.tbadge {
+	--th: 265;
+	--tb-fg: oklch(0.84 0.11 var(--th));
+	--tb-bg: oklch(0.7 0.12 var(--th) / 0.16);
+	--tb-bd: oklch(0.75 0.12 var(--th) / 0.3);
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	max-width: 100%;
+	height: 24px;
+	padding: 0 10px 0 7px;
+	border: 1px solid var(--tb-bd);
+	border-radius: 999px;
+	background: var(--tb-bg);
+	color: var(--tb-fg);
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	white-space: nowrap;
+}
+:root[data-theme="light"] .tbadge {
+	--tb-fg: oklch(0.45 0.14 var(--th));
+	--tb-bg: oklch(0.65 0.14 var(--th) / 0.12);
+	--tb-bd: oklch(0.6 0.14 var(--th) / 0.3);
+}
+.tbadge svg {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	stroke: currentColor;
+	fill: none;
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+/* no label next to the icon: centre the icon in the pill instead of leaving it left-aligned */
+.tbadge.bare {
+	justify-content: center;
+	padding: 0 10px;
+}
+.tbadge .tb-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* shimmer clips its gradient to the text, so it goes on the label only, tinted with the badge colour */
+.tbadge .tb-label.shimmer {
+	--sh-base: var(--tb-fg);
+	--sh-hi: var(--text);
+}
+/* skills and sub-agents are the two that are not plain file/shell work: a dashed outline for skills, a solid fill for agents */
+.tbadge.skill {
+	border-style: dashed;
+}
+.tbadge.subagent {
+	background: oklch(0.7 0.14 var(--th) / 0.26);
+	box-shadow: 0 0 0 3px oklch(0.7 0.14 var(--th) / 0.08);
+}
+
+/* Window hidden (set in main.ts): looping animations stop so they do not burn CPU in the background. */
+html.page-hidden .spinner,
+html.page-hidden .shimmer,
+html.page-hidden .skeleton-bar::after,
+html.page-hidden .sdot.checking,
+html.page-hidden .prompt-line .cursor,
+html.page-hidden .glow-working {
+	animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ripple {
+		display: none;
+	}
+	.shimmer {
+		animation: none;
+		color: var(--sh-base);
+		background-image: none;
+	}
+	.glow-working {
+		animation: none;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* A session is being carried (lib/dnd.svelte.ts): no text selection, no stray cursors, no pull-to-refresh or overscroll */
+html.dnd,
+html.dnd * {
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+	cursor: grabbing !important;
+}
+html.dnd {
+	overscroll-behavior: none;
+}

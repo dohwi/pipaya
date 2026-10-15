@@ -1,0 +1,117 @@
+<script lang="ts">
+	import { t } from "../lib/i18n";
+	import { updater } from "../lib/updater.svelte";
+	import { notificationPlatform } from "../lib/notifications";
+	import Icon from "./Icon.svelte";
+	import Modal from "./Modal.svelte";
+
+	const android = notificationPlatform() === "android";
+	const downloading = $derived(updater.phase === "downloading" || updater.phase === "ready");
+	const allowing = $derived(updater.phase === "ready-install");
+	const percent = $derived(Math.round(updater.progress * 100));
+	// while downloading, a click outside or Esc must not hide the only sign that something is being installed
+	const closable = $derived(!downloading);
+</script>
+
+{#if updater.visible}
+	<Modal onclose={() => updater.dismiss()} dismissible={closable} label={t("업데이트")} live="polite" width="360px" gutter="32px" layer={4} sheet={false}>
+	<div class="card">
+		<div class="mark"><Icon name="download" /></div>
+		<h2>
+			{#if allowing}{t("설치를 허용해 주세요")}
+			{:else if updater.phase === "ready"}{t("재시작하는 중…")}
+			{:else if downloading}{t("업데이트를 내려받는 중…")}
+			{:else}{t("새 버전을 사용할 수 있습니다")}{/if}
+		</h2>
+		<p class="ver">
+			{#if updater.current}<span class="mono">{updater.current}</span><span class="arrow" aria-hidden="true">→</span>{/if}
+			<b class="mono">{updater.version}</b>
+		</p>
+		{#if allowing}
+			<p class="note">{t("설정에서 이 앱의 설치를 허용하고 돌아오면 설치 화면이 이어서 열립니다.")}</p>
+			<div class="actions"><button class="btn" onclick={() => updater.dismiss()}>{t("나중에")}</button></div>
+		{:else if downloading}
+			<progress class="bar" max="100" value={updater.progress ? percent : undefined} aria-label={t("업데이트 진행률")}></progress>
+			{#if updater.phase === "downloading" && updater.progress}<p class="pct">{percent}%</p>{/if}
+		{:else}
+			<p class="note">{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}</p>
+			<div class="actions">
+				<button class="btn" onclick={() => updater.dismiss()}>{t("나중에")}</button>
+				<button class="btn primary" onclick={() => updater.install()}>{t("업데이트")}</button>
+			</div>
+		{/if}
+	</div>
+	</Modal>
+{/if}
+
+<style>
+	/* same shape as the server-link card: a small centred dialog above everything else */
+	.card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		padding: 30px 24px 24px;
+		text-align: center;
+	}
+	.mark {
+		width: 64px;
+		height: 64px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius);
+		border: 1px solid var(--ok);
+		background: var(--bg);
+		color: var(--ok);
+	}
+	.mark :global(svg) {
+		width: 28px;
+		height: 28px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	h2 {
+		margin: 4px 0 0;
+		font-size: var(--fs-xl);
+	}
+	.ver {
+		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: var(--fs-md);
+		color: var(--text-dim);
+	}
+	.ver b {
+		color: var(--text);
+	}
+	.arrow {
+		color: var(--text-faint);
+	}
+	.note {
+		margin: 2px 0 6px;
+		font-size: var(--fs-sm);
+		line-height: 1.55;
+		color: var(--text-faint);
+		word-break: keep-all;
+	}
+	.actions {
+		display: flex;
+		gap: 8px;
+		justify-content: center;
+	}
+	.bar {
+		width: 100%;
+		height: 6px;
+		margin-top: 6px;
+	}
+	.pct {
+		margin: 0;
+		font-size: var(--fs-sm);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+</style>

@@ -1,0 +1,469 @@
+name: Client release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - ".github/workflows/client-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never interrupt a publish midway. While it runs, only the newest pending run is kept.
+concurrency:
+  group: client-release
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.3.14"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+        working-directory: client
+      - run: bun run check && bun run test && bun run build
+        working-directory: client
+
+  windows:
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: client/src-tauri -> target
+      - run: bun install --frozen-lockfile
+      - name: Set rolling build version
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          number = int(os.environ["GITHUB_RUN_NUMBER"])
+          if not 1 <= number <= 65535:
+              raise SystemExit("Build number exceeds the Windows version limit")
+          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps({"version": f"0.1.{number}", "bundle": {"createUpdaterArtifacts": True}}))
+          PY
+      - name: Build Windows x64 installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run tauri build --ci --bundles nsis --config src-tauri/tauri.release.conf.json -- --locked
+      - name: Collect installer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          files = list(Path("src-tauri/target/release/bundle/nsis").glob("*.exe"))
+          if len(files) != 1:
+              raise SystemExit(f"Expected one installer, got {files}")
+          Path("release-assets").mkdir()
+          sig = Path(str(files[0]) + ".sig")
+          if not sig.is_file() or not sig.read_text().strip():
+              raise SystemExit("Missing updater signature for the Windows installer")
+          shutil.copyfile(files[0], "release-assets/harness-windows-x64-setup.exe")
+          shutil.copyfile(sig, "release-assets/harness-windows-x64-setup.exe.sig")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release
+          path: client/release-assets/harness-windows-x64-setup.exe*
+          if-no-files-found: error
+          retention-days: 3
+
+  macos:
+    needs: validate
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: client/src-tauri -> target
+          key: macos-arm64
+      - run: bun install --frozen-lockfile
+      - name: Set rolling build version and ad-hoc signing
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          number = int(os.environ["GITHUB_RUN_NUMBER"])
+          config = {"version": f"0.1.{number}", "bundle": {"createUpdaterArtifacts": True, "macOS": {"signingIdentity": "-"}}}
+          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps(config))
+          PY
+      - name: Build Apple Silicon DMG and update bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run tauri build --ci --target aarch64-apple-darwin --bundles dmg,app --config src-tauri/tauri.release.conf.json -- --locked
+      - name: Verify ARM64 app, signature, and disk image
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil, subprocess, tempfile
+          bundle = Path("src-tauri/target/aarch64-apple-darwin/release/bundle")
+          files = list((bundle / "dmg").glob("*.dmg"))
+          if len(files) != 1:
+              raise SystemExit(f"Expected one DMG, got {files}")
+          subprocess.run(["hdiutil", "verify", str(files[0])], check=True)
+          # Tauri removes the staging .app when only DMG is requested.
+          # Verify the app inside the actual downloadable disk image instead.
+          with tempfile.TemporaryDirectory() as mount:
+              subprocess.run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mount, str(files[0])], check=True)
+              try:
+                  app = Path(mount) / "pipaya.app"
+                  binary = app / "Contents/MacOS/pipaya"
+                  arch = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).strip()
+                  if arch != "arm64":
+                      raise SystemExit(f"Expected Apple Silicon-only binary, got {arch}")
+                  subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)
+              finally:
+                  subprocess.run(["hdiutil", "detach", mount], check=True)
+          Path("release-assets").mkdir()
+          shutil.copyfile(files[0], "release-assets/harness-macos-arm64.dmg")
+          update = list((bundle / "macos").glob("*.app.tar.gz"))
+          if len(update) != 1 or not Path(str(update[0]) + ".sig").read_text().strip():
+              raise SystemExit(f"Expected one signed macOS update bundle, got {update}")
+          shutil.copyfile(update[0], "release-assets/harness-macos-arm64.app.tar.gz")
+          shutil.copyfile(str(update[0]) + ".sig", "release-assets/harness-macos-arm64.app.tar.gz.sig")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-release
+          path: client/release-assets/harness-macos-arm64.*
+          if-no-files-found: error
+          retention-days: 3
+
+  ios:
+    needs: validate
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: client/src-tauri -> target
+          key: ios-arm64
+      - name: Ensure iOS project tools are installed
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          command -v pod >/dev/null || brew install cocoapods
+      - run: bun install --frozen-lockfile
+      - name: Set rolling build version
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          number = int(os.environ["GITHUB_RUN_NUMBER"])
+          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps({"version": f"0.1.{number}"}))
+          PY
+      - name: Initialize iOS project
+        run: |
+          bun run tauri ios init --ci --skip-targets-install
+          bun run ios:prepare
+      - name: Build unsigned iPhone ARM64 IPA
+        run: bun run tauri ios build --ci --no-sign --config src-tauri/tauri.release.conf.json -- --locked
+      - name: Verify device IPA and collect package
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib, shutil, subprocess, tempfile, zipfile
+          files = list(Path("src-tauri/gen/apple").rglob("*.ipa"))
+          if len(files) != 1:
+              raise SystemExit(f"Expected one unsigned IPA, got {files}")
+          with zipfile.ZipFile(files[0]) as package:
+              if package.testzip() is not None:
+                  raise SystemExit("Corrupt IPA archive")
+              with tempfile.TemporaryDirectory() as directory:
+                  package.extractall(directory)
+                  apps = list((Path(directory) / "Payload").glob("*.app"))
+                  if len(apps) != 1:
+                      raise SystemExit("Expected one app in IPA Payload")
+                  app = apps[0]
+                  info = plistlib.loads((app / "Info.plist").read_bytes())
+                  if info["CFBundleIdentifier"] != "pipaya.app":
+                      raise SystemExit("Unexpected app identifier")
+                  if info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
+                      raise SystemExit("IPA is not an iPhone device build")
+                  binary = app / info["CFBundleExecutable"]
+                  arch = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).strip()
+                  if arch != "arm64":
+                      raise SystemExit(f"Expected device ARM64 binary, got {arch}")
+                  if (app / "embedded.mobileprovision").exists():
+                      raise SystemExit("Unsigned IPA must not claim provisioning")
+                  if not info.get("NSAppTransportSecurity", {}).get("NSAllowsArbitraryLoads"):
+                      raise SystemExit("User-configured HTTP endpoints are not enabled")
+          Path("release-assets").mkdir()
+          shutil.copyfile(files[0], "release-assets/harness-ios-arm64-unsigned.ipa")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-release
+          path: client/release-assets/*.ipa
+          if-no-files-found: error
+          retention-days: 3
+
+  android:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: client
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          # The action's default includes the removed legacy "tools" package.
+          packages: platform-tools
+      - name: Install Android SDK and NDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.13846066"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.13846066" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/harness-android-release.jks" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: client/src-tauri -> target
+          key: android-arm64
+      - run: bun install --frozen-lockfile
+      - name: Restore persistent signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          python - <<'PY'
+          import base64, os
+          from pathlib import Path
+          names = ["ANDROID_KEYSTORE_BASE64", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD"]
+          for name in names:
+              if not os.environ.get(name):
+                  raise SystemExit(f"Missing GitHub Secret: {name}")
+          path = Path(os.environ["ANDROID_KEYSTORE_PATH"])
+          path.write_bytes(base64.b64decode(os.environ["ANDROID_KEYSTORE_BASE64"], validate=True))
+          path.chmod(0o600)
+          PY
+      - name: Restore Firebase configuration for mobile push
+        env:
+          FIREBASE_CONFIG: ${{ secrets.HARNESS_FIREBASE_ANDROID_CONFIG }}
+        run: |
+          # Without it the app still builds and runs, but the phone never gets a push token.
+          if [ -z "$FIREBASE_CONFIG" ]; then
+            echo "::warning::HARNESS_FIREBASE_ANDROID_CONFIG is not set: this APK cannot receive mobile push notifications"
+          else
+            umask 077
+            printf '%s' "$FIREBASE_CONFIG" > "$RUNNER_TEMP/google-services.json"
+            echo "HARNESS_FIREBASE_ANDROID_CONFIG=$RUNNER_TEMP/google-services.json" >> "$GITHUB_ENV"
+          fi
+      - name: Initialize Android project and configure release
+        run: |
+          bun run tauri android init --ci --skip-targets-install
+          bun run android:prepare
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          number = int(os.environ["GITHUB_RUN_NUMBER"])
+          config = {"version": f"0.1.{number}", "bundle": {"android": {"versionCode": 100000 + number}}}
+          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps(config))
+          PY
+      - name: Build signed Android ARM64 APK
+        run: bun run tauri android build --ci --apk --target aarch64 --config src-tauri/tauri.release.conf.json -- --locked
+      - name: Verify signature and collect APK
+        run: |
+          python - <<'PY'
+          import os, shutil, subprocess
+          from pathlib import Path
+          files = list(Path("src-tauri/gen/android/app/build/outputs/apk").rglob("*.apk"))
+          files = [p for p in files if "release" in p.parts and "unsigned" not in p.name]
+          if len(files) != 1:
+              raise SystemExit(f"Expected one signed release APK, got {files}")
+          tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/37.0.0"
+          subprocess.run([str(tools / "apksigner"), "verify", "--verbose", str(files[0])], check=True)
+          Path("release-assets").mkdir()
+          shutil.copyfile(files[0], "release-assets/harness-android-arm64.apk")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release
+          path: client/release-assets/*.apk
+          if-no-files-found: error
+          retention-days: 3
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$ANDROID_KEYSTORE_PATH"
+
+  publish:
+    needs: [windows, macos, ios, android]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "*-release"
+          merge-multiple: true
+          path: release-assets
+      - name: Generate checksums
+        working-directory: release-assets
+        run: sha256sum harness-windows-x64-setup.exe harness-macos-arm64.dmg harness-ios-arm64-unsigned.ipa harness-android-arm64.apk > SHA256SUMS.txt
+      - name: Generate updater manifest
+        working-directory: release-assets
+        env:
+          NUMBER: ${{ github.run_number }}
+          BASE: https://github.com/${{ github.repository }}/releases/download/latest
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          def sig(name):
+              text = Path(name + ".sig").read_text().strip()
+              if not text:
+                  raise SystemExit(f"Empty signature: {name}.sig")
+              return text
+          base = os.environ["BASE"]
+          platforms = {
+              "windows-x86_64": {"signature": sig("harness-windows-x64-setup.exe"), "url": f"{base}/harness-windows-x64-setup.exe"},
+              "darwin-aarch64": {"signature": sig("harness-macos-arm64.app.tar.gz"), "url": f"{base}/harness-macos-arm64.app.tar.gz"},
+          }
+          manifest = {"version": f"0.1.{os.environ['NUMBER']}", "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": platforms}
+          Path("latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+      - name: Update the single rolling release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+            const main = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            if (main.data.object.sha !== sha) {
+              core.notice('A newer commit is on main; skipping this outdated build.');
+              return;
+            }
+            const tag = 'latest';
+            const names = ['harness-windows-x64-setup.exe', 'harness-windows-x64-setup.exe.sig', 'harness-macos-arm64.dmg', 'harness-macos-arm64.app.tar.gz', 'harness-macos-arm64.app.tar.gz.sig', 'harness-ios-arm64-unsigned.ipa', 'harness-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
+            // Validate every payload before touching the existing release.
+            const payloads = names.map(name => ({ name, data: fs.readFileSync(`release-assets/${name}`) }));
+            if (payloads.some(asset => asset.data.length === 0)) throw new Error('Empty release asset');
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              'Rolling client build from `main`. Previous assets are replaced, not archived.',
+              '',
+              `Commit: ${sha}`,
+              `Version: 0.1.${process.env.GITHUB_RUN_NUMBER}`,
+              `Build: [GitHub Actions](${run})`,
+              '',
+              '- Windows x64: `harness-windows-x64-setup.exe` (unsigned installer; SmartScreen may warn).',
+              '- macOS Apple Silicon: `harness-macos-arm64.dmg` (ad-hoc signed, not notarized; Gatekeeper may block the first launch).',
+              '- iOS ARM64: `harness-ios-arm64-unsigned.ipa` (UNSIGNED; requires re-signing and provisioning, not directly installable or TestFlight-ready).',
+              '- Android ARM64: `harness-android-arm64.apk` (release APK signed with the persistent project key).',
+              '- macOS: copy the app to Applications, then use System Settings → Privacy & Security → Open Anyway if blocked (only for a trusted download).',
+              '- Verify downloads using `SHA256SUMS.txt`.',
+              '',
+              'The server is not bundled. Enter your server URL and authentication token in the app.',
+              'Windows and macOS apps update themselves (Settings → General → App updates); Android detects new builds and opens the APK download. iOS and unsigned installs update by reinstalling.'
+            ].join('\n');
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (!release) {
+              // GitHub creates the lightweight tag along with the first release.
+              release = (await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag, target_commitish: sha,
+                name: 'Latest client build', body, draft: true, prerelease: false
+              })).data;
+            }
+            // Stage new files under unique names first. A failed upload preserves old assets.
+            const staged = [];
+            for (const asset of payloads) {
+              const result = await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id: release.id,
+                name: `pending-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-${asset.name}`,
+                data: asset.data, headers: { 'content-type': 'application/octet-stream' }
+              });
+              staged.push({ id: result.data.id, name: asset.name });
+            }
+            const { data: current } = await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: release.id, per_page: 100
+            });
+            for (const asset of staged) {
+              for (const old of current.filter(item => item.name === asset.name)) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
+              }
+              await github.rest.repos.updateReleaseAsset({ owner, repo, asset_id: asset.id, name: asset.name });
+            }
+            try {
+              await github.rest.git.updateRef({ owner, repo, ref: `tags/${tag}`, sha, force: true });
+            } catch (error) {
+              if (error.status !== 404 && error.status !== 422) throw error;
+              // A new draft release may not create its tag until it is published.
+              await github.rest.git.createRef({ owner, repo, ref: `refs/tags/${tag}`, sha });
+            }
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id: release.id, name: 'Latest client build', body,
+              draft: false, prerelease: false, make_latest: 'true'
+            });
+            // Remove leftovers from interrupted uploads, but never touch other releases.
+            const keep = new Set(staged.map(asset => asset.id));
+            for (const asset of current) {
+              if (!keep.has(asset.id) && !names.includes(asset.name)) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+              }
+            }
+            core.notice(`Published ${context.serverUrl}/${owner}/${repo}/releases/tag/latest`);
