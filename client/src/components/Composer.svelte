@@ -603,7 +603,7 @@
 			rows="1"
 			placeholder={promptHint ? "" : compacting ? t("컨텍스트 압축 중 · 메시지는 완료 후 보낼 수 있습니다") : running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
-			enterkeyhint="send"
+			enterkeyhint="enter"
 			autocapitalize="sentences"
 			spellcheck="false"
 		></textarea>

@@ -102,6 +102,24 @@ function untrack(layer: Back) {
 	sync();
 }
 
+/** A non-modal surface (the phone sidebar drawer) that the back button should close. Returns the release function. */
+export function backLayer(opts: { onclose: () => void }): () => void {
+	const layer: Back = { opts, entry: false };
+	track(layer);
+	return () => untrack(layer);
+}
+
+/**
+ * The native back button (Tauri Android does not turn it into a popstate once it is handled natively):
+ * closes the top open modal / drawer. Returns false when there is nothing to close.
+ */
+export function handleBack(): boolean {
+	const top = backs[backs.length - 1];
+	if (!top) return false;
+	if (top.opts.dismissible !== false) top.opts.onclose?.();
+	return true;
+}
+
 const FOCUSABLE =
 	'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 

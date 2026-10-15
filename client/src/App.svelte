@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
+	import { backLayer, handleBack } from "./lib/dialog";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/Icon.svelte";
 	import Sidebar from "./components/Sidebar.svelte";
@@ -73,6 +74,30 @@
 	});
 
 	onMount(() => guardWindowClose(() => app.requestClose()));
+
+	// Back button / swipe: close the top modal, else the phone drawer, before leaving the app.
+	$effect(() => {
+		if (!viewport.narrow || !app.sidebar.open) return;
+		return backLayer({ onclose: () => (app.sidebar.open = false) });
+	});
+	onMount(() => {
+		if (!mobile) return;
+		let off: (() => void) | undefined;
+		let gone = false;
+		// plugin-process is desktop only; the app module's exit() finishes the Android activity (core:app:allow-exit).
+		void import("@tauri-apps/api/app").then(async ({ onBackButtonPress, exit }) => {
+			const l = await onBackButtonPress(async () => {
+				if (handleBack()) return;
+				await exit(0);
+			});
+			if (gone) void l.unregister();
+			else off = () => void l.unregister();
+		}).catch(() => {});
+		return () => {
+			gone = true;
+			off?.();
+		};
+	});
 
 	onMount(() => {
 		armSound();
