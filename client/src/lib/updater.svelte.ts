@@ -15,9 +15,6 @@ import { LocalizedError, t } from "./i18n";
 type Phase = "idle" | "checking" | "available" | "downloading" | "ready" | "ready-install" | "error";
 
 const AUTO = "pipaya.update.auto"; // "0" turns the startup check off
-const DISMISSED = "pipaya.update.dismissed"; // the version the user closed the banner for
-const LAST = "pipaya.update.last"; // ms timestamp of the last check
-const INTERVAL = 6 * 60 * 60 * 1000;
 
 type Mode = "desktop" | "android" | "none";
 function mode(): Mode {
@@ -32,8 +29,8 @@ class Updater {
 	current = $state("");
 	progress = $state(0); // 0..1, 0 while the size is unknown
 	error = $state("");
-	/** Hidden by "later" for this version; checking again for a newer one shows it again. */
-	dismissed = $state(localStorage.getItem(DISMISSED) ?? "");
+	/** Hidden by "later" until the app is started again (not remembered), so every launch reminds the user. */
+	dismissed = $state("");
 	auto = $state(localStorage.getItem(AUTO) !== "0");
 	supported = mode() !== "none";
 
@@ -52,14 +49,11 @@ class Updater {
 
 	dismiss() {
 		this.dismissed = this.version;
-		localStorage.setItem(DISMISSED, this.version);
 	}
 
-	/** Called at startup: respects the setting and does not check more than every few hours. */
+	/** Called at every launch: respects the setting; a newer version opens the update dialog. */
 	autoCheck() {
 		if (!this.supported || !this.auto) return;
-		const last = Number(localStorage.getItem(LAST) ?? 0);
-		if (Date.now() - last < INTERVAL) return;
 		void this.check(false);
 	}
 
@@ -70,7 +64,6 @@ class Updater {
 		this.error = "";
 		if (manual) this.phase = "checking";
 		try {
-			localStorage.setItem(LAST, String(Date.now()));
 			const { getVersion } = await import("@tauri-apps/api/app");
 			this.current = await getVersion();
 			if (mode() === "desktop") {

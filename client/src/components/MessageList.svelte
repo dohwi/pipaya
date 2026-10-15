@@ -14,105 +14,27 @@
 	let { chat }: { chat: ChatState } = $props();
 
 	let scroller: HTMLDivElement | undefined = $state();
-	let stuck = $state(true);
 	let showJump = $state(false);
 
+	/** Show the jump button once the view is further than this from the bottom. */
 	const NEAR = 80;
-	const atBottom = () => !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR;
 
-	let lastTop = 0;
-	let raf = 0;
-
-	/** The scrollbar is being dragged (pointer pressed on the scroller itself, not on its content). */
-	let dragging = false;
-	/** A smooth scroll to the bottom (jump button) is in flight. */
-	let smoothing = false;
-
+	/** The list never follows the stream by itself: it only moves to the bottom when asked (see below). */
 	function onScroll() {
 		if (!scroller) return;
-		const top = scroller.scrollTop;
-		if (atBottom()) {
-			stuck = true;
-			smoothing = false;
-		} else if (smoothing) {
-			// the jump button's smooth scroll is on its way down
-		} else if (dragging && top < lastTop - 1) {
-			stuck = false;
-		} else if (stuck) {
-			// Not the user: the browser moved us (off-screen turns settling their real height via content-visibility,
-			// scroll anchoring, scrollHeight shrinking and clamping scrollTop). Stay pinned instead of reading it as "scrolled up".
-			toBottom();
-		}
-		lastTop = top;
-		showJump = !stuck;
-	}
-
-	/** Only real user intent (wheel/touch/keys/scrollbar drag) unpins before the browser even moves, so we never fight their scroll. */
-	function release() {
-		smoothing = false;
-		if (stuck) {
-			stuck = false;
-			showJump = true;
-		}
-	}
-	function onWheel(e: WheelEvent) {
-		if (e.deltaY < 0) release();
-	}
-	let touchY = 0;
-	function onTouchStart(e: TouchEvent) {
-		touchY = e.touches[0]?.clientY ?? 0;
-	}
-	function onTouchMove(e: TouchEvent) {
-		if ((e.touches[0]?.clientY ?? 0) > touchY) release(); // finger moving down = content going up
-	}
-	function onKey(e: KeyboardEvent) {
-		if (["ArrowUp", "PageUp", "Home"].includes(e.key) || (e.key === " " && e.shiftKey)) release();
-	}
-	function onPointerDown(e: PointerEvent) {
-		if (e.target === scroller) dragging = true;
-	}
-	function onPointerUp() {
-		dragging = false;
+		showJump = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >= NEAR;
 	}
 
 	export function toBottom(smooth = false) {
 		if (!scroller) return;
-		stuck = true;
-		showJump = false;
-		if (smooth) {
-			smoothing = true;
-			scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
-			return;
-		}
-		// Coalesce bursts (token + resize + effect) into one write per frame.
-		if (raf) return;
-		raf = requestAnimationFrame(() => {
-			raf = 0;
-			if (!scroller || !stuck) return;
-			scroller.scrollTop = scroller.scrollHeight;
-			lastTop = scroller.scrollTop;
-		});
+		scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+		if (!smooth) showJump = false;
 	}
 
-	// Follow the stream while the user is parked at the bottom; stop the moment they scroll up.
-	$effect(() => {
-		chat.items.length;
-		const last = chat.items[chat.items.length - 1];
-		if (last?.kind === "assistant") {
-			last.blocks.length;
-			const b = last.blocks[last.blocks.length - 1];
-			if (b && "text" in b) b.text;
-		}
-		Object.keys(chat.tools).length;
-		if (stuck) void tick().then(() => toBottom());
-	});
-
-	// New conversation: jump to the end without animation.
+	// A conversation was opened and loaded: start at its end.
 	$effect(() => {
 		chat.id;
-		chat.ready;
-		stuck = true;
-		void tick().then(() => toBottom());
+		if (chat.ready) void tick().then(() => toBottom());
 	});
 
 	// The user just sent something (prompt / steer / queue): go to the bottom once, even if they had scrolled up.
@@ -121,40 +43,7 @@
 		const n = chat.bottomRequest;
 		if (n === seenRequest) return;
 		seenRequest = n;
-		// Pin right away; from here on the ResizeObserver keeps following any height change until the user scrolls up.
-		stuck = true;
-		showJump = false;
-		void tick().then(() => {
-			if (!scroller) return;
-			scroller.scrollTop = scroller.scrollHeight;
-			lastTop = scroller.scrollTop;
-		});
-	});
-
-	// The answer is complete: settle at the bottom, unless the user is reading further up.
-	let wasRunning = untrack(() => chat.running);
-	$effect(() => {
-		const r = chat.running;
-		if (wasRunning && !r && untrack(() => stuck)) {
-			void tick().then(() => {
-				toBottom();
-				requestAnimationFrame(() => toBottom()); // the final message re-renders (work box collapses etc.)
-			});
-		}
-		wasRunning = r;
-	});
-
-	// Content can grow after layout (images, tool cards opening, fonts), and the viewport itself shrinks when the
-	// input grows (queued chips, multi-line text); keep pinned in both cases.
-	let content: HTMLDivElement | undefined = $state();
-	$effect(() => {
-		if (!content || !scroller) return;
-		const ro = new ResizeObserver(() => {
-			if (stuck) toBottom();
-		});
-		ro.observe(content);
-		ro.observe(scroller);
-		return () => ro.disconnect();
+		void tick().then(() => toBottom());
 	});
 
 	/** The run has started but the model has not produced anything yet: nothing to attach the status to, so show it here */
@@ -193,20 +82,13 @@
 
 </script>
 
-<svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} />
-
 <div
 	class="scroller"
 	bind:this={scroller}
 	onscroll={onScroll}
-	onwheel={onWheel}
-	ontouchstart={onTouchStart}
-	ontouchmove={onTouchMove}
-	onkeydown={onKey}
-	onpointerdown={onPointerDown}
 	role="presentation"
 >
-	<div class="inner" bind:this={content}>
+	<div class="inner">
 		{#if !chat.ready && !chat.loadError}
 			<div class="skeleton" aria-busy="true">
 				<div class="sk skeleton-bar r"></div>
