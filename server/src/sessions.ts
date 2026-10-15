@@ -16,7 +16,7 @@ import type { ModelRegistry } from "./models.ts";
 import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 
@@ -652,14 +652,23 @@ export class SessionManager {
 		return ctx;
 	}
 
-	/** Approval policy lives here so it applies to every client. Reads policy fresh from the DB. */
+	/**
+	 * Approval policy lives here so it applies to every client. Reads policy fresh from the DB.
+	 *  - auto: nothing waits.
+	 *  - ask: a mutating tool waits for the user only when it reaches outside the session's working directory
+	 *    (leavesProject). A helper with write rights (`delegate`) cannot be judged ahead of time, so it waits too.
+	 *  - readonly: mutating tools are blocked.
+	 */
 	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
-		const policy = this.store.get(sessionId)?.approval ?? "ask";
-		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, this.store.get(sessionId)?.cwd ?? "");
-		if (!(isMutating(toolName, this.toolDefs()) || delegated) || policy === "auto") return undefined;
+		const rec = this.store.get(sessionId);
+		const policy = rec?.approval ?? "ask";
+		if (policy === "auto") return undefined;
+		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, rec?.cwd ?? "");
+		if (!(isMutating(toolName, this.toolDefs()) || delegated)) return undefined;
 		if (policy === "readonly") {
 			return { block: true, reason: `"${toolName}" is disabled: this session is read-only` };
 		}
+		if (!delegated && !leavesProject(toolName, args, rec?.cwd ?? this.cfg.workspaceRoot)) return undefined;
 		const decision = await this.approvals.request({ sessionId, toolCallId, toolName, args }, signal);
 		return decision.approved ? undefined : { block: true, reason: decision.reason ?? `The user denied "${toolName}"` };
 	}

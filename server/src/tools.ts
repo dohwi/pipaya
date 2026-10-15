@@ -1,5 +1,6 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
@@ -13,7 +14,7 @@ const KILL_GRACE_MS = 2000;
 export interface ToolDef {
 	name: string;
 	description: string;
-	/** Mutating tools are blocked in `readonly` mode and need approval in `ask` mode. */
+	/** Mutating tools are blocked in `readonly` mode and, in `ask` mode, wait for approval when they reach outside the project (see leavesProject). */
 	mutating: boolean;
 	/** `readRoots`: extra absolute directories the read tool may open (skill folders). */
 	create(cwd: string, readRoots?: string[], ctx?: ToolContext): AgentTool<any>;
@@ -96,6 +97,61 @@ function realWithTail(abs: string): string {
 /** Whether `target` is `root` or lies inside it, judged by real location so a symlink cannot lead out. */
 export function isInside(root: string, target: string): boolean {
 	return !escapes(root, target) && !escapes(realWithTail(root), realWithTail(target));
+}
+
+/** Paths a command may name without touching anything: the standard streams and the bit bucket. */
+const HARMLESS_DEVICES = new Set(["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty"]);
+const URL_IN_COMMAND = /[a-z][a-z0-9+.-]*:\/\/[^\s'"`]*/gi;
+/** Where a shell command's words break: whitespace, operators, quotes, `=` (--out=/x) and `:` (PATH-style lists, host:/path). */
+const SHELL_WORD_BREAK = /[\s;|&<>()'"`=:,{}]+/;
+
+/** Whether anything real lies on the way to `abs`, not counting the filesystem root (every absolute word starts there). */
+function pointsAtSomething(abs: string): boolean {
+	for (let cur = abs; dirname(cur) !== cur; cur = dirname(cur)) if (existsSync(cur)) return true;
+	return dirname(abs) === abs; // the root itself is a real place
+}
+
+/**
+ * Does this shell command name a path outside `cwd`? Deliberately conservative, and deliberately lexical: it reads the
+ * words of the command, not what a script or a variable will expand to at run time.
+ *  - an absolute path, `~`, `$HOME`, or any word with a `..` segment counts when it resolves outside `cwd` (by real location);
+ *  - another `$VAR/...` prefix cannot be resolved, so it counts;
+ *  - URLs are ignored, and so is an absolute word that points at nothing real (a sed pattern such as `/foo/d`, or `/api`).
+ * Not detected: command substitution, variables that hold a path by themselves, and what other programs do on their own.
+ */
+export function bashLeavesProject(cwd: string, command: string): boolean {
+	const home = homedir();
+	for (const raw of command.replace(URL_IN_COMMAND, " ").replace(/\$\{(\w+)\}/g, "$$$1").split(SHELL_WORD_BREAK)) {
+		if (!raw) continue;
+		let word = raw;
+		if (word === "~" || word.startsWith("~/")) word = home + word.slice(1);
+		else if (word.startsWith("~")) return true; // ~someone/...
+		else if (/^\$HOME(\/|$)/.test(word)) word = home + word.slice(5);
+		else if (/^\$PWD(\/|$)/.test(word)) word = cwd + word.slice(4);
+		else if (/^\$\w+\//.test(word)) return true;
+		const dotdot = word.split("/").includes("..");
+		if (!isAbsolute(word) && !dotdot) continue;
+		const abs = resolve(cwd, word);
+		if (HARMLESS_DEVICES.has(abs) || isInside(cwd, abs)) continue;
+		if (!dotdot && !pointsAtSomething(abs)) continue; // an absolute word that points at nothing real is a pattern, not a place
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Would running this tool call reach outside the session's working directory (the project)? `ask` mode only waits
+ * for approval then. write/edit: the target path. bash: see bashLeavesProject. A tool this server cannot judge
+ * (an extension's mutating tool) counts as reaching out.
+ */
+export function leavesProject(toolName: string, args: unknown, cwd: string): boolean {
+	const a = (args ?? {}) as { path?: unknown; command?: unknown };
+	if (toolName === "write" || toolName === "edit") {
+		if (typeof a.path !== "string") return true;
+		return !isInside(cwd, isAbsolute(a.path) ? resolve(a.path) : resolve(cwd, a.path));
+	}
+	if (toolName === "bash") return typeof a.command !== "string" || bashLeavesProject(cwd, a.command);
+	return true;
 }
 
 /**

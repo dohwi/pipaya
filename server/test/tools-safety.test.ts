@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildChildEnv, safePath, safeReadPath } from "../src/tools.ts";
+import { bashLeavesProject, buildChildEnv, leavesProject, safePath, safeReadPath } from "../src/tools.ts";
 
 let root: string;
 let cwd: string;
@@ -66,5 +66,52 @@ describe("buildChildEnv", () => {
 		expect(env.AWS_SECRET_ACCESS_KEY).toBe("s");
 		expect(env.PIPAYA_TOKEN).toBeUndefined();
 		expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBeUndefined();
+	});
+});
+
+describe("leavesProject (what `ask` mode confirms)", () => {
+	test("write/edit: judged by the target's real location", () => {
+		expect(leavesProject("write", { path: "sub/new.txt" }, cwd)).toBe(false);
+		expect(leavesProject("write", { path: join(cwd, "sub", "new.txt") }, cwd)).toBe(false);
+		expect(leavesProject("edit", { path: "../outside/secret.txt" }, cwd)).toBe(true);
+		expect(leavesProject("write", { path: join(outside, "x") }, cwd)).toBe(true);
+		expect(leavesProject("write", { path: "link-dir/x.txt" }, cwd)).toBe(true); // a link inside leads out
+		expect(leavesProject("edit", { path: "link-file" }, cwd)).toBe(true);
+		expect(leavesProject("write", {}, cwd)).toBe(true); // no path to judge
+	});
+	test("a tool the server cannot judge counts as reaching out", () => {
+		expect(leavesProject("some_extension_tool", { anything: 1 }, cwd)).toBe(true);
+	});
+});
+
+describe("bashLeavesProject", () => {
+	const inside = (c: string) => expect(bashLeavesProject(cwd, c), c).toBe(false);
+	const out = (c: string) => expect(bashLeavesProject(cwd, c), c).toBe(true);
+	test("commands that stay in the project", () => {
+		inside("ls -la");
+		inside("bun test && git status");
+		inside("echo hi > sub/out.txt");
+		inside(`cat ${join(cwd, "sub")}/a.txt`);
+		inside("curl -s https://example.com/../x | head");
+		inside("npm run build 2>/dev/null");
+		inside("sed -i '/foo/d' notes.txt");
+		inside("grep -rn 'a/b' .");
+	});
+	test("absolute paths, .., ~ and $HOME that resolve outside", () => {
+		out(`cat ${outside}/secret.txt`);
+		out("cat ../outside/secret.txt");
+		out("rm -rf /");
+		out("cat /etc/passwd");
+		out("ls ~");
+		out("cat ~/.ssh/id_rsa");
+		out("cat $HOME/.bashrc");
+		out("cat ${HOME}/.bashrc");
+		out("cp a.txt /tmp/x.txt");
+		out("tar -czf out.tgz --directory=/etc .");
+		out("cat $SOMEDIR/file");
+		out("echo hi > ../x");
+		out("(cd .. && ls)");
+		out("cd sub && ls .."); // `..` is read against the project root, not after the cd: the project's parent is outside
+		out("cat link-dir/secret.txt ../x");
 	});
 });

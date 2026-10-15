@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { ApprovalPolicy } from "../lib/types";
+	import type { ApprovalMode } from "../lib/types";
+	import { approvalMode } from "../lib/store-model";
 	import { paneIn } from "../lib/motion";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { rovingKeys } from "../lib/roving";
@@ -50,11 +51,11 @@
 		if (!server && current.server) tab = "general";
 	});
 
-	const approvals: { id: ApprovalPolicy; label: string; hint: string; tone?: "danger" | "warn" }[] = [
-		{ id: "ask", label: msg("확인", "approval"), hint: msg("파일 수정과 명령 실행 전에 확인합니다.") },
+	const approvals: { id: ApprovalMode; label: string; hint: string; tone?: "danger" | "warn" }[] = [
+		{ id: "ask", label: msg("프로젝트 밖만 확인", "approval"), hint: msg("프로젝트 폴더 밖의 파일을 고치거나, 밖의 경로를 건드리는 명령을 실행할 때만 확인합니다.") },
 		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다."), tone: "danger" },
-		{ id: "readonly", label: msg("읽기 전용", "approval"), hint: msg("변경을 일으키는 작업을 모두 막습니다.") },
 	];
+	const approval = $derived(approvalMode(app.draft.approval));
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
 		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "light", label: msg("라이트"), icon: "sun" },
@@ -134,9 +135,9 @@
 
 				<section>
 					<div class="mono-label">{t("도구 승인")}</div>
-					<Segmented variant="cards" label={t("도구 승인")} value={app.draft.approval} onchange={(id) => app.setDefaultApproval(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
-					<span class="hint" class:danger={approvals.find((a) => a.id === app.draft.approval)?.tone === "danger"}>
-						{t(approvals.find((a) => a.id === app.draft.approval)?.hint ?? "")}
+					<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => app.setApprovalMode(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
+					<span class="hint" class:danger={approvals.find((a) => a.id === approval)?.tone === "danger"}>
+						{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
 						{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
 					</span>
 				</section>

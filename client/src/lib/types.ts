@@ -10,8 +10,13 @@ export interface Group {
 }
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-/** auto: run everything. ask: mutating tools wait for approval. readonly: mutating tools are blocked. */
+/**
+ * What the server stores. auto: run everything. ask: a mutating tool waits for approval only when it reaches outside the
+ * session's working directory. readonly: mutating tools are blocked (API / PIPAYA_APPROVAL only; the apps do not offer it).
+ */
 export type ApprovalPolicy = "auto" | "ask" | "readonly";
+/** The two modes the apps offer. */
+export type ApprovalMode = "ask" | "auto";
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 /** What the server deletes by itself: sessions not used for `days` days (only closed ones when `onlyClosed`). */

@@ -103,7 +103,7 @@ function untrack(layer: Back) {
 }
 
 /** A non-modal surface (the phone sidebar drawer) that the back button should close. Returns the release function. */
-export function backLayer(opts: { onclose: () => void }): () => void {
+export function backLayer(opts: { onclose: () => void; dismissible?: boolean }): () => void {
 	const layer: Back = { opts, entry: false };
 	track(layer);
 	return () => untrack(layer);

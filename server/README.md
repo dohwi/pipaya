@@ -42,7 +42,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
-| `PIPAYA_APPROVAL` | `ask` | `auto`, `ask`, or `readonly` |
+| `PIPAYA_APPROVAL` | `ask` | `ask` (confirm only what reaches outside the session's working directory), `auto` (never ask), or `readonly` (block changes; API only, the apps no longer offer it) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see client/docs/notifications.md |

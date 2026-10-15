@@ -404,11 +404,18 @@ export const EVENT_TYPES = [
 
 export type ServerProbe = "online" | "offline" | "unauthorized";
 
+/**
+ * The server answered "no such route": it is older than this app and lacks the feature. (A missing *thing*, such as a
+ * deleted session, is also a not_found, but its message names the thing; only the unrouted fallback says "route".)
+ */
+export const isUnsupportedRoute = (e: unknown): boolean => e instanceof ApiError && e.status === 404 && e.code === "not_found" && e.message === "route not found";
+
 /** User-facing (Korean) text for any error thrown by the client. */
 export function errorText(e: unknown): string {
 	if (e instanceof ApiError) {
 		if (e.status === 0) return t("서버에 연결할 수 없습니다");
 		if (e.status === 401 || e.status === 403) return t("토큰이 거부되었습니다");
+		if (isUnsupportedRoute(e)) return t("이 서버는 아직 이 기능을 지원하지 않습니다. 서버를 업데이트하세요");
 		if (e.code === "not_found") return t("대상을 찾을 수 없습니다");
 		return e.message;
 	}

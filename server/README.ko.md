@@ -42,7 +42,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite 경로 |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
-| `PIPAYA_APPROVAL` | `ask` | `auto`, `ask`, `readonly` |
+| `PIPAYA_APPROVAL` | `ask` | `ask`(세션 작업 디렉터리 밖에 닿는 작업만 확인), `auto`(묻지 않음), `readonly`(변경 차단. API 전용이며 앱에서는 더 이상 고르지 않음) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |

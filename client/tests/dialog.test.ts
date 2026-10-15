@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { trapTab } from "../src/lib/dialog";
+import { backLayer, handleBack, trapTab } from "../src/lib/dialog";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
 type Fake = { name: string; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
@@ -65,5 +65,46 @@ describe("trapTab", () => {
 	test("other keys are ignored", () => {
 		const { root } = setup(["a"]);
 		expect(trapTab({ key: "Enter" } as KeyboardEvent, root)).toBe(false);
+	});
+});
+
+describe("handleBack (native back button)", () => {
+	const w = globalThis as unknown as { window?: unknown; history?: unknown };
+	const prev = { window: w.window, history: w.history };
+	afterEach(() => {
+		w.window = prev.window;
+		w.history = prev.history;
+	});
+	function fakeBrowser() {
+		w.window = { addEventListener: () => {} };
+		w.history = { state: null, pushState: () => {}, go: () => {} };
+	}
+
+	test("nothing open: returns false, so the app may exit", () => {
+		fakeBrowser();
+		expect(handleBack()).toBe(false);
+	});
+
+	test("closes only the top layer", () => {
+		fakeBrowser();
+		const closed: string[] = [];
+		const drawer = backLayer({ onclose: () => closed.push("drawer") });
+		const modal = backLayer({ onclose: () => closed.push("modal") });
+		expect(handleBack()).toBe(true);
+		expect(closed).toEqual(["modal"]);
+		modal(); // the modal unmounts after closing
+		expect(handleBack()).toBe(true);
+		expect(closed).toEqual(["modal", "drawer"]);
+		drawer();
+		expect(handleBack()).toBe(false);
+	});
+
+	test("a layer that cannot be dismissed swallows the press without closing or exiting", () => {
+		fakeBrowser();
+		let closed = 0;
+		const release = backLayer({ onclose: () => closed++, dismissible: false });
+		expect(handleBack()).toBe(true);
+		expect(closed).toBe(0);
+		release();
 	});
 });

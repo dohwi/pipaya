@@ -3,6 +3,7 @@ import {
   ApiError,
   describeConnectError,
   errorText,
+  isUnsupportedRoute,
   normalizeUrl,
   probeServer,
   verifyServer,
@@ -26,6 +27,7 @@ import { Preferences } from "./prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState } from "./sidebar.svelte";
 import type {
+  ApprovalMode,
   ApprovalPolicy,
   Group,
   DefaultModelSelection,
@@ -50,7 +52,7 @@ export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
 export { SIDEBAR_W } from "./sidebar.svelte";
 export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
-import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
+import { approvalMode, draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
 
 class AppStore {
@@ -671,7 +673,7 @@ class AppStore {
       this.tools = tools.tools;
       // New chats follow the server's approval default, not whatever the browser last remembered.
       const serverApproval = config?.approval?.effective ?? tools.defaultApproval;
-      if (serverApproval) this.updateDraft({ approval: serverApproval });
+      if (serverApproval) this.updateDraft({ approval: approvalMode(serverApproval) });
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
@@ -909,7 +911,7 @@ class AppStore {
         if ((e.data as { scope?: string } | undefined)?.scope === "approval") {
           // The server's default changed (here or from another client): new chats follow it.
           const eff = (e.data as { effective?: ApprovalPolicy }).effective;
-          if (eff) this.updateDraft({ approval: eff });
+          if (eff) this.updateDraft({ approval: approvalMode(eff) });
         }
         if ((e.data as { scope?: string } | undefined)?.scope === "workdir") {
           this.workdirInfo = {
@@ -1904,11 +1906,11 @@ class AppStore {
   }
 
   /**
-   * Change model/thinking/approval. These belong to the open chat (the server stores them on the
-   * session); only a new chat that has no session yet edits the draft. A change to one chat never
-   * leaks into another chat or into what new chats start with.
+   * Change model/thinking. These belong to the open chat (the server stores them on the session); only a new
+   * chat that has no session yet edits the draft. A change to one chat never leaks into another chat or into
+   * what new chats start with. (Tool approval is different: see setApprovalMode.)
    */
-  async configure(patch: Partial<Draft>, id = this.activeId): Promise<boolean> {
+  async configure(patch: Partial<Omit<Draft, "approval">>, id = this.activeId): Promise<boolean> {
     if (this.chatOf(id)?.compacting) {
       this.toast(t("압축이 끝난 뒤 모델 설정을 변경하세요"), "error", id);
       return false;
@@ -1916,15 +1918,6 @@ class AppStore {
     const s = this.session(id);
     if (!s || !this.api) {
       this.updateDraft(patch);
-      // A new chat's approval is the server's default: store it there, not only in this browser.
-      if (patch.approval && this.api) {
-        try {
-          await this.api.setDefaultApproval(patch.approval);
-        } catch (e) {
-          this.fail(e, t("변경하지 못했습니다"), id);
-          return false;
-        }
-      }
       return true;
     }
     try {
@@ -1943,17 +1936,38 @@ class AppStore {
     }
   }
 
-  /** The server-wide approval every new chat starts with (Settings). Open chats keep their own. */
-  async setDefaultApproval(approval: ApprovalPolicy): Promise<boolean> {
-    if (!this.api) return false;
+  /**
+   * Tool approval: "ask" confirms only what reaches outside the project, "auto" never asks. One setting, not one per
+   * chat: it is saved on the server as the default every new chat starts with, and the open chat follows it right
+   * away, so switching to auto once stays auto. Other chats that are already open keep the mode they have.
+   * Returns false (after telling the user) when nothing could be applied.
+   */
+  async setApprovalMode(mode: ApprovalMode): Promise<boolean> {
+    const api = this.api;
+    if (!api) return false;
+    const sid = this.activeId;
+    const s = this.session(sid);
     const before = this.draft.approval;
-    this.updateDraft({ approval });
+    this.updateDraft({ approval: mode });
+    let chatChanged = false;
     try {
-      await this.api.setDefaultApproval(approval);
+      if (s && s.approval !== mode) {
+        const updated = await api.patchSession(s.id, { approval: mode });
+        const i = this.sessions.findIndex((x) => x.id === s.id);
+        if (i >= 0) this.sessions[i] = { ...this.sessions[i]!, ...updated, updatedAt: s.updatedAt };
+        chatChanged = true;
+      }
+      await api.setDefaultApproval(mode);
       return true;
     } catch (e) {
-      this.updateDraft({ approval: before });
-      this.fail(e, t("변경하지 못했습니다"), this.activeId);
+      // A server from before the default existed has no such route. The open chat may already have the new mode;
+      // say why new chats will not keep it instead of showing a bare "not found".
+      if (chatChanged && isUnsupportedRoute(e)) {
+        this.toast(t("이 서버는 새 대화의 기본값을 저장하지 못합니다. 서버를 업데이트하세요"), "error", sid);
+        return true;
+      }
+      if (!chatChanged) this.updateDraft({ approval: before });
+      this.fail(e, t("변경하지 못했습니다"), sid);
       return false;
     }
   }

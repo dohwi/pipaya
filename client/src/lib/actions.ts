@@ -17,11 +17,11 @@ import {
 } from "./keys";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
-import type { ApprovalPolicy, ThinkingLevel } from "./types";
+import type { ApprovalMode, ThinkingLevel } from "./types";
+import { approvalMode } from "./store-model";
 import { msg, t, tc } from "./i18n";
 
-const APPROVALS: ApprovalPolicy[] = ["ask", "auto", "readonly"];
-const APPROVAL_LABEL: Record<ApprovalPolicy, string> = { ask: msg("확인", "approval"), auto: msg("자동", "approval"), readonly: msg("읽기 전용", "approval") };
+const APPROVAL_LABEL: Record<ApprovalMode, string> = { ask: msg("프로젝트 밖만 확인", "approval"), auto: msg("자동", "approval") };
 
 const LEVELS: ThinkingLevel[] = [
   "minimal",
@@ -69,9 +69,8 @@ async function cycleThinking() {
 }
 
 async function cycleApproval() {
-  const i = APPROVALS.indexOf(app.effective.approval);
-  const a = APPROVALS[(i + 1) % APPROVALS.length]!;
-  if (await app.configure({ approval: a }))
+  const a: ApprovalMode = approvalMode(app.effective.approval) === "auto" ? "ask" : "auto";
+  if (await app.setApprovalMode(a))
     app.toast(t("승인 방식: {name}", { name: tc("approval", APPROVAL_LABEL[a]) }), "ok", app.activeId);
 }
 

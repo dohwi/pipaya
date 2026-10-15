@@ -2,7 +2,7 @@
 import { uid } from "./format";
 import { K, read, write } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
-import type { ApprovalPolicy, DefaultModelSelection, ThinkingLevel } from "./types";
+import type { ApprovalMode, ApprovalPolicy, DefaultModelSelection, ThinkingLevel } from "./types";
 
 export interface PaletteItem {
   id: string;
@@ -24,6 +24,9 @@ export interface PaletteSpec {
   /** Optional handler to delete an item in place, showing an 'X' button on each row */
   ondelete?: (item: PaletteItem) => void | Promise<void>;
 }
+
+/** What the apps show for a stored policy: anything but `auto` is "confirm outside the project". */
+export const approvalMode = (p: ApprovalPolicy | undefined): ApprovalMode => (p === "auto" ? "auto" : "ask");
 
 export interface Draft {
   provider: string;
@@ -102,8 +105,7 @@ export function readDraft(): Draft {
     provider: "",
     model: "",
     thinkingLevel: normalizeThinking(o.thinkingLevel),
-    approval:
-      o.approval === "auto" || o.approval === "readonly" ? o.approval : "ask",
+    approval: approvalMode(o.approval),
   };
 }
 

@@ -119,6 +119,10 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		created_at INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS extension_entries_session ON extension_entries(session_id, extension, id);`,
+	// v17: the apps no longer offer "read-only": `ask` now means "confirm only what reaches outside the project". A session or
+	// saved default stuck on read-only would have no way back out of it, so both fold into `ask`.
+	`UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly';
+	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
 ];
 
 export function openDb(path: string): Database {

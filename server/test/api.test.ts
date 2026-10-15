@@ -160,7 +160,7 @@ describe("API contracts", () => {
 		expect((await api("GET", "/activity")).json).toEqual({ sessions: [] });
 		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
 		expect((await api("GET", "/activity")).json.sessions).toEqual([]);
-		await api("POST", `/sessions/${id}/messages`, { text: "!bash echo hi" });
+		await api("POST", `/sessions/${id}/messages`, { text: "!bash ls /etc" });
 		let seen: any = null;
 		for (let i = 0; i < 100 && !seen?.pendingApprovals; i++) {
 			seen = (await api("GET", "/activity")).json.sessions.find((s: any) => s.sessionId === id);
@@ -465,11 +465,12 @@ describe("tools & approvals", () => {
 		expect(toolResult.message.isError).toBe(false);
 	});
 
-	test("ask mode pauses for approval, then resumes when approved", async () => {
+	test("ask mode pauses for approval only outside the project, then resumes when approved", async () => {
+		const target = join(dir, "outside", "a", "b.txt");
 		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
 		const sse = collectSse(`/sessions/${id}/events`, (ev) => ev.some((e) => e.type === "run_finished"));
 		await Bun.sleep(50);
-		await api("POST", `/sessions/${id}/messages`, { text: '!write {"path":"a/b.txt","content":"hi"}' });
+		await api("POST", `/sessions/${id}/messages`, { text: `!write ${JSON.stringify({ path: target, content: "hi" })}` });
 
 		let pending: any[] = [];
 		for (let i = 0; i < 100 && pending.length === 0; i++) {
@@ -490,12 +491,21 @@ describe("tools & approvals", () => {
 		expect(types).toContain("approval_requested");
 		expect(types).toContain("approval_resolved");
 		expect(types).toContain("tool_execution_end");
-		expect(readFileSync(join(dir, "ws", "a", "b.txt"), "utf8")).toBe("hi");
+		expect(readFileSync(target, "utf8")).toBe("hi");
+	});
+
+	test("ask mode lets work inside the project run without asking", async () => {
+		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: '!write {"path":"inside/ok.txt","content":"yo"}' });
+		await untilIdle(id);
+		expect((await api("GET", `/approvals?sessionId=${id}`)).json.approvals).toEqual([]);
+		expect(readFileSync(join(dir, "ws", "inside", "ok.txt"), "utf8")).toBe("yo");
 	});
 
 	test("denied tool is blocked and the file is not written", async () => {
+		const target = join(dir, "outside", "denied.txt");
 		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
-		await api("POST", `/sessions/${id}/messages`, { text: '!write {"path":"denied.txt","content":"x"}' });
+		await api("POST", `/sessions/${id}/messages`, { text: `!write ${JSON.stringify({ path: target, content: "x" })}` });
 		let pending: any[] = [];
 		for (let i = 0; i < 100 && pending.length === 0; i++) {
 			await Bun.sleep(25);
@@ -507,7 +517,7 @@ describe("tools & approvals", () => {
 		const result = msgs.find((m: any) => m.role === "toolResult").message;
 		expect(result.isError).toBe(true);
 		expect(result.content[0].text).toContain("nope");
-		expect(await Bun.file(join(dir, "ws", "denied.txt")).exists()).toBe(false);
+		expect(await Bun.file(target).exists()).toBe(false);
 	});
 
 	test("readonly blocks mutating tools but allows reads", async () => {

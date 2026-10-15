@@ -75,8 +75,8 @@ describe("t()", () => {
 		expect(label).toBe("닫기");
 		setLang("en");
 		expect(t(label)).toBe("Close");
-		expect(msg("확인", "approval")).toBe("확인");
-		expect(tc("approval", "확인")).toBe("Ask");
+		expect(msg("프로젝트 밖만 확인", "approval")).toBe("프로젝트 밖만 확인");
+		expect(tc("approval", "프로젝트 밖만 확인")).toBe("Ask outside project");
 		expect(t("확인")).toBe("OK");
 	});
 	test("translate() works for a language other than the current one", () => {

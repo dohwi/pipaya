@@ -173,7 +173,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "cycleApproval",
     label: msg("승인 방식 변경"),
-    hint: msg("확인 → 자동 → 읽기 전용 순서로 바꿉니다. 자동은 묻지 않고 실행하니 주의하세요"),
+    hint: msg("프로젝트 밖만 확인 ↔ 자동으로 바꿉니다. 서버에 저장되어 새 대화도 따릅니다. 자동은 묻지 않고 실행하니 주의하세요"),
     default: "",
   },
   {

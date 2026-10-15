@@ -6,7 +6,7 @@ import { THINKING_LEVELS } from "./store.ts";
 
 export const Approval = Type.Union(
 	APPROVAL_POLICIES.map((p) => Type.Literal(p)),
-	{ description: "auto: run everything. ask: mutating tools wait for approval. readonly: mutating tools are blocked." },
+	{ description: "auto: run everything. ask: mutating tools wait for approval only when they reach outside the session working directory (write/edit target path, absolute or .. paths in a bash command). readonly: mutating tools are blocked." },
 );
 export const Thinking = Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)));
 export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")], {
