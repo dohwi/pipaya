@@ -7,6 +7,7 @@
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import ModalHeader from "./ModalHeader.svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
 	import ModelConnections from "./ModelConnections.svelte";
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
@@ -45,7 +46,6 @@
 	let showToken = $state(false);
 	let busy = $state(false);
 	let error = $state("");
-	let confirmDelete = $state(false);
 
 	const close = () => {
 		if (onclose) return onclose();
@@ -109,11 +109,6 @@
 
 	function remove() {
 		if (!editing) return;
-		if (!confirmDelete) {
-			confirmDelete = true;
-			setTimeout(() => (confirmDelete = false), 4000);
-			return;
-		}
 		app.removeServer(editing.id);
 		app.toast(t("서버를 삭제했습니다"));
 		close();
@@ -221,7 +216,7 @@
 
 			<footer>
 				{#if editing}
-					<button type="button" class="btn danger" onclick={remove}>{confirmDelete ? t("정말 삭제") : t("삭제")}</button>
+					<ConfirmButton danger confirmLabel={t("정말 삭제")} onconfirm={remove}>{t("삭제")}</ConfirmButton>
 				{/if}
 				<span class="grow"></span>
 				<button type="button" class="btn ghost" onclick={close}>{t("취소")}</button>

@@ -8,7 +8,7 @@
 	import { Api, errorText } from "../lib/api";
 	import { copyText } from "../lib/clipboard";
 	import { openExternal } from "../lib/tauri";
-	import { slidingIndicator } from "../lib/sliding-indicator";
+	import Segmented from "./Segmented.svelte";
 	import { paneIn } from "../lib/motion";
 	import type { LoginState, ProviderInfo } from "../lib/types";
 
@@ -280,10 +280,7 @@
 					<button class="btn primary" disabled={busy || !keyValue.trim()}>{t("저장")}</button>
 				</form>
 			{:else}
-				<div class="seg full" role="tablist" aria-label={t("연결 방식")} use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "calc(var(--radius) - 3px)" }}>
-					<button role="tab" aria-selected={tab === "oauth"} class:on={tab === "oauth"} onclick={() => (tab = "oauth")}>OAuth</button>
-					<button role="tab" aria-selected={tab === "key"} class:on={tab === "key"} onclick={() => (tab = "key")}>API KEY</button>
-				</div>
+				<Segmented tabs label={t("연결 방식")} value={tab} onchange={(id) => (tab = id)} options={[{ id: "oauth", label: "OAuth" }, { id: "key", label: "API KEY" }]} />
 				<p class="hint lead">{tab === "oauth" ? t("계정으로 로그인해 구독이나 계정에 묶인 모델을 씁니다. 키를 직접 다룰 필요가 없습니다.") : t("API 키로 연결합니다. 로컬 모델과 OpenAI 호환 주소도 여기서 추가합니다.")}</p>
 				<div class="search"><Icon name="search" /><input class="field" placeholder={t("검색")} bind:value={query} aria-label={t("검색")} autocomplete="off" spellcheck="false" /></div>
 

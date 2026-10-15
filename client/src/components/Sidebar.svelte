@@ -13,6 +13,7 @@
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
+	import { blockDrag } from "../lib/block-drag";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarBlocks, type DirBlock, type GroupBlock } from "../lib/nav";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
@@ -147,103 +148,17 @@
 	let dirDrag = $state<string | null>(null);
 	let dirDrop = $state<{ id: string; after: boolean } | null>(null);
 	const bid = (kind: "dir" | "group", key: string) => `${kind}:${key}`;
-	interface DirSrc {
-		kind: "dir" | "group";
-		serverId: string;
-		path: string;
-		paths: string[];
-		disabled: boolean;
-	}
-	function dirSource(node: HTMLElement, initial: DirSrc) {
-		let o = initial;
-		let st: { pid: number; touch: boolean; x: number; y: number; timer: number } | null = null;
-		let active = false;
-		const at = (x: number, y: number) => {
-			const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-block]");
-			if (!el || el.dataset.server !== o.serverId || !el.dataset.block!.startsWith(`${o.kind}:`)) return null;
-			const r = el.getBoundingClientRect();
-			return { id: el.dataset.block!, after: y > r.top + r.height / 2 };
-		};
-		const activate = () => {
-			if (!st || active) return;
-			active = true;
-			clearTimeout(st.timer);
-			navigator.vibrate?.(12);
-			dirDrag = bid(o.kind, o.path);
-			document.documentElement.classList.add("dnd");
-		};
-		function down(e: PointerEvent) {
-			if (o.disabled || st || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || (e.target as Element).closest(".dirnew, .more, input")) return;
-			st = { pid: e.pointerId, touch: e.pointerType === "touch", x: e.clientX, y: e.clientY, timer: 0 };
-			if (st.touch) st.timer = window.setTimeout(activate, 380);
-			window.addEventListener("pointermove", move);
-			window.addEventListener("pointerup", up);
-			window.addEventListener("pointercancel", cancel);
-			window.addEventListener("touchmove", block, { passive: false });
-			window.addEventListener("keydown", key);
-		}
-		function move(e: PointerEvent) {
-			if (!st || e.pointerId !== st.pid) return;
-			if (!active) {
-				if (Math.hypot(e.clientX - st.x, e.clientY - st.y) <= (st.touch ? 10 : 5)) return;
-				if (st.touch) return cleanup(); // scrolling, not dragging
-				activate();
-			}
-			dirDrop = at(e.clientX, e.clientY);
-			// near the edge of the list: scroll it
-			const list = node.closest<HTMLElement>(".list");
-			if (list) {
-				const r = list.getBoundingClientRect();
-				if (e.clientY < r.top + 40) list.scrollTop -= 12;
-				else if (e.clientY > r.bottom - 40) list.scrollTop += 12;
-			}
-		}
-		function up(e: PointerEvent) {
-			if (!st || e.pointerId !== st.pid) return;
-			if (active) {
-				const d = dirDrop;
-				if (d) {
-					const target = d.id.slice(o.kind.length + 1);
-					if (o.kind === "dir") app.sidebar.moveDir(o.serverId, o.paths, o.path, target, d.after);
-					else app.sidebar.moveGroup(o.serverId, o.paths, o.path, target, d.after);
-				}
-				const stop = (ev: Event) => (ev.stopPropagation(), ev.preventDefault());
-				window.addEventListener("click", stop, { capture: true, once: true });
-				setTimeout(() => window.removeEventListener("click", stop, true), 120);
-			}
-			cleanup();
-		}
-		function cancel(e: PointerEvent) {
-			if (st && e.pointerId === st.pid) cleanup();
-		}
-		function block(e: TouchEvent) {
-			if (active && e.cancelable) e.preventDefault();
-		}
-		function key(e: KeyboardEvent) {
-			if (e.key === "Escape" && active) cleanup();
-		}
-		function cleanup() {
-			if (st) clearTimeout(st.timer);
-			if (active) document.documentElement.classList.remove("dnd");
-			st = null;
-			active = false;
-			dirDrag = null;
-			dirDrop = null;
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", up);
-			window.removeEventListener("pointercancel", cancel);
-			window.removeEventListener("touchmove", block);
-			window.removeEventListener("keydown", key);
-		}
-		node.addEventListener("pointerdown", down);
-		return {
-			update: (next: DirSrc) => (o = next),
-			destroy() {
-				node.removeEventListener("pointerdown", down);
-				cleanup();
-			},
-		};
-	}
+	/** `use:dirSource`: drag a directory / group header to reorder it (lib/block-drag.ts), drawn through dirDrag/dirDrop. */
+	const dirSource = blockDrag({
+		set: (drag, drop) => {
+			dirDrag = drag;
+			dirDrop = drop;
+		},
+		get: () => dirDrop,
+		key: bid,
+		move: (o, target, after) =>
+			o.kind === "dir" ? app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after) : app.sidebar.moveGroup(o.serverId, o.paths, o.path, target, after),
+	});
 	/** Let go on a folder: the session steps out of its group. */
 	const dropOnDir = (id: string) => void app.leaveGroup(id);
 	function newIn(n: Node, path: string) {

@@ -2,6 +2,7 @@
 	import Notice from "./Notice.svelte";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import Badge from "./Badge.svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
 	import { onDestroy, onMount } from "svelte";
 	import { t } from "../lib/i18n";
 	import { Api, errorText } from "../lib/api";
@@ -20,14 +21,11 @@
 	/** Tokens issued by QR pairing. null = not shown: this window connects with a paired device's own token, which may not manage them. */
 	let paired = $state<{ id: string; name: string; createdAt: number; lastUsedAt: number | null }[] | null>(null);
 	let revoking = $state<string | null>(null);
-	let confirmingToken = $state<string | null>(null);
 	let error = $state("");
 	let busy = $state<string | null>(null);
-	let confirming = $state<string | null>(null);
 	/** The QR is a key to the server: its code is only made while this is open, and dropped when it closes. */
 	let adding = $state(false);
 	let now = $state(Date.now());
-	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
@@ -52,18 +50,11 @@
 	onMount(() => void load());
 	onDestroy(() => {
 		clearInterval(refresh);
-		clearTimeout(confirmTimer);
 	});
 
-	/** Two taps: the first asks, the second removes. Removing a device cannot be undone from here. */
+	/** Behind a ConfirmButton (two taps): removing a device cannot be undone from here. */
 	async function remove(d: NotificationDevice) {
 		if (busy) return;
-		if (confirming !== d.id) {
-			confirming = d.id;
-			clearTimeout(confirmTimer);
-			confirmTimer = setTimeout(() => (confirming = null), 4000);
-			return;
-		}
 		const a = api();
 		if (!a) return;
 		busy = d.id;
@@ -75,19 +66,12 @@
 			error = errorText(e);
 		} finally {
 			busy = null;
-			confirming = null;
 		}
 	}
 
-	/** Same two-tap rule as removing a device: the first tap asks, the second cuts the phone off. */
+	/** Same two-tap ConfirmButton as removing a device: it cuts the phone off. */
 	async function revoke(id: string) {
 		if (revoking) return;
-		if (confirmingToken !== id) {
-			confirmingToken = id;
-			clearTimeout(confirmTimer);
-			confirmTimer = setTimeout(() => (confirmingToken = null), 4000);
-			return;
-		}
 		const a = api();
 		if (!a) return;
 		revoking = id;
@@ -99,7 +83,6 @@
 			error = errorText(e);
 		} finally {
 			revoking = null;
-			confirmingToken = null;
 		}
 	}
 
@@ -142,9 +125,7 @@
 							{d.live ? t("접속 중") : t("마지막 접속 {ago}", { ago: ago(d.lastSeen) })}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
 						</span>
 					</div>
-					<button class="btn sm" class:danger={confirming === d.id} disabled={busy === d.id} onclick={() => remove(d)}>
-						{confirming === d.id ? t("정말 해지") : t("해지")}
-					</button>
+					<ConfirmButton size="sm" confirmLabel={t("정말 해지")} disabled={busy === d.id} onconfirm={() => remove(d)}>{t("해지")}</ConfirmButton>
 				</li>
 			{/each}
 		</ul>
@@ -162,9 +143,7 @@
 							<span class="name">{p.name}</span>
 							<span class="sub">{p.lastUsedAt ? t("마지막 사용 {ago}", { ago: ago(p.lastUsedAt) }) : t("아직 사용하지 않음")}</span>
 						</div>
-						<button class="btn sm" class:danger={confirmingToken === p.id} disabled={revoking === p.id} onclick={() => revoke(p.id)}>
-							{confirmingToken === p.id ? t("정말 취소") : t("접속 취소")}
-						</button>
+						<ConfirmButton size="sm" confirmLabel={t("정말 취소")} disabled={revoking === p.id} onconfirm={() => revoke(p.id)}>{t("접속 취소")}</ConfirmButton>
 					</li>
 				{/each}
 			</ul>
@@ -281,9 +260,5 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.btn.danger {
-		color: var(--danger);
-		border-color: var(--danger);
 	}
 </style>

@@ -143,7 +143,7 @@
 
 	{#snippet after()}
 		<div class="sec" class:gone={!sel}>
-			<div class="slabel">{t("추론 강도")}</div>
+			<div class="mono-label">{t("추론 강도")}</div>
 			<div class="seg" class:off={!reasoning} role="group" aria-label={t("추론 강도")} use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}>
 				{#each available as l (l)}
 					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!reasoning || !sel} onclick={() => strength(l)}>{l}</button>
@@ -221,14 +221,6 @@
 	}
 	.sec.gone {
 		opacity: 0.4;
-	}
-	.slabel {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		text-transform: lowercase;
-		color: var(--text-faint);
 	}
 	.seg {
 		display: grid;

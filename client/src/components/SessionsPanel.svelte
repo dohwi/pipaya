@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
 	import { t } from "../lib/i18n";
 	import { Api, errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
@@ -25,8 +26,6 @@
 	let busy = $state(false);
 	let picked = $state<Record<string, boolean>>({});
 	let folded = $state<Record<string, boolean>>({});
-	let confirming = $state(false);
-	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
 	let note = $state("");
 	let retention = $state<RetentionInfo | null>(null);
 	let policy = $state<RetentionPolicy>({ enabled: false, days: 30, onlyClosed: false });
@@ -116,15 +115,8 @@
 		picked = next;
 	}
 
-	function askDelete() {
-		confirming = true;
-		clearTimeout(confirmTimer);
-		confirmTimer = setTimeout(() => (confirming = false), 5000);
-	}
 	async function remove() {
 		if (!api || !nChosen) return;
-		clearTimeout(confirmTimer);
-		confirming = false;
 		busy = true;
 		error = "";
 		note = "";
@@ -257,11 +249,7 @@
 		<div class="bar" in:collapseIn out:collapseOut>
 			<span>{t("{n}개 선택됨", { n: nChosen })}</span>
 			<button class="btn sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</button>
-			{#if confirming}
-				<button class="btn danger sm" onclick={() => void remove()} disabled={busy}>{t("정말 {n}개 삭제", { n: nChosen })}</button>
-			{:else}
-				<button class="btn danger sm" onclick={askDelete} disabled={busy}><Icon name="trash" /> {t("삭제")}</button>
-			{/if}
+			<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nChosen })} onconfirm={() => void remove()} disabled={busy}><Icon name="trash" /> {t("삭제")}</ConfirmButton>
 		</div>
 	{/if}
 </div>

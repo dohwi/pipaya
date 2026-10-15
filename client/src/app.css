@@ -536,6 +536,14 @@ input[type="checkbox"]:disabled {
 }
 
 /* section labels are mono, like metadata */
+/* the small mono label above a setting or a group ("model", "추론 강도"); `.eyebrow` is its uppercase sibling */
+.mono-label {
+	font-family: var(--mono);
+	font-size: var(--fs-2xs);
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	color: var(--text-faint);
+}
 .eyebrow {
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);

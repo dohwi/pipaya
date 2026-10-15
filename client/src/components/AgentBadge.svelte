@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ModelLogo from "./ModelLogo.svelte";
 	import { app } from "../lib/store.svelte";
+	import { syncAnim } from "../lib/syncAnim";
 	import { ACTIVITY_LABEL, type Activity } from "../lib/activity";
 
 	/** A session's agent: the (monochrome) logo of the model that did its last work; the dot shows what it is doing. */
@@ -22,7 +23,7 @@
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
 	<span class="logo"><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
-	{#if state !== "idle"}<i class="badge" style="animation-delay:{-(Date.now() % 1200)}ms"></i>{/if}
+	{#if state !== "idle"}<i class="badge" use:syncAnim={state}></i>{/if}
 </span>
 
 <style>

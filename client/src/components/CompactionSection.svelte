@@ -61,7 +61,7 @@
 {#if settings}
 	{@const s = settings}
 	<section>
-		<div class="label">{t("컨텍스트 압축 모델")}</div>
+		<div class="mono-label">{t("컨텍스트 압축 모델")}</div>
 		<div class="crow">
 			<div class="cfield">
 				<ModelField
@@ -102,13 +102,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-	}
-	.label {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		color: var(--text-faint);
 	}
 	.crow {
 		display: flex;

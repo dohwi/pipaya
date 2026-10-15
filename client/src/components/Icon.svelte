@@ -66,4 +66,19 @@
 	};
 </script>
 
-<svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} /></svg>
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} /></svg>
+
+<style>
+	/* Line-icon defaults at zero specificity (:where), so any rule in the parent (a size, a fill, a thinner stroke) wins
+	   without !important. New code needs nothing; existing per-component svg rules keep working unchanged. */
+	:where(.ic) {
+		width: 1em;
+		height: 1em;
+		flex: none;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+</style>

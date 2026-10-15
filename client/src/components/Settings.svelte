@@ -11,6 +11,7 @@
 	import Backup from "./Backup.svelte";
 	import ServerForm from "./ServerForm.svelte";
 	import Switch from "./Switch.svelte";
+	import Segmented from "./Segmented.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
 	import UpdateSettings from "./UpdateSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
@@ -112,37 +113,23 @@
 				<Shortcuts />
 			{:else if tab === "general"}
 				<section>
-					<div class="label">{t("언어")}</div>
-					<div class="themes" role="group" aria-label={t("언어")} use:slidingIndicator={{ selector: ".theme.on", variant: "outline", radius: "var(--radius)" }}>
-						{#each langOptions as l (l.tag)}
-							<button class="theme" class:on={getLangPref() === l.tag} aria-pressed={getLangPref() === l.tag} lang={l.tag === "system" ? undefined : l.tag} onclick={() => setLangPref(l.tag)}>
-								{l.name}
-							</button>
-						{/each}
-					</div>
+					<div class="mono-label">{t("언어")}</div>
+					<Segmented variant="cards" columns={3} label={t("언어")} value={getLangPref()} onchange={setLangPref} options={langOptions.map((l) => ({ id: l.tag, label: l.name, lang: l.tag === "system" ? undefined : l.tag }))} />
 					{#if getLangPref() === "system"}
 						<span class="hint">{t("기기 언어를 따릅니다: {name}", { name: languageName(systemLang(navigator.languages)) })}</span>
 					{/if}
 				</section>
 
 				<section>
-					<div class="label">{t("테마")}</div>
-					<div class="themes" role="group" aria-label={t("테마")} use:slidingIndicator={{ selector: ".theme.on", variant: "outline", radius: "var(--radius)" }}>
-						{#each themes as th}
-							<button class="theme" class:on={app.prefs.theme === th.id} aria-pressed={app.prefs.theme === th.id} onclick={() => app.prefs.setTheme(th.id)}>
-								<Icon name={th.icon} /> {t(th.label)}
-							</button>
-						{/each}
-					</div>
+					<div class="mono-label">{t("테마")}</div>
+					<Segmented variant="cards" label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
+						{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
+					</Segmented>
 				</section>
 
 				<section>
-					<div class="label">{t("도구 승인")}</div>
-					<div class="themes" role="group" aria-label={t("도구 승인")} use:slidingIndicator={{ selector: ".theme.on", variant: "outline", radius: "var(--radius)" }}>
-						{#each approvals as a}
-							<button class="theme" class:on={app.effective.approval === a.id} aria-pressed={app.effective.approval === a.id} onclick={() => app.configure({ approval: a.id })}>{tc("approval", a.label)}</button>
-						{/each}
-					</div>
+					<div class="mono-label">{t("도구 승인")}</div>
+					<Segmented variant="cards" label={t("도구 승인")} value={app.effective.approval} onchange={(id) => app.configure({ approval: id })} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label) }))} />
 					<span class="hint">
 						{t(approvals.find((a) => a.id === app.effective.approval)?.hint ?? "")}
 						{app.current ? t("열려 있는 대화에만 적용됩니다.") : t("앞으로 시작할 새 대화에 적용됩니다.")}
@@ -150,7 +137,7 @@
 				</section>
 
 				<section>
-					<div class="label">{t("알림음")}</div>
+					<div class="mono-label">{t("알림음")}</div>
 					<div class="switch">
 						<span>{t("작업 완료 · 확인 필요 · 실패 때 소리 재생")}</span>
 						<Switch checked={app.prefs.soundOn} label={t("알림음")} onchange={(on) => app.prefs.setSound(on)} />
@@ -351,51 +338,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-	}
-	.label {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		color: var(--text-faint);
-	}
-	.themes {
-		position: relative;
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 8px;
-	}
-	.theme {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		height: 44px;
-		border-radius: var(--radius);
-		border: 1px solid var(--border);
-		background: var(--bg-elev);
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			background var(--motion-fast) var(--ease-std);
-	}
-	.theme.on {
-		border-color: var(--text);
-		background: var(--bg-active);
-		font-weight: 600;
-	}
-	/* the sliding ring (drawn over the card) replaces the card's own border; the fill still cross-fades */
-	.themes:global([data-indicator-ready]) .theme.on {
-		border-color: var(--border);
-	}
-	/* "Auto" runs everything unasked, so it is always tinted as a warning */
-	.theme :global(svg) {
-		width: 17px;
-		height: 17px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	.srv {
 		display: flex;

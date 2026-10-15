@@ -3,6 +3,8 @@
 	 * The one small status dot. `tone` says what it means, `pulse` that something is still happening,
 	 * `size` is the diameter in px (8 by default; toasts and banners use 7).
 	 */
+	import { syncAnim } from "../lib/syncAnim";
+
 	let {
 		tone = "neutral",
 		pulse = false,
@@ -14,7 +16,7 @@
 	} = $props();
 </script>
 
-<span class="dot {tone}" class:pulse style:width="{size}px" style:height="{size}px" aria-hidden="true"></span>
+<span class="dot {tone}" class:pulse style:width="{size}px" style:height="{size}px" aria-hidden="true" use:syncAnim={pulse}></span>
 
 <style>
 	.dot {

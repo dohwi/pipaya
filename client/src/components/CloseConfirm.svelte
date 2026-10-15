@@ -19,6 +19,8 @@
 		app.closeConfirm.confirm();
 	}
 	const cancel = () => !stopping && app.closeConfirm?.cancel();
+	/** The default answer gets focus (the Modal keeps a child's own focus), so Enter confirms and Esc cancels. */
+	const focusMe = (node: HTMLElement) => node.focus();
 </script>
 
 {#if app.closeConfirm}
@@ -28,8 +30,7 @@
 			<p id="close-confirm-desc">{t("진행 중인 작업 {n}개가 종료되면서 창이 닫힙니다.", { n: (app.closeConfirm ?? last)?.count ?? 0 })}</p>
 			<div class="buttons">
 				<button type="button" class="btn" onclick={cancel} disabled={stopping}>{t("취소")}</button>
-				<!-- svelte-ignore a11y_autofocus -->
-				<button type="button" class="btn primary" onclick={ok} disabled={stopping} autofocus>{t("확인")}</button>
+				<button type="button" class="btn primary" onclick={ok} disabled={stopping} use:focusMe>{t("확인")}</button>
 			</div>
 		</div>
 	</Modal>

@@ -8,9 +8,10 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
-	import { fadeIn, fadeOut } from "../lib/motion";
+	import { chipIn, chipOut, fadeIn, fadeOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
+	import SendControls from "./SendControls.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
 	import QueuedList from "./QueuedList.svelte";
 	import StatusLine from "./StatusLine.svelte";
@@ -570,9 +571,9 @@
 			<AttachmentStrip {attachments} onremove={removeAttachment} />
 		{/if}
 		{#if files.length}
-			<div class="files">
+			<div class="files" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>
 				{#each files as f (f.id)}
-					<FileChip name={f.name} size={f.size} preview={f.preview} onremove={() => removeFile(f.id)} />
+					<div class="fchip-slot" animate:reflow in:chipIn out:chipOut><FileChip name={f.name} size={f.size} preview={f.preview} onremove={() => removeFile(f.id)} /></div>
 				{/each}
 			</div>
 		{/if}
@@ -617,22 +618,18 @@
 			<ModelPicker />
 			<span class="grow"></span>
 
-			{#if compacting}
-				<span class="compacting" role="status"><span class="spinner"></span> {t("압축 중")}</span>
-				<button class="send stop" onclick={() => app.abort(pane.id)} disabled={app.net !== "online"} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
-			{:else if running}
-				<button class="mode" onclick={() => during("queue")} disabled={!hasInput} title={t("현재 작업이 모두 끝난 뒤 실행 (Alt+Enter)")}>
-					<Icon name="list" /><span>{t("대기열")}</span><kbd>⌥↵</kbd>
-				</button>
-				<button class="mode primary" onclick={() => during("steer")} disabled={!hasInput} title={t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 (Enter)")}>
-					<Icon name="bolt" /><span>{t("끼워 넣기")}</span><kbd>↵</kbd>
-				</button>
-				<button class="send stop" onclick={() => app.abort(pane.id)} aria-label={t("중지")} title={t("작업 중지")}><Icon name="stop" /></button>
-			{:else}
-				<button class="send" class:on={canSend} onclick={submit} disabled={!canSend} aria-label={t("보내기")}>
-					{#if app.sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
-				</button>
-			{/if}
+			<SendControls
+				{compacting}
+				{running}
+				{canSend}
+				{hasInput}
+				sending={app.sending}
+				online={app.net === "online"}
+				onsend={submit}
+				onqueue={() => during("queue")}
+				onsteer={() => during("steer")}
+				onstop={() => app.abort(pane.id)}
+			/>
 		</div>
 	</div>
 	{#if extensions.actions.length}
@@ -803,121 +800,6 @@
 	}
 	.grow {
 		flex: 1;
-	}
-	.send {
-		display: grid;
-		place-items: center;
-		width: 38px;
-		height: 38px;
-		border-radius: 50%;
-		background: var(--bg-active);
-		color: var(--text-faint);
-		transition:
-			background var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std),
-			transform var(--motion-fast) var(--ease);
-		flex: none;
-	}
-	.send.on {
-		background: var(--accent);
-		color: var(--accent-fg);
-	}
-	.send:active:not(:disabled) {
-		transform: scale(0.9);
-	}
-	.send.stop {
-		background: var(--text);
-		color: var(--bg);
-	}
-	.send :global(svg) {
-		width: 19px;
-		height: 19px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2.1;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.send.stop :global(svg) {
-		fill: currentColor;
-		stroke-width: 1;
-	}
-	.compacting {
-		display: inline-flex;
-		align-items: center;
-		gap: 7px;
-		padding: 0 8px;
-		font-size: var(--fs-xs);
-		color: var(--text-dim);
-	}
-	.mode {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 34px;
-		padding: 0 10px;
-		margin-right: 4px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-pill);
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		white-space: nowrap;
-		flex: none;
-		transition:
-			background var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std);
-	}
-	.mode:hover:not(:disabled) {
-		background: var(--bg-active);
-		color: var(--text);
-	}
-	.mode:disabled {
-		opacity: 0.4;
-	}
-	.mode.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-fg);
-	}
-	.mode.primary:hover:not(:disabled) {
-		background: var(--accent-hover);
-		color: var(--accent-fg);
-	}
-	.mode :global(svg) {
-		width: 14px;
-		height: 14px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	kbd {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		opacity: 0.6;
-	}
-	@media (max-width: 640px), (pointer: coarse) {
-		kbd {
-			display: none;
-		}
-		/* One row cannot hold the model picker, two labelled buttons and stop: keep the buttons icon-only so none is squashed */
-		.mode {
-			width: 36px;
-			height: 36px;
-			padding: 0;
-			margin-right: 0;
-			justify-content: center;
-			border-radius: 50%;
-		}
-		.mode span {
-			display: none;
-		}
-		.mode :global(svg) {
-			width: 17px;
-			height: 17px;
-		}
 	}
 	.files {
 		display: flex;

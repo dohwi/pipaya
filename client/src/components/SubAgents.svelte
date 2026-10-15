@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import { t } from "../lib/i18n";
 	import { Api, ApiError, errorText } from "../lib/api";
@@ -29,7 +30,6 @@
 	let models = $state<ModelInfo[]>([]);
 	let providers = $state<ProviderInfo[]>([]);
 	/** Name of the helper being deleted (asks again before removing). */
-	let confirmDelete = $state<string | null>(null);
 	/** Which helper panels are open, by name. */
 	let openNames = $state<Record<string, boolean>>({});
 	/** Text fields keep a local draft and save when left, so typing does not send a request per key. */
@@ -106,7 +106,6 @@
 		}
 	}
 	async function remove(name: string) {
-		confirmDelete = null;
 		await save({ ...settings!, agents: settings!.agents.filter((a) => a.name !== name) });
 	}
 
@@ -297,14 +296,9 @@
 							{#if fieldError[a.name]}<Notice tone="danger">{fieldError[a.name]}</Notice>{/if}
 
 							<div class="row end">
-								{#if confirmDelete === a.name}
-									<button type="button" class="btn danger sm" disabled={saving} onclick={() => void remove(a.name)}>{t("정말 삭제")}</button>
-									<button type="button" class="btn ghost sm" onclick={() => (confirmDelete = null)}>{t("취소")}</button>
-								{:else}
-									<button type="button" class="btn ghost sm" disabled={saving} onclick={() => (confirmDelete = a.name)} aria-label={t("서브에이전트 {name} 삭제", { name: a.name })}>
-										<Icon name="trash" /> {t("삭제")}
-									</button>
-								{/if}
+								<ConfirmButton size="sm" class="ghost" confirmLabel={t("정말 삭제")} disabled={saving} onconfirm={() => void remove(a.name)} ariaLabel={t("서브에이전트 {name} 삭제", { name: a.name })}>
+									<Icon name="trash" /> {t("삭제")}
+								</ConfirmButton>
 							</div>
 						</div>
 					</Accordion>

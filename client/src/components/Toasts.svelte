@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 	import { viewport } from "../lib/viewport.svelte";
-	import CountdownClose from "./CountdownClose.svelte";
+	import ToastStrip from "./ToastStrip.svelte";
 
 	/**
 	 * Toasts are strips like the "done" notices: full width of the chat area (not of the window,
@@ -52,12 +51,7 @@
 	style:top={box ? `${box.top}px` : null}
 	aria-live="polite"
 >
-	{#each app.globalToasts as t (t.id)}
-		<div class="strip {t.tone}" role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }} animate:reflow>
-			<span class="msg">{t.text}</span>
-			<CountdownClose ms={t.ms} onclick={() => app.feedback.dismissToast(t.id)} />
-		</div>
-	{/each}
+	<ToastStrip toasts={app.globalToasts} />
 </div>
 
 <style>
@@ -74,31 +68,5 @@
 	}
 	.toasts.anchored {
 		right: auto;
-	}
-	.strip {
-		--tone: var(--text-faint);
-		pointer-events: auto;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		min-height: 44px;
-		padding: 4px 8px 4px 16px;
-		/* tinted with the tone, like the "done" strips (neutral toasts get only a faint tint) */
-		background: color-mix(in srgb, var(--tone) 16%, var(--bg-elev));
-		border-bottom: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
-		color: var(--text);
-		font-size: var(--fs-sm);
-		line-height: 1.4;
-	}
-	.strip.ok {
-		--tone: var(--ok);
-	}
-	.strip.error {
-		--tone: var(--danger);
-	}
-	.msg {
-		flex: 1;
-		min-width: 0;
-		overflow-wrap: anywhere;
 	}
 </style>
