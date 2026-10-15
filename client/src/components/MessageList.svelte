@@ -19,16 +19,65 @@
 	/** Show the jump button once the view is further than this from the bottom. */
 	const NEAR = 80;
 
-	/** The list never follows the stream by itself: it only moves to the bottom when asked (see below). */
+	/** Pinned = parked at the bottom: follow the stream. Only real user intent (wheel/touch/keys/scrollbar drag) unpins. */
+	let stuck = true;
+	let lastTop = 0;
+	let dragging = false;
+	/** A smooth scroll to the bottom (jump button) is in flight. */
+	let smoothing = false;
+
+	const gap = () => (scroller ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight : 0);
+
+	/** Synchronous write: lands before paint, so the stream never shows a frame that is off the bottom. */
+	function pin() {
+		if (!scroller) return;
+		scroller.scrollTop = scroller.scrollHeight;
+		lastTop = scroller.scrollTop;
+	}
+
 	function onScroll() {
 		if (!scroller) return;
-		showJump = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >= NEAR;
+		if (smoothing) {
+			if (gap() < 2) smoothing = false;
+		} else if (stuck) {
+			// Not the user (they unpin first): the browser settled layout or clamped scrollTop. Stay at the bottom.
+			if (gap() > 1) pin();
+		} else if (gap() < 2 && scroller.scrollTop >= lastTop) {
+			stuck = true; // the user came back down to the end
+		}
+		lastTop = scroller.scrollTop;
+		showJump = gap() >= NEAR;
+	}
+
+	function release() {
+		smoothing = false;
+		stuck = false;
+	}
+	let touchY = 0;
+	const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
+	const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? 0; };
+	const onTouchMove = (e: TouchEvent) => { if ((e.touches[0]?.clientY ?? 0) > touchY) release(); };
+	const onKey = (e: KeyboardEvent) => {
+		if (["ArrowUp", "PageUp", "Home"].includes(e.key) || (e.key === " " && e.shiftKey)) release();
+	};
+	const onPointerDown = (e: PointerEvent) => { if (e.target === scroller) dragging = true; };
+	const onPointerUp = () => { dragging = false; };
+	// Dragging the scrollbar upward also unpins.
+	function onDragScroll() {
+		if (dragging && scroller && scroller.scrollTop < lastTop - 1) release();
 	}
 
 	export function toBottom(smooth = false) {
 		if (!scroller) return;
-		scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? "smooth" : "instant" });
-		if (!smooth) showJump = false;
+		stuck = true;
+		if (smooth) {
+			smoothing = true;
+			scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+			return;
+		}
+		smoothing = false;
+		showJump = false;
+		pin();
 	}
 
 	// A conversation was opened and loaded: start at its end.
@@ -43,7 +92,24 @@
 		const n = chat.bottomRequest;
 		if (n === seenRequest) return;
 		seenRequest = n;
-		void tick().then(() => toBottom());
+		stuck = true;
+		void tick().then(() => {
+			toBottom();
+			// off-screen turns settle their real height afterwards; land exactly on the input again
+			requestAnimationFrame(() => stuck && pin());
+		});
+	});
+
+	// Follow growth (streaming text, tool cards, images, input box resizing the viewport) while pinned.
+	let content: HTMLDivElement | undefined = $state();
+	$effect(() => {
+		if (!content || !scroller) return;
+		const ro = new ResizeObserver(() => {
+			if (stuck) pin();
+		});
+		ro.observe(content);
+		ro.observe(scroller);
+		return () => ro.disconnect();
 	});
 
 	/** The run has started but the model has not produced anything yet: nothing to attach the status to, so show it here */
@@ -82,13 +148,20 @@
 
 </script>
 
+<svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} />
+
 <div
 	class="scroller"
 	bind:this={scroller}
-	onscroll={onScroll}
+	onscroll={() => { onDragScroll(); onScroll(); }}
+	onwheel={onWheel}
+	ontouchstart={onTouchStart}
+	ontouchmove={onTouchMove}
+	onkeydown={onKey}
+	onpointerdown={onPointerDown}
 	role="presentation"
 >
-	<div class="inner">
+	<div class="inner" bind:this={content}>
 		{#if !chat.ready && !chat.loadError}
 			<div class="skeleton" aria-busy="true">
 				<div class="sk skeleton-bar r"></div>
@@ -157,6 +230,7 @@
 		overscroll-behavior: contain;
 		-webkit-overflow-scrolling: touch;
 		scroll-padding-bottom: 24px;
+		overflow-anchor: none; /* we pin ourselves; browser anchoring would fight it */
 	}
 	.inner {
 		max-width: calc(var(--content-w) + 32px);

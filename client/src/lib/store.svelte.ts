@@ -1929,9 +1929,6 @@ class AppStore {
     }
     try {
       const updated = await this.api.patchSession(s.id, patch);
-      // The approval you pick is also what new chats start with. Saved on the server, otherwise the
-      // next connect resets the draft to the startup default and every new chat is back to "ask".
-      if (patch.approval) await this.api.setDefaultApproval(patch.approval).catch(() => {});
       const i = this.sessions.findIndex((x) => x.id === s.id);
       if (i >= 0)
         this.sessions[i] = {
@@ -1942,6 +1939,21 @@ class AppStore {
       return true;
     } catch (e) {
       this.fail(e, t("변경하지 못했습니다"), s.id);
+      return false;
+    }
+  }
+
+  /** The server-wide approval every new chat starts with (Settings). Open chats keep their own. */
+  async setDefaultApproval(approval: ApprovalPolicy): Promise<boolean> {
+    if (!this.api) return false;
+    const before = this.draft.approval;
+    this.updateDraft({ approval });
+    try {
+      await this.api.setDefaultApproval(approval);
+      return true;
+    } catch (e) {
+      this.updateDraft({ approval: before });
+      this.fail(e, t("변경하지 못했습니다"), this.activeId);
       return false;
     }
   }

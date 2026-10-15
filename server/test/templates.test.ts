@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverTemplates, expandTemplate, parseTemplateCall, templateCallHint } from "../src/templates.ts";
+import { discoverTemplates, expandTemplate, parseTemplateCall, limitTemplateText, templateMarker } from "../src/templates.ts";
 
 function fixture() {
 	const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-templates-")));
@@ -65,10 +65,14 @@ describe("template calls", () => {
 		expect(expandTemplate("Review things", "")).toBe("Review things");
 	});
 
-	test("hint carries the expanded text", () => {
-		const hint = templateCallHint("review", "BODY", "<pipaya-hint>");
-		expect(hint.startsWith("<pipaya-hint>")).toBe(true);
-		expect(hint).toContain("BODY");
-		expect(hint.endsWith("</pipaya-hint>")).toBe(true);
+	test("marker records the template name and the typed call", () => {
+		const m = templateMarker("review", "/prompt:review a.ts");
+		expect(m.startsWith("<pipaya-template>")).toBe(true);
+		expect(JSON.parse(m.slice("<pipaya-template>".length, m.indexOf("</pipaya-template>")))).toEqual({ name: "review", call: "/prompt:review a.ts" });
+	});
+
+	test("very long text is cut", () => {
+		expect(limitTemplateText("short")).toBe("short");
+		expect(limitTemplateText("x".repeat(70_000)).endsWith("\n[cut]")).toBe(true);
 	});
 });

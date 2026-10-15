@@ -181,9 +181,12 @@ export function readTemplateBody(path: string): string | null {
 	}
 }
 
-/** Hidden note carrying the expanded template; the visible message stays the short `/prompt:name …` call. */
-export function templateCallHint(name: string, expanded: string, openTag: string): string {
-	const cut = expanded.length > MAX_INLINE_TEMPLATE_CHARS;
-	const text = cut ? `${expanded.slice(0, MAX_INLINE_TEMPLATE_CHARS)}\n[cut]` : expanded;
-	return `${openTag}The user invoked the saved prompt template "${name}" (written as ${TEMPLATE_CALL_PREFIX}${name}). The visible message is only a shortcut: treat the following as the user's actual request.\n\n${text}</pipaya-hint>`;
+/** Keeps a very long expanded template within the inline limit. */
+export function limitTemplateText(expanded: string): string {
+	return expanded.length > MAX_INLINE_TEMPLATE_CHARS ? `${expanded.slice(0, MAX_INLINE_TEMPLATE_CHARS)}\n[cut]` : expanded;
+}
+
+/** Note stored next to the expanded text: which template was used and what the user typed. The client shows it under the bubble. */
+export function templateMarker(name: string, call: string): string {
+	return `<pipaya-template>${JSON.stringify({ name, call })}</pipaya-template>`;
 }

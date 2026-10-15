@@ -31,28 +31,40 @@ const backs: Back[] = [];
 
 /*
  * Back button / back swipe (mobile): every open modal owns one history entry, so "back" closes the top modal instead of
- * leaving the page. When a modal is closed by other means (scrim, ✕, Esc) its entry is dropped with history.back(); the
- * popstate that causes is ignored (`skip`).
+ * leaving the page.
+ *
+ * `sync()` is the only place that touches the history: it makes the number of entries we pushed (`pushed`) equal the
+ * number of layers that own one. Removing entries is one `history.go(-n)` (several `history.back()` calls in the same
+ * tick are coalesced by browsers and leave stray entries), and while that traversal is in flight nothing is pushed
+ * (a push in between would be the entry the traversal removes). The popstate it causes is ours (`pending`), not the
+ * user's.
  */
-let skip = 0;
+let pushed = 0;
+let pending = 0;
+let listening = false;
 
-function pushEntry(layer: Back) {
-	history.pushState({ ...(history.state ?? {}), modalLayer: true }, "");
-	layer.entry = true;
-}
-
-function dropEntry(layer: Back) {
-	if (!layer.entry) return;
-	layer.entry = false;
-	skip++;
-	history.back();
+function sync() {
+	if (pending) return; // the popstate of our own traversal re-runs this
+	const want = backs.filter((b) => b.entry).length;
+	while (pushed < want) {
+		history.pushState({ ...(history.state ?? {}), modalLayer: true }, "");
+		pushed++;
+	}
+	if (pushed > want) {
+		pending = pushed - want;
+		history.go(-pending);
+	}
 }
 
 function onPop() {
-	if (skip > 0) {
-		skip--;
+	if (pending) {
+		pushed = Math.max(0, pushed - pending);
+		pending = 0;
+		sync();
 		return;
 	}
+	// The user went back: the browser took one of our entries.
+	if (pushed > 0) pushed--;
 	let layer: Back | undefined;
 	for (let i = backs.length - 1; i >= 0; i--) {
 		if (backs[i]!.entry) {
@@ -61,25 +73,33 @@ function onPop() {
 		}
 	}
 	if (!layer) return;
-	layer.entry = false; // the browser already took it
+	layer.entry = false;
 	if (layer.opts.dismissible !== false) layer.opts.onclose?.();
 	// Still open afterwards (not dismissible, or onclose only stepped back inside it): it needs an entry for the next press.
 	setTimeout(() => {
-		if (backs.includes(layer) && !layer.entry) pushEntry(layer);
+		if (backs.includes(layer) && !layer.entry) {
+			layer.entry = true;
+			sync();
+		}
 	}, 0);
+	sync();
 }
 
 function track(layer: Back) {
-	if (!backs.length) window.addEventListener("popstate", onPop);
+	if (!listening) {
+		listening = true;
+		window.addEventListener("popstate", onPop);
+	}
 	backs.push(layer);
-	pushEntry(layer);
+	layer.entry = true;
+	sync();
 }
 
 function untrack(layer: Back) {
 	const i = backs.indexOf(layer);
 	if (i >= 0) backs.splice(i, 1);
-	dropEntry(layer);
-	if (!backs.length) window.removeEventListener("popstate", onPop);
+	layer.entry = false;
+	sync();
 }
 
 const FOCUSABLE =

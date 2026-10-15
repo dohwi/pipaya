@@ -8,7 +8,7 @@ import type { QuestionManager } from "./questions.ts";
 import type { Config } from "./config.ts";
 import { agentsPrompt, advertisedAgents, advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type AdvertisedAgent, type ContextSnapshot, type SessionContext } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
-import { expandTemplate, parseTemplateCall, readTemplateBody, templateCallHint, type TemplateService } from "./templates.ts";
+import { expandTemplate, parseTemplateCall, readTemplateBody, limitTemplateText, templateMarker, type TemplateService } from "./templates.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
@@ -330,7 +330,20 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 		if (live.compacting) throw conflict("the session is being compacted; send after it finishes");
 
-		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }];
+		// A template call is sent as its expanded text; a marker tells the client to show the short call as a note under the bubble.
+		const call = this.templates ? parseTemplateCall(input.text) : null;
+		let sentText = input.text;
+		let marker: string | null = null;
+		if (call) {
+			const found = this.templates!.list(record.cwd).templates.find((k) => k.name === call.name);
+			const body = found ? readTemplateBody(found.path) : null;
+			if (body !== null) {
+				sentText = limitTemplateText(expandTemplate(body, call.args));
+				marker = templateMarker(call.name, input.text.trim());
+			}
+		}
+		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: sentText }];
+		if (marker) content.push({ type: "text", text: marker });
 		const asked = mentionedAgents(input.text, this.subagents?.agents(record.cwd).map((a) => a.name) ?? []);
 		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
 		if (this.skills) {
@@ -340,12 +353,6 @@ export class SessionManager {
 				const body = readSkillText(skill.path);
 				if (body !== null) content.push({ type: "text", text: skillCallHint(skill, body, HINT_OPEN) });
 			}
-		}
-		const call = this.templates ? parseTemplateCall(input.text) : null;
-		if (call) {
-			const found = this.templates!.list(record.cwd).templates.find((k) => k.name === call.name);
-			const body = found ? readTemplateBody(found.path) : null;
-			if (body !== null) content.push({ type: "text", text: templateCallHint(call.name, expandTemplate(body, call.args), HINT_OPEN) });
 		}
 		if (input.images?.length) content.push(...input.images);
 		if (input.files?.length) {
@@ -364,7 +371,7 @@ export class SessionManager {
 
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		if (record.title === "New session" && this.store.nextSeq(id) === 0) {
-			this.update(id, { title: input.text.trim().replace(/\s+/g, " ").slice(0, 60) || "New session" });
+			this.update(id, { title: (call && marker ? call.name : input.text).trim().replace(/\s+/g, " ").slice(0, 60) || "New session" });
 		}
 		this.run(id, live, "prompt", async () => {
 			await this.autoCompact(id);

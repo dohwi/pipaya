@@ -481,6 +481,8 @@ export interface UserItem {
 	images: ImageBlock[];
 	/** Files attached to this message, saved in the session's working directory */
 	files?: FileRef[];
+	/** Set when the text is an expanded prompt template: its name and the short call the user typed. */
+	template?: { name: string; call: string };
 	ts: number;
 	fresh?: boolean;
 }

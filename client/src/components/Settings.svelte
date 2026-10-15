@@ -134,10 +134,10 @@
 
 				<section>
 					<div class="mono-label">{t("도구 승인")}</div>
-					<Segmented variant="cards" label={t("도구 승인")} value={app.effective.approval} onchange={(id) => app.configure({ approval: id })} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
-					<span class="hint" class:danger={approvals.find((a) => a.id === app.effective.approval)?.tone === "danger"}>
-						{t(approvals.find((a) => a.id === app.effective.approval)?.hint ?? "")}
-						{app.current ? t("열려 있는 대화에만 적용됩니다.") : t("앞으로 시작할 새 대화에 적용됩니다.")}
+					<Segmented variant="cards" label={t("도구 승인")} value={app.draft.approval} onchange={(id) => app.setDefaultApproval(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
+					<span class="hint" class:danger={approvals.find((a) => a.id === app.draft.approval)?.tone === "danger"}>
+						{t(approvals.find((a) => a.id === app.draft.approval)?.hint ?? "")}
+						{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
 					</span>
 				</section>
 

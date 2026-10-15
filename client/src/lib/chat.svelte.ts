@@ -54,9 +54,10 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[] } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; template?: { name: string; call: string } } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
+	let template: { name: string; call: string } | undefined;
 	// The server appends a note when the user wrote $agent or attached files; it is for the model, not for the transcript.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
@@ -69,10 +70,17 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 					} catch { /* a note we cannot read is simply not shown */ }
 					return false;
 				}
+				if (s.startsWith("<pipaya-template>")) {
+					try {
+						const j = JSON.parse(s.slice("<pipaya-template>".length, s.indexOf("</pipaya-template>")));
+						if (j && typeof j.name === "string") template = { name: j.name, call: String(j.call ?? "") };
+					} catch { /* an unreadable marker just means no note */ }
+					return false;
+				}
 				return !s.startsWith("<pipaya-hint>");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files };
+	return { text: textOf(shown), images, files, ...(template ? { template } : {}) };
 }
 
 // The server stores a denied/blocked call as an ordinary error result with these messages
@@ -435,6 +443,9 @@ export class ChatState {
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;
+						// A template call was typed short but stored expanded: show what was really sent.
+						const full = userFields(m);
+						if (full.template) Object.assign(opt, { text: full.text, template: full.template });
 					} else {
 						this.items.push({ kind: "user", key: `m${seq}`, seq, ts: m.timestamp ?? e.ts, fresh: true, ...userFields(m) });
 					}

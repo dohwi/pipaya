@@ -30,6 +30,7 @@
 	const tail = $derived(parts[parts.length - 1]);
 
 	let copied = $state(false);
+	let expanded = $state(false);
 
 	const plainText = $derived(
 		item.kind === "user"
@@ -91,7 +92,15 @@
 				</div>
 			{/if}
 			{#if item.text}
-				<div class="txt">{item.text}</div>
+				<div class="txt" class:clamp={item.template && !expanded}>{item.text}</div>
+			{/if}
+			{#if item.template}
+				<div class="tplnote">
+					<span>{t("프롬프트 템플릿 사용: {name}", { name: item.template.name })}</span>
+					{#if item.text.length > 400 || item.text.split("\n").length > 8}
+						<button class="more" onclick={() => (expanded = !expanded)}>{expanded ? t("접기") : t("더 보기")}</button>
+					{/if}
+				</div>
 			{/if}
 		</div>
 		<div class="actions">
@@ -180,6 +189,31 @@
 	}
 	.txt {
 		white-space: pre-wrap;
+	}
+	.txt.clamp {
+		display: -webkit-box;
+		-webkit-line-clamp: 8;
+		line-clamp: 8;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.tplnote {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		margin-top: 6px;
+		font-size: 12px;
+		color: var(--muted, inherit);
+		opacity: 0.8;
+	}
+	.more {
+		background: none;
+		border: 0;
+		padding: 0;
+		font: inherit;
+		color: inherit;
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.imgs {
 		display: flex;
