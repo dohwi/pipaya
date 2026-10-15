@@ -236,7 +236,7 @@
 	<div class="brandrow">
 		<PipayaMark color size={26} />
 		<Wordmark size={16} />
-		<button class="iconbtn fold foldbtn" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 접기")} title={t("사이드바 접기") + hint}><Icon name="sidebar" /></button>
+		<button class="iconbtn foldbtn" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 접기")} title={t("사이드바 접기") + hint}><Icon name="sidebar" /></button>
 	</div>
 	<div class="tools">
 		<div class="searchwrap">
@@ -401,7 +401,7 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.fold {
+	.foldbtn {
 		margin-left: auto;
 		margin-right: -9.5px; /* the 19px icon's right edge sits on the 16px gutter, like the server chevron below */
 	}
