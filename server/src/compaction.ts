@@ -99,7 +99,7 @@ export function transcript(messages: AgentMessage[]): string {
 	const out: string[] = [];
 	for (const m of messages) {
 		const c = contentOf(m);
-		const parts = typeof c === "string" ? [{ type: "text", text: c }] : Array.isArray(c) ? (c as any[]) : [];
+		const parts = typeof c === "string" ? [{ type: "text", text: c }] : Array.isArray(c) ? (c as { type?: string; text?: string; name?: string; arguments?: unknown }[]) : [];
 		const texts: string[] = [];
 		for (const p of parts) {
 			if (p.type === "text" && p.text) texts.push(clip(p.text));

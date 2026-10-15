@@ -110,7 +110,7 @@ describe("groups API", () => {
 		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
 		const g = (await api("POST", "/groups", { layout: split(pane(a), split(pane(b), pane(c), "col")) })).json;
 		await api("PATCH", `/sessions/${b}`, { closed: true });
-		let cur = (await api("GET", "/groups")).json.groups.find((x: { id: string }) => x.id === g.id);
+		const cur = (await api("GET", "/groups")).json.groups.find((x: { id: string }) => x.id === g.id);
 		expect(panesOf(cur.layout)).toEqual([a, c]);
 		await api("DELETE", `/sessions/${a}`);
 		// one session is left, so the group dissolves

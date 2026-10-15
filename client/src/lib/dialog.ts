@@ -120,7 +120,7 @@ export function topLayer(): HTMLElement | null {
 }
 
 /** Esc for the top modal. Runs after the focused element's own handlers, so a field or menu that used Esc keeps it. */
-function escape(e: KeyboardEvent, layer: Layer) {
+function escapeLayer(e: KeyboardEvent, layer: Layer) {
 	if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
 	e.preventDefault();
 	if (layer.opts.dismissible !== false) layer.opts.onclose?.();
@@ -133,7 +133,7 @@ function onWindowKey(e: KeyboardEvent) {
 	const target = e.target instanceof Node ? e.target : null;
 	if (target && stack.some((l) => l.node.contains(target))) return;
 	if (e.key === "Tab") return void trapTab(e, top.node);
-	escape(e, top);
+	escapeLayer(e, top);
 }
 
 export function modalLayer(node: HTMLElement, opts: LayerOpts) {
@@ -149,7 +149,7 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	const onKey = (e: KeyboardEvent) => {
 		// A modal underneath (not portalled) only sees keys that bubbled out of the one on top: leave them alone.
 		if (stack[stack.length - 1] === layer) {
-			if (!trapTab(e, node)) escape(e, layer);
+			if (!trapTab(e, node)) escapeLayer(e, layer);
 		}
 		e.stopPropagation(); // the app's shortcuts stay quiet while a modal has the keyboard
 	};

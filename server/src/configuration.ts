@@ -233,7 +233,7 @@ export class Configuration {
 		const seen = new Set<string>();
 		const models: { id: string; name?: string }[] = [];
 		for (const item of list) {
-			const o = item as any;
+			const o = item as { id?: unknown; display_name?: unknown } | null | undefined;
 			const id = typeof o === "string" ? o : typeof o?.id === "string" ? o.id : undefined;
 			if (!id || id.length > 200 || seen.has(id)) continue;
 			seen.add(id);

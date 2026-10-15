@@ -11,7 +11,7 @@ let cfg: Config;
 let upstream: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 const key = "private-test-secret";
-let requests: { path: string; key: string | null; body: any }[] = [];
+const requests: { path: string; key: string | null; body: any }[] = [];
 const body = () => ({ name: "Local test", baseUrl, api: "openai-completions", authRequired: false,
 	models: [{ id: "test-model", name: "Test", contextWindow: 8192, maxTokens: 1024, reasoning: false, vision: false }] });
 const api = async (method: any, url: string, payload?: unknown, auth = true) => {

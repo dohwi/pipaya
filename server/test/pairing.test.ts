@@ -78,7 +78,7 @@ describe("pairing rules", () => {
 	});
 
 	test("one noisy caller is throttled without locking out the owner", () => {
-		let t = 0;
+		const t = 0;
 		const p = new Pairing(() => "tok", () => t);
 		const { code } = p.create();
 		for (let i = 0; i < 10; i++) expect(() => p.redeem(`wrong-${i}`, "203.0.113.9")).toThrow("not valid");

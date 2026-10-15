@@ -80,11 +80,11 @@ export function firebaseResources(source: string): string {
 		gcm_defaultSenderId: config.project_info?.project_number,
 		project_id: config.project_info?.project_id,
 	};
-	const escape = (value: unknown) => {
+	const escapeXml = (value: unknown) => {
 		if (typeof value !== "string" || !value || /[\r\n\x00]/.test(value)) throw new Error("Invalid Firebase Android configuration");
 		return value.replace(/[&<>\"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 	};
-	return `<resources>\n${Object.entries(values).map(([key, value]) => `    <string name="${key}" translatable="false">${escape(value)}</string>`).join("\n")}\n</resources>\n`;
+	return `<resources>\n${Object.entries(values).map(([key, value]) => `    <string name="${key}" translatable="false">${escapeXml(value)}</string>`).join("\n")}\n</resources>\n`;
 }
 
 /**

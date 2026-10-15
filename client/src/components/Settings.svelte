@@ -421,23 +421,6 @@
 	.srv:last-child {
 		border-bottom: 0;
 	}
-	.sinfo {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		line-height: 1.3;
-		text-align: left;
-		align-self: stretch;
-		justify-content: center;
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-	}
-	.sinfo:hover .sname {
-		text-decoration: underline;
-		text-underline-offset: 3px;
-	}
 	.srv > :global(svg) {
 		flex: none;
 		width: 17px;
@@ -447,20 +430,6 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-	}
-	.sname {
-		font-weight: 550;
-		font-size: var(--fs-md);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.surl {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 	@media (max-width: 760px) {
 		.layout {

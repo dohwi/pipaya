@@ -12,7 +12,7 @@ try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const code = fs.readFileSync(sourcePath, 'utf8');
   // Syntax check only: never evaluate author code during packaging.
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
   new AsyncFunction('sdk', code);
   const json = JSON.stringify({ manifest, code }, null, 2) + '\n';
   if (Buffer.byteLength(code, 'utf8') > 128 * 1024 || Buffer.byteLength(json, 'utf8') > 256 * 1024) throw new Error('Extension package exceeds size limits');

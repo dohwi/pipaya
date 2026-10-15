@@ -77,7 +77,7 @@ describe("layout tree", () => {
 	});
 });
 
-import { append, measure } from "../src/lib/layout";
+import { append } from "../src/lib/layout";
 
 describe("layout geometry", () => {
 	test("append adds a pane beside the whole layout", () => {
