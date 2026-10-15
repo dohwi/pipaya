@@ -394,7 +394,8 @@ const bashTool: ToolDef = {
 
 const ASK_USER_DESCRIPTION =
 	"Ask the user a question and wait for the answer. Use it only when a requirement is genuinely ambiguous or a decision is hard to undo; " +
-	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known.";
+	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known, " +
+	"and set `recommended` to the option you suggest (it is highlighted for the user).";
 
 const askUserTool: ToolDef = {
 	name: "ask_user",
@@ -408,12 +409,14 @@ const askUserTool: ToolDef = {
 			parameters: Type.Object({
 				question: Type.Optional(Type.String({ minLength: 1, maxLength: 2000, description: "One clear question. Omit when using `questions`" })),
 				options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, description: "Suggested answers" })),
+				recommended: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" })),
 				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
 				questions: Type.Optional(
 					Type.Array(
 						Type.Object({
 							question: Type.String({ minLength: 1, maxLength: 2000 }),
 							options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8 })),
+							recommended: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" })),
 							allowFreeText: Type.Optional(Type.Boolean()),
 						}),
 						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
@@ -422,9 +425,10 @@ const askUserTool: ToolDef = {
 			}),
 			async execute(id, params, signal) {
 				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
-				const items = params.questions?.map((q) => ({ question: q.question, options: q.options, allowFreeText: q.allowFreeText ?? true }));
+				const rec = (options?: string[], recommended?: string) => (recommended && options?.includes(recommended) ? { recommended } : {});
+				const items = params.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), allowFreeText: q.allowFreeText ?? true }));
 				if (!items?.length && !params.question) throw new Error("ask_user needs `question` or `questions`");
-				const first = items?.[0] ?? { question: params.question!, options: params.options, allowFreeText: params.allowFreeText ?? true };
+				const first = items?.[0] ?? { question: params.question!, options: params.options, ...rec(params.options, params.recommended), allowFreeText: params.allowFreeText ?? true };
 				const outcome = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
 				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
 				return text(outcome.answer, { question: first.question, answer: outcome.answer });

@@ -4,7 +4,7 @@
 	import Icon from "./Icon.svelte";
 	import type { Question } from "../lib/types";
 
-	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "allowFreeText" | "items"> } = $props();
+	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items"> } = $props();
 
 	let typed = $state("");
 
@@ -56,7 +56,10 @@
 	{#if cur.options?.length}
 		<div class="opts">
 			{#each cur.options as o (o)}
-				<button class="btn opt" class:picked={items && answers[tab] === o} onclick={() => reply(o)}>{o}</button>
+				<button class="btn opt" class:picked={items && answers[tab] === o} class:rec={cur.recommended === o} onclick={() => reply(o)}>
+					{o}
+					{#if cur.recommended === o}<span class="badge">{t("추천")}</span>{/if}
+				</button>
 			{/each}
 		</div>
 	{/if}
@@ -113,6 +116,18 @@
 		line-height: 1.45;
 		white-space: normal;
 		overflow-wrap: anywhere;
+	}
+	.opt.rec {
+		border-color: currentColor;
+		font-weight: 600;
+	}
+	.badge {
+		margin-left: 6px;
+		padding: 1px 8px;
+		border-radius: var(--radius-pill);
+		border: 1px solid currentColor;
+		font-size: var(--fs-2xs);
+		white-space: nowrap;
 	}
 	.opt.picked {
 		outline: 2px solid currentColor;

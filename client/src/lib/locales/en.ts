@@ -543,7 +543,6 @@ export const en: Record<string, string> = {
 	"서버가 스킬 기능을 지원하지 않습니다. 서버를 최신 버전으로 재시작한 뒤 다시 시도하세요.": "The server doesn't support skills. Restart it on the latest version and try again.",
 	"스킬": "Skills",
 	"{total}개 중 {on}개 사용": "{on} of {total} in use",
-	"적용 범위": "Scope",
 	"이 프로젝트": "This project",
 	"모든 프로젝트": "All projects",
 	"스킬 검색": "Search skills",

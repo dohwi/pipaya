@@ -248,6 +248,7 @@ export const DecisionBody = Type.Object({ approved: Type.Boolean(), reason: Type
 export const QuestionItem = Type.Object({
 	question: Type.String(),
 	options: Type.Optional(Type.Array(Type.String())),
+	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
 	allowFreeText: Type.Boolean(),
 });
 export const QuestionRequest = Type.Object({
@@ -255,6 +256,7 @@ export const QuestionRequest = Type.Object({
 	toolCallId: Type.String(),
 	question: Type.String(),
 	options: Type.Optional(Type.Array(Type.String())),
+	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
 	allowFreeText: Type.Boolean(),
 	items: Type.Optional(Type.Array(QuestionItem, { description: "Present when several questions were asked at once" })),
 	requestedAt: Type.Integer(),

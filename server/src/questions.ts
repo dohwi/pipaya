@@ -4,6 +4,8 @@ import type { EventBus } from "./events.ts";
 export interface QuestionItem {
 	question: string;
 	options?: string[];
+	/** The option the agent recommends (one of `options`). */
+	recommended?: string;
 	allowFreeText: boolean;
 }
 
@@ -13,6 +15,7 @@ export interface QuestionRequest {
 	/** The first question, or the only one. */
 	question: string;
 	options?: string[];
+	recommended?: string;
 	allowFreeText: boolean;
 	/** Set when several questions were asked at once; one entry per question, in order. */
 	items?: QuestionItem[];

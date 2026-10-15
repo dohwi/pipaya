@@ -401,22 +401,6 @@
 		border-color: var(--border);
 	}
 	/* "Auto" runs everything unasked, so it is always tinted as a warning */
-	.theme.danger {
-		color: var(--danger);
-	}
-	.theme.danger.on {
-		background: var(--danger-soft);
-		border-color: var(--danger);
-	}
-	.themes:global([data-indicator-ready]) .theme.danger.on {
-		border-color: var(--border);
-	}
-	.themes.danger-on :global(.slide-ind[data-variant="outline"]) {
-		box-shadow: inset 0 0 0 1px var(--danger);
-	}
-	.hint.danger-text {
-		color: var(--danger);
-	}
 	.theme :global(svg) {
 		width: 17px;
 		height: 17px;
@@ -425,13 +409,6 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-	}
-	.slist {
-		display: flex;
-		flex-direction: column;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		overflow: hidden;
 	}
 	.srv {
 		display: flex;

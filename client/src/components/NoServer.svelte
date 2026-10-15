@@ -119,15 +119,6 @@
 		word-break: keep-all;
 		max-width: 34ch;
 	}
-	.panel {
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 14px;
-		padding-top: 6px;
-		animation: rise var(--motion-normal) var(--ease) both;
-	}
 	.add {
 		height: 46px;
 		padding: 0 26px;
@@ -140,37 +131,6 @@
 		color: var(--text-faint);
 		line-height: 1.55;
 		word-break: keep-all;
-	}
-	.tip {
-		display: flex;
-		gap: 10px;
-		align-items: flex-start;
-		text-align: left;
-		padding: 12px 14px;
-		border: 1px dashed var(--border-strong);
-		border-radius: var(--radius);
-		background: var(--bg);
-		font-size: var(--fs-sm);
-		line-height: 1.6;
-		color: var(--text-dim);
-		word-break: keep-all;
-	}
-	.tip p {
-		margin: 0;
-	}
-	.tip b {
-		color: var(--text);
-	}
-	.tip :global(svg) {
-		flex: none;
-		width: 18px;
-		height: 18px;
-		margin-top: 2px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	.steps {
 		list-style: none;
@@ -215,61 +175,5 @@
 	.steps b {
 		color: var(--text);
 		font-size: var(--fs-md);
-	}
-	.how {
-		display: flex;
-		gap: 6px;
-	}
-	.how button {
-		height: 28px;
-		padding: 0 10px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-pill);
-		font-size: var(--fs-xs);
-		color: var(--text-dim);
-	}
-	.how button.on {
-		border-color: var(--text);
-		color: var(--text);
-	}
-	.cmd {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-		padding: 8px 6px 8px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-code, var(--bg));
-	}
-	.cmd code {
-		flex: 1;
-		min-width: 0;
-		font-family: var(--mono);
-		font-size: var(--fs-xs);
-		color: var(--text);
-		overflow-x: auto;
-		white-space: nowrap;
-		scrollbar-width: none;
-	}
-	.cmd code::-webkit-scrollbar {
-		display: none;
-	}
-	.cmd :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.steps .btn :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
 	}
 </style>
