@@ -115,7 +115,7 @@ export function surfaceOut(node: Element, { y = 8 }: { y?: number } = {}) {
 }
 
 /* ---------- panes: the content under a tab strip. Slides a little from the side the new tab is on. ---------- */
-export function paneIn(node: Element, { x = 0 }: { x?: number } = {}) {
+export function paneIn(_node: Element, { x = 0 }: { x?: number } = {}) {
 	return { duration: ms("normal"), easing: easeEnter, css: (t: number, u: number) => `opacity:${t.toFixed(3)};transform:translateX(${(u * x).toFixed(2)}px)` };
 }
 

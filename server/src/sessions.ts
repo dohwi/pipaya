@@ -14,86 +14,15 @@ import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
-import type { ModelChoiceValue } from "./model-choice.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
-import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
+import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a capable coding assistant working inside a sandboxed working directory.
-Use the available tools to inspect and change files and run commands. Prefer small, verifiable steps.
-Be concise. Paths are relative to the working directory.
-Files the user attaches are saved in the working directory and listed in the message. To hand a file back (a report, image, export), write it into the working directory and mention it as a markdown link to its relative path, e.g. [report.pdf](out/report.pdf) or ![chart](out/chart.png); the user sees a preview.`;
-
-const IDLE_EVICT_MS = 30 * 60_000;
-
-export type PromptMode = "prompt" | "steer" | "follow_up";
-
-export interface CreateSessionInput {
-	title?: string;
-	cwd?: string;
-	provider?: string;
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-	systemPrompt?: string;
-	tools?: string[];
-	approval?: ApprovalPolicy;
-}
-
-export interface SessionStatus {
-	running: boolean;
-	pendingToolCalls: string[];
-	pendingApprovals: number;
-	pendingQuestions: number;
-	/** Partial assistant message for late-joining clients. */
-	streamingMessage: AgentMessage | null;
-	queued: boolean;
-	lastError: string | null;
-	/** A manual or automatic compaction is writing its summary. */
-	compacting: boolean;
-}
-
-export interface CompactionOutcome {
-	tokensBefore: number;
-	context: { tokens: number | null; contextWindow: number };
-	model: ModelChoiceValue & { custom: boolean };
-}
-
-interface Live {
-	agent: Agent;
-	nextSeq: number;
-	running: boolean;
-	runStartedAt: number;
-	lastActive: number;
-	unsubscribe: () => void;
-	/** Fingerprint of the skills currently written into the system prompt. */
-	skillsKey: string;
-	/** Directories the read tool may open besides the cwd; mutated in place when skills change. */
-	readRoots: string[];
-	/** Set while a compaction runs; aborting it cancels the summary call. */
-	compacting?: AbortController;
-	/** Settles after the run's own wrap-up (run_finished) has been published, not just when the agent is idle. */
-	settled?: Promise<void>;
-	/** Runaway guard: model calls in this run, and the last tool-call fingerprints (to spot a repeating loop). */
-	turns: number;
-	recentCalls: string[];
-	/** Set when abort did not take effect in time and the run was cut loose; its late wrap-up must stay silent. */
-	forceStopped?: boolean;
-	/** Set by `before_agent_start` extensions; applies to the current run only. */
-	runSystem?: { replace?: string; append?: string };
-}
-
-/** How long a cooperative abort may take before the run is forcibly cut loose. */
-const FORCE_STOP_MS = 8000;
-
-/** A single run is stopped after this many model calls (a user can simply send another message to continue). */
-const MAX_RUN_TURNS = Number(process.env.PIPAYA_MAX_RUN_TURNS) > 0 ? Number(process.env.PIPAYA_MAX_RUN_TURNS) : 200;
-/** The same tool call (same name + arguments) this many turns in a row counts as a stuck loop. */
-const MAX_REPEATED_CALLS = 6;
-
-const skillsKey = (skills: SkillRef[], agents: AdvertisedAgent[] = []) =>
-	JSON.stringify([skills.map((k) => [k.name, k.description, k.path]), agents.map((a) => [a.name, a.description])]);
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
+export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
+export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
 /** Strip the heavy `partial` snapshot from stream deltas; clients rebuild from deltas. */
 function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["assistantMessageEvent"]): unknown {

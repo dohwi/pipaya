@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 describe("closed chats permanent deletion", () => {
 	test("PaletteSpec defines ondelete handler", () => {
-		const storeSrc = readFileSync(resolve(__dirname, "../src/lib/store.svelte.ts"), "utf-8");
+		const storeSrc = readFileSync(resolve(__dirname, "../src/lib/store-model.ts"), "utf-8");
 		expect(storeSrc).toContain("ondelete?: (item: PaletteItem) => void | Promise<void>;");
 	});
 

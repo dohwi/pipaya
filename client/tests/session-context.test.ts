@@ -60,7 +60,7 @@ describe("skills REST contract", () => {
 		expect(call!.url).toBe("http://100.64.0.1:8787/skills?cwd=%2Fw%2Fmy+project");
 		expect(call!.init?.method).toBe("GET");
 		expect(call!.init?.signal).toBe(controller.signal);
-		expect((call!.init?.headers as Record<string, string>).Authorization).toBe("Bearer secret");
+		expect((call!.init!.headers as Record<string, string>).Authorization).toBe("Bearer secret");
 		expect((await capture(api => api.skills()))[0]!.url).toBe("http://100.64.0.1:8787/skills");
 	});
 

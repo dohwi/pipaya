@@ -48,7 +48,7 @@ export class AgentsWatcher {
 		return [...out].filter((d) => existsSync(d));
 	}
 
-	private sync(initial = false): void {
+	private sync(): void {
 		if (this.stopped) return;
 		let wanted: string[];
 		try { wanted = this.targets(); } catch { return; }

@@ -172,7 +172,7 @@ describe("settings change what delegate does", () => {
 		const db = new Database(":memory:", { strict: true });
 		db.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, data TEXT NOT NULL)");
 		db.query("INSERT INTO settings (key, data) VALUES ('subagents', $d)").run({ d: JSON.stringify({ enabled: true, agents: [{ ...defaultAgent(), model: { provider: "echo", model: "gone", thinkingLevel: "high" } }] }) });
-		const known = (p: string, m: string) => (m === "here" ? ({} as any) : undefined);
+		const known = (_p: string, m: string) => (m === "here" ? ({} as any) : undefined);
 		const settings = new SubAgentSettings(db, { models: { getModel: known } } as any);
 		const session = { provider: "echo", model: "session" };
 		expect(settings.resolve(settings.get().agents[0]!, session)).toEqual({ provider: "echo", model: "session", thinkingLevel: "minimal", custom: false });

@@ -1,6 +1,6 @@
 import { errorText, ApiError, type Api } from "./api";
 import { uid } from "./format";
-import { LocalizedError, localeTag, t } from "./i18n";
+import { LocalizedError, t } from "./i18n";
 import type {
 	AgentMessage,
 	AssistantBlock,
@@ -125,20 +125,6 @@ export class ChatState {
 
 	/** Key of the "/compact" bubble while a compaction is in progress; the result lands in the transcript under it. */
 	compactKey = $state<string | null>(null);
-
-	private beginCompactItem(): void {
-		if (this.compactKey) return;
-		const key = `u${uid()}`;
-		this.compactKey = key;
-		this.items.push({ kind: "user", key, seq: null, text: "/compact", images: [], ts: Date.now(), fresh: true });
-	}
-
-	/** Whichever of the HTTP reply and the SSE event arrives first writes the result; the second finds nothing open. */
-	private endCompactItem(text: string, tone: "ok" | "error"): void {
-		if (!this.compactKey) return;
-		this.compactKey = null;
-		this.items.push({ kind: "notice", key: `n${uid()}`, text, ts: Date.now(), tone });
-	}
 
 	/** Never send /compact as a user prompt: the server must rebuild and persist model context. */
 	async compact(customInstructions?: string): Promise<CompactionResult> {

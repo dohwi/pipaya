@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { compileModule } from "svelte/compiler";
 import ts from "typescript";
-import type { ExtensionHost as ExtensionHostType, ExtensionContext, HostAdapter } from "../src/lib/extensions/host.svelte";
+import type { ExtensionHost as ExtensionHostType, HostAdapter } from "../src/lib/extensions/host.svelte";
 
 // Server vs device scope: where an extension is installed and what a server switch or sync touches.
 // The real rune module is compiled with Svelte. Only the iframe/Worker runtime is replaced by a

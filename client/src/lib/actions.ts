@@ -5,7 +5,6 @@ import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { firstUnseen, sessionOrder, stepFrom } from "./nav";
 import {
-  ACTIONS,
   actionFor,
   buildCombo,
   escapeShouldStop,

@@ -17,8 +17,6 @@ const call = async (method: any, url: string, payload?: unknown) => {
 	return { status: r.statusCode, json: r.body ? r.json() : undefined };
 };
 const device = (id: string, platform: string, focused = false, push?: unknown) => call("PUT", `/notifications/devices/${id}`, { platform, focused, enabled: true, visibleSessionIds: [], ...(push ? { push } : {}) });
-const live = () => app.bus.history({ after: 0, limit: 500 }).filter((e) => e.type === "notification");
-const liveFor = () => { const out: { deviceId: string; id: string }[] = []; app.bus.subscribe((e) => { if (e.type === "notification") out.push({ deviceId: (e.data as any).deviceId, id: (e.data as any).notification.id }); }); return out; };
 const setPolicy = (escalateMinutes: number) => call("PUT", "/client-settings/notificationPolicy", { value: { escalateMinutes } });
 /** A chat with a title, made directly: creating one over HTTP needs a model provider that is irrelevant here. */
 const chat = (title: string): string => {
