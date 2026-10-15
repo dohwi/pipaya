@@ -19,7 +19,7 @@ FACE_C, FS = (64, 89), .78
 
 DARK = dict(trunk="#7a5b44", leaf="#4a9443", fruit="#f08a24", eye="#fbf3e2")
 LIGHT = dict(trunk="#5a4130", leaf="#2f6d2d", fruit="#f08a24", eye="#fbf3e2")
-ICON_BG = "#161616"
+ICON_BG = "#FFFFFF"
 
 FACES = {
     "block": ["M-14 -5.5L-6 -5.5L-6 5.5L-14 5.5Z", "M6 -5.5L14 -5.5L14 5.5L6 5.5Z"],
@@ -112,7 +112,7 @@ def app_icon(glyph_only=False):
     bg = "" if glyph_only else f'<rect width="1024" height="1024" fill="{ICON_BG}"/>'
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">'
-        f'{bg}<g transform="translate({num(tx)} {num(ty)}) scale({ICON_SCALE})">{color_body("block", DARK, False)}</g></svg>\n'
+        f'{bg}<g transform="translate({num(tx)} {num(ty)}) scale({ICON_SCALE})">{color_body("block", LIGHT, False)}</g></svg>\n'
     )
 
 

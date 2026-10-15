@@ -9,6 +9,7 @@
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
 	import { faceFor } from "../lib/faces";
+	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
 	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
 

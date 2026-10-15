@@ -53,10 +53,10 @@ describe("template discovery", () => {
 
 describe("template calls", () => {
 	test("parses only a call at the start of the message", () => {
-		expect(parseTemplateCall("/template:review src/a.ts\nplease")).toEqual({ name: "review", args: "src/a.ts\nplease" });
-		expect(parseTemplateCall("  /template:review")).toEqual({ name: "review", args: "" });
-		expect(parseTemplateCall("hello /template:review")).toBeNull();
-		expect(parseTemplateCall("/template:Bad")).toBeNull();
+		expect(parseTemplateCall("/prompt:review src/a.ts\nplease")).toEqual({ name: "review", args: "src/a.ts\nplease" });
+		expect(parseTemplateCall("  /prompt:review")).toEqual({ name: "review", args: "" });
+		expect(parseTemplateCall("hello /prompt:review")).toBeNull();
+		expect(parseTemplateCall("/prompt:Bad")).toBeNull();
 	});
 
 	test("expands $ARGUMENTS or appends the arguments", () => {

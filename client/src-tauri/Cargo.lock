@@ -2753,13 +2753,15 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
- "tauri-plugin-pipaya-push",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-os",
+ "tauri-plugin-pipaya-push",
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tauri-winrt-notification",
+ "webview2-com",
+ "windows-core",
 ]
 
 [[package]]
@@ -4020,15 +4022,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-pipaya-push"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tauri",
- "tauri-plugin",
-]
-
-[[package]]
 name = "tauri-plugin-notification"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4086,6 +4079,15 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tauri-plugin-pipaya-push"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

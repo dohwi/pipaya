@@ -127,7 +127,7 @@
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
 	const skillMatches = $derived(slashQuery !== null ? matchSkills(skillList, slashQuery) : []);
-	// Prompt templates follow the skills as `/template:name`.
+	// Prompt templates follow the skills as `/prompt:name`.
 	let templateList = $state<{ name: string; description: string }[]>([]);
 	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
 	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } })[]>([

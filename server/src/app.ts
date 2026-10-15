@@ -34,6 +34,7 @@ import { openDb } from "./db.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { EventBus } from "./events.ts";
 import { builtinProvider, createModelRegistry, describeModels } from "./models.ts";
+import { AccountEmails } from "./account-email.ts";
 import { deviceId, ProviderLogins } from "./provider-login.ts";
 import * as S from "./schemas.ts";
 import { SessionManager } from "./sessions.ts";
@@ -115,7 +116,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		paths: opts.extensionPaths,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions);
+	const templates = new TemplateService({ home: opts.home, defaultWorkdir: () => configuration.defaultWorkdir() });
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates);
 	extensions.attach({
 		cwd: (id) => store.get(id)?.cwd,
 		send: (id, text, mode) => sessions.send(id, { text, mode }),
@@ -215,13 +217,17 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return { providers: await Promise.all(registry.models.getProviders().map(async (p) => ({
 				id: p.id, name: p.name ?? p.id,
 				configured: Boolean(await registry.models.checkAuth(p.id).catch(() => undefined)), storedCredential: stored.get(p.id) ?? null,
+				...(stored.get(p.id) === "oauth" ? await accountEmails.backfill(p.id, () => credentials.read(p.id)).then((email) => (email ? { accountEmail: email } : {})) : {}),
 				loginMethods: [...(p.auth.apiKey?.login ? ["api_key" as const] : []), ...(p.auth.oauth ? ["oauth" as const] : [])],
 				...(p.auth.oauth ? { oauthLabel: p.auth.oauth.loginLabel ?? p.auth.oauth.name } : {}),
 				builtin: !custom.has(p.id) && builtinProvider(p.id) !== undefined,
 			}))) };
 		},
 	});
+	const accountEmails = new AccountEmails(db);
 	const logins = new ProviderLogins(registry.models, async (id) => {
+		const credential = await credentials.read(id).catch(() => undefined);
+		if (credential) await accountEmails.refresh(id, credential);
 		bus.publish(null, "provider_updated", { id, configured: Boolean(await registry.models.checkAuth(id).catch(() => undefined)) });
 	}, { agentName: "Pipaya", deviceId: () => deviceId(db) });
 	app.post("/providers/:id/login", {
@@ -246,6 +252,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			const { id } = req.params;
 			if (!registry.models.getProvider(id)) throw notFound("provider");
 			await credentials.modify(id, async () => ({ type: "api_key", key: req.body.key }));
+			accountEmails.clear(id);
 			bus.publish(null, "provider_updated", { id, configured: true });
 			return { ok: true };
 		},
@@ -255,6 +262,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async (req) => {
 			const { id } = req.params;
 			await credentials.delete(id);
+			accountEmails.clear(id);
 			bus.publish(null, "provider_updated", { id, configured: Boolean(await registry.models.checkAuth(id)) });
 			return { ok: true };
 		},
@@ -429,6 +437,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerGroupRoutes(server, groups);
 	registerSkillRoutes(server, skills, bus);
+	registerTemplateRoutes(server, templates);
 	registerExtensionSettingsRoutes(server, new ExtensionSettings(cfg.dataDir), bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);

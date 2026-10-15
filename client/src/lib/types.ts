@@ -221,6 +221,8 @@ export interface ProviderInfo {
 	name: string;
 	configured: boolean;
 	storedCredential: string | null;
+	/** Email of the signed-in (OAuth) account, when the provider reveals one */
+	accountEmail?: string;
 	/** "api_key": interactive key setup, "oauth": browser/device sign-in */
 	loginMethods?: ("api_key" | "oauth")[];
 	oauthLabel?: string;

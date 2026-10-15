@@ -60,7 +60,7 @@
 			.catch(() => { if (!controller.signal.aborted && fresh?.key === key) fresh = null; });
 		return () => controller.abort();
 	});
-	// Prompt templates callable as /template:name in the chosen directory (the open chat's, else the new-chat one).
+	// Prompt templates callable as /prompt:name in the chosen directory (the open chat's, else the new-chat one).
 	let tpl = $state<{ key: string; names: string[] } | null>(null);
 	const tplCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	const tplKey = $derived(`${app.serverId}:${tplCwd}`);
@@ -83,7 +83,7 @@
 		tplNames
 			? [
 					t("사용할 수 있는 프롬프트 템플릿 {n}개", { n: tplNames.length }),
-					tplNames.length ? tplNames.slice(0, 8).map(n => `/template:${n}`).join(", ") + (tplNames.length > 8 ? ` ${t("외 {n}개", { n: tplNames.length - 8 })}` : "") : t("템플릿이 없습니다."),
+					tplNames.length ? tplNames.slice(0, 8).map(n => `/prompt:${n}`).join(", ") + (tplNames.length > 8 ? ` ${t("외 {n}개", { n: tplNames.length - 8 })}` : "") : t("템플릿이 없습니다."),
 					t("눌러서 목록 보기"),
 				].join("\n")
 			: "",

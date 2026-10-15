@@ -275,6 +275,7 @@ export const ProviderInfo = Type.Object({
 	name: Type.String(),
 	configured: Type.Boolean(),
 	storedCredential: Nullable(Type.String({ description: "Credential type kept in SQLite, if any" })),
+	accountEmail: Type.Optional(Type.String({ description: "Email of the signed-in (OAuth) account, when the provider reveals one" })),
 	loginMethods: Type.Array(Type.Union([Type.Literal("api_key"), Type.Literal("oauth")]), { description: "How a client can sign in: \"api_key\" = paste a key (PUT credential), \"oauth\" = browser/device login (POST /providers/:id/login)" }),
 	oauthLabel: Type.Optional(Type.String({ description: "Label of the OAuth option, e.g. \"Sign in with ChatGPT\"" })),
 	builtin: Type.Boolean({ description: "Ships with the SDK (false = user-defined endpoint or extension)" }),

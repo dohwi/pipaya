@@ -118,6 +118,7 @@ export class SessionManager {
 		private subagents?: SubAgents,
 		private compaction?: CompactionSettings,
 		private ext?: ExtensionHost,
+		private templates?: TemplateService,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -406,6 +407,12 @@ export class SessionManager {
 				const body = readSkillText(skill.path);
 				if (body !== null) content.push({ type: "text", text: skillCallHint(skill, body, HINT_OPEN) });
 			}
+		}
+		const call = this.templates ? parseTemplateCall(input.text) : null;
+		if (call) {
+			const found = this.templates!.list(record.cwd).templates.find((k) => k.name === call.name);
+			const body = found ? readTemplateBody(found.path) : null;
+			if (body !== null) content.push({ type: "text", text: templateCallHint(call.name, expandTemplate(body, call.args), HINT_OPEN) });
 		}
 		if (input.images?.length) content.push(...input.images);
 		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };

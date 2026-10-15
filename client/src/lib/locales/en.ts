@@ -1058,7 +1058,7 @@ export const en: Record<string, string> = {
 	"템플릿 {n}개": "{n} {n#template|templates}",
 	"사용할 수 있는 프롬프트 템플릿 {n}개": "{n} prompt {n#template|templates} available",
 	"눌러서 목록 보기": "Click to see the list",
-	"입력창에 /template:이름 [내용]을 쓰면 저장된 긴 프롬프트가 대화에 전달됩니다. 프롬프트 안의 $ARGUMENTS는 뒤에 쓴 내용으로 바뀝니다.": "Write /template:name [text] in the input to send the saved long prompt to the chat. $ARGUMENTS inside the prompt is replaced by the text you add after it.",
+	"입력창에 /prompt:이름 [내용]을 쓰면 저장된 긴 프롬프트가 대화에 전달됩니다. 프롬프트 안의 $ARGUMENTS는 뒤에 쓴 내용으로 바뀝니다.": "Write /prompt:name [text] in the input to send the saved long prompt to the chat. $ARGUMENTS inside the prompt is replaced by the text you add after it.",
 	"스킬 열기": "Open skills",
 	"지금 대화(또는 새 대화)의 스킬 목록을 엽니다": "Opens the skill list for the current chat (or a new one)",
 	"다음 서버로 전환": "Switch to next server",

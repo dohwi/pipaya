@@ -53,7 +53,7 @@
 		{#if (data?.templates.length ?? 0) > 6}
 			<div class="tools"><input class="search" type="search" placeholder={t("템플릿 검색")} bind:value={query} aria-label={t("템플릿 검색")} /></div>
 		{/if}
-		<p class="hint">{t("입력창에 /template:이름 [내용]을 쓰면 저장된 긴 프롬프트가 대화에 전달됩니다. 프롬프트 안의 $ARGUMENTS는 뒤에 쓴 내용으로 바뀝니다.")}</p>
+		<p class="hint">{t("입력창에 /prompt:이름 [내용]을 쓰면 저장된 긴 프롬프트가 대화에 전달됩니다. 프롬프트 안의 $ARGUMENTS는 뒤에 쓴 내용으로 바뀝니다.")}</p>
 
 		<div class="body" aria-busy={loading}>
 			{#if error}
@@ -69,7 +69,7 @@
 					{#each shown as s (s.name)}
 						<li class="item">
 							<div class="line">
-								<span class="name mono">/template:{s.name}</span>
+								<span class="name mono">/prompt:{s.name}</span>
 								<Badge size="sm">{s.scope === "project" ? t("프로젝트") : t("전역")}</Badge>
 							</div>
 							<p class="desc">{s.description}</p>

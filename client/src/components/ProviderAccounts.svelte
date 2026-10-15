@@ -64,7 +64,7 @@
 	<ul class="list">
 		{#each connected as p (p.id)}
 			<li>
-				<span class="pname">{p.name}</span>
+				<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
 				<span class="chip">{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</span>
 				{#if p.configured}<span class="chip ok"><Icon name="check" /> {t("사용 가능")}</span>{/if}
 				<button class="btn ghost sm" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</button>
@@ -76,7 +76,8 @@
 <style>
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 	li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); }
+	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); display: flex; flex-direction: column; }
+	.email { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
 	.chip { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
 	.chip.ok { color: var(--ok, #2a9d4b); }

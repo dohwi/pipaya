@@ -161,6 +161,25 @@ mod local_server {
     }
 }
 
+/// The app has its own shortcuts, so WebView2's browser ones (find, print, reload, zoom, devtools …) must not fire.
+#[cfg(windows)]
+fn disable_browser_shortcuts(app: &tauri::App) {
+    use tauri::Manager;
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+    use windows_core::Interface;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.with_webview(|webview| unsafe {
+            if let Ok(core) = webview.controller().CoreWebView2() {
+                if let Ok(settings) = core.Settings() {
+                    if let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() {
+                        let _ = settings3.SetAreBrowserAcceleratorKeysEnabled(false);
+                    }
+                }
+            }
+        });
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -194,6 +213,8 @@ pub fn run() {
                     let _ = window.set_focus();
                 }
             }
+            #[cfg(windows)]
+            disable_browser_shortcuts(app);
             #[cfg(not(desktop))]
             let _ = app;
             Ok(())

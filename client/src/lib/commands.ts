@@ -29,8 +29,8 @@ export const commandText = (cmd: SlashCommand) => `${COMMAND_PREFIX}${cmd.name}`
 
 /** Only the explicit command prefix is reserved; paths and ordinary messages remain text. */
 export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isTemplateCall(text);
-/** `/template:name args` is not a client command either: the server expands the saved prompt. */
-export const TEMPLATE_PREFIX = "template:";
+/** `/prompt:name args` is not a client command either: the server expands the saved prompt. */
+export const TEMPLATE_PREFIX = "prompt:";
 export const isTemplateCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${TEMPLATE_PREFIX}`);
 /** `/skill:name` is not a client command: the server turns it into a manual skill call. */
 export const SKILL_PREFIX = "skill:";
@@ -305,11 +305,11 @@ export function matchSkills<T extends { name: string }>(skills: T[], query: stri
 	return skills.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
-/** Templates as menu rows for a query like "tem", "template:" or "template:rev". */
+/** Templates as menu rows for a query like "tem", "prompt:" or "prompt:rev". */
 export function matchTemplates<T extends { name: string }>(templates: T[], query: string): T[] {
 	const q = query.trim().toLowerCase();
 	const full = (k: T) => `${TEMPLATE_PREFIX}${k.name}`;
-	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.includes(q.replace(/^template:?/, "")) || full(k).includes(q) ? 2 : 9);
+	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.includes(q.replace(/^prompt:?/, "")) || full(k).includes(q) ? 2 : 9);
 	return templates.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 

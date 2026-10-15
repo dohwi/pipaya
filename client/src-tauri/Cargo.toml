@@ -27,3 +27,6 @@ tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.8"
+# Same versions tauri/wry already use: needed to switch off WebView2's browser shortcuts (Ctrl+F, Ctrl+P, F5 …).
+webview2-com = "0.39"
+windows-core = "0.62"

@@ -40,7 +40,7 @@ describe("insertToken", () => {
 describe("mirrorHtml", () => {
 	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], agents: [{ name: "explore" }], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
-		const html = mirrorHtml("@src/a.ts @nope $explore $ghost #image1 #image2 /skill:review /template:fix", known);
+		const html = mirrorHtml("@src/a.ts @nope $explore $ghost #image1 #image2 /skill:review /prompt:fix", known);
 		expect(html).toContain('<mark class="file">@src/a.ts</mark>');
 		expect(html).not.toContain('<mark class="file">@nope');
 		expect(html).toContain('<mark class="agent">$explore</mark>');
@@ -48,7 +48,7 @@ describe("mirrorHtml", () => {
 		expect(html).toContain('<mark class="img">#image1</mark>');
 		expect(html).not.toContain("#image2</mark>");
 		expect(html).toContain('<mark class="skill">/skill:review</mark>');
-		expect(html).toContain('<mark class="skill">/template:fix</mark>');
+		expect(html).toContain('<mark class="skill">/prompt:fix</mark>');
 	});
 	test("escapes the text and ends with a newline (keeps the layer as tall as the textarea)", () => {
 		expect(mirrorHtml("<b>&", known)).toBe("&lt;b&gt;&amp;\n");

@@ -420,9 +420,10 @@ export class ChatState {
 				if (seq <= this.lastSeq) break;
 				this.lastSeq = seq;
 				this.contextRevision++;
-				// Newly appended inputs/tool results are not reflected in the previous measurement.
-				if (this.context !== undefined) {
-					this.context = { ...this.context, tokens: m.role === "assistant" ? (m.usage?.totalTokens ?? null) : null };
+				// Newly appended inputs/tool results are not reflected in the previous measurement, but blanking it
+				// would flash "—" in the status line while working; keep the last value until the next assistant usage.
+				if (this.context !== undefined && m.role === "assistant" && m.usage?.totalTokens) {
+					this.context = { ...this.context, tokens: m.usage.totalTokens };
 				}
 				if (m.role === "user") {
 					const text = textOf(m.content);

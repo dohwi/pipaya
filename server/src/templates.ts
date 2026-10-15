@@ -5,7 +5,7 @@ import { badRequest } from "./errors.ts";
 import { findRepoRoot, MAX_SKILL_DESCRIPTION, SKILL_NAME, MAX_SKILL_NAME } from "./skills.ts";
 
 /**
- * Prompt templates: a long prompt saved as `<name>.md` and called with `/template:name [arguments]`.
+ * Prompt templates: a long prompt saved as `<name>.md` and called with `/prompt:name [arguments]`.
  * Global: `<home>/.agents/templates`. Project: `.agents/templates` from cwd up to the repository root.
  * Optional frontmatter: `description` (shown in menus; defaults to the first line of the body) and `name`.
  */
@@ -28,7 +28,7 @@ export interface TemplateList {
 	warnings: TemplateWarning[];
 }
 
-export const TEMPLATE_CALL_PREFIX = "/template:";
+export const TEMPLATE_CALL_PREFIX = "/prompt:";
 export const MAX_TEMPLATES = 200;
 const MAX_TEMPLATE_BYTES = 128 * 1024;
 const MAX_INLINE_TEMPLATE_CHARS = 60_000;
@@ -158,9 +158,9 @@ export class TemplateService {
 	}
 }
 
-/** `/template:name rest…` at the very start of a message -> name + arguments. */
+/** `/prompt:name rest…` at the very start of a message -> name + arguments. */
 export function parseTemplateCall(text: string): { name: string; args: string } | null {
-	const m = /^\s*\/template:([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$/.exec(text);
+	const m = /^\s*\/prompt:([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$/.exec(text);
 	return m ? { name: m[1]!, args: (m[2] ?? "").trim() } : null;
 }
 
@@ -181,7 +181,7 @@ export function readTemplateBody(path: string): string | null {
 	}
 }
 
-/** Hidden note carrying the expanded template; the visible message stays the short `/template:name …` call. */
+/** Hidden note carrying the expanded template; the visible message stays the short `/prompt:name …` call. */
 export function templateCallHint(name: string, expanded: string, openTag: string): string {
 	const cut = expanded.length > MAX_INLINE_TEMPLATE_CHARS;
 	const text = cut ? `${expanded.slice(0, MAX_INLINE_TEMPLATE_CHARS)}\n[cut]` : expanded;

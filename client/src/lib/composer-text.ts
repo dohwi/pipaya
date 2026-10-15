@@ -42,6 +42,22 @@ export function insertToken(text: string, pos: number, token: string): { text: s
 	return { text: before + pre + token + post + after, caret: (before + pre + token + post).length };
 }
 
+/** Splits sent text into plain pieces and `#imageN` tokens that refer to one of `images` attached images. */
+export function splitImageTokens(text: string, images: number): { text: string; img: boolean }[] {
+	const out: { text: string; img: boolean }[] = [];
+	let last = 0;
+	for (const m of text.matchAll(/(^|\s)(#image(\d+))(?=\s|$)/g)) {
+		const n = Number(m[3]);
+		if (n < 1 || n > images) continue;
+		const start = m.index + m[1].length;
+		if (start > last) out.push({ text: text.slice(last, start), img: false });
+		out.push({ text: m[2], img: true });
+		last = start + m[2].length;
+	}
+	if (last < text.length) out.push({ text: text.slice(last), img: false });
+	return out;
+}
+
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export interface Known {
@@ -60,8 +76,8 @@ export interface Known {
  */
 export function mirrorHtml(text: string, known: Known): string {
 	return (
-		esc(text).replace(/(^|\s)(@[^\s@]+|\$[a-z0-9-]+|\/skill:[a-z0-9-]+|\/template:[a-z0-9-]+|#image(\d+))(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
-			if (tok.startsWith("/template:")) return known.templates.some((k) => k.name === tok.slice(10)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+		esc(text).replace(/(^|\s)(@[^\s@]+|\$[a-z0-9-]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+|#image(\d+))(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
+			if (tok.startsWith("/prompt:")) return known.templates.some((k) => k.name === tok.slice(8)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("$")) return known.agents.some((a) => a.name === tok.slice(1)) ? `${lead}<mark class="agent">${tok}</mark>` : m;
 			if (n !== undefined) return Number(n) >= 1 && Number(n) <= known.images ? `${lead}<mark class="img">${tok}</mark>` : m;
