@@ -1,0 +1,11 @@
+{
+  "manifest": {
+    "id": "example.todo-view",
+    "name": "Todo 보기 · 서버 확장 예제",
+    "version": "1.0.0",
+    "sdkVersion": 1,
+    "description": "서버 확장 server/examples/extensions/todo.ts가 대화에 남긴 todo 기록을 카드로 보여주고, 헤더 아래에 개수를 표시하며, 보내기 전에 비밀처럼 보이는 토큰을 막습니다.",
+    "permissions": ["server", "messages", "slots", "composer-filter", "events"]
+  },
+  "code": "await sdk.messages.registerRenderer('todo', entry => ({ type: 'stack', id: 'root', direction: 'horizontal', gap: 8, children: [{ type: 'badge', id: 'b', text: 'todo', tone: 'info' }, { type: 'text', id: 't', text: String(entry.data && entry.data.text || '') }] }));\n\nasync function refresh() {\n  try {\n    const n = await sdk.server.call('todo', 'count');\n    await sdk.slots.set('footer', 'count', { label: 'Todo 개수', view: { type: 'text', id: 'c', text: `할 일 ${n}개`, size: 'small' } });\n  } catch (e) { await sdk.slots.remove('footer', 'count'); }\n}\nawait refresh();\nawait sdk.server.on(e => { if (e.kind === 'entry' && e.type === 'todo') return refresh(); });\nawait sdk.events.on(e => { if (e.type === 'session_updated') return refresh(); });\n\nawait sdk.composerFilter.set(text => /\\b(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,})\\b/.test(text) ? { cancel: '토큰처럼 보이는 문자열이 들어 있어 보내지 않았습니다' } : null);"
+}

@@ -336,7 +336,9 @@
 		const parsed = parseSlash(text);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
 		if (rejectUnknownCommand()) return;
-		const body = text;
+		const filtered = await extensions.filterComposer(text);
+		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
+		const body = filtered.text;
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
 		const ok = await app.send(body, imgs, pane.id);
@@ -351,9 +353,11 @@
 		const parsed = parseSlash(text);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
 		if (rejectUnknownCommand()) return;
+		const filtered = await extensions.filterComposer(text);
+		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
-		const ok = await (kind === "steer" ? app.steer(text, imgs, pane.id) : app.queue(text, imgs, pane.id));
+		const ok = await (kind === "steer" ? app.steer(filtered.text, imgs, pane.id) : app.queue(filtered.text, imgs, pane.id));
 		if (ok) clearSent(key);
 	}
 

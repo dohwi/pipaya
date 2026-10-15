@@ -9,7 +9,9 @@
 	import { faceFor } from "../lib/faces";
 	import { app } from "../lib/store.svelte";
 	import type { ChatState } from "../lib/chat.svelte";
-	import type { AssistantItem, ChatItem, NoticeItem, UserItem } from "../lib/types";
+	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../lib/types";
+	import EntryCard from "./extensions/EntryCard.svelte";
+	import { extensions } from "../lib/extensions/host.svelte";
 
 	let { chat }: { chat: ChatState } = $props();
 
@@ -134,13 +136,17 @@
 	/** The run has started but the model has not produced anything yet: nothing to attach the status to, so show it here */
 	const waitingFirst = $derived(chat.running && chat.ready && chat.items[chat.items.length - 1]?.kind === "user");
 
-	type Unit = { kind: "user"; item: UserItem } | { kind: "notice"; item: NoticeItem } | { kind: "turn"; key: string; items: AssistantItem[] };
+	type Unit = { kind: "user"; item: UserItem } | { kind: "notice"; item: NoticeItem } | { kind: "entry"; item: EntryItem } | { kind: "turn"; key: string; items: AssistantItem[] };
 	/** One prompt gets one reply: consecutive assistant messages (one per LLM call) are drawn as a single turn. */
 	const units = $derived.by<Unit[]>(() => {
 		const out: Unit[] = [];
 		for (const it of chat.items as ChatItem[]) {
 			if (it.kind === "user") out.push({ kind: "user", item: it });
 			else if (it.kind === "notice") out.push({ kind: "notice", item: it });
+			else if (it.kind === "entry") {
+				// Only entries an active extension knows how to draw take a place; the rest stay invisible.
+				if (extensions.messageRendererFor(it.entryType)) out.push({ kind: "entry", item: it });
+			}
 			else {
 				const prev = out[out.length - 1];
 				if (prev?.kind === "turn") prev.items.push(it);
@@ -191,6 +197,8 @@
 				<div class="unit" class:settled={n < units.length - SETTLED_TAIL && !(u.kind === "user" && u.item.key === lastUserKey)}>
 					{#if u.kind === "notice"}
 						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
+					{:else if u.kind === "entry"}
+						<EntryCard item={u.item} />
 					{:else if u.kind === "user"}
 						<Message item={u.item} working={u.item.key === lastUserKey} />
 					{:else}

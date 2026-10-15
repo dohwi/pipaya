@@ -3,6 +3,7 @@
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import NavbarUsage from "./extensions/NavbarUsage.svelte";
+	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
@@ -33,6 +34,7 @@
 
 	</div>
 </header>
+<ExtensionSlot slot="header" />
 
 
 <style>

@@ -31,7 +31,7 @@ describe("portable extension package schema", () => {
 	test("exports the SDK, byte cap, and immutable permission/token whitelists", () => {
 		expect(SDK_VERSION).toBe(1);
 		expect(MAX_PACKAGE_BYTES).toBe(256 * 1024);
-		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales"]);
+		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter"]);
 		expect(Object.isFrozen(PERMISSIONS)).toBe(true);
 		expect(Object.isFrozen(THEME_TOKENS)).toBe(true);
 		expect(new Set(THEME_TOKENS).size).toBe(23);
@@ -283,5 +283,19 @@ describe("portable extension package schema", () => {
 		Object.defineProperty(accessorArray, "0", { enumerable: true, get() { reads++; return "commands"; } });
 		rejects({ ...fixture(), manifest: { ...fixture().manifest, permissions: accessorArray } }, "array data entry");
 		expect(reads).toBe(0);
+	});
+});
+
+
+describe("examples/extensions/todo-view.json", () => {
+	test("is a valid package whose permissions cover what its code uses", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const raw = JSON.parse(readFileSync(resolve(__dirname, "../examples/extensions/todo-view.json"), "utf8"));
+		const pkg = parsePackage(raw);
+		const used = { server: /sdk\.server\./, messages: /sdk\.messages\./, slots: /sdk\.slots\./, "composer-filter": /sdk\.composerFilter\./, events: /sdk\.events\./ } as const;
+		for (const [permission, pattern] of Object.entries(used)) {
+			expect(pkg.manifest.permissions.includes(permission as never)).toBe(pattern.test(pkg.code ?? ""));
+		}
 	});
 });

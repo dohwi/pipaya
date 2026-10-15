@@ -17,6 +17,7 @@ import {
   type ActionId,
 } from "./keys";
 import { chord } from "./chord.svelte";
+import { extensions } from "./extensions/host.svelte";
 import type { ApprovalPolicy, ThinkingLevel } from "./types";
 import { msg, t, tc } from "./i18n";
 
@@ -338,6 +339,16 @@ export function onShortcut(e: KeyboardEvent) {
     // The start of a longer shortcut waits for its next key even when nothing is bound to these keys alone
     // (Ctrl+B+B and Ctrl+B+C are bound, Ctrl+B is not).
     const starts = hasLongerBinding(combo, app.prefs.bindings);
+    // A key the app does not use may belong to an extension (built-in shortcuts always win).
+    if (!id && !starts && keys.length === 1) {
+      const own = extensions.shortcutFor(combo);
+      if (own) {
+        e.preventDefault();
+        fired = true;
+        own.run().catch((cause) => app.toast(t("확장 실패: {error}", { error: cause instanceof Error ? cause.message : String(cause) }), "error", app.activeId));
+        return;
+      }
+    }
     if (!id && !starts) continue;
     // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there.
     if (isBareCombo(combo) && typingTarget(e)) return;

@@ -34,6 +34,14 @@
 | 상태 칩 | `sdk.status.set` | 입력창 아래 `StatusLine` | 10개, 120자 | `StatusLine.svelte` |
 | 테마 | 패키지 `theme` | `:root` CSS 변수 | 토큰 화이트리스트 | `host.applyThemes` |
 | 알림 | `sdk.notifications.show` | 토스트 | 10초에 5개, 300자 | `Toasts`(`HostAdapter.notify`) |
+| 서버 확장 연결 | `sdk.server.*` | `Api.callServerExtension` 등, `store.emitServer` | `server` 권한 | `host.svelte.ts` `emitServer`, `store.svelte.ts` `handle` |
+| 기록 카드 | `sdk.messages.*` | `EntryCard.svelte` (`MessageList`), `ChatState.addEntry` | `messages` 권한, 20개 | `host.svelte.ts` `messageRendererFor` |
+| 헤더·푸터 영역 | `sdk.slots.*` | `ExtensionSlot.svelte` (`Header`, `Pane`) | `slots` 권한, 2개 | `host.svelte.ts` `slots` |
+| 보내기 전 가공 | `sdk.composerFilter.*` | `Composer.svelte` `submit`/`during` | `composer-filter` 권한, 2초 | `host.svelte.ts` `filterComposer` |
+| 단축키 | `sdk.shortcuts.*` | `lib/actions.ts` `onShortcut` (앱 단축키 다음 순위) | `shortcuts` 권한, 10개 | `host.svelte.ts` `shortcutFor` |
+| 대화상자 | `sdk.dialog.*` | `ExtensionDialog.svelte` | `dialogs` 권한, 한 번에 하나 | `store.askExtension` |
+| 대화 제어 | `sdk.session.*` | `HostAdapter.session` | `session` 권한, 10초 5번 | `host.svelte.ts` `limitSession` |
+| 도구 결과 렌더러 | `sdk.tools.registerRenderer` | `ToolCard.svelte` | `tools` 권한, 20개 | `host.svelte.ts` `rendererFor` |
 | 시스템 알림 | `sdk.notifications.send/status/register/remove` | OS·FCM/APNs 어댑터 | 별도 `system-notifications` 권한, 서버 규칙 5개 | [알림 구조](notifications.md), `notifications.ts`, `notification-rules.ts`, `HostAdapter.systemNotifications` |
 | 설정 폼 | manifest `settings` | 설정 → 확장 → 행 펼침 → 확장 설정 | 20필드 | `extensions/SettingsForm.svelte` |
 | 승인창 | `sdk.configuration.*` | 모달 | 한 번에 하나 | `extensions/ExtensionApproval.svelte`, `store.confirmExtension` |

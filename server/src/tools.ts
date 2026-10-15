@@ -46,6 +46,8 @@ export interface DelegateReport {
 
 /** What a tool may need from the running session beyond its working directory. */
 export interface ToolContext {
+	/** The session the tool runs in (extension tools use it to reach their per-session storage). */
+	sessionId?: string;
 	/** Run a read-only sub-agent and get its report (`delegate`). Missing when the server has no sub-agent runner. */
 	delegate?(req: DelegateRequest): Promise<DelegateReport>;
 	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
@@ -473,8 +475,9 @@ export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 
-export const isMutating = (toolName: string): boolean => TOOL_DEFS[toolName]?.mutating ?? true;
+export const isMutating = (toolName: string, defs: Record<string, ToolDef> = TOOL_DEFS): boolean => defs[toolName]?.mutating ?? true;
 
-export function buildTools(names: string[], cwd: string, readRoots: string[] = [], ctx: ToolContext = {}): AgentTool<any>[] {
-	return names.flatMap((n) => (TOOL_DEFS[n] ? [TOOL_DEFS[n].create(cwd, readRoots, ctx)] : []));
+/** `defs` lets server extensions add or replace tools; the built-in set is the default. */
+export function buildTools(names: string[], cwd: string, readRoots: string[] = [], ctx: ToolContext = {}, defs: Record<string, ToolDef> = TOOL_DEFS): AgentTool<any>[] {
+	return names.flatMap((n) => (defs[n] ? [defs[n].create(cwd, readRoots, ctx)] : []));
 }

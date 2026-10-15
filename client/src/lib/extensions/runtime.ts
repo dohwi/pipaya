@@ -5,7 +5,7 @@ import { LocalizedError, t } from "../i18n";
  * frame owns a Worker; its CSP is inherited by the blob worker (no network).
  * Only this private MessagePort reaches the capability-checked host. */
 const WORKER = `
-const pending = new Map(), handlers = new Map(), listeners = new Set();
+const pending = new Map(), handlers = new Map(), listeners = new Set(), serverListeners = new Set();
 let seq = 0;
 const panelTokens = new Map();
 function rpc(method, ...args) {
@@ -38,6 +38,19 @@ const sdk = Object.freeze({
   navbar: Object.freeze({ set: (id, spec) => rpc('navbar.set', id, spec), remove: id => rpc('navbar.remove', id) }),
   http: Object.freeze({ getJson: (...args) => args.length !== 1 ? Promise.reject(new Error('http.getJson takes exactly one argument')) : rpc('http.getJson', args[0]), requestJson: request => rpc('http.requestJson', request) }),
   configuration: Object.freeze({ authorize: () => rpc('configuration.authorize'), revoke: () => rpc('configuration.revoke'), access: () => rpc('configuration.access'), read: () => rpc('configuration.read'), applyBackground: (document, fingerprint) => rpc('configuration.applyBackground', document, fingerprint), export: () => rpc('configuration.export'), apply: document => rpc('configuration.apply', document), restore: () => rpc('configuration.restore'), status: () => rpc('configuration.status') }),
+  server: Object.freeze({
+    call: (extension, method, params, sessionId) => rpc('server.call', extension, method, params === undefined ? null : params, sessionId === undefined ? null : sessionId),
+    entries: options => rpc('server.entries', options === undefined ? {} : options),
+    list: () => rpc('server.list'),
+    on: async fn => { if (typeof fn !== 'function') throw new Error('A listener is required'); await rpc('server.subscribe'); serverListeners.add(fn); return () => serverListeners.delete(fn); }
+  }),
+  shortcuts: Object.freeze({ register: (spec, fn) => register('shortcuts.register', spec, fn), remove: id => rpc('shortcuts.remove', id) }),
+  dialog: Object.freeze({ confirm: spec => rpc('dialog.confirm', spec), select: spec => rpc('dialog.select', spec), input: spec => rpc('dialog.input', spec) }),
+  session: Object.freeze({ send: (text, mode) => rpc('session.send', text, mode === undefined ? 'prompt' : mode), abort: () => rpc('session.abort') }),
+  tools: Object.freeze({ registerRenderer: (toolName, fn) => register('tools.registerRenderer', toolName, fn), removeRenderer: toolName => rpc('tools.removeRenderer', toolName) }),
+  messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType) }),
+  slots: Object.freeze({ set: (slot, id, spec) => rpc('slots.set', slot, id, spec), remove: (slot, id) => rpc('slots.remove', slot, id) }),
+  composerFilter: Object.freeze({ set: fn => register('composerFilter.set', 'filter', fn), clear: () => rpc('composerFilter.clear') }),
   status: Object.freeze({ set: (id, text) => rpc('status.set', id, text), remove: id => rpc('status.remove', id) }),
   context: Object.freeze({ get: () => rpc('context.get') }),
   storage: Object.freeze({ get: key => rpc('storage.get', key), set: (key, value) => rpc('storage.set', key, value) }),
@@ -54,8 +67,10 @@ onmessage = async ({ data: m }) => {
     pending.delete(m.id); clearTimeout(p.timer);
     m.error ? p.reject(new Error(m.error)) : p.resolve(m.value);
   } else if (m.type === 'execute') {
-    try { const fn = handlers.get(m.token); if (!fn) throw new Error('Unknown handler'); await fn(m.arg); postMessage({ type: 'executed', id: m.id }); }
+    try { const fn = handlers.get(m.token); if (!fn) throw new Error('Unknown handler'); const value = await fn(m.arg); postMessage({ type: 'executed', id: m.id, value: value === undefined ? null : value }); }
     catch(e) { postMessage({ type: 'executed', id: m.id, error: String(e?.message || e) }); }
+  } else if (m.type === 'server_event') {
+    for (const fn of serverListeners) Promise.resolve().then(() => fn(m.event)).catch(e => console.error(e));
   } else if (m.type === 'event') {
     for (const fn of listeners) Promise.resolve().then(() => fn(m.event)).catch(e => console.error(e));
   } else if (m.type === 'start') {
@@ -97,7 +112,7 @@ export interface RuntimeCallbacks {
 export class ExtensionRuntime {
   private frame: HTMLIFrameElement | null = null;
   private port: MessagePort | null = null;
-  private pending = new Map<number, { resolve(): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<number, { resolve(value?: unknown): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }>();
   private seq = 0;
   private stopped = false;
   private startup?: { resolve(): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> };
@@ -149,7 +164,7 @@ export class ExtensionRuntime {
       this.fail(typeof m.error === "string" ? m.error.slice(0, 500) : t("확장 실행 오류"));
     } else if (m.type === "executed" && typeof m.id === "number") {
       const p = this.pending.get(m.id);
-      if (p) { clearTimeout(p.timer); this.pending.delete(m.id); m.error ? p.reject(new Error(String(m.error).slice(0, 500))) : p.resolve(); }
+      if (p) { clearTimeout(p.timer); this.pending.delete(m.id); m.error ? p.reject(new Error(String(m.error).slice(0, 500))) : p.resolve(m.value); }
     } else if (m.type === "request" && Number.isSafeInteger(m.id) && typeof m.method === "string" && Array.isArray(m.args)) {
       try {
         const limit = ["configuration.apply", "configuration.applyBackground", "http.requestJson"].includes(m.method) ? 4 * 1024 * 1024 + 4096 : 70000;
@@ -162,7 +177,8 @@ export class ExtensionRuntime {
     } else this.fail(t("잘못된 확장 프로토콜"));
   }
 
-  execute(token: string, arg: unknown = ""): Promise<void> {
+  /** Runs a handler of the extension and returns what it returned (plain data; only renderers use it). */
+  execute(token: string, arg: unknown = ""): Promise<unknown> {
     if (this.stopped || !this.port) return Promise.reject(new LocalizedError(t("확장이 실행 중이 아닙니다")));
     if (this.pending.size >= 20) return Promise.reject(new LocalizedError(t("동시 실행 제한 초과")));
     const id = ++this.seq;
@@ -173,6 +189,7 @@ export class ExtensionRuntime {
   }
 
   event(event: unknown) { if (!this.stopped) this.port?.postMessage({ type: "event", event }); }
+  serverEvent(event: unknown) { if (!this.stopped) this.port?.postMessage({ type: "server_event", event }); }
 
   private fail(error: string) {
     if (this.stopped) return;

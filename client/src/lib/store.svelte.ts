@@ -729,6 +729,7 @@ class AppStore {
       this.models = models;
       this.providers = providers;
       this.tools = tools.tools;
+      void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
       this.ensureDraftModel();
@@ -832,6 +833,19 @@ class AppStore {
     // Only metadata is forwarded, never event data, messages, tool args or credentials.
     if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "approval_requested" || e.type === "approval_resolved") {
       extensions.emit({ type: e.type, sessionId: sid, at: e.ts, ...(e.type === "run_finished" && typeof e.data.status === "string" ? { status: e.data.status } : {}) });
+    }
+    if (e.type === "turn_end") extensions.emit({ type: "turn_end", sessionId: sid, at: e.ts });
+    else if (e.type === "tool_execution_end") extensions.emit({ type: "tool_execution_end", sessionId: sid, at: e.ts, toolName: String((e.data as { toolName?: unknown }).toolName ?? ""), isError: (e.data as { isError?: unknown }).isError === true });
+    // What server extensions publish is meant for client extensions, so it is forwarded as is.
+    if (e.type === "extension_event") {
+      const d = e.data as { extension: string; type: string; data: unknown };
+      extensions.emitServer({ kind: "event", extension: d.extension, type: d.type, sessionId: sid, data: d.data });
+    } else if (e.type === "extension_entry") {
+      const d = e.data as { id: number; extension: string; type: string; data: unknown; createdAt?: number };
+      if (sid) this.chats[sid]?.addEntry(d);
+      extensions.emitServer({ kind: "entry", extension: d.extension, type: d.type, sessionId: sid, data: d.data, id: d.id });
+    } else if (e.type === "extensions_updated") {
+      void this.refreshServerExtensions();
     }
     switch (e.type) {
       case "notification": {
@@ -1565,6 +1579,32 @@ class AppStore {
     this.during("steer", text, images, t("끼워 넣지 못했습니다"), to);
   queue = (text: string, images: ImageBlock[] = [], to = this.activeId) =>
     this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to);
+
+  /** Commands and tools that extensions inside the server provide; refreshed when the server (re)loads them. */
+  serverCommands = $state<{ name: string; description?: string; extension: string }[]>([]);
+  async refreshServerExtensions() {
+    const api = this.api;
+    if (!api) return;
+    try {
+      const [list, tools] = await Promise.all([api.serverExtensions(), api.tools()]);
+      if (api !== this.api) return;
+      this.serverCommands = list.commands;
+      this.tools = tools.tools;
+    } catch { /* an older server has no extensions; nothing to show */ }
+  }
+
+  /** Modal question asked by an extension (`sdk.dialog`). One at a time; a second request waits its turn. */
+  extensionDialog = $state<{ request: import("./extensions/host.svelte").ExtensionDialogRequest; resolve(value: unknown): void } | null>(null);
+  private dialogQueue: Promise<unknown> = Promise.resolve();
+  askExtension(request: import("./extensions/host.svelte").ExtensionDialogRequest): Promise<unknown> {
+    const run = () => new Promise<unknown>(resolve => { this.extensionDialog = { request, resolve }; });
+    const next = this.dialogQueue.then(run, run);
+    this.dialogQueue = next.catch(() => {});
+    return next;
+  }
+  resolveExtensionDialog(value: unknown) {
+    const pending = this.extensionDialog; this.extensionDialog = null; pending?.resolve(value);
+  }
 
   /** Queue manager dialog: the session whose queued messages are listed. null = closed. */
   queueDialog = $state<string | null>(null);

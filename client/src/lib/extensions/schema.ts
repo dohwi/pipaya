@@ -5,6 +5,7 @@ export const SDK_VERSION = 1;
 export const MAX_PACKAGE_BYTES = 256 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
+	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter",
 ] as const);
 export type Permission = (typeof PERMISSIONS)[number];
 

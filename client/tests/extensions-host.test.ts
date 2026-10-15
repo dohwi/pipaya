@@ -17,9 +17,10 @@ export class ExtensionRuntime {
 	execute(token, arg = "") {
 		if (this.stopped) return Promise.reject(new Error("stopped"));
 		this.executed.push({ token, arg });
-		return Promise.resolve();
+		return Promise.resolve(globalThis.__fakeReturn?.[token] ?? null);
 	}
 	event(event) { if (!this.stopped) this.events.push(event); }
+	serverEvent(event) { if (!this.stopped) (this.serverEvents ??= []).push(event); }
 	stop() { this.stopped = true; }
 }
 `;
@@ -926,5 +927,201 @@ describe("generic configuration host capabilities", () => {
 			call(host, sync.id, "configuration.apply", [document]); host.disable(sync.id); approve(true); await flush();
 			expect(applies).toBe(1); // late approval of a dead generation is ignored
 		} finally { host.stop(); globalThis.fetch = original; }
+	});
+});
+
+describe("server bridge, shortcuts, dialogs, session control and tool renderers", () => {
+	const NEW = ["server", "shortcuts", "dialogs", "session", "tools"];
+
+	test("every new capability is refused without its permission", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.bare", ["commands"]));
+		const calls: [string, unknown[]][] = [
+			["server.call", ["ext", "m", null, null]], ["server.entries", [{}]], ["server.list", []], ["server.subscribe", []],
+			["shortcuts.register", [{ id: "a", label: "A", combo: "Mod+K" }, "t"]], ["shortcuts.remove", ["a"]],
+			["dialog.confirm", [{ title: "t" }]], ["session.send", ["hi"]], ["session.abort", []],
+			["tools.registerRenderer", ["bash", "t"]], ["tools.removeRenderer", ["bash"]],
+		];
+		for (const [method, args] of calls) expect(() => call(host, id, method, args)).toThrow(/권한 없음|permission/i);
+		host.stop();
+	});
+
+	test("shortcuts need Ctrl/Alt and one key, cannot clash, and only fire while the extension is active", async () => {
+		const { host } = await reload();
+		const a = await activate(host, code("example.keys-a", NEW));
+		const spec = (id: string, combo: string) => [{ id, label: id, combo }, "tok"];
+		expect(() => call(host, a.id, "shortcuts.register", spec("plain", "K"))).toThrow();
+		expect(() => call(host, a.id, "shortcuts.register", spec("shift", "Shift+K"))).toThrow();
+		expect(() => call(host, a.id, "shortcuts.register", spec("two", "Mod+J+K"))).toThrow();
+		call(host, a.id, "shortcuts.register", spec("ok", "Mod+Shift+K"));
+		expect(() => call(host, a.id, "shortcuts.register", spec("again", "Mod+Shift+K"))).toThrow(/Mod\+Shift\+K/);
+		const b = await activate(host, code("example.keys-b", NEW));
+		expect(() => call(host, b.id, "shortcuts.register", spec("steal", "Mod+Shift+K"))).toThrow();
+		expect(host.shortcutFor("Mod+Shift+K")?.owner).toBe("example.keys-a");
+		await host.shortcutFor("Mod+Shift+K")!.run();
+		expect(runtimes()[0]!.executed.length).toBe(1);
+		host.disable(a.id);
+		expect(host.shortcutFor("Mod+Shift+K")).toBeUndefined();
+		host.stop();
+	});
+
+	test("dialogs are validated, attributed to the extension, and answered through the adapter", async () => {
+		const { host, adapter } = newHost();
+		await flush();
+		const seen: any[] = [];
+		adapter.dialog = async request => { seen.push(request); return request.kind === "confirm" ? true : request.kind === "select" ? request.options[1]!.value : "typed"; };
+		const { id } = await activate(host, code("example.ask", NEW));
+		expect(await call(host, id, "dialog.confirm", [{ title: "Sure?", message: "m" }])).toBe(true);
+		expect(await call(host, id, "dialog.select", [{ title: "Pick", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] }])).toBe("b");
+		expect(await call(host, id, "dialog.input", [{ title: "Name", placeholder: "p" }])).toBe("typed");
+		expect(seen.map(r => r.kind)).toEqual(["confirm", "select", "input"]);
+		expect(seen.every(r => r.owner === id && r.ownerName === `Name ${id}`)).toBe(true);
+		expect(() => call(host, id, "dialog.select", [{ title: "Pick", options: [] }])).toThrow();
+		expect(() => call(host, id, "dialog.confirm", [{ title: "" }])).toThrow();
+		host.stop();
+	});
+
+	test("an answer that arrives after the extension was disabled is dropped", async () => {
+		const { host, adapter } = newHost();
+		await flush();
+		let answer: (v: unknown) => void = () => {};
+		adapter.dialog = () => new Promise(resolve => { answer = resolve; });
+		const { id } = await activate(host, code("example.late", NEW));
+		const pending = call(host, id, "dialog.confirm", [{ title: "Sure?" }]);
+		host.disable(id);
+		answer(true);
+		expect(await pending).toBe(false);
+		host.stop();
+	});
+
+	test("session control goes through the adapter and is rate limited", async () => {
+		const { host, adapter } = newHost();
+		await flush();
+		const sent: string[] = []; let aborted = 0;
+		adapter.session = { send: async (text, mode) => { sent.push(`${mode}:${text}`); }, abort: async () => { aborted++; } };
+		const { id } = await activate(host, code("example.drive", NEW));
+		await call(host, id, "session.send", ["hello"]);
+		await call(host, id, "session.send", ["more", "steer"]);
+		await call(host, id, "session.send", ["x", "bogus-mode"]);
+		await call(host, id, "session.abort", []);
+		expect(sent).toEqual(["prompt:hello", "steer:more", "prompt:x"]);
+		expect(aborted).toBe(1);
+		await call(host, id, "session.abort", []);
+		expect(() => call(host, id, "session.abort", [])).toThrow(/5/);
+		host.stop();
+	});
+
+	test("tool renderers return validated views only, replace by tool name, and leave with the extension", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.render", NEW));
+		call(host, id, "tools.registerRenderer", ["bash", "tok-1"]);
+		expect(() => call(host, id, "tools.registerRenderer", ["bad name", "tok-2"])).toThrow();
+		const view = { type: "text", id: "t", text: "custom" };
+		(globalThis as any).__fakeReturn = { "tok-1": view };
+		const input = { toolName: "bash", state: "done" as const, args: {}, output: "o", details: null };
+		expect(await host.rendererFor("bash")!.render(input)).toEqual(view);
+		(globalThis as any).__fakeReturn = { "tok-1": { type: "script", src: "x" } };
+		await expect(host.rendererFor("bash")!.render(input)).rejects.toThrow();
+		(globalThis as any).__fakeReturn = { "tok-1": null };
+		expect(await host.rendererFor("bash")!.render(input)).toBeNull();
+		expect(host.rendererFor("read")).toBeUndefined();
+		host.disable(id);
+		expect(host.rendererFor("bash")).toBeUndefined();
+		delete (globalThis as any).__fakeReturn;
+		host.stop();
+	});
+
+	test("server events reach only extensions that subscribed with the server permission", async () => {
+		const { host } = await reload();
+		const sub = await activate(host, code("example.sub", NEW));
+		const other = await activate(host, code("example.other", NEW));
+		call(host, sub.id, "server.subscribe", []);
+		host.emitServer({ kind: "event", extension: "demo", type: "x", sessionId: null, data: 1 });
+		expect((sub.runtime as any).serverEvents).toEqual([{ kind: "event", extension: "demo", type: "x", sessionId: null, data: 1 }]);
+		expect((other.runtime as any).serverEvents).toBeUndefined();
+		host.stop();
+	});
+
+	test("turn_end and tool_execution_end reach event subscribers with only metadata", async () => {
+		const { host } = await reload();
+		const { id, runtime } = await activate(host, code("example.watch", ["events"]));
+		call(host, id, "events.subscribe", []);
+		host.emit({ type: "tool_execution_end", sessionId: "s1", at: 5, toolName: "bash", isError: true });
+		host.emit({ type: "turn_end", sessionId: "s1", at: 6 });
+		expect(runtime.events).toEqual([
+			{ type: "tool_execution_end", sessionId: "s1", at: 5, toolName: "bash", isError: true },
+			{ type: "turn_end", sessionId: "s1", at: 6 },
+		]);
+		host.stop();
+	});
+});
+
+describe("message renderers, slots and the composer filter", () => {
+	const NEW = ["messages", "slots", "composer-filter"];
+	const view = { type: "text", id: "t", text: "hi" };
+
+	test("each capability is refused without its permission", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.bare2", ["commands"]));
+		for (const [m, a] of [["messages.registerRenderer", ["todo", "t"]], ["slots.set", ["footer", "a", { label: "L", view }]], ["composerFilter.set", ["filter", "t"]], ["composerFilter.clear", []]] as [string, unknown[]][]) {
+			expect(() => call(host, id, m, a)).toThrow(/권한 없음|permission/i);
+		}
+		host.stop();
+	});
+
+	test("message renderers draw only data-only nodes and leave with the extension", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.msg", NEW));
+		call(host, id, "messages.registerRenderer", ["todo", "tok"]);
+		expect(() => call(host, id, "messages.registerRenderer", ["bad type", "tok"])).toThrow();
+		const entry = { id: 1, extension: "demo", type: "todo", data: {}, createdAt: 1 };
+		(globalThis as any).__fakeReturn = { tok: view };
+		expect(await host.messageRendererFor("todo")!.render(entry)).toEqual(view);
+		(globalThis as any).__fakeReturn = { tok: { type: "button", id: "b", label: "x" } }; // interactive: not allowed in a transcript
+		await expect(host.messageRendererFor("todo")!.render(entry)).rejects.toThrow();
+		expect(host.messageRendererFor("other")).toBeUndefined();
+		host.disable(id);
+		expect(host.messageRendererFor("todo")).toBeUndefined();
+		delete (globalThis as any).__fakeReturn;
+		host.stop();
+	});
+
+	test("slots take read-only views, two per extension, and are removed with the extension", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.slot", NEW));
+		call(host, id, "slots.set", ["header", "a", { label: "A", view }]);
+		call(host, id, "slots.set", ["footer", "b", { label: "B", view }]);
+		call(host, id, "slots.set", ["footer", "b", { label: "B2", view }]); // same slot+id replaces
+		expect(host.slots.length).toBe(2);
+		expect(() => call(host, id, "slots.set", ["footer", "c", { label: "C", view }])).toThrow(/2/);
+		expect(() => call(host, id, "slots.set", ["sidebar", "d", { label: "D", view }])).toThrow();
+		expect(() => call(host, id, "slots.set", ["header", "e", { label: "E", view: { type: "button", id: "b", label: "x" } }])).toThrow();
+		call(host, id, "slots.remove", ["header", "a"]);
+		expect(host.slots.map(s => `${s.slot}:${s.id}:${s.label}`)).toEqual(["footer:b:B2"]);
+		host.disable(id);
+		expect(host.slots).toEqual([]);
+		host.stop();
+	});
+
+	test("the composer filter rewrites, cancels, is skipped when it fails, and stops with the extension", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.filter", NEW));
+		call(host, id, "composerFilter.set", ["filter", "tok"]);
+		(globalThis as any).__fakeReturn = { tok: "rewritten" };
+		expect(await host.filterComposer("orig")).toEqual({ text: "rewritten" });
+		(globalThis as any).__fakeReturn = { tok: { text: "obj" } };
+		expect(await host.filterComposer("orig")).toEqual({ text: "obj" });
+		(globalThis as any).__fakeReturn = { tok: { cancel: "no secrets" } };
+		expect(await host.filterComposer("orig")).toEqual({ cancel: `[Name ${id}] no secrets` });
+		(globalThis as any).__fakeReturn = { tok: 42 }; // not a usable answer: send as is
+		expect(await host.filterComposer("orig")).toEqual({ text: "orig" });
+		call(host, id, "composerFilter.clear", []);
+		(globalThis as any).__fakeReturn = { tok: "rewritten" };
+		expect(await host.filterComposer("orig")).toEqual({ text: "orig" });
+		call(host, id, "composerFilter.set", ["filter", "tok"]);
+		host.disable(id);
+		expect(await host.filterComposer("orig")).toEqual({ text: "orig" });
+		delete (globalThis as any).__fakeReturn;
+		host.stop();
 	});
 });

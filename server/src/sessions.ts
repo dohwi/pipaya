@@ -16,8 +16,9 @@ import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagen
 import type { ModelChoiceValue } from "./model-choice.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
+import type { ExtensionHost } from "./extensions/host.ts";
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a capable coding assistant working inside a sandboxed working directory.
 Use the available tools to inspect and change files and run commands. Prefer small, verifiable steps.
@@ -77,6 +78,8 @@ interface Live {
 	recentCalls: string[];
 	/** Set when abort did not take effect in time and the run was cut loose; its late wrap-up must stay silent. */
 	forceStopped?: boolean;
+	/** Set by `before_agent_start` extensions; applies to the current run only. */
+	runSystem?: { replace?: string; append?: string };
 }
 
 /** How long a cooperative abort may take before the run is forcibly cut loose. */
@@ -114,6 +117,7 @@ export class SessionManager {
 		private questions?: QuestionManager,
 		private subagents?: SubAgents,
 		private compaction?: CompactionSettings,
+		private ext?: ExtensionHost,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -123,7 +127,7 @@ export class SessionManager {
 
 	async create(input: CreateSessionInput, parentId: string | null = null): Promise<SessionRecord> {
 		const { provider, model } = await this.resolveModel(input.provider, input.model);
-		const tools = this.validateTools(input.tools ?? DEFAULT_TOOLS);
+		const tools = this.validateTools(input.tools ?? this.ext?.defaultTools() ?? DEFAULT_TOOLS);
 		const id = randomUUID();
 		const cwd = this.resolveCwd(input.cwd);
 		const now = Date.now();
@@ -144,6 +148,7 @@ export class SessionManager {
 		};
 		this.store.create(record);
 		this.bus.publish(id, "session_created", record);
+		this.ext?.notify("session_start", { sessionId: id }, id);
 		return record;
 	}
 
@@ -243,11 +248,22 @@ export class SessionManager {
 		if (!(await this.registry.models.checkAuth(target.provider))) throw badRequest(`provider ${target.provider} is not configured; set its API key first`);
 
 		const before = this.contextUsage(id)?.tokens ?? 0;
+		let custom: string | undefined;
+		if (this.ext?.has("session_before_compact")) {
+			let cancelled = false;
+			await this.ext.emit("session_before_compact", {
+				sessionId: id, reason, messages: toSummarize.map((m) => m.message), previousSummary: stored.summary, instructions,
+			}, id, (r) => {
+				if (r.cancel) { cancelled = true; return true; }
+				if (typeof r.summary === "string" && r.summary.trim()) { custom = r.summary.trim(); return true; }
+			});
+			if (cancelled) throw conflict("compaction was cancelled by an extension");
+		}
 		const controller = new AbortController();
 		live.compacting = controller;
 		this.bus.publish(id, "compaction_started", { reason });
 		try {
-			const reply = await this.registry.models.completeSimple(
+			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await this.registry.models.completeSimple(
 				model,
 				{ systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user", content: summaryRequest(stored.summary, toSummarize.map((m) => m.message), instructions), timestamp: Date.now() }] },
 				{ maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
@@ -267,6 +283,7 @@ export class SessionManager {
 			const context = this.contextUsage(id) ?? { tokens: null, contextWindow: model.contextWindow };
 			const outcome: CompactionOutcome = { tokensBefore: before, context, model: target };
 			this.bus.publish(id, "compaction_finished", { tokensBefore: before, context, usage: this.store.usage(id) });
+			this.ext?.notify("session_compact", { sessionId: id, summary, tokensBefore: before }, id);
 			this.bus.publish(id, "context_updated", { context });
 			return outcome;
 		} catch (e) {
@@ -355,6 +372,7 @@ export class SessionManager {
 		);
 		const copied = this.store.copyMessages(id, copy.id, atSeq);
 		this.bus.publish(copy.id, "session_forked", { from: id, atSeq: atSeq ?? null, messages: copied });
+		this.ext?.notify("session_fork", { sessionId: copy.id, from: id }, copy.id);
 		return this.get(copy.id);
 	}
 
@@ -367,6 +385,11 @@ export class SessionManager {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		const mode = input.mode ?? "prompt";
+		if (this.ext) {
+			const pre = await this.preprocess(id, input.text, mode);
+			if (pre.handled) return { accepted: mode };
+			input = { ...input, text: pre.text };
+		}
 		const active = this.live.get(id)?.running ?? false;
 		if (mode !== "prompt" && !active) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
 		if (mode === "prompt" && active) throw conflict('session is busy; send with mode "steer" or "follow_up"');
@@ -399,8 +422,33 @@ export class SessionManager {
 		if (record.title === "New session" && this.store.nextSeq(id) === 0) {
 			this.update(id, { title: input.text.trim().replace(/\s+/g, " ").slice(0, 60) || "New session" });
 		}
-		this.run(id, live, "prompt", async () => { await this.autoCompact(id); await live.agent.prompt(message); });
+		this.run(id, live, "prompt", async () => {
+			await this.autoCompact(id);
+			live.runSystem = undefined;
+			if (this.ext?.has("before_agent_start")) {
+				await this.ext.emit("before_agent_start", { sessionId: id, text: input.text }, id, (r) => {
+					if (r.systemPrompt !== undefined) live.runSystem = { ...live.runSystem, replace: r.systemPrompt };
+					if (r.appendSystemPrompt) live.runSystem = { ...live.runSystem, append: `${live.runSystem?.append ?? ""}\n\n${r.appendSystemPrompt}` };
+					if (r.message) (message.content as { type: string; text?: string }[]).push({ type: "text", text: r.message });
+				});
+			}
+			await live.agent.prompt(message);
+		});
 		return { accepted: "prompt" };
+	}
+
+	/** `input` hooks and `/command` handling. A swallowed message is never sent to the model. */
+	private async preprocess(id: string, text: string, mode: PromptMode): Promise<{ handled: boolean; text: string }> {
+		let current = text;
+		let handled = false;
+		await this.ext!.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
+			if (typeof r.text === "string") current = r.text;
+			if (r.handled) { handled = true; return true; }
+		});
+		if (handled) return { handled, text: current };
+		const cmd = await this.ext!.runCommand(id, current);
+		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt } : { handled: true, text: current };
+		return { handled: false, text: current };
 	}
 
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
@@ -485,6 +533,7 @@ export class SessionManager {
 
 	shutdown(): void {
 		clearInterval(this.sweeper);
+		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of this.live) {
 			if (live.running) live.agent.abort();
 			this.dispose(id);
@@ -579,12 +628,17 @@ export class SessionManager {
 				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, agents),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: buildTools(snapshot.tools, snapshot.cwd, readRoots, this.toolContext(record.id)),
+				tools: buildTools(snapshot.tools, snapshot.cwd, readRoots, this.toolContext(record.id), this.toolDefs()),
 				messages: history,
 			},
 			streamFn: this.registry.models.streamSimple.bind(this.registry.models),
 			sessionId: record.id,
-			beforeToolCall: async ({ toolCall, args }, signal) => this.gateTool(record.id, toolCall.id, toolCall.name, args, signal),
+			transformContext: async (messages) => this.transformContext(record.id, messages),
+			beforeToolCall: async (c, signal) => {
+				const blocked = await this.extensionToolCall(record.id, c);
+				return blocked ?? this.gateTool(record.id, c.toolCall.id, c.toolCall.name, c.args, signal);
+			},
+			afterToolCall: async (c) => this.extensionToolResult(record.id, c),
 		});
 
 		const live: Live = {
@@ -628,14 +682,20 @@ export class SessionManager {
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
 		const sub = this.subagents;
-		const ctx: ToolContext = q ? { ask: (toolCallId, req, signal) => q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
+		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
+		ctx.sessionId = sessionId;
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.
 			ctx.delegateAgents = () => sub.agents(this.store.get(sessionId)?.cwd);
 			ctx.delegate = async (req) => {
 				const rec = this.store.get(sessionId);
 				if (!rec) throw notFound("session");
-				return sub.run({ ...req, fallback: { provider: rec.provider, model: rec.model } });
+				return sub.run({
+					...req, fallback: { provider: rec.provider, model: rec.model },
+					toolDefs: this.toolDefs(),
+					beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
+					afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
+				});
 			};
 		}
 		return ctx;
@@ -645,7 +705,7 @@ export class SessionManager {
 	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
 		const policy = this.store.get(sessionId)?.approval ?? "ask";
 		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, this.store.get(sessionId)?.cwd ?? "");
-		if (!(isMutating(toolName) || delegated) || policy === "auto") return undefined;
+		if (!(isMutating(toolName, this.toolDefs()) || delegated) || policy === "auto") return undefined;
 		if (policy === "readonly") {
 			return { block: true, reason: `"${toolName}" is disabled: this session is read-only` };
 		}
@@ -673,7 +733,57 @@ export class SessionManager {
 		this.abortRun(sessionId, live);
 	}
 
+	/** `tool_call` hooks. Shared by the session agent and its helpers so a policy extension cannot be sidestepped. */
+	private async extensionToolCall(sessionId: string, { toolCall, args }: { toolCall: { id: string; name: string }; args: unknown }): Promise<{ block: true; reason: string } | undefined> {
+		if (!this.ext?.has("tool_call")) return undefined;
+		let blocked: { block: true; reason: string } | undefined;
+		await this.ext.emit("tool_call", { sessionId, toolCallId: toolCall.id, toolName: toolCall.name, args }, sessionId, (r) => {
+			if (r.block) { blocked = { block: true, reason: r.reason ?? `"${toolCall.name}" was blocked by an extension` }; return true; }
+		});
+		return blocked;
+	}
+
+	/** `tool_result` hooks: each extension sees what the previous one returned. */
+	private async extensionToolResult(sessionId: string, { toolCall, args, result, isError }: { toolCall: { id: string; name: string }; args: unknown; result: { content: unknown; details?: unknown }; isError: boolean }) {
+		if (!this.ext?.has("tool_result")) return undefined;
+		let out: { content?: any[]; details?: unknown; isError?: boolean } | undefined;
+		let content = result.content as any[];
+		let details = result.details as unknown;
+		let err = isError;
+		await this.ext.emit("tool_result", { sessionId, toolCallId: toolCall.id, toolName: toolCall.name, args, content, details, isError: err }, sessionId, (r) => {
+			out = { ...out };
+			if (r.content) { content = r.content; out.content = r.content; }
+			if (r.details !== undefined) { details = r.details; out.details = r.details; }
+			if (typeof r.isError === "boolean") { err = r.isError; out.isError = r.isError; }
+		});
+		return out;
+	}
+
+	/** Built-in tools plus whatever server extensions add or replace. */
+	toolDefs(): Record<string, ToolDef> {
+		return this.ext ? this.ext.toolDefs() : TOOL_DEFS;
+	}
+
+	/** Per-run system prompt tweaks and the `context` hook, applied to what the model sees (never stored). */
+	private async transformContext(sessionId: string, messages: AgentMessage[]): Promise<AgentMessage[]> {
+		const live = this.live.get(sessionId);
+		let out = messages;
+		const sys = live?.runSystem;
+		if (sys && out[0]?.role === "system") {
+			const head = out[0] as { content?: unknown };
+			const base = typeof head.content === "string" ? head.content : "";
+			out = [{ ...out[0], content: `${sys.replace ?? base}${sys.append ?? ""}` } as AgentMessage, ...out.slice(1)];
+		}
+		if (this.ext?.has("context")) {
+			await this.ext.emit("context", { sessionId, messages: out }, sessionId, (r) => {
+				if (Array.isArray(r.messages)) out = r.messages;
+			});
+		}
+		return out;
+	}
+
 	private onAgentEvent(sessionId: string, live: Live, event: AgentEvent): void {
+		this.forwardToExtensions(sessionId, event);
 		const pub = (type: string, data: unknown, ephemeral = false) => this.bus.publish(sessionId, type, data, { ephemeral });
 
 		switch (event.type) {
@@ -687,6 +797,7 @@ export class SessionManager {
 				const seq = live.nextSeq++;
 				this.store.appendMessage(sessionId, seq, event.message);
 				pub("message_end", { seq, message: event.message });
+				this.ext?.notify("message_end", { sessionId, message: event.message, seq }, sessionId);
 				return;
 			}
 			case "agent_end":
@@ -698,6 +809,18 @@ export class SessionManager {
 				return;
 			default:
 				pub(event.type, event);
+		}
+	}
+
+	private forwardToExtensions(sessionId: string, event: AgentEvent): void {
+		const ext = this.ext;
+		if (!ext) return;
+		switch (event.type) {
+			case "agent_start": ext.notify("agent_start", { sessionId }, sessionId); return;
+			case "agent_end": ext.notify("agent_end", { sessionId, messageCount: event.messages.length }, sessionId); return;
+			case "turn_start": ext.notify("turn_start", { sessionId }, sessionId); return;
+			case "turn_end": ext.notify("turn_end", { sessionId, message: event.message }, sessionId); return;
+			default: return;
 		}
 	}
 
@@ -738,7 +861,8 @@ export class SessionManager {
 	}
 
 	private validateTools(names: string[]): string[] {
-		const unknown = names.filter((n) => !TOOL_DEFS[n]);
+		const defs = this.toolDefs();
+		const unknown = names.filter((n) => !defs[n]);
 		if (unknown.length) throw badRequest(`unknown tools: ${unknown.join(", ")}`);
 		return [...new Set(names)];
 	}

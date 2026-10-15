@@ -498,11 +498,22 @@ export interface NoticeItem {
 	tone?: "ok" | "error";
 }
 
+/** A record a server extension stored on the conversation (`ctx.appendEntry`), drawn by a client extension's renderer. */
+export interface EntryItem {
+	kind: "entry";
+	key: string;
+	id: number;
+	extension: string;
+	entryType: string;
+	data: unknown;
+	ts: number;
+}
+
 /** One step of agent work: a thought or a tool call. Back-to-back steps share one work box. */
 export type Step = { kind: "think"; text: string; done: boolean } | { kind: "tool"; id: string; name: string; args: Record<string, unknown> };
 
 /** One entry in the rendered transcript. */
-export type ChatItem = UserItem | AssistantItem | NoticeItem;
+export type ChatItem = UserItem | AssistantItem | NoticeItem | EntryItem;
 
 export type AssistantBlock =
 	| { type: "text"; text: string }

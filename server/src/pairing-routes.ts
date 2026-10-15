@@ -11,7 +11,9 @@ export const PUBLIC_PAIRING_PATH = "/pairing/redeem";
 
 /** Only the admin token may open the door for another device: a paired phone must not be able to pair more phones. */
 export const isAdminOnlyPath = (method: string, path: string) =>
-	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/");
+	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
+	// Server extensions execute code in this process; a paired phone may use their methods but never reload them.
+	(path === "/server-extensions/reload" && method === "POST");
 
 export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing, devices: DeviceTokens): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();

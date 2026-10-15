@@ -8,6 +8,9 @@
 	import { clip, duration } from "../lib/format";
 	import { badgeStyle, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
 	import type { ToolRun } from "../lib/types";
+	import { extensions } from "../lib/extensions/host.svelte";
+	import ExtensionView from "./extensions/ExtensionView.svelte";
+	import type { UINode } from "../lib/extensions/ui";
 
 	let { id, name, args }: { id: string; name: string; args: Record<string, unknown> } = $props();
 
@@ -20,6 +23,23 @@
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
 	const kind = $derived(toolKind(name, args));
+
+	// An extension may draw the finished call (`sdk.tools.registerRenderer`). Whatever it returns is validated data shown
+	// in a read-only view; on any failure the card keeps its usual look.
+	const renderer = $derived(extensions.rendererFor(name));
+	let custom = $state<UINode | null>(null);
+	$effect(() => {
+		const r = renderer;
+		const done = run.state === "done" || run.state === "error";
+		if (!r || !done) { custom = null; return; }
+		let live = true;
+		r.render({ toolName: name, state: run.state, args, output: run.output, details: run.details ?? null })
+			.then((view) => { if (live) custom = view; })
+			.catch(() => { if (live) custom = null; });
+		return () => { live = false; };
+	});
+	const noop = () => {};
+	const none = async () => {};
 
 	const awaiting = $derived(run.state === "awaiting_approval");
 	/** An `ask_user` call: the card asks a question instead of asking for permission. */
@@ -90,7 +110,9 @@
 				<pre class="mono">{JSON.stringify(args, null, 2)}</pre>
 			{/if}
 
-			{#if run.output && name !== "ask_user"}
+			{#if custom}
+				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
+			{:else if run.output && name !== "ask_user"}
 				<div class="label">{t("출력")}</div>
 				<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>
 			{:else if run.state === "denied"}
@@ -122,6 +144,7 @@
 </div>
 
 <style>
+	.custom { margin-top: 8px; min-width: 0; }
 	.card {
 		margin: 8px 0;
 		border: 1px solid var(--border);

@@ -1,11 +1,11 @@
 ---
 name: pipaya-client-extensions
-description: Read this before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - the extension SDK (permissions, sdk methods, manifest, packages), declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens (extension panel dialog, Settings > Extensions manager, import and approval modals) and their visual design - or when writing an extension package for the client. Not for the server's agent tools or model providers.
+description: Read this before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - the extension SDK (permissions, sdk methods, manifest, packages), declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens (extension panel dialog, Settings > Extensions manager, import and approval modals) and their visual design - or when writing an extension package for the client. Not for extensions that run inside the server (agent tools, hooks, model providers), which are covered by pipaya-server-extensions.
 ---
 
 # Pipaya client extensions
 
-The pipaya client has its own extension system (SDK v1). Extension code runs in a sandboxed Worker and can only send **validated data**; the host renders everything. It is separate from the server's agent tools and model providers.
+The pipaya client has its own extension system (SDK v1). Extension code runs in a sandboxed Worker and can only send **validated data**; the host renders everything. It is separate from the extensions that run inside the server (see the `pipaya-server-extensions` skill); the `server` permission is the bridge between the two.
 
 The docs below are bundled with this skill, in `references/` next to this file. Read them with the `read` tool before you edit. Source paths inside them (`src/lib/extensions/...`, `src/components/...`, `tests/...`, `examples/extensions/...`) are relative to the client project root, the directory that contains `src/lib/extensions/` (normally `<repo>/client`). If you cannot find it from the working directory, ask the user where the client source is instead of guessing.
 

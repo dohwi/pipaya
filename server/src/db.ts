@@ -109,6 +109,16 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		enabled    INTEGER NOT NULL,
 		PRIMARY KEY (session_id, name)
 	);`,
+	// v16: entries that server extensions keep on a session (not part of the transcript, never sent to the model).
+	`CREATE TABLE IF NOT EXISTS extension_entries (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		extension  TEXT NOT NULL,
+		type       TEXT NOT NULL,
+		data       TEXT NOT NULL,
+		created_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS extension_entries_session ON extension_entries(session_id, extension, id);`,
 ];
 
 export function openDb(path: string): Database {

@@ -490,7 +490,7 @@ describe("built-in skills", () => {
 			expect(listed.skills.find((s: any) => s.name === BUILTIN)).toMatchObject({ scope: "builtin", enabled: true, globalEnabled: true, override: null });
 
 			const id = (await api("POST", "/sessions", { cwd: f.cwd })).json.id as string;
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => [k.name, k.scope])).toEqual([[BUILTIN, "builtin"], ["pipaya-usage", "builtin"]]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => [k.name, k.scope])).toEqual([[BUILTIN, "builtin"], ["pipaya-server-extensions", "builtin"], ["pipaya-usage", "builtin"]]);
 			await send(id, "hi");
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/context`)).json.effectiveSystemPrompt)).toContain(`- ${BUILTIN}: `);
 
@@ -499,9 +499,9 @@ describe("built-in skills", () => {
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("확장 구조와 변경 가이드");
 
 			await api("PUT", `/skills/${BUILTIN}`, { scope: "global", enabled: false, cwd: f.cwd });
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([expect.objectContaining({ name: "pipaya-usage" })]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([expect.objectContaining({ name: "pipaya-server-extensions" }), expect.objectContaining({ name: "pipaya-usage" })]);
 			await api("PUT", `/skills/${BUILTIN}`, { scope: "global", enabled: true, cwd: f.cwd });
-			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => k.name)).toEqual([BUILTIN, "pipaya-usage"]);
+			expect((await api("GET", `/sessions/${id}/context`)).json.skills.map((k: any) => k.name)).toEqual([BUILTIN, "pipaya-server-extensions", "pipaya-usage"]);
 		} finally {
 			await app.close();
 			upstream.stop();

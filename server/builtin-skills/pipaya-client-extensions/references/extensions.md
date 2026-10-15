@@ -2,7 +2,7 @@
 
 > 관련 문서: [구조와 변경 가이드](extension-architecture.md) · [화면 디자인 규격](extension-screen-design.md)
 
-소스 코드를 고치거나 앱을 다시 빌드하지 않고 테마, 프롬프트 명령, 입력창 액션, 상태 항목을 추가합니다. 선언형 패널·폼·표·탭·위젯을 만드는 [Frontend SDK](extension-ui.md)도 제공합니다. 웹과 Tauri 클라이언트에 공통으로 적용됩니다. **서버의 에이전트 도구·모델 제공자 확장과는 별개**입니다.
+소스 코드를 고치거나 앱을 다시 빌드하지 않고 테마, 프롬프트 명령, 입력창 액션, 상태 항목을 추가합니다. 선언형 패널·폼·표·탭·위젯을 만드는 [Frontend SDK](extension-ui.md)도 제공합니다. 웹과 Tauri 클라이언트에 공통으로 적용됩니다. **서버 안에서 실행되는 확장(에이전트 도구·훅·모델 제공자)과는 별개**이며, 두 가지는 `server` 권한으로 이어집니다. 서버 확장은 `pipaya-server-extensions` 스킬을 보세요.
 
 ## 사용하기
 
@@ -183,6 +183,14 @@ SDK의 모든 메서드는 Promise입니다. 등록과 설정 변경을 `await`�
 | `notifications` | `sdk.notifications.show(text)` | 앱 내 토스트, 최대 300자 |
 | `locales` | (SDK 메서드 없음) | 패키지의 `locales`로 UI 언어팩을 제공. [언어팩](#언어팩) |
 | `system-notifications` | `sdk.notifications.send(spec)`, `status()`, `register(id, rule)`, `remove(id)` | OS·모바일 푸시, 기기 간 포커스 억제, 서버 이벤트 규칙. [알림 설정·플랫폼 지원](notifications.md) |
+| `server` | `sdk.server.call(extension, method, params?, sessionId?)`, `entries({sessionId?, extension?, type?})`, `list()`, `on(handler)` | 서버 확장의 메서드 호출, 확장이 대화에 저장한 기록 읽기, 확장이 보낸 이벤트 받기. 호출 15초 제한 |
+| `shortcuts` | `sdk.shortcuts.register({id, label, combo}, handler)`, `remove(id)` | 확장당 최대 10개. `combo`는 `Mod`(Ctrl/⌘) 또는 `Alt`에 키 하나(예: `Mod+Shift+K`). 앱의 단축키가 항상 우선하고, 다른 확장이 쓰는 조합은 등록할 수 없음 |
+| `dialogs` | `sdk.dialog.confirm/select/input(spec)` | 모달 질문. 창에 확장 이름이 표시되고, 취소하면 `confirm`은 `false`, 나머지는 `null`. 한 번에 하나씩 순서대로 표시 |
+| `session` | `sdk.session.send(text, mode?)`, `abort()` | 열려 있는 대화에 메시지 전송·실행 중지. 10초에 5번. 보낸 메시지는 에이전트가 실행하므로 승인 문구에 명시 |
+| `tools` | `sdk.tools.registerRenderer(toolName, render)`, `removeRenderer(toolName)` | 끝난 도구 호출을 확장이 만든 화면으로 표시(읽기 전용 노드 80개·깊이 5·24KiB). 실패하거나 `null`이면 기본 모양. 같은 도구는 마지막 등록이 이김. 확장당 20개 |
+| `messages` | `sdk.messages.registerRenderer(entryType, render)`, `removeRenderer(entryType)` | 서버 확장이 `ctx.appendEntry(type, data)`로 대화에 남긴 기록을, 만들어진 시각 순서로 대화 중간에 카드로 표시. 렌더러가 없거나 `null`이면 보이지 않음. 읽기 전용 노드(navbar와 같은 종류) 80개·깊이 5·24KiB. 확장당 20개 |
+| `slots` | `sdk.slots.set('header'\|'footer', id, {label, view})`, `remove(slot, id)` | 헤더 아래·입력창 위의 읽기 전용 영역. navbar와 같은 노드·한도, 확장당 2개 |
+| `composer-filter` | `sdk.composerFilter.set(fn)`, `clear()` | 보내기 직전 텍스트를 바꾸거나 막음(`string`, `{text}`, `{cancel: '사유'}`, `null`=그대로). 2초 제한, 오류·시간 초과면 원문 그대로 전송. 슬래시 명령은 거치지 않음 |
 | 별도 권한 없음 | `sdk.settings.get()`, `sdk.log(text)` | 자신의 사용자 설정 읽기, 확장 로그 |
 
 ```js
@@ -217,7 +225,7 @@ const unsubscribe = await sdk.events.on(async event => {
   running: boolean, online: boolean }
 ```
 
-이벤트는 `{type, sessionId?, at, status?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `approval_requested`, `approval_resolved`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만 전달됩니다. 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
+이벤트는 `{type, sessionId?, at, status?, toolName?, isError?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `approval_requested`, `approval_resolved`, `turn_end`, `tool_execution_end`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만, `toolName`과 `isError`는 `tool_execution_end`에만 전달됩니다(도구 인자와 결과 내용은 전달하지 않습니다). 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
 
 설정 화면에서 확장별 JSON 객체를 편집합니다. 활성화된 확장에는 다시 불러오기로 반영합니다. 저장소의 없는 키는 `null`입니다. `__proto__`, `constructor`, `prototype` 키는 쓸 수 없습니다. 확장 삭제 시 자신의 저장소도 삭제됩니다. console 출력은 SDK 로그로 연결되며 로그는 클라이언트 실행 중 최신 100개만 유지합니다.
 

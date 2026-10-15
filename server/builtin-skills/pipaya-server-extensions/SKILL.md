@@ -1,0 +1,98 @@
+---
+name: pipaya-server-extensions
+description: Read this when the user wants to write, install, debug or change a pipaya SERVER extension - code that runs inside the server process to add or replace agent tools, hook the agent loop (tool_call, tool_result, context, before_agent_start, input, compaction), add `/commands`, register model providers, expose methods or events to the client, or keep per-session data. Not for client (browser or Tauri) extensions, which are covered by pipaya-client-extensions.
+---
+
+# Pipaya server extensions
+
+A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `package.json` with `"harness": { "extensions": ["./a.ts"] }`) that default-exports `(pi) => { ... }`. It runs **inside the server process with the server's full privileges**: it can read any file the server can, run commands and see every credential. Only install code you trust. That is why `POST /server-extensions/reload` needs the admin token, and why a paired phone can call extension methods but never reload or install anything.
+
+Where they are read from (each entry is a file or a folder; names starting with `.` and `node_modules` are skipped):
+
+- `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
+- `~/.agents/extensions/`
+
+Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors`. A file that throws while loading is switched off alone; the others keep working.
+
+## A complete example
+
+```ts
+// ~/.pipaya/extensions/guard.ts
+export default (pi) => {
+  const T = pi.Type;
+
+  // 1. a tool the model can call
+  pi.registerTool({
+    name: "todo_add",
+    description: "Add an item to the session's todo list",
+    parameters: T.Object({ text: T.String() }),
+    mutating: false,                       // default true = needs approval in `ask` mode
+    execute: async (_id, p, ctx) => {
+      ctx.appendEntry("todo", { text: p.text });   // saved on the session, not sent to the model
+      return { content: [{ type: "text", text: `added: ${p.text}` }] };
+    },
+  });
+
+  // 2. a policy: block commands before they run
+  pi.on("tool_call", (e) =>
+    e.toolName === "bash" && /rm\s+-rf\s+\//.test(String(e.args.command))
+      ? { block: true, reason: "refused by guard" }
+      : undefined);
+
+  // 3. a /command handled by the server (returning a string sends it to the model as the user's message)
+  pi.registerCommand("todos", {
+    description: "List todos",
+    handler: async (_args, ctx) => `Summarize these todos: ${JSON.stringify(ctx.entries("todo").map((e) => e.data))}`,
+  });
+
+  // 4. a method the client can call, and an event it can listen for
+  pi.registerMethod("count", (_p, ctx) => ctx?.entries("todo").length ?? 0);
+  pi.emit(null, "ready", { at: Date.now() }, { ephemeral: true });
+};
+```
+
+## `pi` (ExtensionAPI)
+
+| Member | What it does |
+|---|---|
+| `pi.Type` | typebox, for tool parameter schemas |
+| `pi.on(event, handler)` | hooks, see below. Handlers run in load order. A throwing handler is logged and skipped, it never breaks the run |
+| `pi.registerTool(tool)` | `{name, description, parameters, mutating?, defaultActive?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
+| `pi.registerCommand(name, {description?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt}` to send it to the model, nothing to just handle it. Runs before the model sees the message |
+| `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]` |
+| `pi.registerProvider(provider)` / `unregisterProvider(id)` | a pi-ai `Provider` (custom endpoint, proxy, OAuth). Removed when the extension unloads |
+| `pi.registerFlag(name, {type?, default?, description?})`, `pi.getFlag(name)` | value from environment `PIPAYA_FLAG_<NAME>` |
+| `pi.emit(sessionId\|null, type, data?, {ephemeral?})` | publishes `extension_event` to clients (client extensions with the `server` permission receive it) |
+| `pi.events.on/emit(channel, ...)` | in-process bus between extensions |
+| `pi.dataDir` | a folder for this extension's own files |
+| `pi.log(...)` | server log |
+
+`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`. `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries`, and never reaches the model.
+
+## Hooks
+
+| Event | Payload | Return |
+|---|---|---|
+| `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow |
+| `before_agent_start` | `{sessionId, text}` | `{systemPrompt?, appendSystemPrompt?, message?}` for this run only |
+| `context` | `{sessionId, messages}` | `{messages}`: what the model sees for this call (storage is untouched) |
+| `tool_call` | `{sessionId, toolCallId, toolName, args}` | `{block: true, reason}`; `args` may be edited in place. Also applies to tools a `delegate` helper calls |
+| `tool_result` | `{..., content, details, isError}` | `{content?, details?, isError?}`; each extension sees the previous one's result |
+| `session_before_compact` | `{sessionId, reason, messages, previousSummary, instructions?}` | `{cancel: true}` or `{summary}` (your own summary replaces the model call) |
+| `extension_unload` | `{name}` | none. Runs (2 s limit) before reload or shutdown drops the extension: close timers and files here |
+| observation only | `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_end`, `session_start`, `session_fork`, `session_compact`, `session_shutdown`, `extensions_loaded` | none |
+
+Approval policy (`ask` / `readonly` / `auto`) still applies after `tool_call` hooks. A tool you register is `mutating: true` unless you say otherwise, so it asks for approval by default.
+
+## Rules that are easy to break
+
+1. **Never block the event loop.** Hooks run on the agent's path. Do slow work async and keep `context` fast; it runs before every model call.
+2. **Return `undefined` when you have nothing to say** so the next extension still runs. In `tool_call`, return `{block: true}` only when you mean it: it stops the whole chain.
+3. **Do not store secrets in `appendEntry` or `emit`**: both reach every connected client and `emit` with `ephemeral: false` is persisted in the event log.
+4. **Replacing a built-in tool replaces its safety checks.** If you override `read`/`write`/`edit`/`bash`, call the original from `pi.builtinTool(name, ctx.cwd)` (which keeps its path checks) unless you deliberately reimplement them.
+5. **Unload cleanly.** Providers and bus listeners you register are removed on reload; timers and file handles you open are yours to close in an `extension_unload` handler.
+6. **Test with a real server.** `server/test/server-extensions.test.ts` shows how: write the extension to a temp dir, `buildApp(cfg, { extensionDirs: [dir] })`, drive it through the HTTP API with the echo upstream in `test/support/openai-upstream.ts`.
+
+## Client side
+
+A client extension reaches yours with the `server` permission: `sdk.server.call("guard", "count")`, `sdk.server.entries({type: "todo"})`, `sdk.server.on(e => ...)`. See `pipaya-client-extensions`.

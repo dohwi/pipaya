@@ -97,6 +97,8 @@ export interface EventMap {
 	session_start: [{ sessionId: string }, void];
 	session_shutdown: [{ sessionId: string }, void];
 	session_fork: [{ sessionId: string; from: string }, void];
+	/** This extension is being unloaded (reload or shutdown). Close timers and files you opened. */
+	extension_unload: [{ name: string }, void];
 	/** Server finished loading/reloading all extensions. */
 	extensions_loaded: [{ names: string[] }, void];
 }

@@ -14,6 +14,7 @@
 	import { dragSource } from "../lib/dnd.svelte";
 	import { setPane } from "../lib/pane";
 	import { app } from "../lib/store.svelte";
+	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 
 	/**
 	 * One conversation with its own input. `id` null = a new chat that has no session yet.
@@ -76,6 +77,7 @@
 		{/if}
 	</div>
 
+	<ExtensionSlot slot="footer" />
 	<Composer />
 	<!-- covers the input and the stats line too, so a drop zone reaches the bottom edge of the pane -->
 	{#if id}<DropLayer target={id} />{/if}

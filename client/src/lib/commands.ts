@@ -246,8 +246,24 @@ export function runCommand(name: string, arg = ""): void | Promise<void> {
 	return cmd.run(arg);
 }
 
+/**
+ * Commands that extensions inside the server handle (`pi.registerCommand`). Picking one sends `/name args` as the
+ * message; the server runs it instead of the model. A name the app or a client extension already uses stays theirs.
+ */
+export function serverCommands(taken: Set<string>): SlashCommand[] {
+	return (app.serverCommands ?? [])
+		.filter((c) => /^[a-z][a-z0-9-]*$/.test(c.name) && !taken.has(c.name))
+		.map((c) => ({
+			name: c.name,
+			args: "[args]",
+			desc: c.description || c.extension,
+			run: async (arg: string) => { await app.send(`${COMMAND_PREFIX}${c.name}${arg.trim() ? ` ${arg.trim()}` : ""}`); },
+		}));
+}
+
 export function allCommands(): SlashCommand[] {
-	return [...COMMANDS, ...extensions.commands];
+	const own = [...COMMANDS, ...extensions.commands];
+	return [...own, ...serverCommands(new Set(own.map((c) => c.name)))];
 }
 
 /** Match canonical English names only: exact, prefix, then substring. */

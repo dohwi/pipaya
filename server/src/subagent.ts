@@ -1,6 +1,6 @@
 import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import type { DelegateReport, DelegateRequest } from "./tools.ts";
-import { buildTools } from "./tools.ts";
+import { buildTools, type ToolDef } from "./tools.ts";
 import type { ModelRegistry } from "./models.ts";
 import { DEFAULT_MAX_TURNS, MUTATING_SUBAGENT_TOOLS, READ_ONLY_SUBAGENT_TOOLS, type SubAgentSettings } from "./subagent-settings.ts";
 
@@ -38,6 +38,11 @@ const WRAP_UP = "You are almost out of steps. Reply now with your report from wh
 export interface SubAgentRun extends DelegateRequest {
 	/** Used when nothing else picks a model: the calling session's model. */
 	fallback: { provider: string; model: string };
+	/** Tool set including what server extensions add or replace (default: the built-in tools). */
+	toolDefs?: Record<string, ToolDef>;
+	/** The same tool_call / tool_result hooks the calling session runs, so a policy extension cannot be bypassed through a helper. */
+	beforeToolCall?: ConstructorParameters<typeof Agent>[0]["beforeToolCall"];
+	afterToolCall?: ConstructorParameters<typeof Agent>[0]["afterToolCall"];
 }
 
 /** Why a delegate call cannot run. Thrown as a plain Error so the main agent reads it as a tool error and can adapt. */
@@ -115,11 +120,13 @@ export class SubAgents {
 				model,
 				// A model without reasoning ignores the level, so passing it is always safe.
 				thinkingLevel: target.thinkingLevel,
-				tools: buildTools([...def.tools], req.cwd, req.readRoots),
+				tools: buildTools([...def.tools], req.cwd, req.readRoots, {}, req.toolDefs),
 				messages: [],
 			},
 			streamFn: (m, context, options) =>
 				this.registry.models.streamSimple(m, context, { ...options, maxTokens: Math.min(options?.maxTokens ?? MAX_CALL_TOKENS, MAX_CALL_TOKENS) }),
+			beforeToolCall: req.beforeToolCall,
+			afterToolCall: req.afterToolCall,
 		});
 
 		let turns = 0;

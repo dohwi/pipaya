@@ -192,11 +192,12 @@ export class ChatState {
 		this.loadError = "";
 		this.notFound = false;
 		try {
-			const [msgs, detail, approvals, questions] = await Promise.all([
+			const [msgs, detail, approvals, questions, entries] = await Promise.all([
 				this.api.messages(this.id),
 				this.api.getSession(this.id),
 				this.api.approvals(),
 				this.api.questions(),
+				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
 			]);
 			if (token !== this.token) return;
 
@@ -212,6 +213,8 @@ export class ChatState {
 			for (const q of questions) {
 				if (q.sessionId === this.id) tools[q.toolCallId] = { state: "awaiting_approval", output: "", question: q };
 			}
+			// Extension records sit among the messages by the time they were made (they are not messages themselves).
+			for (const en of entries) this.insertEntry(items, en);
 			const partial = st.streamingMessage as AssistantMessage | null;
 			if (st.running && partial && partial.role === "assistant") {
 				items.push({ kind: "assistant", key: `s${uid()}`, seq: null, streaming: true, ...assistantFields(partial) });
@@ -262,6 +265,19 @@ export class ChatState {
 		} else if (m.role === "toolResult") {
 			tools[m.toolCallId] = toolRunFrom(m);
 		}
+	}
+
+	private insertEntry(items: ChatItem[], en: { id: number; extension: string; type: string; data: unknown; createdAt: number }) {
+		if (items.some((x) => x.kind === "entry" && x.id === en.id)) return;
+		const item: ChatItem = { kind: "entry", key: `e${en.id}`, id: en.id, extension: en.extension, entryType: en.type, data: en.data, ts: en.createdAt };
+		let at = items.length;
+		while (at > 0 && items[at - 1]!.ts > en.createdAt && items[at - 1]!.kind !== "entry") at--;
+		items.splice(at, 0, item);
+	}
+
+	/** A record a server extension just stored on this conversation. */
+	addEntry(en: { id: number; extension: string; type: string; data: unknown; createdAt?: number }): void {
+		this.insertEntry(this.items, { ...en, createdAt: en.createdAt ?? Date.now() });
 	}
 
 	private streamItem(): AssistantItem | null {

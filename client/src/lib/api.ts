@@ -163,6 +163,19 @@ export class Api {
 	deleteExtension = (id: string, signal?: AbortSignal) =>
 		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
 
+	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
+	serverExtensions = (signal?: AbortSignal) =>
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; error?: string }[]; commands: { name: string; description?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
+		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
+	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {
+		const q = new URLSearchParams();
+		if (extension) q.set("extension", extension);
+		if (type) q.set("type", type);
+		return this.req<{ entries: { id: number; extension: string; type: string; data: unknown; createdAt: number }[] }>("GET", `/sessions/${encodeURIComponent(sessionId)}/extension-entries${q.size ? `?${q}` : ""}`, undefined, signal).then((r) => r.entries);
+	};
+	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal);
+
 	/* ---------- settings that belong to this server ---------- */
 	clientSettings = (signal?: AbortSignal) =>
 		this.req<{ settings: Record<string, { value: unknown; updatedAt: number }> }>("GET", "/client-settings", undefined, signal);
@@ -361,6 +374,10 @@ export const EVENT_TYPES = [
 	"skills_updated",
 	"locales_updated",
 	"client_settings_updated",
+	"extensions_updated",
+	"extension_error",
+	"extension_event",
+	"extension_entry",
 	"notification",
 	"device_revoked",
 ];

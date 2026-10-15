@@ -22,6 +22,7 @@
 	import CloseConfirm from "./components/CloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
 	import ExtensionApproval from "./components/extensions/ExtensionApproval.svelte";
+	import ExtensionDialog from "./components/extensions/ExtensionDialog.svelte";
 	import { app, SIDEBAR_W } from "./lib/store.svelte";
 	import { armSound } from "./lib/sound";
 	import { extensions } from "./lib/extensions/host.svelte";
@@ -90,6 +91,11 @@
 				revoke: async owner => { await notificationRules.revoke(api(), owner); },
 			},
 			context: () => ({ sessionId: app.activeId, model: app.effective.model, provider: app.effective.provider, running: app.runningHere, online: app.net === "online" }),
+			session: {
+				send: async (text, mode) => { if (!app.activeId) throw new Error(t("열려 있는 대화가 없습니다")); const ok = mode === "steer" ? await app.steer(text) : mode === "follow_up" ? await app.queue(text) : await app.send(text); if (!ok) throw new Error(t("보내지 못했습니다")); },
+				abort: async () => { if (app.activeId) await app.abort(); },
+			},
+			dialog: request => app.askExtension(request),
 			dark: () => app.prefs.resolvedDark,
 			reservedCommands: () => COMMANDS.map(c => c.name),
 			connection: () => app.conn,
@@ -313,6 +319,7 @@
 <UpdateBanner />
 <ChordStrip />
 <ExtensionApproval />
+<ExtensionDialog />
 <CloseConfirm />
 
 <style>

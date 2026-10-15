@@ -7,13 +7,14 @@ import {
 } from "./configuration";
 import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
 import { JsonTransport } from "./transport";
-import { NAVBAR_LIMITS, navbarId, parseNavbarItem, type NavbarItem } from "./navbar";
+import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
 import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission } from "./schema";
 import { ExtensionRuntime } from "./runtime";
 import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
-import type { ExtensionContext, ExtensionEvent } from "./sdk";
+import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ToolRenderInput } from "./sdk";
+import { splitCombo } from "../keys";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
   prefill(text: string): void;
@@ -26,6 +27,13 @@ export interface HostAdapter {
     revoke(owner: string): Promise<void>;
   };
   context(): ExtensionContext;
+  /** Server-extension and session access for extensions that hold the `server` / `session` / `dialogs` permissions. */
+  session?: {
+    send(text: string, mode: "prompt" | "steer" | "follow_up"): Promise<void>;
+    abort(): Promise<void>;
+  };
+  /** Modal questions. Resolve to null when the user dismisses them. */
+  dialog?(request: ExtensionDialogRequest): Promise<unknown>;
   dark(): boolean;
   reservedCommands(): string[];
   /** Authenticated connection of the open server; settings sync is skipped (local only) without one. */
@@ -63,6 +71,17 @@ export interface UnreadableExtension { raw: unknown; id?: string; name?: string;
 export interface ExtensionCommand { owner: string; name: string; desc: string; args?: string; run(arg: string): Promise<void> }
 export interface ComposerAction { owner: string; id: string; label: string; run(): Promise<void> }
 export interface StatusItem { owner: string; id: string; text: string }
+export interface ExtensionShortcut { owner: string; id: string; label: string; combo: string; run(): Promise<void> }
+export interface SlotItem extends NavbarItemSpec { owner: string; id: string; slot: "header" | "footer" }
+export interface MessageRenderer { owner: string; entryType: string; render(entry: EntryInput): Promise<UINode | null> }
+export interface EntryInput { id: number; extension: string; type: string; data: unknown; createdAt: number }
+export interface ComposerFilter { owner: string; run(text: string): Promise<string | { text: string } | { cancel: string } | null> }
+export interface ToolRenderer { owner: string; toolName: string; render(input: ToolRenderInput): Promise<UINode | null> }
+export type ExtensionDialogRequest = { owner: string; ownerName: string } & (
+  | { kind: "confirm"; title: string; message?: string; confirmLabel?: string }
+  | { kind: "select"; title: string; message?: string; options: { value: string; label: string; description?: string }[] }
+  | { kind: "input"; title: string; message?: string; placeholder?: string; value?: string; multiline?: boolean }
+);
 export interface ExtensionPanel extends Omit<UIPanelSpec, "view"> {
   owner: string;
   view: UINode;
@@ -142,6 +161,13 @@ export class ExtensionHost {
   actions = $state.raw<ComposerAction[]>([]);
   statuses = $state<StatusItem[]>([]);
   navbar = $state.raw<NavbarItem[]>([]);
+  shortcuts = $state.raw<ExtensionShortcut[]>([]);
+  toolRenderers = $state.raw<ToolRenderer[]>([]);
+  slots = $state.raw<SlotItem[]>([]);
+  messageRenderers = $state.raw<MessageRenderer[]>([]);
+  private composerFilters = new Map<string, ComposerFilter>();
+  private serverSubscribed = new Set<string>();
+  private sessionCalls = new Map<string, number[]>();
   private httpReader = new HttpReader();
   logs = $state<ExtensionLog[]>([]);
   panels = $state.raw<ExtensionPanel[]>([]);
@@ -581,6 +607,12 @@ export class ExtensionHost {
     this.navbar = this.navbar.filter(item => item.owner !== id);
     this.pendingPanelOpens.delete(id);
     this.subscribed.delete(id); this.notificationTimes.delete(id);
+    this.serverSubscribed.delete(id); this.sessionCalls.delete(id);
+    this.shortcuts = this.shortcuts.filter(s => s.owner !== id);
+    this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id);
+    this.slots = this.slots.filter(s => s.owner !== id);
+    this.messageRenderers = this.messageRenderers.filter(r => r.owner !== id);
+    this.composerFilters.delete(id);
     this.commands = this.commands.filter(c => c.owner !== id);
     this.actions = this.actions.filter(c => c.owner !== id);
     this.statuses = this.statuses.filter(c => c.owner !== id);
@@ -813,7 +845,7 @@ export class ExtensionHost {
   restoreConfiguration() { restoreBackup(this.configIO("")); }
 
   private request(id: string, method: string, args: unknown[], runtime: ExtensionRuntime): unknown {
-    const execute = (token: string, arg = "") => runtime.execute(token, arg);
+    const execute = (token: string, arg = ""): Promise<unknown> => runtime.execute(token, arg);
     switch (method) {
       case "configuration.authorize": {
         this.require(id, "configuration-background"); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다"));
@@ -894,12 +926,12 @@ export class ExtensionHost {
       }
       case "commands.register": {
         this.require(id, "commands"); const s = object(args[0]); const token = string(args[1], 40);
-        this.registerCommand(id, localId(s.name), string(s.description, 200), s.args === undefined ? undefined : string(s.args, 80), arg => execute(token, arg)); return;
+        this.registerCommand(id, localId(s.name), string(s.description, 200), s.args === undefined ? undefined : string(s.args, 80), arg => execute(token, arg).then(() => {})); return;
       }
       case "composer.registerAction": {
         this.require(id, "composer"); const s = object(args[0]); const token = string(args[1], 40); const actionId = localId(s.id);
         if (this.actions.filter(a => a.owner === id).length >= 10 || this.actions.some(a => a.owner === id && a.id === actionId)) throw new LocalizedError(t("입력창 액션 제한 또는 중복 ID"));
-        this.actions = [...this.actions, { owner: id, id: actionId, label: string(s.label, 40), run: () => execute(token) }]; return;
+        this.actions = [...this.actions, { owner: id, id: actionId, label: string(s.label, 40), run: () => execute(token).then(() => {}) }]; return;
       }
       case "composer.setText": this.require(id, "composer"); this.adapter!.prefill(string(args[0], 16000)); return;
       case "navbar.set": {
@@ -940,6 +972,135 @@ export class ExtensionHost {
         return { sessionId: c.sessionId, model: c.model, provider: c.provider, running: c.running, online: c.online };
       }
       case "events.subscribe": this.require(id, "events"); this.subscribed.add(id); return;
+      case "server.subscribe": this.require(id, "server"); this.serverSubscribed.add(id); return;
+      case "server.call": {
+        this.require(id, "server");
+        const connection = this.adapter?.connection?.() ?? null;
+        if (!connection) throw new LocalizedError(t("서버에 연결해 주세요"));
+        const extension = string(args[0], 80), method = string(args[1], 80);
+        if (!/^[A-Za-z0-9_./-]+$/.test(extension) || !/^[A-Za-z0-9_-]+$/.test(method)) throw new LocalizedError(t("잘못된 서버 확장 이름"));
+        const sessionId = args[3] === null || args[3] === undefined ? null : string(args[3], 80);
+        const generation = this.generations.get(id);
+        return within(15000, async signal => {
+          const result = await new Api(connection).callServerExtension(extension, method, args[2] ?? null, sessionId, signal);
+          if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다"));
+          return result;
+        });
+      }
+      case "server.entries": {
+        this.require(id, "server");
+        const connection = this.adapter?.connection?.() ?? null;
+        if (!connection) throw new LocalizedError(t("서버에 연결해 주세요"));
+        const o = args[0] === undefined ? {} : object(args[0]);
+        const sessionId = typeof o.sessionId === "string" ? o.sessionId : this.adapter!.context().sessionId;
+        if (!sessionId) throw new LocalizedError(t("열려 있는 대화가 없습니다"));
+        return within(15000, signal => new Api(connection).serverExtensionEntries(sessionId, typeof o.extension === "string" ? o.extension : undefined, typeof o.type === "string" ? o.type : undefined, signal));
+      }
+      case "server.list": {
+        this.require(id, "server");
+        const connection = this.adapter?.connection?.() ?? null;
+        if (!connection) throw new LocalizedError(t("서버에 연결해 주세요"));
+        return within(15000, signal => new Api(connection).serverExtensions(signal));
+      }
+      case "shortcuts.register": {
+        this.require(id, "shortcuts"); const s = object(args[0]); const token = string(args[1], 40); const shortcutId = localId(s.id);
+        const combo = string(s.combo, 40, "combo");
+        const { mods, keys } = splitCombo(combo);
+        if ((!mods.includes("Mod") && !mods.includes("Alt")) || keys.length !== 1) throw new LocalizedError(t("단축키는 Ctrl/⌘ 또는 Alt와 키 하나로 구성해야 합니다 (예: Mod+Shift+K)"));
+        if (this.shortcuts.filter(x => x.owner === id).length >= 10 || this.shortcuts.some(x => x.owner === id && x.id === shortcutId)) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
+        if (this.shortcuts.some(x => x.combo === combo)) throw new LocalizedError(t("이미 다른 확장이 쓰는 단축키입니다: {combo}", { combo }));
+        this.shortcuts = [...this.shortcuts, { owner: id, id: shortcutId, label: string(s.label, 60), combo, run: () => execute(token).then(() => {}) }]; return;
+      }
+      case "shortcuts.remove": this.require(id, "shortcuts"); this.shortcuts = this.shortcuts.filter(x => x.owner !== id || x.id !== localId(args[0])); return;
+      case "dialog.confirm":
+      case "dialog.select":
+      case "dialog.input": {
+        this.require(id, "dialogs");
+        const ask = this.adapter?.dialog;
+        if (!ask) throw new LocalizedError(t("이 클라이언트는 대화상자를 지원하지 않습니다"));
+        const s = object(args[0]); const kind = method.slice("dialog.".length) as "confirm" | "select" | "input";
+        const base = { owner: id, ownerName: this.find(id).package.manifest.name, title: string(s.title, 120), ...(s.message === undefined ? {} : { message: string(s.message, 2000) }) };
+        let request: ExtensionDialogRequest;
+        if (kind === "confirm") request = { ...base, kind, ...(s.confirmLabel === undefined ? {} : { confirmLabel: string(s.confirmLabel, 40) }) };
+        else if (kind === "select") {
+          if (!Array.isArray(s.options) || !s.options.length || s.options.length > 50) throw new LocalizedError(t("선택지는 1~50개여야 합니다"));
+          request = { ...base, kind, options: s.options.map(o => { const x = object(o); return { value: string(x.value, 200), label: string(x.label, 120), ...(x.description === undefined ? {} : { description: string(x.description, 300) }) }; }) };
+        } else request = { ...base, kind, ...(s.placeholder === undefined ? {} : { placeholder: string(s.placeholder, 120) }), ...(s.value === undefined ? {} : { value: string(s.value, 4000) }), multiline: s.multiline === true };
+        const generation = this.generations.get(id);
+        return ask(request).then(v => this.generations.get(id) === generation ? v : (kind === "confirm" ? false : null));
+      }
+      case "session.send": {
+        this.require(id, "session");
+        const adapter = this.adapter?.session;
+        if (!adapter) throw new LocalizedError(t("이 클라이언트는 대화 제어를 지원하지 않습니다"));
+        const mode = args[1] === "steer" || args[1] === "follow_up" ? args[1] : "prompt";
+        this.limitSession(id);
+        return adapter.send(string(args[0], 16000), mode);
+      }
+      case "session.abort": {
+        this.require(id, "session");
+        const adapter = this.adapter?.session;
+        if (!adapter) throw new LocalizedError(t("이 클라이언트는 대화 제어를 지원하지 않습니다"));
+        this.limitSession(id);
+        return adapter.abort();
+      }
+      case "tools.registerRenderer": {
+        this.require(id, "tools"); const toolName = string(args[0], 64); const token = string(args[1], 40);
+        if (!/^[A-Za-z0-9_-]+$/.test(toolName)) throw new LocalizedError(t("잘못된 도구 이름"));
+        if (this.toolRenderers.filter(r => r.owner === id).length >= 20) throw new LocalizedError(t("렌더러는 확장당 최대 20개입니다"));
+        const generation = this.generations.get(id);
+        this.toolRenderers = [...this.toolRenderers.filter(r => !(r.owner === id && r.toolName === toolName)), { owner: id, toolName, render: async input => {
+          if (this.generations.get(id) !== generation || this.find(id).state !== "active") return null;
+          const value = await runtime.execute(token, input);
+          return value === null || value === undefined ? null : parseView(value, { maxNodes: 80, maxDepth: 5, maxBytes: 24 * 1024 });
+        } }]; return;
+      }
+      case "messages.registerRenderer": {
+        this.require(id, "messages"); const entryType = string(args[0], 64); const token = string(args[1], 40);
+        if (!/^[A-Za-z0-9_-]+$/.test(entryType)) throw new LocalizedError(t("잘못된 기록 종류"));
+        if (this.messageRenderers.filter(r => r.owner === id).length >= 20) throw new LocalizedError(t("렌더러는 확장당 최대 20개입니다"));
+        const generation = this.generations.get(id);
+        this.messageRenderers = [...this.messageRenderers.filter(r => !(r.owner === id && r.entryType === entryType)), { owner: id, entryType, render: async entry => {
+          if (this.generations.get(id) !== generation || this.find(id).state !== "active") return null;
+          const value = await runtime.execute(token, entry);
+          return value === null || value === undefined ? null : parseView(value, { maxNodes: 80, maxDepth: 5, maxBytes: 24 * 1024, allowed: NAVBAR_NODE_TYPES });
+        } }]; return;
+      }
+      case "messages.removeRenderer": this.require(id, "messages"); this.messageRenderers = this.messageRenderers.filter(r => r.owner !== id || r.entryType !== string(args[0], 64)); return;
+      case "slots.set": {
+        this.require(id, "slots");
+        if (args.length !== 3) throw new LocalizedError(t("slots.set은 위치, ID, spec 세 인자가 필요합니다"));
+        const slot = args[0] === "header" || args[0] === "footer" ? args[0] : null;
+        if (!slot) throw new LocalizedError(t("슬롯은 header 또는 footer입니다"));
+        const itemId = navbarId(args[1]); const spec = parseNavbarItem(args[2]);
+        const mine = this.slots.filter(s => s.owner === id);
+        const exists = mine.some(s => s.slot === slot && s.id === itemId);
+        if (!exists && mine.length >= 2) throw new LocalizedError(t("슬롯 항목은 확장당 최대 2개입니다"));
+        const next: SlotItem = { owner: id, id: itemId, slot, ...spec };
+        this.slots = exists ? this.slots.map(s => s.owner === id && s.slot === slot && s.id === itemId ? next : s) : [...this.slots, next]; return;
+      }
+      case "slots.remove": {
+        this.require(id, "slots");
+        const slot = args[0], itemId = navbarId(args[1]);
+        this.slots = this.slots.filter(s => s.owner !== id || s.slot !== slot || s.id !== itemId); return;
+      }
+      case "composerFilter.set": {
+        this.require(id, "composer-filter"); const token = string(args[1], 40);
+        const generation = this.generations.get(id);
+        this.composerFilters.set(id, { owner: id, run: async text => {
+          if (this.generations.get(id) !== generation || this.find(id).state !== "active") return null;
+          const value = await Promise.race([runtime.execute(token, text), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2000))]);
+          if (typeof value === "string") return value.slice(0, 64000);
+          if (value && typeof value === "object") {
+            const o = value as Record<string, unknown>;
+            if (typeof o.text === "string") return { text: o.text.slice(0, 64000) };
+            if (typeof o.cancel === "string") return { cancel: o.cancel.slice(0, 300) };
+          }
+          return null;
+        } }); return;
+      }
+      case "composerFilter.clear": this.require(id, "composer-filter"); this.composerFilters.delete(id); return;
+      case "tools.removeRenderer": this.require(id, "tools"); this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id || r.toolName !== string(args[0], 64)); return;
       case "notifications.send":
       case "notifications.status":
       case "notifications.register":
@@ -975,9 +1136,51 @@ export class ExtensionHost {
       default: throw new LocalizedError(t("지원하지 않는 SDK 메서드: {method}", { method }));
     }
   }
+  private limitSession(id: string) {
+    const recent = (this.sessionCalls.get(id) ?? []).filter(at => Date.now() - at < 10000);
+    if (recent.length >= 5) throw new LocalizedError(t("대화 제어는 10초에 최대 5번입니다"));
+    this.sessionCalls.set(id, [...recent, Date.now()]);
+  }
+  /** Hands an event from a server extension to every extension that subscribed with `sdk.server.on`. */
+  emitServer(event: ServerExtensionEvent) {
+    if (this.safeMode) return;
+    for (const id of this.serverSubscribed) this.runtimes.get(id)?.serverEvent(event);
+  }
+  /** The shortcut an extension registered for this key combo, if any. Only active extensions count. */
+  shortcutFor(combo: string): ExtensionShortcut | undefined {
+    if (this.safeMode) return undefined;
+    return this.shortcuts.find(s => s.combo === combo && this.installed.some(e => e.package.manifest.id === s.owner && e.state === "active"));
+  }
+  /**
+   * Runs the active extensions' composer filters in install order on a message about to be sent. A filter that fails or
+   * times out is skipped (the text goes out unchanged); one that cancels stops the send with its reason.
+   */
+  async filterComposer(text: string): Promise<{ text: string } | { cancel: string }> {
+    if (this.safeMode) return { text };
+    let current = text;
+    for (const e of this.installed) {
+      const filter = e.state === "active" ? this.composerFilters.get(e.package.manifest.id) : undefined;
+      if (!filter) continue;
+      try {
+        const out = await filter.run(current);
+        if (out && typeof out === "object" && "cancel" in out) return { cancel: `[${e.package.manifest.name}] ${out.cancel}` };
+        if (typeof out === "string") current = out; else if (out) current = out.text;
+      } catch { /* a broken filter must never keep the user from sending */ }
+    }
+    return { text: current };
+  }
+  messageRendererFor(entryType: string): MessageRenderer | undefined {
+    if (this.safeMode) return undefined;
+    return this.messageRenderers.find(r => r.entryType === entryType && this.installed.some(e => e.package.manifest.id === r.owner && e.state === "active"));
+  }
+  /** The renderer an extension registered for a tool, if any. */
+  rendererFor(toolName: string): ToolRenderer | undefined {
+    if (this.safeMode) return undefined;
+    return this.toolRenderers.find(r => r.toolName === toolName && this.installed.some(e => e.package.manifest.id === r.owner && e.state === "active"));
+  }
   emit(event: ExtensionEvent) {
     if (this.safeMode) return;
-    const safe = { type: event.type, sessionId: event.sessionId, at: event.at, ...(event.status === undefined ? {} : { status: event.status }) };
+    const safe = { type: event.type, sessionId: event.sessionId, at: event.at, ...(event.status === undefined ? {} : { status: event.status }), ...(event.toolName === undefined ? {} : { toolName: event.toolName, isError: event.isError === true }) };
     for (const id of this.subscribed) this.runtimes.get(id)?.event(safe);
   }
 }

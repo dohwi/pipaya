@@ -43,13 +43,14 @@ import { TemplateService } from "./templates.ts";
 import { registerTemplateRoutes } from "./templates-routes.ts";
 import { streamEvents } from "./sse.ts";
 import { SessionStore, SqliteCredentialStore } from "./store.ts";
-import { DEFAULT_TOOLS, TOOL_DEFS } from "./tools.ts";
 import { makeSerializerCompiler, validatorCompiler, type TypeBoxProvider } from "./typebox-provider.ts";
 import { registerWebSocket, type WebSocketOptions } from "./ws.ts";
 import { NotificationService, type PushTransports } from "./notifications.ts";
 import { registerNotificationRoutes } from "./notification-routes.ts";
 import { createCorsPolicy, redactUrl } from "./security.ts";
 import { createPushTransports } from "./push.ts";
+import { ExtensionHost } from "./extensions/host.ts";
+import { registerServerExtensionRoutes } from "./extensions/routes.ts";
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
 export const IMAGE_BODY_LIMIT = 25 * 1024 * 1024;
@@ -75,6 +76,10 @@ export interface BuildOptions {
 	mobileDelayMs?: number;
 	/** WebSocket heartbeat and slow-client limits (tests shorten them) */
 	websocket?: WebSocketOptions;
+	/** Directories scanned for server extensions (tests); defaults to `<dataDir>/extensions` and `~/.agents/extensions`. */
+	extensionDirs?: string[];
+	/** Extra extension files or folders to load. */
+	extensionPaths?: string[];
 }
 
 /** API-only server. No frontend assets, bundling or client-directory dependency. */
@@ -104,7 +109,19 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const modelRoles = new ModelRoles(db, registry);
 	const subagentSettings = new SubAgentSettings(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings);
+	const extensions = new ExtensionHost({
+		db, bus, registry, dataDir: cfg.dataDir,
+		dirs: opts.extensionDirs ?? ExtensionHost.defaultDirs(cfg.dataDir, opts.home),
+		paths: opts.extensionPaths,
+		log: (m) => server.log.warn(m),
+	});
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions);
+	extensions.attach({
+		cwd: (id) => store.get(id)?.cwd,
+		send: (id, text, mode) => sessions.send(id, { text, mode }),
+		abort: (id) => sessions.abort(id),
+		isRunning: (id) => sessions.isRunning(id),
+	});
 	const retention = new Retention(db, store, sessions, approvals, questions);
 	const groups = new GroupManager(db, bus, (id) => store.get(id) !== undefined);
 	const server = Fastify({
@@ -179,8 +196,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	app.get("/tools", {
 		schema: { response: { 200: S.ToolList, ...S.errors(401) } },
 		handler: async () => ({
-			tools: Object.values(TOOL_DEFS).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
-			defaults: DEFAULT_TOOLS,
+			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
+			defaults: extensions.defaultTools(),
 		}),
 	});
 	app.get("/models", {
@@ -403,6 +420,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.EventTypeList, ...S.errors(401) } },
 		handler: async () => ({ events: S.EVENTS.map((e) => ({ type: e.type, persisted: e.persisted, description: e.description, data: e.data })) }),
 	});
+	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined);
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
 	registerConfigurationRoutes(server, configuration, bus);
 	registerLlmRoutes(server, modelRoles, new Llm(registry, modelRoles), bus);
@@ -417,6 +435,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
 	await registerWebSocket(server, { bus, sessions, approvals, questions }, opts.websocket);
 
+	await extensions.load();
 	retention.start();
 	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);
 	prune.unref?.();
@@ -427,6 +446,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		await push.close();
 		sessions.shutdown();
 		await sessions.idle();
+		await extensions.shutdown();
 		await server.close();
 		db.close();
 	} };
