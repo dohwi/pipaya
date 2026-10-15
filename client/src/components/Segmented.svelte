@@ -22,7 +22,7 @@
 		columns,
 		option,
 	}: {
-		options: { id: T; label: string; disabled?: boolean; lang?: string }[];
+		options: { id: T; label: string; disabled?: boolean; lang?: string; tone?: "danger" | "warn" }[];
 		value: T;
 		onchange: (id: T) => void;
 		label: string;
@@ -38,7 +38,7 @@
 
 	const indicator = $derived(
 		variant === "cards"
-			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius)" }
+			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius)", mirror: ["data-tone"] }
 			: { selector: "button.on", variant: "fill" as const, radius: "calc(var(--radius) - 3px)" },
 	);
 </script>
@@ -63,6 +63,7 @@
 			tabindex={value === o.id ? 0 : -1}
 			disabled={o.disabled}
 			lang={o.lang}
+			data-tone={o.tone}
 			onclick={() => value !== o.id && onchange(o.id)}
 		>
 			{#if option}{@render option(o)}{:else}{o.label}{/if}
@@ -98,6 +99,15 @@
 		border-color: var(--text);
 		background: var(--bg-active);
 		font-weight: 600;
+	}
+	/* a risky choice (tone) turns its card red/amber when selected, so the danger is visible at a glance */
+	.cards > button.on[data-tone="danger"] {
+		color: var(--danger);
+		background: var(--danger-soft);
+	}
+	.cards > button.on[data-tone="warn"] {
+		color: var(--warn);
+		background: var(--warn-soft);
 	}
 	/* the sliding ring (drawn over the card) replaces the card's own border; the fill still cross-fades */
 	.cards:global([data-indicator-ready]) > button.on {

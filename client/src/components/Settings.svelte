@@ -50,9 +50,9 @@
 		if (!server && current.server) tab = "general";
 	});
 
-	const approvals: { id: ApprovalPolicy; label: string; hint: string }[] = [
+	const approvals: { id: ApprovalPolicy; label: string; hint: string; tone?: "danger" | "warn" }[] = [
 		{ id: "ask", label: msg("확인", "approval"), hint: msg("파일 수정과 명령 실행 전에 확인합니다.") },
-		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다.") },
+		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다."), tone: "danger" },
 		{ id: "readonly", label: msg("읽기 전용", "approval"), hint: msg("변경을 일으키는 작업을 모두 막습니다.") },
 	];
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
@@ -134,8 +134,8 @@
 
 				<section>
 					<div class="mono-label">{t("도구 승인")}</div>
-					<Segmented variant="cards" label={t("도구 승인")} value={app.effective.approval} onchange={(id) => app.configure({ approval: id })} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label) }))} />
-					<span class="hint">
+					<Segmented variant="cards" label={t("도구 승인")} value={app.effective.approval} onchange={(id) => app.configure({ approval: id })} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
+					<span class="hint" class:danger={approvals.find((a) => a.id === app.effective.approval)?.tone === "danger"}>
 						{t(approvals.find((a) => a.id === app.effective.approval)?.hint ?? "")}
 						{app.current ? t("열려 있는 대화에만 적용됩니다.") : t("앞으로 시작할 새 대화에 적용됩니다.")}
 					</span>

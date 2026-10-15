@@ -1929,6 +1929,9 @@ class AppStore {
     }
     try {
       const updated = await this.api.patchSession(s.id, patch);
+      // The approval you pick is also what new chats start with. Saved on the server, otherwise the
+      // next connect resets the draft to the startup default and every new chat is back to "ask".
+      if (patch.approval) await this.api.setDefaultApproval(patch.approval).catch(() => {});
       const i = this.sessions.findIndex((x) => x.id === s.id);
       if (i >= 0)
         this.sessions[i] = {
