@@ -30,6 +30,7 @@ import type {
   Group,
   DefaultModelSelection,
   PipayaEvent,
+  FileRef,
   ImageBlock,
   ModelInfo,
   ModelSelection,
@@ -38,6 +39,7 @@ import type {
   Session,
   ThinkingLevel,
   ToolInfo,
+  UploadFile,
   WorkspaceInfo,
   WorkdirInfo,
 } from "./types";
@@ -1550,12 +1552,13 @@ class AppStore {
     text: string,
     images: ImageBlock[] = [],
     to: string | null = this.activeId,
+    files: UploadFile[] = [],
   ): Promise<boolean> {
     const api = this.api;
     if (!api || this.sending || this.chatOf(to)?.compacting) return false;
     text = text.trim();
-    if (!text && !images.length) return false;
-    if (!text) text = t("(첨부한 이미지를 봐 주세요)");
+    if (!text && !images.length && !files.length) return false;
+    if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
     this.sending = true;
     try {
       if (!to) {
@@ -1582,10 +1585,10 @@ class AppStore {
       if (!chat) return false;
 
       const mode: SendMode = chat.running ? "follow_up" : "prompt";
-      if (mode === "prompt") chat.addOptimisticUser(text, images);
+      if (mode === "prompt") chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
       chat.requestBottom();
       try {
-        await api.send(chat.id, text, mode, images.length ? images : undefined);
+        await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
       } catch (e) {
         if (mode === "prompt") chat.dropOptimisticUser();
         throw e;
@@ -1610,28 +1613,35 @@ class AppStore {
     images: ImageBlock[],
     failMsg: string,
     to: string | null,
+    files: UploadFile[] = [],
   ): Promise<boolean> {
     const chat = this.chatOf(to);
     const api = this.api;
     text = text.trim();
-    if (!api || !chat || chat.compacting || (!text && !images.length)) return false;
-    if (!text) text = t("(첨부한 이미지를 봐 주세요)");
+    if (!api || !chat || chat.compacting || (!text && !images.length && !files.length)) return false;
+    if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
     chat.requestBottom();
     try {
-      await api.send(chat.id, text, mode, images.length ? images : undefined);
+      await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
       return true;
     } catch (e) {
       if (e instanceof ApiError && e.status === 409)
-        return this.send(text, images, to);
+        return this.send(text, images, to, files);
       this.fail(e, failMsg, chat.id);
       return false;
     }
   }
 
-  steer = (text: string, images: ImageBlock[] = [], to = this.activeId) =>
-    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to);
-  queue = (text: string, images: ImageBlock[] = [], to = this.activeId) =>
-    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to);
+  steer = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = []) =>
+    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to, files);
+  queue = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = []) =>
+    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to, files);
+
+  /** Open a file preview (null = closed) */
+  filePreview = $state<{ sessionId: string; file: FileRef } | null>(null);
+  openFile(sessionId: string, file: FileRef) {
+    this.filePreview = { sessionId, file };
+  }
 
   /** Commands and tools that extensions inside the server provide; refreshed when the server (re)loads them. */
   serverCommands = $state<{ name: string; description?: string; extension: string }[]>([]);

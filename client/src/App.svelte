@@ -52,6 +52,7 @@
 		templates: () => import("./components/Templates.svelte"),
 		lightbox: () => import("./components/Lightbox.svelte"),
 		queue: () => import("./components/QueueModal.svelte"),
+		filePreview: () => import("./components/FilePreview.svelte"),
 		dirPicker: () => import("./components/DirPicker.svelte"),
 		serverForm: () => import("./components/ServerForm.svelte"),
 		linkCard: () => import("./components/LinkCard.svelte"),
@@ -305,6 +306,10 @@
 
 {#if app.viewer}
 	<Lazy load={load.lightbox} onclose={() => (app.viewer = null)} />
+{/if}
+
+{#if app.filePreview}
+	<Lazy load={load.filePreview} />
 {/if}
 
 {#if app.queueDialog}

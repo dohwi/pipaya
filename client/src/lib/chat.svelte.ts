@@ -10,6 +10,7 @@ import type {
 	CompactionResult,
 	ContextUsage,
 	PipayaEvent,
+	FileRef,
 	ImageBlock,
 	StreamDelta,
 	ToolRun,
@@ -53,11 +54,25 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[] } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[] } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
-	// The server appends a note when the user wrote $agent; it is for the model, not for the transcript.
-	const shown = Array.isArray(m.content) ? m.content.filter((c) => !(c?.type === "text" && String(c.text ?? "").startsWith("<pipaya-hint>"))) : m.content;
-	return { text: textOf(shown), images };
+	const files: FileRef[] = [];
+	// The server appends a note when the user wrote $agent or attached files; it is for the model, not for the transcript.
+	const shown = Array.isArray(m.content)
+		? m.content.filter((c) => {
+				if (c?.type !== "text") return true;
+				const s = String(c.text ?? "");
+				if (s.startsWith("<pipaya-files>")) {
+					try {
+						const json = s.slice("<pipaya-files>".length, s.indexOf("</pipaya-files>"));
+						for (const f of JSON.parse(json) as FileRef[]) if (f && typeof f.path === "string") files.push({ path: f.path, name: String(f.name ?? f.path), size: f.size, mimeType: f.mimeType });
+					} catch { /* a note we cannot read is simply not shown */ }
+					return false;
+				}
+				return !s.startsWith("<pipaya-hint>");
+			})
+		: m.content;
+	return { text: textOf(shown), images, files };
 }
 
 // The server stores a denied/blocked call as an ordinary error result with these messages
@@ -250,8 +265,8 @@ export class ChatState {
 		else this.reduce(e);
 	}
 
-	addOptimisticUser(text: string, images: ImageBlock[]): void {
-		this.items.push({ kind: "user", key: `u${uid()}`, seq: null, text, images, ts: Date.now(), fresh: true });
+	addOptimisticUser(text: string, images: ImageBlock[], files: FileRef[] = []): void {
+		this.items.push({ kind: "user", key: `u${uid()}`, seq: null, text, images, files, ts: Date.now(), fresh: true });
 	}
 
 	dropOptimisticUser(): void {

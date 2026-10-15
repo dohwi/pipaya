@@ -21,14 +21,17 @@
 	 * `"new"` to add, or the id of the server being edited. `embedded` draws it as a page inside the settings window
 	 * (with a back button) instead of a modal of its own; `onclose` is then how it hands control back to the list.
 	 */
-	let { target, embedded = false, onclose }: { target: string | "new"; embedded?: boolean; onclose?: () => void } = $props();
+	type Section = "info" | "workdir" | "models" | "agents" | "sessions" | "devices";
+	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
+	let { target, embedded = false, onclose, section }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section } = $props();
 
 	// App.svelte re-mounts this component per target ({#key}), so reading `target` once is intended.
 	// svelte-ignore state_referenced_locally
 	const editing = target === "new" ? null : (app.servers.find((s) => s.id === target) ?? null);
 
 	/** Editing a server has three panes: its connection details, its default folder, and the model connections on it. */
-	let tab = $state<"info" | "workdir" | "models" | "agents" | "sessions" | "devices">("info");
+	// svelte-ignore state_referenced_locally
+	let tab = $state<Section>(section ?? "info");
 	const tabOrder = ["info", "workdir", "models", "agents", "sessions", "devices"] as const;
 	let dir = $state(1);
 	function go(next: (typeof tabOrder)[number]) {
@@ -44,7 +47,19 @@
 	let error = $state("");
 	let confirmDelete = $state(false);
 
-	const close = () => (onclose ? onclose() : (app.serverForm = null));
+	const close = () => {
+		if (onclose) return onclose();
+		if (section) {
+			// pinned inside settings: nothing to go back to; "cancel" just restores the saved values
+			const cur = app.servers.find((s) => s.id === editing?.id);
+			name = cur?.name ?? "";
+			url = cur?.baseUrl ?? "";
+			token = cur?.token ?? "";
+			error = "";
+			return;
+		}
+		app.serverForm = null;
+	};
 	const openHttp = $derived(isPlainHttpOnOpenNetwork(normalizeUrl(url)));
 
 	/* ---------- default working directory (saved on the server itself) ---------- */
@@ -83,6 +98,7 @@
 		if (editing) {
 			app.updateServer(editing.id, { name, baseUrl, token });
 			app.toast(t("서버 정보를 저장했습니다"), "ok");
+			if (section) return; // stays on its page; the saved values are what the fields show now
 		} else {
 			const before = app.servers.length;
 			app.addServer({ name, baseUrl, token });
@@ -105,6 +121,7 @@
 </script>
 
 {#snippet inner()}
+	{#if !section}
 	<header use:sheetPull={{ onclose: close, disabled: embedded }}>
 		{#if embedded}
 			<button type="button" class="back" onclick={close}><Icon name="chevron-left" /> {t("서버")}</button>
@@ -115,8 +132,9 @@
 		</div>
 		{#if !embedded}<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>{/if}
 	</header>
+	{/if}
 
-	{#if editing}
+	{#if editing && !section}
 		<div
 			class="tabs"
 			role="tablist"

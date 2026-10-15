@@ -268,12 +268,28 @@ export class Api {
 			"GET",
 			`/sessions/${id}/messages?limit=5000${after !== undefined ? `&after=${after}` : ""}`,
 		).then((r) => r.messages);
-	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[]) =>
+	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[], files?: { name: string; data: string }[]) =>
 		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
 			text,
 			mode,
 			...(images?.length ? { images } : {}),
+			...(files?.length ? { files: files.map((f) => ({ name: f.name, data: f.data })) } : {}),
 		});
+	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
+	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
+		let res: Response;
+		try {
+			res = await fetch(`${this.conn.baseUrl}/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: { Authorization: `Bearer ${this.conn.token}` } });
+		} catch (e) {
+			if ((e as Error).name === "AbortError") throw e;
+			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
+		}
+		if (!res.ok) {
+			const json = await res.json().catch(() => undefined);
+			throw new ApiError(res.status, json?.error?.code ?? "http_error", json?.error?.message ?? res.statusText);
+		}
+		return res.blob();
+	}
 	abort = (id: string) => this.req<{ aborted: boolean }>("POST", `/sessions/${id}/abort`);
 	cancelQueued = (id: string, mode: "steer" | "follow_up", text: string) =>
 		this.req<{ cancelled: boolean }>("POST", `/sessions/${id}/queue/cancel`, { mode, text });

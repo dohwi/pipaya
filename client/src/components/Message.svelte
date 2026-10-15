@@ -4,6 +4,7 @@
 	import Icon from "./Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
+	import FileChip from "./FileChip.svelte";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
@@ -83,6 +84,13 @@
 					{/each}
 				</div>
 			{/if}
+			{#if item.files?.length}
+				<div class="filechips">
+					{#each item.files as f}
+						<FileChip name={f.name} size={f.size} onopen={f.path && session ? () => app.openFile(session.id, f) : undefined} />
+					{/each}
+				</div>
+			{/if}
 			{#if item.text}
 				<div class="txt">{item.text}</div>
 			{/if}
@@ -103,7 +111,7 @@
 				{#if seg.kind === "work"}
 					<WorkBox steps={seg.steps} live={n === liveSeg} />
 				{:else}
-					<Markdown text={seg.text} streaming={live && n === segments.length - 1} />
+					<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
 				{/if}
 			{/each}
 
@@ -175,6 +183,12 @@
 		white-space: pre-wrap;
 	}
 	.imgs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 2px 0 8px;
+	}
+	.filechips {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;

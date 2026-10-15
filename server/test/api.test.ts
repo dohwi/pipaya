@@ -641,3 +641,39 @@ describe("request size limits", () => {
 		expect(sent.status).not.toBe(413);
 	});
 });
+
+describe("files", () => {
+	const raw = async (path: string) => fetch(base + path, { headers: auth });
+	const b64 = (s: string) => Buffer.from(s).toString("base64");
+
+	test("an attached file is saved in the working directory, and read back from there", async () => {
+		const made = await api("POST", "/sessions", {});
+		const sent = await api("POST", `/sessions/${made.json.id}/messages`, { text: "see file", files: [{ name: "../../evil dir/notes 1.txt", data: b64("hello") }] });
+		expect(sent.status).toBe(202);
+		await untilIdle(made.json.id);
+		const { json } = await api("GET", `/sessions/${made.json.id}/messages`);
+		const note = JSON.stringify(json.messages[0]);
+		const path = /\.pipaya\/uploads\/[a-f0-9]{6}-notes_1\.txt/.exec(note)?.[0];
+		expect(path).toBeTruthy();
+		const got = await raw(`/sessions/${made.json.id}/files?path=${encodeURIComponent(path!)}`);
+		expect(got.status).toBe(200);
+		expect(got.headers.get("content-type")).toBe("text/plain");
+		expect(got.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(await got.text()).toBe("hello");
+	});
+
+	test("reading cannot leave the working directory", async () => {
+		const made = await api("POST", "/sessions", {});
+		for (const p of ["../../etc/passwd", "/etc/passwd"]) {
+			expect((await raw(`/sessions/${made.json.id}/files?path=${encodeURIComponent(p)}`)).status).toBe(400);
+		}
+		expect((await raw(`/sessions/${made.json.id}/files?path=missing.txt`)).status).toBe(404);
+		expect((await raw(`/sessions/nope/files?path=a.txt`)).status).toBe(404);
+	});
+
+	test("a file over the limit is refused", async () => {
+		const made = await api("POST", "/sessions", {});
+		const big = Buffer.alloc(21 * 1024 * 1024).toString("base64");
+		expect((await api("POST", `/sessions/${made.json.id}/messages`, { text: "x", files: [{ name: "big.bin", data: big }] })).status).toBe(413);
+	});
+});

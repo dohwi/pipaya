@@ -475,8 +475,26 @@ export interface UserItem {
 	seq: number | null;
 	text: string;
 	images: ImageBlock[];
+	/** Files attached to this message, saved in the session's working directory */
+	files?: FileRef[];
 	ts: number;
 	fresh?: boolean;
+}
+
+/** A file being sent: base64 bytes, saved by the server in the session's working directory. */
+export interface UploadFile {
+	name: string;
+	data: string;
+	size: number;
+	mimeType: string;
+}
+
+/** A file in a session's working directory (`path` is relative to it). */
+export interface FileRef {
+	path: string;
+	name: string;
+	size?: number;
+	mimeType?: string;
 }
 
 export interface AssistantItem {

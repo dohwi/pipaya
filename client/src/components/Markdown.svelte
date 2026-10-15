@@ -1,10 +1,14 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
+	import { app } from "../lib/store.svelte";
+	import { baseName } from "../lib/files";
 	import { renderMarkdown, renderStreaming } from "../lib/markdown";
 	import { copyText } from "../lib/clipboard";
 	import { openExternal } from "../lib/tauri";
 
-	let { text, streaming = false }: { text: string; streaming?: boolean } = $props();
+	let { text, streaming = false, sessionId = null }: { text: string; streaming?: boolean; sessionId?: string | null } = $props();
+	let root: HTMLElement | undefined = $state();
 
 	// While streaming, re-parsing on every token is wasteful on phones; coalesce to one parse per frame.
 	let shown = $state("");
@@ -24,8 +28,58 @@
 	// While streaming, only the block being written is parsed again; the blocks above it come from the cache.
 	const html = $derived(streaming ? renderStreaming(shown) : renderMarkdown(shown));
 
+	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
+	// Only once the reply has settled: while streaming, the path may still be half written.
+	const loaded = new Map<string, string>();
+	$effect(() => {
+		html;
+		const host = root;
+		const api = app.api;
+		if (!host || !api || !sessionId || streaming) return;
+		const id = sessionId;
+		const ctl = new AbortController();
+		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
+			const path = slot.dataset.wdSrc!;
+			const alt = slot.dataset.alt ?? "";
+			const show = (src: string) => {
+				if (!slot.isConnected) return;
+				const img = document.createElement("img");
+				img.alt = alt;
+				img.src = src;
+				img.className = "wd-pic";
+				img.addEventListener("click", () => app.openImage([{ src, mimeType: "image/*" }]));
+				slot.replaceWith(img);
+			};
+			const key = `${id}\u0000${path}`;
+			const hit = loaded.get(key);
+			if (hit) {
+				show(hit);
+				continue;
+			}
+			api.fetchFile(id, path, ctl.signal)
+				.then((blob) => {
+					if (!blob.type.startsWith("image/")) return;
+					const src = URL.createObjectURL(blob);
+					loaded.set(key, src);
+					show(src);
+				})
+				.catch(() => slot.classList.add("missing"));
+		}
+		return () => ctl.abort();
+	});
+	onDestroy(() => {
+		for (const src of loaded.values()) URL.revokeObjectURL(src);
+		loaded.clear();
+	});
+
 	function onClick(e: MouseEvent) {
 		const el = e.target as HTMLElement;
+		const file = el.closest<HTMLAnchorElement>("a[data-file]");
+		if (file) {
+			e.preventDefault();
+			if (sessionId) app.openFile(sessionId, { path: file.dataset.file!, name: baseName(file.dataset.file!) });
+			return;
+		}
 		const copy = el.closest<HTMLButtonElement>("[data-copy]");
 		if (copy) {
 			const code = copy.closest(".codeblock")?.querySelector("code")?.textContent ?? "";
@@ -54,7 +108,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="md" class:streaming onclick={onClick}>{@html html}</div>
+<div class="md" class:streaming bind:this={root} onclick={onClick}>{@html html}</div>
 
 <style>
 	.md {
@@ -197,6 +251,33 @@
 	.md :global(img) {
 		max-width: 100%;
 		border-radius: var(--radius);
+	}
+	.md :global(a.wd-file) {
+		display: inline-flex;
+		align-items: center;
+		padding: 0 8px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-elev);
+		text-decoration: none;
+		font-size: 0.93em;
+	}
+	.md :global(a.wd-file::before) {
+		content: "📄";
+		margin-right: 5px;
+		font-size: 0.9em;
+	}
+	.md :global(a.wd-file:hover) {
+		border-color: var(--border-strong);
+	}
+	.md :global(.wd-img) {
+		color: var(--text-faint);
+		font-size: var(--fs-xs);
+	}
+	.md :global(.wd-pic) {
+		display: block;
+		max-height: 420px;
+		cursor: zoom-in;
 	}
 	.md :global(.remote-img) {
 		display: inline-flex;

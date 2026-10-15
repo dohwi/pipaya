@@ -10,6 +10,7 @@ import { agentsPrompt, advertisedAgents, advertisedSkills, aggregateReadFiles, b
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { expandTemplate, parseTemplateCall, readTemplateBody, templateCallHint, type TemplateService } from "./templates.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
+import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
@@ -22,7 +23,8 @@ import type { ExtensionHost } from "./extensions/host.ts";
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a capable coding assistant working inside a sandboxed working directory.
 Use the available tools to inspect and change files and run commands. Prefer small, verifiable steps.
-Be concise. Paths are relative to the working directory.`;
+Be concise. Paths are relative to the working directory.
+Files the user attaches are saved in the working directory and listed in the message. To hand a file back (a report, image, export), write it into the working directory and mention it as a markdown link to its relative path, e.g. [report.pdf](out/report.pdf) or ![chart](out/chart.png); the user sees a preview.`;
 
 const IDLE_EVICT_MS = 30 * 60_000;
 
@@ -381,7 +383,7 @@ export class SessionManager {
 
 	async send(
 		id: string,
-		input: { text: string; images?: ImageContent[]; mode?: PromptMode },
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode },
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
@@ -415,6 +417,10 @@ export class SessionManager {
 			if (body !== null) content.push({ type: "text", text: templateCallHint(call.name, expandTemplate(body, call.args), HINT_OPEN) });
 		}
 		if (input.images?.length) content.push(...input.images);
+		if (input.files?.length) {
+			const saved = await saveUploads(record.cwd, input.files);
+			content.push({ type: "text", text: filesNote(saved) });
+		}
 		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
 
 		if (mode === "steer" || mode === "follow_up") {

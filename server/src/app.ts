@@ -26,6 +26,7 @@ import { DeviceTokens } from "./device-tokens.ts";
 import { Pairing } from "./pairing.ts";
 import { isAdminOnlyPath, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
+import { registerFileRoutes } from "./file-routes.ts";
 import { GroupManager } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { LocaleStore } from "./locales.ts";
@@ -55,7 +56,8 @@ import { ExtensionHost } from "./extensions/host.ts";
 import { registerServerExtensionRoutes } from "./extensions/routes.ts";
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
-export const IMAGE_BODY_LIMIT = 25 * 1024 * 1024;
+// A message may carry images and files (up to 25 MB of files, as base64: x1.34) alongside each other.
+export const IMAGE_BODY_LIMIT = 64 * 1024 * 1024;
 
 export interface App {
 	server: FastifyInstance;
@@ -436,6 +438,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerSubAgentRoutes(server, subagentSettings, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
+	registerFileRoutes(server, (id) => store.get(id)?.cwd);
 	registerGroupRoutes(server, groups);
 	registerSkillRoutes(server, skills, bus);
 	registerTemplateRoutes(server, templates);

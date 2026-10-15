@@ -18,42 +18,35 @@
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
-	let tab = $state(app.settingsTab);
+	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab);
 
+	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 알림음") },
-		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화") },
-		{ id: "servers", label: msg("서버"), icon: "server", sub: msg("연결, 기본 폴더, 모델, 대화 관리") },
-		{ id: "extensions", label: msg("확장"), icon: "bolt", sub: msg("가져오기와 관리") },
-		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기") },
+		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 알림음"), server: false },
+		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
+		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
+		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
+		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
+		{ id: "agents", label: msg("에이전트"), icon: "brain", sub: "", server: true },
+		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
+		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
+		{ id: "extensions", label: msg("확장"), icon: "bolt", sub: msg("가져오기와 관리"), server: false },
+		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	] as const;
+	type TabId = (typeof tabs)[number]["id"];
 	/** Which side the next pane enters from, so content follows the selection. */
 	let dir = $state(1);
-	function go(next: (typeof tabs)[number]["id"]) {
+	function go(next: TabId) {
 		if (next === tab) return;
 		dir = tabs.findIndex((x) => x.id === next) > tabs.findIndex((x) => x.id === tab) ? 1 : -1;
 		tab = next;
-		// a different section starts at its own top level (the server list, not the last server)
-		if (next !== "servers") serverPage = null;
 	}
-	const current = $derived(tabs.find((x) => x.id === tab)!);
-
-	/** The servers section is a list, with one server's detail (or the add form) as a page on top of it. */
-	// svelte-ignore state_referenced_locally
-	let serverPage = $state<string | "new" | null>(app.settingsServer);
-	/** Back from a server page: the list slides in from the left, a page from the right. */
-	let pageDir = $state(1);
-	function openServerPage(id: string | "new") {
-		pageDir = 1;
-		serverPage = id;
-	}
-	function closeServerPage() {
-		pageDir = -1;
-		serverPage = null;
-	}
-	// a server removed from inside its page (or elsewhere) must not leave a page for nothing
+	const current = $derived(tabs.find((x) => x.id === tab) ?? tabs[0]);
+	const server = $derived(app.servers.find((s) => s.id === app.serverId) ?? null);
+	const serverName = $derived(server ? app.serverLabel(server) : "");
+	// without a server there is nothing server-specific left to show
 	$effect(() => {
-		if (serverPage && serverPage !== "new" && !app.servers.some((x) => x.id === serverPage)) serverPage = null;
+		if (!server && current.server) tab = "general";
 	});
 
 	const approvals: { id: ApprovalPolicy; label: string; hint: string }[] = [
@@ -75,7 +68,7 @@
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<div use:sheetPull={{ onclose: close }}>
 		<header>
-			<h2>{t("설정")}</h2>
+			<h2>{t("설정")}{#if serverName}<span class="hsrv"> · {serverName}</span>{/if}</h2>
 			<button class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
 		</header>
 	</div>
@@ -89,26 +82,31 @@
 			use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius)" }}
 			use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
 		>
-			{#each tabs as x (x.id)}
-				<button role="tab" aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
-					<Icon name={x.icon} />
-					<span class="nt">
-						<span class="nl">{t(x.label)}</span>
-						<span class="ns">{t(x.sub)}</span>
-					</span>
-				</button>
+			{#each tabs as x, i (x.id)}
+				{#if !x.server || server}
+					{#if x.server && !tabs[i - 1].server}<div class="ngroup" role="presentation">{serverName}</div>{/if}
+					{#if !x.server && tabs[i - 1]?.server}<div class="nsep" role="presentation"></div>{/if}
+					<button role="tab" class:srv={x.server} aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
+						<Icon name={x.icon} />
+						<span class="nt">
+							<span class="nl">{t(x.label)}</span>
+							{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
+						</span>
+					</button>
+					{#if x.id === "devices"}
+						<button class="addsrv" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 추가")}</button>
+					{/if}
+				{/if}
 			{/each}
 		</div>
 
 		<div class="body">
-			{#key tab + (serverPage ?? "")}
-			<div class="pane" role="tabpanel" in:paneIn={{ x: (serverPage ? pageDir : dir) * 18 }}>
-			{#if tab !== "servers" || !serverPage}
-				<div class="phead">
-					<h3>{t(current.label)}</h3>
-					<p>{t(current.sub)}</p>
-				</div>
-			{/if}
+			{#key tab + (current.server ? app.serverId : "")}
+			<div class="pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
+			<div class="phead">
+				<h3>{t(current.label)}</h3>
+				{#if current.sub}<p>{t(current.sub)}</p>{/if}
+			</div>
 			{#if tab === "extensions"}
 				<Extensions />
 			{:else if tab === "backup"}
@@ -179,32 +177,8 @@
 				</section>
 				<section><NotificationSettings /></section>
 				<section><UpdateSettings /></section>
-			{:else if tab === "servers"}
-				{#if serverPage}
-					{#key serverPage}<ServerForm target={serverPage} embedded onclose={closeServerPage} />{/key}
-				{:else}
-					<section>
-						<div class="label">{t("서버 목록 ({n})", { n: app.servers.length })}</div>
-						<div class="slist">
-							{#each app.servers as s (s.id)}
-								<div class="srv">
-									<span class="sdot {s.id === app.serverId ? (app.net === 'online' ? 'online' : app.net === 'unauthorized' ? 'unauthorized' : 'offline') : (app.status[s.id] ?? '')}"></span>
-									<button class="sinfo" onclick={() => openServerPage(s.id)} aria-label={t("{name} 설정 열기", { name: app.serverLabel(s) })}>
-										<span class="sname">{app.serverLabel(s)}</span>
-										<span class="surl mono">{s.baseUrl}</span>
-									</button>
-									{#if s.id !== app.serverId}
-										<button class="btn sm" onclick={() => { app.openServer(s.id); close(); }}>{t("전환")}</button>
-									{:else}
-										<span class="chip">{t("사용 중")}</span>
-									{/if}
-									<button class="iconbtn" onclick={() => openServerPage(s.id)} aria-label={t("{name} 설정", { name: app.serverLabel(s) })} title={t("서버 설정 · 모델 연결")}><Icon name="chevron-right" /></button>
-								</div>
-							{/each}
-						</div>
-						<button class="btn dashed" onclick={() => openServerPage("new")}><Icon name="plus" /> {t("서버 추가")}</button>
-					</section>
-				{/if}
+			{:else if current.server && server}
+				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
 			{/if}
 			</div>
 			{/key}
@@ -259,6 +233,40 @@
 	h2 {
 		margin: 0;
 		font-size: var(--fs-xl);
+	}
+	.hsrv {
+		font-weight: 500;
+		color: var(--text-dim);
+	}
+	.ngroup {
+		padding: 10px 12px 4px;
+		font-family: var(--mono);
+		font-size: var(--fs-2xs);
+		letter-spacing: 0.04em;
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.nsep {
+		height: 1px;
+		margin: 8px 12px;
+		background: var(--border);
+	}
+	.nav button.addsrv {
+		gap: 8px;
+		padding: 7px 12px;
+		font-size: var(--fs-sm);
+		color: var(--text-faint);
+	}
+	.nav button.srv {
+		padding: 8px 12px;
+	}
+	@media (max-width: 760px) {
+		.ngroup,
+		.nsep {
+			display: none;
+		}
 	}
 	.layout {
 		flex: 1;

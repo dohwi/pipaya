@@ -208,6 +208,12 @@ export const SendBody = Type.Object({
 			{ maxItems: 8 },
 		),
 	),
+	files: Type.Optional(
+		Type.Array(
+			Type.Object({ name: Type.String({ minLength: 1, maxLength: 255 }), data: Type.String({ description: "base64" }) }),
+			{ maxItems: 8, description: "Saved under .pipaya/uploads/ in the session's working directory; the agent is told where" },
+		),
+	),
 });
 export const SendResult = Type.Object({ accepted: PromptMode });
 

@@ -1,7 +1,8 @@
 <script lang="ts" module>
 	import type { Attachment as DraftAttachment } from "../lib/images";
 	/** Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. */
-	const drafts = new Map<string, { text: string; attachments: DraftAttachment[] }>();
+	import type { FileDraft } from "../lib/files";
+	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[] }>();
 </script>
 
 <script lang="ts">
@@ -20,6 +21,8 @@
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { fileToAttachment, type Attachment } from "../lib/images";
+	import { fileToDraft, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL } from "../lib/files";
+	import FileChip from "./FileChip.svelte";
 	import { isTouch } from "../lib/format";
 	import { msg, t } from "../lib/i18n";
 
@@ -33,6 +36,8 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	let wrapEl: HTMLDivElement | undefined = $state();
 	let attachments = $state<Attachment[]>([]);
+	/** Non-image files (and images a text-only model cannot see): sent as-is, saved in the working directory */
+	let files = $state<FileDraft[]>([]);
 	let dragging = $state(false);
 	let composing = false;
 
@@ -50,7 +55,7 @@
 	});
 	const promptHint = $derived(!compacting && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
-	const canSend = $derived((text.trim().length > 0 || attachments.length > 0) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && (!compacting || parseSlash(text) !== null));
+	const canSend = $derived((text.trim().length > 0 || attachments.length > 0 || files.length > 0) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && (!compacting || parseSlash(text) !== null));
 
 	export function focus() {
 		ta?.focus();
@@ -93,7 +98,7 @@
 	function stash() {
 		if (draftKey === undefined) return;
 		const k = draftKey ?? "";
-		if (text || attachments.length) drafts.set(k, { text, attachments });
+		if (text || attachments.length || files.length) drafts.set(k, { text, attachments, files });
 		else drafts.delete(k);
 	}
 	$effect(() => {
@@ -104,6 +109,7 @@
 			const d = drafts.get(id ?? "");
 			text = d?.text ?? "";
 			attachments = d?.attachments ?? [];
+			files = d?.files ?? [];
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => ta?.focus());
 		return () => untrack(stash);
@@ -329,6 +335,12 @@
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
 		attachments = [];
+		releaseFiles(files);
+		files = [];
+	}
+
+	function releaseFiles(list: FileDraft[]) {
+		for (const f of list) if (f.preview) URL.revokeObjectURL(f.preview);
 	}
 
 	async function submit() {
@@ -341,11 +353,11 @@
 		const body = filtered.text;
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
-		const ok = await app.send(body, imgs, pane.id);
+		const ok = await app.send(body, imgs, pane.id, files);
 		if (ok) clearSent(key);
 	}
 
-	const hasInput = $derived(text.trim().length > 0 || attachments.length > 0);
+	const hasInput = $derived(text.trim().length > 0 || attachments.length > 0 || files.length > 0);
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
@@ -357,7 +369,7 @@
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
-		const ok = await (kind === "steer" ? app.steer(filtered.text, imgs, pane.id) : app.queue(filtered.text, imgs, pane.id));
+		const ok = await (kind === "steer" ? app.steer(filtered.text, imgs, pane.id, files) : app.queue(filtered.text, imgs, pane.id, files));
 		if (ok) clearSent(key);
 	}
 
@@ -466,27 +478,53 @@
 		attachments = attachments.filter((x) => x.id !== id);
 	}
 
-	async function addFiles(files: Iterable<File>) {
-		for (const f of files) {
-			if (!f.type.startsWith("image/")) continue;
-			if (attachments.length >= 8) {
-				app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
+	/** Pictures the model can see go in as images (downscaled); everything else is attached as a file. */
+	async function addFiles(picked: Iterable<File>) {
+		for (const f of picked) {
+			if (f.type.startsWith("image/") && f.type !== "image/svg+xml" && vision) {
+				if (attachments.length >= 8) {
+					app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
+					continue;
+				}
+				try {
+					attachments.push(await fileToAttachment(f));
+					insertImageToken(attachments.length);
+				} catch {
+					app.toast(t("{name}를 읽지 못했습니다", { name: f.name || t("이미지") }), "error", pane.id);
+				}
+				continue;
+			}
+			if (files.length >= MAX_FILES) {
+				app.toast(t("파일은 최대 {n}개까지 첨부할 수 있습니다", { n: MAX_FILES }), "error", pane.id);
 				break;
 			}
+			if (f.size > MAX_FILE_BYTES) {
+				app.toast(t("{name}: 파일은 {n}MB까지 첨부할 수 있습니다", { name: f.name, n: MAX_FILE_BYTES / 1024 / 1024 }), "error", pane.id);
+				continue;
+			}
+			if (files.reduce((n, x) => n + x.size, f.size) > MAX_FILES_TOTAL) {
+				app.toast(t("한 메시지에 첨부할 수 있는 파일은 모두 합쳐 {n}MB까지입니다", { n: MAX_FILES_TOTAL / 1024 / 1024 }), "error", pane.id);
+				continue;
+			}
 			try {
-				attachments.push(await fileToAttachment(f));
-				insertImageToken(attachments.length);
+				files.push(await fileToDraft(f));
 			} catch {
-				app.toast(t("{name}를 읽지 못했습니다", { name: f.name || t("이미지") }), "error", pane.id);
+				app.toast(t("{name}를 읽지 못했습니다", { name: f.name || t("파일") }), "error", pane.id);
 			}
 		}
 	}
 
+	function removeFile(id: string) {
+		const f = files.find((x) => x.id === id);
+		if (f) releaseFiles([f]);
+		files = files.filter((x) => x.id !== id);
+	}
+
 	function onPaste(e: ClipboardEvent) {
-		const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
-		if (files.length) {
+		const pasted = [...(e.clipboardData?.files ?? [])];
+		if (pasted.length) {
 			e.preventDefault();
-			void addFiles(files);
+			void addFiles(pasted);
 		}
 	}
 
@@ -512,7 +550,7 @@
 />
 
 {#if dragging}
-	<div class="drop" in:fadeIn out:fadeOut>{t("이미지를 놓아서 첨부")}</div>
+	<div class="drop" in:fadeIn out:fadeOut>{t("파일을 놓아서 첨부")}</div>
 {/if}
 
 <div class="wrap" bind:this={wrapEl}>
@@ -530,6 +568,13 @@
 		{/if}
 		{#if attachments.length}
 			<AttachmentStrip {attachments} onremove={removeAttachment} />
+		{/if}
+		{#if files.length}
+			<div class="files">
+				{#each files as f (f.id)}
+					<FileChip name={f.name} size={f.size} preview={f.preview} onremove={() => removeFile(f.id)} />
+				{/each}
+			</div>
 		{/if}
 
 		{#if chat?.queued.length}
@@ -564,10 +609,10 @@
 </div>
 
 		<div class="bar">
-			<button class="iconbtn" onclick={() => fileInput?.click()} disabled={!vision} aria-label={t("이미지 첨부")} title={vision ? t("이미지 첨부") : t("이 모델은 이미지를 지원하지 않습니다")}>
-				<Icon name="image" />
+			<button class="iconbtn" onclick={() => fileInput?.click()} aria-label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")}>
+				<Icon name="file" />
 			</button>
-			<input bind:this={fileInput} type="file" accept="image/*" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void addFiles(picked); }} />
+			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void addFiles(picked); }} />
 
 			<ModelPicker />
 			<span class="grow"></span>
@@ -873,6 +918,12 @@
 			width: 17px;
 			height: 17px;
 		}
+	}
+	.files {
+		display: flex;
+		gap: 10px;
+		padding: 12px 14px 0;
+		overflow-x: auto;
 	}
 	.drop {
 		position: fixed;

