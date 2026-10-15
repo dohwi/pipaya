@@ -2,11 +2,11 @@
 	import Notice from "./Notice.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { paneIn } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { rovingKeys } from "../lib/roving";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import ModalHeader from "./ModalHeader.svelte";
 	import ModelConnections from "./ModelConnections.svelte";
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
@@ -122,16 +122,17 @@
 
 {#snippet inner()}
 	{#if !section}
-	<header use:sheetPull={{ onclose: close, disabled: embedded }}>
-		{#if embedded}
+	{#if embedded}
+		<header>
 			<button type="button" class="back" onclick={close}><Icon name="chevron-left" /> {t("서버")}</button>
-		{/if}
-		<div class="title">
-			<h2>{editing ? app.serverLabel(editing) : t("서버 추가")}</h2>
-			{#if editing}<span class="sub mono">{editing.baseUrl}</span>{/if}
-		</div>
-		{#if !embedded}<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>{/if}
-	</header>
+			<div class="title">
+				<h2>{editing ? app.serverLabel(editing) : t("서버 추가")}</h2>
+				{#if editing}<span class="sub mono">{editing.baseUrl}</span>{/if}
+			</div>
+		</header>
+	{:else}
+		<ModalHeader title={editing ? app.serverLabel(editing) : t("서버 추가")} sub={editing?.baseUrl} subMono onclose={close} />
+	{/if}
 	{/if}
 
 	{#if editing && !section}

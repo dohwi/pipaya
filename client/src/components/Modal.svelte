@@ -2,11 +2,13 @@
 	import type { Snippet } from "svelte";
 	import { fadeIn, fadeOut, modalIn, modalOut } from "../lib/motion";
 	import { modalLayer, portal as lift } from "../lib/dialog";
+	import ModalHeader from "./ModalHeader.svelte";
 
 	/**
 	 * The one modal panel: scrim + panel, the same enter/exit, a bottom sheet on phones, the z-index layer for its
 	 * nesting depth, and (lib/dialog.ts) Esc for the top modal only, Tab kept inside, focus returned to the opener,
-	 * and the app's shortcuts muted while it is open. Contents (header, body, footer) are the caller's.
+	 * and the app's shortcuts muted while it is open. With `title` it draws the shared header (ModalHeader: title,
+	 * subtitle, close, pull-to-dismiss); without, the caller draws its own. Body and footer are the caller's.
 	 *
 	 * Transitions are `|global`: a component whose root is this modal is shown by its parent's `{#if}`, and a local
 	 * transition would only play for a block inside this file (see tests/motion.test.ts).
@@ -31,6 +33,13 @@
 		portal = false,
 		dismissible = true,
 		class: cls = "",
+		title,
+		sub,
+		subMono = false,
+		divider = false,
+		compact = false,
+		onback,
+		headerActions,
 		children,
 	}: {
 		onclose: () => void;
@@ -60,6 +69,18 @@
 		/** false while closing must wait (saving, downloading); Esc and the scrim then do nothing */
 		dismissible?: boolean;
 		class?: string;
+		/** draws the shared header (and labels the dialog with it when `label` is not given) */
+		title?: string;
+		sub?: string | null;
+		subMono?: boolean;
+		/** a hairline under the header */
+		divider?: boolean;
+		/** the smaller header of a picker stacked over another dialog */
+		compact?: boolean;
+		/** a back arrow before the title (a step inside the dialog) */
+		onback?: () => void;
+		/** icon buttons placed before the header's close button */
+		headerActions?: Snippet;
 		children: Snippet;
 	} = $props();
 
@@ -81,7 +102,7 @@
 		class:fixed={!!height}
 		{role}
 		aria-modal="true"
-		aria-label={label}
+		aria-label={label ?? title}
 		aria-labelledby={labelledby}
 		aria-describedby={describedby}
 		aria-live={live}
@@ -94,6 +115,9 @@
 		in:modalIn|global
 		out:modalOut|global
 	>
+		{#if title}
+			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} closeDisabled={!dismissible} actions={headerActions} />
+		{/if}
 		{@render children()}
 	</div>
 {/snippet}

@@ -75,18 +75,13 @@
 </script>
 
 {#if open}
-	<Modal onclose={close} label={open.file.name} width="xl" maxHeight="85vh" layer={2} portal>
-		<div class="head">
-			<div class="title">
-				<span class="nm">{open.file.name}</span>
-				<span class="sub mono">{open.file.path}{size !== undefined ? ` · ${sizeLabel(size)}` : ""}</span>
-			</div>
+	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="85vh" layer={2} portal>
+		{#snippet headerActions()}
 			{#if text !== null}
 				<button type="button" class="iconbtn" onclick={copy} aria-label={t("복사")} title={t("복사")}><Icon name={copied ? "check" : "copy"} /></button>
 			{/if}
 			<button type="button" class="iconbtn" onclick={save} disabled={!url} aria-label={t("저장")} title={t("저장")}><Icon name="download" /></button>
-			<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
-		</div>
+		{/snippet}
 		<div class="body">
 			{#if loading}
 				<div class="note"><span class="spinner"></span></div>
@@ -107,32 +102,6 @@
 {/if}
 
 <style>
-	.head {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 12px 14px;
-		border-bottom: 1px solid var(--border);
-	}
-	.title {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-	}
-	.nm {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-weight: 600;
-	}
-	.sub {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 	.body {
 		overflow: auto;
 		padding: 14px;

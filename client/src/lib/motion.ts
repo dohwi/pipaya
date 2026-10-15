@@ -202,12 +202,12 @@ export const rowOut = (node: Element) => {
 	return { ...s, css: (t: number, u: number) => `${s.css!(t, u)};opacity:${t.toFixed(3)}` };
 };
 /** A chip leaving a horizontal strip: shrinks in place (the neighbours `reflow` into the gap). */
-export const chipOut = (node: Element) => ({
+export const chipOut = (_node: Element) => ({
 	duration: ms("fast"),
 	easing: easeExit,
 	css: (t: number) => `opacity:${t.toFixed(3)};transform:scale(${(0.85 + 0.15 * t).toFixed(4)})`,
 });
-export const chipIn = (node: Element) => ({
+export const chipIn = (_node: Element) => ({
 	duration: ms("normal"),
 	easing: easeEnter,
 	css: (t: number) => `opacity:${t.toFixed(3)};transform:scale(${(0.85 + 0.15 * t).toFixed(4)})`,

@@ -248,11 +248,7 @@
 </script>
 
 <!-- opened over the server dialog (layer 2) when it picks the default folder -->
-<Modal {onclose} label={mode === "default" ? t("기본 작업 디렉터리") : t("작업 디렉터리 선택")} width="l" layer={3} safeArea>
-	<header>
-		<h2>{mode === "default" ? t("기본 작업 디렉터리") : t("작업 디렉터리 선택")}</h2>
-		<button class="iconbtn" onclick={onclose} aria-label={t("닫기")}><Icon name="x" /></button>
-	</header>
+<Modal {onclose} title={mode === "default" ? t("기본 작업 디렉터리") : t("작업 디렉터리 선택")} width="l" layer={3} safeArea>
 
 	<form
 		class="path"
@@ -348,16 +344,6 @@
 </Modal>
 
 <style>
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 14px 14px 8px 22px;
-	}
-	h2 {
-		margin: 0;
-		font-size: var(--fs-xl);
-	}
 	.path,
 	.mk {
 		display: flex;

@@ -3,6 +3,7 @@
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import ModalHeader from "./ModalHeader.svelte";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
 	import { copyText } from "../lib/clipboard";
@@ -207,13 +208,7 @@
 
 <Modal onclose={() => !busy && onclose()} onescape={() => (inFlow ? void back() : onclose())} dismissible={!busy} label={t("연결 추가")} width="m" maxHeight="720px" layer={3} portal>
 	<div class="cm">
-		<header>
-			{#if inFlow}
-				<button type="button" class="iconbtn" onclick={back} aria-label={t("뒤로")}><Icon name="chevron-left" /></button>
-			{/if}
-			<h3>{title}</h3>
-			<button type="button" class="iconbtn" onclick={onclose} aria-label={t("닫기")} disabled={busy}><Icon name="x" /></button>
-		</header>
+		<ModalHeader {title} divider onback={inFlow ? back : undefined} {onclose} closeDisabled={busy} />
 
 		<div class="body">
 			{#if error}<p class="bad" role="alert">{error}</p>{/if}
@@ -353,8 +348,6 @@
 
 <style>
 	.cm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-	header { display: flex; align-items: center; gap: 8px; padding: 14px 14px 12px 22px; border-bottom: 1px solid var(--border); }
-	header h3 { flex: 1; margin: 0; font-size: var(--fs-xl); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.body { display: flex; flex-direction: column; gap: 12px; padding: 16px 22px 20px; overflow-y: auto; min-height: 0; }
 	.hint { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.55; word-break: keep-all; }
 	.hint.lead { margin-top: -4px; }

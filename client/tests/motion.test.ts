@@ -142,11 +142,19 @@ describe("modals mounted by their parent animate", () => {
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "CatalogPickerModal", "ModelPickerModal", "ModelConnections", "Extensions", "LinkCard", "UpdateBanner"]) {
+		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "CatalogPickerModal", "ModelPickerModal", "ModelConnections", "Extensions", "LinkCard", "UpdateBanner", "Skills", "Templates", "CloseConfirm"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
 		}
+	});
+	test("dialog titles go through the shared header (one close button, one pull handle)", () => {
+		for (const f of ["QueueModal", "ModelSettings", "DirPicker", "WorkBox", "FilePreview", "Skills", "Templates"]) {
+			const s = markup(read(`components/${f}.svelte`));
+			expect(s, f).toMatch(/<Modal\b[^\n]*\stitle=/);
+			expect(s, f).not.toContain('aria-label={t("닫기")}');
+		}
+		for (const f of ["Settings", "ConnectModal", "ServerForm"]) expect(markup(read(`components/${f}.svelte`)), f).toContain("<ModalHeader");
 	});
 	test("Lightbox's layer uses global transitions", () => {
 		const s = markup(read("components/Lightbox.svelte"));

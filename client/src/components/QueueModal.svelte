@@ -57,14 +57,10 @@
 	}
 </script>
 
-<Modal onclose={close} label={t("대기열 관리")} width="m" maxHeight="560px" layer={4} elevated portal safeArea>
+<Modal onclose={close} title={t("대기열 관리")} compact width="m" maxHeight="560px" layer={4} elevated portal safeArea>
 	<!-- arrows move between rows from anywhere in the dialog, the close button included -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="keys" onkeydown={onKey}>
-	<div class="head-row">
-		<h2>{t("대기열 관리")}</h2>
-		<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
-	</div>
 	<ul bind:this={listEl} use:focusList tabindex="-1" role="listbox" aria-label={t("대기열 관리")}>
 		{#each items as q, i (q.mode + "\u0000" + q.text + "\u0000" + i)}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -91,17 +87,6 @@
 <style>
 	.keys {
 		display: contents;
-	}
-	.head-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 10px 8px 4px 18px;
-	}
-	h2 {
-		margin: 0;
-		font-size: var(--fs-lg);
-		font-weight: 600;
 	}
 	ul {
 		list-style: none;

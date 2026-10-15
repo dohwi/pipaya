@@ -3,14 +3,13 @@
 	import Badge from "./Badge.svelte";
 	import Switch from "./Switch.svelte";
 	import { t } from "../lib/i18n";
-	import { holdClosing, reflow, rowIn, rowOut } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
+	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext, SkillInfo, SkillList } from "../lib/types";
 	import Icon from "./Icon.svelte";
-	import { nativeModal } from "../lib/dialog";
+	import Modal from "./Modal.svelte";
 
 	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null }; api: Api; onclose: () => void } = $props();
 
@@ -137,70 +136,49 @@
 	</ul>
 {/snippet}
 
-<!-- Native modal provides focus trapping, Escape, background inertness and focus restoration. -->
-<dialog out:holdClosing|global oncancel={onclose} use:nativeModal={{ onclose }} aria-labelledby="skills-title">
-	<div class="panel">
-		<header use:sheetPull={{ onclose }}>
-			<div class="titles">
-				<h2 id="skills-title">{t("스킬")}</h2>
-				{#if data}
-					<p class="state">{t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · <span class="mono">{home(data.project)}</span></p>
+<Modal {onclose} title={t("스킬")} sub={data ? `${t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · ${home(data.project)}` : null} width="xl" maxHeight="760px" safeArea>
+	{#snippet headerActions()}
+		<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
+	{/snippet}
+
+	{#if (data?.skills.length ?? 0) > 6}
+		<div class="tools">
+			<input class="search" type="search" placeholder={t("스킬 검색")} bind:value={query} aria-label={t("스킬 검색")} />
+		</div>
+	{/if}
+
+	<div class="body" aria-busy={loading}>
+		{#if error}
+			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
+		{/if}
+		{#if !data && loading}
+			<div class="empty" role="status">{t("불러오는 중…")}</div>
+		{:else if data}
+			<div class="note" role="status">
+				{#if target.sessionId}
+					{t("바꾼 설정은 이 대화의")} <b>{t("다음 메시지")}</b>{t("부터 바로 적용돼요.")}
+				{:else}
+					{t("바꾼 설정은 새 대화와 기존 대화의")} <b>{t("다음 메시지")}</b>{t("부터 적용돼요.")}
 				{/if}
 			</div>
-			<div class="actions">
-				<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
-				<button class="iconbtn" onclick={onclose} aria-label={t("닫기")}><Icon name="x" /></button>
-			</div>
-		</header>
-
-		{#if (data?.skills.length ?? 0) > 6}
-			<div class="tools">
-				<input class="search" type="search" placeholder={t("스킬 검색")} bind:value={query} aria-label={t("스킬 검색")} />
-			</div>
+			{#each data.warnings as warning}
+				<div class="gap"><Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice></div>
+			{/each}
+			<section class="section">
+				<h3>{t("이 프로젝트")}</h3>
+				<p class="hint">{t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}</p>
+				{@render list("project")}
+			</section>
+			<section class="section">
+				<h3>{t("모든 프로젝트")}</h3>
+				<p class="hint">{t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지돼요.")}</p>
+				{@render list("global")}
+			</section>
 		{/if}
-
-		<div class="body" aria-busy={loading}>
-			{#if error}
-				<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
-			{/if}
-			{#if !data && loading}
-				<div class="empty" role="status">{t("불러오는 중…")}</div>
-			{:else if data}
-				<div class="note" role="status">
-					{#if target.sessionId}
-						{t("바꾼 설정은 이 대화의")} <b>{t("다음 메시지")}</b>{t("부터 바로 적용돼요.")}
-					{:else}
-						{t("바꾼 설정은 새 대화와 기존 대화의")} <b>{t("다음 메시지")}</b>{t("부터 적용돼요.")}
-					{/if}
-				</div>
-				{#each data.warnings as warning}
-					<div class="gap"><Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice></div>
-				{/each}
-				<section class="section">
-					<h3>{t("이 프로젝트")}</h3>
-					<p class="hint">{t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}</p>
-					{@render list("project")}
-				</section>
-				<section class="section">
-					<h3>{t("모든 프로젝트")}</h3>
-					<p class="hint">{t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지돼요.")}</p>
-					{@render list("global")}
-				</section>
-			{/if}
-		</div>
 	</div>
-</dialog>
+</Modal>
 
 <style>
-	/* The global `* { margin: 0 }` reset removes the modal's default auto margin, so center explicitly. */
-	dialog { margin: auto; width: min(var(--modal-w-xl), calc(100vw - var(--modal-gutter))); max-width: none; max-height: min(760px, calc(100dvh - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
-	dialog::backdrop { background: var(--scrim); }
-	.panel { display: flex; flex-direction: column; max-height: inherit; }
-	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 14px 24px; flex: none; }
-	.titles { min-width: 0; }
-	h2 { margin: 0; font-size: var(--fs-xl); line-height: 1.4; }
-	.state { margin: 3px 0 0; font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
-	.actions { display: flex; flex: none; }
 	.tools { display: flex; padding: 0 24px 12px; flex: none; }
 	.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -224,9 +202,6 @@
 	.switch { flex: none; display: inline-flex; margin-top: 2px; }
 	.empty { padding: 18px 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-faint); background: var(--bg); border-radius: var(--radius); overflow-wrap: anywhere; }
 	@media (max-width: 640px) {
-		dialog { width: 100vw; max-height: 90dvh; margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
-		header { padding: 14px 12px 12px 16px; }
-		h2 { font-size: var(--fs-lg); }
 		.tools { padding: 0 16px; }
 		.body { padding: 14px 16px 16px; }
 	}

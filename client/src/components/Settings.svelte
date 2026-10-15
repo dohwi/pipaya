@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { ApprovalPolicy } from "../lib/types";
 	import { paneIn } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { rovingKeys } from "../lib/roving";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import ModalHeader from "./ModalHeader.svelte";
 	import Shortcuts from "./Shortcuts.svelte";
 	import Extensions from "./Extensions.svelte";
 	import Backup from "./Backup.svelte";
@@ -66,12 +66,9 @@
 </script>
 
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
-	<div use:sheetPull={{ onclose: close }}>
-		<header>
-			<h2>{t("설정")}{#if serverName}<span class="hsrv"> · {serverName}</span>{/if}</h2>
-			<button class="iconbtn" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
-		</header>
-	</div>
+	<ModalHeader title={t("설정")} onclose={close}>
+		{#snippet titleExtra()}{#if serverName}<span class="hsrv"> · {serverName}</span>{/if}{/snippet}
+	</ModalHeader>
 
 	<div class="layout">
 		<!-- desktop: a column on the left; phone: a row of tabs above the content -->
@@ -223,16 +220,6 @@
 	.hint {
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 14px 14px 6px 22px;
-	}
-	h2 {
-		margin: 0;
-		font-size: var(--fs-xl);
 	}
 	.hsrv {
 		font-weight: 500;

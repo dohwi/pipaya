@@ -3,7 +3,6 @@
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
-	import { sheetPull } from "../lib/sheet";
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../lib/store.svelte";
@@ -154,14 +153,7 @@
 </div>
 
 {#if modal}
-	<Modal onclose={() => (modal = false)} label={t("작업 상세")} width="xl" maxHeight="760px" portal safeArea>
-		<header use:sheetPull={{ onclose: () => (modal = false) }}>
-			<div class="mt">
-				<h2>{t("작업 {n}단계", { n: steps.length })}</h2>
-				<span class="sub mono">{tally || t("생각 과정")}{total ? ` · ${duration(total)}` : ""}</span>
-			</div>
-			<button class="iconbtn" onclick={() => (modal = false)} aria-label={t("닫기")}><Icon name="x" /></button>
-		</header>
+	<Modal onclose={() => (modal = false)} label={t("작업 상세")} title={t("작업 {n}단계", { n: steps.length })} sub={`${tally || t("생각 과정")}${total ? ` · ${duration(total)}` : ""}`} subMono divider width="xl" maxHeight="760px" portal safeArea>
 		<div class="list">
 			{#each steps as s, i (i)}
 				{#if s.kind === "think"}
@@ -329,30 +321,6 @@
 		height: 36px;
 	}
 
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		padding: 14px 14px 12px 22px;
-		border-bottom: 1px solid var(--border);
-	}
-	.mt {
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-	}
-	h2 {
-		margin: 0;
-		font-size: var(--fs-xl);
-	}
-	.sub {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
 	.list {
 		padding: 6px 18px 18px;
 		overflow-y: auto;
