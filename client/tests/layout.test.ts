@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detach, linkedDividers, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
+import { isolate, linkedDividers, positionOf, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
 
 const split = (a: Layout, b: Layout, dir: "row" | "col" = "row", ratio = 0.5): Layout => ({ type: "split", dir, ratio, a, b });
 
@@ -100,31 +100,94 @@ describe("layout geometry", () => {
 	});
 });
 
-describe("detach", () => {
-	// left column (a over b) | right column (c over d): the vertical line is one node
-	const grid = split(split(pane("a"), pane("b"), "col", 0.3), split(pane("c"), pane("d"), "col", 0.7), "row", 0.5);
+describe("isolate", () => {
+	const boxes = (l: Layout) => Object.fromEntries(measure(l).panes.map((p) => [p.id, { x: p.x, y: p.y, w: p.w, h: p.h }]));
+	const expectSameBoxes = (x: Layout, y: Layout) => {
+		const bx = boxes(x), by = boxes(y);
+		expect(Object.keys(bx).sort()).toEqual(Object.keys(by).sort());
+		for (const k of Object.keys(bx)) for (const f of ["x", "y", "w", "h"] as const) expect(bx[k]![f]).toBeCloseTo(by[k]![f]);
+	};
+	/** Drag the piece around `at` to `pos` and return the pane boxes. */
+	const drag = (l: Layout, path: string[], at: number, pos: number) => {
+		const r = isolate(l, path as ("a" | "b")[], at)!;
+		expect(r).not.toBeNull();
+		expectSameBoxes(r.layout, l); // grabbing alone changes nothing on screen
+		return { ...r, after: boxes(moveDividers(r.layout, [r.path], pos)) };
+	};
+	const row3 = (a: string, b: string, c: string): Layout => split(pane(a), split(pane(b), pane(c), "row", 0.5), "row", 1 / 3);
+	const col3 = (a: string, b: string, c: string): Layout => split(pane(a), split(pane(b), pane(c), "col", 0.5), "col", 1 / 3);
 
-	test("turns the grid so each half of the vertical line has its own node", () => {
-		const r = detach(grid, [], 0)!;
-		expect(r.path).toEqual(["a"]);
-		const top = setRatio(r.layout, r.path, 0.8);
-		const by = Object.fromEntries(measure(top).panes.map((p) => [p.id, p]));
-		expect(by.a!.w).toBeCloseTo(0.8); // top row moved
-		expect(by.b!.w).toBeCloseTo(0.5); // bottom row did not
-		expect(by.d!.x).toBeCloseTo(0.5);
+	test("2x2 built as columns: each half of the vertical line moves alone", () => {
+		const grid = split(split(pane("a"), pane("b"), "col", 0.5), split(pane("c"), pane("d"), "col", 0.5), "row", 0.5);
+		const top = drag(grid, [], 0.2, 0.8);
+		expect(top.span).toEqual([0, 0.5]);
+		expect(top.after.a!.w).toBeCloseTo(0.8);
+		expect(top.after.b!.w).toBeCloseTo(0.5);
+		const bottom = drag(grid, [], 0.7, 0.3);
+		expect(bottom.after.b!.w).toBeCloseTo(0.3);
+		expect(bottom.after.a!.w).toBeCloseTo(0.5);
 	});
-	test("the lower half is the second node", () => {
-		expect(detach(grid, [], 1)!.path).toEqual(["b"]);
+
+	test("3x2 as two rows of three: each third of the horizontal line moves alone", () => {
+		const l = split(row3("A", "B", "C"), row3("D", "E", "F"), "col", 0.5);
+		for (const [at, mine, others] of [[0.1, ["A"], ["B", "C"]], [0.5, ["B"], ["A", "C"]], [0.9, ["C"], ["A", "B"]]] as const) {
+			const { after } = drag(l, [], at, 0.7);
+			for (const id of mine) expect(after[id]!.h).toBeCloseTo(0.7);
+			for (const id of others) expect(after[id]!.h).toBeCloseTo(0.5);
+			expect(Object.values(after).reduce((n, p) => n + p.w * p.h, 0)).toBeCloseTo(1);
+		}
 	});
-	test("keeps every pane and the position of the vertical line", () => {
-		const r = detach(grid, [], 0)!;
-		expect(panesOf(r.layout).sort()).toEqual(["a", "b", "c", "d"]);
-		const by = Object.fromEntries(measure(r.layout).panes.map((p) => [p.id, p]));
-		expect(by.a!.w).toBeCloseTo(0.5);
-		expect(by.a!.h).toBeCloseTo(0.5);
+
+	test("3x2 as two rows of three: a vertical line inside a row already moves alone", () => {
+		const l = split(row3("A", "B", "C"), row3("D", "E", "F"), "col", 0.5);
+		expect(isolate(l, ["a"], 0.2)).toBeNull();
+		expect(isolate(l, ["b", "b"], 0.8)).toBeNull();
 	});
+
+	test("two columns of three: each third of the vertical line moves alone", () => {
+		const l = split(col3("A", "B", "C"), col3("D", "E", "F"), "row", 0.5);
+		const { after } = drag(l, [], 0.5, 0.3);
+		expect(after.B!.w).toBeCloseTo(0.3);
+		expect(after.E!.x).toBeCloseTo(0.3);
+		expect(after.A!.w).toBeCloseTo(0.5);
+		expect(after.C!.w).toBeCloseTo(0.5);
+	});
+
+	test("a T junction is not a cross: the line moves as a whole", () => {
+		// left: one pane; right: two stacked -> the horizontal line on the right ends at the vertical one
+		const t = split(pane("a"), split(pane("b"), pane("c"), "col"), "row");
+		expect(isolate(t, [], 0.2)).toBeNull();
+		// rows that do not line up: no cross
+		const off = split(split(pane("A"), pane("B"), "row", 0.3), split(pane("C"), pane("D"), "row", 0.6), "col");
+		expect(isolate(off, [], 0.2)).toBeNull();
+	});
+
+	test("lines meeting only on part of the line cut it there and leave the rest whole", () => {
+		// top: A | (B | C) at 1/3, 2/3; bottom: D | E at 1/3 -> only x = 1/3 is a cross
+		const l = split(row3("A", "B", "C"), split(pane("D"), pane("E"), "row", 1 / 3), "col", 0.5);
+		const left = drag(l, [], 0.1, 0.6);
+		expect(left.span[1]).toBeCloseTo(1 / 3);
+		expect(left.after.A!.h).toBeCloseTo(0.6);
+		expect(left.after.B!.h).toBeCloseTo(0.5);
+		const right = drag(l, [], 0.8, 0.6);
+		expect(right.span[0]).toBeCloseTo(1 / 3);
+		expect(right.after.B!.h).toBeCloseTo(0.6);
+		expect(right.after.C!.h).toBeCloseTo(0.6);
+		expect(right.after.A!.h).toBeCloseTo(0.5);
+	});
+
+	test("an isolated piece can be cut again after the tree turned", () => {
+		const l = split(row3("A", "B", "C"), row3("D", "E", "F"), "col", 0.5);
+		const r = isolate(l, [], 0.5)!;
+		// now three columns; the vertical line between A/D and B/E is crossed by y = 0.5
+		const v = measure(r.layout).dividers.find((d) => d.dir === "row" && Math.abs(positionOf(d) - 1 / 3) < 1e-6)!;
+		const { after } = drag(r.layout, v.path, 0.2, 0.2);
+		expect(after.A!.w).toBeCloseTo(0.2);
+		expect(after.D!.w).toBeCloseTo(1 / 3);
+	});
+
 	test("nothing to separate for a plain split", () => {
-		expect(detach(pair("a", "b"), [], 0)).toBeNull();
+		expect(isolate(pair("a", "b"), [], 0.5)).toBeNull();
 	});
 });
 
@@ -178,5 +241,52 @@ describe("linked dividers", () => {
 		expect(snapPosition(grid(), [["a"]], 0.51)).toBeCloseTo(0.5);
 		expect(snapPosition(grid(), [["a"]], 0.595)).toBeCloseTo(0.6);
 		expect(snapPosition(grid(), [["a"]], 0.42)).toBeCloseTo(0.42);
+	});
+});
+
+describe("isolate on any layout", () => {
+	// Small deterministic PRNG so failures are reproducible.
+	let seed = 1;
+	const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+	const ratios = [1 / 3, 0.5, 2 / 3, 0.25, 0.75];
+	const build = (ids: string[]): Layout => {
+		if (ids.length === 1) return pane(ids[0]!);
+		const k = 1 + Math.floor(rand() * (ids.length - 1));
+		return split(build(ids.slice(0, k)), build(ids.slice(k)), rand() < 0.5 ? "row" : "col", ratios[Math.floor(rand() * ratios.length)]!);
+	};
+	const touches = (p: { x: number; y: number; w: number; h: number }, dir: "row" | "col", pos: number, span: [number, number]) => {
+		const [edgeLo, edgeHi, s0, s1] = dir === "row" ? [p.x, p.x + p.w, p.y, p.y + p.h] : [p.y, p.y + p.h, p.x, p.x + p.w];
+		const onLine = Math.abs(edgeLo - pos) < 1e-6 || Math.abs(edgeHi - pos) < 1e-6;
+		return onLine && s0 < span[1] - 1e-6 && s1 > span[0] + 1e-6;
+	};
+
+	test("grabbing a piece changes nothing on screen, and dragging it moves only the panes along that piece", () => {
+		for (let iter = 0; iter < 400; iter++) {
+			const n = 2 + Math.floor(rand() * 7);
+			const l = build(Array.from({ length: n }, (_, i) => `p${i}`));
+			for (const d of measure(l).dividers) {
+				for (const at of [0.05, 0.3, 0.5, 0.7, 0.95]) {
+					const r = isolate(l, d.path, at);
+					if (!r) continue;
+					const before = Object.fromEntries(measure(l).panes.map((p) => [p.id, p]));
+					const turned = Object.fromEntries(measure(r.layout).panes.map((p) => [p.id, p]));
+					for (const id of Object.keys(before)) for (const f of ["x", "y", "w", "h"] as const) expect(Math.abs(turned[id]![f] - before[id]![f])).toBeLessThan(0.006);
+					const piece = measure(r.layout).dividers.find((x) => x.path.join("") === r.path.join(""))!;
+					expect(piece.dir).toBe(d.dir);
+					const [s, len] = d.dir === "row" ? [piece.area.y, piece.area.h] : [piece.area.x, piece.area.w];
+					expect(s).toBeCloseTo(r.span[0]);
+					expect(s + len).toBeCloseTo(r.span[1]);
+					const pos = positionOf(piece);
+					const moved = Object.fromEntries(measure(moveDividers(r.layout, [r.path], pos + 0.05)).panes.map((p) => [p.id, p]));
+					for (const id of Object.keys(turned)) {
+						const same = (["x", "y", "w", "h"] as const).every((f) => Math.abs(moved[id]![f] - turned[id]![f]) < 1e-9);
+						const t = turned[id]!, A = piece.area;
+						const inside = t.x >= A.x - 1e-6 && t.y >= A.y - 1e-6 && t.x + t.w <= A.x + A.w + 1e-6 && t.y + t.h <= A.y + A.h + 1e-6;
+						if (!inside) expect(same).toBe(true);
+						else if (touches(t, d.dir, pos, r.span)) expect(same).toBe(false);
+					}
+				}
+			}
+		}
 	});
 });

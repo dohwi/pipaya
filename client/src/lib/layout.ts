@@ -166,21 +166,113 @@ function replaceNode(l: Layout, path: Path, next: Layout): Layout {
 	return head === "a" ? { ...l, a: replaceNode(l.a, rest, next) } : { ...l, b: replaceNode(l.b, rest, next) };
 }
 
+/** How far apart (fraction of the group) two lines may be and still count as meeting in a cross. */
+const CROSS_TOL = 0.005;
+const other = (dir: "row" | "col"): "row" | "col" => (dir === "row" ? "col" : "row");
+const lo = (r: Rect, dir: "row" | "col") => (dir === "row" ? r.x : r.y);
+const len = (r: Rect, dir: "row" | "col") => (dir === "row" ? r.w : r.h);
+
+function childAreas(l: Layout & { type: "split" }, area: Rect): [Rect, Rect] {
+	if (l.dir === "row") {
+		const w = area.w * l.ratio;
+		return [{ ...area, w }, { x: area.x + w, y: area.y, w: area.w - w, h: area.h }];
+	}
+	const h = area.h * l.ratio;
+	return [{ ...area, h }, { x: area.x, y: area.y + h, w: area.w, h: area.h - h }];
+}
+
 /**
- * Free one half of a divider. In a 2x2 grid built as "left column | right column", the vertical line is a single
- * node, so both halves move together. Turning the tree the other way ("top row over bottom row") gives that line
- * one segment per row; the two horizontal lines, once separate, become one (at their average). `side` 0 is the
- * first half (upper / left), 1 the second. Returns the new layout and the path of that half's divider, or null when
- * the divider is not between two splits that cross it (nothing to separate).
+ * Cut `l` (lying in `area`) in two with a straight line at `pos` (fraction of the group): `dir` "row" cuts at x = pos
+ * into left | right, "col" at y = pos into top / bottom. Every pane stays whole, so this only works where no pane
+ * straddles the line (a line within CROSS_TOL counts as on it); null otherwise. Panes keep their place.
  */
-export function detach(l: Layout, path: Path, side: 0 | 1): { layout: Layout; path: Path } | null {
+function cut(l: Layout, area: Rect, dir: "row" | "col", pos: number): [Layout, Layout] | null {
+	if (l.type === "pane") return null;
+	const [ra, rb] = childAreas(l, area);
+	if (l.dir !== dir) {
+		const x = cut(l.a, ra, dir, pos);
+		const y = x && cut(l.b, rb, dir, pos);
+		return x && y ? [{ ...l, a: x[0], b: y[0] }, { ...l, a: x[1], b: y[1] }] : null;
+	}
+	const s = lo(area, dir);
+	const e = s + len(area, dir);
+	const line = s + len(area, dir) * l.ratio;
+	if (Math.abs(pos - line) <= CROSS_TOL) return [l.a, l.b];
+	if (pos < line) {
+		const r = cut(l.a, ra, dir, pos);
+		return r && [r[0], { type: "split", dir, ratio: (line - pos) / (e - pos), a: r[1], b: l.b }];
+	}
+	const r = cut(l.b, rb, dir, pos);
+	return r && [{ type: "split", dir, ratio: (line - s) / (pos - s), a: l.a, b: r[0] }, r[1]];
+}
+
+function ratiosOk(l: Layout): boolean {
+	return l.type === "pane" || (l.ratio >= MIN_RATIO - EPS && l.ratio <= MAX_RATIO + EPS && ratiosOk(l.a) && ratiosOk(l.b));
+}
+
+/**
+ * The piece of a divider's line around `at` (fraction of the group, measured along the line), made into a divider of
+ * its own so it can be dragged alone.
+ *
+ * A divider is one tree node, but the panes may make its line look like several segments: wherever lines from both
+ * sides meet it at the same spot (a cross, not a T), the line can be cut there. This works for any tree, whatever
+ * way it is nested (2x2, 3x2, a column of three beside a column of three, ...). The panes and every line stay
+ * where they are, except that lines nearly meeting in a cross are lined up exactly.
+ *
+ * Returns the turned layout, the path of the piece's divider and the piece's span along the line, or null when the
+ * line has no cross to cut at (the divider already moves alone).
+ */
+export function isolate(l: Layout, path: Path, at: number): { layout: Layout; path: Path; span: [number, number] } | null {
 	const n = nodeAt(l, path);
-	if (!n || n.type !== "split" || n.a.type !== "split" || n.b.type !== "split") return null;
-	const { a, b } = n;
-	if (a.dir === n.dir || b.dir !== a.dir) return null;
-	const row = (x: Layout, y: Layout): Layout => ({ type: "split", dir: n.dir, ratio: n.ratio, a: x, b: y });
-	const turned: Layout = { type: "split", dir: a.dir, ratio: (a.ratio + b.ratio) / 2, a: row(a.a, b.a), b: row(a.b, b.b) };
-	return { layout: replaceNode(l, path, turned), path: [...path, side ? "b" : "a"] };
+	const me = measure(l).dividers.find((d) => same(d.path, path));
+	if (!n || n.type !== "split" || !me) return null;
+	const across = other(n.dir); // the direction of the splits that cut the line
+	const s = lo(me.area, across);
+	const e = s + len(me.area, across);
+	const [ra, rb] = childAreas(n, me.area);
+	// A cross is where lines inside both halves meet the divider at the same spot: it must cut both halves cleanly.
+	const crosses: number[] = [];
+	for (const d of measure(n.a, ra).dividers) {
+		if (d.dir !== across) continue;
+		const c = positionOf(d);
+		if (c <= s + CROSS_TOL || c >= e - CROSS_TOL || crosses.some((x) => Math.abs(x - c) <= CROSS_TOL)) continue;
+		if (cut(n.a, ra, across, c) && cut(n.b, rb, across, c)) crosses.push(c);
+	}
+	if (!crosses.length) return null;
+	crosses.sort((x, y) => x - y);
+	const from = [s, ...crosses].filter((c) => c <= at).pop() ?? s;
+	const to = [...crosses, e].find((c) => c > at) ?? e;
+	// Cut both halves at the piece's ends: before | piece | after, each a row of its own along the divider.
+	const rest = (sub: Layout, area: Rect, ends: number[]): Layout[] | null => {
+		const out: Layout[] = [];
+		let cur = sub;
+		let a = area;
+		for (const c of ends) {
+			const r = cut(cur, a, across, c);
+			if (!r) return null;
+			out.push(r[0]);
+			cur = r[1];
+			const shift = c - lo(a, across);
+			a = across === "row" ? { ...a, x: c, w: a.w - shift } : { ...a, y: c, h: a.h - shift };
+		}
+		return [...out, cur];
+	};
+	const ends = [from, to].filter((c) => c > s + EPS && c < e - EPS);
+	const as = rest(n.a, ra, ends);
+	const bs = rest(n.b, rb, ends);
+	if (!as || !bs) return null;
+	const rows: Layout[] = as.map((x, i) => ({ type: "split", dir: n.dir, ratio: n.ratio, a: x, b: bs[i]! }));
+	const bounds = [s, ...ends, e];
+	// Stack the rows: rows[i] spans bounds[i]..bounds[i+1].
+	const stack = (i: number): Layout =>
+		i === rows.length - 1 ? rows[i]! : { type: "split", dir: across, ratio: (bounds[i + 1]! - bounds[i]!) / (e - bounds[i]!), a: rows[i]!, b: stack(i + 1) };
+	const turned = stack(0);
+	if (!ratiosOk(turned)) return null;
+	const piece = from > s + EPS ? 1 : 0; // index of the piece's row
+	const sub: Path = [];
+	for (let i = 0; i < piece; i++) sub.push("b");
+	if (piece < rows.length - 1) sub.push("a");
+	return { layout: replaceNode(l, path, turned), path: [...path, ...sub], span: [from, to] };
 }
 
 /**

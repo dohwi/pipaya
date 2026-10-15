@@ -2,7 +2,7 @@
 	import { t } from "../lib/i18n";
 	import Pane from "./Pane.svelte";
 	import { app } from "../lib/store.svelte";
-	import { detach, linkedDividers, measure, moveDividers, positionOf, snapPosition, type Divider, type Layout, type Path } from "../lib/layout";
+	import { isolate, linkedDividers, measure, moveDividers, positionOf, snapPosition, type Divider, type Layout, type Path } from "../lib/layout";
 	import type { Group } from "../lib/types";
 
 	let { group }: { group: Group } = $props();
@@ -31,18 +31,25 @@
 	/** Shift held and the divider under the pointer: its whole continuing line lights up as one long line. */
 	let linkKeyDown = $state(false);
 	let hover = $state<Path | null>(null);
-	/** Which half of the hovered divider the pointer is on (what a plain drag would grab). */
-	let hoverSide = $state<0 | 1>(0);
-	/** Which half of the divider (by its length) the point is on: 0 = upper / left. */
-	function sideOf(e: { clientX: number; clientY: number }, d: Divider): 0 | 1 {
+	/** Where the pointer is along the hovered divider's line (fraction of the group): picks the piece a plain drag grabs. */
+	let hoverAt = $state(0);
+	/** Where a point is along the divider's own line, as a fraction of the whole group. */
+	function alongOf(e: { clientX: number; clientY: number }, d: Divider): number {
 		if (!box) return 0;
 		const r = box.getBoundingClientRect();
-		const along = d.dir === "row" ? ((e.clientY - r.top) / r.height - d.area.y) / d.area.h : ((e.clientX - r.left) / r.width - d.area.x) / d.area.w;
-		return along < 0.5 ? 0 : 1;
+		return d.dir === "row" ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
 	}
-	/** Plain hover on a 2x2 line only moves one half when dragged; preview just that half. */
-	const halfOf = (d: Divider): 0 | 1 | null =>
-		!active && !linkKeyDown && hover && key(d) === (hover.join("") || "root") && detach(group.layout, d.path, 0) ? hoverSide : null;
+	/**
+	 * A line crossed by other lines (grids of any size) moves only the piece under the pointer when dragged plainly;
+	 * preview just that piece, as insets from the divider's ends.
+	 */
+	const pieceOf = (d: Divider): { from: string; to: string } | null => {
+		if (active || linkKeyDown || !hover || key(d) !== (hover.join("") || "root")) return null;
+		const r = isolate(group.layout, d.path, hoverAt);
+		if (!r) return null;
+		const [s, n] = d.dir === "row" ? [d.area.y, d.area.h] : [d.area.x, d.area.w];
+		return { from: pct((r.span[0] - s) / n), to: pct((s + n - r.span[1]) / n) };
+	};
 	const lit = $derived.by(() => {
 		if (active) return new Set(linked.map((p) => p.join("") || "root"));
 		if (!linkKeyDown || !hover) return new Set<string>();
@@ -52,21 +59,15 @@
 		linkKeyDown = e.shiftKey;
 	}
 	/**
-	 * In a 2x2 grid one line is a single node of the tree, so its two halves would move together. Grabbing one half
-	 * turns the tree so that half stands alone (the other pair of lines then moves together).
+	 * One node of the tree can draw a line that other lines cross (2x2, 3x2, ...), so all its pieces would move
+	 * together. Grabbing one piece turns the tree so that piece stands alone; panes and other lines stay put.
 	 * Shift instead drags every aligned segment of the line together; Ctrl (Cmd) snaps to guides
 	 * (centre, thirds, quarters, other dividers).
 	 */
-	let grab: { path: Path; side: 0 | 1 | null } | null = null;
+	let grab: { path: Path; at: number | null } | null = null;
 	function down(e: PointerEvent, d: Divider) {
-		let side: 0 | 1 | null = null;
 		const together = linkedKey(e);
-		if (!together && box) {
-			const r = box.getBoundingClientRect();
-			const along = d.dir === "row" ? ((e.clientY - r.top) / r.height - d.area.y) / d.area.h : ((e.clientX - r.left) / r.width - d.area.x) / d.area.w;
-			side = along < 0.5 ? 0 : 1;
-		}
-		grab = { path: d.path, side };
+		grab = { path: d.path, at: together ? null : alongOf(e, d) };
 		linked = together ? linkedDividers(group.layout, d.path) : [];
 		live = group.layout;
 		dragPath = d.path;
@@ -80,7 +81,7 @@
 		if (!active || !live) return;
 		// The tree is only turned once the pointer really drags, so a click or double click changes nothing.
 		if (grab) {
-			const split = grab.side === null ? null : detach(live, grab.path, grab.side);
+			const split = grab.at === null ? null : isolate(live, grab.path, grab.at);
 			if (split) {
 				live = split.layout;
 				dragPath = split.path;
@@ -196,19 +197,19 @@
 			class="div {d.dir}"
 			class:on={active === key(d) || lit.has(key(d))}
 			class:hot={hover !== null && !active && key(d) === (hover.join("") || "root")}
-			style:--from={halfOf(d) === 1 ? "50%" : "0%"}
-			style:--to={halfOf(d) === 0 ? "50%" : "0%"}
+			style:--from={pieceOf(d)?.from ?? "0%"}
+			style:--to={pieceOf(d)?.to ?? "0%"}
 			data-divider={key(d)}
 			onpointerenter={(e) => {
 				hover = d.path;
-				hoverSide = sideOf(e, d);
+				hoverAt = alongOf(e, d);
 				// Only ever turn Shift on here: the enter the browser fires after a layout change carries no modifiers.
 				if (e.shiftKey) linkKeyDown = true;
 			}}
 			onpointermove={(e) => {
 				if (active) return;
 				hover = d.path;
-				hoverSide = sideOf(e, d);
+				hoverAt = alongOf(e, d);
 				// A real pointer move carries the real modifiers, so a missed Shift release can't leave the long line lit.
 				linkKeyDown = e.shiftKey;
 			}}
