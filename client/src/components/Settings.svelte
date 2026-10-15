@@ -67,9 +67,14 @@
 </script>
 
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
-	<ModalHeader title={t("설정")} onclose={close}>
-		{#snippet titleExtra()}{#if serverName}<span class="hsrv"> · {serverName}</span>{/if}{/snippet}
-	</ModalHeader>
+	<ModalHeader title={t("설정")} onclose={close} />
+	{#if app.servers.length > 1}
+		<div class="srvbar" role="group" aria-label={t("서버")}>
+			{#each app.servers as s (s.id)}
+				<button class="srvchip" class:on={s.id === app.serverId} aria-pressed={s.id === app.serverId} onclick={() => app.openServer(s.id)}>{app.serverLabel(s)}</button>
+			{/each}
+		</div>
+	{/if}
 
 	<div class="layout">
 		<!-- desktop: a column on the left; phone: a row of tabs above the content -->
@@ -208,9 +213,47 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.hsrv {
-		font-weight: 500;
+	.srvbar {
+		flex: none;
+		display: flex;
+		gap: 6px;
+		padding: 0 22px 12px;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.srvbar::-webkit-scrollbar {
+		display: none;
+	}
+	.srvchip {
+		flex: none;
+		max-width: 220px;
+		padding: 5px 12px;
+		border-radius: 999px;
+		border: 1px solid var(--border);
+		background: var(--bg-elev);
+		font-size: var(--fs-sm);
 		color: var(--text-dim);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		transition:
+			border-color var(--motion-fast) var(--ease-std),
+			background var(--motion-fast) var(--ease-std);
+	}
+	.srvchip:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.srvchip.on {
+		border-color: var(--text);
+		background: var(--bg-active);
+		color: var(--text);
+		font-weight: 600;
+	}
+	@media (max-width: 760px) {
+		.srvbar {
+			padding: 0 14px 10px;
+		}
 	}
 	.ngroup {
 		padding: 10px 12px 4px;

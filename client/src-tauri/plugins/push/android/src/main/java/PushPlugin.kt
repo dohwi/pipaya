@@ -44,7 +44,8 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
     }
     init {
         capture(activity.intent)
-        createChannel(activity)
+        // No createChannel here: on Android 13+ the first channel makes the system ask for notification permission,
+        // which would pop up on first launch. register() creates it once permission has been granted.
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); capture(intent) }
     @Command
@@ -166,6 +167,10 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun register(invoke: Invoke) {
+        // `enabled` defaults to on, so register() also runs on first launch. Creating the channel there would trigger the
+        // system permission prompt, so only do it once permission is already granted (the settings toggle asks first).
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            activity.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) createChannel(activity)
         if (FirebaseApp.getApps(activity).isEmpty() && FirebaseApp.initializeApp(activity) == null) {
             invoke.resolve(JSObject()) // No Firebase config: normal builds remain usable.
             return
