@@ -23,18 +23,33 @@
 	let lastTop = 0;
 	let raf = 0;
 
+	/** The scrollbar is being dragged (pointer pressed on the scroller itself, not on its content). */
+	let dragging = false;
+	/** A smooth scroll to the bottom (jump button) is in flight. */
+	let smoothing = false;
+
 	function onScroll() {
 		if (!scroller) return;
 		const top = scroller.scrollTop;
-		// Any upward movement is the user leaving the bottom: release immediately instead of waiting for NEAR.
-		if (top < lastTop - 1) stuck = false;
-		else if (atBottom()) stuck = true;
+		if (atBottom()) {
+			stuck = true;
+			smoothing = false;
+		} else if (smoothing) {
+			// the jump button's smooth scroll is on its way down
+		} else if (dragging && top < lastTop - 1) {
+			stuck = false;
+		} else if (stuck) {
+			// Not the user: the browser moved us (off-screen turns settling their real height via content-visibility,
+			// scroll anchoring, scrollHeight shrinking and clamping scrollTop). Stay pinned instead of reading it as "scrolled up".
+			toBottom();
+		}
 		lastTop = top;
 		showJump = !stuck;
 	}
 
-	/** User intent (wheel/touch/keys) unpins before the browser even moves, so we never fight their scroll. */
+	/** Only real user intent (wheel/touch/keys/scrollbar drag) unpins before the browser even moves, so we never fight their scroll. */
 	function release() {
+		smoothing = false;
 		if (stuck) {
 			stuck = false;
 			showJump = true;
@@ -51,7 +66,13 @@
 		if ((e.touches[0]?.clientY ?? 0) > touchY) release(); // finger moving down = content going up
 	}
 	function onKey(e: KeyboardEvent) {
-		if (["ArrowUp", "PageUp", "Home"].includes(e.key)) release();
+		if (["ArrowUp", "PageUp", "Home"].includes(e.key) || (e.key === " " && e.shiftKey)) release();
+	}
+	function onPointerDown(e: PointerEvent) {
+		if (e.target === scroller) dragging = true;
+	}
+	function onPointerUp() {
+		dragging = false;
 	}
 
 	export function toBottom(smooth = false) {
@@ -59,6 +80,7 @@
 		stuck = true;
 		showJump = false;
 		if (smooth) {
+			smoothing = true;
 			scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
 			return;
 		}
@@ -171,6 +193,8 @@
 
 </script>
 
+<svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} />
+
 <div
 	class="scroller"
 	bind:this={scroller}
@@ -179,6 +203,7 @@
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
 	onkeydown={onKey}
+	onpointerdown={onPointerDown}
 	role="presentation"
 >
 	<div class="inner" bind:this={content}>
