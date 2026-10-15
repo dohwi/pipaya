@@ -142,7 +142,7 @@ describe("modals mounted by their parent animate", () => {
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "CatalogPickerModal", "ModelPickerModal", "ModelConnections", "Extensions", "LinkCard", "UpdateBanner", "Skills", "Templates", "CloseConfirm"]) {
+		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "ModelConnections", "Extensions", "LinkCard", "UpdateBanner", "Skills", "Templates", "CloseConfirm", "PickerModal"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
@@ -155,6 +155,16 @@ describe("modals mounted by their parent animate", () => {
 			expect(s, f).not.toContain('aria-label={t("닫기")}');
 		}
 		for (const f of ["Settings", "ConnectModal", "ServerForm"]) expect(markup(read(`components/${f}.svelte`)), f).toContain("<ModalHeader");
+	});
+	test("every model / catalog picker is the shared PickerModal, and every model button the shared ModelField", () => {
+		for (const f of ["ModelPickerModal", "CatalogPickerModal"]) {
+			const s = markup(read(`components/${f}.svelte`));
+			expect(s, f).toContain("<PickerModal");
+			expect(s, f).not.toContain("<Modal");
+		}
+		const picker = markup(read("components/ModelPicker.svelte"));
+		expect(picker).toContain("<ModelField");
+		expect(picker).not.toContain("<ModelPickerModal");
 	});
 	test("Lightbox's layer uses global transitions", () => {
 		const s = markup(read("components/Lightbox.svelte"));

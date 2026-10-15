@@ -448,6 +448,8 @@ export const en: Record<string, string> = {
 	"아직 적용 전 · 다음 메시지부터 적용돼요": "Not applied yet · takes effect from the next message",
 	"새로고침": "Refresh",
 	"이 세션 기본": "Session default",
+	"기본 프롬프트": "Default prompts",
+	"AGENTS.md (적용 순서)": "AGENTS.md (in order applied)",
 	"{n}개 주입 중": "{n} injected",
 	"적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)": "No AGENTS.md applied (none global, in a parent folder, or in the project).",
 	"{name} 그룹의 대화": "Chats in group {name}",

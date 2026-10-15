@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { isPhone } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
 	import { slidingIndicator } from "../lib/sliding-indicator";
+	import { collapseIn, collapseOut } from "../lib/motion";
 	import { compact } from "../lib/format";
 	import Icon from "./Icon.svelte";
-	import Modal from "./Modal.svelte";
-	import ModelLogo from "./ModelLogo.svelte";
+	import PickerModal from "./PickerModal.svelte";
+	import PickerOption from "./PickerOption.svelte";
 	import type { ModelInfo, ProviderInfo, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -48,10 +47,9 @@
 	} = $props();
 
 	const levels: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
-	const phone = isPhone();
 
 	let filter = $state("");
-	/** What is highlighted now. Every click is applied at once through `onpick`; the dialog stays open. */
+	/** What is chosen now. Every click (model, strength, unset) is applied at once through `onpick`; the dialog stays open. */
 	// svelte-ignore state_referenced_locally
 	let sel = $state<{ provider: string; model: string } | null>(value);
 	// svelte-ignore state_referenced_locally
@@ -86,191 +84,81 @@
 	const starred = $derived(favs.map((k) => models.find((m) => key(m.provider, m.id) === k)).filter((m): m is ModelInfo => !!m && matches(m)));
 
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;
-	function choose(m: ModelInfo) {
-		if (!m.configured) return;
-		sel = { provider: m.provider, model: m.id };
-	}
-	function confirm() {
+	function apply() {
 		if (!sel) return onpick(null);
 		onpick({ provider: sel.provider, model: sel.model, ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
 	}
-
-	function focusFirst(node: HTMLElement) {
-		if (!phone) node.focus();
+	function choose(m: ModelInfo) {
+		if (!m.configured || same(m)) return;
+		sel = { provider: m.provider, model: m.id };
+		apply();
+	}
+	function unset() {
+		if (!sel) return;
+		sel = null;
+		apply();
+	}
+	function strength(l: ThinkingLevel) {
+		if (l === shownLvl) return;
+		lvl = l;
+		apply();
 	}
 </script>
 
 {#snippet opt(m: ModelInfo, inFavs: boolean)}
 	{@const fav = isFav(m)}
-	<div class="orow" class:sel={same(m)}>
-		<button type="button" class="opt" class:dim={!m.configured} aria-pressed={same(m)} aria-disabled={!m.configured} ondblclick={() => { choose(m); confirm(); }} onclick={() => choose(m)}>
-			<span class="o-main">
-				<span class="o-name">{m.name}</span>
-				<span class="o-meta">
-					{#if inFavs}{providerName(m.provider)} · {/if}{t("컨텍스트")} {compact(m.contextWindow)}{#if m.reasoning} · {t("추론")}{/if}{#if m.vision} · {t("이미지")}{/if}{#if !m.configured} · {t("키 없음")}{/if}
-				</span>
-			</span>
-			{#if same(m)}<Icon name="check" />{/if}
-		</button>
-		{#if onfav}
-			<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
-				<Icon name="star" />
-			</button>
-		{/if}
-	</div>
+	<PickerOption selected={same(m)} disabled={!m.configured} onclick={() => choose(m)}>
+		{#snippet name()}{m.name}{/snippet}
+		{#snippet meta()}{#if inFavs}{providerName(m.provider)} · {/if}{t("컨텍스트")} {compact(m.contextWindow)}{#if m.reasoning} · {t("추론")}{/if}{#if m.vision} · {t("이미지")}{/if}{#if !m.configured} · {t("키 없음")}{/if}{/snippet}
+		{#snippet trailing()}
+			{#if onfav}
+				<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
+					<Icon name="star" />
+				</button>
+			{/if}
+		{/snippet}
+	</PickerOption>
 {/snippet}
 
 <!-- opened from the composer (over the page) or from settings: the top layer works for both -->
-<Modal {onclose} label={title ?? t("모델 설정")} width="m" layer={4} elevated portal>
-	<div class="head" use:sheetPull={{ onclose }}>
-		<div class="head-row">
-			<h2>{title ?? t("모델 설정")}</h2>
-			<button type="button" class="close" onclick={onclose} aria-label={t("닫기")}><Icon name="x" /></button>
-		</div>
-	</div>
+<PickerModal title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")}>
+	{#snippet list()}
+		{#if allowUnset}
+			<PickerOption selected={!sel} onclick={unset}>
+				{#snippet name()}{unsetLabel ?? t("지정 안 함")}{/snippet}
+			</PickerOption>
+		{/if}
+		{#if starred.length}
+			<div class="pk-group"><span class="gstar"><Icon name="star" /></span>{t("즐겨찾기")}</div>
+			{#each starred as m (m.provider + m.id)}{@render opt(m, true)}{/each}
+		{/if}
+		{#each shown as g (g.id)}
+			<div class="pk-group">{g.name}{#if !g.configured} <span class="chip">{t("키 없음")}</span>{/if}</div>
+			{#each g.models as m (m.id)}{@render opt(m, false)}{/each}
+		{/each}
+		{#if !starred.length && !shown.length}
+			<div class="pk-empty">{t("일치하는 모델이 없습니다")}</div>
+		{/if}
+	{/snippet}
 
-	<div class="body">
-		<input class="field search" placeholder={t("모델 검색")} bind:value={filter} aria-label={t("모델 검색")} use:focusFirst />
-		<div class="list">
-			{#if allowUnset}
-				<div class="orow" class:sel={!sel}>
-					<button type="button" class="opt" aria-pressed={!sel} onclick={() => (sel = null)}>
-						<span class="o-main"><span class="o-name">{unsetLabel ?? t("지정 안 함")}</span></span>
-						{#if !sel}<Icon name="check" />{/if}
-					</button>
-				</div>
-			{/if}
-			{#if starred.length}
-				<div class="gname"><span class="gstar"><Icon name="star" /></span>{t("즐겨찾기")}</div>
-				{#each starred as m (m.provider + m.id)}{@render opt(m, true)}{/each}
-			{/if}
-			{#each shown as g (g.id)}
-				<div class="gname">{g.name}{#if !g.configured} <span class="chip">{t("키 없음")}</span>{/if}</div>
-				{#each g.models as m (m.id)}{@render opt(m, false)}{/each}
-			{/each}
-			{#if !starred.length && !shown.length}
-				<div class="empty">{t("일치하는 모델이 없습니다")}</div>
-			{/if}
-		</div>
-
+	{#snippet after()}
 		<div class="sec" class:gone={!sel}>
 			<div class="slabel">{t("추론 강도")}</div>
 			<div class="seg" class:off={!reasoning} role="group" aria-label={t("추론 강도")} use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}>
 				{#each available as l (l)}
-					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!reasoning || !sel} onclick={() => (lvl = l)}>{l}</button>
+					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!reasoning || !sel} onclick={() => strength(l)}>{l}</button>
 				{/each}
 			</div>
-			{#if info && !info.reasoning}<div class="note">{t("이 모델은 추론 모드를 지원하지 않습니다.")}</div>{/if}
+			{#if info && !info.reasoning}<div class="note" in:collapseIn out:collapseOut>{t("이 모델은 추론 모드를 지원하지 않습니다.")}</div>{/if}
 		</div>
-	</div>
+	{/snippet}
 
-	<footer>
+	{#snippet footerStart()}
 		{#if onmanage}<button type="button" class="manage" onclick={() => { onclose(); onmanage(); }}><Icon name="settings" /> {t("연결 관리")}</button>{/if}
-		<span class="grow"></span>
-		<button type="button" class="btn sm" onclick={onclose}>{t("취소")}</button>
-		<button type="button" class="btn primary sm" onclick={confirm}>{t("선택")}</button>
-	</footer>
-</Modal>
+	{/snippet}
+</PickerModal>
 
 <style>
-	.head {
-		flex: none;
-	}
-	.head-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 10px 8px 4px 18px;
-	}
-	h2 {
-		margin: 0;
-		font-size: var(--fs-lg);
-		font-weight: 600;
-	}
-	.body {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		flex: 1;
-		min-height: 0;
-		overflow: hidden;
-		padding: 6px 14px 12px;
-	}
-	.search {
-		flex: none;
-		height: 38px;
-	}
-	.list {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-height: 120px;
-		overflow-y: auto;
-		margin: 0 -6px;
-		padding: 0 6px;
-	}
-	.gname {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 8px 4px;
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		text-transform: lowercase;
-		color: var(--text-faint);
-	}
-	.orow {
-		display: flex;
-		align-items: center;
-		border-radius: var(--radius);
-	}
-	.orow:hover:not(.sel) {
-		background: var(--bg-hover);
-	}
-	.orow.sel {
-		background: var(--bg-active);
-	}
-	.opt {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 10px;
-		min-height: 44px;
-		border-radius: var(--radius);
-		text-align: left;
-	}
-	.opt.dim {
-		opacity: 0.5;
-	}
-	.opt :global(svg) {
-		width: 17px;
-		height: 17px;
-		stroke: var(--text);
-		fill: none;
-		stroke-width: 2.2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.o-main {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-width: 0;
-	}
-	.o-name {
-		font-size: var(--fs-md);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.o-meta {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-	}
 	.fav {
 		flex: none;
 		display: grid;
@@ -280,8 +168,12 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 		opacity: 0;
+		transition:
+			opacity var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std),
+			scale var(--motion-fast) var(--ease);
 	}
-	.orow:hover .fav,
+	:global(.pk-row:hover) .fav,
 	.fav:focus-visible,
 	.fav.on {
 		opacity: 1;
@@ -294,6 +186,9 @@
 	.fav:hover {
 		color: var(--text);
 	}
+	.fav:active {
+		scale: 0.85;
+	}
 	.fav :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -301,6 +196,7 @@
 		fill: none;
 		stroke-width: 1.8;
 		stroke-linejoin: round;
+		transition: fill var(--motion-fast) var(--ease-std);
 	}
 	.fav.on {
 		color: var(--warn);
@@ -316,17 +212,12 @@
 		stroke-width: 1.8;
 		stroke-linejoin: round;
 	}
-	.empty {
-		padding: 16px;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
-	}
 	.sec {
 		flex: none;
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.sec.gone {
 		opacity: 0.4;
@@ -376,17 +267,6 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	footer {
-		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 14px calc(10px + var(--sab));
-		border-top: 1px solid var(--border);
-	}
-	.grow {
-		flex: 1;
-	}
 	.manage {
 		display: inline-flex;
 		align-items: center;
@@ -396,6 +276,9 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
 	}
 	.manage:hover {
 		color: var(--text);
@@ -409,13 +292,5 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-	}
-	@media (max-width: 640px) {
-		.search {
-			font-size: var(--fs-lg); /* below 16px iOS zooms the page when the field is focused */
-		}
-		.seg button {
-			font-size: var(--fs-2xs);
-		}
 	}
 </style>

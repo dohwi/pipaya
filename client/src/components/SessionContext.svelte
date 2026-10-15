@@ -68,38 +68,44 @@
 				{#each data.warnings as warning}
 					<div class="gap"><Notice tone="warn"><span class="mono">{warning.path}</span><br />{warning.message}</Notice></div>
 				{/each}
-				<div class="source">
-					<button class="fold" onclick={() => (opened.system = !opened.system)} aria-expanded={!!opened.system}>
-						<span class="label"><span class="source-name">{t("시스템")}</span><span class="meta">{t("이 세션 기본")} · {bytes(new TextEncoder().encode(data.systemPrompt).length)}</span></span>
-						<span class="chev" class:open={opened.system}><Icon name="chevron-right" /></span>
-					</button>
-					{#if opened.system}<pre in:collapseIn out:collapseOut>{data.systemPrompt}</pre>{/if}
-				</div>
-				{#each data.instructions as instruction (instruction.path)}
+				<section class="group">
+					<h3>{t("기본 프롬프트")}</h3>
 					<div class="source">
-						<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
-							<span class="label"><span class="source-name mono">{instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
-							<span class="chev" class:open={opened[instruction.path]}><Icon name="chevron-right" /></span>
+						<button class="fold" onclick={() => (opened.system = !opened.system)} aria-expanded={!!opened.system}>
+							<span class="label"><span class="source-name">{t("시스템")}</span><span class="meta">{t("이 세션 기본")} · {bytes(new TextEncoder().encode(data.systemPrompt).length)}</span></span>
+							<span class="chev" class:open={opened.system}><Icon name="chevron-right" /></span>
 						</button>
-						{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
+						{#if opened.system}<pre in:collapseIn out:collapseOut>{data.systemPrompt}</pre>{/if}
 					</div>
-				{:else}
-					<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
-				{/each}
-				{#each [
-					{ key: "skills", name: t("스킬"), text: data.skillsPrompt, count: data.skills.length },
-					{ key: "agents", name: t("서브에이전트"), text: data.agentsPrompt, count: data.agents.length },
-				] as block (block.key)}
-					{#if block.text}
+					{#each [
+						{ key: "skills", name: t("스킬"), text: data.skillsPrompt, count: data.skills.length },
+						{ key: "agents", name: t("서브에이전트"), text: data.agentsPrompt, count: data.agents.length },
+					] as block (block.key)}
+						{#if block.text}
+							<div class="source">
+								<button class="fold" onclick={() => (opened[block.key] = !opened[block.key])} aria-expanded={!!opened[block.key]}>
+									<span class="label"><span class="source-name">{block.name}</span><span class="meta">{t("{n}개 주입 중", { n: block.count })} · {bytes(new TextEncoder().encode(block.text).length)}</span></span>
+									<span class="chev" class:open={opened[block.key]}><Icon name="chevron-right" /></span>
+								</button>
+								{#if opened[block.key]}<pre in:collapseIn out:collapseOut>{block.text}</pre>{/if}
+							</div>
+						{/if}
+					{/each}
+				</section>
+				<section class="group">
+					<h3>{t("AGENTS.md (적용 순서)")}</h3>
+					{#each data.instructions as instruction, i (instruction.path)}
 						<div class="source">
-							<button class="fold" onclick={() => (opened[block.key] = !opened[block.key])} aria-expanded={!!opened[block.key]}>
-								<span class="label"><span class="source-name">{block.name}</span><span class="meta">{t("{n}개 주입 중", { n: block.count })} · {bytes(new TextEncoder().encode(block.text).length)}</span></span>
-								<span class="chev" class:open={opened[block.key]}><Icon name="chevron-right" /></span>
+							<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
+								<span class="label"><span class="source-name mono">{i + 1}. {instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
+								<span class="chev" class:open={opened[instruction.path]}><Icon name="chevron-right" /></span>
 							</button>
-							{#if opened[block.key]}<pre in:collapseIn out:collapseOut>{block.text}</pre>{/if}
+							{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
 						</div>
-					{/if}
-				{/each}
+					{:else}
+						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
+					{/each}
+				</section>
 			{/if}
 		</div>
 	</div>
@@ -116,7 +122,9 @@
 	.actions { display: flex; flex: none; }
 	.body { overflow-y: auto; padding: 18px 24px 24px; min-height: 80px; }
 	.source { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-	.source + .source, .source + .empty { margin-top: 8px; }
+	.source + .source { margin-top: 8px; }
+	.group + .group { margin-top: 22px; }
+	h3 { margin: 0 0 8px 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
 	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; overflow-wrap: anywhere; }
 	.fold:hover { background: var(--bg-hover); }
 	/* a full-width row must not shrink when pressed (the global 0.97 press scale is meant for small buttons): feedback is a tint */
