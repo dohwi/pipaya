@@ -293,7 +293,7 @@ describe("examples/extensions/todo-view.json", () => {
 		const { resolve } = await import("node:path");
 		const raw = JSON.parse(readFileSync(resolve(__dirname, "../examples/extensions/todo-view.json"), "utf8"));
 		const pkg = parsePackage(raw);
-		const used = { server: /sdk\.server\./, messages: /sdk\.messages\./, slots: /sdk\.slots\./, "composer-filter": /sdk\.composerFilter\./, events: /sdk\.events\./ } as const;
+		const used = { server: /sdk\.server\./, messages: /sdk\.messages\./, slots: /sdk\.slots\./, "composer-filter": /sdk\.composerFilter\./, events: /sdk\.events\./, context: /sdk\.context\./ } as const;
 		for (const [permission, pattern] of Object.entries(used)) {
 			expect(pkg.manifest.permissions.includes(permission as never)).toBe(pattern.test(pkg.code ?? ""));
 		}

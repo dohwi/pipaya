@@ -30,11 +30,11 @@ assert GLYPH.size == (1024, 1024), GLYPH.size
 
 BG = MASTER.getpixel((4, 4))  # flat background colour of the master
 SS = 4  # supersampling for smooth mask edges
-# How much of the tile the glyph may use on each desktop OS. The master glyph spans ~66% of the tile, which looks cramped once an OS draws
+# How much of the tile the glyph may use on each desktop OS. The master tree spans ~68% of the tile height; on top of that it looks cramped once an OS draws
 # the icon next to others: the Dock expects ~10% of transparent margin AND air around the artwork, Windows tiles want a little less.
-MAC_GLYPH = 0.74
-WIN_GLYPH = 0.86
-GLYPH_SCALE = 0.62  # master glyph spans ~66% of the canvas; this brings it inside the 61% safe circle of an adaptive icon
+MAC_GLYPH = 0.80
+WIN_GLYPH = 0.92
+GLYPH_SCALE = 0.72  # master tree spans ~68% of the canvas height (bbox diagonal ~0.82); 0.72 keeps it inside the 61% safe circle of an adaptive icon
 
 
 def glyph_alpha() -> Image.Image:

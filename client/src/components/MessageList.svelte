@@ -209,7 +209,7 @@
 			{/each}
 			{#if waitingFirst}
 				<div class="row wait">
-					<div class="avatar"><PipayaLogo size={18} eyes face={faceFor(chat.id)} blink /></div>
+					<div class="avatar"><PipayaLogo size={22} eyes face={faceFor(chat.id)} blink /></div>
 					<div class="content"><WorkBox steps={[]} live /></div>
 				</div>
 			{/if}
@@ -238,8 +238,8 @@
 	}
 	.avatar {
 		flex: none;
-		width: 30px;
-		height: 30px;
+		width: 36px;
+		height: 36px;
 		display: grid;
 		place-items: center;
 		border-radius: 50%;

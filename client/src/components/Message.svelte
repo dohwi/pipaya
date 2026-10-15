@@ -99,7 +99,7 @@
 	</div>
 {:else}
 	<div class="row assistant" class:fresh={parts[0]?.fresh}>
-		<div class="avatar" class:live><PipayaLogo size={18} eyes face={faceFor(pane.id)} blink={live} /></div>
+		<div class="avatar" class:live><PipayaLogo size={22} eyes face={faceFor(pane.id)} blink={live} /></div>
 		<div class="content">
 			{#each segments as seg, n (seg.i)}
 				{#if seg.kind === "work"}
@@ -226,8 +226,8 @@
 	}
 	.avatar {
 		flex: none;
-		width: 30px;
-		height: 30px;
+		width: 36px;
+		height: 36px;
 		margin-top: 2px;
 		display: grid;
 		place-items: center;
@@ -300,8 +300,8 @@
 			gap: 10px;
 		}
 		.avatar {
-			width: 26px;
-			height: 26px;
+			width: 32px;
+			height: 32px;
 		}
 	}
 </style>

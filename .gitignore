@@ -55,3 +55,6 @@ target/
 build/
 .gradle/
 .tauri/
+
+# desktop sidecar (built by scripts/build-sidecar.ts)
+client/src-tauri/binaries/

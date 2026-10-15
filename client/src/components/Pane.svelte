@@ -62,7 +62,7 @@
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
 			<div class="hello" aria-hidden="true">
-				<PipayaLogo size={112} eyes face={faceFor(id)} blink />
+				<PipayaLogo size={144} eyes face={faceFor(id)} blink />
 			</div>
 		{/if}
 		{#if chat}

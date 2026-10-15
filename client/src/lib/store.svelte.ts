@@ -8,6 +8,7 @@ import {
   verifyServer,
   type ServerProbe,
 } from "./api";
+import { isTauri } from "./tauri";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
 import { viewport } from "./viewport.svelte";
@@ -80,6 +81,8 @@ export interface Server {
   name: string;
   baseUrl: string;
   token: string;
+  /** The server bundled with the desktop app; its address and token are managed by the app. */
+  local?: boolean;
 }
 
 /** Load saved servers, migrating the old single-connection format once. */
@@ -425,6 +428,38 @@ class AppStore {
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
     if (first) this.openServer(first.id);
+    void this.ensureLocalServer();
+  }
+
+  /**
+   * Desktop app: start the bundled server (loopback only) and keep it in the list, so a PC works with no separate install.
+   * It becomes the open server only when nothing else is open; existing remote servers are left as they are.
+   */
+  async ensureLocalServer() {
+    if (!isTauri()) return;
+    let info: { baseUrl: string; token: string };
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      info = await invoke("local_server");
+    } catch {
+      return; // mobile, or the bundled server is missing (dev build): the manual flow still works
+    }
+    const baseUrl = normalizeUrl(info.baseUrl);
+    const cur = this.servers.find((s) => s.local);
+    if (cur) {
+      if (cur.baseUrl !== baseUrl || cur.token !== info.token) {
+        const i = this.servers.findIndex((s) => s.id === cur.id);
+        this.servers[i] = { ...cur, baseUrl, token: info.token };
+        this.saveServers();
+        if (cur.id === this.serverId) this.openServer(cur.id, true);
+      }
+    } else {
+      const server: Server = { id: uid(), name: t("이 PC"), baseUrl, token: info.token, local: true };
+      this.servers.push(server);
+      this.saveServers();
+    }
+    const local = this.servers.find((s) => s.local)!;
+    if (!this.serverId || !this.servers.some((s) => s.id === this.serverId)) this.openServer(local.id);
   }
 
   /* ---------- servers ---------- */

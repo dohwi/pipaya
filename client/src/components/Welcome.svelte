@@ -9,7 +9,7 @@
 </script>
 
 <div class="welcome">
-	<div class="face" aria-hidden="true"><PipayaLogo size={112} eyes face={faceFor(null)} blink /></div>
+	<div class="face" aria-hidden="true"><PipayaLogo size={144} eyes face={faceFor(null)} blink /></div>
 	<div class="copy">
 		<h1>{t("무엇을 함께 작업할까요?")}</h1>
 		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>

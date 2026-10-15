@@ -52,6 +52,8 @@ jobs:
         with:
           workspaces: client/src-tauri -> target
       - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: server
       - name: Set rolling build version
         run: |
           python - <<'PY'
@@ -110,6 +112,8 @@ jobs:
           workspaces: client/src-tauri -> target
           key: macos-arm64
       - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: server
       - name: Set rolling build version and ad-hoc signing
         run: |
           python3 - <<'PY'
@@ -413,7 +417,7 @@ jobs:
               '- macOS: copy the app to Applications, then use System Settings → Privacy & Security → Open Anyway if blocked (only for a trusted download).',
               '- Verify downloads using `SHA256SUMS.txt`.',
               '',
-              'The server is not bundled. Enter your server URL and authentication token in the app.',
+              'Windows and macOS apps bundle a local server ("This PC") that starts with the app, so no server install is needed. Android and iOS connect to a server: enter its URL and authentication token.',
               'Windows and macOS apps update themselves (Settings → General → App updates); Android detects new builds and opens the APK download. iOS and unsigned installs update by reinstalling.'
             ].join('\n');
             let release;

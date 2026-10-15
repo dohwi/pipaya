@@ -46,7 +46,7 @@ export interface SkillList {
 }
 
 /** Skills bundled with the server (`server/builtin-skills/<name>/SKILL.md`). */
-export const BUILTIN_SKILLS_DIR = join(import.meta.dir, "..", "builtin-skills");
+export const BUILTIN_SKILLS_DIR = process.env.PIPAYA_BUILTIN_SKILLS || join(import.meta.dir, "..", "builtin-skills");
 
 export const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const MAX_SKILL_NAME = 64;

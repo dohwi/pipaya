@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="client/src-tauri/icons/128x128@2x.png" alt="pipaya" width="140" />
+  <img src="client/src-tauri/icons/icon.png" alt="pipaya" width="200" />
   <h1>pipaya</h1>
 
   <p><a href="README.md">English</a> · <b>한국어</b></p>

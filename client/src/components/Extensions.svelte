@@ -673,6 +673,7 @@
 		stroke-linejoin: round;
 		color: var(--text-dim);
 	}
+	.zone-add { margin-left: auto; font-weight: 400; }
 	.zone-n {
 		font-size: var(--fs-xs);
 		font-weight: 500;

@@ -102,11 +102,17 @@ def mono_svg(face="block", animated=False, title="pipaya"):
     )
 
 
-def app_icon():
+ICON_SCALE = 6.6  # 128 그리드 -> 1024 캔버스 배율. 나무 높이(약 105)가 캔버스의 약 68%가 된다.
+ICON_CENTER = (64, 65.5)  # 아트워크 bbox의 중심 (128 그리드). 이 점을 캔버스 중앙에 맞춘다.
+
+
+def app_icon(glyph_only=False):
+    tx = 512 - ICON_CENTER[0] * ICON_SCALE
+    ty = 512 - ICON_CENTER[1] * ICON_SCALE
+    bg = "" if glyph_only else f'<rect width="1024" height="1024" fill="{ICON_BG}"/>'
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">'
-        f'<rect width="1024" height="1024" fill="{ICON_BG}"/>'
-        f'<g transform="translate(192 192) scale(5.0)">{color_body("block", DARK, False)}</g></svg>\n'
+        f'{bg}<g transform="translate({num(tx)} {num(ty)}) scale({ICON_SCALE})">{color_body("block", DARK, False)}</g></svg>\n'
     )
 
 
@@ -118,6 +124,7 @@ def main():
     (OUT / "pipaya-animated.svg").write_text(color_svg(animated=True))
     (OUT / "pipaya-mono-animated.svg").write_text(mono_svg(animated=True))
     (OUT / "app-icon.svg").write_text(app_icon())
+    (OUT / "app-icon-glyph.svg").write_text(app_icon(glyph_only=True))
     for n in FACES:
         (OUT / "faces" / f"{n}.svg").write_text(color_svg(n))
         (OUT / "faces" / f"{n}-mono.svg").write_text(mono_svg(n))

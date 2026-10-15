@@ -12,6 +12,7 @@
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
+	import ConnectModal from "./ConnectModal.svelte";
 	import { indexCatalog } from "../lib/catalog-match";
 	import type {
 		ApiFormat,
@@ -73,6 +74,9 @@
 	/** Index of the model whose details are open inside the dialog; null = the connection page. */
 	let editing = $state<number | null>(null);
 	let fresh = $state(false);
+	/** The "add connection" picker, and a counter that makes the signed-in account list reload after it changes something. */
+	let picking = $state(false);
+	let accountsTick = $state(0);
 
 	const formats: { id: ApiFormat; label: string }[] = [
 		{ id: "openai-completions", label: msg("OpenAI 호환 (Chat Completions)") },
@@ -505,10 +509,9 @@
 
 		<CompactionSection {serverId} {models} providers={providerList} />
 
-		<ProviderAccounts {serverId} onchange={() => void load(serverId)} />
-
 		<section>
-			<div class="label">{t("연결 ({n})", { n: cfg.providers.length })}</div>
+			<div class="label">{t("연결")}</div>
+			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
 			{#if cfg.providers.length}
 				<div class="plist">
 					{#each cfg.providers as p (p.id)}
@@ -575,18 +578,23 @@
 						</div>
 					{/each}
 				</div>
-			{:else if !form}
-				<p class="empty">{t("등록된 연결이 없습니다")}</p>
 			{/if}
 
 			{#if !form}
-				<button class="btn dashed" onclick={() => startNew()}><Icon name="plus" /> {t("연결 추가")}</button>
-				<div class="label">{t("로컬 모델 (서버 PC에서 실행 중인 것)")}</div>
-				{#each localPresets as p (p.id)}
-					<button class="btn dashed" disabled={cfg?.providers.some((x) => x.id === p.id)} onclick={() => startNew(p)}><Icon name="plus" /> {p.name}</button>
-				{/each}
+				<button class="btn dashed" onclick={() => (picking = true)}><Icon name="plus" /> {t("연결 추가")}</button>
 			{/if}
 		</section>
+
+		{#if picking}
+			<ConnectModal
+				{serverId}
+				locals={localPresets}
+				taken={new Set(cfg.providers.map((x) => x.id))}
+				onclose={() => (picking = false)}
+				onchange={() => { accountsTick++; void load(serverId); }}
+				oncustom={(id) => startNew(localPresets.find((l) => l.id === id))}
+			/>
+		{/if}
 
 		{#if form}
 			<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
@@ -855,13 +863,6 @@
 	.ptitle {
 		font-weight: 550;
 		font-size: var(--fs-md);
-	}
-	.empty {
-		margin: 0;
-		padding: 14px;
-		text-align: center;
-		font-size: var(--fs-sm);
-		color: var(--text-faint);
 	}
 	.mlist {
 		list-style: none;

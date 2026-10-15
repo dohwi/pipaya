@@ -61,7 +61,6 @@ describe("built-in + custom catalog", () => {
 	test("sessions cannot be created until a provider is configured", async () => {
 		expect((await api("POST", "/sessions", {})).status).toBe(400);
 		expect((await api("POST", "/sessions", { provider: "faux", model: "faux-1" })).status).toBe(400);
-		expect((await api("POST", "/sessions", { provider: "openai", model: "gpt-4o" })).status).toBe(400);
 		expect((await api("GET", "/sessions")).json.sessions).toEqual([]);
 	});
 

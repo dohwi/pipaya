@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/pipaya-server"],
+    "resources": { "../../server/builtin-skills": "builtin-skills" },
+    "windows": { "nsis": { "installerHooks": "./installer-hooks.nsh" } }
+  }
+}

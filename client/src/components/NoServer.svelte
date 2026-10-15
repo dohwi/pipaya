@@ -30,8 +30,8 @@
 <div class="screen">
 	<Backdrop />
 	<div class="card">
-		<div class="logo"><PipayaLogo size={40} /></div>
-		<h1><Wordmark size={30} /></h1>
+		<div class="logo"><PipayaLogo size={52} /></div>
+		<h1><Wordmark size={34} /></h1>
 		<p class="sub">{t("내 서버에서 코딩 에이전트를 돌리고, 어느 기기에서든 이어서 쓰는 클라이언트입니다.")}</p>
 
 		<div class="seg full" role="tablist" aria-label={t("시작 방법")} use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "calc(var(--radius) - 3px)" }}>
@@ -118,8 +118,8 @@
 		}
 	}
 	.logo {
-		width: 60px;
-		height: 60px;
+		width: 76px;
+		height: 76px;
 		display: grid;
 		place-items: center;
 		border-radius: var(--radius);
