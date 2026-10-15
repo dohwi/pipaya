@@ -357,6 +357,8 @@ export interface Question {
 	question: string;
 	options?: string[];
 	allowFreeText: boolean;
+	/** Several questions asked at once: shown as tabs. */
+	items?: { question: string; options?: string[]; allowFreeText: boolean }[];
 	requestedAt: number;
 }
 
@@ -462,7 +464,7 @@ export interface ToolRun {
 	durationMs?: number;
 	denyReason?: string;
 	/** Set while an `ask_user` call waits for the user (state is "awaiting_approval"). */
-	question?: Pick<Question, "question" | "options" | "allowFreeText">;
+	question?: Pick<Question, "question" | "options" | "allowFreeText" | "items">;
 }
 
 export interface UserItem {

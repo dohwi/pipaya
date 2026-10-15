@@ -6,7 +6,7 @@
 	import Icon from "./Icon.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { marquee, tail } from "../lib/fit-text";
-	import PipayaLogo from "./PipayaLogo.svelte";
+	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import { activityOf, type Activity } from "../lib/activity";
@@ -318,7 +318,7 @@
 
 <aside class="side">
 	<div class="brandrow">
-		<PipayaLogo color size={26} />
+		<PipayaMark color size={26} />
 		<Wordmark size={16} />
 		<button class="iconbtn fold" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 접기")} title={t("사이드바 접기") + hint}><Icon name="sidebar" /></button>
 	</div>

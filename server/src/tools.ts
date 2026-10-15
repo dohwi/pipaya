@@ -408,16 +408,28 @@ const askUserTool: ToolDef = {
 			label: "Ask user",
 			description: ASK_USER_DESCRIPTION,
 			parameters: Type.Object({
-				question: Type.String({ minLength: 1, maxLength: 2000, description: "One clear question" }),
+				question: Type.Optional(Type.String({ minLength: 1, maxLength: 2000, description: "One clear question. Omit when using `questions`" })),
 				options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, description: "Suggested answers" })),
 				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
+				questions: Type.Optional(
+					Type.Array(
+						Type.Object({
+							question: Type.String({ minLength: 1, maxLength: 2000 }),
+							options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8 })),
+							allowFreeText: Type.Optional(Type.Boolean()),
+						}),
+						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
+					),
+				),
 			}),
 			async execute(id, params, signal) {
 				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
-				const allowFreeText = params.allowFreeText ?? true;
-				const outcome = await ctx.ask(id, { question: params.question, options: params.options, allowFreeText }, signal);
+				const items = params.questions?.map((q) => ({ question: q.question, options: q.options, allowFreeText: q.allowFreeText ?? true }));
+				if (!items?.length && !params.question) throw new Error("ask_user needs `question` or `questions`");
+				const first = items?.[0] ?? { question: params.question!, options: params.options, allowFreeText: params.allowFreeText ?? true };
+				const outcome = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
 				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
-				return text(outcome.answer, { question: params.question, answer: outcome.answer });
+				return text(outcome.answer, { question: first.question, answer: outcome.answer });
 			},
 		});
 	},

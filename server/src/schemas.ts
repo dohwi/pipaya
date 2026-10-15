@@ -239,16 +239,25 @@ export const DecisionBody = Type.Object({ approved: Type.Boolean(), reason: Type
 
 // ── Questions (ask_user) ────────────────────────────────────────────────────
 
+export const QuestionItem = Type.Object({
+	question: Type.String(),
+	options: Type.Optional(Type.Array(Type.String())),
+	allowFreeText: Type.Boolean(),
+});
 export const QuestionRequest = Type.Object({
 	sessionId: Type.String(),
 	toolCallId: Type.String(),
 	question: Type.String(),
 	options: Type.Optional(Type.Array(Type.String())),
 	allowFreeText: Type.Boolean(),
+	items: Type.Optional(Type.Array(QuestionItem, { description: "Present when several questions were asked at once" })),
 	requestedAt: Type.Integer(),
 });
 export const QuestionList = Type.Object({ questions: Type.Array(QuestionRequest) });
-export const QuestionAnswerBody = Type.Object({ answer: Type.String({ minLength: 1, maxLength: 10_000 }) });
+export const QuestionAnswerBody = Type.Object({
+	answer: Type.Optional(Type.String({ minLength: 1, maxLength: 10_000, description: "For a single question" })),
+	answers: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 10_000 }), { description: "For several questions: one per item, in order" })),
+});
 
 // ── Models, providers, tools ────────────────────────────────────────────────
 

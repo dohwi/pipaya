@@ -34,7 +34,7 @@ SS = 4  # supersampling for smooth mask edges
 # the icon next to others: the Dock expects ~10% of transparent margin AND air around the artwork, Windows tiles want a little less.
 MAC_GLYPH = 0.80
 WIN_GLYPH = 0.92
-GLYPH_SCALE = 0.72  # master tree spans ~68% of the canvas height (bbox diagonal ~0.82); 0.72 keeps it inside the 61% safe circle of an adaptive icon
+GLYPH_SCALE = 0.64  # master tree spans ~86% of the canvas height; 0.64 keeps it inside the safe circle of an adaptive icon, same as before
 
 
 def glyph_alpha() -> Image.Image:

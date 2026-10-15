@@ -472,7 +472,7 @@ export class ChatState {
 					...this.tools[d.toolCallId],
 					output: "",
 					state: "awaiting_approval",
-					question: { question: d.question, options: d.options, allowFreeText: d.allowFreeText },
+					question: { question: d.question, options: d.options, allowFreeText: d.allowFreeText, items: d.items },
 				};
 				break;
 

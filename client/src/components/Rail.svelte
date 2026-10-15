@@ -3,7 +3,7 @@
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
-	import PipayaLogo from "./PipayaLogo.svelte";
+	import PipayaMark from "./PipayaMark.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import { app } from "../lib/store.svelte";
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
@@ -47,7 +47,7 @@
 
 <!-- The folded sidebar: a narrow rail that keeps every active session's agent in view. -->
 <aside class="rail" aria-label={t("활성 대화")}>
-	<div class="top"><PipayaLogo color size={26} /></div>
+	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
 		<button class="btn-ico" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint}><Icon name="sidebar" /></button>
 		<button class="btn-ico" onclick={() => app.newChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>

@@ -1,16 +1,28 @@
 import type { EventBus } from "./events.ts";
 
-export interface QuestionRequest {
-	sessionId: string;
-	toolCallId: string;
+/** One question. A request holds several when the agent asks them together (the client shows them as tabs). */
+export interface QuestionItem {
 	question: string;
 	options?: string[];
 	allowFreeText: boolean;
+}
+
+export interface QuestionRequest {
+	sessionId: string;
+	toolCallId: string;
+	/** The first question, or the only one. */
+	question: string;
+	options?: string[];
+	allowFreeText: boolean;
+	/** Set when several questions were asked at once; one entry per question, in order. */
+	items?: QuestionItem[];
 	requestedAt: number;
 }
 
 export interface QuestionAnswer {
-	answer: string;
+	answer?: string;
+	/** One answer per entry of `items`, in order. */
+	answers?: string[];
 }
 
 export type QuestionOutcome =
@@ -19,13 +31,14 @@ export type QuestionOutcome =
 
 interface Pending {
 	request: QuestionRequest;
-	options: string[] | undefined;
-	allowFreeText: boolean;
 	resolve: (o: QuestionOutcome, source: "user" | "abort") => void;
 	cleanup: () => void;
 }
 
 export type DecideResult = "ok" | "not_found" | "invalid";
+
+const valid = (item: QuestionItem, answer: string) =>
+	!!answer && (item.allowFreeText || !item.options?.length || item.options.includes(answer));
 
 /**
  * Holds `ask_user` tool calls that are waiting for a human answer. A question waits until it is answered or the run is
@@ -61,8 +74,6 @@ export class QuestionManager {
 
 			this.pending.set(key, {
 				request,
-				options: req.options,
-				allowFreeText: req.allowFreeText,
 				resolve: finish,
 				cleanup: () => signal?.removeEventListener("abort", onAbort),
 			});
@@ -73,14 +84,24 @@ export class QuestionManager {
 
 	/**
 	 * "not_found": nothing is waiting (already answered or the run was aborted).
-	 * "invalid": the answer is empty, or is not one of the options when free text is not allowed.
+	 * "invalid": an answer is empty, is not one of the options when free text is not allowed, or the count does not match.
 	 */
 	answer(sessionId: string, toolCallId: string, a: QuestionAnswer): DecideResult {
 		const entry = this.pending.get(this.key(sessionId, toolCallId));
 		if (!entry) return "not_found";
-		const answer = a.answer.trim();
-		if (!answer) return "invalid";
-		if (!entry.allowFreeText && entry.options?.length && !entry.options.includes(answer)) return "invalid";
+		const { request } = entry;
+
+		if (request.items?.length) {
+			const answers = a.answers?.map((x) => x.trim());
+			if (!answers || answers.length !== request.items.length) return "invalid";
+			if (!request.items.every((item, i) => valid(item, answers[i]!))) return "invalid";
+			const text = request.items.map((item, i) => `${i + 1}. ${item.question}\n→ ${answers[i]}`).join("\n\n");
+			entry.resolve({ status: "answered", answer: text }, "user");
+			return "ok";
+		}
+
+		const answer = (a.answer ?? "").trim();
+		if (!valid(request, answer)) return "invalid";
 		entry.resolve({ status: "answered", answer }, "user");
 		return "ok";
 	}

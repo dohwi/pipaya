@@ -1746,7 +1746,7 @@ class AppStore {
     }
   }
 
-  async answerQuestion(toolCallId: string, answer: string, id = this.activeId) {
+  async answerQuestion(toolCallId: string, answer: string | string[], id = this.activeId) {
     const chat = this.chatOf(id);
     if (!this.api || !chat) return;
     try {

@@ -300,8 +300,8 @@ export class Api {
 
 	questions = () =>
 		this.req<{ questions: Question[] }>("GET", "/questions").then((r) => r.questions).catch(() => [] as Question[]);
-	answer = (sessionId: string, toolCallId: string, answer: string) =>
-		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, { answer });
+	answer = (sessionId: string, toolCallId: string, answer: string | string[]) =>
+		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, Array.isArray(answer) ? { answers: answer } : { answer });
 
 	/**
 	 * Subscribe to the global event stream. EventSource cannot set headers, so the token goes in the

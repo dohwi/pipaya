@@ -665,6 +665,7 @@ export const en: Record<string, string> = {
 	"답변 필요": "Needs an answer",
 	"답변": "Answer",
 	"직접 입력": "Type your own",
+	"모두 보내기": "Send all",
 	"답변을 입력하세요": "Type your answer",
 	"답변을 보내지 못했습니다": "Could not send the answer",
 	"종료 코드 {code}": "Exit code {code}",
