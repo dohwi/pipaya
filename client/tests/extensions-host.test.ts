@@ -941,6 +941,7 @@ describe("server bridge, shortcuts, dialogs, session control and tool renderers"
 			["shortcuts.register", [{ id: "a", label: "A", combo: "Mod+K" }, "t"]], ["shortcuts.remove", ["a"]],
 			["dialog.confirm", [{ title: "t" }]], ["session.send", ["hi"]], ["session.abort", []],
 			["tools.registerRenderer", ["bash", "t"]], ["tools.removeRenderer", ["bash"]],
+			["panes.list", []], ["panes.send", ["s1", "hi"]], ["panes.close", ["s1"]],
 		];
 		for (const [method, args] of calls) expect(() => call(host, id, method, args)).toThrow(/권한 없음|permission/i);
 		host.stop();
@@ -1122,6 +1123,71 @@ describe("message renderers, slots and the composer filter", () => {
 		host.disable(id);
 		expect(await host.filterComposer("orig")).toEqual({ text: "orig" });
 		delete (globalThis as any).__fakeReturn;
+		host.stop();
+	});
+});
+
+describe("panes", () => {
+	function fakePanes() {
+		const log: unknown[][] = [];
+		const rec = (name: string, value: unknown = undefined) => async (...a: unknown[]) => { log.push([name, ...a]); return value as any; };
+		const panes = {
+			list: () => [{ id: "s1", kind: "session", title: "t", cwd: "/", focused: true, running: false, awaitingApproval: 0, model: "m", provider: "p", groupId: null, box: { x: 0, y: 0, w: 1, h: 1 } }],
+			group: () => null,
+			read: rec("read", [{ role: "user", text: "hi", at: 1 }]),
+			focus: rec("focus"), send: rec("send"), abort: rec("abort"), split: rec("split", "s2"), move: rec("move"), swap: rec("swap"),
+			resize: rec("resize"), leave: rec("leave"), close: rec("close"), zoom: rec("zoom"),
+		};
+		return { panes: panes as any, log };
+	}
+	async function setup() {
+		const f = fakePanes();
+		const r = await reload();
+		(r.adapter as any).panes = f.panes;
+		const { id } = await activate(r.host, code("example.orchestrator", ["panes"]));
+		return { ...r, ...f, id };
+	}
+
+	test("reads are plain data and writes reach the adapter with validated arguments", async () => {
+		const { host, id, log } = await setup();
+		expect(await call(host, id, "panes.list")).toHaveLength(1);
+		expect(await call(host, id, "panes.group")).toBeNull();
+		expect(await call(host, id, "panes.read", ["s1", { limit: 5 }])).toEqual([{ role: "user", text: "hi", at: 1 }]);
+		await call(host, id, "panes.send", ["s1", "go"]);
+		await call(host, id, "panes.send", ["s1", "later", "follow_up"]);
+		expect(await call(host, id, "panes.split", ["s1", "right", { kind: "terminal" }])).toEqual({ id: "s2" });
+		await call(host, id, "panes.resize", ["s1", 0.3]);
+		await call(host, id, "panes.zoom", [null]);
+		expect(log).toEqual([
+			["read", "s1", 5], ["send", "s1", "go", "prompt"], ["send", "s1", "later", "follow_up"],
+			["split", "s1", "right", "terminal", false], ["resize", "s1", 0.3], ["zoom", null],
+		]);
+		host.stop();
+	});
+
+	test("bad arguments are refused before they reach the adapter", async () => {
+		const { host, id, log } = await setup();
+		for (const [m, a] of [
+			["panes.send", ["s1", "x", "shout"]], ["panes.send", ["s1", ""]], ["panes.split", ["s1", "middle"]],
+			["panes.split", ["s1", "left", { kind: "window" }]], ["panes.resize", ["s1", 0.95]], ["panes.resize", ["s1", "a"]],
+			["panes.read", ["s1", { limit: 101 }]], ["panes.move", ["s1", "s2", "up"]], ["panes.focus", [7]],
+		] as [string, unknown[]][]) await expect(Promise.resolve().then(() => call(host, id, m, a))).rejects.toThrow();
+		expect(log).toEqual([]);
+		host.stop();
+	});
+
+	test("changes are limited to 30 per 10 seconds, reads are not", async () => {
+		const { host, id } = await setup();
+		for (let i = 0; i < 30; i++) await call(host, id, "panes.focus", ["s1"]);
+		await expect(Promise.resolve().then(() => call(host, id, "panes.focus", ["s1"]))).rejects.toThrow(/30/);
+		expect(await call(host, id, "panes.list")).toHaveLength(1);
+		host.stop();
+	});
+
+	test("a client without pane support says so", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.nopanes", ["panes"]));
+		expect(() => call(host, id, "panes.list")).toThrow();
 		host.stop();
 	});
 });

@@ -1947,7 +1947,7 @@ class AppStore {
    * Drop session `id` on a side of the pane showing `target`. If `target` is in a group the layout changes there;
    * otherwise the two sessions become a new group on the spot. A session is in one group only, so dropping moves it.
    */
-  async dropSession(id: string, target: string, zone: Zone): Promise<void> {
+  async dropSession(id: string, target: string, zone: Zone, focus = true): Promise<void> {
     if (!this.api || id === target) return;
     const g = this.groupOf(target);
     if (g) {
@@ -1959,7 +1959,43 @@ class AppStore {
       await this.createGroup(pair(target, id, zone));
     }
     void this.refreshGroups(); // the session may have left another group, which can have dissolved
-    void this.openSession(id);
+    if (focus) void this.openSession(id);
+  }
+
+  /**
+   * Split pane `target` with a brand-new conversation (same folder and model settings) on `zone`'s side and return its
+   * id, or null when it could not be made. `focus: false` leaves the focus where it is (for programmatic callers).
+   */
+  async splitPane(target: string, zone: Zone, focus = true): Promise<string | null> {
+    const api = this.api;
+    const from = this.session(target) ?? this.terminal(target);
+    if (!api || !from) return null;
+    const g = this.groupOf(target);
+    if (g && panesOf(g.layout).length >= MAX_PANES) {
+      this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+      return null;
+    }
+    const base = this.session(target);
+    const d = this.draft;
+    if (!base && !d.model) {
+      this.toast(t("사용할 수 있는 모델이 없습니다. 모델 선택창에서 연결을 추가하세요."), "error");
+      return null;
+    }
+    try {
+      const made = await api.createSession({
+        cwd: from.cwd,
+        provider: base?.provider ?? d.provider,
+        model: base?.model ?? d.model,
+        thinkingLevel: base?.thinkingLevel ?? normalizeThinking(d.thinkingLevel),
+        approval: base?.approval ?? d.approval,
+      });
+      if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
+      await this.dropSession(made.id, target, zone, focus);
+      return made.id;
+    } catch (e) {
+      this.fail(e, t("새 대화를 만들지 못했습니다"));
+      return null;
+    }
   }
 
   /**
@@ -2037,7 +2073,7 @@ class AppStore {
    * Open a new terminal on the server (its own OS shell) and show it. `workdir`: "." / undefined for the default working
    * directory, else a path. `beside`: put it next to that pane (grouping them) instead of on its own.
    */
-  async openTerminal(workdir?: string, beside?: { target: string; zone: Zone }): Promise<TerminalInfo | null> {
+  async openTerminal(workdir?: string, beside?: { target: string; zone: Zone; focus?: boolean }): Promise<TerminalInfo | null> {
     const api = this.api;
     if (!api) return null;
     if (this.terminalSupport && !this.terminalSupport.enabled) {
@@ -2060,7 +2096,7 @@ class AppStore {
       return null;
     }
     if (!this.terminals.some((x) => x.id === made.id)) this.terminals.push(made);
-    if (beside) await this.dropSession(made.id, beside.target, beside.zone);
+    if (beside) await this.dropSession(made.id, beside.target, beside.zone, beside.focus ?? true);
     else await this.openSession(made.id);
     return made;
   }

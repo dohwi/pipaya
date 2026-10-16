@@ -41,6 +41,7 @@
 | 단축키 | `sdk.shortcuts.*` | `lib/actions.ts` `onShortcut` (앱 단축키 다음 순위) | `shortcuts` 권한, 10개 | `host.svelte.ts` `shortcutFor` |
 | 대화상자 | `sdk.dialog.*` | `ExtensionDialog.svelte` | `dialogs` 권한, 한 번에 하나 | `store.askExtension` |
 | 대화 제어 | `sdk.session.*` | `HostAdapter.session` | `session` 권한, 10초 5번 | `host.svelte.ts` `limitSession` |
+| 패널 제어 | `sdk.panes.*` | `HostAdapter.panes` (`extensions/panes.ts` `paneAdapter`) | `panes` 권한, 변경 10초 30번 | `host.svelte.ts` `limitPanes` |
 | 도구 결과 렌더러 | `sdk.tools.registerRenderer` | `ToolCard.svelte` | `tools` 권한, 20개 | `host.svelte.ts` `rendererFor` |
 | 시스템 알림 | `sdk.notifications.send/status/register/remove` | OS·FCM/APNs 어댑터 | 별도 `system-notifications` 권한, 서버 규칙 5개 | [알림 구조](notifications.md), `notifications.ts`, `notification-rules.ts`, `HostAdapter.systemNotifications` |
 | 설정 폼 | manifest `settings` | 설정 → 확장 → 행 펼침 → 확장 설정 | 20필드 | `extensions/SettingsForm.svelte` |

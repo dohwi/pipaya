@@ -191,6 +191,7 @@ SDK의 모든 메서드는 Promise입니다. 등록과 설정 변경을 `await`�
 | `messages` | `sdk.messages.registerRenderer(entryType, render)`, `removeRenderer(entryType)` | 서버 확장이 `ctx.appendEntry(type, data)`로 대화에 남긴 기록을, 만들어진 시각 순서로 대화 중간에 카드로 표시. 렌더러가 없거나 `null`이면 보이지 않음. 읽기 전용 노드(navbar와 같은 종류) 80개·깊이 5·24KiB. 확장당 20개 |
 | `slots` | `sdk.slots.set('header'\|'footer', id, {label, view})`, `remove(slot, id)` | 헤더 아래·입력창 위의 읽기 전용 영역. navbar와 같은 노드·한도, 확장당 2개 |
 | `composer-filter` | `sdk.composerFilter.set(fn)`, `clear()` | 보내기 직전 텍스트를 바꾸거나 막음(`string`, `{text}`, `{cancel: '사유'}`, `null`=그대로). 2초 제한, 오류·시간 초과면 원문 그대로 전송. 슬래시 명령은 거치지 않음 |
+| `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus(id)`, `send(id,text,mode?)`, `abort(id)`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave(id)`, `close(id)`, `zoom(id?)` | 열린 그룹(그룹 밖이면 열린 대화 하나)의 대화·터미널을 id로 지정해 읽고(`read`는 텍스트만) 조작. 포커스와 무관하게 `send` 가능, `split`은 `focus: true`가 아니면 포커스를 옮기지 않음. 변경은 10초에 30번. 보낸 메시지는 에이전트가 실행하고 `close`는 터미널 작업을 끝내므로 승인 문구에 명시 |
 | 별도 권한 없음 | `sdk.settings.get()`, `sdk.log(text)` | 자신의 사용자 설정 읽기, 확장 로그 |
 
 ```js

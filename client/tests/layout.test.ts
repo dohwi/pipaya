@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { alignPosition, isolate, linkedDividers, positionOf, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
+import { resizePane, alignPosition, isolate, linkedDividers, positionOf, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
 
 const split = (a: Layout, b: Layout, dir: "row" | "col" = "row", ratio = 0.5): Layout => ({ type: "split", dir, ratio, a, b });
 
@@ -323,5 +323,21 @@ describe("alignPosition", () => {
 		expect(alignPosition(l, [right!.path], positionOf(right!))).toBeCloseTo(positionOf(right!));
 		const one = row(pane("A"), pane("B"));
 		expect(alignPosition(one, [[]], 0.3)).toBe(0.3);
+	});
+});
+
+describe("resizePane", () => {
+	const l = split(pane("a"), split(pane("b"), pane("c"), "col", 0.5), "row", 0.5);
+	test("gives the pane its share of the split that holds it, whichever side it is on", () => {
+		const a = resizePane(l, "a", 0.3) as Extract<Layout, { type: "split" }>;
+		expect(a.ratio).toBe(0.3);
+		const c = resizePane(l, "c", 0.25) as any;
+		expect(c.b.ratio).toBeCloseTo(0.75); // c is the second child: it gets 25%, b keeps 75%
+		expect(c.ratio).toBe(0.5);
+	});
+	test("clamps, and refuses a pane that is not in a split", () => {
+		expect((resizePane(l, "a", 5) as any).ratio).toBe(MAX_RATIO);
+		expect(resizePane(l, "zzz", 0.3)).toBeNull();
+		expect(resizePane(pane("a"), "a", 0.3)).toBeNull();
 	});
 });

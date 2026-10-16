@@ -81,6 +81,24 @@ export function setRatio(l: Layout, path: Path, ratio: number): Layout {
 	return head === "a" ? { ...l, a: setRatio(l.a, rest, ratio) } : { ...l, b: setRatio(l.b, rest, ratio) };
 }
 
+/** The split that directly holds pane `id`: its path, and which side (`a` or `b`) the pane is on. null = not in the layout or alone. */
+export function parentOf(l: Layout, id: string, path: Path = []): { path: Path; side: "a" | "b" } | null {
+	if (l.type === "pane") return null;
+	for (const side of ["a", "b"] as const) {
+		const child = l[side];
+		if (child.type === "pane" && child.sessionId === id) return { path, side };
+		const deeper = parentOf(child, id, [...path, side]);
+		if (deeper) return deeper;
+	}
+	return null;
+}
+
+/** Give pane `id` the share `ratio` (0..1, clamped to the limits) of the split that holds it; its sibling gets the rest. */
+export function resizePane(l: Layout, id: string, ratio: number): Layout | null {
+	const at = parentOf(l, id);
+	return at && setRatio(l, at.path, at.side === "a" ? ratio : 1 - ratio);
+}
+
 const EPS = 1e-6;
 const same = (a: Path, b: Path) => a.join("") === b.join("");
 

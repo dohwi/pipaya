@@ -91,6 +91,35 @@ export interface ExtensionSDK {
   /** Needs `session`: act on the open conversation. At most 5 calls per 10 seconds. */
   readonly session: { send(text: string, mode?: "prompt" | "steer" | "follow_up"): Promise<void>; abort(): Promise<void> };
   /**
+   * Needs `panes`: orchestrate the panes (conversations and terminals) of the open group. A pane is addressed by its
+   * session/terminal id; outside a group the only pane is the open one. Changes are limited to 30 per 10 seconds.
+   * Panes opened by `split` do not take focus unless `focus: true`. `close` ends a terminal's shell for good.
+   */
+  readonly panes: {
+    /** Panes of the open group (or the single open one), each with its state and position (`box`, fractions of the group). */
+    list(): Promise<import("./panes").PaneInfo[]>;
+    /** The open group's name and layout tree, or `null` outside a group. */
+    group(): Promise<import("./panes").PaneGroupInfo | null>;
+    /** The last `limit` (default 20, max 100) messages of a conversation as text. */
+    read(id: string, options?: { limit?: number }): Promise<import("./panes").PaneMessage[]>;
+    focus(id: string): Promise<void>;
+    /** Send to a specific conversation, focused or not. `steer`/`follow_up` queue behind a running turn. */
+    send(id: string, text: string, mode?: import("./panes").PaneSendMode): Promise<void>;
+    abort(id: string): Promise<void>;
+    /** A new conversation (same folder and model) or terminal beside `id`. Resolves to its id. */
+    split(id: string, edge: "left" | "right" | "top" | "bottom", options?: { kind?: "session" | "terminal"; focus?: boolean }): Promise<{ id: string }>;
+    /** Move `id` to the given side of `target` (joins its group, or forms one). */
+    move(id: string, target: string, edge: "left" | "right" | "top" | "bottom"): Promise<void>;
+    swap(a: string, b: string): Promise<void>;
+    /** Give `id` the share 0.1–0.9 of the split that holds it. */
+    resize(id: string, ratio: number): Promise<void>;
+    /** Take `id` out of its group; the conversation stays open. */
+    leave(id: string): Promise<void>;
+    close(id: string): Promise<void>;
+    /** Enlarge a pane to the whole group; `zoom()` / `zoom(null)` puts it back. */
+    zoom(id?: string | null): Promise<void>;
+  };
+  /**
    * Needs `messages`: draw the entries a server extension stored on the open conversation (`ctx.appendEntry`) as cards
    * in the transcript, in the order they were made. Without a renderer an entry is not shown. Return `null` to hide one.
    */

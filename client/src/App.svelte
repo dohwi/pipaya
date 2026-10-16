@@ -20,6 +20,7 @@
 	import DoneNotice from "./components/DoneNotice.svelte";
 	import ChordStrip from "./components/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
+	import { paneAdapter } from "./lib/extensions/panes";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import CloseConfirm from "./components/CloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
@@ -126,6 +127,7 @@
 				send: async (text, mode) => { if (!app.activeId) throw new Error(t("열려 있는 대화가 없습니다")); const ok = mode === "steer" ? await app.steer(text) : mode === "follow_up" ? await app.queue(text) : await app.send(text); if (!ok) throw new Error(t("보내지 못했습니다")); },
 				abort: async () => { if (app.activeId) await app.abort(); },
 			},
+			panes: paneAdapter(app),
 			dialog: request => app.askExtension(request),
 			dark: () => app.prefs.resolvedDark,
 			reservedCommands: () => COMMANDS.map(c => c.name),

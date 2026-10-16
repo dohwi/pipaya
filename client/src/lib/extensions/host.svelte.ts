@@ -15,6 +15,8 @@ import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINo
 
 import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ToolRenderInput } from "./sdk";
 import { splitCombo } from "../keys";
+import type { PaneAdapter } from "./panes";
+import type { Edge } from "../layout";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
   prefill(text: string): void;
@@ -32,6 +34,8 @@ export interface HostAdapter {
     send(text: string, mode: "prompt" | "steer" | "follow_up"): Promise<void>;
     abort(): Promise<void>;
   };
+  /** Orchestration of the panes (conversations and terminals) of the open group, for extensions with the `panes` permission. */
+  panes?: PaneAdapter;
   /** Modal questions. Resolve to null when the user dismisses them. */
   dialog?(request: ExtensionDialogRequest): Promise<unknown>;
   dark(): boolean;
@@ -168,6 +172,7 @@ export class ExtensionHost {
   private composerFilters = new Map<string, ComposerFilter>();
   private serverSubscribed = new Set<string>();
   private sessionCalls = new Map<string, number[]>();
+  private paneCalls = new Map<string, number[]>();
   private httpReader = new HttpReader();
   logs = $state<ExtensionLog[]>([]);
   panels = $state.raw<ExtensionPanel[]>([]);
@@ -607,7 +612,7 @@ export class ExtensionHost {
     this.navbar = this.navbar.filter(item => item.owner !== id);
     this.pendingPanelOpens.delete(id);
     this.subscribed.delete(id); this.notificationTimes.delete(id);
-    this.serverSubscribed.delete(id); this.sessionCalls.delete(id);
+    this.serverSubscribed.delete(id); this.sessionCalls.delete(id); this.paneCalls.delete(id);
     this.shortcuts = this.shortcuts.filter(s => s.owner !== id);
     this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id);
     this.slots = this.slots.filter(s => s.owner !== id);
@@ -1044,6 +1049,49 @@ export class ExtensionHost {
         this.limitSession(id);
         return adapter.abort();
       }
+      case "panes.list": case "panes.group": case "panes.read": case "panes.focus": case "panes.send": case "panes.abort": case "panes.split":
+      case "panes.move": case "panes.swap": case "panes.resize": case "panes.leave": case "panes.close": case "panes.zoom": {
+        this.require(id, "panes");
+        const panes = this.adapter?.panes;
+        if (!panes) throw new LocalizedError(t("이 클라이언트는 패널 제어를 지원하지 않습니다"));
+        const pid = (v: unknown) => string(v, 80, "pane id");
+        const edge = (v: unknown): Edge => { if (v === "left" || v === "right" || v === "top" || v === "bottom") return v; throw new LocalizedError(t("방향은 left, right, top, bottom 중 하나여야 합니다")); };
+        const generation = this.generations.get(id);
+        const alive = <T,>(v: T): T => { if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다")); return v; };
+        if (method === "panes.list") return clone(panes.list());
+        if (method === "panes.group") return clone(panes.group());
+        if (method === "panes.read") {
+          const o = args[1] === undefined || args[1] === null ? {} : object(args[1]);
+          const limit = o.limit === undefined ? 20 : Number(o.limit);
+          if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new LocalizedError(t("limit은 1~100이어야 합니다"));
+          return panes.read(pid(args[0]), limit).then(alive).then(clone);
+        }
+        this.limitPanes(id);
+        switch (method) {
+          case "panes.focus": return panes.focus(pid(args[0])).then(() => {});
+          case "panes.send": {
+            const mode = args[2] === undefined || args[2] === null ? "prompt" : args[2];
+            if (mode !== "prompt" && mode !== "steer" && mode !== "follow_up") throw new LocalizedError(t("잘못된 전송 방식"));
+            return panes.send(pid(args[0]), string(args[1], 16000), mode).then(() => {});
+          }
+          case "panes.abort": return panes.abort(pid(args[0])).then(() => {});
+          case "panes.split": {
+            const o = args[2] === undefined || args[2] === null ? {} : object(args[2]);
+            if (o.kind !== undefined && o.kind !== "session" && o.kind !== "terminal") throw new LocalizedError(t("kind는 session 또는 terminal이어야 합니다"));
+            return panes.split(pid(args[0]), edge(args[1]), o.kind === "terminal" ? "terminal" : "session", o.focus === true).then(alive).then(newId => ({ id: newId }));
+          }
+          case "panes.move": return panes.move(pid(args[0]), pid(args[1]), edge(args[2])).then(() => {});
+          case "panes.swap": return panes.swap(pid(args[0]), pid(args[1])).then(() => {});
+          case "panes.resize": {
+            const ratio = Number(args[1]);
+            if (!Number.isFinite(ratio) || ratio < 0.1 || ratio > 0.9) throw new LocalizedError(t("비율은 0.1~0.9여야 합니다"));
+            return panes.resize(pid(args[0]), ratio).then(() => {});
+          }
+          case "panes.leave": return panes.leave(pid(args[0])).then(() => {});
+          case "panes.close": return panes.close(pid(args[0])).then(() => {});
+          default: return panes.zoom(args[0] === null || args[0] === undefined ? null : pid(args[0])).then(() => {});
+        }
+      }
       case "tools.registerRenderer": {
         this.require(id, "tools"); const toolName = string(args[0], 64); const token = string(args[1], 40);
         if (!/^[A-Za-z0-9_-]+$/.test(toolName)) throw new LocalizedError(t("잘못된 도구 이름"));
@@ -1140,6 +1188,12 @@ export class ExtensionHost {
     const recent = (this.sessionCalls.get(id) ?? []).filter(at => Date.now() - at < 10000);
     if (recent.length >= 5) throw new LocalizedError(t("대화 제어는 10초에 최대 5번입니다"));
     this.sessionCalls.set(id, [...recent, Date.now()]);
+  }
+  /** Pane control moves real UI and starts real work: 30 changes per 10 seconds per extension. */
+  private limitPanes(id: string) {
+    const recent = (this.paneCalls.get(id) ?? []).filter(at => Date.now() - at < 10000);
+    if (recent.length >= 30) throw new LocalizedError(t("패널 제어는 10초에 최대 30번입니다"));
+    this.paneCalls.set(id, [...recent, Date.now()]);
   }
   /** Hands an event from a server extension to every extension that subscribed with `sdk.server.on`. */
   emitServer(event: ServerExtensionEvent) {
