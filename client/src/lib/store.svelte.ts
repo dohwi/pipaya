@@ -1536,7 +1536,11 @@ class AppStore {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
     if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
-    await this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id));
+    // Swap layout and focus in the same tick, and only then close the old session: the screen never passes through a
+    // state where the focused session is gone or outside its group (that made the whole app flash).
+    const saving = this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id));
+    const opening = this.openSession(made.id);
+    await Promise.all([saving, opening]);
     void this.refreshGroups(); // the server is the authority on who is in which group
     // The replaced session leaves the active list instead of dropping out of the group as a loose session.
     try {
@@ -1548,7 +1552,6 @@ class AppStore {
     } catch (e) {
       this.fail(e, t("닫지 못했습니다"));
     }
-    await this.openSession(made.id);
   }
 
   /** Focus a session (showing its group if it has one). */
