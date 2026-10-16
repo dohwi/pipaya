@@ -24,3 +24,10 @@ describe("push message", () => {
     expect(m.android).toBeUndefined(); expect(m.apns.payload.aps.threadId).toBe("s1");
   });
 });
+
+import { fcmClearMessage } from "../src/push.ts";
+test("the clear message is data-only, so Android hands it to the app instead of showing it", () => {
+  const m = fcmClearMessage("tok", "s1");
+  expect(m).not.toHaveProperty("notification");
+  expect(m.data).toEqual({ type: "clear", sessionId: "s1" });
+});

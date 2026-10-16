@@ -36,6 +36,9 @@ export function nativePushAdapter(): NativePushAdapter | undefined {
       document.addEventListener("visibilitychange", update);
       return () => document.removeEventListener("visibilitychange", update);
     },
+    async clear(sessionIds) {
+      if (sessionIds.length) await invoke("plugin:pipaya-push|clear_notifications", { sessionIds });
+    },
     async onTap(handler) {
       const update = () => { void invoke<{ sessionId?: string; notificationId?: string }>("plugin:pipaya-push|pending_tap").then(data => { if (data?.sessionId) handler(data); }).catch(() => {}); };
       document.addEventListener("visibilitychange", update); window.addEventListener("focus", update); update();

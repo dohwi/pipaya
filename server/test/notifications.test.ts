@@ -109,6 +109,24 @@ describe("notification policy", () => {
     bus.publish("s", "run_finished", { status: "ok" }); service.removeRules("ext");
     await pause(); expect(calls).toBe(0);
   });
+  test("reading a pushed session on another device withdraws the phone's notification, once", async () => {
+    const cleared: string[] = [];
+    const { service } = setup({ fcm: { send: async () => "sent", clear: async (token, sid) => { cleared.push(`${token}:${sid}`); return "sent"; } } });
+    service.heartbeat("phone", presence("android"), { provider: "fcm", token: "p" }); service.send("a", { title: "done", sessionId: "s1", kind: "task_completed" });
+    await pause();
+    service.heartbeat("pc", { ...presence("desktop", true), visibleSessionIds: ["s2"] }); await pause(); expect(cleared).toEqual([]);
+    service.heartbeat("pc", { ...presence("desktop", true), visibleSessionIds: ["s1"] }); await pause(); expect(cleared).toEqual(["p:s1"]);
+    service.heartbeat("pc", { ...presence("desktop", true), visibleSessionIds: ["s1"] }); await pause(); expect(cleared).toEqual(["p:s1"]);
+  });
+  test("the phone that read the session is not asked to clear it, and a new run withdraws a finished notice", async () => {
+    const cleared: string[] = [];
+    const { service, bus, advance } = setup({ fcm: { send: async () => "sent", clear: async (_t, sid) => { cleared.push(sid); return "sent"; } } });
+    service.heartbeat("phone", presence("android"), { provider: "fcm", token: "p" }); service.send("a", { title: "done", sessionId: "s1", kind: "task_completed" }); await pause();
+    service.heartbeat("phone", { ...presence("android", true), visibleSessionIds: ["s1"] }); await pause(); expect(cleared).toEqual([]);
+    advance(); service.heartbeat("phone", presence("android"), { provider: "fcm", token: "p" });
+    service.send("a", { title: "again", sessionId: "s1", key: "k2", kind: "task_completed" }); await pause();
+    bus.publish("s1", "run_started", {}); await pause(); expect(cleared).toEqual(["s1"]);
+  });
   test("a phone that can be pushed is pushed at once, not after waiting for a local notification it may be too frozen to show", async () => {
     const sent: string[] = []; const { service, events } = setup({ fcm: { send: async token => { sent.push(token); return "sent"; } } });
     service.heartbeat("phone", presence("android"), { provider: "fcm", token: "phone" });

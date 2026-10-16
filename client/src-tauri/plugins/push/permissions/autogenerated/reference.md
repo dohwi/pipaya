@@ -11,6 +11,7 @@ Native push registration and tap metadata for the trusted host
 - `allow-download-apk`
 - `allow-update-progress`
 - `allow-install-apk`
+- `allow-clear-notifications`
 
 ## Permission Table
 
@@ -202,4 +203,30 @@ Denies the update_progress command without any pre-configured scope.
 
 </td>
 </tr>
+<tr>
+<td>
+
+`pipaya-push:allow-clear-notifications`
+
+</td>
+<td>
+
+Enables the clear_notifications command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`pipaya-push:deny-clear-notifications`
+
+</td>
+<td>
+
+Denies the clear_notifications command without any pre-configured scope.
+
+</td>
+</tr>
+
 </table>

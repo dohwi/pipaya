@@ -22,7 +22,11 @@ export function wording(p: { title: string; body?: string; facts?: BuiltinFacts 
 }
 export interface NotificationPayload extends NotificationInput { id: string; at: number; source: string }
 export interface NotificationRule { event: "run_finished" | "approval_requested"; title: string; body?: string }
-export interface PushTransport { send(token: string, payload: NotificationPayload, platform: DevicePlatform): Promise<"sent" | "invalid"> }
+export interface PushTransport {
+  send(token: string, payload: NotificationPayload, platform: DevicePlatform): Promise<"sent" | "invalid">;
+  /** Silently asks a phone to take this session's notification out of its notification shade. Android only. */
+  clear?(token: string, sessionId: string, platform: DevicePlatform): Promise<"sent" | "invalid">;
+}
 export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
 /** Server-side defaults are English; the desktop/web client shows its own translation for these kinds (see client notifications.ts). */
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
@@ -41,6 +45,8 @@ const DIRECT_PUSH_GRACE_MS = 1_000;
 const MOBILE_FOCUS_MS = 25_000;
 /** An escalation that came due this long ago (the server was down) is stale news, not worth a push. */
 const STALE_ESCALATION_MS = 10 * 60_000;
+/** A phone notification older than this is left to the user: the push is no longer worth tracking. */
+const CLEAR_WINDOW_MS = 24 * 60 * 60_000;
 
 /** A push waiting to go out. `first`: is a live device going to show it? `escalate`: it was shown on a PC; send to the phone if nobody looks. */
 interface Pending { payload: NotificationPayload; target: DevicePlatform | null; phase: "first" | "escalate"; looksAtStart: number }
@@ -54,6 +60,8 @@ export class NotificationService {
   private looks = 0;
   private pending = new Set<Promise<unknown>>();
   private receipts = new Set<string>();
+  /** Sessions a phone was pushed about, so reading one elsewhere can take it out of the phone's shade again. */
+  private pushed = new Map<string, number>();
   private rates = new Map<string, number[]>();
   private unsubscribe: () => void;
   /**
@@ -82,7 +90,7 @@ export class NotificationService {
   get providers() { return Object.keys(this.push) as PushProvider[]; }
   get pushConfigured() { return this.providers.length > 0; }
   heartbeat(id: string, presence: DevicePresence, registration?: PushRegistration | null) {
-    if (presence.focused) this.looks++;
+    if (presence.focused) { this.looks++; this.clearPushed(presence.visibleSessionIds, id); }
     for (const [key, p] of this.presence) if (this.now() - p.at >= LEASE_MS) this.presence.delete(key);
     if (this.presence.size >= 100 && !this.presence.has(id)) throw new Error("live device limit reached");
     if (presence.platform === "desktop" || presence.platform === "web") {
@@ -224,13 +232,33 @@ export class NotificationService {
         const transport = this.push[device.provider];
         if (!transport) continue;
         const text = wording(payload, toLang(device.lang));
-        if (await transport.send(device.token, { ...payload, ...text, facts: undefined }, device.platform) === "invalid") this.db.query("UPDATE notification_devices SET token = NULL WHERE id = ? AND token = ?").run(device.id, device.token);
+        const result = await transport.send(device.token, { ...payload, ...text, facts: undefined }, device.platform);
+        if (result === "invalid") this.db.query("UPDATE notification_devices SET token = NULL WHERE id = ? AND token = ?").run(device.id, device.token);
+        else if (payload.sessionId) this.pushed.set(payload.sessionId, this.now());
       } catch { /* Never leak tokens into logs or interrupt agent runs. Retry on the next notification. */ }
     }
   }
+  /**
+   * The sessions were looked at on `reader`: the phones that were pushed about them drop those notifications.
+   * The reader itself is left out, since it clears its own shade. Each push is withdrawn once.
+   */
+  private clearPushed(sessionIds: string[], reader: string | null) {
+    for (const [sid, at] of this.pushed) if (this.now() - at > CLEAR_WINDOW_MS) this.pushed.delete(sid);
+    const ids = sessionIds.filter(sid => this.pushed.delete(sid));
+    if (!ids.length || !this.pushConfigured) return;
+    const devices = this.db.query("SELECT id, token, platform, provider FROM notification_devices WHERE platform = 'android' AND token IS NOT NULL").all() as { id: string; token: string; platform: DevicePlatform; provider: PushProvider }[];
+    for (const device of devices) {
+      if (device.id === reader) continue;
+      const clear = this.push[device.provider]?.clear;
+      if (!clear) continue;
+      for (const sid of ids) this.track((async () => {
+        try { if (await clear.call(this.push[device.provider], device.token, sid, device.platform) === "invalid") this.db.query("UPDATE notification_devices SET token = NULL WHERE id = ? AND token = ?").run(device.id, device.token); } catch { /* best effort: a notification left in the shade is harmless */ }
+      })());
+    }
+  }
   private onEvent(e: PipayaEvent) {
-    if (e.type === "approval_resolved") this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "approval_required");
-    if (e.type === "run_started") this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? ""));
+    if (e.type === "approval_resolved") { this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "approval_required"); if (e.sessionId) this.clearPushed([e.sessionId], null); }
+    if (e.type === "run_started") { this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? "")); if (e.sessionId) this.clearPushed([e.sessionId], null); }
     if (!e.sessionId || !["run_finished", "approval_requested"].includes(e.type)) return;
     const data = e.data as { status?: string };
     if (data.status === "aborted") return;

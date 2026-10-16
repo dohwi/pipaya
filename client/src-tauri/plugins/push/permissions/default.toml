@@ -1,3 +1,3 @@
 [default]
 description = "Native push registration and tap metadata for the trusted host"
-permissions = ["allow-register", "allow-pending-tap", "allow-set-system-bars", "allow-device-name", "allow-download-apk", "allow-update-progress", "allow-install-apk"]
+permissions = ["allow-register", "allow-pending-tap", "allow-set-system-bars", "allow-device-name", "allow-download-apk", "allow-update-progress", "allow-install-apk", "allow-clear-notifications"]

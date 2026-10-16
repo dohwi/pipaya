@@ -11,6 +11,8 @@ export interface PushRegistration { provider: "fcm" | "apns"; token: string }
 export interface NativePushAdapter {
   register(): Promise<PushRegistration | null>;
   onTokenChanged(handler: (registration: PushRegistration) => void): Promise<() => void>;
+  /** Takes these sessions' notifications out of the phone's notification shade. */
+  clear?(sessionIds: string[]): Promise<void>;
   onTap(handler: (data: { sessionId?: string; notificationId?: string }) => void): Promise<() => void>;
 }
 const isWindows = (): boolean => /Windows/i.test(navigator.userAgent);
@@ -177,9 +179,17 @@ export class NotificationClient {
   revoked(deviceId: string) {
     if (deviceId === this.id && this.api) this.revokedOn = this.api;
   }
+  /** A session was opened or marked read here: clear its notification from this phone now, and tell the server so other phones follow. */
+  read(sessionId: string) {
+    if (!attended()) return;
+    void this.native?.clear?.([sessionId]).catch(() => {});
+    void this.heartbeat();
+  }
   async heartbeat() {
     const api = this.api;
     if (!api || api === this.revokedOn) return;
+    // Looking at a session reads it: its notification in this phone's shade goes away (other devices are told by the server).
+    if (attended()) void this.native?.clear?.(this.visible().slice(0, 20)).catch(() => {});
     try {
       await api.notificationPresence(this.id, { platform: notificationPlatform(), focused: attended(), enabled: this.enabled && await this.permission() === "granted", visibleSessionIds: this.visible().slice(0, 20), lang: getLang(), ...await this.identity(), ...(this.registration === undefined ? {} : { push: this.registration }) });
     } catch { /* older/offline server: notifications do not break the app */ }

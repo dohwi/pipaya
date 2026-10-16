@@ -35,6 +35,11 @@ class DownloadArgs {
     var url: String = ""
 }
 
+@InvokeArg
+class ClearArgs {
+    var sessionIds: Array<String> = emptyArray()
+}
+
 @TauriPlugin
 class PushPlugin(private val activity: Activity) : Plugin(activity) {
     private var tap: JSObject? = null
@@ -53,6 +58,12 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
         val current = tap
         tap = null
         invoke.resolve(current ?: JSObject())
+    }
+    /** The session was read in the app: its notification in the shade has served its purpose. */
+    @Command
+    fun clearNotifications(invoke: Invoke) {
+        for (id in invoke.parseArgs(ClearArgs::class.java).sessionIds) clearSession(activity, id)
+        invoke.resolve()
     }
     /** The bar behind the clock and battery takes the app's own background, and its icons turn light or dark to stay readable. */
     @Command
@@ -190,6 +201,10 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
          * a new id rather than editing an old one.
          */
         const val CHANNEL_ID = "pipaya_alerts"
+        /** Pushes carry the session id as their tag (see the server's push.ts), so the tag finds them. FCM posts them with id 0. */
+        fun clearSession(context: Context, sessionId: String) {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(sessionId, 0)
+        }
         fun createChannel(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

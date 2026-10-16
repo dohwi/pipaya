@@ -23,6 +23,11 @@ export function fcmMessage(token: string, payload: Payload, platform: Platform) 
   };
 }
 
+/** A silent, data-only message: the Android app's push service takes the session's notification out of the shade. */
+export function fcmClearMessage(token: string, sessionId: string) {
+  return { token, data: { type: "clear", sessionId }, android: { priority: "high" as const, ttl: 3_600_000 } };
+}
+
 /** FCM supports Android and iOS (when Firebase has an APNs key). Direct APNs can be injected separately. */
 export function createPushTransports(enabled: boolean): { transports: PushTransports; close(): Promise<void> } {
   if (!enabled) return { transports: {}, close: async () => {} };
@@ -35,17 +40,19 @@ export function createPushTransports(enabled: boolean): { transports: PushTransp
   // No credentials (a fresh install without a Firebase key): stay off, so pushConfigured does not claim a push that cannot be sent.
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || !existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) return { transports: {}, close: async () => {} };
   const app: App = initializeApp({ credential: applicationDefault() }, `pipaya-${crypto.randomUUID()}`);
+  const deliver = async (message: Parameters<ReturnType<typeof getMessaging>["send"]>[0]) => {
+    try {
+      await getMessaging(app).send(message);
+      return "sent" as const;
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") return "invalid" as const;
+      throw new Error("push delivery failed");
+    }
+  };
   const fcm: PushTransport = {
-    async send(token, payload, platform) {
-      try {
-        await getMessaging(app).send(fcmMessage(token, payload, platform));
-        return "sent";
-      } catch (error) {
-        const code = (error as { code?: string }).code;
-        if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") return "invalid";
-        throw new Error("push delivery failed");
-      }
-    },
+    send: (token, payload, platform) => deliver(fcmMessage(token, payload, platform)),
+    clear: (token, sessionId) => deliver(fcmClearMessage(token, sessionId)),
   };
   return { transports: { fcm }, close: async () => { const { deleteApp } = await import("firebase-admin/app"); await deleteApp(app); } };
 }

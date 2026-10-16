@@ -1393,6 +1393,7 @@ class AppStore {
     write(this.activeKey, id);
     delete this.unread[id];
     delete this.failed[id];
+    notifications.read(id);
     const cwd = this.sessions.find((s) => s.id === id)?.cwd;
     if (cwd) this.setWorkdir(this.relPath(cwd));
     this.sidebar.open = false;
@@ -1448,8 +1449,10 @@ class AppStore {
   markSeen() {
     const id = this.activeId;
     if (!id || !this.attended()) return;
-    if (this.unread[id]) delete this.unread[id];
-    if (this.failed[id]) delete this.failed[id];
+    if (!this.unread[id] && !this.failed[id]) return;
+    delete this.unread[id];
+    delete this.failed[id];
+    notifications.read(id);
   }
 
   /* ---------- commands ---------- */

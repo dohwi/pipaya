@@ -117,9 +117,27 @@ async fn install_apk<R: Runtime>(_app: tauri::AppHandle<R>) -> Result<serde_json
     }
 }
 
+/// Takes the given sessions' notifications out of the notification shade (Android).
+#[tauri::command]
+async fn clear_notifications<R: Runtime>(_app: tauri::AppHandle<R>, session_ids: Vec<String>) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return _app
+        .state::<Push<R>>()
+        .0
+        .run_mobile_plugin_async::<serde_json::Value>("clearNotifications", serde_json::json!({ "sessionIds": session_ids }))
+        .await
+        .map(|_| ())
+        .map_err(|_| "Clearing notifications unavailable".to_string());
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = session_ids;
+        Ok(())
+    }
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("pipaya-push")
-        .invoke_handler(tauri::generate_handler![register, pending_tap, set_system_bars, device_name, download_apk, update_progress, install_apk])
+        .invoke_handler(tauri::generate_handler![register, pending_tap, set_system_bars, device_name, download_apk, update_progress, install_apk, clear_notifications])
         .setup(|_app, _api| {
             #[cfg(target_os = "android")]
             _app.manage(Push(
