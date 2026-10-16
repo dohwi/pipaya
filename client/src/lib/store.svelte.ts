@@ -2161,16 +2161,31 @@ class AppStore {
     if (this.activeId === id) this.leave(next);
   }
 
-  /** Server-side default names are English; a group made here gets one in the UI language. */
-  private nextGroupName(): string {
+  /**
+   * Name a new group after its sessions' working folders: `pipaya` when they all share one,
+   * `pipaya / pipaya-wiki` when they differ. Falls back to "Group N" when no folder is known.
+   */
+  private nextGroupName(layout: Layout): string {
+    const dirs: string[] = [];
+    for (const id of panesOf(layout)) {
+      const cwd = this.session(id)?.cwd.replace(/\/+$/, "");
+      const dir = cwd ? (cwd.split("/").pop() ?? "") : "";
+      if (dir && !dirs.includes(dir)) dirs.push(dir);
+    }
     const taken = new Set(this.groups.map((g) => g.name));
+    if (dirs.length) {
+      const shown = dirs.length > 3 ? [...dirs.slice(0, 3), `+${dirs.length - 3}`] : dirs;
+      const base = shown.join(" / ");
+      if (!taken.has(base)) return base;
+      for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
+    }
     for (let n = 1; ; n++) if (!taken.has(t("그룹 {n}", { n }))) return t("그룹 {n}", { n });
   }
 
   async createGroup(layout: Layout, name?: string): Promise<Group | null> {
     if (!this.api) return null;
     try {
-      const g = await this.api.createGroup({ layout, name: name || this.nextGroupName() });
+      const g = await this.api.createGroup({ layout, name: name || this.nextGroupName(layout) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
       // the server moved these sessions out of any group they were in
       await this.refreshGroups();
