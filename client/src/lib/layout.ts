@@ -135,6 +135,25 @@ export function moveDividers(l: Layout, paths: Path[], pos: number): Layout {
 }
 
 /**
+ * Where a divider that was just let go should end up: pulled onto the line of another divider running the same way
+ * when that is within `threshold` (fraction of the group). Lines left slightly apart would not count as one cross, and
+ * the pieces of a line could then no longer be told apart. Returns `pos` when nothing is near.
+ */
+export function alignPosition(l: Layout, paths: Path[], pos: number, threshold = 0.02): number {
+	const all = measure(l).dividers;
+	const me = all.find((d) => paths.some((p) => same(d.path, p)));
+	if (!me) return pos;
+	let best = pos;
+	let gap = threshold;
+	for (const d of all) {
+		if (d.dir !== me.dir || paths.some((p) => same(d.path, p))) continue;
+		const g = positionOf(d);
+		if (Math.abs(g - pos) <= gap) ((best = g), (gap = Math.abs(g - pos)));
+	}
+	return best;
+}
+
+/**
  * Pull `pos` onto a guide when it is within `threshold` (fraction of the group): the centre of the group or of the
  * divided area, quarters and thirds, and the lines of other dividers running the same way (to line things up).
  */

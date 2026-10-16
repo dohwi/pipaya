@@ -2,7 +2,7 @@
 	import { t } from "../lib/i18n";
 	import Pane from "./Pane.svelte";
 	import { app } from "../lib/store.svelte";
-	import { isolate, linkedDividers, measure, moveDividers, positionOf, snapPosition, type Divider, type Layout, type Path } from "../lib/layout";
+	import { alignPosition, isolate, linkedDividers, measure, moveDividers, positionOf, snapPosition, type Divider, type Layout, type Path } from "../lib/layout";
 	import type { Group } from "../lib/types";
 
 	let { group }: { group: Group } = $props();
@@ -112,7 +112,13 @@
 		active = null;
 		grab = null;
 		document.body.style.userSelect = "";
-		if (live && moved) void app.saveLayout(group.id, live);
+		if (live && moved) {
+			// Line it up with a divider it nearly meets, so the pieces of that line stay separate.
+			const paths = linked.length ? linked : [dragPath];
+			const d = find(live, dragPath);
+			if (d) live = moveDividers(live, paths, alignPosition(live, paths, positionOf(d)));
+			void app.saveLayout(group.id, live);
+		}
 		moved = false;
 		live = null;
 		linked = [];

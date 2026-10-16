@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isolate, linkedDividers, positionOf, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
+import { alignPosition, isolate, linkedDividers, positionOf, moveDividers, snapPosition, measure, MAX_RATIO, MIN_RATIO, pair, pane, panesOf, place, remove, replaceSession, setRatio, splitAt, swap, worthKeeping, zoneAt, type Layout } from "../src/lib/layout";
 
 const split = (a: Layout, b: Layout, dir: "row" | "col" = "row", ratio = 0.5): Layout => ({ type: "split", dir, ratio, a, b });
 
@@ -288,5 +288,40 @@ describe("isolate on any layout", () => {
 				}
 			}
 		}
+	});
+});
+
+describe("alignPosition", () => {
+	const col = (a: Layout, b: Layout, ratio: number): Layout => ({ type: "split", dir: "col", ratio, a, b });
+	const row = (a: Layout, b: Layout, ratio = 0.5): Layout => ({ type: "split", dir: "row", ratio, a, b });
+	// A|D, B|E, C|F in thirds, with the right side's lower line `off` away from the left one.
+	const grid = (off: number) =>
+		row(col(pane("A"), col(pane("B"), pane("C"), 0.5), 1 / 3), col(pane("D"), col(pane("E"), pane("F"), (1 / 3 + off) / (2 / 3)), 1 / 3));
+	const lower = (l: Layout) => measure(l).dividers.filter((d) => d.dir === "col" && positionOf(d) > 0.5);
+
+	test("lines left slightly apart are not a cross: the lower pieces of the vertical line merge", () => {
+		const span = isolate(grid(0.015), [], 0.85)!.span;
+		expect(span[0]).toBeCloseTo(1 / 3);
+		expect(span[1]).toBeCloseTo(1);
+	});
+
+	test("a drop near another divider lands exactly on it", () => {
+		const l = grid(0.015);
+		const [left, right] = lower(l).sort((a, b) => a.area.x - b.area.x);
+		const pos = alignPosition(l, [right!.path], positionOf(right!));
+		expect(pos).toBeCloseTo(positionOf(left!));
+		const aligned = moveDividers(l, [right!.path], pos);
+		const pieces = [0.15, 0.5, 0.85].map((at) => isolate(aligned, [], at)!.span);
+		expect(pieces[1]![0]).toBeCloseTo(1 / 3);
+		expect(pieces[1]![1]).toBeCloseTo(2 / 3);
+		expect(pieces[2]![0]).toBeCloseTo(2 / 3);
+	});
+
+	test("far from every divider, or with none the same way, the position stays", () => {
+		const l = grid(0.2);
+		const [, right] = lower(l).sort((a, b) => a.area.x - b.area.x);
+		expect(alignPosition(l, [right!.path], positionOf(right!))).toBeCloseTo(positionOf(right!));
+		const one = row(pane("A"), pane("B"));
+		expect(alignPosition(one, [[]], 0.3)).toBe(0.3);
 	});
 });
