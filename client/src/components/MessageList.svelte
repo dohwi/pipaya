@@ -21,6 +21,11 @@
 
 	/** Pinned = parked at the bottom: follow the stream. Only real user intent (wheel/touch/keys/scrollbar drag) unpins. */
 	let stuck = true;
+	/** Browser scroll anchoring only while the user is reading above the bottom (see .scroller); pinned, we place the scroll ourselves. */
+	function setStuck(v: boolean) {
+		stuck = v;
+		if (scroller) scroller.style.overflowAnchor = v ? "none" : "auto";
+	}
 	let lastTop = 0;
 	let dragging = false;
 	/** A smooth scroll to the bottom (jump button) is in flight. */
@@ -43,7 +48,7 @@
 			// Not the user (they unpin first): the browser settled layout or clamped scrollTop. Stay at the bottom.
 			if (gap() > 1) pin();
 		} else if (gap() < 2 && scroller.scrollTop >= lastTop) {
-			stuck = true; // the user came back down to the end
+			setStuck(true); // the user came back down to the end
 		}
 		lastTop = scroller.scrollTop;
 		showJump = gap() >= NEAR;
@@ -51,7 +56,7 @@
 
 	function release() {
 		smoothing = false;
-		stuck = false;
+		setStuck(false);
 	}
 	let touchY = 0;
 	const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
@@ -69,7 +74,7 @@
 
 	export function toBottom(smooth = false) {
 		if (!scroller) return;
-		stuck = true;
+		setStuck(true);
 		if (smooth) {
 			smoothing = true;
 			scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
@@ -92,7 +97,7 @@
 		const n = chat.bottomRequest;
 		if (n === seenRequest) return;
 		seenRequest = n;
-		stuck = true;
+		setStuck(true);
 		void tick().then(() => {
 			toBottom();
 			// off-screen turns settle their real height afterwards; land exactly on the input again
@@ -230,7 +235,10 @@
 		overscroll-behavior: contain;
 		-webkit-overflow-scrolling: touch;
 		scroll-padding-bottom: 24px;
-		overflow-anchor: none; /* we pin ourselves; browser anchoring would fight it */
+		overflow-anchor: none;
+		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script). Scrolled up, anchoring must stay on:
+		   off-screen turns (content-visibility) swap their 160px estimate for the real height as they come into view, and without
+		   anchoring that shifts everything under the reader's eyes, so the list seemed to wobble up and down. */
 	}
 	.inner {
 		max-width: calc(var(--content-w) + 32px);

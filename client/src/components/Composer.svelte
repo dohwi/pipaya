@@ -63,19 +63,12 @@
 	}
 	export function setText(t: string) {
 		text = t;
-		queueMicrotask(resize);
-		ta?.focus();
+				ta?.focus();
 	}
 
-	function resize() {
-		if (!ta) return;
-		ta.style.height = "auto";
-		ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`;
-	}
-	$effect(() => {
-		text;
-		resize();
-	});
+	// The textarea's height is not measured in JS: the mirror layer shares its grid cell and sizes it (see .field-wrap).
+	// Collapsing the textarea to `auto` on every keystroke shrank the composer for a moment, which made the message list
+	// grow, clamp its scrollTop and jump (the flicker while typing long input).
 
 	// Publish the composer's top edge so floating UI (toasts) can sit above the input instead of over it.
 	$effect(() => {
@@ -247,7 +240,6 @@
 		queueMicrotask(() => {
 			ta?.focus();
 			ta?.setSelectionRange(next.caret, next.caret);
-			resize();
 		});
 	}
 	/** Replace the @token with the chosen path. Folders keep the menu open so the user can keep drilling down. */
@@ -386,7 +378,7 @@
 	function showHistory(value: string) {
 		histShown = value;
 		text = value;
-		queueMicrotask(() => { resize(); ta?.setSelectionRange(value.length, value.length); syncCaret(); });
+		queueMicrotask(() => { ta?.setSelectionRange(value.length, value.length); syncCaret(); });
 	}
 	/** Returns true when the key was used to move through the history. */
 	function browseHistory(e: KeyboardEvent): boolean {
@@ -729,13 +721,18 @@
 		min-height: 28px;
 	}
 	textarea {
+		grid-area: 1 / 1;
+		min-width: 0;
+		align-self: stretch;
+		height: 100%;
 		position: relative;
 		z-index: 1;
 	}
 	/* highlight layer behind the transparent textarea: same metrics, only `#imageN` tokens are tinted */
 	.mirror {
-		position: absolute;
-		inset: 0;
+		grid-area: 1 / 1;
+		min-width: 0;
+		max-height: 220px;
 		padding: 14px 18px 4px;
 		font-size: var(--fs-lg);
 		line-height: 1.5;
@@ -769,8 +766,11 @@
 	textarea::placeholder {
 		color: var(--text-faint);
 	}
+	/* mirror and textarea share one cell; the mirror (same metrics, trailing newline) is in flow and sets the height */
 	.field-wrap {
 		position: relative;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 	}
 	/* mirrors the textarea's first line so it reads as a placeholder */
 	.prompt-hint {
