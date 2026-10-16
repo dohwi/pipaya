@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { msg, t } from "../lib/i18n";
 	import { surfaceIn, surfaceOut } from "../lib/motion";
+	import { ACTIVITY_TONE, type Activity } from "../lib/activity";
+	import StatusDot from "./StatusDot.svelte";
 	let {
 		items,
 		index,
@@ -9,7 +11,7 @@
 		onpick,
 		onhover,
 	}: {
-		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; group?: string }[];
+		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; group?: string; state?: Activity }[];
 		index: number;
 		label?: string;
 		empty?: string;
@@ -40,7 +42,8 @@
 			onclick={() => onpick(i)}
 			onmousemove={() => onhover(i)}
 		>
-			<span class="n mono" class:skill={!!item.tag}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
+			{#if item.state && item.state !== "idle"}<StatusDot tone={ACTIVITY_TONE[item.state]} pulse={item.state === "working"} />{/if}
+			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={!!item.tag}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
 			<span class="d">{t(item.desc)}</span>
 			{#if item.tag}<span class="tag">{t(item.tag)}</span>{/if}
 			{#if item.current}<span class="current">{t("현재")}</span>{/if}
@@ -103,6 +106,11 @@
 	.n.skill {
 		color: var(--accent);
 	}
+	/* a session that is working / asking / done / failed: its name takes the same colour as its status elsewhere */
+	.n.act-info { color: var(--info); }
+	.n.act-warn { color: var(--warn); }
+	.n.act-ok { color: var(--ok); }
+	.n.act-danger { color: var(--danger); }
 	.tag {
 		margin-left: auto;
 		flex: none;

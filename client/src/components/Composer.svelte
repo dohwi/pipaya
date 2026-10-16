@@ -249,7 +249,7 @@
 			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
 		]
 		: memberMention
-			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션") }))
+			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션"), state: m.state }))
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
