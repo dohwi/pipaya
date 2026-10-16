@@ -12,7 +12,7 @@
 	import { activityOf, type Activity } from "../lib/activity";
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
-	import { dragSource, dropTarget } from "../lib/dnd.svelte";
+	import { drag, dragSource, dropTarget } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarBlocks, type DirBlock, type GroupBlock } from "../lib/nav";
@@ -45,7 +45,7 @@
 	}
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, gorder: string[] | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs" | "groups"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, gorder: string[] | undefined, terminals: TerminalInfo[], sorder: string[] | undefined): Pick<Node, "root" | "total" | "dirs" | "groups"> {
 		const { groups: all, dirs } = sidebarBlocks(
 			sessions,
 			groups,
@@ -55,6 +55,7 @@
 			gorder,
 			terminals,
 			(x) => !q || x.title.toLowerCase().includes(q),
+			sorder,
 		);
 		const blocks = all.filter((b) => b.sessions.length || b.terminals.length || !q);
 		const total = dirs.reduce((n, d) => n + d.sessions.length + d.terminals.length, 0) + blocks.reduce((n, b) => n + b.sessions.length + b.terminals.length, 0);
@@ -78,7 +79,7 @@
 							: "offline"
 				: ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.groupOrder[server.id], current ? app.terminals : (ov?.terminals ?? []));
+			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.groupOrder[server.id], current ? app.terminals : (ov?.terminals ?? []), app.sidebar.sessionOrder[server.id]);
 			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
 		});
 	});
@@ -152,6 +153,31 @@
 	const dropOnGroup = (groupId: string) => (id: string) => void app.addToGroup(id, groupId);
 	/** Let go on a session: they become a group right there (or it joins that session's group). */
 	const dropOnSession = (other: string) => (id: string) => void app.groupWith(id, other);
+	/* ---- reordering loose sessions of a directory by dragging them next to each other ---- */
+	/** the session row a carried session would land before / after (only among the loose sessions of one directory) */
+	let sessDrop = $state<{ id: string; after: boolean } | null>(null);
+	/** Over the top / bottom quarter of a row = put it there; over the middle = group with it. */
+	function edgeAt(pt: { x: number; y: number }): "before" | "after" | null {
+		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item")?.getBoundingClientRect();
+		if (!r) return null;
+		if (pt.y < r.top + r.height * 0.28) return "before";
+		if (pt.y > r.bottom - r.height * 0.28) return "after";
+		return null;
+	}
+	/** The edge a drag over row `x` means, when it is a reorder: both are loose sessions in the same list (`siblings`). */
+	const reorderEdge = (x: string, siblings: string[] | null, pt: { x: number; y: number }) =>
+		siblings && !searching && drag.id && drag.id !== x && siblings.includes(drag.id) && siblings.includes(x) ? edgeAt(pt) : null;
+	const rowHover = (x: string, siblings: string[] | null) => (pt: { x: number; y: number } | null) => {
+		const edge = pt ? reorderEdge(x, siblings, pt) : null;
+		sessDrop = edge ? { id: x, after: edge === "after" } : sessDrop?.id === x ? null : sessDrop;
+		if (pt && !edge) dropOn = x;
+		else if (dropOn === x) dropOn = null;
+	};
+	const rowDrop = (n: Node, x: string, siblings: string[] | null) => (id: string, pt: { x: number; y: number }) => {
+		const edge = reorderEdge(x, siblings, pt);
+		if (edge && siblings) app.sidebar.moveSession(n.server.id, siblings, id, x, edge === "after");
+		else void app.groupWith(id, x);
+	};
 	/* ---- reordering directories / groups by dragging their header ---- */
 	/** the block being carried (`kind:key`), and the one of the same kind it would land next to */
 	let dirDrag = $state<string | null>(null);
@@ -224,17 +250,19 @@
 </script>
 
 
-{#snippet row(n: Node, x: Session, nested: boolean)}
+{#snippet row(n: Node, x: Session, nested: boolean, siblings: string[] | null = null)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="item"
 		class:nested
 		class:active={n.current && x.id === app.activeId}
 		class:over={dropOn === x.id}
+		class:before={sessDrop?.id === x.id && !sessDrop.after}
+		class:after={sessDrop?.id === x.id && sessDrop.after}
 		class:grabbable={n.current && editing !== x.id}
 		class:menuopen={menuId === x.id}
 		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
-		use:dropTarget={{ accepts: (id) => n.current && id !== x.id, hover: hover(x.id), drop: dropOnSession(x.id) }}
+		use:dropTarget={{ accepts: (id) => n.current && id !== x.id, hover: rowHover(x.id, siblings), drop: rowDrop(n, x.id, siblings) }}
 	>
 		{#if n.current && editing === x.id}
 			<input
@@ -354,7 +382,7 @@
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
-								{#each d.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+								{#each d.sessions as x (x.id)}{@render row(n, x, true, d.sessions.map((s) => s.id))}{/each}
 								{#each d.terminals as x (x.id)}{@render termRow(n, x)}{/each}
 							</div>
 						{/if}
@@ -924,6 +952,25 @@
 	.dir.over {
 		border-color: var(--accent);
 		background: var(--accent-soft);
+	}
+	/* the line where a carried session would land among its siblings */
+	.item.before::before,
+	.item.after::after {
+		content: "";
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		height: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+		z-index: 1;
+		pointer-events: none;
+	}
+	.item.before::before {
+		top: -1px;
+	}
+	.item.after::after {
+		bottom: -1px;
 	}
 	/* the row being pulled onto: pairs up with whatever is dropped */
 	.item.over {

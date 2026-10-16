@@ -38,6 +38,8 @@
 				app.sidebar.dirOrder[server.id],
 				app.sidebar.groupOrder[server.id],
 				terminals,
+				undefined,
+				app.sidebar.sessionOrder[server.id],
 			);
 			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
 			const state: Record<string, Activity> = {};

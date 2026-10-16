@@ -25,6 +25,7 @@ export class SidebarState {
   folded = $state<string[]>(read<string[]>(K.folded, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   groupOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.groupOrder, {}));
+  sessionOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.sessionOrder, {}));
 
   /** `save` false while dragging the edge: persist once, at the end. */
   setWidth(px: number, save = true) {
@@ -48,6 +49,15 @@ export class SidebarState {
     if (!list) return;
     this.dirOrder = { ...this.dirOrder, [serverId]: list };
     write(K.dirOrder, this.dirOrder);
+  }
+
+  /** Put session `id` before/after `target` among the sessions of one directory (`visible`, as listed now). */
+  moveSession(serverId: string, visible: string[], id: string, target: string, after: boolean) {
+    const list = reorder(visible, id, target, after);
+    if (!list) return;
+    const rest = (this.sessionOrder[serverId] ?? []).filter((x) => !list.includes(x));
+    this.sessionOrder = { ...this.sessionOrder, [serverId]: [...rest, ...list] };
+    write(K.sessionOrder, this.sessionOrder);
   }
 
   /** Same for groups, by id. */

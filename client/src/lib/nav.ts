@@ -31,6 +31,7 @@ export function sidebarBlocks(
 	groupOrder: readonly string[] = [],
 	terminals: readonly TerminalInfo[] = [],
 	matchTerminal: (t: TerminalInfo) => boolean = () => true,
+	sessionOrder: readonly string[] = [],
 ): { groups: GroupBlock[]; dirs: DirBlock[] } {
 	const byId = new Map(sessions.map((s) => [s.id, s]));
 	const termById = new Map(terminals.map((t) => [t.id, t]));
@@ -61,6 +62,11 @@ export function sidebarBlocks(
 		if (list) list.push(t);
 		else termsBy.set(t.cwd, [t]);
 	}
+	// sessions placed by hand keep that order within their directory; the others (new ones) come first
+	if (sessionOrder.length) {
+		const srank = (s: Session) => sessionOrder.indexOf(s.id); // -1 (not placed yet) sorts first
+		for (const list of by.values()) list.sort((a, b) => srank(a) - srank(b)); // stable
+	}
 	const newest = (path: string, list: Session[]) => Math.max(0, ...list.map((s) => s.updatedAt), ...(termsBy.get(path) ?? []).map((t) => t.createdAt));
 	// directories the user has placed by hand keep that order; the others (new ones) come first, most recent first
 	const rank = (p: string) => dirOrder.indexOf(p);
@@ -84,8 +90,8 @@ export function sidebarBlocks(
 }
 
 /** Session ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
-export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], groupOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = []): string[] {
-	const { groups: gs, dirs } = sidebarBlocks(sessions, groups, undefined, undefined, dirOrder, groupOrder, terminals);
+export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], groupOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = [], sessionRank: readonly string[] = []): string[] {
+	const { groups: gs, dirs } = sidebarBlocks(sessions, groups, undefined, undefined, dirOrder, groupOrder, terminals, undefined, sessionRank);
 	const out: string[] = [];
 	const seen = new Set<string>();
 	for (const b of [...dirs.map((d) => [...d.sessions, ...d.terminals]), ...gs.map((g) => [...g.sessions, ...g.terminals])])

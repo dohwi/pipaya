@@ -1313,6 +1313,11 @@ class AppStore {
     return (this.serverId && this.sidebar.groupOrder[this.serverId]) || [];
   }
 
+  /** Hand-set order of loose sessions of the open server (empty = as the server lists them). */
+  get currentSessionOrder(): string[] {
+    return (this.serverId && this.sidebar.sessionOrder[this.serverId]) || [];
+  }
+
   async refreshWorkspace() {
     if (!this.api) return;
     try {
@@ -1384,7 +1389,7 @@ class AppStore {
       const inGroup = i < 0 ? undefined : (ids[i + 1] ?? ids[i - 1]);
       if (inGroup) return inGroup;
     }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentGroupOrder, this.terminals);
+    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentGroupOrder, this.terminals, this.currentSessionOrder);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
   }

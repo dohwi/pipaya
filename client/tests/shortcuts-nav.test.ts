@@ -299,3 +299,14 @@ describe("firstUnseen", () => {
 		expect(firstUnseen(order, (id) => id === "c", null)).toBe("c");
 	});
 });
+
+describe("hand-ordered sessions", () => {
+	const all = [sess("a", "/p", 3), sess("b", "/p", 2), sess("c", "/p", 1)];
+	test("a placed order wins inside a directory, and prev/next follows it", () => {
+		expect(sessionOrder(all, [], [], [], [], [])).toEqual(["a", "b", "c"]);
+		expect(sessionOrder(all, [], [], [], [], ["c", "a", "b"])).toEqual(["c", "a", "b"]);
+	});
+	test("sessions not placed yet come first", () => {
+		expect(sessionOrder(all, [], [], [], [], ["c", "b"])).toEqual(["a", "c", "b"]);
+	});
+});
