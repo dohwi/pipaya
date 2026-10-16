@@ -29,7 +29,7 @@ export const CustomProviderBody = Type.Object({
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
-	}), { minItems: 1, maxItems: 100 }),
+	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
 function thinkingMapFor(m: { id: string; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
@@ -45,6 +45,7 @@ export const DiscoverBody = Type.Object({
 	baseUrl: Type.String({ minLength: 1, maxLength: 2000 }),
 	api: CustomProviderBody.properties.api,
 	providerId: Type.Optional(Type.String({ description: "Existing connection whose stored API key is used for the request" })),
+	apiKey: Type.Optional(Type.String({ maxLength: 2000, description: "A key typed into the form but not saved yet; used instead of the stored one. Never stored or logged." })),
 }, { additionalProperties: false });
 export const DiscoverResult = Type.Object({ models: Type.Array(Type.Object({ id: Type.String(), name: Type.Optional(Type.String()) })) });
 export const Selection = Type.Object({ provider: Type.String({ minLength: 1 }), model: Type.String({ minLength: 1 }) }, { additionalProperties: false });
@@ -211,8 +212,8 @@ export class Configuration {
 		if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
 			throw badRequest("baseUrl must be HTTP(S) without embedded credentials, query or fragment");
 		}
-		const key = input.providerId ? (await this.credentials.read(input.providerId)) : undefined;
-		const apiKey = key?.type === "api_key" ? key.key : undefined;
+		const key = input.providerId && !input.apiKey?.trim() ? (await this.credentials.read(input.providerId)) : undefined;
+		const apiKey = input.apiKey?.trim() || (key?.type === "api_key" ? key.key : undefined);
 		const headers: Record<string, string> = { accept: "application/json" };
 		if (apiKey) {
 			if (input.api === "anthropic-messages") { headers["x-api-key"] = apiKey; headers["anthropic-version"] = "2023-06-01"; }
@@ -225,7 +226,7 @@ export class Configuration {
 		} catch {
 			throw badRequest("Could not reach the endpoint's /models. Check the URL and that the server is running.");
 		}
-		if (res.status === 401 || res.status === 403) throw badRequest("The endpoint rejected the request (401/403). Save the API key first, then try again.");
+		if (res.status === 401 || res.status === 403) throw badRequest("The endpoint rejected the request (401/403). Check the API key.");
 		if (!res.ok) throw badRequest(`The endpoint's /models answered ${res.status}. It may not offer a model list; add models by hand.`);
 		let body: any;
 		try { body = await res.json(); } catch { throw badRequest("The endpoint's /models did not return JSON."); }

@@ -204,7 +204,7 @@ export class Api {
 	/* ---------- model connection settings ---------- */
 	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
 	catalog = () => this.req<{ models: CatalogModel[] }>("GET", "/configuration/catalog");
-	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string }) =>
+	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string; apiKey?: string }) =>
 		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);
 	saveCustomProvider = (id: string, input: CustomProviderInput) =>
 		this.req<CustomProvider>("PUT", `/configuration/providers/${encodeURIComponent(id)}`, input);

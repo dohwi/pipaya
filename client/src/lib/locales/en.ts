@@ -299,7 +299,6 @@ export const en: Record<string, string> = {
 	"아래 코드를 입력하세요.": "Enter this code:",
 	"연결 해제": "Disconnect",
 	"로컬 모델 (서버 PC에서 실행 중인 것)": "Local models (running on the server machine)",
-	"모델을 하나 이상 추가하세요.": "Add at least one model.",
 	"{n}번째 모델의 ID를 입력하세요.": "Enter the ID of model #{n}.",
 	"{id}: 컨텍스트 크기는 128 이상의 정수여야 합니다.": "{id}: the context size must be an integer of at least 128.",
 	"{id}: 최대 출력은 1 이상의 정수여야 합니다.": "{id}: the max output must be an integer of at least 1.",
@@ -326,6 +325,7 @@ export const en: Record<string, string> = {
 	"모델 {n}개": "{n} {n#model|models}",
 	"실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)": "Sends one real model request (may incur charges)",
 	"확인 중…": "Checking…",
+	"모델이 없습니다. 모델을 추가해야 이 연결을 쓸 수 있습니다.": "No models yet. Add a model to use this connection.",
 	"테스트": "Test",
 	"성공": "Success",
 	"키 삭제": "Delete key",
@@ -356,6 +356,9 @@ export const en: Record<string, string> = {
 	"모델 ({n})": "Models ({n})",
 	"모델 추가": "Add model",
 	"저장 중…": "Saving…",
+	"모델 없이 저장": "Save without models",
+	"연결은 저장했지만 키를 저장하지 못했습니다: {error}": "The connection was saved, but the key could not be: {error}",
+	"저장하면 이 주소에서 모델 목록을 불러옵니다. 모델 설정은 연결을 만든 뒤 수정에서 바꿀 수 있습니다.": "Saving reads the model list from this address. Model settings can be changed in Edit once the connection exists.",
 	"선택\u0004optional": "optional",
 
 	/* ---- model picker ---- */

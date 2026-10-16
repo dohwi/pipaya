@@ -244,6 +244,12 @@
 							</div>
 
 							<div class="models">
+							{#if !p.models.length}
+								<div class="nomodels">
+									<span>{t("모델이 없습니다. 모델을 추가해야 이 연결을 쓸 수 있습니다.")}</span>
+									<button class="btn sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="plus" /> {t("모델 추가")}</button>
+								</div>
+							{:else}
 							<Accordion variant="text">
 							{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{/snippet}
 							<ul class="mlist">
@@ -269,6 +275,7 @@
 								{/each}
 							</ul>
 							</Accordion>
+							{/if}
 							</div>
 
 							<div class="actions">
@@ -319,6 +326,16 @@
 
 
 <style>
+	.nomodels {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		flex-wrap: wrap;
+		font-size: 0.85em;
+		color: var(--muted, inherit);
+	}
+
 	.mc {
 		display: flex;
 		flex-direction: column;

@@ -67,6 +67,8 @@
 		baseUrl: string;
 		api: ApiFormat;
 		authRequired: boolean;
+		/** Typed into a new connection; sent to the server only on save (never kept in the list). */
+		apiKey: string;
 		rows: Row[];
 	}
 
@@ -123,18 +125,20 @@
 	/* ---------- upstream model list ---------- */
 
 	let discovering = $state(false);
+	/** A new connection could not read its upstream model list: offer to save it without models. */
+	let discoverFailed = $state(false);
 	let discoverNote = $state("");
 	/** Fetch the upstream's own /models and add what is not listed yet. Fetched models keep their id fixed. */
-	async function discover() {
+	async function discover(): Promise<boolean> {
 		const a = api();
 		const f = form;
-		if (!a || !f) return;
+		if (!a || !f) return false;
 		formError = "";
 		discoverNote = "";
-		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
+		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요.")), false;
 		discovering = true;
 		try {
-			const [res] = await Promise.all([a.discoverModels({ baseUrl: f.baseUrl.trim(), api: f.api, ...(f.isNew ? {} : { providerId: f.id }) }), ensureCatalog()]);
+			const [res] = await Promise.all([a.discoverModels({ baseUrl: f.baseUrl.trim(), api: f.api, ...(f.isNew ? {} : { providerId: f.id }), ...(f.apiKey.trim() ? { apiKey: f.apiKey.trim() } : {}) }), ensureCatalog()]);
 			f.rows = f.rows.filter((r) => r.id.trim() || r.name.trim());
 			const have = new Set(f.rows.map((r) => r.id.trim()));
 			let added = 0;
@@ -150,10 +154,11 @@
 				f.rows.push(row);
 				added++;
 			}
-			if (!f.rows.length) f.rows.push(newRow());
 			discoverNote = added ? t("{n}개 모델을 불러왔습니다.", { n: added }) : t("새로 추가할 모델이 없습니다.");
+			return true;
 		} catch (e) {
 			formError = errorText(e);
+			return false;
 		} finally {
 			discovering = false;
 		}
@@ -187,6 +192,7 @@
 		void ensureCatalog();
 		formError = "";
 		discoverNote = "";
+		discoverFailed = false;
 		editing = null;
 		form = {
 			isNew: true,
@@ -196,10 +202,9 @@
 			baseUrl: preset?.baseUrl ?? "",
 			api: "openai-completions",
 			authRequired: false,
-			rows: [newRow()],
+			apiKey: "",
+			rows: [],
 		};
-		// Local servers list their installed models: fill them in right away (a failure just shows the hint).
-		if (preset) void discover();
 	}
 
 	function startEdit(p: CustomProvider) {
@@ -215,6 +220,7 @@
 			baseUrl: p.baseUrl,
 			api: p.api,
 			authRequired: p.authRequired,
+			apiKey: "",
 			rows: p.models.map((m) => ({
 				id: m.id,
 				name: m.name ?? "",
@@ -267,8 +273,13 @@
 		if (form.isNew && !form.idTouched) form.id = slug(v);
 	}
 
-	async function submit(e: SubmitEvent) {
+	function submit(e: SubmitEvent) {
 		e.preventDefault();
+		void save(false);
+	}
+
+	/** `withoutModels`: a new connection whose upstream has no readable model list is saved empty; models are added afterwards. */
+	async function save(withoutModels: boolean) {
 		const a = api();
 		const f = form;
 		if (!a || !f) return;
@@ -277,7 +288,14 @@
 		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
 		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
 		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
-		if (!f.rows.length) return void (formError = t("모델을 하나 이상 추가하세요."));
+		// A new connection is checked against its upstream first (endpoint + key); its models then come from there.
+		if (f.isNew && !withoutModels) {
+			busy = true;
+			const ok = await discover();
+			busy = false;
+			discoverFailed = !ok;
+			if (!ok) return;
+		}
 		const out = [];
 		for (const [i, r] of f.rows.entries()) {
 			const ctx = Number(r.contextWindow);
@@ -307,6 +325,17 @@
 		busy = true;
 		try {
 			await a.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: out });
+			if (f.isNew && f.authRequired && f.apiKey.trim()) {
+				try {
+					await a.setCredential(f.id, f.apiKey.trim());
+				} catch (err) {
+					// The connection exists now: stay in the dialog as an edit so the key can be added from the list.
+					f.isNew = false;
+					f.apiKey = "";
+					formError = t("연결은 저장했지만 키를 저장하지 못했습니다: {error}", { error: errorText(err) });
+					return;
+				}
+			}
 			onsaved();
 		} catch (err) {
 			formError = errorText(err);
@@ -469,8 +498,16 @@
 							</span>
 							<Switch checked={form.authRequired} label={t("API 키 필요")} describedby="auth-req-d" onchange={(on) => { if (form) form.authRequired = on; }} />
 						</div>
+						{#if form.isNew && form.authRequired}
+							<label in:collapseIn out:collapseOut>
+								<span>{t("API 키")}</span>
+								<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
+							</label>
+						{/if}
+						{#if form.isNew}<p class="note">{t("저장하면 이 주소에서 모델 목록을 불러옵니다. 모델 설정은 연결을 만든 뒤 수정에서 바꿀 수 있습니다.")}</p>{/if}
 					</section>
 
+					{#if !form.isNew}
 					<section class="fsec">
 						<div class="mhead">
 							<div class="mono-label">{t("모델 ({n})", { n: form.rows.length })}</div>
@@ -498,6 +535,7 @@
 						</div>
 						<button type="button" class="btn dashed" onclick={addModel}><Icon name="plus" /> {t("모델 추가")}</button>
 					</section>
+					{/if}
 				{/if}
 			</div>
 
@@ -508,7 +546,10 @@
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
 						<button type="button" class="btn ghost" onclick={close} disabled={busy}>{t("취소")}</button>
-						<button class="btn primary" disabled={busy}>{busy ? t("저장 중…") : t("저장")}</button>
+						{#if form.isNew && discoverFailed}
+							<button type="button" class="btn" onclick={() => void save(true)} disabled={busy}>{t("모델 없이 저장")}</button>
+						{/if}
+						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
 					{/if}
 				</div>
 			</footer>
