@@ -13,7 +13,9 @@ export const PUBLIC_PAIRING_PATH = "/pairing/redeem";
 export const isAdminOnlyPath = (method: string, path: string) =>
 	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
 	// Server extensions execute code in this process; a paired phone may use their methods but never reload them.
-	(path === "/server-extensions/reload" && method === "POST");
+	(path === "/server-extensions/reload" && method === "POST") ||
+	// Replacing the server's own code and restarting it is the owner's call alone.
+	path === "/server/update";
 
 export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing, devices: DeviceTokens): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();

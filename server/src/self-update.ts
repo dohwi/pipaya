@@ -1,0 +1,169 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { HttpError } from "./errors.ts";
+
+/**
+ * Lets a client update the server it is connected to: fetch the branch this checkout tracks, move the working tree to it,
+ * reinstall dependencies, then exit so the service manager (systemd `Restart=always`, launchd `KeepAlive`) starts the new code.
+ * It does the same as `install.sh update`, minus the service restart that would kill the server in the middle of replying.
+ *
+ * Only offered when something will bring the process back: a systemd/launchd service (detected from the environment they set),
+ * or `PIPAYA_SELF_UPDATE=1` for another supervisor (pm2, a container restart policy on a git checkout). `PIPAYA_SELF_UPDATE=0`
+ * switches it off. A Docker image, a compiled binary and a manual `bun src/index.ts` have no way back, so they report why.
+ */
+
+export interface RunResult {
+	code: number;
+	out: string;
+}
+export type Run = (cmd: string[], cwd: string, timeoutMs: number) => Promise<RunResult>;
+
+export type UnavailableReason = "disabled" | "unmanaged" | "not_git" | "detached" | "fetch_failed";
+
+export interface UpdateStatus {
+	/** The server can update itself and come back. */
+	managed: boolean;
+	reason?: UnavailableReason;
+	/** The branch this checkout tracks. */
+	ref: string | null;
+	current: string | null;
+	latest: string | null;
+	available: boolean;
+	checkedAt: number;
+}
+
+export interface SelfUpdateOptions {
+	/** Repository root (the directory with `.git`). */
+	root: string;
+	/** `<root>/server`, where dependencies are installed. */
+	serverDir: string;
+	env?: Record<string, string | undefined>;
+	run?: Run;
+	/** Reinstall dependencies; true on success. Replaceable in tests. */
+	install?: (serverDir: string) => Promise<boolean>;
+	/** Ask the process to exit so the supervisor restarts it. */
+	restart?: () => void;
+	/** Sessions that are mid-turn right now: a restart would cut them off. */
+	running?: () => number;
+	/** How long a check is reused. */
+	cacheMs?: number;
+	now?: () => number;
+}
+
+const LAUNCHD_LABEL = "app.pipaya.server";
+const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
+const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
+
+export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
+	try {
+		const proc = Bun.spawn(cmd, {
+			cwd,
+			stdout: "pipe",
+			stderr: "pipe",
+			env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+			timeout: timeoutMs,
+			killSignal: "SIGKILL",
+		});
+		const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+		return { code, out: (out + err).trim() };
+	} catch (e) {
+		return { code: 127, out: (e as Error).message };
+	}
+};
+
+const defaultInstall = (run: Run) => async (serverDir: string) =>
+	(await run([process.execPath, "install", "--frozen-lockfile", "--production", "--silent"], serverDir, 5 * 60_000)).code === 0;
+
+export class SelfUpdater {
+	private readonly env: Record<string, string | undefined>;
+	private readonly run: Run;
+	private readonly install: (serverDir: string) => Promise<boolean>;
+	private readonly now: () => number;
+	private readonly cacheMs: number;
+	private cached: UpdateStatus | null = null;
+	private applying = false;
+
+	constructor(private readonly o: SelfUpdateOptions) {
+		this.env = o.env ?? process.env;
+		this.run = o.run ?? defaultRun;
+		this.install = o.install ?? defaultInstall(this.run);
+		this.now = o.now ?? Date.now;
+		this.cacheMs = o.cacheMs ?? 5 * 60_000;
+	}
+
+	/** Why the server could not come back after an update, or null when it can. */
+	private unmanagedReason(): UnavailableReason | null {
+		const flag = this.env.PIPAYA_SELF_UPDATE;
+		if (flag === "0") return "disabled";
+		if (!existsSync(join(this.o.root, ".git"))) return "not_git";
+		if (flag === "1") return null;
+		const supervised = Boolean(this.env.INVOCATION_ID) || this.env.XPC_SERVICE_NAME === LAUNCHD_LABEL;
+		return supervised ? null : "unmanaged";
+	}
+
+	private git(args: string[], timeoutMs = 30_000) {
+		return this.run(["git", ...args], this.o.root, timeoutMs);
+	}
+
+	async status(refresh = false): Promise<UpdateStatus> {
+		if (!refresh && this.cached && this.now() - this.cached.checkedAt < this.cacheMs) return this.cached;
+		const checkedAt = this.now();
+		const none = (reason: UnavailableReason, extra: Partial<UpdateStatus> = {}): UpdateStatus =>
+			(this.cached = { managed: false, reason, ref: null, current: null, latest: null, available: false, checkedAt, ...extra });
+
+		const reason = this.unmanagedReason();
+		if (reason) return none(reason);
+
+		const branch = await this.git(["symbolic-ref", "--short", "-q", "HEAD"]);
+		const ref = branch.out.split("\n")[0]?.trim() ?? "";
+		// A pinned tag or commit is a deliberate choice: do not move it.
+		if (branch.code !== 0 || !REF_PATTERN.test(ref)) return none("detached");
+
+		const head = await this.git(["rev-parse", "HEAD"]);
+		const current = head.code === 0 && SHA_PATTERN.test(head.out) ? head.out : null;
+		if (!current) return none("not_git", { ref });
+
+		const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", ref], 60_000);
+		const tip = fetched.code === 0 ? await this.git(["rev-parse", "FETCH_HEAD"]) : null;
+		const latest = tip && tip.code === 0 && SHA_PATTERN.test(tip.out) ? tip.out : null;
+		if (!latest) return none("fetch_failed", { ref, current });
+		return (this.cached = { managed: true, ref, current, latest, available: latest !== current, checkedAt });
+	}
+
+	/** Moves to the newest commit and asks the process to restart. Throws HttpError with a reason the client can show. */
+	async apply(force = false): Promise<{ from: string; to: string }> {
+		if (this.applying) throw new HttpError(409, "update_in_progress", "an update is already running");
+		this.applying = true;
+		try {
+			const st = await this.status(true);
+			if (!st.managed || !st.current) {
+				throw new HttpError(400, "update_unavailable", `this server cannot update itself (${st.reason ?? "unknown"})`);
+			}
+			if (!st.available || !st.latest) throw new HttpError(409, "up_to_date", "the server is already up to date");
+			const busy = this.o.running?.() ?? 0;
+			if (busy > 0 && !force) {
+				throw new HttpError(409, "sessions_running", `${busy} session(s) are running; a restart would interrupt them`);
+			}
+
+			const moved = await this.git(["reset", "--hard", "--quiet", st.latest]);
+			const ready = moved.code === 0 && existsSync(join(this.o.serverDir, "src", "index.ts")) && (await this.install(this.o.serverDir));
+			if (!ready) {
+				// Leave the working tree as it was; a half-updated checkout would not start.
+				await this.git(["reset", "--hard", "--quiet", st.current]);
+				await this.install(this.o.serverDir);
+				this.cached = null;
+				throw new HttpError(502, "update_failed", "the update could not be installed; the previous version was restored");
+			}
+			this.cached = null;
+			this.o.restart?.();
+			return { from: st.current, to: st.latest };
+		} finally {
+			this.applying = false;
+		}
+	}
+}
+
+/** Exit through the normal SIGTERM path (index.ts closes sockets first) a moment after the reply has been sent. */
+export const restartSoon = () => {
+	setTimeout(() => process.kill(process.pid, "SIGTERM"), 400).unref?.();
+};

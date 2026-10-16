@@ -30,6 +30,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ThinkingLevel,
 } from "./types";
 import { t } from "./i18n";
+import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, type ServerUpdateStatus, type ServerVersions } from "./protocol";
 
 export class ApiError extends Error {
 	constructor(
@@ -94,6 +95,7 @@ export class Api {
 				signal,
 				headers: {
 					Authorization: `Bearer ${this.conn.token}`,
+					[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
 					...(body !== undefined ? { "Content-Type": "application/json" } : {}),
 				},
 				body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -134,8 +136,13 @@ export class Api {
 	async health(signal?: AbortSignal) {
 		const res = await fetch(`${this.conn.baseUrl}/health`, { signal });
 		if (!res.ok) throw new ApiError(res.status, "http_error", res.statusText);
-		return (await res.json()) as { ok: boolean; uptimeMs: number; runningSessions: number; subscribers: number };
+		return (await res.json()) as { ok: boolean; uptimeMs?: number; runningSessions?: number; subscribers?: number } & ServerVersions;
 	}
+
+	/** Is there a newer server build, and can this server update itself? (admin token only) */
+	serverUpdateStatus = (signal?: AbortSignal) => this.req<ServerUpdateStatus>("GET", "/server/update", undefined, signal ?? AbortSignal.timeout(90_000));
+	/** Update the server's code and restart it. The connection drops while it restarts. */
+	updateServer = (force = false) => this.req<{ ok: boolean; from: string; to: string; restarting: boolean }>("POST", "/server/update", { force }, AbortSignal.timeout(10 * 60_000));
 
 	/** Newest persisted event id; used as the starting cursor so we do not replay all history. */
 	latestEventId = () =>
@@ -281,7 +288,7 @@ export class Api {
 	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
 		let res: Response;
 		try {
-			res = await fetch(`${this.conn.baseUrl}/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: { Authorization: `Bearer ${this.conn.token}` } });
+			res = await fetch(`${this.conn.baseUrl}/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: { Authorization: `Bearer ${this.conn.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) } });
 		} catch (e) {
 			if ((e as Error).name === "AbortError") throw e;
 			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
@@ -330,7 +337,7 @@ export class Api {
 		handlers: { onEvent: (e: PipayaEvent) => void; onOpen?: () => void; onError?: () => void },
 		after: number,
 	): () => void {
-		const url = `${this.conn.baseUrl}/events?after=${after}&token=${encodeURIComponent(this.conn.token)}`;
+		const url = `${this.conn.baseUrl}/events?after=${after}&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&token=${encodeURIComponent(this.conn.token)}`;
 		const es = new EventSource(url);
 		let dead = false;
 		es.onopen = () => handlers.onOpen?.();

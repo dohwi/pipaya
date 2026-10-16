@@ -32,7 +32,7 @@
 	interface Node {
 		server: Server;
 		current: boolean;
-		state: "online" | "offline" | "unauthorized" | "checking";
+		state: "online" | "offline" | "unauthorized" | "incompatible" | "checking";
 		loaded: boolean;
 		root: string | undefined;
 		home: string | undefined;
@@ -66,8 +66,8 @@
 			const state = current
 				? app.net === "online"
 					? "online"
-					: app.net === "unauthorized"
-						? "unauthorized"
+					: app.net === "unauthorized" || app.net === "incompatible"
+						? app.net
 						: app.net === "connecting"
 							? "checking"
 							: "offline"
@@ -83,7 +83,7 @@
 	/** Activity of a session on the open server (other servers only report what their session list carries). */
 	const stateOf = (n: Node, x: Session): Activity => (n.current ? activityOf(app, x.id) : "idle");
 
-	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), checking: msg("확인 중") };
+	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 
 	const dirKey = (id: string, path: string) => `${id}\u0000${path}`;
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
@@ -262,13 +262,13 @@
 
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
-					{#if n.state === "offline" || n.state === "unauthorized"}
+					{#if n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}
 						<div class="nosess warnline">{t(statusText[n.state])}{n.loaded ? ` · ${t("마지막으로 확인된 목록")}` : ""}</div>
 					{/if}
-					{#if !n.loaded && n.state !== "offline" && n.state !== "unauthorized"}
+					{#if !n.loaded && n.state !== "offline" && n.state !== "unauthorized" && n.state !== "incompatible"}
 						<div class="sk skeleton-bar"></div>
 					{:else if n.total === 0}
-						{#if !(n.state === "offline" || n.state === "unauthorized") || n.loaded}
+						{#if !(n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible") || n.loaded}
 							<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
 						{/if}
 					{/if}

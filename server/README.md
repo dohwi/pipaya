@@ -56,7 +56,8 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 
 | Method | Path | Input / result |
 |---|---|---|
-| GET | `/health` | Public liveness and stats |
+| GET | `/health` | Public liveness. Also `version`, `protocol` and `minClientProtocol`; load figures only with a token |
+| GET/POST | `/server/update` | Admin token only. GET: is a newer commit available on the branch this checkout tracks, and can the server restart itself. POST `{force?}`: move to it, reinstall dependencies and exit so the service manager restarts the new code. 409 `sessions_running` unless `force` |
 | GET | `/tools` | Tool list and defaults |
 | GET | `/models?provider=&configured=true` | Model catalog |
 | GET | `/providers` | Provider availability, no keys |
@@ -230,3 +231,9 @@ Mutating tools (`write`, `edit`, `bash`) follow the approval policy.
 ### Built-in skills
 
 `pipaya-client-extensions` documents the client's extension system for agents that change the client. Its `references/` hold the extension documentation. Add another built-in skill by creating `builtin-skills/<name>/SKILL.md`.
+
+## Client compatibility and self-update
+
+`protocol` (see `src/version.ts`) is an integer raised only when REST/WebSocket/SSE shapes change in a way an older peer cannot cope with; adding a field or a route does not raise it. Clients send theirs in `X-Pipaya-Protocol` (or `?protocol=` for EventSource/WebSocket). One below `minClientProtocol` is refused with `426 client_too_old` on every route except `/health`, so the app can tell its user to update. The WebSocket `hello` frame carries the same three values.
+
+`POST /server/update` works only when something restarts the process afterwards: a systemd/launchd service made by `install.sh` (detected automatically), or any supervisor with `PIPAYA_SELF_UPDATE=1`. `PIPAYA_SELF_UPDATE=0` turns it off. Docker images, compiled binaries and a checkout on a detached HEAD (a pinned tag or commit) report why they cannot.

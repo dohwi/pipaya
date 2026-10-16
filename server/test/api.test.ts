@@ -227,7 +227,8 @@ describe("auth & meta", () => {
 	test("health is public but reveals load figures only to the token holder", async () => {
 		const r = await api("GET", "/health", undefined, {});
 		expect(r.status).toBe(200);
-		expect(r.json).toEqual({ ok: true });
+		// versions are public on purpose (a client reads them before it has a token); load figures are not
+		expect(Object.keys(r.json).sort()).toEqual(["minClientProtocol", "ok", "protocol", "version"]);
 		const owner = await api("GET", "/health");
 		expect(owner.json.ok).toBe(true);
 		expect(typeof owner.json.runningSessions).toBe("number");

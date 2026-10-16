@@ -10,6 +10,8 @@ import {
   type ServerProbe,
 } from "./api";
 import { isTauri } from "./tauri";
+import { compat, isClientTooOld, type Compat, type ServerVersions } from "./protocol";
+import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
 import { viewport } from "./viewport.svelte";
@@ -45,7 +47,7 @@ import type {
 } from "./types";
 
 export type NetState =
-  "idle" | "connecting" | "online" | "offline" | "unauthorized";
+  "idle" | "connecting" | "online" | "offline" | "unauthorized" | "incompatible";
 export type { ThemePref } from "./prefs.svelte";
 export type { Toast, Notice } from "./feedback.svelte";
 export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
@@ -66,6 +68,12 @@ class AppStore {
     Record<string, { sessions: Session[]; workspace: WorkspaceInfo | null; groups: Group[] }>
   >({});
   net = $state<NetState>("idle");
+  /** What the open server said about its version on connect (`/health`), or null before that. */
+  serverVersions = $state<ServerVersions | null>(null);
+  /** The open server needs a newer app (`update-app`) or is older than this app (`update-server`). */
+  get compat(): Compat {
+    return this.net === "incompatible" ? "update-app" : compat(this.serverVersions);
+  }
   netError = $state("");
 
   /** Active (not closed) sessions only. Closed ones are fetched on demand by /resume and /tree. */
@@ -514,6 +522,8 @@ class AppStore {
     notifications.connect(null);
     this.net = "connecting";
     this.netError = "";
+    this.serverVersions = null;
+    serverUpdater.reset();
     this.sessions = [];
     this.workspace = null;
     this.workdirInfo = null;
@@ -651,7 +661,15 @@ class AppStore {
     this.net = this.net === "online" ? "online" : "connecting";
     const api = (this.api = new Api(this.conn));
     try {
-      await api.health();
+      const health = await api.health();
+      if (token !== this.syncToken) return;
+      this.serverVersions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
+      if (compat(this.serverVersions) === "update-app") {
+        // Every other call would be refused (426) or answered in a shape this app cannot read: say why instead.
+        this.net = "incompatible";
+        this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
+        return;
+      }
       const [list, models, providers, tools, cursor, workspace, config, groups] =
         await Promise.all([
           api.listSessions(200, false),
@@ -714,8 +732,14 @@ class AppStore {
       notifications.connect(api);
       this.netError = "";
       this.retryDelay = 1000;
+      if (this.serverId) void serverUpdater.check(api, this.serverId);
     } catch (e) {
       if (token !== this.syncToken) return;
+      if (e instanceof ApiError && isClientTooOld(e.status, e.code)) {
+        this.net = "incompatible";
+        this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
+        return;
+      }
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         this.net = "unauthorized";
         this.netError = t("토큰이 거부되었습니다");

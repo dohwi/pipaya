@@ -54,6 +54,9 @@ import { createCorsPolicy, redactUrl } from "./security.ts";
 import { createPushTransports } from "./push.ts";
 import { ExtensionHost } from "./extensions/host.ts";
 import { registerServerExtensionRoutes } from "./extensions/routes.ts";
+import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
+import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
+import { join } from "node:path";
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
 // A message may carry images and files (up to 25 MB of files, as base64: x1.34) alongside each other.
@@ -84,6 +87,8 @@ export interface BuildOptions {
 	extensionDirs?: string[];
 	/** Extra extension files or folders to load. */
 	extensionPaths?: string[];
+	/** Self-update wiring (tests replace git, the installer and the restart); defaults to this checkout and a SIGTERM restart. */
+	selfUpdate?: Partial<SelfUpdateOptions>;
 }
 
 /** API-only server. No frontend assets, bundling or client-directory dependency. */
@@ -166,6 +171,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		if (req.method === "OPTIONS") return;
 		const path = req.url.split("?")[0];
 		if (req.method === "GET" && path === "/health") return;
+		// A client that declares a protocol older than the oldest this server serves is told so before anything else, so it can
+		// ask its user to update instead of failing on a changed response. A client that declares nothing is not judged.
+		const raw = req.headers[PROTOCOL_HEADER] ?? (req.query as Record<string, unknown> | undefined)?.[PROTOCOL_QUERY];
+		const declared = typeof raw === "string" && /^\d{1,6}$/.test(raw) ? Number(raw) : null;
+		if (declared !== null && declared < MIN_CLIENT_PROTOCOL) {
+			throw new HttpError(426, "client_too_old", `this server needs a client with protocol ${MIN_CLIENT_PROTOCOL} or newer (yours is ${declared}); update the app`);
+		}
 		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
 		const bearer = bearerOf(req.headers.authorization);
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
@@ -195,8 +207,28 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.Health } },
 		handler: async (req) =>
 			tokenMatches(bearerOf(req.headers.authorization)) || deviceTokens.verify(bearerOf(req.headers.authorization))
-				? { ok: true, uptimeMs: Date.now() - startedAt, runningSessions: sessions.runningCount, subscribers: bus.subscriberCount }
-				: { ok: true },
+				? { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL, uptimeMs: Date.now() - startedAt, runningSessions: sessions.runningCount, subscribers: bus.subscriberCount }
+				: { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL },
+	});
+
+	// ── self-update: the client offers "update the server too" when it updates itself ──
+	const updater = new SelfUpdater({
+		root: REPO_ROOT,
+		serverDir: join(REPO_ROOT, "server"),
+		running: () => sessions.runningCount,
+		restart: restartSoon,
+		...opts.selfUpdate,
+	});
+	app.get("/server/update", {
+		schema: { response: { 200: S.UpdateStatus, ...S.errors(401, 403) } },
+		handler: async () => updater.status(),
+	});
+	app.post("/server/update", {
+		schema: { body: S.UpdateBody, response: { 200: S.UpdateResult, ...S.errors(400, 401, 403, 409, 502) } },
+		handler: async (req) => {
+			const done = await updater.apply(req.body?.force === true);
+			return { ok: true, ...done, restarting: true };
+		},
 	});
 	app.get("/tools", {
 		schema: { response: { 200: S.ToolList, ...S.errors(401) } },

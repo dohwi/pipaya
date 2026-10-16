@@ -16,6 +16,7 @@
 	import Toasts from "./components/Toasts.svelte";
 	import Lazy from "./components/Lazy.svelte";
 	import UpdateBanner from "./components/UpdateBanner.svelte";
+	import VersionNotice from "./components/VersionNotice.svelte";
 	import DoneNotice from "./components/DoneNotice.svelte";
 	import ChordStrip from "./components/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
@@ -105,6 +106,7 @@
 		let stopLinks = () => {};
 		let gone = false;
 		void listenForPairingLinks(link => app.connectByLink(link)).then(stop => { if (gone) stop(); else stopLinks = stop; });
+		updater.connection = () => ({ api: app.api, serverId: app.serverId });
 		// A few seconds after launch, so the check never competes with connecting to the server.
 		const updateTimer = setTimeout(() => updater.autoCheck(), 5000);
 		notifications.init(() => app.visibleIds, sid => { void app.openAny(sid); }, nativePushAdapter());
@@ -353,6 +355,7 @@
 <Palette />
 <Toasts />
 <UpdateBanner />
+<VersionNotice />
 <ChordStrip />
 <ExtensionApproval />
 <ExtensionDialog />

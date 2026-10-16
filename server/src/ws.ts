@@ -6,6 +6,7 @@ import type { QuestionManager } from "./questions.ts";
 import { HttpError, parse } from "./errors.ts";
 import type { EventBus } from "./events.ts";
 import type { SessionManager } from "./sessions.ts";
+import { MIN_CLIENT_PROTOCOL, PROTOCOL_VERSION, SERVER_VERSION } from "./version.ts";
 
 /**
  * WebSocket protocol (JSON text frames), a bidirectional alternative to REST + SSE.
@@ -21,7 +22,7 @@ import type { SessionManager } from "./sessions.ts";
  * server -> client
  *   { type: "ack", id, ok: true, result? } | { type: "ack", id, ok: false, error: { code, message } }
  *   { type: "event", event: PipayaEvent }
- *   { type: "hello", subscriptions: [...] }   on connect
+ *   { type: "hello", subscriptions: [...], version, protocol, minClientProtocol }   on connect (see version.ts)
  *
  * Liveness: the server sends a protocol ping every 30 s and drops a socket that missed the previous one (browsers answer on
  * their own). A client that falls more than 8 MB behind is closed with 1013; reconnect and `subscribe` with `after` to replay.
@@ -197,6 +198,6 @@ export async function registerWebSocket(
 		};
 		socket.on("close", cleanup);
 		socket.on("error", cleanup);
-		send({ type: "hello", subscriptions: [] });
+		send({ type: "hello", subscriptions: [], version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL });
 	});
 }

@@ -56,7 +56,8 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 
 | Method | Path | 입력 / 결과 |
 |---|---|---|
-| GET | `/health` | 공개 상태 확인과 통계 |
+| GET | `/health` | 공개 상태 확인. `version`, `protocol`, `minClientProtocol`도 포함하며 부하 수치는 토큰이 있을 때만 |
+| GET/POST | `/server/update` | 관리자 토큰 전용. GET: 이 체크아웃이 추적하는 브랜치에 새 커밋이 있는지, 서버가 스스로 재시작할 수 있는지. POST `{force?}`: 새 커밋으로 이동하고 의존성을 설치한 뒤 프로세스를 종료해 서비스 매니저가 새 코드로 다시 띄우게 합니다. `force`가 없으면 실행 중인 대화가 있을 때 409 `sessions_running` |
 | GET | `/tools` | 도구 목록과 기본값 |
 | GET | `/models?provider=&configured=true` | 모델 카탈로그 |
 | GET | `/providers` | 프로바이더 사용 가능 여부(키는 반환하지 않음) |
@@ -226,3 +227,9 @@ SQLite는 인덱스 조회와 트랜잭션 기반 설정 갱신을 제공합니�
 ### Built-in skills
 
 `pipaya-client-extensions`는 클라이언트를 수정하는 에이전트를 위해 클라이언트의 확장 시스템을 설명합니다. `references/`에 확장 문서가 들어 있습니다. 다른 내장 스킬은 `builtin-skills/<name>/SKILL.md`를 만들어 추가합니다.
+
+## 클라이언트 호환성과 자동 업데이트
+
+`protocol`(`src/version.ts`)은 REST/WebSocket/SSE 형식이 바뀌어 이전 상대가 처리하지 못할 때만 올리는 정수입니다. 필드나 라우트를 추가하는 것만으로는 올리지 않습니다. 클라이언트는 `X-Pipaya-Protocol` 헤더(EventSource/WebSocket은 `?protocol=`)로 자기 값을 보내고, `minClientProtocol`보다 낮으면 `/health`를 뺀 모든 경로에서 `426 client_too_old`로 거절되어 앱이 사용자에게 업데이트를 안내할 수 있습니다. WebSocket `hello` 프레임에도 같은 세 값이 들어 있습니다.
+
+`POST /server/update`는 프로세스를 다시 띄워 줄 주체가 있을 때만 동작합니다. `install.sh`가 만든 systemd/launchd 서비스(자동 감지)이거나, `PIPAYA_SELF_UPDATE=1`을 지정한 다른 감독 프로세스여야 합니다. `PIPAYA_SELF_UPDATE=0`이면 꺼집니다. Docker 이미지, 컴파일된 바이너리, detached HEAD(고정한 태그나 커밋)는 불가능한 이유를 응답합니다.

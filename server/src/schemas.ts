@@ -21,7 +21,7 @@ export const ErrorBody = Type.Object(
 );
 
 /** Standard error responses for a route. */
-export const errors = (...codes: (400 | 401 | 403 | 404 | 409 | 413 | 429 | 501 | 502)[]) =>
+export const errors = (...codes: (400 | 401 | 403 | 404 | 409 | 413 | 426 | 429 | 501 | 502)[]) =>
 	Object.fromEntries(codes.map((c) => [c, { ...ErrorBody, description: ERROR_DESCRIPTIONS[c] }])) as Record<number, typeof ErrorBody>;
 const ERROR_DESCRIPTIONS = {
 	400: "Invalid request",
@@ -30,6 +30,7 @@ const ERROR_DESCRIPTIONS = {
 	404: "Not found",
 	409: "Conflict with current state",
 	413: "Payload too large",
+	426: "The client is too old for this server; update it",
 	429: "Too many requests",
 	501: "Not supported by this server",
 	502: "The model provider failed",
@@ -321,10 +322,26 @@ export const ToolList = Type.Object({
 /** Without the token only `ok` is returned: load figures are nobody's business but the owner's. */
 export const Health = Type.Object({
 	ok: Type.Boolean(),
+	/** App version, wire-protocol version and the oldest client protocol still served (see version.ts). Public: a client must read them before it has a token. */
+	version: Type.Optional(Type.String()),
+	protocol: Type.Optional(Type.Integer()),
+	minClientProtocol: Type.Optional(Type.Integer()),
 	uptimeMs: Type.Optional(Type.Integer()),
 	runningSessions: Type.Optional(Type.Integer()),
 	subscribers: Type.Optional(Type.Integer()),
 });
+
+export const UpdateStatus = Type.Object({
+	managed: Type.Boolean({ description: "The server can update itself and be restarted by its service manager" }),
+	reason: Type.Optional(Type.Union([Type.Literal("disabled"), Type.Literal("unmanaged"), Type.Literal("not_git"), Type.Literal("detached"), Type.Literal("fetch_failed")])),
+	ref: Nullable(Type.String()),
+	current: Nullable(Type.String()),
+	latest: Nullable(Type.String()),
+	available: Type.Boolean(),
+	checkedAt: Type.Integer(),
+});
+export const UpdateResult = Type.Object({ ok: Type.Boolean(), from: Type.String(), to: Type.String(), restarting: Type.Boolean() });
+export const UpdateBody = Type.Object({ force: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
 
 // ── Events ──────────────────────────────────────────────────────────────────
 

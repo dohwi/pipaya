@@ -26,7 +26,7 @@ describe("session context REST contract", () => {
 			expect(await api.sessionContext("id/with space", controller.signal)).toEqual(snapshot);
 			expect(url).toBe("http://100.64.0.1:8787/sessions/id%2Fwith%20space/context");
 			expect(request?.method).toBe("GET");
-			expect(request?.headers).toEqual({ Authorization: "Bearer secret" });
+			expect(request?.headers).toEqual({ Authorization: "Bearer secret", "X-Pipaya-Protocol": "1" });
 			expect(request?.body).toBeUndefined();
 			expect(request?.signal).toBe(controller.signal);
 		} finally { globalThis.fetch = original; }

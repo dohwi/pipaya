@@ -2,6 +2,8 @@ import { isTauri, openExternal } from "./tauri";
 import { notificationPlatform } from "./notifications";
 import { APK_NAME, DOWNLOAD_PREFIX, fetchLatestRelease, isNewer } from "./update-check";
 import { LocalizedError, t } from "./i18n";
+import { serverUpdater } from "./server-update.svelte";
+import type { Api } from "./api";
 
 /**
  * Update flow for the installed app.
@@ -11,6 +13,10 @@ import { LocalizedError, t } from "./i18n";
  *    still asks the user to confirm: Android never lets an app install itself silently. If anything in the native
  *    side fails, the APK link is opened in the browser instead, as before.
  *  - iOS and the browser: nothing to update from here.
+ *
+ * "Update the server too": when the connected server can update itself (see server-update.svelte.ts) and the user agrees,
+ * the server goes first. The app's own install restarts the app, so anything after it would never run, and a new app
+ * against an old server is the mismatch this exists to prevent.
  */
 type Phase = "idle" | "checking" | "available" | "downloading" | "ready" | "ready-install" | "error";
 
@@ -33,6 +39,11 @@ class Updater {
 	dismissed = $state("");
 	auto = $state(localStorage.getItem(AUTO) !== "0");
 	supported = mode() !== "none";
+
+	/** Gives the open server connection; set by the app so this file need not import the store. */
+	connection: (() => { api: Api | null; serverId: string | null }) | null = null;
+	/** The result of the server step of the last install, for the dialog to explain. */
+	serverStep = $state<"" | "updated" | "skipped" | "failed">("");
 
 	private update: import("@tauri-apps/plugin-updater").Update | null = null;
 	private apkUrl: string | null = null;
@@ -147,9 +158,29 @@ class Updater {
 		document.addEventListener("visibilitychange", again);
 	}
 
+	/** The open server offers to update itself, so the dialog can ask. */
+	get serverOffer(): boolean {
+		return serverUpdater.available && Boolean(this.connection?.().api);
+	}
+
+	/**
+	 * Updates the server first when the user agreed. A server that could not be updated never blocks the app update:
+	 * the app is newer-or-equal on the wire (protocol is backward compatible), so the user is told and can retry later.
+	 */
+	private async updateServerFirst(): Promise<void> {
+		this.serverStep = "";
+		const conn = this.connection?.();
+		if (!conn?.api || !serverUpdater.available || !serverUpdater.withApp) return;
+		this.phase = "downloading";
+		const ok = await serverUpdater.apply(conn.api);
+		this.serverStep = ok ? "updated" : serverUpdater.error ? "failed" : "skipped";
+	}
+
 	/** Desktop: download, verify, install, restart. Android: download in the app and open the system installer. */
 	async install(): Promise<void> {
 		if (this.phase !== "available") return;
+		await this.updateServerFirst();
+		this.phase = "available";
 		if (mode() === "android") return this.installAndroid();
 		const update = this.update;
 		if (!update) return;
