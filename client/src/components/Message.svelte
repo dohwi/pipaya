@@ -4,6 +4,7 @@
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import FileChip from "./FileChip.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
@@ -133,6 +134,9 @@
 {:else}
 	<div class="row assistant" class:fresh={parts[0]?.fresh}>
 		<div class="content reply-card">
+			{#if tail?.model || tail?.provider}
+				<span class="logo" title={tail.model ?? tail.provider}><ModelLogo provider={tail.provider} model={tail.model} size={13} /></span>
+			{/if}
 			{#each segments as seg, n (seg.i)}
 				{#if seg.kind === "work"}
 					<WorkBox steps={seg.steps} live={n === liveSeg} />
@@ -328,6 +332,7 @@
 	}
 	/* one prompt -> one answer: every step and text of the turn sits in a single bubble */
 	.reply-card {
+		position: relative;
 		padding: 12px 16px 6px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
@@ -335,6 +340,21 @@
 		background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
 	}
 
+	/* the model's mark sits on the card's top-left corner, so it takes no room from the text */
+	.logo {
+		position: absolute;
+		top: -9px;
+		left: 12px;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		border: 1px solid var(--border);
+		background: var(--bg-elev);
+		color: var(--text-dim);
+		pointer-events: auto;
+	}
 	.error {
 		display: flex;
 		align-items: flex-start;
