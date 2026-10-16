@@ -19,6 +19,7 @@
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
+	import { activityOf, ACTIVITY_LABEL } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -193,11 +194,20 @@
 	const groupInfo = $derived(pane.id ? app.groupOf(pane.id) : undefined);
 	const members = $derived(
 		groupInfo && pane.id
-			? panesOf(groupInfo.layout).filter((id) => id !== pane.id && groupInfo.names?.[id]).map((id) => ({ id, name: groupInfo.names[id]!, title: app.session(id)?.title ?? "" }))
+			? panesOf(groupInfo.layout).filter((id) => id !== pane.id && groupInfo.names?.[id]).map((id) => {
+				const s = app.session(id);
+				const fresh = !s || s.title === "New session";
+				// What the member is for follows its pane name (the session title); a session not yet named shows its folder.
+				const dir = s?.cwd.split("/").slice(-2).join("/") ?? "";
+				return { id, name: groupInfo.names[id]!, title: fresh ? dir : s.title, dir: fresh ? "" : dir, state: activityOf(app, id) };
+			})
 			: [],
 	);
 	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
-	const memberMatches = $derived(memberMention ? members.filter((m) => m.name.toLowerCase().startsWith(memberMention.query.toLowerCase())) : []);
+	const memberMatches = $derived(memberMention ? members.filter((m) => {
+		const q = memberMention.query.toLowerCase();
+		return m.name.toLowerCase().startsWith(q) || m.title.toLowerCase().includes(q);
+	}) : []);
 
 	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	$effect(() => {
@@ -228,7 +238,7 @@
 			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
 		]
 		: memberMention
-			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: m.title, group: msg("그룹 멤버") }))
+			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("그룹 멤버") }))
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
