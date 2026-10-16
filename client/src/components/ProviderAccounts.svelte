@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import Badge from "./Badge.svelte";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
 	import type { ProviderInfo } from "../lib/types";
@@ -65,8 +66,8 @@
 		{#each connected as p (p.id)}
 			<li>
 				<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
-				<span class="chip">{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</span>
-				{#if p.configured}<span class="chip ok"><Icon name="check" /> {t("사용 가능")}</span>{/if}
+				<Badge variant="outline" size="sm" mono>{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</Badge>
+				{#if p.configured}<Badge tone="ok" size="sm"><Icon name="check" /> {t("사용 가능")}</Badge>{/if}
 				<button class="btn ghost sm" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</button>
 			</li>
 		{/each}
@@ -79,7 +80,5 @@
 	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); display: flex; flex-direction: column; }
 	.email { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
-	.chip { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
-	.chip.ok { color: var(--ok, #2a9d4b); }
-	.chip :global(svg) { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.6; }
+	li :global(.badge svg) { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.6; }
 </style>

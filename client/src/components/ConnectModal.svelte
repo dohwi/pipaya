@@ -2,6 +2,7 @@
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import Badge from "./Badge.svelte";
 	import Modal from "./Modal.svelte";
 	import ModalHeader from "./ModalHeader.svelte";
 	import { app } from "../lib/store.svelte";
@@ -292,7 +293,7 @@
 							<li>
 								<button class="item" disabled={busy} onclick={() => start(p, "oauth")}>
 									<span class="pname">{p.name}</span>
-									{#if p.configured}<span class="chip ok">{t("사용 가능")}</span>{/if}
+									{#if p.configured}<Badge tone="ok" size="sm">{t("사용 가능")}</Badge>{/if}
 									<Icon name="chevron-right" />
 								</button>
 							</li>
@@ -307,7 +308,7 @@
 							<li>
 								<button class="item" disabled={busy} onclick={() => pickKey(p)}>
 									<span class="pname">{p.name}</span>
-									{#if p.configured}<span class="chip ok">{t("사용 가능")}</span>{/if}
+									{#if p.configured}<Badge tone="ok" size="sm">{t("사용 가능")}</Badge>{/if}
 									<Icon name="chevron-right" />
 								</button>
 							</li>
@@ -320,7 +321,7 @@
 								<button class="item" disabled={taken.has(l.id)} onclick={() => custom(l.id)}>
 									<span class="pname">{l.name}</span>
 									<span class="mono sub">{l.baseUrl}</span>
-									{#if taken.has(l.id)}<span class="chip">{t("추가됨")}</span>{/if}
+									{#if taken.has(l.id)}<Badge variant="outline" size="sm">{t("추가됨")}</Badge>{/if}
 									<Icon name="chevron-right" />
 								</button>
 							</li>
@@ -362,8 +363,6 @@
 	.pname { flex: 1; min-width: 0; font-size: var(--fs-sm); }
 	.sub { font-size: var(--fs-xs); color: var(--text-faint); }
 	.empty { padding: 14px; text-align: center; font-size: var(--fs-sm); color: var(--text-faint); }
-	.chip { font-size: var(--fs-xs); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
-	.chip.ok { color: var(--ok, #2a9d4b); }
 	.flow { display: flex; flex-direction: column; gap: 14px; }
 	.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; counter-reset: s; }
 	.steps li { position: relative; display: flex; flex-direction: column; gap: 6px; padding-left: 34px; counter-increment: s; font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55; word-break: keep-all; opacity: 0.6; }
