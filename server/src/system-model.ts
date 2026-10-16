@@ -7,8 +7,7 @@ import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
 
 /**
  * The "system model": a light model the server uses for its own small jobs, apart from any conversation. Today it
- * names sessions: a short title and the session's role (what its agent works on, so other sessions know what to ask
- * it). `null` turns this off: titles stay the first message cut short and sessions have no role.
+ * names sessions (a short title and the session's role, what its agent works on) and suggests names for new groups. `null` turns this off: titles stay the first message cut short and sessions have no role.
  */
 export const SystemModelSchema = Type.Object(
 	{ model: Type.Union([ModelChoice, Type.Null()], { description: "Model (and reasoning strength) for session titles and roles. null = off" }) },
@@ -22,6 +21,7 @@ const KEY = "system_model";
 export const TITLE_MAX = 60;
 export const PURPOSE_MAX = 120;
 export const DESCRIBE_MAX_TOKENS = 400;
+export const GROUP_NAME_MAX = 40;
 
 export class SystemModelSettings {
 	constructor(private db: Database, private registry: ModelRegistry) {}
@@ -43,6 +43,25 @@ export class SystemModelSettings {
 		}
 		this.db.query("INSERT INTO settings (key, data) VALUES ($key, $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ key: KEY, data: JSON.stringify(next) });
 		return this.get();
+	}
+
+	/** One short completion with the system model: the reply text, or null when it is off, unavailable or failed. */
+	async complete(system: string, user: string, maxTokens: number, signal?: AbortSignal): Promise<string | null> {
+		const target = this.resolve();
+		if (!target) return null;
+		try {
+			const model = this.registry.models.getModel(target.provider, target.model);
+			if (!model || !(await this.registry.models.checkAuth(target.provider))) return null;
+			const reply = await this.registry.models.completeSimple(
+				model,
+				{ systemPrompt: system, messages: [{ role: "user", content: user, timestamp: Date.now() }] },
+				{ maxTokens, signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
+			);
+			if (reply.stopReason === "error" || reply.stopReason === "aborted") return null;
+			return reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
+		} catch {
+			return null;
+		}
 	}
 
 	/** The configured model while it still exists; a deleted one simply turns the feature off. */
@@ -87,4 +106,27 @@ export function parseDescription(reply: string): { title: string; purpose: strin
 	} catch {
 		return null;
 	}
+}
+
+export const GROUP_NAME_SYSTEM = `You name a group of coding-agent sessions that are shown side by side. Reply with only the name and nothing else.
+- 1 to 4 words, at most 30 characters, no quotes, no trailing period.
+- Say what the sessions work on together (the shared project or goal), not how many there are.
+Write it in the same language as the session titles.`;
+
+export interface GroupMember {
+	cwd: string;
+	title: string;
+	purpose: string;
+}
+
+export function groupNameRequest(members: GroupMember[]): string {
+	const lines = members.map((m, i) => `${i + 1}. folder: ${m.cwd.replace(/\/+$/, "").split("/").pop() || m.cwd}; title: ${clip(m.title, 80)}${m.purpose ? `; role: ${clip(m.purpose, 120)}` : ""}`);
+	return `Sessions in the group:\n${lines.join("\n")}\n\nReply with the group name now.`;
+}
+
+/** A group name out of a model reply (first line, quotes and markup stripped); null when nothing usable. */
+export function parseGroupName(reply: string): string | null {
+	const line = reply.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+	const name = tidy(line.replace(/[*`#]/g, "").replace(/^(group name|name|이름)\s*[:：]\s*/i, ""), GROUP_NAME_MAX);
+	return name || null;
 }

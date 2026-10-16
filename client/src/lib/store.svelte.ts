@@ -2185,7 +2185,7 @@ class AppStore {
   async createGroup(layout: Layout, name?: string): Promise<Group | null> {
     if (!this.api) return null;
     try {
-      const g = await this.api.createGroup({ layout, name: name || this.nextGroupName(layout) });
+      const g = await this.api.createGroup({ layout, name: name || this.nextGroupName(layout), ...(name ? {} : { autoName: true }) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
       // the server moved these sessions out of any group they were in
       await this.refreshGroups();

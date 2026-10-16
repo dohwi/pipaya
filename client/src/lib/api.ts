@@ -319,7 +319,7 @@ export class Api {
 
 	/* ---------- session groups ---------- */
 	groups = () => this.req<{ groups: Group[] }>("GET", "/groups").then((r) => r.groups);
-	createGroup = (input: { name?: string; layout: Group["layout"] }) => this.req<Group>("POST", "/groups", input);
+	createGroup = (input: { name?: string; layout: Group["layout"]; autoName?: boolean }) => this.req<Group>("POST", "/groups", input);
 	patchGroup = (id: string, patch: { name?: string; layout?: Group["layout"] }) =>
 		this.req<Group>("PATCH", `/groups/${id}`, patch);
 	deleteGroup = (id: string) => this.req<{ ok: boolean }>("DELETE", `/groups/${id}`);

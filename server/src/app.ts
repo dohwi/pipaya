@@ -18,7 +18,7 @@ import { SubAgentSettings } from "./subagent-settings.ts";
 import { CompactionSettings } from "./compaction.ts";
 import { registerSubAgentRoutes } from "./subagent-routes.ts";
 import { registerCompactionRoutes } from "./compaction-routes.ts";
-import { SystemModelSettings } from "./system-model.ts";
+import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
@@ -29,7 +29,7 @@ import { Pairing } from "./pairing.ts";
 import { isAdminOnlyPath, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
-import { GroupManager } from "./groups.ts";
+import { GroupManager, panesOf } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
 import { registerTerminalRoutes, TERMINAL_SOCKET } from "./terminal-routes.ts";
@@ -486,7 +486,24 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
-	registerGroupRoutes(server, groups);
+	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
+	registerGroupRoutes(server, groups, (rec) => {
+		if (!systemModel.resolve()) return;
+		const members = panesOf(rec.layout).flatMap((id) => {
+			const r = store.get(id);
+			return r ? [{ cwd: r.cwd, title: r.title, purpose: r.purpose }] : [];
+		});
+		if (!members.length) return;
+		void (async () => {
+			const name = parseGroupName((await systemModel.complete(GROUP_NAME_SYSTEM, groupNameRequest(members), 60)) ?? "");
+			if (!name || name === rec.name) return;
+			try {
+				if (groups.get(rec.id).name === rec.name) groups.update(rec.id, { name });
+			} catch {
+				/* the group is gone */
+			}
+		})();
+	});
 	registerSkillRoutes(server, skills, bus);
 	registerTemplateRoutes(server, templates);
 	registerExtensionSettingsRoutes(server, new ExtensionSettings(cfg.dataDir), bus);

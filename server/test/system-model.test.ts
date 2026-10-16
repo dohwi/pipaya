@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { describeRequest, parseDescription } from "../src/system-model.ts";
+import { describeRequest, groupNameRequest, parseDescription, parseGroupName } from "../src/system-model.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -140,5 +140,18 @@ describe("system model", () => {
 		const s = (await api("GET", `/sessions/${id}`)).json;
 		expect(s.title).toBe("plain words");
 		expect(s.purpose).toBe("");
+	});
+});
+
+describe("group names", () => {
+	test("parseGroupName takes the first line and strips quotes and markup", () => {
+		expect(parseGroupName('"Billing API"\nbecause...')).toBe("Billing API");
+		expect(parseGroupName("**Name: Docs sync.**")).toBe("Docs sync");
+		expect(parseGroupName("   \n")).toBeNull();
+	});
+	test("groupNameRequest lists each session's folder, title and role", () => {
+		const text = groupNameRequest([{ cwd: "/w/pipaya/", title: "Fix login", purpose: "auth work" }, { cwd: "/w/wiki", title: "Docs", purpose: "" }]);
+		expect(text).toContain("1. folder: pipaya; title: Fix login; role: auth work");
+		expect(text).toContain("2. folder: wiki; title: Docs\n");
 	});
 });

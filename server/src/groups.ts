@@ -61,6 +61,7 @@ export const GroupList = Type.Object({ groups: Type.Array(GroupSchema) });
 export const CreateGroupBody = Type.Object({
 	name: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
 	layout: LayoutSchema,
+	autoName: Type.Optional(Type.Boolean({ description: "The name is only a placeholder: when a system model is set, the server replaces it with a suggested one" })),
 });
 export const PatchGroupBody = Type.Object({
 	name: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
