@@ -9,6 +9,10 @@
 
 	const GAP = 3; // px kept between panes
 	const geo = $derived(measure(group.layout));
+	// Cells are absolutely placed, so their DOM order means nothing on screen. Keep it stable (by session id) instead of
+	// following the layout tree: when a split/drop reorders the tree, a keyed each would move the nodes, and moving a node
+	// resets its scroll position and focus (the pane flashes and the input loses the caret).
+	const cells = $derived([...geo.panes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
 
 	let box: HTMLDivElement | undefined = $state();
 	let active = $state<string | null>(null);
@@ -178,7 +182,7 @@
 <svelte:window onkeydown={modKeys} onkeyup={modKeys} onblur={() => (linkKeyDown = false)} />
 
 <div class="group" bind:this={box} aria-label={t("{name} 그룹", { name: group.name })}>
-	{#each geo.panes as p (p.id)}
+	{#each cells as p (p.id)}
 		{@const z = zoomId === p.id}
 		<div
 			class="cell"
