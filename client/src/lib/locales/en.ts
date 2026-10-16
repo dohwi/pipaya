@@ -1254,4 +1254,5 @@ export const en: Record<string, string> = {
 	"서버가 앱보다 오래된 버전입니다. 일부 기능이 동작하지 않을 수 있습니다": "The server is older than the app. Some features may not work",
 	"서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)": "The server is older than the app. Run the update on the server (install.sh update)",
 	"서버 업데이트": "Update server",
+	"서버에 새 버전이 있습니다": "A new server version is available",
 };

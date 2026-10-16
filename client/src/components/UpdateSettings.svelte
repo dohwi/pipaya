@@ -2,11 +2,33 @@
 	import { t } from "../lib/i18n";
 	import { updater } from "../lib/updater.svelte";
 	import { notificationPlatform } from "../lib/notifications";
+	import { serverUpdater } from "../lib/server-update.svelte";
+	import { app } from "../lib/store.svelte";
 	import Switch from "./Switch.svelte";
 
 	const android = notificationPlatform() === "android";
 	const checking = $derived(updater.phase === "checking");
 	const downloading = $derived(updater.phase === "downloading" || updater.phase === "ready");
+	const serverBusy = $derived(serverUpdater.busy);
+	const serverStatus = $derived(serverUpdater.status?.managed ? serverUpdater.status : null);
+
+	/** Checks the app and, when connected as the owner, the server it talks to. */
+	async function checkAll() {
+		const conn = updater.connection?.();
+		await Promise.all([
+			updater.check(true),
+			conn?.api && conn.serverId ? serverUpdater.check(conn.api, conn.serverId, true) : Promise.resolve(),
+		]);
+	}
+
+	async function updateServer() {
+		const api = updater.connection?.().api;
+		if (!api) return;
+		if (await serverUpdater.apply(api)) {
+			app.toast(t("서버를 업데이트했습니다"), "ok");
+			await app.sync();
+		}
+	}
 </script>
 
 {#if updater.supported}
@@ -26,8 +48,8 @@
 		{#if updater.phase === "available"}
 			<button class="btn primary sm" onclick={() => updater.install()}>{t("업데이트")}</button>
 		{:else}
-			<button class="btn sm" disabled={checking || downloading} onclick={() => updater.check(true)}>
-				{checking ? t("확인하는 중…") : t("업데이트 확인")}
+			<button class="btn sm" disabled={checking || downloading || serverBusy} onclick={checkAll}>
+				{checking || serverUpdater.phase === "checking" ? t("확인하는 중…") : t("업데이트 확인")}
 			</button>
 		{/if}
 	</div>
@@ -35,6 +57,20 @@
 		<p class="hint">{t("최신 버전입니다")}</p>
 	{/if}
 	{#if updater.error}<p class="error" role="alert">{updater.error}</p>{/if}
+	{#if serverStatus}
+		<div class="row server">
+			<span class="status">
+				{#if serverUpdater.phase === "updating"}{t("서버를 업데이트하는 중…")}
+				{:else if serverUpdater.phase === "restarting"}{t("서버가 다시 시작되기를 기다리는 중…")}
+				{:else if serverStatus.available}{t("서버에 새 버전이 있습니다")}
+				{:else}{t("서버가 이미 최신 버전입니다")}{/if}
+			</span>
+			{#if serverStatus.available}
+				<button class="btn primary sm" disabled={serverBusy} onclick={updateServer}>{t("서버 업데이트")}</button>
+			{/if}
+		</div>
+	{/if}
+	{#if serverUpdater.error}<p class="error" role="alert">{serverUpdater.error}</p>{/if}
 	<p class="hint">
 		{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}
 	</p>

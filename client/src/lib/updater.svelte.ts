@@ -49,6 +49,16 @@ class Updater {
 	private apkUrl: string | null = null;
 	private busy = false;
 
+	constructor() {
+		// Show the installed version right away instead of waiting for the first update check.
+		if (this.supported) {
+			void import("@tauri-apps/api/app")
+				.then(({ getVersion }) => getVersion())
+				.then((v) => { if (!this.current) this.current = v; })
+				.catch(() => {});
+		}
+	}
+
 	get visible(): boolean {
 		return (this.phase === "available" || this.phase === "downloading" || this.phase === "ready" || this.phase === "ready-install") && this.dismissed !== this.version;
 	}
