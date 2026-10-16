@@ -80,7 +80,7 @@
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
 		<button class="btn-ico" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint}><Icon name="sidebar" /></button>
-		<button class="btn-ico" onclick={() => app.newChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
+		<button class="btn-ico" onclick={() => void app.startChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
 	</div>
 
 	<ul

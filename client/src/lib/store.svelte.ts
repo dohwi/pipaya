@@ -653,7 +653,7 @@ class AppStore {
     if (to.session) void this.openSession(to.session);
     else {
       if (to.workdir !== undefined) this.setWorkdir(to.workdir);
-      this.newChat();
+      void this.startChat();
     }
   }
 
@@ -1364,6 +1364,42 @@ class AppStore {
   }
 
   /**
+   * Start a new chat as a real session: it is created at once from the draft (pending model settings and working
+   * directory) and shows up in the sidebar as an active "New session" right away. Without a usable model, or if the
+   * server refuses, it falls back to the blank new-chat screen. An already open empty session in the same working
+   * directory is reused rather than piling up another.
+   */
+  async startChat(): Promise<void> {
+    const api = this.api;
+    const d = this.draft;
+    if (!api || !d.model) return this.newChat();
+    const cur = this.session(this.activeId);
+    const cwd = this.workdir === "." ? undefined : this.workdir;
+    if (
+      cur &&
+      this.chats[cur.id]?.items.length === 0 &&
+      !this.groupOf(cur.id) &&
+      (!cwd || this.relPath(cur.cwd) === this.relPath(cwd))
+    ) {
+      this.sidebar.open = false;
+      return;
+    }
+    try {
+      const s = await api.createSession({
+        cwd,
+        provider: d.provider,
+        model: d.model,
+        thinkingLevel: normalizeThinking(d.thinkingLevel),
+        approval: d.approval,
+      });
+      if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
+      await this.openSession(s.id, true);
+    } catch (e) {
+      this.fail(e, t("새 대화를 만들지 못했습니다"));
+    }
+  }
+
+  /**
    * `/new`: start a fresh conversation in the focused pane only. Inside a group the pane's session is swapped for a new
    * one (same working directory and model settings) and the rest of the group stays as it is; the old session is closed
    * (off the sidebar, reachable only through /resume). Outside a group this is a plain `newChat`.
@@ -1372,7 +1408,7 @@ class AppStore {
     const api = this.api;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);
-    if (!api || !from || !g) return this.newChat();
+    if (!api || !from || !g) return this.startChat();
     let made: Session;
     try {
       made = await api.createSession({
