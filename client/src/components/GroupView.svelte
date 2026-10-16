@@ -7,7 +7,9 @@
 
 	let { group }: { group: Group } = $props();
 
-	const GAP = 3; // px kept between panes
+	// px kept between panes. A zoomed pane keeps it too: flush with the group's edges its frame would sit on the window
+	// edge, where a fractional display scale rounds the last pixel away (the right/bottom line vanished).
+	const GAP = 3;
 	const geo = $derived(measure(group.layout));
 	// Cells are absolutely placed, so their DOM order means nothing on screen. Keep it stable (by session id) instead of
 	// following the layout tree: when a split/drop reorders the tree, a keyed each would move the nodes, and moving a node
@@ -199,7 +201,7 @@
 			style:top={z ? "0%" : pct(p.y)}
 			style:width={z ? "100%" : pct(p.w)}
 			style:height={z ? "100%" : pct(p.h)}
-			style:--gap="{z ? 0 : GAP}px"
+			style:--gap="{GAP}px"
 		>
 			<Pane id={p.id} grouped />
 		</div>
@@ -269,11 +271,11 @@
 			left var(--motion-normal) var(--ease-std),
 			top var(--motion-normal) var(--ease-std),
 			width var(--motion-normal) var(--ease-std),
-			height var(--motion-normal) var(--ease-std),
-			padding var(--motion-normal) var(--ease-std);
+			height var(--motion-normal) var(--ease-std);
 	}
 	.cell.zoomed {
 		z-index: 10;
+		background: var(--bg-side); /* the gutter round the zoomed pane hides the panes behind it */
 	}
 	.cell.behind {
 		z-index: 0;
