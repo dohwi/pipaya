@@ -9,10 +9,45 @@
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
 	import { sidebarBlocks } from "../lib/nav";
 	import type { Session } from "../lib/types";
-	import { ACTIVITY_LABEL, activityOf, summarize, URGENCY } from "../lib/activity";
+	import type { Server } from "../lib/store.svelte";
+	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
-	const counts = $derived(summarize(app, app.sessions));
+	interface Section {
+		server: Server;
+		current: boolean;
+		groups: ReturnType<typeof sidebarBlocks>["groups"];
+		loose: Session[];
+		/** activity of this server's sessions, by id */
+		state: Record<string, Activity>;
+	}
+	/** Every server's active sessions, the open one first-hand and the others as the servers report them. Servers with none are left out. */
+	const sections = $derived.by<Section[]>(() =>
+		app.servers.flatMap((server) => {
+			const current = server.id === app.serverId;
+			const ov = app.overview[server.id];
+			const sessions = current ? app.sessions : (ov?.sessions ?? []);
+			if (!sessions.length) return [];
+			const { groups, dirs } = sidebarBlocks(
+				sessions,
+				current ? app.groups : (ov?.groups ?? []),
+				undefined,
+				undefined,
+				app.sidebar.dirOrder[server.id],
+				app.sidebar.groupOrder[server.id],
+			);
+			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
+			const state: Record<string, Activity> = {};
+			for (const x of sessions) state[x.id] = activityOf(view, x.id);
+			return [{ server, current, groups: groups.filter((b) => b.sessions.length), loose: dirs.flatMap((d) => d.sessions), state }];
+		}),
+	);
+	const multi = $derived(sections.length > 1);
+	const counts = $derived.by(() => {
+		const out: Record<Activity, number> = { working: 0, asking: 0, done: 0, failed: 0, idle: 0 };
+		for (const sec of sections) for (const a of Object.values(sec.state)) out[a]++;
+		return out;
+	});
 	/** What a dragged session is over: an agent (pair up with it), a folder (join), or the bare rail (leave its group). */
 	let dropOn = $state<string | null>(null);
 	const hover = (key: string) => (pt: unknown) => {
@@ -20,26 +55,21 @@
 		else if (dropOn === key) dropOn = null;
 	};
 	const top = $derived(URGENCY.find((a) => a !== "idle" && counts[a] > 0));
-
-	/** Loose sessions by directory first, then the groups (each one a folder of its own): the same order as the open sidebar. */
-	const blocks = $derived.by(() => {
-		const { groups, dirs } = sidebarBlocks(app.sessions, app.groups, undefined, undefined, app.currentDirOrder, app.currentGroupOrder);
-		return { groups: groups.filter((b) => b.sessions.length), loose: dirs.flatMap((d) => d.sessions) };
-	});
 </script>
 
-{#snippet agent(x: Session)}
-	{@const st = activityOf(app, x.id)}
+{#snippet agent(sec: Section, x: Session)}
+	{@const st = sec.state[x.id] ?? "idle"}
+	{@const cur = sec.current}
 	<button
 		class="agent"
-		class:active={x.id === app.activeId}
+		class:active={cur && x.id === app.activeId}
 		class:over={dropOn === x.id}
-		use:dragSource={{ id: x.id }}
-		use:dropTarget={{ accepts: (id) => id !== x.id && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
-		onclick={() => app.openSession(x.id)}
-		title="{x.title} · {ACTIVITY_LABEL[st]}"
+		use:dragSource={{ id: x.id, disabled: !cur }}
+		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
+		onclick={() => app.openIn(sec.server.id, { session: x.id })}
+		title="{x.title} · {ACTIVITY_LABEL[st]}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
 		aria-label="{x.title}, {ACTIVITY_LABEL[st]}"
-		aria-current={x.id === app.activeId ? "true" : undefined}
+		aria-current={cur && x.id === app.activeId ? "true" : undefined}
 	>
 		<AgentBadge id={x.id} state={st} size={22} />
 	</button>
@@ -59,21 +89,24 @@
 	use:dropTarget={{ accepts: (id) => !!app.groupOf(id), hover: hover("rail"), drop: (id) => void app.leaveGroup(id) }}
 	use:slidingIndicator={{ selector: ".agent.active", radius: "var(--radius-sm)", variant: "ring" }}
 >
-		{#each blocks.loose as x (x.id)}<li>{@render agent(x)}</li>{/each}
-		{#if blocks.groups.length && blocks.loose.length}<li class="sep" role="separator"></li>{/if}
-		{#each blocks.groups as b, i (b.group.id)}
-			{#if i > 0}<li class="sep" role="separator"></li>{/if}
-			<li
-				class="folder"
-				class:cur={b.group.id === app.activeGroup?.id}
-				class:over={dropOn === b.group.id}
-				title={b.group.name}
-				use:dropTarget={{ hover: hover(b.group.id), drop: (id) => void app.addToGroup(id, b.group.id) }}
-			>
-				<ul class="members" aria-label={t("그룹 {name}", { name: b.group.name })}>
-					{#each b.sessions as x (x.id)}<li>{@render agent(x)}</li>{/each}
-				</ul>
-			</li>
+		{#each sections as sec, si (sec.server.id)}
+			{#if si > 0}<li class="sep srv" role="separator" title={app.serverLabel(sec.server)}></li>{/if}
+			{#each sec.loose as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
+			{#if sec.groups.length && sec.loose.length}<li class="sep" role="separator"></li>{/if}
+			{#each sec.groups as b, i (b.group.id)}
+				{#if i > 0}<li class="sep" role="separator"></li>{/if}
+				<li
+					class="folder"
+					class:cur={sec.current && b.group.id === app.activeGroup?.id}
+					class:over={dropOn === b.group.id}
+					title={b.group.name}
+					use:dropTarget={{ accepts: () => sec.current, hover: hover(b.group.id), drop: (id) => void app.addToGroup(id, b.group.id) }}
+				>
+					<ul class="members" aria-label={t("그룹 {name}", { name: b.group.name })}>
+						{#each b.sessions as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
+					</ul>
+				</li>
+			{/each}
 		{/each}
 	</ul>
 
@@ -182,6 +215,12 @@
 		height: 1px;
 		margin: 4px 0;
 		background: var(--border);
+	}
+	/* between two servers: a longer, stronger line than the one between groups */
+	.sep.srv {
+		width: 32px;
+		margin: 8px 0;
+		background: var(--text-faint);
 	}
 	.agent {
 		position: relative;
