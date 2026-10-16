@@ -17,6 +17,7 @@ export type ActionId =
   | "lastSession"
   | "nextFinished"
   | "focusSearch"
+  | "findInChat"
   | "resume"
   | "forkSession"
   | "retry"
@@ -114,6 +115,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("대화 검색"),
     hint: msg("사이드바를 펼치고 검색창으로 포커스를 옮깁니다"),
     default: "",
+  },
+  {
+    id: "findInChat",
+    label: msg("대화 안에서 찾기"),
+    hint: msg("지금 선택한 창의 대화에서 글자를 찾아 표시합니다. Enter는 다음, Shift+Enter는 이전 결과입니다"),
+    default: "Mod+F",
   },
   {
     id: "resume",
@@ -344,6 +351,7 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   retry: "chat",
   compact: "chat",
   copyLast: "chat",
+  findInChat: "chat",
   scrollTop: "chat",
   scrollBottom: "chat",
   approveTool: "chat",

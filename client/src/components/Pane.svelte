@@ -5,6 +5,7 @@
 	import Backdrop from "./Backdrop.svelte";
 	import Welcome from "./Welcome.svelte";
 	import MessageList from "./MessageList.svelte";
+	import FindBar from "./FindBar.svelte";
 	import Composer from "./Composer.svelte";
 	import DropLayer from "./DropLayer.svelte";
 	import SessionToasts from "./SessionToasts.svelte";
@@ -129,6 +130,7 @@
 			{#key chat.id}
 				<MessageList {chat} />
 			{/key}
+			<FindBar paneId={id} {focused} />
 		{:else if !id}
 			<div class="empty">
 				<Backdrop />

@@ -127,6 +127,8 @@ class AppStore {
   palette = $state.raw<PaletteSpec | null>(null);
   /** Bumped by /model to open the model picker. */
   modelPickerTick = $state(0);
+  /** Bumped by the "find in chat" shortcut; the focused pane opens its search bar. */
+  findTick = $state(0);
   /** Bumped when the open server reports a model-connection change (any client) */
   configTick = $state(0);
   /** Model new chats start with on this server (saved default, else the server's startup default) */

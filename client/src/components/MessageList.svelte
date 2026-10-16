@@ -72,6 +72,14 @@
 		if (dragging && scroller && scroller.scrollTop < lastTop - 1) release();
 	}
 
+	// The in-chat search scrolls away from the end: stop following the stream so the view stays on the match.
+	$effect(() => {
+		const el = scroller;
+		if (!el) return;
+		el.addEventListener("unpin", release);
+		return () => el.removeEventListener("unpin", release);
+	});
+
 	export function toBottom(smooth = false) {
 		if (!scroller) return;
 		setStuck(true);

@@ -205,6 +205,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   lastSession,
   nextFinished,
   focusSearch,
+  findInChat: () => void app.findTick++,
   forkSession: () => runCommand("fork", "last"),
   retry: () => runCommand("retry"),
   compact: () => runCommand("compact"),
