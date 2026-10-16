@@ -11,6 +11,8 @@
 	const downloading = $derived(updater.phase === "downloading" || updater.phase === "ready");
 	const serverBusy = $derived(serverUpdater.busy);
 	const serverStatus = $derived(serverUpdater.status?.managed ? serverUpdater.status : null);
+	const serverVersion = $derived(app.serverVersions?.version ?? "");
+	const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "");
 
 	/** Checks the app and, when connected as the owner, the server it talks to. */
 	async function checkAll() {
@@ -52,7 +54,7 @@
 				{#if updater.current}<span class="ver">{updater.current}</span>{/if}
 			</div>
 			{#if appNew}
-				<span class="chip new">{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</span>
+				<span class="chip new"><i></i>{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</span>
 			{:else if updater.phase === "idle" && updater.current}
 				<span class="chip ok"><i></i>{t("최신 버전입니다")}</span>
 			{/if}
@@ -65,18 +67,23 @@
 				<span style:width="{Math.round(updater.progress * 100)}%"></span>
 			</div>
 		{/if}
-		{#if serverStatus}
+		{#if serverStatus || serverVersion}
 			<div class="item">
 				<div class="meta">
 					<span class="name">{t("서버 버전")}</span>
+					{#if serverVersion || serverStatus?.current}
+						<span class="ver">
+							{[serverVersion, short(serverStatus?.current)].filter(Boolean).join(" · ")}{#if serverNew && serverStatus?.latest} → {short(serverStatus.latest)}{/if}
+						</span>
+					{/if}
 				</div>
 				{#if serverUpdater.phase === "updating"}
-					<span class="chip new">{t("서버를 업데이트하는 중…")}</span>
+					<span class="chip new"><i></i>{t("서버를 업데이트하는 중…")}</span>
 				{:else if serverUpdater.phase === "restarting"}
-					<span class="chip new">{t("서버가 다시 시작되기를 기다리는 중…")}</span>
+					<span class="chip new"><i></i>{t("서버가 다시 시작되기를 기다리는 중…")}</span>
 				{:else if serverNew}
-					<span class="chip new">{t("서버에 새 버전이 있습니다")}</span>
-				{:else}
+					<span class="chip new"><i></i>{t("서버에 새 버전이 있습니다")}</span>
+				{:else if serverStatus}
 					<span class="chip ok"><i></i>{t("최신 버전입니다")}</span>
 				{/if}
 				{#if serverNew}
@@ -107,10 +114,10 @@
 	.meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 	.name { font-size: var(--fs-sm); font-weight: 500; }
 	.ver { font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-	.chip { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: var(--fs-xs); line-height: 1.5; text-align: right; }
+	.chip { flex: 0 1 auto; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: var(--fs-xs); line-height: 1.5; text-align: right; }
 	.chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 	.chip.ok { background: var(--ok-soft); color: var(--ok); }
-	.chip.new { background: var(--accent-soft); color: var(--text); }
+	.chip.new { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
 	.item .btn { flex: none; white-space: nowrap; }
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
