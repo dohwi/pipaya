@@ -327,6 +327,8 @@ export const en: Record<string, string> = {
 	"세션 이름과 역할을 이 모델이 요약해 붙입니다. 가볍고 저렴한 모델을 권장합니다.": "This model writes each session's name and role. A light, cheap model is recommended.",
 	"컨텍스트가 가득 차면 자동으로 압축": "Compact automatically when the context is nearly full",
 	"자동 압축": "Auto-compact",
+	"자동 압축 기준": "Auto-compact threshold",
+	"컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.": "When the context passes {percent}% of the model's window, it is compacted automatically before the next message is sent. Default: {default}%.",
 	"압축 설정을 저장하지 못했습니다: {error}": "Could not save the compaction settings: {error}",
 	"사용 가능": "Available",
 	"키 필요": "Key needed",

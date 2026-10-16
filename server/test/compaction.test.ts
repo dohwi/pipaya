@@ -53,17 +53,25 @@ const modelsUsed = () => upstream.requests.map((r) => r.body?.model);
 describe("compaction model setting", () => {
 	test("defaults to the session's own model, and auto compaction on", async () => {
 		const r = (await api("GET", "/compaction")).json;
-		expect(r.settings).toEqual({ auto: true, model: null });
-		expect(r.defaults).toEqual({ auto: true, model: null });
+		expect(r.settings).toEqual({ auto: true, model: null, thresholdPercent: 90 });
+		expect(r.defaults).toEqual({ auto: true, model: null, thresholdPercent: 90 });
+	});
+
+	test("threshold percent is saved, kept when omitted, and range-checked", async () => {
+		expect((await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 60 })).json.settings.thresholdPercent).toBe(60);
+		expect((await api("PUT", "/compaction", { auto: true, model: null })).json.settings.thresholdPercent).toBe(60);
+		expect((await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 10 })).status).toBe(400);
+		expect((await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 99 })).status).toBe(400);
+		expect((await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 90 })).json.settings.thresholdPercent).toBe(90);
 	});
 
 	test("saves a model, clears it with null, rejects an unknown one and bad bodies", async () => {
-		expect((await api("PUT", "/compaction", { auto: false, model: { provider: "echo", model: LIGHT.id } })).json.settings).toEqual({ auto: false, model: { provider: "echo", model: LIGHT.id } });
+		expect((await api("PUT", "/compaction", { auto: false, model: { provider: "echo", model: LIGHT.id } })).json.settings).toEqual({ auto: false, model: { provider: "echo", model: LIGHT.id }, thresholdPercent: 90 });
 		expect((await api("GET", "/compaction")).json.settings.model).toEqual({ provider: "echo", model: LIGHT.id });
 		expect((await api("PUT", "/compaction", { auto: true, model: { provider: "echo", model: "nope" } })).status).toBe(400);
 		expect((await api("PUT", "/compaction", { auto: true })).status).toBe(400);
 		expect((await api("GET", "/compaction")).json.settings.model).toEqual({ provider: "echo", model: LIGHT.id });
-		expect((await api("PUT", "/compaction", { auto: true, model: null })).json.settings).toEqual({ auto: true, model: null });
+		expect((await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 90 })).json.settings).toEqual({ auto: true, model: null, thresholdPercent: 90 });
 	});
 });
 
@@ -191,7 +199,7 @@ describe("cut selection", () => {
 
 	test("token estimate and automatic threshold", () => {
 		expect(estimateTokens(user("abcd".repeat(100)))).toBe(100);
-		expect(thresholdFor(1_000_000)).toBe(1_000_000 - 16_384);
-		expect(thresholdFor(8192)).toBe(4096);
+		expect(thresholdFor(1_000_000)).toBe(900_000);
+		expect(thresholdFor(8192, 50)).toBe(4096);
 	});
 });

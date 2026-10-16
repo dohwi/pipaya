@@ -6,24 +6,33 @@ import { badRequest } from "./errors.ts";
 import type { ModelRegistry } from "./models.ts";
 import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
 
-/** Recent history kept verbatim, and room left for the next answer before an automatic compaction fires. */
+/** Recent history kept verbatim by a compaction. */
 export const KEEP_RECENT_TOKENS = 20_000;
-export const RESERVE_TOKENS = 16_384;
 export const SUMMARY_MAX_TOKENS = 4096;
 /** Characters of a single tool result / argument blob shown to the summarizer. */
 const CLIP = 2000;
+
+export const MIN_THRESHOLD_PERCENT = 30;
+export const MAX_THRESHOLD_PERCENT = 95;
+export const DEFAULT_THRESHOLD_PERCENT = 90;
 
 export const CompactionSettingsSchema = Type.Object(
 	{
 		auto: Type.Boolean({ description: "Compact automatically before a prompt when the context is nearly full" }),
 		model: Type.Union([ModelChoice, Type.Null()], { description: "Model (and reasoning strength) that writes the summary. null = the session's own model, without extra reasoning" }),
+		thresholdPercent: Type.Integer({ minimum: MIN_THRESHOLD_PERCENT, maximum: MAX_THRESHOLD_PERCENT, description: "Automatic compaction runs before a prompt once the context uses at least this percent of the model's context window" }),
 	},
 	{ additionalProperties: false },
 );
 export type CompactionSettingsValue = Static<typeof CompactionSettingsSchema>;
-export const CompactionSettingsBody = CompactionSettingsSchema;
+/** `thresholdPercent` may be left out (older clients): the current value is kept. */
+export const CompactionSettingsBody = Type.Object(
+	{ auto: CompactionSettingsSchema.properties.auto, model: CompactionSettingsSchema.properties.model, thresholdPercent: Type.Optional(CompactionSettingsSchema.properties.thresholdPercent) },
+	{ additionalProperties: false },
+);
+export type CompactionSettingsInput = Static<typeof CompactionSettingsBody>;
 export const CompactionSettingsResult = Type.Object({ settings: CompactionSettingsSchema, defaults: CompactionSettingsSchema });
-export const DEFAULT_COMPACTION_SETTINGS = (): CompactionSettingsValue => ({ auto: true, model: null });
+export const DEFAULT_COMPACTION_SETTINGS = (): CompactionSettingsValue => ({ auto: true, model: null, thresholdPercent: DEFAULT_THRESHOLD_PERCENT });
 
 const KEY = "compaction";
 
@@ -34,14 +43,16 @@ export class CompactionSettings {
 		const row = this.db.query("SELECT data FROM settings WHERE key = $key").get({ key: KEY }) as { data: string } | null;
 		if (!row) return DEFAULT_COMPACTION_SETTINGS();
 		try {
-			const parsed = JSON.parse(row.data);
-			return Value.Check(CompactionSettingsSchema, parsed) ? parsed : DEFAULT_COMPACTION_SETTINGS();
+			// Merge over the defaults so settings saved before a field existed keep their other values.
+			const merged = { ...DEFAULT_COMPACTION_SETTINGS(), ...JSON.parse(row.data) };
+			return Value.Check(CompactionSettingsSchema, merged) ? merged : DEFAULT_COMPACTION_SETTINGS();
 		} catch {
 			return DEFAULT_COMPACTION_SETTINGS();
 		}
 	}
 
-	set(next: CompactionSettingsValue): CompactionSettingsValue {
+	set(input: CompactionSettingsInput): CompactionSettingsValue {
+		const next: CompactionSettingsValue = { ...input, thresholdPercent: input.thresholdPercent ?? this.get().thresholdPercent };
 		if (next.model && !this.registry.models.getModel(next.model.provider, next.model.model)) {
 			throw badRequest(`unknown model ${next.model.provider}/${next.model.model}`);
 		}
@@ -132,5 +143,5 @@ export function summaryMessage(summary: string): AgentMessage {
 	return { role: "user", content: [{ type: "text", text: SUMMARY_PREFIX + summary }], timestamp: Date.now() } as AgentMessage;
 }
 
-/** Token level at which an automatic compaction fires: the window minus a reserve, but never below half of it. */
-export const thresholdFor = (contextWindow: number): number => Math.max(Math.floor(contextWindow * 0.5), contextWindow - RESERVE_TOKENS);
+/** Token level at which an automatic compaction fires: `percent` of the context window. */
+export const thresholdFor = (contextWindow: number, percent: number = DEFAULT_THRESHOLD_PERCENT): number => Math.floor((contextWindow * percent) / 100);

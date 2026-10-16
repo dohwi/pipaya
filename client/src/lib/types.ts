@@ -51,6 +51,8 @@ export interface CompactionSettings {
 	auto: boolean;
 	/** The model (and strength) that writes the summary; null = the session's own model */
 	model: ModelChoice | null;
+	/** Auto-compaction runs once the context uses at least this percent of the model's window; absent on older servers */
+	thresholdPercent?: number;
 }
 export interface CompactionSettingsInfo { settings: CompactionSettings; defaults: CompactionSettings }
 export interface SystemModelSettings {

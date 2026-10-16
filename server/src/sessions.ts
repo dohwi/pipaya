@@ -254,9 +254,10 @@ export class SessionManager {
 
 	/** Before a prompt: compact first when automatic compaction is on and the context is nearly full. */
 	private async autoCompact(id: string): Promise<void> {
-		if (!this.compaction?.get().auto) return;
+		const settings = this.compaction?.get();
+		if (!settings?.auto) return;
 		const usage = this.contextUsage(id);
-		if (!usage?.tokens || usage.tokens < thresholdFor(usage.contextWindow)) return;
+		if (!usage?.tokens || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return;
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }

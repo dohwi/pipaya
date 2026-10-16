@@ -12,6 +12,8 @@
 	let { serverId, models, providers }: { serverId: string; models: ModelInfo[]; providers: ProviderInfo[] } = $props();
 
 	let settings = $state<CompactionSettings | null>(null);
+	let defaults = $state<CompactionSettings | null>(null);
+	let pct = $state<number | null>(null); // slider value while dragging
 	let error = $state("");
 	let busy = $state(false);
 	let seq = 0;
@@ -27,7 +29,7 @@
 		if (!a) return;
 		try {
 			const r = await a.compactionSettings();
-			if (mine === seq) settings = r.settings;
+			if (mine === seq) { settings = r.settings; defaults = r.defaults; }
 		} catch {
 			/* not supported by this server */
 		}
@@ -55,6 +57,7 @@
 	}
 
 	const info = $derived(settings?.model ? models.find((m) => m.provider === settings!.model!.provider && m.id === settings!.model!.model) : undefined);
+	const def = $derived(defaults);
 	const own = $derived(serverId === app.serverId); // favourites are the open server's
 </script>
 
@@ -93,6 +96,24 @@
 				{t("압축 요약은 이 모델이 작성합니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
+		{#if s.thresholdPercent !== undefined}
+			<label class="thr">
+				<span>{t("자동 압축 기준")}</span>
+				<input
+					type="range"
+					min="30"
+					max="95"
+					step="5"
+					value={pct ?? s.thresholdPercent}
+					disabled={busy || !s.auto}
+					aria-label={t("자동 압축 기준")}
+					oninput={(e) => (pct = e.currentTarget.valueAsNumber)}
+					onchange={(e) => { const v = e.currentTarget.valueAsNumber; pct = null; void save({ ...s, thresholdPercent: v }); }}
+				/>
+				<strong>{pct ?? s.thresholdPercent}%</strong>
+			</label>
+			<p class="note">{t("컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
+		{/if}
 		{#if error}<p class="note" role="alert">{error}</p>{/if}
 	</section>
 {/if}
@@ -125,6 +146,16 @@
 		font-size: var(--fs-sm);
 		white-space: nowrap;
 		cursor: pointer;
+	}
+	.thr {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-size: var(--fs-sm);
+	}
+	.thr input {
+		flex: 1;
+		min-width: 0;
 	}
 	.note {
 		margin: 0;
