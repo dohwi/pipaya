@@ -256,7 +256,9 @@ a {
 }
 /* a modal dialog is not a control: its focus ring would float detached around the whole card */
 dialog:focus,
-dialog:focus-visible {
+dialog:focus-visible,
+[role="dialog"]:focus,
+[role="dialog"]:focus-visible {
 	outline: none;
 }
 input:focus-visible,
