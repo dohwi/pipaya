@@ -55,10 +55,11 @@
 	<div class="q">{cur.question}</div>
 	{#if cur.options?.length}
 		<div class="opts">
-			{#each cur.options as o (o)}
+			{#each cur.options as o, n (o)}
 				<button class="btn opt" class:picked={items && answers[tab] === o} class:rec={cur.recommended === o} onclick={() => reply(o)}>
-					{o}
-					{#if cur.recommended === o}<span class="badge">{t("추천")}</span>{/if}
+					<span class="num">{n + 1}.</span>
+					<span>{o}</span>
+					{#if cur.recommended === o}<span class="badge">({t("추천")})</span>{/if}
 				</button>
 			{/each}
 		</div>
@@ -118,16 +119,13 @@
 		overflow-wrap: anywhere;
 	}
 	.opt.rec {
-		border-color: currentColor;
+		border: 2px solid var(--warn);
 		font-weight: 600;
 	}
-	.badge {
-		margin-left: 6px;
-		padding: 1px 8px;
-		border-radius: var(--radius-pill);
-		border: 1px solid currentColor;
-		font-size: var(--fs-2xs);
-		white-space: nowrap;
+	.num {
+		margin-right: 6px;
+		opacity: 0.7;
+		font-variant-numeric: tabular-nums;
 	}
 	.opt.picked {
 		outline: 2px solid currentColor;
