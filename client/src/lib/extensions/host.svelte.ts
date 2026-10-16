@@ -1050,7 +1050,7 @@ export class ExtensionHost {
         return adapter.abort();
       }
       case "panes.list": case "panes.group": case "panes.read": case "panes.focus": case "panes.send": case "panes.abort": case "panes.split":
-      case "panes.move": case "panes.swap": case "panes.resize": case "panes.leave": case "panes.close": case "panes.zoom": {
+      case "panes.models": case "panes.configure": case "panes.compact": case "panes.move": case "panes.swap": case "panes.resize": case "panes.leave": case "panes.close": case "panes.zoom": {
         this.require(id, "panes");
         const panes = this.adapter?.panes;
         if (!panes) throw new LocalizedError(t("이 클라이언트는 패널 제어를 지원하지 않습니다"));
@@ -1059,6 +1059,7 @@ export class ExtensionHost {
         const generation = this.generations.get(id);
         const alive = <T,>(v: T): T => { if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다")); return v; };
         if (method === "panes.list") return clone(panes.list());
+        if (method === "panes.models") return clone(panes.models());
         if (method === "panes.group") return clone(panes.group());
         if (method === "panes.read") {
           const o = args[1] === undefined || args[1] === null ? {} : object(args[1]);
@@ -1074,6 +1075,18 @@ export class ExtensionHost {
             if (mode !== "prompt" && mode !== "steer" && mode !== "follow_up") throw new LocalizedError(t("잘못된 전송 방식"));
             return panes.send(pid(args[0]), string(args[1], 16000), mode).then(() => {});
           }
+          case "panes.configure": {
+            const o = object(args[1]); const out: Record<string, string> = {};
+            for (const key of Object.keys(o)) if (!["title", "provider", "model", "thinkingLevel", "approval"].includes(key)) throw new LocalizedError(t("알 수 없는 설정: {key}", { key }));
+            if (o.title !== undefined) out.title = string(o.title, 200);
+            if (o.provider !== undefined) out.provider = string(o.provider, 80);
+            if (o.model !== undefined) out.model = string(o.model, 200);
+            if (o.thinkingLevel !== undefined) { if (!["minimal", "low", "medium", "high", "xhigh", "max"].includes(o.thinkingLevel as string)) throw new LocalizedError(t("잘못된 추론 강도")); out.thinkingLevel = o.thinkingLevel as string; }
+            if (o.approval !== undefined) { if (!["auto", "ask", "readonly"].includes(o.approval as string)) throw new LocalizedError(t("잘못된 승인 방식")); out.approval = o.approval as string; }
+            if (!Object.keys(out).length) throw new LocalizedError(t("바꿀 설정이 없습니다"));
+            return panes.configure(pid(args[0]), out).then(() => {});
+          }
+          case "panes.compact": return panes.compact(pid(args[0]), args[1] === undefined || args[1] === null ? undefined : string(args[1], 4000)).then(() => {});
           case "panes.abort": return panes.abort(pid(args[0])).then(() => {});
           case "panes.split": {
             const o = args[2] === undefined || args[2] === null ? {} : object(args[2]);

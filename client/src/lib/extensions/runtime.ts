@@ -58,7 +58,9 @@ const sdk = Object.freeze({
     swap: (a, b) => rpc('panes.swap', a, b),
     resize: (id, ratio) => rpc('panes.resize', id, ratio),
     leave: id => rpc('panes.leave', id), close: id => rpc('panes.close', id),
-    zoom: id => rpc('panes.zoom', id === undefined ? null : id)
+    zoom: id => rpc('panes.zoom', id === undefined ? null : id),
+    models: () => rpc('panes.models'), configure: (id, settings) => rpc('panes.configure', id, settings),
+    compact: (id, instructions) => rpc('panes.compact', id, instructions === undefined ? null : instructions)
   }),
   tools: Object.freeze({ registerRenderer: (toolName, fn) => register('tools.registerRenderer', toolName, fn), removeRenderer: toolName => rpc('tools.removeRenderer', toolName) }),
   messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType) }),

@@ -941,7 +941,7 @@ describe("server bridge, shortcuts, dialogs, session control and tool renderers"
 			["shortcuts.register", [{ id: "a", label: "A", combo: "Mod+K" }, "t"]], ["shortcuts.remove", ["a"]],
 			["dialog.confirm", [{ title: "t" }]], ["session.send", ["hi"]], ["session.abort", []],
 			["tools.registerRenderer", ["bash", "t"]], ["tools.removeRenderer", ["bash"]],
-			["panes.list", []], ["panes.send", ["s1", "hi"]], ["panes.close", ["s1"]],
+			["panes.list", []], ["panes.send", ["s1", "hi"]], ["panes.close", ["s1"]], ["panes.models", []], ["panes.configure", ["s1", { title: "x" }]], ["panes.compact", ["s1"]],
 		];
 		for (const [method, args] of calls) expect(() => call(host, id, method, args)).toThrow(/권한 없음|permission/i);
 		host.stop();
@@ -1137,6 +1137,8 @@ describe("panes", () => {
 			read: rec("read", [{ role: "user", text: "hi", at: 1 }]),
 			focus: rec("focus"), send: rec("send"), abort: rec("abort"), split: rec("split", "s2"), move: rec("move"), swap: rec("swap"),
 			resize: rec("resize"), leave: rec("leave"), close: rec("close"), zoom: rec("zoom"),
+			models: () => [{ provider: "p", id: "m", name: "M", reasoning: true, thinkingLevels: null, vision: false, contextWindow: 1 }],
+			configure: rec("configure"), compact: rec("compact"),
 		};
 		return { panes: panes as any, log };
 	}
@@ -1162,6 +1164,22 @@ describe("panes", () => {
 			["read", "s1", 5], ["send", "s1", "go", "prompt"], ["send", "s1", "later", "follow_up"],
 			["split", "s1", "right", "terminal", false], ["resize", "s1", 0.3], ["zoom", null],
 		]);
+		host.stop();
+	});
+
+	test("settings: only known fields reach the adapter, and the models list is plain data", async () => {
+		const { host, id, log } = await setup();
+		expect(await call(host, id, "panes.models")).toHaveLength(1);
+		await call(host, id, "panes.configure", ["s1", { provider: "p", model: "m", thinkingLevel: "high", approval: "ask", title: "T" }]);
+		await call(host, id, "panes.compact", ["s1", "keep the plan"]);
+		await call(host, id, "panes.compact", ["s1"]);
+		expect(log).toEqual([
+			["configure", "s1", { title: "T", provider: "p", model: "m", thinkingLevel: "high", approval: "ask" }],
+			["compact", "s1", "keep the plan"], ["compact", "s1", undefined],
+		]);
+		for (const bad of [{}, { token: "x" }, { thinkingLevel: "extreme" }, { approval: "yolo" }, { title: "" }])
+			await expect(Promise.resolve().then(() => call(host, id, "panes.configure", ["s1", bad]))).rejects.toThrow();
+		expect(log).toHaveLength(3);
 		host.stop();
 	});
 

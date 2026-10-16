@@ -118,6 +118,15 @@ export interface ExtensionSDK {
     close(id: string): Promise<void>;
     /** Enlarge a pane to the whole group; `zoom()` / `zoom(null)` puts it back. */
     zoom(id?: string | null): Promise<void>;
+    /** Models that can be chosen now, with the thinking levels each accepts (`null` = every level). */
+    models(): Promise<import("./panes").PaneModel[]>;
+    /**
+     * Change one conversation's own settings (not the defaults of new chats): `title`, `provider` + `model` together,
+     * `thinkingLevel` (`minimal`…`max`, must suit the model), `approval` (`auto` | `ask` | `readonly`). Conversations only.
+     */
+    configure(id: string, settings: import("./panes").PaneSettings): Promise<void>;
+    /** Compress the conversation's context now (not while it is running). */
+    compact(id: string, instructions?: string): Promise<void>;
   };
   /**
    * Needs `messages`: draw the entries a server extension stored on the open conversation (`ctx.appendEntry`) as cards
