@@ -31,6 +31,10 @@
 
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
+	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
+	const freshSession = $derived(!!pane.id && !app.groupOf(pane.id) && !!chat?.ready && !chat.loadError && chat.items.length === 0);
+	const whereShown = $derived(!pane.id || freshSession);
+	const wherePath = $derived(pane.id ? (app.session(pane.id)?.cwd ?? app.workdirAbs) : app.workdirAbs);
 
 	// Unsent input survives switching to another session and back (kept per session, in memory; "" = new chat).
 	let text = $state("");
@@ -579,10 +583,10 @@
 {/if}
 
 <div class="wrap" bind:this={wrapEl}>
-	{#if !pane.id && app.net === "online"}
-		<button class="where mono" onclick={() => (app.dirPicker = true)} title={t("새 대화가 작업할 디렉터리 (눌러서 바꾸기)")} aria-label={t("작업 디렉터리: {path}", { path: app.workdirAbs })}>
+	{#if whereShown && app.net === "online"}
+		<button class="where mono" onclick={() => (app.dirPicker = true)} title={t("새 대화가 작업할 디렉터리 (눌러서 바꾸기)")} aria-label={t("작업 디렉터리: {path}", { path: wherePath })}>
 			<Icon name="folder" />
-			<span class="p">{app.workdirAbs || t("서버 기본 디렉터리")}</span>
+			<span class="p">{wherePath || t("서버 기본 디렉터리")}</span>
 			<span class="chg">{t("변경")}</span>
 		</button>
 	{/if}

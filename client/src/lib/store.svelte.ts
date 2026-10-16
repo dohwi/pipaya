@@ -1356,7 +1356,14 @@ class AppStore {
     }
     const same = this.current && this.relPath(this.current.cwd) === rel;
     this.setWorkdir(rel);
-    if (!same) this.newChat();
+    if (same) return true;
+    const cur = this.current;
+    if (cur && !this.groupOf(cur.id) && this.chats[cur.id]?.items.length === 0) {
+      // An empty session made by "new chat" moves to the new folder: start one there and close the empty one.
+      void this.startChat().then(() => {
+        if (this.activeId !== cur.id) void this.close(cur.id);
+      });
+    } else this.newChat();
     return true;
   }
 
