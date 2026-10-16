@@ -535,6 +535,9 @@ input[type="checkbox"]:disabled {
 
 .mono {
 	font-family: var(--mono);
+	/* JetBrains Mono ligatures merge "//" into one glyph, which looks like a dropped slash in URLs */
+	font-variant-ligatures: none;
+	font-feature-settings: "calt" 0, "liga" 0;
 }
 
 /* section labels are mono, like metadata */
