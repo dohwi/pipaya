@@ -31,6 +31,25 @@
 	/** The name other sessions call this one by; the other sessions address it as @name. */
 	const memberName = $derived(session?.name);
 
+	/**
+	 * Marks a clipped title: sets `--shift` (how far the text overflows) and `.over` so CSS can scroll it into view.
+	 * Re-measured when the text or the bar width changes.
+	 */
+	function overflow(node: HTMLElement, _text?: string) {
+		const measure = () => {
+			const inner = node.firstElementChild as HTMLElement | null;
+			const d = inner ? inner.scrollWidth - node.clientWidth : 0;
+			node.classList.toggle("over", d > 1);
+			node.style.setProperty("--shift", `${-Math.max(d, 0)}px`);
+			node.style.setProperty("--dur", `${Math.max(d / 40, 2) + 2}s`);
+		};
+		const ro = new ResizeObserver(measure);
+		ro.observe(node);
+		if (node.firstElementChild) ro.observe(node.firstElementChild);
+		measure();
+		return { update: measure, destroy: () => ro.disconnect() };
+	}
+
 	function focus() {
 		if (grouped && id && id !== app.activeId) void app.openSession(id);
 	}
@@ -170,6 +189,23 @@
 	.who.failed { color: var(--danger); }
 	.focused .t {
 		color: var(--text);
+	}
+	.ti {
+		display: inline-block;
+	}
+	/* A title longer than the bar scrolls through while the pane is selected, so the whole text can be read. */
+	@media (prefers-reduced-motion: no-preference) {
+		.focused .t:global(.over) {
+			text-overflow: clip;
+		}
+		.focused .t:global(.over) .ti {
+			animation: title-scroll var(--dur, 8s) ease-in-out infinite;
+		}
+	}
+	@keyframes title-scroll {
+		0%, 15% { transform: translateX(0); }
+		70%, 85% { transform: translateX(var(--shift)); }
+		100% { transform: translateX(0); }
 	}
 	.x {
 		flex: none;
