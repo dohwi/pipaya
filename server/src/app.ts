@@ -337,6 +337,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },
 		handler: async (req, reply) => reply.status(201).send(await sessions.create(req.body)),
 	});
+	app.post("/sessions/localize-names", {
+		schema: { body: S.LocalizeNamesBody, response: { 200: Type.Object({ renamed: Type.Integer() }), ...S.errors(400, 401) } },
+		handler: async (req) => ({ renamed: sessions.localizeNames(req.body.lang) }),
+	});
 	app.get("/sessions", {
 		schema: { querystring: S.ListSessionsQuery, response: { 200: S.SessionList, ...S.errors(400, 401) } },
 		handler: async (req) => {

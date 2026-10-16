@@ -149,6 +149,10 @@ export const CreateSessionBody = Type.Object({
 	lang: Type.Optional(Type.String({ maxLength: 35, description: "UI language tag (e.g. ko, en). Picks the language of the session's @name; omit for Korean names." })),
 });
 
+export const LocalizeNamesBody = Type.Object({
+	lang: Type.String({ minLength: 1, maxLength: 35, description: "UI language tag the client switched to (e.g. ko, en). Every session's @name becomes its twin in that language (민수 <-> Minsu)." }),
+});
+
 export const PatchSessionBody = Type.Object({
 	title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
 	purpose: Type.Optional(Type.String({ maxLength: 200, description: "What this session works on; \"\" clears it so the system model writes it again" })),

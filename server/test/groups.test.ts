@@ -7,7 +7,7 @@ import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
 import { DEFAULT_MAX_SESSIONS } from "../src/config.ts";
-import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentionedMembers, nextMemberName, poolForLang } from "../src/member-names.ts";
+import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentionedMembers, nameInLang, nextMemberName, poolForLang, romanize } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -48,8 +48,8 @@ describe("member names", () => {
 		expect(nextMemberName(new Set())).toBe("철수");
 		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("가온");
 		expect(nextMemberName(new Set(MEMBER_NAMES_KO.map((n) => n.toLowerCase())))).toBe("철수2");
-		expect(nextMemberName(new Set(), MEMBER_NAMES_EN)).toBe("James");
-		expect(nextMemberName(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())), MEMBER_NAMES_EN)).toBe("James2");
+		expect(nextMemberName(new Set(), MEMBER_NAMES_EN)).toBe("Cheolsu");
+		expect(nextMemberName(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())), MEMBER_NAMES_EN)).toBe("Cheolsu2");
 	});
 	test("each pool has no duplicates and covers the default session limit", () => {
 		for (const pool of [MEMBER_NAMES_KO, MEMBER_NAMES_EN]) {
@@ -214,6 +214,31 @@ describe("groups API", () => {
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);
+	});
+});
+
+describe("name localization", () => {
+	test("romanizes Hangul names", () => {
+		expect(romanize("민수")).toBe("Minsu");
+		expect(romanize("철수")).toBe("Cheolsu");
+		expect(romanize("영희")).toBe("Yeonghui");
+		expect(romanize("가온")).toBe("Gaon");
+	});
+	test("nameInLang maps a name to its twin and back, keeping a number suffix", () => {
+		expect(nameInLang("민수", "en")).toBe("Minsu");
+		expect(nameInLang("민수2", "en")).toBe("Minsu2");
+		expect(nameInLang("Minsu", "ko")).toBe("민수");
+		expect(nameInLang("minsu2", "ko-KR")).toBe("민수2");
+		expect(nameInLang("민수", "ko")).toBe("민수");
+		expect(nameInLang("Custom", "ko")).toBe("Custom");
+	});
+	test("POST /sessions/localize-names renames every session and back", async () => {
+		const a = (await api("POST", "/sessions", {})).json;
+		const r = await api("POST", "/sessions/localize-names", { lang: "en" });
+		expect(r.json.renamed).toBeGreaterThan(0);
+		expect((await api("GET", `/sessions/${a.id}`)).json.name).toBe(nameInLang(a.name, "en"));
+		await api("POST", "/sessions/localize-names", { lang: "ko" });
+		expect((await api("GET", `/sessions/${a.id}`)).json.name).toBe(a.name);
 	});
 });
 

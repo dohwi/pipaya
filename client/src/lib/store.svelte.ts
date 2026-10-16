@@ -21,7 +21,7 @@ import { extensions } from "./extensions/host.svelte";
 import { DEFAULT_ESCALATE, ESCALATE_CHOICES, deviceIdentity, notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { PairingError, redeemPairing, type PairingLink } from "./pairing";
-import { LocalizedError, remotePack, remotePackVersions, setRemotePacks, t } from "./i18n";
+import { getLang, LocalizedError, onLangChange, remotePack, remotePackVersions, setRemotePacks, t } from "./i18n";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
@@ -389,6 +389,14 @@ class AppStore {
       }
     });
     this.prefs.init();
+    // Session @names follow the UI language (민수 <-> Minsu); the server renames, and session_updated events refresh the list.
+    let korean = /^ko(?:-|$)/i.test(getLang());
+    onLangChange(() => {
+      const now = /^ko(?:-|$)/i.test(getLang());
+      if (now === korean) return;
+      korean = now;
+      void this.api?.localizeNames(getLang()).catch(() => {}); // an older server has no such route: names just stay
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.hiddenAt = Date.now();

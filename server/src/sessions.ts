@@ -18,7 +18,7 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
-import { memberHint, mentionedMembers, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
+import { memberHint, mentionedMembers, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -272,6 +272,20 @@ export class SessionManager {
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }
+	}
+
+	/** The UI language changed: give every session the twin of its name in that language (민수 <-> Minsu). Returns how many were renamed. */
+	localizeNames(lang: string): number {
+		const pool = poolForLang(lang);
+		let renamed = 0;
+		for (const r of this.store.list({ limit: 1000 })) {
+			let name = nameInLang(r.name, lang);
+			if (name === r.name) continue;
+			if (!r.closed && this.store.activeNames().has(name.toLowerCase())) name = nextMemberName(this.store.activeNames(), pool);
+			this.update(r.id, { name });
+			renamed++;
+		}
+		return renamed;
 	}
 
 	update(id: string, patch: SessionPatch): SessionRecord {

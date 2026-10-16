@@ -12,9 +12,9 @@ export const MEMBER_NAMES_KO = [
 	"선아", "연우", "주아", "은서", "유리", "아영", "정아", "현아", "승아", "경미",
 	"온유", "혜린", "재현", "민호", "성훈", "진우", "태준", "승현", "지원", "하람",
 	"시현", "도훈", "준서", "예성", "은우", "지환", "동윤", "현서", "서현", "지수",
-	"예지", "하영", "수진", "유경", "민아", "다영", "세린", "가영", "나윤", "소민",
+	"예지", "하영", "수진", "유경", "다영", "세린", "가영", "나윤", "소민",
 	"유빈", "지은", "아윤", "예서", "채린", "민지", "민규", "민석", "민우", "민혁",
-	"민철", "민수", "지석", "지성", "지웅", "지혁", "지완", "지명", "지태", "시후",
+	"민철", "민기", "민수", "지석", "지성", "지웅", "지혁", "지완", "지명", "지태", "시후",
 	"시원", "시온", "시헌", "시율", "서호", "서원", "서빈", "서율", "서인", "서하",
 	"도영", "도진", "도율", "도원", "도준", "도경", "도빈", "하진", "하율", "하민",
 	"하성", "현석", "현진", "현호", "현규", "현빈", "현성", "태영", "태윤", "태진",
@@ -22,29 +22,22 @@ export const MEMBER_NAMES_KO = [
 	"우빈", "우성", "우혁", "정훈", "정호", "정현", "정민", "정빈", "정원", "준영",
 ];
 
-/** English names for sessions made from a non-Korean UI. */
-export const MEMBER_NAMES_EN = [
-	"James", "Emma", "Liam", "Olivia", "Noah", "Sophia", "Lucas", "Mia", "Ethan", "Chloe",
-	"Daniel", "Emily", "Henry", "Grace", "Oliver", "Hannah", "Jack", "Lily", "Leo", "Nora",
-	"Owen", "Ella", "Ryan", "Zoe", "Adam", "Anna", "Carter", "Ruby", "Dylan", "Ivy",
-	"Eric", "Julia", "Felix", "Laura", "Gavin", "Maya", "Hugo", "Nina", "Isaac", "Alice",
-	"Jacob", "Clara", "Kevin", "Elena", "Logan", "Vera", "Miles", "Iris", "Nathan", "Lena",
-	"Oscar", "Rita", "Peter", "Sara", "Quinn", "Tara", "Ralph", "Uma", "Simon", "Vivian",
-	"Thomas", "Wendy", "Victor", "Willa", "Xavier", "Yara", "Zachary", "Amber", "Aaron", "Bella",
-	"Blake", "Cora", "Caleb", "Dana", "Chris", "Edith", "Colin", "Erin", "David", "Faye",
-	"Derek", "Gemma", "Dean", "Hazel", "Elliot", "Irene", "Evan", "Jade", "Finn", "Kate",
-	"Floyd", "Leah", "Frank", "Lucy", "George", "Maria", "Harvey", "Nadia", "Ian", "Paula",
-	"Jason", "Rachel", "Jesse", "Sofia", "Joel", "Tessa", "Jonah", "Violet", "Julian", "Alana",
-	"Justin", "Bianca", "Keith", "Camila", "Kyle", "Diana", "Lance", "Elise", "Lewis", "Fiona",
-	"Luke", "Gina", "Marco", "Helen", "Martin", "Ingrid", "Mason", "Jenna", "Matteo", "Karen",
-	"Max", "Leila", "Nolan", "Mona", "Omar", "Naomi", "Pablo", "Olga", "Patrick", "Petra",
-	"Paul", "Renee", "Preston", "Sienna", "Reid", "Talia", "Rex", "Ursula", "Roman", "Vanessa",
-	"Ross", "Wanda", "Ryder", "Yvonne", "Samuel", "Zelda", "Sean", "Agnes", "Seth", "Brenda",
-	"Shane", "Carla", "Sidney", "Delia", "Spencer", "Esther", "Stefan", "Flora", "Tobias", "Greta",
-	"Tyler", "Heidi", "Walter", "Ines", "Warren", "Joan", "Wesley", "Kira", "Wyatt", "Lydia",
-	"Xander", "Marta", "Zane", "Nell", "Andre", "Opal", "Boris", "Pearl", "Cyrus", "Rosa",
-	"Dario", "Selma", "Elias", "Thea", "Emil", "Vida", "Fabian", "Zora", "Anton", "Bruno",
-];
+const INITIALS = ["g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h"];
+const VOWELS = ["a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we", "wi", "yu", "eu", "ui", "i"];
+const FINALS = ["", "k", "k", "k", "n", "n", "n", "t", "l", "k", "m", "l", "l", "l", "p", "l", "m", "p", "p", "t", "t", "ng", "t", "t", "k", "t", "p", "t"];
+
+/** Revised Romanization of a Hangul name, syllable by syllable (민수 -> Minsu); anything else is kept as it is. */
+export function romanize(name: string): string {
+	let out = "";
+	for (const ch of name) {
+		const code = ch.charCodeAt(0) - 0xac00;
+		out += code >= 0 && code <= 11171 ? INITIALS[Math.floor(code / 588)]! + VOWELS[Math.floor((code % 588) / 28)]! + FINALS[code % 28]! : ch;
+	}
+	return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+/** English names for sessions made from a non-Korean UI: the Korean pool, romanized (민수 -> Minsu), so each name has a twin. */
+export const MEMBER_NAMES_EN = MEMBER_NAMES_KO.map(romanize);
 
 /** Kept for callers that mean the default (Korean) pool. */
 export const MEMBER_NAMES = MEMBER_NAMES_KO;
@@ -57,7 +50,7 @@ export function poolForLang(lang?: string): readonly string[] {
 /** The pool a given name came from (Latin letters = English), so a reopened or forked session stays in its language. */
 export const poolOfName = (name: string): readonly string[] => (/^[a-z]/i.test(name) ? MEMBER_NAMES_EN : MEMBER_NAMES_KO);
 
-/** The next free name given the lower-cased names in use: the pool first, then 철수2, 철수3, ... (James2, ...) */
+/** The next free name given the lower-cased names in use: the pool first, then 철수2, 철수3, ... (Cheolsu2, ...) */
 export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string[] = MEMBER_NAMES_KO): string {
 	const free = pool.find((n) => !taken.has(n.toLowerCase()));
 	if (free) return free;
@@ -91,4 +84,18 @@ export function mentionedMembers(text: string, names: readonly string[]): string
 export function memberHint(open: string, names: string[], purposes: Readonly<Record<string, string>> = {}): string {
 	const list = names.map((n) => (purposes[n] ? `@${n} (${purposes[n]})` : `@${n}`)).join(", ");
 	return `${open}The user mentioned ${list}: other sessions (agents) on this server. Use peer_send to give them work or ask them something (they run independently and see only what you send), and peer_read to look at what they said or did. Do not guess what they did.</pipaya-hint>`;
+}
+
+const SUFFIX = /\d+$/;
+
+/**
+ * The same member name in another UI language: 민수 <-> Minsu (a numbered 민수2 <-> Minsu2). A name that is not from the
+ * pools (or is already in that language) is returned unchanged.
+ */
+export function nameInLang(name: string, lang?: string): string {
+	const base = name.replace(SUFFIX, "");
+	const suffix = name.slice(base.length);
+	if (poolForLang(lang) === MEMBER_NAMES_EN) return MEMBER_NAMES_KO.includes(base) ? romanize(base) + suffix : name;
+	const i = MEMBER_NAMES_EN.findIndex((n) => n.toLowerCase() === base.toLowerCase());
+	return i >= 0 ? MEMBER_NAMES_KO[i]! + suffix : name;
 }
