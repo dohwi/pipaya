@@ -3,6 +3,7 @@
 	import { approvalMode } from "../lib/store-model";
 	import { paneIn } from "../lib/motion";
 	import { slidingIndicator } from "../lib/sliding-indicator";
+	import { ACTIONS, formatCombo } from "../lib/keys";
 	import { rovingKeys } from "../lib/roving";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
@@ -64,6 +65,45 @@
 	/** Language names stay in their own language so they can be found from any other. */
 	const langOptions = $derived([{ tag: "system", name: t("시스템") }, ...languages()]);
 
+	/* ---------- search: settings sections and shortcuts in one list ---------- */
+	let query = $state("");
+	/** Filter handed to the shortcut list when a shortcut result is opened. */
+	let keyFilter = $state("");
+	type Hit = { key: string; title: string; where: string; combo?: string; open(): void };
+	/** Settings that are not a tab of their own; the words are what a person may type for them. */
+	const items: { tab: TabId; label: string; words: string }[] = [
+		{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
+		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
+		{ tab: "general", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
+		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
+		{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
+	];
+	const norm = (s: string) => s.toLowerCase();
+	const words = $derived(norm(query).split(/\s+/).filter(Boolean));
+	const hit = (text: string) => words.every((w) => norm(text).includes(w));
+	const hits = $derived.by<Hit[]>(() => {
+		if (!words.length) return [];
+		const out: Hit[] = [];
+		const tabName = (id: TabId) => t(tabs.find((x) => x.id === id)!.label);
+		for (const x of tabs) {
+			if (x.server && !server) continue;
+			if (hit(`${t(x.label)} ${x.label} ${x.sub ? t(x.sub) : ""}`)) out.push({ key: `tab:${x.id}`, title: t(x.label), where: x.sub ? t(x.sub) : t("설정"), open: () => go(x.id) });
+		}
+		for (const x of items) {
+			if (hit(`${t(x.label)} ${x.label} ${x.words}`)) out.push({ key: `item:${x.label}`, title: t(x.label), where: tabName(x.tab), open: () => go(x.tab) });
+		}
+		for (const a of ACTIONS) {
+			const combo = app.prefs.bindings[a.id];
+			if (hit(`${t(a.label)} ${a.label} ${a.hint ? t(a.hint) : ""} ${combo} ${formatCombo(combo)}`))
+				out.push({ key: `key:${a.id}`, title: t(a.label), where: tabName("keys"), combo: formatCombo(combo), open: () => { keyFilter = t(a.label); go("keys"); } });
+		}
+		return out;
+	});
+	function pick(h: Hit) {
+		h.open();
+		query = "";
+	}
+
 	const close = () => (app.settingsOpen = false);
 </script>
 
@@ -76,6 +116,11 @@
 			{/each}
 		</div>
 	{/if}
+
+	<div class="searchbar">
+		<Icon name="search" />
+		<input type="search" placeholder={t("설정·단축키 검색")} aria-label={t("설정·단축키 검색")} bind:value={query} onkeydown={(e) => { if (e.key === "Escape" && query) { e.stopPropagation(); query = ""; } else if (e.key === "Enter" && hits[0]) pick(hits[0]); }} />
+	</div>
 
 	<div class="layout">
 		<!-- desktop: a column on the left; phone: a row of tabs above the content -->
@@ -105,6 +150,20 @@
 		</div>
 
 		<div class="body">
+			{#if words.length}
+				<div class="pane" role="region" aria-label={t("검색 결과")}>
+					{#if !hits.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
+					<ul class="hits">
+						{#each hits as h (h.key)}
+							<li><button onclick={() => pick(h)}>
+								<span class="ht">{h.title}</span>
+								<span class="hw">{h.where}</span>
+								{#if h.combo}<span class="hc">{h.combo}</span>{/if}
+							</button></li>
+						{/each}
+					</ul>
+				</div>
+			{:else}
 			{#key tab + (current.server ? app.serverId : "")}
 			<div class="pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
 			<div class="phead">
@@ -116,7 +175,7 @@
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}
-				<Shortcuts />
+				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}
 				<section>
 					<div class="mono-label">{t("언어")}</div>
@@ -172,11 +231,88 @@
 			{/if}
 			</div>
 			{/key}
+			{/if}
 		</div>
 	</div>
 </Modal>
 
 <style>
+	.searchbar {
+		flex: none;
+		position: relative;
+		padding: 0 22px 12px;
+	}
+	.searchbar :global(svg) {
+		position: absolute;
+		left: 34px;
+		top: 9px;
+		width: 16px;
+		height: 16px;
+		stroke: var(--text-faint);
+		fill: none;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		pointer-events: none;
+	}
+	.searchbar input {
+		width: 100%;
+		height: 34px;
+		padding: 0 12px 0 34px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+		color: var(--text);
+		font: inherit;
+		font-size: var(--fs-md);
+	}
+	.hits {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.hits button {
+		width: 100%;
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		padding: 10px 8px;
+		border-top: 1px solid var(--border);
+		text-align: left;
+		border-radius: 0;
+	}
+	.hits li:first-child button {
+		border-top: 0;
+	}
+	.hits button:hover {
+		background: var(--bg-hover);
+	}
+	.ht {
+		font-size: var(--fs-md);
+	}
+	.hw {
+		flex: 1;
+		min-width: 0;
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.hc {
+		flex: none;
+		font-family: var(--mono);
+		font-size: var(--fs-xs);
+		color: var(--text-dim);
+	}
+	@media (max-width: 760px) {
+		.searchbar {
+			padding: 0 14px 10px;
+		}
+		.searchbar :global(svg) {
+			left: 26px;
+		}
+	}
 	.switch {
 		display: flex;
 		align-items: center;

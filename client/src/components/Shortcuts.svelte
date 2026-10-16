@@ -5,6 +5,9 @@
 	import Icon from "./Icon.svelte";
 	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../lib/keys";
 
+	/** `filter` narrows the list by name, hint or key; the Settings search hands it over when a shortcut result is opened. */
+	let { filter = $bindable("") }: { filter?: string } = $props();
+
 	let recording = $state<ActionId | null>(null);
 	let note = $state<{ id: ActionId; text: string; bad?: boolean } | null>(null);
 	/** Keys pressed so far. Nothing is saved until the user confirms with the check button. */
@@ -20,6 +23,14 @@
 	] as const;
 
 	const label = (id: ActionId) => t(ACTIONS.find((a) => a.id === id)?.label ?? id);
+	const q = $derived(filter.trim().toLowerCase());
+	/** Both the shown language and the Korean source text match, so either can be searched. */
+	const shown = (a: (typeof ACTIONS)[number]) => {
+		const combo = app.prefs.bindings[a.id];
+		return [t(a.label), a.label, a.hint ? t(a.hint) : "", combo, formatCombo(combo)].join("\n").toLowerCase();
+	};
+	const matches = (a: (typeof ACTIONS)[number]) => !q || q.split(/\s+/).every((w) => shown(a).includes(w));
+	const visible = $derived(ACTIONS.filter(matches));
 	const changed = $derived(ACTIONS.some((a) => app.prefs.bindings[a.id] !== a.default));
 
 	function start(id: ActionId) {
@@ -90,10 +101,13 @@
 		{t("항목을 누른 뒤 원하는 키를 차례로 누르면 하나씩 쌓입니다. Ctrl·Alt·Shift에 더해 일반 키를 최대 3개까지 지정할 수 있고, 확인(✓) 버튼을 눌러야 저장됩니다.")} <kbd>Esc</kbd> {t("취소")} · <kbd>Backspace</kbd> {t("마지막 키 지우기 (비었을 때는 해제)")}. {t("모델과 추론 단계는 지금 열려 있는 대화에만 적용됩니다.")}
 	</span>
 
-	{#each GROUPS as g (g.id)}
+	<input class="search" type="search" placeholder={t("단축키 검색")} aria-label={t("단축키 검색")} bind:value={filter} />
+	{#if !visible.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
+
+	{#each GROUPS.filter((g) => visible.some((x) => x.group === g.id)) as g (g.id)}
 	<div class="group">{t(g.title)}</div>
 	<ul>
-		{#each ACTIONS.filter((x) => x.group === g.id) as a (a.id)}
+		{#each visible.filter((x) => x.group === g.id) as a (a.id)}
 			{@const combo = app.prefs.bindings[a.id]}
 			<li>
 				<div class="what">
@@ -133,6 +147,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
+	}
+	.search {
+		width: 100%;
+		height: 34px;
+		padding: 0 12px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+		color: var(--text);
+		font: inherit;
+		font-size: var(--fs-md);
 	}
 	.group {
 		margin-top: 14px;
