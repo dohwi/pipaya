@@ -59,8 +59,8 @@ import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.
 import { join } from "node:path";
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
-// A message may carry images and files (up to 25 MB of files, as base64: x1.34) alongside each other.
-export const IMAGE_BODY_LIMIT = 64 * 1024 * 1024;
+// A message may carry images and files (up to 100 MB of files, as base64: x1.34) alongside each other.
+export const IMAGE_BODY_LIMIT = 192 * 1024 * 1024;
 
 export interface App {
 	server: FastifyInstance;

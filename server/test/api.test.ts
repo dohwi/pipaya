@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
+import { MAX_FILE_BYTES } from "../src/file-routes.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
@@ -681,7 +682,7 @@ describe("files", () => {
 
 	test("a file over the limit is refused", async () => {
 		const made = await api("POST", "/sessions", {});
-		const big = Buffer.alloc(21 * 1024 * 1024).toString("base64");
+		const big = Buffer.alloc(MAX_FILE_BYTES + 1).toString("base64");
 		expect((await api("POST", `/sessions/${made.json.id}/messages`, { text: "x", files: [{ name: "big.bin", data: big }] })).status).toBe(413);
 	});
 });

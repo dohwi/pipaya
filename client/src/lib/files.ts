@@ -3,8 +3,8 @@ import type { UploadFile } from "./types";
 
 /** Matches the server (server/src/file-routes.ts) */
 export const MAX_FILES = 8;
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
-export const MAX_FILES_TOTAL = 25 * 1024 * 1024;
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const MAX_FILES_TOTAL = 100 * 1024 * 1024;
 
 /** A file waiting in the composer. `preview` is a blob: URL for images, so the strip can show a thumbnail. */
 export interface FileDraft extends UploadFile {

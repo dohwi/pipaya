@@ -10,10 +10,10 @@ import type { TypeBoxProvider } from "./typebox-provider.ts";
 
 /** Where files the user attaches land, relative to the session's working directory. */
 export const UPLOAD_DIR = ".pipaya/uploads";
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILES = 8;
 /** One message may carry this many bytes of files in total. */
-export const MAX_FILES_TOTAL = 25 * 1024 * 1024;
+export const MAX_FILES_TOTAL = 100 * 1024 * 1024;
 
 const MIME: Record<string, string> = {
 	png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", avif: "image/avif",
