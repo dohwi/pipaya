@@ -546,11 +546,8 @@ const delegateTool: ToolDef = {
 	},
 };
 
-const peerNames = (ctx?: ToolContext) => ctx?.peers?.names() ?? [];
-const peerNote = (ctx?: ToolContext) => {
-	const n = peerNames(ctx);
-	return n.length ? ` Members now: ${n.map((x) => `@${x}`).join(", ")}.` : " This session is not in a group right now, so there is nobody to reach.";
-};
+// The tool list is built once per session, but members join and leave later: never put names in a description (they would go stale).
+const peerNote = " Members are the user's @names; an unknown name is rejected with the current member list.";
 
 const peerSendTool: ToolDef = {
 	name: "peer_send",
@@ -562,7 +559,7 @@ const peerSendTool: ToolDef = {
 			label: "Message a group member",
 			description:
 				"Send a message to another session in your group, addressed by name (without @). It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." +
-				peerNote(ctx),
+				peerNote,
 			parameters: Type.Object({
 				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
 				message: Type.String({ minLength: 1, maxLength: 8000, description: "What to tell or ask; include all context it needs" }),
@@ -583,7 +580,7 @@ const peerReadTool: ToolDef = {
 		return defineTool({
 			name: "peer_read",
 			label: "Read a group member",
-			description: "Read what another session in your group has recently said and done (text only, newest last), addressed by name (without @)." + peerNote(ctx),
+			description: "Read what another session in your group has recently said and done (text only, newest last), addressed by name (without @)." + peerNote,
 			parameters: Type.Object({
 				from: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
 				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "How many recent messages (default 10)" })),
