@@ -223,6 +223,8 @@ export class SessionManager {
 		}
 		const controller = new AbortController();
 		live.compacting = controller;
+		let settle!: () => void;
+		live.compactSettled = new Promise<void>((r) => { settle = r; });
 		this.bus.publish(id, "compaction_started", { reason });
 		try {
 			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await this.registry.models.completeSimple(
@@ -256,6 +258,8 @@ export class SessionManager {
 			throw e instanceof HttpError ? e : new HttpError(502, "upstream_error", errorMessage);
 		} finally {
 			live.compacting = undefined;
+			live.compactSettled = undefined;
+			settle();
 		}
 	}
 
@@ -358,11 +362,13 @@ export class SessionManager {
 			if (pre.handled) return { accepted: mode };
 			input = { ...input, text: pre.text };
 		}
+		// A prompt sent during a manual compaction waits for it to finish instead of being rejected.
+		const compacting = this.live.get(id);
+		if (mode === "prompt" && compacting?.compacting && !compacting.running) await compacting.compactSettled;
 		const active = this.live.get(id)?.running ?? false;
 		if (mode !== "prompt" && !active) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
 		if (mode === "prompt" && active) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		const live = this.ensureLive(record);
-		if (live.compacting) throw conflict("the session is being compacted; send after it finishes");
 
 		// A template call is sent as its expanded text; a marker tells the client to show the short call as a note under the bubble.
 		const call = this.templates ? parseTemplateCall(input.text) : null;

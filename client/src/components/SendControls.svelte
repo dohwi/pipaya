@@ -39,6 +39,9 @@
 		<div class="set" in:chipIn out:chipOut>
 			{#if mode === "compacting"}
 				<span class="compacting" role="status"><span class="spinner"></span> {t("압축 중")}</span>
+				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
+					{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
+				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
 				<button class="mode" onclick={onqueue} disabled={!hasInput} title={t("현재 작업이 모두 끝난 뒤 실행 (Alt+Enter)")}>

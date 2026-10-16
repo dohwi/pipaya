@@ -86,7 +86,6 @@ export const en: Record<string, string> = {
 	"대기열 관리": "Manage queue",
 	"{name} 취소": "Cancel {name}",
 	"대기 중인 메시지가 없습니다": "No waiting messages",
-	"컨텍스트 압축 중 · 메시지는 완료 후 보낼 수 있습니다": "Compacting context · you can send messages once it finishes",
 	"작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령": "Working · Enter to steer / Alt+Enter to queue · / for commands",
 	"에이전트에게 메시지 보내기 · / 명령": "Message the agent · / for commands",
 	"압축 중": "Compacting",

@@ -170,6 +170,28 @@ describe("POST /sessions/:id/compact", () => {
 		expect((await api("POST", `/sessions/${id}/compact`, {})).status).toBe(200);
 	});
 
+	test("a prompt sent during a compaction waits for it and is then accepted", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		const real = app.sessions as any;
+		const original = real.registry.models.completeSimple;
+		let release!: () => void;
+		const gate = new Promise<void>((r) => { release = r; });
+		real.registry.models.completeSimple = async (...args: unknown[]) => { await gate; return original.apply(real.registry.models, args); };
+		try {
+			const compact = api("POST", `/sessions/${id}/compact`, {});
+			while (!real.live.get(id)?.compacting) await new Promise((r) => setTimeout(r, 5));
+			const sent = api("POST", `/sessions/${id}/messages`, { text: "during" });
+			await new Promise((r) => setTimeout(r, 30));
+			release();
+			expect((await compact).status).toBe(200);
+			expect((await sent).status).toBeLessThan(300);
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+	});
+
 	test("unknown sessions are 404", async () => {
 		expect((await api("POST", "/sessions/nope/compact", {})).status).toBe(404);
 	});

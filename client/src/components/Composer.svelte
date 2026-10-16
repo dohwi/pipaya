@@ -61,7 +61,7 @@
 	});
 	const promptHint = $derived(!compacting && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
-	const canSend = $derived((text.trim().length > 0 || attachments.length > 0 || files.length > 0) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && (!compacting || parseSlash(text) !== null));
+	const canSend = $derived((text.trim().length > 0 || attachments.length > 0 || files.length > 0) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
 
 	export function focus() {
 		ta?.focus();
@@ -385,7 +385,7 @@
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
-		if (!hasInput || app.net !== "online" || compacting) return;
+		if (!hasInput || app.net !== "online") return;
 		const parsed = parseSlash(text);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
 		if (rejectUnknownCommand()) return;
@@ -633,7 +633,7 @@
 			oncompositionstart={() => (composing = true)}
 			oncompositionend={() => (composing = false)}
 			rows="1"
-			placeholder={promptHint ? "" : compacting ? t("컨텍스트 압축 중 · 메시지는 완료 후 보낼 수 있습니다") : running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
+			placeholder={promptHint ? "" : running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
 			autocapitalize="sentences"

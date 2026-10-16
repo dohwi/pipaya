@@ -1667,7 +1667,7 @@ class AppStore {
     files: UploadFile[] = [],
   ): Promise<boolean> {
     const api = this.api;
-    if (!api || this.sending || this.chatOf(to)?.compacting) return false;
+    if (!api || this.sending) return false;
     text = text.trim();
     if (!text && !images.length && !files.length) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
@@ -1739,7 +1739,7 @@ class AppStore {
     const chat = this.chatOf(to);
     const api = this.api;
     text = text.trim();
-    if (!api || !chat || chat.compacting || (!text && !images.length && !files.length)) return false;
+    if (!api || !chat || (!text && !images.length && !files.length)) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
     chat.requestBottom();
     try {
