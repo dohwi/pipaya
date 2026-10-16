@@ -118,6 +118,7 @@
 		{#if id}<SessionToasts {id} />{/if}
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
+			<Backdrop />
 			<div class="hello" aria-hidden="true">
 				<PipayaMark size={72} />
 			</div>
