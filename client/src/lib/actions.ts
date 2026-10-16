@@ -108,7 +108,10 @@ function focusToward(edge: Edge) {
   const g = app.activeGroup;
   if (!g || !app.activeId) return;
   const id = paneToward(g.layout, app.activeId, edge);
-  if (id && app.session(id)) void app.openSession(id);
+  if (id && app.session(id)) {
+    app.zoomId = null; // a zoomed pane covers its neighbours: shrink back so the newly selected one is visible
+    void app.openSession(id);
+  }
 }
 
 function cyclePane() {
@@ -116,7 +119,10 @@ function cyclePane() {
   if (!g || !app.activeId) return;
   const ids = panesOf(g.layout).filter((x) => app.session(x));
   const id = stepFrom(ids, app.activeId, 1);
-  if (id && id !== app.activeId) void app.openSession(id);
+  if (id && id !== app.activeId) {
+    app.zoomId = null;
+    void app.openSession(id);
+  }
 }
 
 /** The focused pane's scroll area (each pane has its own). */
