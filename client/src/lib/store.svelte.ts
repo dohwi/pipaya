@@ -95,6 +95,8 @@ class AppStore {
   workdir = $state(".");
   /** The server's default working directory setting (null on servers from before it existed) */
   workdirInfo = $state<WorkdirInfo | null>(null);
+  /** Whether the agent may ask questions (ask_user); saved on the server */
+  askUserEnabled = $state(true);
   /** Open the directory picker */
   dirPicker = $state(false);
   /** Images open in the full-screen viewer (null = closed) */
@@ -715,6 +717,7 @@ class AppStore {
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
+      this.askUserEnabled = config?.askUser?.enabled ?? true;
       this.ensureDraftModel();
       void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
       if (this.serverId) this.startSettingsSync(api, this.serverId);
@@ -957,6 +960,9 @@ class AppStore {
           const eff = (e.data as { effective?: ApprovalPolicy }).effective;
           if (eff) this.updateDraft({ approval: approvalMode(eff) });
         }
+        if ((e.data as { scope?: string } | undefined)?.scope === "ask_user") {
+          this.askUserEnabled = (e.data as { enabled?: boolean }).enabled !== false;
+        }
         if ((e.data as { scope?: string } | undefined)?.scope === "workdir") {
           this.workdirInfo = {
             saved: (e.data as WorkdirInfo).saved,
@@ -1076,6 +1082,21 @@ class AppStore {
       : this.workdir.startsWith("/")
         ? this.workdir
         : `${root}/${this.workdir}`;
+  }
+
+  /** Let the agent ask the user questions (ask_user) or not. Saved on the server for every client. */
+  async setAskUser(enabled: boolean): Promise<boolean> {
+    if (!this.api) return false;
+    const before = this.askUserEnabled;
+    this.askUserEnabled = enabled;
+    try {
+      this.askUserEnabled = (await this.api.setAskUser(enabled)).enabled;
+      return true;
+    } catch (e) {
+      this.askUserEnabled = before;
+      this.fail(e, t("변경하지 못했습니다"), this.activeId);
+      return false;
+    }
   }
 
   /** Save the server-wide default working directory (null restores the startup default). */

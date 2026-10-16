@@ -25,7 +25,7 @@
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 알림음"), server: false },
+		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 질문 · 알림음"), server: false },
 		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
@@ -199,6 +199,15 @@
 						{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
 						{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
 					</span>
+				</section>
+
+				<section>
+					<div class="mono-label">{t("질문 허용")}</div>
+					<div class="switch">
+						<span>{t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}</span>
+						<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
+					</div>
+					<span class="hint">{t("끄면 에이전트는 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다.")}</span>
 				</section>
 
 				<section>

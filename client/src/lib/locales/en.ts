@@ -461,7 +461,10 @@ export const en: Record<string, string> = {
 
 	/* ---- settings ---- */
 	"일반": "General",
-	"언어 · 테마 · 도구 승인 · 알림음": "Language · theme · tool approval · notification sound",
+	"언어 · 테마 · 도구 승인 · 질문 · 알림음": "Language · theme · tool approval · questions · notification sound",
+	"질문 허용": "Allow questions",
+	"에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다": "The agent may ask you questions during a run and wait for your answer",
+	"끄면 에이전트는 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다.": "When off, the agent makes assumptions instead of asking. Saved on the server; applies to every chat.",
 	"단축키": "Shortcuts",
 	"단축키 검색": "Search shortcuts",
 	"설정·단축키 검색": "Search settings and shortcuts",

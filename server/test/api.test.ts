@@ -205,6 +205,20 @@ describe("API contracts", () => {
 		expect(msgs).toContain("Tool ask_user finished:\\nblue");
 	});
 
+	test("ask_user can be switched off in the settings", async () => {
+		expect((await api("GET", "/configuration")).json.askUser).toEqual({ enabled: true });
+		expect((await api("PUT", "/configuration/ask-user", { enabled: "no" })).status).toBe(400);
+		expect((await api("PUT", "/configuration/ask-user", { enabled: false })).json).toEqual({ enabled: false });
+		expect((await api("GET", "/configuration")).json.askUser).toEqual({ enabled: false });
+		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${JSON.stringify({ question: "Which?" })}` });
+		await untilIdle(id);
+		expect((await api("GET", `/questions?sessionId=${id}`)).json.questions).toEqual([]);
+		const hist = (await api("GET", `/events/history?sessionId=${id}&limit=1000`)).json.events;
+		expect(hist.some((e: any) => e.type === "question_requested")).toBe(false);
+		expect((await api("PUT", "/configuration/ask-user", { enabled: true })).json).toEqual({ enabled: true });
+	});
+
 	test("aborting a run releases a waiting ask_user question", async () => {
 		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${JSON.stringify({ question: "Still there?" })}` });

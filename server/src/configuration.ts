@@ -83,7 +83,9 @@ export const WorkdirInfo = Type.Object({
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
 export const ApprovalBody = Type.Object({ approval: Type.Union([Approval, Type.Null()], { description: "Default tool approval for new sessions; null restores the startup default (PIPAYA_APPROVAL)" }) }, { additionalProperties: false });
 export const ApprovalInfo = Type.Object({ saved: Type.Union([Approval, Type.Null()]), effective: Approval, fallback: Approval });
-export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo) });
+export const AskUserBody = Type.Object({ enabled: Type.Boolean({ description: "Let the agent ask the user questions (ask_user). Off: the tool is withheld from every session" }) }, { additionalProperties: false });
+export const AskUserInfo = Type.Object({ enabled: Type.Boolean() });
+export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo), askUser: Type.Optional(AskUserInfo) });
 export const ConnectionResult = Type.Object({ ok: Type.Boolean(), durationMs: Type.Integer(), text: Type.Optional(Type.String()), error: Type.Optional(Type.String()) });
 export type CustomProvider = Static<typeof CustomProviderBody> & { id: string };
 export type ModelSelection = Static<typeof Selection>;
@@ -175,6 +177,17 @@ export class Configuration {
 		return this.approvalInfo();
 	}
 
+	/** Whether the agent may ask the user questions (`ask_user`). On unless switched off; saved on the server. */
+	askUserEnabled(): boolean {
+		const row = this.db.query("SELECT data FROM settings WHERE key = 'ask_user_enabled'").get() as { data: string } | null;
+		return row ? JSON.parse(row.data) !== false : true;
+	}
+
+	setAskUser(enabled: boolean) {
+		this.db.query("INSERT INTO settings (key, data) VALUES ('ask_user_enabled', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(enabled) });
+		return { enabled: this.askUserEnabled() };
+	}
+
 	list(): CustomProvider[] {
 		const rows = this.db.query("SELECT id, data FROM custom_providers ORDER BY id").all() as { id: string; data: string }[];
 		return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
@@ -220,7 +233,7 @@ export class Configuration {
 	async snapshot() {
 		return {
 			providers: await Promise.all(this.list().map((p) => this.describe(p))),
-			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(),
+			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(), askUser: { enabled: this.askUserEnabled() },
 		};
 	}
 

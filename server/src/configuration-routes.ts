@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ApprovalBody, ApprovalInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
+import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ApprovalBody, ApprovalInfo, AskUserBody, AskUserInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
 import { IdParams, Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
@@ -67,6 +67,14 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			const approval = config.setApproval(req.body.approval);
 			bus.publish(null, "configuration_updated", { scope: "approval", ...approval });
 			return approval;
+		},
+	});
+	app.put("/configuration/ask-user", {
+		schema: { body: AskUserBody, response: { 200: AskUserInfo, ...errors(400, 401) } },
+		handler: async (req) => {
+			const askUser = config.setAskUser(req.body.enabled);
+			bus.publish(null, "configuration_updated", { scope: "ask_user", ...askUser });
+			return askUser;
 		},
 	});
 	app.post("/configuration/test", {

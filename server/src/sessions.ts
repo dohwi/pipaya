@@ -58,6 +58,8 @@ export class SessionManager {
 		private templates?: TemplateService,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
+		/** Whether the agent may ask the user questions; off withholds `ask_user`. */
+		private askUserEnabled: () => boolean = () => true,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -575,6 +577,8 @@ export class SessionManager {
 				if (!model) throw badRequest(`unknown model ${record.provider}/${record.model}`);
 				existing.agent.state.model = model;
 				this.syncSkills(record.id, existing);
+				const snap = this.store.context(record.id);
+				if (snap) existing.agent.state.tools = this.sessionTools(record.id, snap.tools, snap.cwd, existing.readRoots);
 			}
 			return existing;
 		}
@@ -594,7 +598,7 @@ export class SessionManager {
 				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, agents),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: buildTools([...new Set([...snapshot.tools, ...PEER_TOOLS])], snapshot.cwd, readRoots, this.toolContext(record.id), this.toolDefs()),
+				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
 				messages: history,
 			},
 			streamFn: this.registry.models.streamSimple.bind(this.registry.models),
@@ -644,11 +648,17 @@ export class SessionManager {
 		live.skillsKey = key;
 	}
 
+	/** The tools a session's agent gets; `ask_user` is left out while the user has switched it off. */
+	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
+		const all = [...new Set([...names, ...PEER_TOOLS])].filter((n) => n !== "ask_user" || this.askUserEnabled());
+		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
+	}
+
 	/** What tools may ask of the running session. `ask` only exists when a QuestionManager is wired in. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
 		const sub = this.subagents;
-		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
+		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => !this.askUserEnabled() ? Promise.reject(new Error("ask_user is turned off in the settings")) : q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
 		ctx.sessionId = sessionId;
 		ctx.peers = this.peerApi(sessionId);
 		if (sub) {
