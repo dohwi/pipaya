@@ -9,7 +9,7 @@
 		onpick,
 		onhover,
 	}: {
-		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string }[];
+		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; group?: string }[];
 		index: number;
 		label?: string;
 		empty?: string;
@@ -26,6 +26,9 @@
 
 <div class="menu" in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }} role="listbox" aria-label={t(label)} bind:this={listEl}>
 	{#each items as item, i (item.id)}
+		{#if item.group && item.group !== items[i - 1]?.group}
+			<div class="head" class:first={i === 0} role="presentation">{t(item.group)}</div>
+		{/if}
 		<!-- Prevent mouse focus transfer; click also supports touch and keyboard activation. -->
 		<button
 			class="cmd"
@@ -61,6 +64,21 @@
 		box-shadow: var(--shadow);
 		padding: 4px 0;
 		z-index: 20;
+	}
+	/* a divider and a small heading wherever the kind of rows changes: commands, skills, sub-agents, files ... */
+	.head {
+		margin-top: 4px;
+		padding: 8px 14px 3px;
+		border-top: 1px solid var(--border);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--text-faint);
+	}
+	.head.first {
+		margin-top: 0;
+		padding-top: 4px;
+		border-top: 0;
 	}
 	.cmd {
 		display: flex;

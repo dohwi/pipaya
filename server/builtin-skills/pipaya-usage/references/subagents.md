@@ -2,7 +2,7 @@
 
 The main agent can hand a task (usually a search) to a **helper**. The helper works in its own transcript and returns one short report, so the main conversation does not fill up with file contents.
 
-**A fresh server has no helpers.** Nothing is built in. Until at least one helper exists (saved on the server, or as a file), the `# Sub-agents` block is not added to the system prompt and `$name` adds no hint. The same holds for skills: with no skill available, no `<available_skills>` block is added.
+**A fresh server has no helpers.** Nothing is built in. Until at least one helper exists (saved on the server, or as a file), the `# Sub-agents` block is not added to the system prompt and `/subagent:name` adds no hint. The same holds for skills: with no skill available, no `<available_skills>` block is added.
 
 ## What a helper can and cannot do
 
@@ -41,7 +41,7 @@ Stored on the server (`settings` table, key `subagents`). API: `GET /subagents`,
 |---|---|
 | `settings.enabled` | Master switch for the whole `delegate` tool |
 | `agents` | At most 10; names unique |
-| `name` | `^[a-z][a-z0-9-]{0,39}$` (lowercase, digits, `-`; starts with a letter). This is what the main agent passes as `agent` and what the user types as `$name` |
+| `name` | `^[a-z][a-z0-9-]{0,39}$` (lowercase, digits, `-`; starts with a letter). This is what the main agent passes as `agent` and what the user types as `/subagent:name` |
 | `description` | 1-200 chars. Shown to the main agent; it decides when to pick this helper, so say *when to use it* |
 | `enabled` | A disabled helper is not offered |
 | `model` | `null` = the model of the conversation that called it. Otherwise `{provider, model, thinkingLevel?}`; the model must be registered or the save is rejected (`400`). If it is deleted later, the helper silently falls back to the caller's model |
@@ -100,9 +100,9 @@ Edit one field: `jq '.settings | (.agents[] | select(.name=="explore") | .maxTur
 
 Port and data dir may differ (`PIPAYA_PORT`, `PIPAYA_DATA_DIR`; the token file is `<data dir>/token`). Re-`GET` afterwards to confirm.
 
-## Picking a helper by hand: `$name`
+## Picking a helper by hand: `/subagent:name`
 
-In the message input the user can write `$name` (preceded by start or whitespace, followed by end, whitespace or `. , ; : ! ? )`). Only names of **currently available** (enabled) helpers count; unknown names, or a switched-off feature, are ignored. The server then adds a hidden `<pipaya-hint>` note (clients hide it) telling the model to call `delegate` with that agent. It is a strong hint, not a guarantee. The input has a menu and tints the token.
+In the message input the user can write `/subagent:name` (preceded by start or whitespace, followed by end, whitespace or `. , ; : ! ? )`). Only names of **currently available** (enabled) helpers count; unknown names, or a switched-off feature, are ignored. The server then adds a hidden `<pipaya-hint>` note (clients hide it) telling the model to call `delegate` with that agent. It is a strong hint, not a guarantee. The `/` menu lists helpers (tagged "Sub-agents") and the input tints the token. In the input, `#path` mentions a file, `#imageN` an attached image, and `@name` another session of the same group.
 
 ## Good helper design
 
@@ -113,4 +113,4 @@ In the message input the user can write `$name` (preceded by start or whitespace
 
 ## Source map (when you must read code)
 
-`server/src/subagent-settings.ts` (schema, limits, model resolution, merging files), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `$name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen).
+`server/src/subagent-settings.ts` (schema, limits, model resolution, merging files), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `/subagent:name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen).

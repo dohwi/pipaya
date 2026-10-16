@@ -1,6 +1,6 @@
 ---
 name: pipaya-usage
-description: Read this when the user asks how to configure or change the pipaya itself (the server and client they are chatting through) - adding, editing, enabling or removing sub-agents (the `delegate` helpers, their agent files in `.agents/subagents/*.md`, `$name` mentions), writing or locating the global ~/.agents/AGENTS.md and project AGENTS.md, or turning skills on and off. Not for changing the pipaya source code, and not for client extensions (use pipaya-client-extensions).
+description: Read this when the user asks how to configure or change the pipaya itself (the server and client they are chatting through) - adding, editing, enabling or removing sub-agents (the `delegate` helpers, their agent files in `.agents/subagents/*.md`, `/subagent:name` mentions), writing or locating the global ~/.agents/AGENTS.md and project AGENTS.md, or turning skills on and off. Not for changing the pipaya source code, and not for client extensions (use pipaya-client-extensions).
 ---
 
 # Using and configuring the pipaya
@@ -9,7 +9,7 @@ Facts about the user's own pipaya. Everything here was checked against the serve
 
 | Topic | Read |
 |---|---|
-| Sub-agents: add, edit, enable, remove, models, tools, agent files, `$name` | `references/subagents.md` |
+| Sub-agents: add, edit, enable, remove, models, tools, agent files, `/subagent:name` | `references/subagents.md` |
 | Global and project `AGENTS.md`, when edits take effect, size limits | `references/agents-md.md` |
 | Skills: where they load from, on/off | `references/agents-md.md` section "Skills" |
 

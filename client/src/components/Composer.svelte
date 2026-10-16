@@ -7,6 +7,7 @@
 
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { panesOf } from "../lib/layout";
 	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import { chipIn, chipOut, fadeIn, fadeOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
@@ -17,7 +18,7 @@
 	import StatusLine from "./StatusLine.svelte";
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
-	import { argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
+	import { argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -130,8 +131,23 @@
 	// Prompt templates follow the skills as `/prompt:name`.
 	let templateList = $state<{ name: string; description: string }[]>([]);
 	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
-	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } })[]>([
+	// ── /subagent:name: picks a sub-agent by hand, e.g. "/subagent:explore find the login flow" (listed in the `/` menu) ──
+	let agentList = $state<{ name: string; description: string }[]>([]);
+	const agentMatches = $derived(slashQuery !== null ? matchSubagents(agentList, slashQuery) : []);
+	const agentsWanted = $derived(slashQuery !== null || text.includes(`/${SUBAGENT_PREFIX}`));
+	// Re-read the list each time the `/` menu opens, so edits made in server settings show up without a reload.
+	$effect(() => {
+		const api = app.api;
+		if (!agentsWanted || !api || app.net !== "online") return;
+		const controller = new AbortController();
+		api.subagents()
+			.then((r) => { if (!controller.signal.aborted) agentList = r.settings.enabled ? r.settings.agents.filter((a) => a.enabled).map((a) => ({ name: a.name, description: a.description })) : []; })
+			.catch(() => { if (!controller.signal.aborted) agentList = []; });
+		return () => controller.abort();
+	});
+	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } } | { agent: { name: string; description: string } })[]>([
 		...commandList,
+		...agentMatches.map((agent) => ({ agent })),
 		...skillMatches.map((skill) => ({ skill })),
 		...templateMatches.map((template) => ({ template })),
 	]);
@@ -161,36 +177,28 @@
 	});
 	const argSuggestions = $derived(argumentSuggestions(text));
 
-	// ── @file mentions: the token right before the caret, e.g. "look at @src/comp" ──
+	// ── #file mentions (and #imageN): the token right before the caret, e.g. "look at #src/comp" ──
 	let caret = $state(0);
 	let mentionFiles = $state<{ path: string; dir: boolean }[]>([]);
 	let mentionLoaded = $state(false);
 	const mention = $derived(slashQuery !== null || argSuggestions ? null : mentionAt("file", text, caret));
-
-	// ── $agent: the token right before the caret picks a sub-agent by hand, e.g. "$explore find the login flow" ──
-	let agentList = $state<{ name: string; description: string }[]>([]);
-	const agentMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("agent", text, caret));
-	const agentMatches = $derived(agentMention ? agentList.filter((a) => a.name.startsWith(agentMention.query)) : []);
-
-	// ── #image: the token right before the caret picks an attached image, e.g. "compare #image1 and #image2" ──
-	const imageMention = $derived(slashQuery !== null || argSuggestions || mention || agentMention || !attachments.length ? null : mentionAt("image", text, caret));
-	// A fully typed token is done: hiding the menu keeps Enter free to send.
+	// Attached images share the `#` menu, above the files: "compare #image1 and #image2". A fully typed token is done, so Enter stays free to send.
 	const imageMatches = $derived(
-		imageMention
-			? attachments.map((a, i) => ({ n: i + 1, name: a.name })).filter((a) => `image${a.n}`.startsWith(imageMention.query) && `image${a.n}` !== imageMention.query)
+		mention
+			? attachments.map((a, i) => ({ n: i + 1, name: a.name })).filter((a) => `image${a.n}`.startsWith(mention.query.toLowerCase()) && `image${a.n}` !== mention.query)
 			: [],
 	);
-	// Re-read the list each time a `$` is started, so edits made in server settings show up without a reload.
-	const agentsWanted = $derived(agentMention !== null);
-	$effect(() => {
-		const api = app.api;
-		if (!agentsWanted || !api || app.net !== "online") return;
-		const controller = new AbortController();
-		api.subagents()
-			.then((r) => { if (!controller.signal.aborted) agentList = r.settings.enabled ? r.settings.agents.filter((a) => a.enabled).map((a) => ({ name: a.name, description: a.description })) : []; })
-			.catch(() => { if (!controller.signal.aborted) agentList = []; });
-		return () => controller.abort();
-	});
+
+	// ── @member: another session of this session's group, e.g. "@미나 와 얘기해서 진행해" ──
+	const groupInfo = $derived(pane.id ? app.groupOf(pane.id) : undefined);
+	const members = $derived(
+		groupInfo && pane.id
+			? panesOf(groupInfo.layout).filter((id) => id !== pane.id && groupInfo.names?.[id]).map((id) => ({ id, name: groupInfo.names[id]!, title: app.session(id)?.title ?? "" }))
+			: [],
+	);
+	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
+	const memberMatches = $derived(memberMention ? members.filter((m) => m.name.toLowerCase().startsWith(memberMention.query.toLowerCase())) : []);
+
 	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	$effect(() => {
 		const q = mention?.query;
@@ -213,20 +221,24 @@
 		};
 	});
 
+	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
 	const menuItems = $derived(mention
-		? mentionFiles.map((f) => ({ id: f.path, text: `@${f.path}`, desc: f.dir ? msg("폴더") : "" }))
-		: agentMention
-			? agentMatches.map((a) => ({ id: a.name, text: `$${a.name}`, desc: a.description }))
-		: imageMention
-			? imageMatches.map((a) => ({ id: `image${a.n}`, text: `#image${a.n}`, desc: a.name }))
+		? [
+			...imageMatches.map((a) => ({ id: `image${a.n}`, text: `#image${a.n}`, desc: a.name, group: msg("이미지") })),
+			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
+		]
+		: memberMention
+			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: m.title, group: msg("그룹 멤버") }))
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
-				? { id: `skill:${it.skill.name}`, text: `/${SKILL_PREFIX}${it.skill.name}`, desc: it.skill.description, tag: msg("스킬") }
+				? { id: `skill:${it.skill.name}`, text: `/${SKILL_PREFIX}${it.skill.name}`, desc: it.skill.description, tag: msg("스킬"), group: msg("스킬") }
 				: "template" in it
-				? { id: `template:${it.template.name}`, text: `/${TEMPLATE_PREFIX}${it.template.name}`, desc: it.template.description, tag: msg("템플릿") }
-				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc }));
-	const slashOpen = $derived(mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0) : agentMention !== null ? !slashDismissed && agentMatches.length > 0 : imageMention !== null ? !slashDismissed && imageMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
+				? { id: `template:${it.template.name}`, text: `/${TEMPLATE_PREFIX}${it.template.name}`, desc: it.template.description, tag: msg("템플릿"), group: msg("템플릿") }
+				: "agent" in it
+				? { id: `subagent:${it.agent.name}`, text: `/${SUBAGENT_PREFIX}${it.agent.name}`, desc: it.agent.description, tag: msg("서브에이전트"), group: msg("서브에이전트") }
+				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc, group: msg("명령") }));
+	const slashOpen = $derived(mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
 	function syncCaret() {
 		caret = ta?.selectionStart ?? text.length;
@@ -242,22 +254,19 @@
 			ta?.setSelectionRange(next.caret, next.caret);
 		});
 	}
-	/** Replace the @token with the chosen path. Folders keep the menu open so the user can keep drilling down. */
+	/** Replace the #token with the chosen image or path. Folders keep the menu open so the user can keep drilling down. */
 	function pickMention(index: number) {
-		const file = mentionFiles[index];
-		if (!file || !mention) return;
+		if (!mention) return;
+		if (index < imageMatches.length) return applyMention(mention, `#image${imageMatches[index]!.n} `);
+		const file = mentionFiles[index - imageMatches.length];
+		if (!file) return;
 		if (!pickedPaths.includes(file.path)) pickedPaths.push(file.path);
-		applyMention(mention, `@${file.path}${file.dir ? "" : " "}`, file.dir);
+		applyMention(mention, `#${file.path}${file.dir ? "" : " "}`, file.dir);
 	}
-	/** Replace the $token with the chosen sub-agent's name. */
-	function pickAgent(index: number) {
-		const agent = agentMatches[index];
-		if (agent && agentMention) applyMention(agentMention, `$${agent.name} `);
-	}
-	/** Replace the #token with the chosen image's reference. */
-	function pickImage(index: number) {
-		const img = imageMatches[index];
-		if (img && imageMention) applyMention(imageMention, `#image${img.n} `);
+	/** Replace the @token with the chosen group member. */
+	function pickMember(index: number) {
+		const m = memberMatches[index];
+		if (m && memberMention) applyMention(memberMention, `@${m.name} `);
 	}
 	// Esc hides the menu only for the text it was pressed on; any further typing brings it back.
 	$effect(() => {
@@ -292,8 +301,7 @@
 
 	function pickRecommendation(index: number, completeOnly = false) {
 		if (mention) return pickMention(index);
-		if (agentMention) return pickAgent(index);
-		if (imageMention) return pickImage(index);
+		if (memberMention) return pickMember(index);
 		if (argSuggestions) {
 			const option = argSuggestions.options[index];
 			if (!option) return;
@@ -308,6 +316,7 @@
 		if (!cmd) return;
 		if ("skill" in cmd) return void setText(`/${SKILL_PREFIX}${cmd.skill.name} `);
 		if ("template" in cmd) return void setText(`/${TEMPLATE_PREFIX}${cmd.template.name} `);
+		if ("agent" in cmd) return void setText(`/${SUBAGENT_PREFIX}${cmd.agent.name} `);
 		if (completeOnly) setText(`${commandText(cmd)}${cmd.args ? " " : ""}`);
 		else pickSlash(cmd);
 	}
@@ -451,9 +460,9 @@
 
 	/** `#image1`-style reserved words refer to attachments by position (1-based). */
 	const IMG_TOKEN = /#image(\d+)\b/g;
-	/** Paths picked from the @ menu; only these (exact) tokens get highlighted. */
+	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, agents: agentList, images: attachments.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, agents: agentList, members: members.map((m) => m.name), images: attachments.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);
@@ -557,7 +566,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running} class:disabled={app.net !== "online"} data-level={running && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : agentMention ? msg("서브에이전트") : imageMention ? msg("이미지") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : agentMention ? msg("일치하는 서브에이전트가 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("그룹 멤버") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if attachments.length}
 			<AttachmentStrip {attachments} onremove={removeAttachment} />
@@ -742,7 +751,7 @@
 		color: transparent;
 		pointer-events: none;
 	}
-	/* mention tags: # (images) violet, @ (files) mint, sub-agents amber; the hues come from the theme (app.css) */
+	/* mention tags: #imageN violet, #files mint, @members sky, /subagent: amber; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;
 		border-radius: var(--radius-xs);
@@ -758,6 +767,10 @@
 	.mirror :global(mark.skill) {
 		background: color-mix(in srgb, var(--accent) 22%, transparent);
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+	}
+	.mirror :global(mark.member) {
+		background: color-mix(in srgb, var(--mark-member) 30%, transparent);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-member) 55%, transparent);
 	}
 	.mirror :global(mark.agent) {
 		background: color-mix(in srgb, var(--mark-agent) 30%, transparent);

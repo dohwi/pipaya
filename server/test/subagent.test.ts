@@ -146,10 +146,10 @@ describe("delegate (read-only sub-agent)", () => {
 		expect(result.isError).not.toBe(true);
 		expect(result.details.subagent).toBe(true);
 	});
-	test("$name in a message tells the model which helper the user chose; unknown names add nothing", async () => {
+	test("/subagent:name in a message tells the model which helper the user chose; unknown names add nothing", async () => {
 		const id = await newSession();
 		upstream.requests.length = 0;
-		await api("POST", `/sessions/${id}/messages`, { text: "$explore where is the login flow?" });
+		await api("POST", `/sessions/${id}/messages`, { text: "/subagent:explore where is the login flow?" });
 		await untilIdle(id);
 		const sent = JSON.stringify(upstream.requests.at(0)?.body.messages);
 		expect(sent).toContain("<pipaya-hint>");
@@ -157,7 +157,7 @@ describe("delegate (read-only sub-agent)", () => {
 
 		const id2 = await newSession();
 		upstream.requests.length = 0;
-		await api("POST", `/sessions/${id2}/messages`, { text: "$nobody costs $5" });
+		await api("POST", `/sessions/${id2}/messages`, { text: "/subagent:nobody costs $5 $explore" });
 		await untilIdle(id2);
 		expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<pipaya-hint>");
 	});

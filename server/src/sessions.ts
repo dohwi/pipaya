@@ -16,8 +16,9 @@ import type { ModelRegistry } from "./models.ts";
 import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
+import { memberHint, mentionedMembers, type GroupManager } from "./groups.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -30,8 +31,13 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 	return rest;
 }
 
+/** How many messages one run may send to group members. */
+const MAX_PEER_SENDS = 10;
+
 export class SessionManager {
 	private live = new Map<string, Live>();
+	/** `peer_send` calls made in each session's current run; keeps two sessions from answering each other forever. */
+	private peerSends = new Map<string, number>();
 	/** Runs that have not yet published run_finished. Tracked apart from `live`, which shutdown and delete empty first. */
 	private pendingRuns = new Set<Promise<void>>();
 	private sweeper: ReturnType<typeof setInterval>;
@@ -52,6 +58,8 @@ export class SessionManager {
 		private templates?: TemplateService,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
+		/** Set once the group manager exists (it needs the bus, like this class); lets sessions in a group reach each other. */
+		private groups?: () => GroupManager | undefined,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -346,6 +354,11 @@ export class SessionManager {
 		if (marker) content.push({ type: "text", text: marker });
 		const asked = mentionedAgents(input.text, this.subagents?.agents(record.cwd).map((a) => a.name) ?? []);
 		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
+		const ms = this.groups?.()?.membership(id);
+		if (ms?.peers.length) {
+			const asked = mentionedMembers(input.text, ms.peers.map((p) => p.name));
+			if (asked.length) content.push({ type: "text", text: memberHint(HINT_OPEN, asked) });
+		}
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {
@@ -519,6 +532,7 @@ export class SessionManager {
 	// ── Internals ───────────────────────────────────────────────────────────
 
 	private run(id: string, live: Live, mode: string, start: () => Promise<void>): void {
+		this.peerSends.delete(id);
 		live.running = true;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
@@ -579,7 +593,7 @@ export class SessionManager {
 				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, agents),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: buildTools(snapshot.tools, snapshot.cwd, readRoots, this.toolContext(record.id), this.toolDefs()),
+				tools: buildTools([...new Set([...snapshot.tools, ...PEER_TOOLS])], snapshot.cwd, readRoots, this.toolContext(record.id), this.toolDefs()),
 				messages: history,
 			},
 			streamFn: this.registry.models.streamSimple.bind(this.registry.models),
@@ -635,6 +649,7 @@ export class SessionManager {
 		const sub = this.subagents;
 		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
 		ctx.sessionId = sessionId;
+		if (this.groups) ctx.peers = this.peerApi(sessionId);
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.
 			ctx.delegateAgents = () => sub.agents(this.store.get(sessionId)?.cwd);
@@ -652,6 +667,42 @@ export class SessionManager {
 		return ctx;
 	}
 
+	/** Messages to and from the other sessions of the group this session is in; membership is read fresh on every call. */
+	private peerApi(sessionId: string): NonNullable<ToolContext["peers"]> {
+		const find = (name: string) => {
+			const ms = this.groups?.()?.membership(sessionId);
+			if (!ms) throw badRequest("this session is not in a group");
+			const peer = ms.peers.find((p) => p.name.toLowerCase() === name.toLowerCase());
+			if (!peer) throw notFound(`group member @${name} (members: ${ms.peers.map((p) => `@${p.name}`).join(", ") || "none"})`);
+			return { ms, peer };
+		};
+		return {
+			names: () => this.groups?.()?.membership(sessionId)?.peers.map((p) => p.name) ?? [],
+			send: async (name, text) => {
+				const { ms, peer } = find(name);
+				const sent = (this.peerSends.get(sessionId) ?? 0) + 1;
+				if (sent > MAX_PEER_SENDS) throw conflict(`at most ${MAX_PEER_SENDS} peer messages per run; stop and report to the user instead`);
+				this.peerSends.set(sessionId, sent);
+				const body = `[from @${ms.self}, a session in your group "${ms.group.name}"; answer with peer_send to @${ms.self} only if a reply is needed]\n${text}`;
+				const busy = this.live.get(peer.sessionId)?.running ?? false;
+				await this.send(peer.sessionId, { text: body, mode: busy ? "follow_up" : "prompt" });
+				return `Sent to @${peer.name}${busy ? " (it is busy; the message waits until it finishes its turn)" : ""}. It works on its own; use peer_read to check on it later.`;
+			},
+			read: (name, count) => {
+				const { peer } = find(name);
+				const rows = this.store.lastMessages(peer.sessionId, Math.min(40, Math.max(1, count)));
+				if (!rows.length) return `@${peer.name} has no messages yet.`;
+				const lines = rows.map(({ message: m }) => {
+					const parts = (Array.isArray(m.content) ? m.content : []) as { type: string; text?: string; name?: string }[];
+					const body = parts.map((c) => (c.type === "text" && !c.text?.startsWith(HINT_OPEN) ? c.text : c.type === "toolCall" ? `[tool ${c.name}]` : "")).filter(Boolean).join(" ");
+					const who = m.role === "user" ? "user" : m.role === "assistant" ? `@${peer.name}` : m.role;
+					return `${who}: ${body.slice(0, 1500)}`;
+				});
+				return `${this.live.get(peer.sessionId)?.running ? `@${peer.name} is still working.\n` : ""}${lines.join("\n")}`;
+			},
+		};
+	}
+
 	/**
 	 * Approval policy lives here so it applies to every client. Reads policy fresh from the DB.
 	 *  - auto: nothing waits.
@@ -662,7 +713,7 @@ export class SessionManager {
 	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
 		const rec = this.store.get(sessionId);
 		const policy = rec?.approval ?? "ask";
-		if (policy === "auto") return undefined;
+		if (policy === "auto" || PEER_TOOLS.includes(toolName)) return undefined;
 		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, rec?.cwd ?? "");
 		if (!(isMutating(toolName, this.toolDefs()) || delegated)) return undefined;
 		if (policy === "readonly") {

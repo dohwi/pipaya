@@ -2,19 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { agentHint, HINT_OPEN, mentionedAgents } from "../src/subagent.ts";
 import { mentionedSkills, skillCallHint } from "../src/skills.ts";
 
-describe("$agent mentions", () => {
+describe("/subagent:name mentions", () => {
 	const names = ["explore", "review-bot"];
 
 	test("finds known helpers once, in order", () => {
-		expect(mentionedAgents("$review-bot check this, then $explore it. $explore again", names)).toEqual(["review-bot", "explore"]);
+		expect(mentionedAgents("/subagent:review-bot check this, then /subagent:explore it. /subagent:explore again", names)).toEqual(["review-bot", "explore"]);
 	});
 
 	test("ignores unknown names, prices and mid-word dollars", () => {
-		expect(mentionedAgents("costs $5 and $nobody, a$explore", names)).toEqual([]);
+		expect(mentionedAgents("costs $5 and /subagent:nobody, a/subagent:explore, $explore", names)).toEqual([]);
 	});
 
 	test("accepts trailing punctuation", () => {
-		expect(mentionedAgents("ask $explore.", names)).toEqual(["explore"]);
+		expect(mentionedAgents("ask /subagent:explore.", names)).toEqual(["explore"]);
 	});
 
 	test("hint names the helpers and carries the marker clients hide", () => {

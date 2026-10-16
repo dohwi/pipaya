@@ -28,13 +28,16 @@ export const COMMAND_PREFIX = "/";
 export const commandText = (cmd: SlashCommand) => `${COMMAND_PREFIX}${cmd.name}`;
 
 /** Only the explicit command prefix is reserved; paths and ordinary messages remain text. */
-export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isTemplateCall(text);
+export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isTemplateCall(text) && !isSubagentCall(text);
 /** `/prompt:name args` is not a client command either: the server expands the saved prompt. */
 export const TEMPLATE_PREFIX = "prompt:";
 export const isTemplateCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${TEMPLATE_PREFIX}`);
 /** `/skill:name` is not a client command: the server turns it into a manual skill call. */
 export const SKILL_PREFIX = "skill:";
 export const isSkillCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${SKILL_PREFIX}`);
+/** `/subagent:name` is not a client command either: the server tells the model to hand that part to the sub-agent. */
+export const SUBAGENT_PREFIX = "subagent:";
+export const isSubagentCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${SUBAGENT_PREFIX}`);
 export const commandQuery = (text: string): string | null => /^\/([a-z][a-z0-9:-]*|)$/i.exec(text)?.[1] ?? null;
 
 const dirLabel = (cwd: string) => {
@@ -303,6 +306,14 @@ export function matchSkills<T extends { name: string }>(skills: T[], query: stri
 	const full = (k: T) => `${SKILL_PREFIX}${k.name}`;
 	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.includes(q.replace(/^skill:?/, "")) || full(k).includes(q) ? 2 : 9);
 	return skills.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
+}
+
+/** Sub-agents as menu rows for a query like "sub", "subagent:" or "subagent:exp". */
+export function matchSubagents<T extends { name: string }>(agents: T[], query: string): T[] {
+	const q = query.trim().toLowerCase();
+	const full = (k: T) => `${SUBAGENT_PREFIX}${k.name}`;
+	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.includes(q.replace(/^subagent:?/, "")) || full(k).includes(q) ? 2 : 9);
+	return agents.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
 /** Templates as menu rows for a query like "tem", "prompt:" or "prompt:rev". */

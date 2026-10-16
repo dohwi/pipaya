@@ -28,6 +28,8 @@
 	const chat = $derived(app.chatOf(id));
 	const session = $derived(app.session(id));
 	const state = $derived(id ? activityOf(app, id) : "idle");
+	/** The name this session has in its group; the other sessions address it as @name. */
+	const memberName = $derived(id ? app.groupOf(id)?.names?.[id] : undefined);
 
 	function focus() {
 		if (grouped && id && id !== app.activeId) void app.openSession(id);
@@ -48,7 +50,7 @@
 		>
 			<AgentBadge {id} {state} size={16} />
 			<span class="tt">
-				<span class="t">{session?.title ?? t("대화")}</span>
+				<span class="t">{#if memberName}<span class="who mono" title={t("그룹에서의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			</span>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => (app.zoomId = zoomed ? null : id)} aria-label={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")} title={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
@@ -156,6 +158,11 @@
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--text-dim);
+	}
+	.who {
+		margin-right: 6px;
+		color: var(--mark-member);
+		font-weight: 700;
 	}
 	.focused .t {
 		color: var(--text);

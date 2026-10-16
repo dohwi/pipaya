@@ -1,6 +1,6 @@
 /**
  * Text logic of the composer, kept free of components so it can be unit-tested: which mention the caret is in
- * (@file, $agent, #image), replacing that token with a pick, and the highlight layer drawn under the textarea.
+ * (#file or #imageN, @member), replacing that token with a pick, and the highlight layer drawn under the textarea.
  */
 
 export interface Mention {
@@ -11,13 +11,13 @@ export interface Mention {
 }
 
 const PATTERNS = {
-	file: /(?:^|\s)@([^\s@]*)$/,
-	agent: /(?:^|\s)\$([a-z0-9-]*)$/,
+	file: /(?:^|\s)#([^\s#]*)$/,
+	member: /(?:^|\s)@([^\s@]*)$/,
 	image: /(?:^|\s)#([a-z0-9]*)$/,
 } as const;
 export type MentionKind = keyof typeof PATTERNS;
 
-/** The mention of `kind` that ends at the caret, e.g. "look at @src/comp|" → { query: "src/comp", start: 8 }. */
+/** The mention of `kind` that ends at the caret, e.g. "look at #src/comp|" → { query: "src/comp", start: 8 }. */
 export function mentionAt(kind: MentionKind, text: string, caret: number): Mention | null {
 	const m = PATTERNS[kind].exec(text.slice(0, caret));
 	return m ? { query: m[1]!, start: caret - m[1]!.length - 1 } : null;
@@ -60,13 +60,28 @@ export function splitImageTokens(text: string, images: number): { text: string; 
 
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/** The group member a `@name` token starts with: the longest name, not cut out of a longer ASCII word (`@미나랑` is `@미나` plus a particle). */
+export function memberOf(token: string, names: readonly string[]): string | null {
+	const low = token.toLowerCase();
+	let best: string | null = null;
+	for (const n of names) {
+		const l = n.toLowerCase();
+		if (!low.startsWith(l) || (best && n.length <= best.length)) continue;
+		if (/[a-z0-9_-]$/.test(l) && /^[a-z0-9_-]/.test(low.slice(l.length))) continue;
+		best = n;
+	}
+	return best;
+}
+
 export interface Known {
 	templates: readonly { name: string }[];
 	skills: readonly { name: string }[];
 	agents: readonly { name: string }[];
+	/** Names of the other sessions in this session's group (`@name`) */
+	members: readonly string[];
 	/** How many images are attached (#image1..#imageN are valid) */
 	images: number;
-	/** Paths picked from the @ menu: only these exact tokens are marked */
+	/** Paths picked from the # menu: only these exact tokens are marked */
 	paths: readonly string[];
 }
 
@@ -76,12 +91,16 @@ export interface Known {
  */
 export function mirrorHtml(text: string, known: Known): string {
 	return (
-		esc(text).replace(/(^|\s)(@[^\s@]+|\$[a-z0-9-]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+|#image(\d+))(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
+		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/subagent:[a-z0-9-]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
 			if (tok.startsWith("/prompt:")) return known.templates.some((k) => k.name === tok.slice(8)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
-			if (tok.startsWith("$")) return known.agents.some((a) => a.name === tok.slice(1)) ? `${lead}<mark class="agent">${tok}</mark>` : m;
-			if (n !== undefined) return Number(n) >= 1 && Number(n) <= known.images ? `${lead}<mark class="img">${tok}</mark>` : m;
-			return known.paths.some((p) => esc(`@${p}`) === tok) ? `${lead}<mark class="file">${tok}</mark>` : m;
+			if (tok.startsWith("/subagent:")) return known.agents.some((a) => a.name === tok.slice(10)) ? `${lead}<mark class="agent">${tok}</mark>` : m;
+			if (tok.startsWith("@")) {
+				const name = memberOf(tok.slice(1), known.members.map(esc));
+				return name ? `${lead}<mark class="member">@${name}</mark>${tok.slice(1 + name.length)}` : m;
+			}
+			if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) return `${lead}<mark class="img">${tok}</mark>`;
+			return known.paths.some((p) => esc(`#${p}`) === tok) ? `${lead}<mark class="file">${tok}</mark>` : m;
 		}) + "\n"
 	);
 }

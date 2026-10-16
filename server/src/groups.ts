@@ -24,6 +24,8 @@ export interface GroupRecord {
 	id: string;
 	name: string;
 	layout: Layout;
+	/** Name of each member session, unique within the group: how members address each other (@name). */
+	names: Record<string, string>;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -32,6 +34,7 @@ interface GroupRow {
 	id: string;
 	name: string;
 	layout: string;
+	names: string;
 	created_at: number;
 	updated_at: number;
 }
@@ -40,6 +43,7 @@ const toRecord = (r: GroupRow): GroupRecord => ({
 	id: r.id,
 	name: r.name,
 	layout: JSON.parse(r.layout),
+	names: JSON.parse(r.names || "{}"),
 	createdAt: r.created_at,
 	updatedAt: r.updated_at,
 });
@@ -54,6 +58,7 @@ export const GroupSchema = Type.Object({
 	id: Type.String(),
 	name: Type.String(),
 	layout: LayoutSchema,
+	names: Type.Record(Type.String(), Type.String(), { description: "Member name by session id; members address each other as @name" }),
 	createdAt: Type.Integer({ description: "Unix ms" }),
 	updatedAt: Type.Integer({ description: "Unix ms" }),
 });
@@ -68,6 +73,59 @@ export const PatchGroupBody = Type.Object({
 });
 export type CreateGroupInput = Static<typeof CreateGroupBody>;
 export type PatchGroupInput = Static<typeof PatchGroupBody>;
+
+/* ---------- member names ---------- */
+
+/** Given to members in order; the first one not taken in the group is used. */
+export const MEMBER_NAMES = ["철수", "미나", "제임스", "영희", "민준", "소피아", "지우", "에밀리", "하준", "루카", "서연", "토마스"];
+
+/** Keep the names of sessions still in the layout; give every new session the next free name. */
+export function assignNames(layout: Layout, prev: Record<string, string>): Record<string, string> {
+	const out: Record<string, string> = {};
+	const ids = panesOf(layout);
+	for (const id of ids) if (prev[id]) out[id] = prev[id];
+	const taken = new Set(Object.values(out));
+	for (const id of ids) {
+		if (out[id]) continue;
+		let name = MEMBER_NAMES.find((n) => !taken.has(n));
+		for (let n = 2; !name; n++) {
+			const c = `${MEMBER_NAMES[0]}${n}`;
+			if (!taken.has(c)) name = c;
+		}
+		taken.add(name);
+		out[id] = name;
+	}
+	return out;
+}
+
+/** The member a `@name` token starts with: the longest known name, not cut out of a longer ASCII word (Korean particles may follow: @미나랑). */
+export function memberAt(token: string, names: readonly string[]): string | null {
+	const low = token.toLowerCase();
+	let best: string | null = null;
+	for (const n of names) {
+		const l = n.toLowerCase();
+		if (!low.startsWith(l) || (best && n.length <= best.length)) continue;
+		if (/[a-z0-9_-]$/.test(l) && /^[a-z0-9_-]/.test(low.slice(l.length))) continue;
+		best = n;
+	}
+	return best;
+}
+
+/** Names written as `@name` in a message, limited to known members, in order of appearance, without repeats. */
+export function mentionedMembers(text: string, names: readonly string[]): string[] {
+	const out: string[] = [];
+	for (const m of text.matchAll(/(?:^|\s)@(\S+)/g)) {
+		const name = memberAt(m[1]!, names);
+		if (name && !out.includes(name)) out.push(name);
+	}
+	return out;
+}
+
+/** Tells the model which group members the user named, and how to reach them. */
+export function memberHint(open: string, names: string[]): string {
+	const list = names.map((n) => `@${n}`).join(", ");
+	return `${open}The user mentioned ${list}: other sessions (agents) in this session's group. Use peer_send to give them work or ask them something (they run independently and see only what you send), and peer_read to look at what they said or did. Do not guess what they did.</pipaya-hint>`;
+}
 
 /* ---------- layout helpers ---------- */
 
@@ -159,11 +217,12 @@ export class GroupManager {
 		const now = Date.now();
 		const id = randomUUID();
 		const name = input.name?.trim() || this.nextName();
+		const names = JSON.stringify(assignNames(layout, {}));
 		this.db.transaction(() => {
 			this.claim(layout, id);
 			this.db
-				.query("INSERT INTO groups (id, name, layout, created_at, updated_at) VALUES ($id, $name, $layout, $now, $now)")
-				.run({ id, name, layout: JSON.stringify(layout), now });
+				.query("INSERT INTO groups (id, name, layout, names, created_at, updated_at) VALUES ($id, $name, $layout, $names, $now, $now)")
+				.run({ id, name, layout: JSON.stringify(layout), names, now });
 		})();
 		const rec = this.get(id);
 		this.bus.publish(null, "group_created", rec);
@@ -174,11 +233,12 @@ export class GroupManager {
 		const cur = this.get(id);
 		const name = patch.name?.trim() || cur.name;
 		const layout = patch.layout === undefined ? cur.layout : needTwo(cleanLayout(patch.layout, this.sessionExists));
+		const names = JSON.stringify(assignNames(layout, cur.names));
 		this.db.transaction(() => {
 			this.claim(layout, id);
 			this.db
-				.query("UPDATE groups SET name = $name, layout = $layout, updated_at = $now WHERE id = $id")
-				.run({ id, name, layout: JSON.stringify(layout), now: Date.now() });
+				.query("UPDATE groups SET name = $name, layout = $layout, names = $names, updated_at = $now WHERE id = $id")
+				.run({ id, name, layout: JSON.stringify(layout), names, now: Date.now() });
 		})();
 		const rec = this.get(id);
 		this.bus.publish(null, "group_updated", rec);
@@ -224,8 +284,19 @@ export class GroupManager {
 			return;
 		}
 		this.db
-			.query("UPDATE groups SET layout = $layout, updated_at = $now WHERE id = $id")
-			.run({ id: g.id, layout: JSON.stringify(layout), now: Date.now() });
+			.query("UPDATE groups SET layout = $layout, names = $names, updated_at = $now WHERE id = $id")
+			.run({ id: g.id, layout: JSON.stringify(layout), names: JSON.stringify(assignNames(layout, g.names)), now: Date.now() });
 		this.bus.publish(null, "group_updated", this.get(g.id));
+	}
+
+	/** The group a session is in, with its own name and the other members; undefined when it is in no group. */
+	membership(sessionId: string): { group: GroupRecord; self: string; peers: { name: string; sessionId: string }[] } | undefined {
+		for (const g of this.list()) {
+			const self = g.names[sessionId];
+			if (!self || !panesOf(g.layout).includes(sessionId)) continue;
+			const peers = panesOf(g.layout).filter((id) => id !== sessionId && g.names[id]).map((id) => ({ name: g.names[id]!, sessionId: id }));
+			return { group: g, self, peers };
+		}
+		return undefined;
 	}
 }

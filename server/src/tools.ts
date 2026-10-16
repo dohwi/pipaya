@@ -53,6 +53,12 @@ export interface ToolContext {
 	delegate?(req: DelegateRequest): Promise<DelegateReport>;
 	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
 	delegateAgents?(): { name: string; description: string }[];
+	/** Other sessions in this session's group (`peer_send`, `peer_read`). Missing when the server cannot reach other sessions. */
+	peers?: {
+		names(): string[];
+		send(name: string, text: string): Promise<string>;
+		read(name: string, count: number): string;
+	};
 	/** Ask the user a question and wait for the answer (`ask_user`). Missing when nobody can answer. */
 	ask?(
 		toolCallId: string,
@@ -540,8 +546,60 @@ const delegateTool: ToolDef = {
 	},
 };
 
+const peerNames = (ctx?: ToolContext) => ctx?.peers?.names() ?? [];
+const peerNote = (ctx?: ToolContext) => {
+	const n = peerNames(ctx);
+	return n.length ? ` Members now: ${n.map((x) => `@${x}`).join(", ")}.` : " This session is not in a group right now, so there is nobody to reach.";
+};
+
+const peerSendTool: ToolDef = {
+	name: "peer_send",
+	description: "Send a message to another session (agent) in the same group.",
+	mutating: false,
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_send",
+			label: "Message a group member",
+			description:
+				"Send a message to another session in your group, addressed by name (without @). It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." +
+				peerNote(ctx),
+			parameters: Type.Object({
+				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				message: Type.String({ minLength: 1, maxLength: 8000, description: "What to tell or ask; include all context it needs" }),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("group messaging is not available in this session");
+				return text(await ctx.peers.send(params.to.replace(/^@/, ""), params.message), { to: params.to });
+			},
+		});
+	},
+};
+
+const peerReadTool: ToolDef = {
+	name: "peer_read",
+	description: "Read the latest messages of another session in the same group.",
+	mutating: false,
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_read",
+			label: "Read a group member",
+			description: "Read what another session in your group has recently said and done (text only, newest last), addressed by name (without @)." + peerNote(ctx),
+			parameters: Type.Object({
+				from: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "How many recent messages (default 10)" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("group messaging is not available in this session");
+				return text(ctx.peers.read(params.from.replace(/^@/, ""), params.count ?? 10), { from: params.from });
+			},
+		});
+	},
+};
+
+export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
+
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, delegateTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, delegateTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

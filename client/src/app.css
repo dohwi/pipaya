@@ -127,10 +127,11 @@
 	--lv-high: #f472b6;
 	--lv-xhigh: #fb923c;
 	--lv-max: #f87171;
-	/* composer mention marks: # image (violet), @ file (mint), sub-agent (amber) */
+	/* composer mention marks: #image (violet), #file (mint), @member (sky), /subagent: (amber) */
 	--mark-img: #c4b5fd;
 	--mark-file: #86efac;
 	--mark-agent: #fcd34d;
+	--mark-member: #7dd3fc;
 	--info: #5aa9ff;
 	--ok: #3ecf8e;
 	--warn: #f5a524;
@@ -175,6 +176,7 @@
 	--mark-img: #8b5cf6;
 	--mark-file: #10b981;
 	--mark-agent: #f59e0b;
+	--mark-member: #0284c7;
 	--info: #1d6fe0;
 	--ok: #12a36a;
 	--warn: #b86e00;

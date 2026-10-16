@@ -5,6 +5,8 @@ export interface Group {
 	id: string;
 	name: string;
 	layout: import("./layout").Layout;
+	/** Name of each member session by session id; members address each other as @name */
+	names: Record<string, string>;
 	createdAt: number;
 	updatedAt: number;
 }

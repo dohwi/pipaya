@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
-import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
+import { assignNames, cleanLayout, memberAt, mentionedMembers, panesOf, withoutSession, type Layout } from "../src/groups.ts";
 
 let app: App;
 let base: string;
@@ -39,6 +39,23 @@ afterAll(async () => {
 	await app.close();
 	upstream.stop();
 	rmSync(dir, { recursive: true, force: true });
+});
+
+describe("member names", () => {
+	test("assignNames keeps existing names and fills the rest without repeats", () => {
+		const l = split(pane("a"), split(pane("b"), pane("c")));
+		const first = assignNames(l, { b: "미나" });
+		expect(first.b).toBe("미나");
+		expect(new Set(Object.values(first)).size).toBe(3);
+		expect(assignNames(pane("b"), first)).toEqual({ b: "미나" });
+	});
+	test("@name mentions take the longest known name and allow Korean particles", () => {
+		const names = ["철수", "미나", "미나2", "bob"];
+		expect(memberAt("미나랑", names)).toBe("미나");
+		expect(memberAt("미나2랑", names)).toBe("미나2");
+		expect(memberAt("bobby", names)).toBeNull();
+		expect(mentionedMembers("@미나랑 얘기해서 @철수 에게 전달, mail@bob @미나", names)).toEqual(["미나", "철수"]);
+	});
 });
 
 describe("layout helpers", () => {
@@ -132,6 +149,46 @@ describe("groups API", () => {
 		expect((await api("POST", "/groups", { layout: pane(a) })).status).toBe(400);
 		const g = (await api("POST", "/groups", { layout: split(pane(a), pane(b)) })).json;
 		expect((await api("PATCH", `/groups/${g.id}`, { layout: pane(a) })).status).toBe(400);
+		await api("DELETE", `/groups/${g.id}`);
+	});
+
+	test("members get names, keep them, and new ones take the next free name", async () => {
+		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
+		const g = (await api("POST", "/groups", { layout: split(pane(a), pane(b)) })).json;
+		expect(Object.keys(g.names).sort()).toEqual([a, b].sort());
+		expect(new Set(Object.values(g.names)).size).toBe(2);
+		const upd = (await api("PATCH", `/groups/${g.id}`, { layout: split(split(pane(a), pane(b)), pane(c)) })).json;
+		expect(upd.names[a]).toBe(g.names[a]);
+		expect(upd.names[b]).toBe(g.names[b]);
+		expect(new Set(Object.values(upd.names)).size).toBe(3);
+		await api("DELETE", `/groups/${g.id}`);
+	});
+
+	test("peer_send reaches a group member and peer_read shows its answer", async () => {
+		const [a, b] = [(await mk())!, (await mk())!];
+		const g = (await api("POST", "/groups", { layout: split(pane(a), pane(b)) })).json;
+		const bName = g.names[b] as string;
+		const idle = async (id: string) => {
+			for (let i = 0; i < 200; i++) {
+				if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
+				await Bun.sleep(25);
+			}
+		};
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: bName, message: "hello peer" })}` });
+		await idle(a);
+		await Bun.sleep(100);
+		await idle(b);
+		const got = (await api("GET", `/sessions/${b}/messages`)).json;
+		expect(JSON.stringify(got)).toContain("hello peer");
+		expect(JSON.stringify(got)).toContain(`from @${g.names[a]}`);
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer_read ${JSON.stringify({ from: bName })}` });
+		await idle(a);
+		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("hello peer");
+		// an unknown name is a tool error, not a crash
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "nobody", message: "x" })}` });
+		await idle(a);
+		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("group member @nobody");
 		await api("DELETE", `/groups/${g.id}`);
 	});
 

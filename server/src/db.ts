@@ -123,6 +123,8 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// saved default stuck on read-only would have no way back out of it, so both fold into `ask`.
 	`UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly';
 	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
+	// v18: each session in a group gets a name (JSON { sessionId: name }), so members can be addressed as @name.
+	(db) => { if (!(db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups ADD COLUMN names TEXT NOT NULL DEFAULT '{}'"); },
 ];
 
 export function openDb(path: string): Database {
