@@ -3,6 +3,7 @@
 	import { app } from "../lib/store.svelte";
 	import Badge from "./Badge.svelte";
 	import Icon from "./Icon.svelte";
+	import { orderQueued, queuedLabel, queuedTone } from "../lib/queue";
 	import Modal from "./Modal.svelte";
 
 	/**
@@ -10,7 +11,7 @@
 	 * time. Like the slash menu: ↑/↓ moves the highlight, Enter / Delete / Backspace or a click removes the row.
 	 */
 	const chat = $derived(app.chatOf(app.queueDialog));
-	const items = $derived(chat?.queued ?? []);
+	const items = $derived(orderQueued(chat?.queued ?? []));
 	let listEl = $state<HTMLElement | null>(null);
 	// The highlighted row, like the slash menu: arrows move it, Enter / Delete removes it.
 	let index = $state(0);
@@ -73,7 +74,7 @@
 				onmousemove={() => (index = i)}
 				onclick={() => remove(i)}
 			>
-				<Badge variant="outline" size="sm" mono square tone={q.mode === "steer" ? "accent" : "neutral"}>{q.mode === "steer" ? t("끼워 넣기") : t("대기열")}</Badge>
+				<Badge variant="outline" size="sm" mono square tone={queuedTone(q.mode)}>{queuedLabel(q)}</Badge>
 				<span class="qt">{q.text}</span>
 				<span class="rm" aria-hidden="true"><Icon name="x" /></span>
 			</li>
