@@ -29,7 +29,12 @@ export interface Config {
 	pushEnabled?: boolean;
 	/** PIPAYA_TERMINAL=0 turns off the interactive shells clients can open on this server. */
 	terminals?: boolean;
+	/** PIPAYA_MAX_SESSIONS: most active (not closed) sessions at once; 0 = no limit. Unset = DEFAULT_MAX_SESSIONS. */
+	maxActiveSessions?: number;
 }
+
+/** As many as there are member names, so every active session has its own name. */
+export const DEFAULT_MAX_SESSIONS = 200;
 
 function int(value: string | undefined, fallback: number): number {
 	const n = value === undefined ? NaN : Number.parseInt(value, 10);
@@ -87,5 +92,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		// On by default; it only takes effect when Firebase credentials exist (see createPushTransports). "0" turns it off.
 		pushEnabled: env.PIPAYA_PUSH_FCM !== "0",
 		terminals: env.PIPAYA_TERMINAL !== "0",
+		maxActiveSessions: Math.max(0, int(env.PIPAYA_MAX_SESSIONS, DEFAULT_MAX_SESSIONS)),
 	};
 }

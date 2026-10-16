@@ -6,7 +6,8 @@ import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
-import { memberAt, mentionedMembers, nextMemberName } from "../src/member-names.ts";
+import { DEFAULT_MAX_SESSIONS } from "../src/config.ts";
+import { MEMBER_NAMES, memberAt, mentionedMembers, nextMemberName } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -46,7 +47,11 @@ describe("member names", () => {
 	test("nextMemberName gives the first free name, then numbers", () => {
 		expect(nextMemberName(new Set())).toBe("철수");
 		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("제임스");
-		expect(nextMemberName(new Set(["철수", "미나", "제임스", "영희", "민준", "소피아", "지우", "에밀리", "하준", "루카", "서연", "토마스"]))).toBe("철수2");
+		expect(nextMemberName(new Set(MEMBER_NAMES.map((n) => n.toLowerCase())))).toBe("철수2");
+	});
+	test("the pool has no duplicates and covers the default session limit", () => {
+		expect(new Set(MEMBER_NAMES.map((n) => n.toLowerCase())).size).toBe(MEMBER_NAMES.length);
+		expect(MEMBER_NAMES.length).toBeGreaterThanOrEqual(DEFAULT_MAX_SESSIONS);
 	});
 	test("@name mentions take the longest known name and allow Korean particles", () => {
 		const names = ["철수", "미나", "미나2", "bob"];
@@ -197,5 +202,33 @@ describe("groups API", () => {
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);
+	});
+});
+
+describe("active session limit", () => {
+	test("create and reopen are refused at the limit; closing frees a slot", async () => {
+		const d = mkdtempSync(join(tmpdir(), "pipaya-limit-"));
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: d, dbPath: join(d, "t.db"), token: "t", workspaceRoot: join(d, "ws"), defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent", maxActiveSessions: 2 };
+		const a = await buildApp(cfg, { strictResponses: true });
+		await a.server.listen({ host: "0.0.0.0", port: 0 });
+		const b = `http://127.0.0.1:${(a.server.server.address() as { port: number }).port}`;
+		const call = async (method: string, path: string, body?: unknown) => {
+			const res = await fetch(b + path, { method, headers: { ...auth, "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
+			const text = await res.text();
+			return { status: res.status, json: text ? JSON.parse(text) : undefined };
+		};
+		try {
+			await call("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));
+			await call("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id });
+			const s1 = (await call("POST", "/sessions", {})).json.id;
+			expect((await call("POST", "/sessions", {})).status).toBe(201);
+			expect((await call("POST", "/sessions", {})).status).toBe(409);
+			expect((await call("PATCH", `/sessions/${s1}`, { closed: true })).status).toBe(200);
+			expect((await call("POST", "/sessions", {})).status).toBe(201);
+			expect((await call("PATCH", `/sessions/${s1}`, { closed: false })).status).toBe(409);
+		} finally {
+			await a.close();
+			rmSync(d, { recursive: true, force: true });
+		}
 	});
 });

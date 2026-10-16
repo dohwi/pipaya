@@ -146,6 +146,10 @@ export class SessionStore {
 	}
 
 	/** Lower-cased names of the active sessions (closed ones give theirs up). */
+	activeCount(): number {
+		return (this.db.query("SELECT COUNT(*) AS n FROM sessions WHERE closed = 0").get() as { n: number }).n;
+	}
+
 	activeNames(): Set<string> {
 		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
 	}

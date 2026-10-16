@@ -5,7 +5,7 @@ import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ApprovalManager } from "./approvals.ts";
 import type { QuestionManager } from "./questions.ts";
-import type { Config } from "./config.ts";
+import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { agentsPrompt, advertisedAgents, advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type AdvertisedAgent, type ContextSnapshot, type SessionContext } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { expandTemplate, parseTemplateCall, readTemplateBody, limitTemplateText, templateMarker, type TemplateService } from "./templates.ts";
@@ -78,7 +78,14 @@ export class SessionManager {
 
 	// ── CRUD ────────────────────────────────────────────────────────────────
 
+	/** Throws when one more active session would pass the server limit (PIPAYA_MAX_SESSIONS). */
+	private assertRoom(): void {
+		const max = this.cfg.maxActiveSessions ?? DEFAULT_MAX_SESSIONS;
+		if (max > 0 && this.store.activeCount() >= max) throw conflict(`session limit reached (${max} active sessions); close or delete one first`);
+	}
+
 	async create(input: CreateSessionInput, parentId: string | null = null): Promise<SessionRecord> {
+		this.assertRoom();
 		const { provider, model } = await this.resolveModel(input.provider, input.model);
 		const tools = this.validateTools(input.tools ?? this.ext?.defaultTools() ?? DEFAULT_TOOLS);
 		const id = randomUUID();
@@ -281,6 +288,7 @@ export class SessionManager {
 			if (patch.tools) clean.tools = this.validateTools(patch.tools);
 		}
 
+		if (patch.closed === false && current.closed) this.assertRoom();
 		// A closed session gives its name up; on resume it takes it back unless another session has it by now.
 		if (patch.closed === false && current.closed && this.store.activeNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.store.activeNames());
 		const updated = this.store.update(id, clean);

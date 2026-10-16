@@ -44,6 +44,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
 | `PIPAYA_APPROVAL` | `ask` | `ask`(세션 작업 디렉터리 밖에 닿는 작업만 확인), `auto`(묻지 않음), `readonly`(변경 차단. API 전용이며 앱에서는 더 이상 고르지 않음) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
+| `PIPAYA_MAX_SESSIONS` | `200` | 동시에 활성인(닫히지 않은) 세션의 최대 수. 넘으면 생성·재개가 409로 거절됨. `0`이면 제한 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
