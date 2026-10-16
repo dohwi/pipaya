@@ -200,9 +200,9 @@
 		app.openIn(n.server.id, { workdir: path });
 	}
 	/** The "+" of a server or directory: a conversation or a terminal, both starting in that place. */
-	function newMenu(e: MouseEvent, n: Node, path: string, key: string) {
+	function newItems(n: Node, path: string): RowMenuItem[] {
 		const os = platformName(n.platform);
-		rowMenu?.toggle(e, `new\u0000${key}`, [
+		return [
 			{ icon: "chat", label: t("새 대화"), title: "", run: () => newIn(n, path) },
 			{
 				icon: "terminal",
@@ -210,8 +210,11 @@
 				title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
 				run: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
 			},
-		]);
+		];
 	}
+	const newId = (key: string) => `new\u0000${key}`;
+	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newId(key), newItems(n, path));
+	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newId(key), newItems(n, path));
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 	const asWorkdir = (n: Node, path: string) => (path === n.root ? "." : path);
 
@@ -352,7 +355,7 @@
 						<span class="sname">{app.serverLabel(n.server)}</span>
 						<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>
 					</button>
-					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onclick={(e) => newMenu(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, n.current ? app.workdir : ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 
 				{#if !sfold}
@@ -378,7 +381,7 @@
 								<span class="dname mono" use:tail={pretty(n, d.path)}></span>
 								<span class="dcount mono">{d.sessions.length + d.terminals.length}</span>
 							</button>
-							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onclick={(e) => newMenu(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
