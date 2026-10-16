@@ -63,7 +63,7 @@
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
 			<div class="hello" aria-hidden="true">
-				<PipayaMark size={144} />
+				<PipayaMark size={72} />
 			</div>
 		{/if}
 		{#if chat}

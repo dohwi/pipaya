@@ -1509,6 +1509,7 @@ class AppStore {
     if (!text && !images.length && !files.length) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
     this.sending = true;
+    let seeded = false;
     try {
       if (!to) {
         const d = this.draft;
@@ -1527,14 +1528,22 @@ class AppStore {
           approval: d.approval,
         });
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
-        await this.openSession(s.id, true);
+        // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
+        // straight to the sent message instead of flashing a skeleton and an empty transcript in between.
+        const fresh = new ChatState(s.id, api);
+        await fresh.load();
+        if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
+        fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
+        this.chats = { ...this.chats, [s.id]: fresh };
+        await this.openSession(s.id);
         to = s.id;
+        seeded = true;
       }
       const chat = this.chatOf(to);
       if (!chat) return false;
 
       const mode: SendMode = chat.running ? "follow_up" : "prompt";
-      if (mode === "prompt") chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
+      if (mode === "prompt" && !seeded) chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
       chat.requestBottom();
       try {
         await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);

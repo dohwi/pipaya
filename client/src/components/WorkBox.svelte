@@ -116,7 +116,7 @@
 			{#if awaitingIdx >= 0}
 				<span class="chip warn">{question ? t("답변 필요") : t("확인 필요")}</span>
 			{:else if active}
-				<span class="spinner"></span>
+				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
 				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 			{:else}
 				{#if tools.length}
@@ -164,7 +164,7 @@
 				{:else if s.id}
 					<ToolCard id={s.id} name={s.name} args={s.args} />
 				{:else}
-					<div class="prep"><span class="spinner"></span> {t("도구 호출 준비 중…")}</div>
+					<div class="prep"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("도구 호출 준비 중…")}</div>
 				{/if}
 			{/each}
 		</div>

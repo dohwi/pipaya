@@ -8,7 +8,7 @@
 </script>
 
 <div class="welcome">
-	<div class="face" aria-hidden="true"><PipayaMark size={144} /></div>
+	<div class="face" aria-hidden="true"><PipayaMark size={72} /></div>
 	<div class="copy">
 		<h1>{t("무엇을 함께 작업할까요?")}</h1>
 		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
@@ -28,8 +28,8 @@
 		margin: auto;
 		width: 100%;
 		max-width: 680px;
-		min-height: min(420px, 100%);
-		padding: 24px 18px;
+		min-height: min(240px, 100%);
+		padding: 16px 18px;
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -46,7 +46,7 @@
 	}
 	.face {
 		position: relative;
-		margin-bottom: 20px;
+		margin-bottom: 12px;
 		color: var(--text-faint);
 		opacity: 0.35;
 		user-select: none;
@@ -60,14 +60,14 @@
 	h1 {
 		text-wrap: balance;
 		margin: 0;
-		font-size: clamp(22px, 5vw, 30px);
+		font-size: clamp(18px, 4vw, 22px);
 		font-weight: 650;
 		letter-spacing: -0.03em;
 		line-height: 1.15;
 	}
 	.sub {
-		margin: 8px 0 0;
-		font-size: var(--fs-md);
+		margin: 6px 0 0;
+		font-size: var(--fs-sm);
 		color: var(--text-dim);
 		text-wrap: balance;
 	}
@@ -78,7 +78,7 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		position: relative;
-		margin-top: 24px;
+		margin-top: 16px;
 		padding: 10px 14px;
 		border-radius: var(--radius);
 		background: var(--warn-soft);
