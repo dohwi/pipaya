@@ -4,6 +4,7 @@ import { isTauri } from "./tauri";
 import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { firstUnseen, sessionOrder, stepFrom } from "./nav";
+import { appTakesKey } from "./terminal";
 import {
   actionFor,
   buildCombo,
@@ -76,13 +77,13 @@ async function cycleApproval() {
 
 /** Previous / next conversation in sidebar order. */
 function stepSession(step: 1 | -1) {
-  const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentGroupOrder), app.activeId, step);
+  const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentGroupOrder, app.terminals), app.activeId, step);
   if (id && id !== app.activeId) void app.openSession(id);
 }
 
 function lastSession() {
   const id = app.previousId;
-  if (id && app.session(id)) void app.openSession(id);
+  if (id && app.shows(id)) void app.openSession(id);
   else app.toast(t("돌아갈 이전 대화가 없습니다"), "error");
 }
 
@@ -108,7 +109,7 @@ function focusToward(edge: Edge) {
   const g = app.activeGroup;
   if (!g || !app.activeId) return;
   const id = paneToward(g.layout, app.activeId, edge);
-  if (id && app.session(id)) {
+  if (id && app.shows(id)) {
     app.zoomId = null; // a zoomed pane covers its neighbours: shrink back so the newly selected one is visible
     void app.openSession(id);
   }
@@ -117,7 +118,7 @@ function focusToward(edge: Edge) {
 function cyclePane() {
   const g = app.activeGroup;
   if (!g || !app.activeId) return;
-  const ids = panesOf(g.layout).filter((x) => app.session(x));
+  const ids = panesOf(g.layout).filter((x) => app.shows(x));
   const id = stepFrom(ids, app.activeId, 1);
   if (id && id !== app.activeId) {
     app.zoomId = null;
@@ -200,6 +201,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     if (app.activeId && app.activeGroup) return app.leaveGroup(app.activeId);
     app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
   },
+  newTerminal: () => void app.openTerminal(app.workdir),
+  splitTerminal: () => app.splitTerminal("bottom"),
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
   cycleServer,
@@ -233,6 +236,10 @@ const held = new Set<string>();
 let fired = false;
 
 const MODIFIER_CODE = /^(Control|Shift|Alt|Meta|OS|AltGraph|CapsLock|Fn)/;
+
+function inTerminal(e: KeyboardEvent) {
+  return !!(e.target as HTMLElement | null)?.closest?.("[data-terminal]");
+}
 
 function typingTarget(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null;
@@ -303,6 +310,8 @@ export function onShortcutCapture(e: KeyboardEvent) {
 /** Window-level key handler: runs the action bound to the keys held right now. */
 export function onShortcut(e: KeyboardEvent) {
   if (e.defaultPrevented || app.prefs.recordingKey) return;
+  // A focused terminal gets its keys (Ctrl+B, Esc, Alt+N...): only Mod+Shift/Alt shortcuts and F-keys reach the app.
+  if (inTerminal(e) && !appTakesKey(e, app.prefs.bindings)) return;
   // Esc stops the agent even while an IME composition is open (Korean/Japanese input leaves isComposing set).
   if (e.isComposing && e.key !== "Escape") return;
   if (MODIFIER_CODE.test(e.code)) return;

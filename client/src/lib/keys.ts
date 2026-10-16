@@ -33,6 +33,8 @@ export type ActionId =
   | "focusDown"
   | "cyclePane"
   | "ungroup"
+  | "newTerminal"
+  | "splitTerminal"
   | "workdir"
   | "skills"
   | "cycleServer"
@@ -208,6 +210,18 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "Mod+Backslash",
   },
   {
+    id: "newTerminal",
+    label: msg("새 터미널"),
+    hint: msg("서버의 셸(Linux·macOS는 기본 셸, Windows는 PowerShell)을 지금 작업 폴더에서 엽니다"),
+    default: "Mod+Shift+Backquote",
+  },
+  {
+    id: "splitTerminal",
+    label: msg("아래에 터미널 열기"),
+    hint: msg("지금 선택한 창 아래에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다"),
+    default: "Mod+Alt+Backquote",
+  },
+  {
     id: "splitDown",
     label: msg("아래로 분할 (상하)"),
     hint: msg("지금 선택한 창 아래에 새 대화를 만들어 그룹으로 묶습니다"),
@@ -300,6 +314,8 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   focusDown: "layout",
   cyclePane: "layout",
   ungroup: "layout",
+  newTerminal: "layout",
+  splitTerminal: "layout",
   forkSession: "chat",
   retry: "chat",
   compact: "chat",

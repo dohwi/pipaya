@@ -3,13 +3,14 @@
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import AgentBadge from "./AgentBadge.svelte";
+	import Icon from "./Icon.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
 	import { panesOf } from "../lib/layout";
 	import { app } from "../lib/store.svelte";
 
 	/** Phones: the sessions of the open group as a strip under the header; a tap switches to that session. */
 	const group = $derived(app.activeGroup);
-	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id)).filter((s) => !!s) : []);
+	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
 
 	let strip: HTMLElement | undefined = $state();
 	// keep the focused chip in view when it changes (also when switched from elsewhere)
@@ -23,9 +24,9 @@
 	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".fchip.on", variant: "accent" }}>
 		<span class="name" title={group.name}>{group.name}</span>
 		{#each items as x (x.id)}
-			{@const st = activityOf(app, x.id)}
+			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			<FilterChip current on={x.id === app.activeId} onclick={() => app.openSession(x.id)} title="{x.title} · {ACTIVITY_LABEL[st]}">
-				<AgentBadge id={x.id} state={st} size={16} />
+				{#if app.terminal(x.id)}<Icon name="terminal" />{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 				<span class="t">{x.title}</span>
 			</FilterChip>
 		{/each}
@@ -60,6 +61,13 @@
 		font-size: var(--fs-2xs);
 		font-weight: 700;
 		color: var(--text-faint);
+	}
+	.strip :global(.fchip svg) {
+		width: 14px;
+		height: 14px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
 	}
 	.t {
 		min-width: 0;

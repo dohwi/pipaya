@@ -28,6 +28,7 @@ import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState } from "./sidebar.svelte";
+import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   ApprovalMode,
   ApprovalPolicy,
@@ -71,6 +72,8 @@ class AppStore {
         sessions: Session[];
         workspace: WorkspaceInfo | null;
         groups: Group[];
+        /** Terminals open on that server */
+        terminals: TerminalInfo[];
         /** Sessions of that server that are running / waiting for the user (as it reports them) */
         running: Record<string, boolean>;
         awaiting: Record<string, number>;
@@ -137,6 +140,9 @@ class AppStore {
   chats = $state.raw<Record<string, ChatState>>({});
   /** Session groups of the open server: named split-window layouts, stored on the server. */
   groups = $state<Group[]>([]);
+  /** Terminals open on the server (shells on its own OS), and what it supports; null support = an older server */
+  terminals = $state<TerminalInfo[]>([]);
+  terminalSupport = $state<TerminalSupport | null>(null);
 
   models = $state<ModelInfo[]>([]);
   providers = $state<ProviderInfo[]>([]);
@@ -216,6 +222,15 @@ class AppStore {
     return this.session(this.activeId);
   }
 
+  terminal(id: string | null | undefined): TerminalInfo | undefined {
+    return isTerminalId(id) ? this.terminals.find((x) => x.id === id) : undefined;
+  }
+
+  /** A session or a terminal that is open: something a pane can show. */
+  shows(id: string | null | undefined): boolean {
+    return !!this.session(id) || !!this.terminal(id);
+  }
+
   session(id: string | null | undefined): Session | undefined {
     return id ? this.sessions.find((s) => s.id === id) : undefined;
   }
@@ -237,7 +252,7 @@ class AppStore {
   /** Sessions whose transcripts must be loaded: the focused one, and every pane of the group on a wide screen. */
   get visibleIds(): string[] {
     const out = new Set<string>();
-    if (this.activeId) out.add(this.activeId);
+    if (this.activeId && !isTerminalId(this.activeId)) out.add(this.activeId);
     const g = this.activeGroup;
     if (g && !viewport.narrow)
       for (const id of panesOf(g.layout)) if (this.session(id)) out.add(id);
@@ -258,6 +273,14 @@ class AppStore {
     this.fullGroups = this.isFull(groupId) ? this.fullGroups.filter((x) => x !== groupId) : [...this.fullGroups, groupId];
     this.zoomId = null;
     write(K.fullGroups, this.fullGroups);
+  }
+
+  /** Every pane on screen, terminals included (toasts land in whichever of them they are about). */
+  get shownIds(): string[] {
+    const g = this.activeGroup;
+    const out = new Set<string>(this.activeId ? [this.activeId] : []);
+    if (g && !viewport.narrow) for (const id of panesOf(g.layout)) if (this.shows(id)) out.add(id);
+    return [...out];
   }
 
   groupOf(sessionId: string): Group | undefined {
@@ -574,6 +597,8 @@ class AppStore {
     this.activeId = null;
     this.chats = {};
     this.groups = [];
+    this.terminals = [];
+    this.terminalSupport = null;
     this.sidebar.open = false;
     this.retryDelay = 1000;
     void this.sync();
@@ -595,6 +620,8 @@ class AppStore {
     this.activeId = null;
     this.chats = {};
     this.groups = [];
+    this.terminals = [];
+    this.terminalSupport = null;
     try {
       localStorage.removeItem(K.currentServer);
     } catch {
@@ -624,11 +651,12 @@ class AppStore {
         .map(async (s) => {
           const api = new Api({ baseUrl: s.baseUrl, token: s.token });
           try {
-            const [list, workspace, groups, act] = await Promise.all([
+            const [list, workspace, groups, act, terminals] = await Promise.all([
               api.listSessions(200, false),
               api.workspace().catch(() => null),
               api.groups().catch(() => [] as Group[]),
               api.activity().catch(() => null),
+              api.terminals().catch(() => [] as TerminalInfo[]),
             ]);
             const running: Record<string, boolean> = {};
             const awaiting: Record<string, number> = {};
@@ -641,6 +669,7 @@ class AppStore {
               sessions: list.sessions.filter((x) => !x.closed),
               workspace,
               groups,
+              terminals,
               running,
               awaiting,
             };
@@ -656,8 +685,10 @@ class AppStore {
   }
 
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
-  openIn(serverId: string, to: { session?: string; workdir?: string }) {
+  openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean }) {
     if (serverId !== this.serverId || this.net === "idle") {
+      // A terminal asked for on another server opens once that server is connected (see sync).
+      this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
       if (to.workdir !== undefined)
         write(`${K.workdir}.${serverId}`, to.workdir);
       if (to.session) write(`${K.active}.${serverId}`, to.session);
@@ -671,11 +702,15 @@ class AppStore {
       return;
     }
     if (to.session) void this.openSession(to.session);
+    else if (to.terminal) void this.openTerminal(to.workdir);
     else {
       if (to.workdir !== undefined) this.setWorkdir(to.workdir);
       void this.startChat();
     }
   }
+
+  /** Working directory of a terminal to open as soon as the server being switched to is connected */
+  private pendingTerminal: string | null = null;
 
   private get activeKey(): string {
     return `${K.active}.${this.serverId}`;
@@ -710,7 +745,7 @@ class AppStore {
         this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
         return;
       }
-      const [list, models, providers, tools, cursor, workspace, config, groups] =
+      const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport] =
         await Promise.all([
           api.listSessions(200, false),
           api.models(),
@@ -720,11 +755,15 @@ class AppStore {
           api.workspace().catch(() => null), // servers from before workspaces existed
           api.configuration().catch(() => null), // servers from before model configuration existed
           api.groups().catch(() => [] as Group[]), // servers from before session groups existed
+          api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
+          api.terminalSupport().catch(() => null),
         ]);
       if (token !== this.syncToken) return;
       this.workspace = workspace;
       this.sessions = list.sessions.filter((s) => !s.closed);
       this.groups = groups;
+      this.terminals = terminals;
+      this.terminalSupport = terminalSupport;
       this.sessionsLoaded = true;
       this.models = models;
       this.providers = providers;
@@ -762,9 +801,14 @@ class AppStore {
       // Restore (or refresh) the open conversation.
       const want = this.activeId ?? read<string | null>(this.activeKey, null);
       const had = Object.keys(this.chats);
-      if (want && this.sessions.some((s) => s.id === want))
+      if (want && this.shows(want))
         await this.openSession(want, true);
       else if (this.activeId) this.newChat();
+      if (this.pendingTerminal !== null) {
+        const dir = this.pendingTerminal;
+        this.pendingTerminal = null;
+        void this.openTerminal(dir);
+      }
       // Panes of the open group missed events while we were away: reload them too.
       for (const id of this.visibleIds)
         if (id !== this.activeId && had.includes(id))
@@ -903,6 +947,17 @@ class AppStore {
       case "group_deleted":
         this.groups = this.groups.filter((x) => x.id !== (e.data as { id: string }).id);
         this.dropFull((e.data as { id: string }).id);
+        break;
+      case "terminal_created":
+      case "terminal_updated": {
+        const x = e.data as TerminalInfo;
+        const i = this.terminals.findIndex((y) => y.id === x.id);
+        if (i >= 0) this.terminals[i] = x;
+        else this.terminals.push(x);
+        break;
+      }
+      case "terminal_closed":
+        this.dropTerminal((e.data as { id: string }).id);
         break;
       case "session_deleted": {
         const id = e.data.id as string;
@@ -1306,12 +1361,12 @@ class AppStore {
   private neighbourOf(id: string): string | undefined {
     const g = this.groupOf(id);
     if (g) {
-      const ids = panesOf(g.layout).filter((x) => this.session(x));
+      const ids = panesOf(g.layout).filter((x) => this.shows(x));
       const i = ids.indexOf(id);
       const inGroup = i < 0 ? undefined : (ids[i + 1] ?? ids[i - 1]);
       if (inGroup) return inGroup;
     }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentGroupOrder);
+    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentGroupOrder, this.terminals);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
   }
@@ -1335,13 +1390,14 @@ class AppStore {
 
   /** The focused session is gone: focus its neighbour (see `neighbourOf`) if there is one, else fall back to a blank chat. */
   private leave(next?: string) {
-    if (next && this.session(next)) void this.openSession(next);
+    if (next && this.shows(next)) void this.openSession(next);
     else this.newChat();
   }
 
   /** Close the focused session (focus moves to a remaining pane of its group, see `close`). */
   async closeActive() {
-    if (this.activeId) await this.close(this.activeId);
+    if (isTerminalId(this.activeId)) await this.closeTerminal(this.activeId);
+    else if (this.activeId) await this.close(this.activeId);
   }
 
   /** Reopen a closed session and show it. */
@@ -1480,7 +1536,7 @@ class AppStore {
   /** Focus a session (showing its group if it has one). */
   async openSession(id: string, force = false) {
     if (!this.api) return;
-    if (!force && this.activeId === id && this.chats[id]) {
+    if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
       this.sidebar.open = false;
       return;
     }
@@ -1490,9 +1546,10 @@ class AppStore {
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
-    const cwd = this.sessions.find((s) => s.id === id)?.cwd;
+    const cwd = this.sessions.find((s) => s.id === id)?.cwd ?? this.terminal(id)?.cwd;
     if (cwd) this.setWorkdir(this.relPath(cwd));
     this.sidebar.open = false;
+    if (isTerminalId(id)) return;
     await this.ensureChat(id, force);
   }
 
@@ -1565,11 +1622,11 @@ class AppStore {
 
   /** Toasts shown as a global strip: not about a session, or about one that is not on screen right now. */
   get globalToasts(): Toast[] {
-    return this.feedback.global(this.visibleIds);
+    return this.feedback.global(this.shownIds);
   }
   /** Toasts shown inside the pane of session `id`. */
   toastsOf(id: string | null): Toast[] {
-    return this.feedback.of(id, this.visibleIds);
+    return this.feedback.of(id, this.shownIds);
   }
 
   /** `to`: the session to send to (a pane's own); omitted = the focused one. null starts a new chat. */
@@ -1883,6 +1940,8 @@ class AppStore {
   async splitActive(zone: Zone): Promise<void> {
     const api = this.api;
     if (!api) return;
+    const term = this.terminal(this.activeId);
+    if (term) return this.splitWithNewChat(term.id, term.cwd, zone);
     let from = this.session(this.activeId);
     // A new chat has no session yet: make one from the draft (the pending model settings and working directory)
     // so there is something to split. Both halves then start empty and ready for input.
@@ -1940,6 +1999,100 @@ class AppStore {
       if (!made) return;
     }
     void this.openSession(id);
+  }
+
+  /* ---------- terminals ---------- */
+
+  /**
+   * Open a new terminal on the server (its own OS shell) and show it. `workdir`: "." / undefined for the default working
+   * directory, else a path. `beside`: put it next to that pane (grouping them) instead of on its own.
+   */
+  async openTerminal(workdir?: string, beside?: { target: string; zone: Zone }): Promise<TerminalInfo | null> {
+    const api = this.api;
+    if (!api) return null;
+    if (this.terminalSupport && !this.terminalSupport.enabled) {
+      this.toast(t("이 서버는 터미널이 꺼져 있습니다 (PIPAYA_TERMINAL=0)"), "error");
+      return null;
+    }
+    if (beside) {
+      const g = this.groupOf(beside.target);
+      if (g && panesOf(g.layout).length >= MAX_PANES) {
+        this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+        return null;
+      }
+    }
+    let made: TerminalInfo;
+    try {
+      made = await api.createTerminal({ cwd: workdir && workdir !== "." ? workdir : undefined });
+    } catch (e) {
+      if (isUnsupportedRoute(e)) this.toast(t("이 서버는 터미널을 지원하지 않습니다. 서버를 업데이트하세요"), "error");
+      else this.fail(e, t("터미널을 열지 못했습니다"));
+      return null;
+    }
+    if (!this.terminals.some((x) => x.id === made.id)) this.terminals.push(made);
+    if (beside) await this.dropSession(made.id, beside.target, beside.zone);
+    else await this.openSession(made.id);
+    return made;
+  }
+
+  /** A terminal beside the focused pane (Mod+Shift+` style split): it starts where that pane works. */
+  async splitTerminal(zone: Zone = "bottom"): Promise<void> {
+    const id = this.activeId;
+    const cwd = this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    if (!id || !cwd) return void (await this.openTerminal(this.workdir));
+    await this.openTerminal(cwd, { target: id, zone });
+  }
+
+  /** Split a terminal pane with a brand-new conversation working in the same folder. */
+  private async splitWithNewChat(target: string, cwd: string, zone: Zone): Promise<void> {
+    const api = this.api;
+    const d = this.draft;
+    if (!api) return;
+    if (!d.model)
+      return void this.toast(t("사용할 수 있는 모델이 없습니다. 모델 선택창에서 연결을 추가하세요."), "error");
+    const g = this.groupOf(target);
+    if (g && panesOf(g.layout).length >= MAX_PANES)
+      return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+    try {
+      const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel), approval: d.approval });
+      if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
+      await this.dropSession(made.id, target, zone);
+    } catch (e) {
+      this.fail(e, t("새 대화를 만들지 못했습니다"));
+    }
+  }
+
+  async renameTerminal(id: string, title: string): Promise<void> {
+    title = title.trim();
+    if (!this.api || !title) return;
+    try {
+      const x = await this.api.renameTerminal(id, title);
+      const i = this.terminals.findIndex((y) => y.id === id);
+      if (i >= 0) this.terminals[i] = x;
+    } catch (e) {
+      this.fail(e, t("이름을 바꾸지 못했습니다"), id);
+    }
+  }
+
+  /** End the shell. The terminal leaves its group and the sidebar (the server confirms with terminal_closed). */
+  async closeTerminal(id: string): Promise<void> {
+    if (!this.api) return;
+    try {
+      await this.api.closeTerminal(id);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 404)) return this.fail(e, t("터미널을 닫지 못했습니다"), id);
+    }
+    this.dropTerminal(id);
+  }
+
+  /** The shell is gone (closed here, elsewhere, or it exited): forget it and move focus on. */
+  dropTerminal(id: string) {
+    if (!this.terminals.some((x) => x.id === id)) return;
+    const next = this.neighbourOf(id);
+    this.forgetInGroups(id);
+    this.terminals = this.terminals.filter((x) => x.id !== id);
+    if (this.zoomId === id) this.zoomId = null;
+    if (this.activeId === id) this.leave(next);
   }
 
   /** Server-side default names are English; a group made here gets one in the UI language. */

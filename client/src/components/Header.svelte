@@ -10,6 +10,7 @@
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
+	const term = $derived(app.terminal(app.activeId));
 	// Wide screens show the whole group at once, so the header names the group rather than one session.
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 </script>
@@ -24,6 +25,9 @@
 			{#if group}
 				<span class="t">{group.name}</span>
 				<span class="sub mono">{t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
+			{:else if term}
+				<span class="t">{term.title}</span>
+				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
 				<span class="t">{s?.title ?? t("새 대화")}</span>
 				{#if s}<span class="sub mono">{s.cwd.split("/").slice(-2).join("/")}</span>{/if}

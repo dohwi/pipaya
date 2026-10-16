@@ -9,6 +9,7 @@
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
 	import { sidebarBlocks } from "../lib/nav";
 	import type { Session } from "../lib/types";
+	import type { TerminalInfo } from "../lib/terminal";
 	import type { Server } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -18,6 +19,7 @@
 		current: boolean;
 		groups: ReturnType<typeof sidebarBlocks>["groups"];
 		loose: Session[];
+		terms: TerminalInfo[];
 		/** activity of this server's sessions, by id */
 		state: Record<string, Activity>;
 	}
@@ -27,7 +29,8 @@
 			const current = server.id === app.serverId;
 			const ov = app.overview[server.id];
 			const sessions = current ? app.sessions : (ov?.sessions ?? []);
-			if (!sessions.length) return [];
+			const terminals = current ? app.terminals : (ov?.terminals ?? []);
+			if (!sessions.length && !terminals.length) return [];
 			const { groups, dirs } = sidebarBlocks(
 				sessions,
 				current ? app.groups : (ov?.groups ?? []),
@@ -35,11 +38,12 @@
 				undefined,
 				app.sidebar.dirOrder[server.id],
 				app.sidebar.groupOrder[server.id],
+				terminals,
 			);
 			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
 			const state: Record<string, Activity> = {};
 			for (const x of sessions) state[x.id] = activityOf(view, x.id);
-			return [{ server, current, groups: groups.filter((b) => b.sessions.length), loose: dirs.flatMap((d) => d.sessions), state }];
+			return [{ server, current, groups: groups.filter((b) => b.sessions.length || b.terminals.length), loose: dirs.flatMap((d) => d.sessions), terms: dirs.flatMap((d) => d.terminals), state }];
 		}),
 	);
 	const multi = $derived(sections.length > 1);
@@ -56,6 +60,23 @@
 	};
 	const top = $derived(URGENCY.find((a) => a !== "idle" && counts[a] > 0));
 </script>
+
+{#snippet termBtn(sec: Section, x: TerminalInfo)}
+	{@const cur = sec.current}
+	<button
+		class="agent term"
+		class:active={cur && x.id === app.activeId}
+		class:over={dropOn === x.id}
+		use:dragSource={{ id: x.id, disabled: !cur }}
+		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
+		onclick={() => app.openIn(sec.server.id, { session: x.id })}
+		title="{x.title} · {t('터미널')}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
+		aria-label="{x.title}, {t('터미널')}"
+		aria-current={cur && x.id === app.activeId ? "true" : undefined}
+	>
+		<Icon name="terminal" />
+	</button>
+{/snippet}
 
 {#snippet agent(sec: Section, x: Session)}
 	{@const st = sec.state[x.id] ?? "idle"}
@@ -92,7 +113,8 @@
 		{#each sections as sec, si (sec.server.id)}
 			{#if si > 0}<li class="sep srv" role="separator" title={app.serverLabel(sec.server)}></li>{/if}
 			{#each sec.loose as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
-			{#if sec.groups.length && sec.loose.length}<li class="sep" role="separator"></li>{/if}
+			{#each sec.terms as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
+			{#if sec.groups.length && (sec.loose.length || sec.terms.length)}<li class="sep" role="separator"></li>{/if}
 			{#each sec.groups as b, i (b.group.id)}
 				{#if i > 0}<li class="sep" role="separator"></li>{/if}
 				<li
@@ -104,6 +126,7 @@
 				>
 					<ul class="members" aria-label={t("그룹 {name}", { name: b.group.name })}>
 						{#each b.sessions as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
+						{#each b.terminals as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
 					</ul>
 				</li>
 			{/each}
@@ -230,6 +253,18 @@
 		width: 40px;
 		height: 40px;
 		border-radius: var(--radius-sm);
+	}
+	.agent.term {
+		color: var(--text-dim);
+	}
+	.agent.term :global(svg) {
+		width: 18px;
+		height: 18px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.agent,
 	.folder {

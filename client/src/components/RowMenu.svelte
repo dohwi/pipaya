@@ -64,6 +64,13 @@
 		if (e.detail === 0) queueMicrotask(() => el?.querySelector<HTMLElement>("button")?.focus());
 	}
 
+	/** A button that only ever opens on a click (the sidebar's "+"): a second click closes it. */
+	export function toggle(e: MouseEvent, id: string, items: RowMenuItem[]) {
+		if (shown?.id === id) return close();
+		show(e.currentTarget as HTMLElement, id, items);
+		if (e.detail === 0) queueMicrotask(() => el?.querySelector<HTMLElement>("button")?.focus());
+	}
+
 	function pick(run: () => void) {
 		close();
 		run();
@@ -86,7 +93,7 @@
 	function outside(e: PointerEvent) {
 		if (!shown) return;
 		const target = e.target as Element | null;
-		if (target?.closest(".sbmenu, .more")) return;
+		if (target?.closest(".sbmenu, .more, [data-menu-button]")) return;
 		close();
 	}
 </script>

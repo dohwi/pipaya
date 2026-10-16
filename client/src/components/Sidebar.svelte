@@ -17,6 +17,7 @@
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarBlocks, type DirBlock, type GroupBlock } from "../lib/nav";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
+	import { platformName, type TerminalInfo } from "../lib/terminal";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -39,10 +40,12 @@
 		total: number;
 		dirs: DirBlock[];
 		groups: GroupBlock[];
+		/** What the server runs (linux, darwin, win32), when it says so */
+		platform: string | undefined;
 	}
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, gorder: string[] | undefined): Pick<Node, "root" | "total" | "dirs" | "groups"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, gorder: string[] | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs" | "groups"> {
 		const { groups: all, dirs } = sidebarBlocks(
 			sessions,
 			groups,
@@ -50,9 +53,11 @@
 			(g) => !!q && g.name.toLowerCase().includes(q),
 			order,
 			gorder,
+			terminals,
+			(x) => !q || x.title.toLowerCase().includes(q),
 		);
-		const blocks = all.filter((b) => b.sessions.length || !q);
-		const total = dirs.reduce((n, d) => n + d.sessions.length, 0) + blocks.reduce((n, b) => n + b.sessions.length, 0);
+		const blocks = all.filter((b) => b.sessions.length || b.terminals.length || !q);
+		const total = dirs.reduce((n, d) => n + d.sessions.length + d.terminals.length, 0) + blocks.reduce((n, b) => n + b.sessions.length + b.terminals.length, 0);
 		return { root: ws?.root, total, dirs, groups: blocks };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
@@ -73,8 +78,8 @@
 							: "offline"
 				: ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.groupOrder[server.id]);
-			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, ...data };
+			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.groupOrder[server.id], current ? app.terminals : (ov?.terminals ?? []));
+			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
 		});
 	});
 
@@ -111,7 +116,7 @@
 		draft = title;
 	}
 	function commitRename() {
-		if (editing && draft.trim()) void app.rename(editing, draft);
+		if (editing && draft.trim()) void (app.terminal(editing) ? app.renameTerminal(editing, draft) : app.rename(editing, draft));
 		editing = null;
 	}
 	function focusSelect(node: HTMLInputElement) {
@@ -127,12 +132,12 @@
 		editingGroup = null;
 	}
 	/** Touch has no drag and drop: pick the conversation to pull this one together with. */
-	function chooseGroup(x: Session) {
+	function chooseGroup(x: { id: string; title: string }) {
 		const own = app.groupOf(x.id);
 		app.palette = {
 			title: t("'{title}'와 묶기", { title: x.title }),
 			empty: msg("묶을 다른 대화가 없습니다"),
-			items: app.sessions
+			items: [...app.sessions, ...app.terminals]
 				.filter((s) => s.id !== x.id)
 				.map((s) => ({ id: s.id, title: s.title, sub: app.groupOf(s.id)?.name ?? tilde(s.cwd, app.workspace?.home), current: !!own && app.groupOf(s.id)?.id === own.id })),
 			onpick: (it) => void app.groupWith(x.id, it.id),
@@ -168,10 +173,23 @@
 	function newIn(n: Node, path: string) {
 		app.openIn(n.server.id, { workdir: path });
 	}
+	/** The "+" of a server or directory: a conversation or a terminal, both starting in that place. */
+	function newMenu(e: MouseEvent, n: Node, path: string, key: string) {
+		const os = platformName(n.platform);
+		rowMenu?.toggle(e, `new\u0000${key}`, [
+			{ icon: "chat", label: t("새 대화"), title: "", run: () => newIn(n, path) },
+			{
+				icon: "terminal",
+				label: os ? t("새 터미널 ({os})", { os }) : t("새 터미널"),
+				title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
+				run: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
+			},
+		]);
+	}
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 	const asWorkdir = (n: Node, path: string) => (path === n.root ? "." : path);
 
-	type MenuTarget = { kind: "session"; x: Session } | { kind: "group"; g: Group };
+	type MenuTarget = { kind: "session"; x: Session } | { kind: "group"; g: Group } | { kind: "terminal"; x: TerminalInfo };
 	/** Items of a row's "more" menu. */
 	function menuItems(target: MenuTarget): RowMenuItem[] {
 		if (target.kind === "group") {
@@ -179,6 +197,14 @@
 			return [
 				{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => startGroupRename(g) },
 				{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => void app.deleteGroup(g.id) },
+			];
+		}
+		if (target.kind === "terminal") {
+			const x = target.x;
+			return [
+				{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => chooseGroup(x) },
+				{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => startRename(x.id, x.title) },
+				{ icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(x.id) },
 			];
 		}
 		const x = target.x;
@@ -191,7 +217,7 @@
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	/** Id of the session or group whose menu is open (its button stays highlighted). */
 	let menuId = $state<string | null>(null);
-	const targetId = (target: MenuTarget) => (target.kind === "session" ? target.x.id : target.g.id);
+	const targetId = (target: MenuTarget) => (target.kind === "group" ? target.g.id : target.x.id);
 	const hoverMenu = (e: PointerEvent, target: MenuTarget) => rowMenu?.hover(e, targetId(target), menuItems(target));
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
 	const clickMenu = (e: MouseEvent, target: MenuTarget) => rowMenu?.click(e, targetId(target), menuItems(target));
@@ -237,6 +263,42 @@
 	</div>
 {/snippet}
 
+{#snippet termRow(n: Node, x: TerminalInfo)}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="item nested term"
+		class:active={n.current && x.id === app.activeId}
+		class:over={dropOn === x.id}
+		class:grabbable={n.current && editing !== x.id}
+		class:menuopen={menuId === x.id}
+		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
+		use:dropTarget={{ accepts: (id) => n.current && id !== x.id, hover: hover(x.id), drop: dropOnSession(x.id) }}
+	>
+		{#if n.current && editing === x.id}
+			<input
+				class="rename"
+				bind:value={draft}
+				use:focusSelect
+				onblur={commitRename}
+				onkeydown={(e) => {
+					if (e.key === "Enter") commitRename();
+					if (e.key === "Escape") editing = null;
+				}}
+			/>
+		{:else}
+			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={`${x.shell}\n${x.cwd}`}>
+				<span class="termicon"><Icon name="terminal" /></span>
+				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
+			</button>
+			<div class="acts">
+				{#if n.current}
+					<button class="more" class:on={menuId === x.id} onpointerenter={(e) => hoverMenu(e, { kind: "terminal", x })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "terminal", x })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === x.id}><Icon name="more" /></button>
+				{/if}
+			</div>
+		{/if}
+	</div>
+{/snippet}
+
 <aside class="side">
 	<div class="brandrow">
 		<PipayaMark color size={26} />
@@ -262,7 +324,7 @@
 						<span class="sname">{app.serverLabel(n.server)}</span>
 						<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>
 					</button>
-					<button class="dirnew" onclick={() => newIn(n, n.current ? app.workdir : ".")} aria-label={t("{name}에서 새 대화", { name: app.serverLabel(n.server) })} title={t("이 서버에서 새 대화")}><Icon name="plus" /></button>
+					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onclick={(e) => newMenu(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 
 				{#if !sfold}
@@ -286,13 +348,14 @@
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={d.path}>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
 								<span class="dname mono" use:tail={pretty(n, d.path)}></span>
-								<span class="dcount mono">{d.sessions.length}</span>
+								<span class="dcount mono">{d.sessions.length + d.terminals.length}</span>
 							</button>
-							<button class="dirnew" onclick={() => newIn(n, asWorkdir(n, d.path))} aria-label={t("{name}에서 새 대화", { name: pretty(n, d.path) })} title={t("이 디렉터리에서 새 대화")}><Icon name="plus" /></button>
+							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onclick={(e) => newMenu(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
 								{#each d.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+								{#each d.terminals as x (x.id)}{@render termRow(n, x)}{/each}
 							</div>
 						{/if}
 						</div>
@@ -320,7 +383,7 @@
 										<span class="chev" class:folded={gfold}><Icon name="chevron-down" /></span>
 										<span class="gicon"><Icon name="columns" /></span>
 										<span class="dname">{b.group.name}</span>
-										<span class="dcount mono">{b.sessions.length}</span>
+										<span class="dcount mono">{b.sessions.length + b.terminals.length}</span>
 									</button>
 									{#if n.current}
 										<div class="gacts">
@@ -332,6 +395,7 @@
 							{#if !gfold}
 								<div class="fold" in:collapseIn out:collapseOut>
 									{#each b.sessions as x (x.id)}{@render row(n, x, true)}{/each}
+									{#each b.terminals as x (x.id)}{@render termRow(n, x)}{/each}
 								</div>
 							{/if}
 						</div>
@@ -630,9 +694,28 @@
 			opacity: 1;
 		}
 	}
-	.dirnew:hover {
+	.dirnew:hover,
+	.dirnew.on {
 		background: var(--bg-active);
 		color: var(--text);
+		opacity: 1;
+	}
+	.termicon {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 18px;
+		height: 18px;
+		color: var(--text-dim);
+	}
+	.termicon :global(svg) {
+		width: 15px;
+		height: 15px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.dirnew :global(svg) {
 		width: 15px;

@@ -14,6 +14,10 @@
 	import { setPane } from "../lib/pane";
 	import { app } from "../lib/store.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
+	import Lazy from "./Lazy.svelte";
+	import { isTerminalId, platformName } from "../lib/terminal";
+
+	const loadTerminal = () => import("./TerminalView.svelte");
 
 	/**
 	 * One conversation with its own input. `id` null = a new chat that has no session yet.
@@ -35,7 +39,10 @@
 	}
 	const chat = $derived(app.chatOf(id));
 	const session = $derived(app.session(id));
-	const state = $derived(id ? activityOf(app, id) : "idle");
+	/** A terminal pane: the server's shell instead of a conversation */
+	const term = $derived(app.terminal(id));
+	const isTerm = $derived(isTerminalId(id));
+	const state = $derived(id && !isTerm ? activityOf(app, id) : "idle");
 	/** The name other sessions call this one by; the other sessions address it as @name. */
 	const memberName = $derived(session?.name);
 
@@ -75,15 +82,37 @@
 				if (group) app.toggleFull(group.id);
 			}}
 		>
-			<AgentBadge {id} {state} size={16} />
+			{#if isTerm}
+				<span class="ticon"><Icon name="terminal" /></span>
+			{:else}
+				<AgentBadge {id} {state} size={16} />
+			{/if}
 			<span class="tt">
+				{#if term}
+				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
+				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
+				{:else}
 				<span class="t">{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
+				{/if}
 			</span>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
+			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
 		</header>
 	{/if}
+
+	{#if isTerm}
+	<div class="body">
+		<SessionToasts id={id!} />
+		{#if term}
+			{#key term.id}<Lazy load={loadTerminal} terminal={term} {focused} />{/key}
+		{:else}
+			<div class="gone">{t("터미널이 닫혔습니다")}</div>
+		{/if}
+	</div>
+	<DropLayer target={id!} />
+	{:else}
 
 	<div class="body">
 		{#if id}<SessionToasts {id} />{/if}
@@ -109,6 +138,7 @@
 	<Composer />
 	<!-- covers the input and the stats line too, so a drop zone reaches the bottom edge of the pane -->
 	{#if id}<DropLayer target={id} />{/if}
+	{/if}
 </section>
 
 <style>
@@ -166,6 +196,35 @@
 		gap: 7px;
 	}
 	/* pushed to the right edge of the title area, next to the badge / unlink button */
+	.ticon {
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		color: var(--text-dim);
+	}
+	.ticon :global(svg) {
+		width: 15px;
+		height: 15px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.os {
+		margin-left: 7px;
+		font-size: var(--fs-2xs);
+		font-weight: 500;
+		color: var(--text-faint);
+	}
+	.gone {
+		flex: 1;
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+		font-size: var(--fs-sm);
+	}
 	.cwd {
 		flex: 0 1 auto;
 		min-width: 0;

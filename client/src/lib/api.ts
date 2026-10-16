@@ -317,6 +317,14 @@ export class Api {
 		this.req<Group>("PATCH", `/groups/${id}`, patch);
 	deleteGroup = (id: string) => this.req<{ ok: boolean }>("DELETE", `/groups/${id}`);
 
+	/* ---------- terminals (the server's own shell) ---------- */
+	terminalSupport = () => this.req<import("./terminal").TerminalSupport>("GET", "/terminals/info");
+	terminals = () => this.req<{ terminals: import("./terminal").TerminalInfo[] }>("GET", "/terminals").then((r) => r.terminals);
+	createTerminal = (input: { cwd?: string; shell?: string; title?: string; cols?: number; rows?: number }) =>
+		this.req<import("./terminal").TerminalInfo>("POST", "/terminals", input);
+	renameTerminal = (id: string, title: string) => this.req<import("./terminal").TerminalInfo>("PATCH", `/terminals/${encodeURIComponent(id)}`, { title });
+	closeTerminal = (id: string) => this.req<{ ok: boolean }>("DELETE", `/terminals/${encodeURIComponent(id)}`);
+
 	approvals = () => this.req<{ approvals: Approval[] }>("GET", "/approvals").then((r) => r.approvals);
 	decide = (sessionId: string, toolCallId: string, approved: boolean, reason?: string) =>
 		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/approvals/${encodeURIComponent(toolCallId)}`, {
@@ -372,6 +380,9 @@ export const EVENT_TYPES = [
 	"group_created",
 	"group_updated",
 	"group_deleted",
+	"terminal_created",
+	"terminal_updated",
+	"terminal_closed",
 	"run_started",
 	"run_finished",
 	"run_limit",
