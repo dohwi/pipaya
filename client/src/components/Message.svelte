@@ -9,6 +9,7 @@
 	import { compact, duration } from "../lib/format";
 	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
+	import { makeQuote, parsePeer, splitQuote } from "../lib/quote";
 	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
 
 	/**
@@ -28,6 +29,14 @@
 
 	const parts = $derived<AssistantItem[]>(item.kind === "assistant" ? (turn.length ? turn : [item]) : []);
 	const tail = $derived(parts[parts.length - 1]);
+
+	const peer = $derived(item.kind === "user" ? parsePeer(item.text) : null);
+	const shown = $derived(item.kind === "user" ? splitQuote(peer ? peer.body : item.text) : { quote: "", rest: "" });
+
+	/** Hand a quote of this message to the composer, so the next prompt answers it. */
+	function reply() {
+		app.prefill = makeQuote(item.kind === "user" ? (peer ? peer.body : item.text) : plainText, peer ? `@${peer.from}` : undefined);
+	}
 
 	let copied = $state(false);
 	let expanded = $state(false);
@@ -73,8 +82,8 @@
 </script>
 
 {#if item.kind === "user"}
-	<div class="row user" class:fresh={item.fresh}>
-		<div class="bubble" class:glow-working={working} data-level={working && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
+	<div class="row user" class:peer={!!peer} class:fresh={item.fresh}>
+		<div class="bubble" class:peerbubble={!!peer} class:glow-working={working} data-level={working && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 			{#if item.images.length}
 				<div class="imgs">
 					{#each item.images as img, i}
@@ -91,8 +100,14 @@
 					{/each}
 				</div>
 			{/if}
-			{#if item.text}
-				<div class="txt" class:clamp={item.template && !expanded}>{item.text}</div>
+			{#if peer}
+				<div class="from"><Icon name="chat" /> <span>@{peer.from}</span></div>
+			{/if}
+			{#if shown.quote}
+				<blockquote class="quote">{shown.quote}</blockquote>
+			{/if}
+			{#if shown.rest}
+				<div class="txt" class:clamp={item.template && !expanded}>{shown.rest}</div>
 			{/if}
 			{#if item.template}
 				<div class="tplnote">
@@ -105,6 +120,9 @@
 		</div>
 		<div class="actions">
 			<button class="iconbtn sm" onclick={copy} aria-label={t("메시지 복사")}><Icon name={copied ? "check" : "copy"} /></button>
+			{#if peer}
+				<button class="iconbtn sm" onclick={reply} aria-label={t("답장")} title={t("답장")}><Icon name="reply" /></button>
+			{/if}
 			{#if item.seq !== null && session && item.text}
 				<button class="iconbtn sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} aria-label={t("여기서 분기해 다시 쓰기")} title={t("여기서 분기해 다시 쓰기")}>
 					<Icon name="fork" />
@@ -114,7 +132,7 @@
 	</div>
 {:else}
 	<div class="row assistant" class:fresh={parts[0]?.fresh}>
-		<div class="content">
+		<div class="content reply-card">
 			{#each segments as seg, n (seg.i)}
 				{#if seg.kind === "work"}
 					<WorkBox steps={seg.steps} live={n === liveSeg} />
@@ -137,6 +155,7 @@
 			{#if tail && !live}
 				<div class="foot">
 					<button class="iconbtn sm" onclick={copy} aria-label={t("답변 복사")} disabled={!plainText}><Icon name={copied ? "check" : "copy"} /></button>
+					<button class="iconbtn sm" onclick={reply} aria-label={t("답장")} title={t("답장")} disabled={!plainText}><Icon name="reply" /></button>
 					{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
 						<button class="iconbtn sm" onclick={() => app.fork(session.id, tail.seq!)} aria-label={t("여기서 분기")} title={t("여기서 분기")}>
 							<Icon name="fork" />
@@ -186,6 +205,38 @@
 		background: var(--user-bg);
 		border: 1px solid var(--border);
 		overflow-wrap: anywhere;
+	}
+	.row.user.peer {
+		align-items: flex-start;
+	}
+	.peerbubble {
+		background: color-mix(in srgb, var(--mark-agent) 9%, var(--user-bg));
+		border-color: color-mix(in srgb, var(--mark-agent) 35%, var(--border));
+		border-top-left-radius: 4px;
+	}
+	.from {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-bottom: 4px;
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		color: var(--mark-agent);
+	}
+	.from :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.8;
+	}
+	.quote {
+		margin: 0 0 6px;
+		padding: 2px 0 2px 10px;
+		border-left: 3px solid var(--border-strong);
+		color: var(--text-faint);
+		font-size: var(--fs-sm);
+		white-space: pre-wrap;
 	}
 	.txt {
 		white-space: pre-wrap;
@@ -274,6 +325,14 @@
 		flex: none;
 		min-width: 0;
 		width: 100%;
+	}
+	/* one prompt -> one answer: every step and text of the turn sits in a single bubble */
+	.reply-card {
+		padding: 12px 16px 6px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		border-top-left-radius: 4px;
+		background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
 	}
 
 	.error {

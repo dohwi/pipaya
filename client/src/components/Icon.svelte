@@ -2,7 +2,7 @@
 	export type IconName =
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "search"
-		| "folder" | "pencil" | "brain" | "fork" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
+		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
 		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink";
 </script>
 
@@ -39,6 +39,7 @@
 		brain: "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1",
 		fork: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9",
 		undo: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5",
+		reply: "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 6 6v4",
 		retry: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
 		shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
 		alert: "M12 3l10 18H2zM12 10v5M12 18h.01",

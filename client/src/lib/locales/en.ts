@@ -263,6 +263,7 @@ export const en: Record<string, string> = {
 	"중지됨": "Stopped",
 	"답변 복사": "Copy reply",
 	"여기서 분기": "Branch from here",
+	"답장": "Reply",
 	"다시 시도": "Retry",
 	"{n} 토큰": "{n} tokens",
 	"최신 메시지로 이동": "Jump to latest message",

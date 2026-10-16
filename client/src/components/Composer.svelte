@@ -733,6 +733,7 @@
 		line-height: 1.5;
 		max-height: 220px;
 		min-height: 28px;
+		scrollbar-gutter: stable;
 	}
 	textarea {
 		grid-area: 1 / 1;
@@ -753,12 +754,15 @@
 		white-space: pre-wrap;
 		overflow-wrap: break-word;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		color: transparent;
 		pointer-events: none;
 	}
 	/* mention tags: #imageN violet, #files mint, @members sky, /subagent: amber; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
 		border-radius: var(--radius-xs);
 	}
 	.mirror :global(mark.img) {
