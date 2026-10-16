@@ -103,6 +103,7 @@
 	color-scheme: dark;
 	--bg: #161616;
 	--bg-side: #191919;
+	--bg-group: #202022; /* nav while a group is open: a touch lighter than --bg */
 	--bg-elev: #1c1c1c;
 	--bg-hover: #242424;
 	--bg-active: #2b2b2b;
@@ -147,6 +148,7 @@
 	color-scheme: light;
 	--bg: #ffffff;
 	--bg-side: #fafafa;
+	--bg-group: #f1f1f3; /* nav while a group is open: a touch darker than --bg */
 	--bg-elev: #fafafa;
 	--bg-hover: #f4f4f5;
 	--bg-active: #ececee;

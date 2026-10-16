@@ -45,7 +45,7 @@
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
 		border-bottom: 1px solid var(--border);
-		background: var(--bg-side);
+		background: var(--bg-group);
 	}
 	.strip::-webkit-scrollbar {
 		display: none;

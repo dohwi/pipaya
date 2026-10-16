@@ -14,7 +14,7 @@
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 </script>
 
-<header>
+<header class:group={!!group}>
 	<div class="capsule">
 		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} title={t("사이드바 열기") + hint}>
 			<Icon name="sidebar" />
@@ -44,6 +44,9 @@
 		padding: var(--sat) var(--sar) 0 var(--sal);
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
+	}
+	header.group {
+		background: var(--bg-group);
 	}
 	.capsule {
 		display: flex;
