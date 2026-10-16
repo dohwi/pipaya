@@ -415,8 +415,8 @@ export const en: Record<string, string> = {
 	"사이드바 펼치기": "Expand sidebar",
 	"그룹 {name}": "Group {name}",
 	"그룹 {n}": "Group {n}",
-	"그룹 멤버": "Group members",
-	"그룹에서의 이름. 다른 대화에서 @{name}로 부를 수 있습니다": "Its name in the group. Other chats can call it @{name}",
+	"세션": "Sessions",
+	"이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다": "This chat's name. Other chats can call it @{name}",
 	"{label} {n}개": "{label}: {n}",
 	"설정": "Settings",
 

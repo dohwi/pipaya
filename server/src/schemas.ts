@@ -43,6 +43,7 @@ export const IdParams = Type.Object({ id: Type.String() });
 const sessionFields = {
 	id: Type.String(),
 	title: Type.String(),
+	name: Type.String({ description: "How other sessions address this one (@name); unique among active sessions" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
 	provider: Type.String(),
 	model: Type.String(),

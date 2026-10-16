@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
-import { assignNames, cleanLayout, memberAt, mentionedMembers, panesOf, withoutSession, type Layout } from "../src/groups.ts";
+import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
+import { memberAt, mentionedMembers, nextMemberName } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -42,12 +43,10 @@ afterAll(async () => {
 });
 
 describe("member names", () => {
-	test("assignNames keeps existing names and fills the rest without repeats", () => {
-		const l = split(pane("a"), split(pane("b"), pane("c")));
-		const first = assignNames(l, { b: "미나" });
-		expect(first.b).toBe("미나");
-		expect(new Set(Object.values(first)).size).toBe(3);
-		expect(assignNames(pane("b"), first)).toEqual({ b: "미나" });
+	test("nextMemberName gives the first free name, then numbers", () => {
+		expect(nextMemberName(new Set())).toBe("철수");
+		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("제임스");
+		expect(nextMemberName(new Set(["철수", "미나", "제임스", "영희", "민준", "소피아", "지우", "에밀리", "하준", "루카", "서연", "토마스"]))).toBe("철수2");
 	});
 	test("@name mentions take the longest known name and allow Korean particles", () => {
 		const names = ["철수", "미나", "미나2", "bob"];
@@ -152,22 +151,26 @@ describe("groups API", () => {
 		await api("DELETE", `/groups/${g.id}`);
 	});
 
-	test("members get names, keep them, and new ones take the next free name", async () => {
+	test("every session has a unique name, whether or not it is in a group; a closed one gives its name up", async () => {
 		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
-		const g = (await api("POST", "/groups", { layout: split(pane(a), pane(b)) })).json;
-		expect(Object.keys(g.names).sort()).toEqual([a, b].sort());
-		expect(new Set(Object.values(g.names)).size).toBe(2);
-		const upd = (await api("PATCH", `/groups/${g.id}`, { layout: split(split(pane(a), pane(b)), pane(c)) })).json;
-		expect(upd.names[a]).toBe(g.names[a]);
-		expect(upd.names[b]).toBe(g.names[b]);
-		expect(new Set(Object.values(upd.names)).size).toBe(3);
-		await api("DELETE", `/groups/${g.id}`);
+		const names = async () => Object.fromEntries(await Promise.all([a, b, c].map(async (id) => [id, (await api("GET", `/sessions/${id}`)).json.name as string])));
+		const before = await names();
+		expect(new Set(Object.values(before)).size).toBe(3);
+		expect(Object.values(before).every(Boolean)).toBe(true);
+		await api("PATCH", `/sessions/${c}`, { closed: true });
+		const d = (await mk())!;
+		expect((await api("GET", `/sessions/${d}`)).json.name).toBe(before[c]);
+		await api("PATCH", `/sessions/${c}`, { closed: false });
+		const after = (await api("GET", `/sessions/${c}`)).json.name as string;
+		expect(after).not.toBe(before[c]);
+		expect(after).not.toBe(before[a]);
+		expect(after).not.toBe(before[b]);
 	});
 
-	test("peer_send reaches a group member and peer_read shows its answer", async () => {
+	test("peer_send reaches any other session (no group needed) and peer_read shows its answer", async () => {
 		const [a, b] = [(await mk())!, (await mk())!];
-		const g = (await api("POST", "/groups", { layout: split(pane(a), pane(b)) })).json;
-		const bName = g.names[b] as string;
+		const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;
+		const bName = await nameOf(b);
 		const idle = async (id: string) => {
 			for (let i = 0; i < 200; i++) {
 				if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
@@ -181,15 +184,14 @@ describe("groups API", () => {
 		await idle(b);
 		const got = (await api("GET", `/sessions/${b}/messages`)).json;
 		expect(JSON.stringify(got)).toContain("hello peer");
-		expect(JSON.stringify(got)).toContain(`from @${g.names[a]}`);
+		expect(JSON.stringify(got)).toContain(`from @${await nameOf(a)}`);
 		await api("POST", `/sessions/${a}/messages`, { text: `!peer_read ${JSON.stringify({ from: bName })}` });
 		await idle(a);
 		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("hello peer");
 		// an unknown name is a tool error, not a crash
 		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "nobody", message: "x" })}` });
 		await idle(a);
-		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("group member @nobody");
-		await api("DELETE", `/groups/${g.id}`);
+		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("session @nobody");
 	});
 
 	test("requires the token", async () => {

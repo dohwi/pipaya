@@ -5,8 +5,6 @@ export interface Group {
 	id: string;
 	name: string;
 	layout: import("./layout").Layout;
-	/** Name of each member session by session id; members address each other as @name */
-	names: Record<string, string>;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -62,6 +60,8 @@ export interface RetentionInfo { policy: RetentionPolicy; lastRun: number | null
 export interface Session {
 	id: string;
 	title: string;
+	/** How other sessions address this one (`@name`); unique among active sessions */
+	name: string;
 	/** Absolute path inside the workspace root */
 	cwd: string;
 	provider: string;
