@@ -16,6 +16,7 @@
 		online,
 		onsend,
 		onqueue,
+		queueKey = "",
 		onsteer,
 		onstop,
 	}: {
@@ -27,6 +28,8 @@
 		online: boolean;
 		onsend: () => void;
 		onqueue: () => void;
+		/** The queue shortcut as shown to the user ("" = unbound). */
+		queueKey?: string;
 		onsteer: () => void;
 		onstop: () => void;
 	} = $props();
@@ -44,8 +47,8 @@
 				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
-				<button class="mode" onclick={onqueue} disabled={!hasInput} title={t("현재 작업이 모두 끝난 뒤 실행 (Alt+Enter)")}>
-					<Icon name="list" /><span>{t("대기열")}</span><kbd>⌥↵</kbd>
+				<button class="mode" onclick={onqueue} disabled={!hasInput} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
+					<Icon name="list" /><span>{t("대기열")}</span>{#if queueKey}<kbd>{queueKey}</kbd>{/if}
 				</button>
 				<button class="mode primary" onclick={onsteer} disabled={!hasInput} title={t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 (Enter)")}>
 					<Icon name="bolt" /><span>{t("끼워 넣기")}</span><kbd>↵</kbd>

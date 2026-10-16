@@ -127,6 +127,8 @@ class AppStore {
   palette = $state.raw<PaletteSpec | null>(null);
   /** Bumped by /model to open the model picker. */
   modelPickerTick = $state(0);
+  /** Bumped by the "queue message" shortcut: the focused composer queues its input. */
+  queueSendTick = $state(0);
   /** Bumped by the "find in chat" shortcut; the focused pane opens its search bar. */
   findTick = $state(0);
   /** Bumped when the open server reports a model-connection change (any client) */

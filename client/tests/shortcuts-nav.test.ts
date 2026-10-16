@@ -125,7 +125,16 @@ describe("shortcut catalogue", () => {
 		expect(stop.default).toBe("Escape");
 		expect(stop.fixed).toBe(true);
 		expect(ACTIONS.filter((a) => a.id !== "stop" && a.default === "Escape")).toEqual([]);
-		expect(ACTIONS.filter((a) => a.fixed).map((a) => a.id)).toEqual(["stop"]);
+		expect(ACTIONS.filter((a) => a.fixed).map((a) => a.id)).toEqual(["stop", "steer"]);
+	});
+
+	test("steering is fixed to Enter; queueing is rebindable (Alt+Enter by default)", () => {
+		const steer = ACTIONS.find((a) => a.id === "steer")!;
+		expect(steer.default).toBe("Enter");
+		expect(steer.fixed).toBe(true);
+		const queue = ACTIONS.find((a) => a.id === "queueMessage")!;
+		expect(queue.default).toBe("Alt+Enter");
+		expect(queue.fixed).toBeUndefined();
 	});
 
 	test("Esc stops the agent only when nothing else is using it", () => {

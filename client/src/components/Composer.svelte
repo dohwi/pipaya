@@ -28,6 +28,7 @@
 	import { fileToDraft, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL } from "../lib/files";
 	import FileChip from "./FileChip.svelte";
 	import { isTouch } from "../lib/format";
+	import { buildCombo, formatCombo, keyName } from "../lib/keys";
 	import { msg, t } from "../lib/i18n";
 
 	const pane = getPane();
@@ -422,6 +423,16 @@
 		if (ok) clearSent(key);
 	}
 
+	let lastQueueTick = app.queueSendTick;
+	$effect(() => {
+		const tick = app.queueSendTick;
+		if (tick === lastQueueTick) return;
+		lastQueueTick = tick;
+		if (pane.focused && running) void untrack(() => during("queue"));
+	});
+	const queueKey = $derived(formatCombo(app.prefs.bindings.queueMessage ?? ""));
+	const runningHint = $derived(queueKey ? t("작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령", { key: queueKey }) : t("작업 중 · Enter 끼워 넣기 · / 명령"));
+
 	// ── Up/Down in the input walks back through the prompts already sent in this conversation ──
 	const sentPrompts = $derived.by(() => {
 		const out: string[] = [];
@@ -492,16 +503,23 @@
 			e.preventDefault();
 			return;
 		}
-		if (e.key !== "Enter" || e.shiftKey || composing || e.isComposing) return;
+		if (e.key !== "Enter" || composing || e.isComposing) return;
 		// Phones: Enter inserts a newline, the buttons send. Desktop: Enter sends.
 		if (isTouch()) return;
+		const combo = buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
+		// Mid-run: plain Enter always steers; the user's queue shortcut (Alt+Enter by default) queues for afterwards.
+		if (running && combo !== "Enter" && combo === app.prefs.bindings.queueMessage) {
+			e.preventDefault();
+			void during("queue");
+			return;
+		}
+		if (e.shiftKey) return;
 		e.preventDefault();
 		// Commands run locally even mid-run (/stop, ...).
 		const parsed = parseSlash(text);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
 		if (rejectUnknownCommand()) return;
-		// Mid-run: Enter steers, Alt/Ctrl+Enter queues for afterwards.
-		if (running) void during(e.altKey || e.ctrlKey || e.metaKey ? "queue" : "steer");
+		if (running) void during("steer");
 		else void submit();
 	}
 
@@ -657,8 +675,8 @@
 			oncompositionstart={() => (composing = true)}
 			oncompositionend={() => (composing = false)}
 			rows="1"
-			placeholder={promptHint ? "" : running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
-			aria-label={running ? t("작업 중 · Enter 끼워 넣기 / Alt+Enter 대기열 · / 명령") : t("에이전트에게 메시지 보내기 · / 명령")}
+			placeholder={promptHint ? "" : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
 			autocapitalize="sentences"
 			spellcheck="false"
@@ -683,6 +701,7 @@
 				online={app.net === "online"}
 				onsend={submit}
 				onqueue={() => during("queue")}
+				{queueKey}
 				onsteer={() => during("steer")}
 				onstop={() => app.abort(pane.id)}
 			/>

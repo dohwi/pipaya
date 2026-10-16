@@ -244,6 +244,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   stop: () => {
     if (app.chat?.running) void app.abort();
   },
+  steer: () => {}, // fixed to Enter: handled by the composer itself
+  queueMessage: () => void app.queueSendTick++,
   cancelQueue: () => app.openQueue(),
   settings: () => {
     if (app.settingsOpen) app.settingsOpen = false;

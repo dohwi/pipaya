@@ -51,6 +51,8 @@ export type ActionId =
   | "splitLeft"
   | "splitUp"
   | "stop"
+  | "steer"
+  | "queueMessage"
   | "cancelQueue"
   | "settings"
   | "toggleTheme"
@@ -208,6 +210,19 @@ const BASE: Omit<ActionDef, "group">[] = [
     fixed: true,
   },
   {
+    id: "steer",
+    label: msg("끼워 넣기 (작업 중 메시지 보내기)"),
+    hint: msg("작업 중에 입력창에서 보내면 진행 중인 작업에 바로 끼워 넣습니다"),
+    default: "Enter",
+    fixed: true,
+  },
+  {
+    id: "queueMessage",
+    label: msg("대기열에 추가 (작업 중 메시지 보내기)"),
+    hint: msg("작업 중에 입력창의 메시지를 현재 작업이 모두 끝난 뒤 실행되도록 대기열에 넣습니다"),
+    default: "Alt+Enter",
+  },
+  {
     id: "cancelQueue",
     label: msg("대기열 / 끼워 넣기 취소"),
     hint: msg("전달 대기 중인 메시지 목록을 열어 하나씩 뺍니다"),
@@ -357,6 +372,8 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   approveTool: "chat",
   denyTool: "chat",
   stop: "chat",
+  steer: "chat",
+  queueMessage: "chat",
   cancelQueue: "chat",
 };
 
