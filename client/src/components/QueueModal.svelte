@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
-	import Badge from "./Badge.svelte";
+	import QueueBadge from "./QueueBadge.svelte";
 	import Icon from "./Icon.svelte";
-	import { orderQueued, queuedLabel, queuedTone } from "../lib/queue";
+	import { orderQueued } from "../lib/queue";
 	import Modal from "./Modal.svelte";
 
 	/**
@@ -74,7 +74,7 @@
 				onmousemove={() => (index = i)}
 				onclick={() => remove(i)}
 			>
-				<Badge variant="outline" size="sm" mono square tone={queuedTone(q.mode)}>{queuedLabel(q)}</Badge>
+				<QueueBadge {q} />
 				<span class="qt">{q.text}</span>
 				<span class="rm" aria-hidden="true"><Icon name="x" /></span>
 			</li>
