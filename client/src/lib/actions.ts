@@ -126,6 +126,28 @@ function cyclePane() {
   }
 }
 
+/** Enlarge the focused pane to the whole group, or put it back. In full mode this leaves full mode. */
+function zoomPane() {
+  const g = app.activeGroup;
+  const id = app.activeId;
+  if (!g || !id) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
+  if (app.isFull(g.id)) app.toggleFull(g.id);
+  else app.zoomId = app.zoomId === id ? null : id;
+}
+
+/** Undo every enlarging of the open group: the zoomed pane and the full mode. */
+function restorePane() {
+  const g = app.activeGroup;
+  if (g && app.isFull(g.id)) app.toggleFull(g.id);
+  app.zoomId = null;
+}
+
+function toggleFull() {
+  const g = app.activeGroup;
+  if (!g) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
+  app.toggleFull(g.id);
+}
+
 /** The focused pane's scroll area (each pane has its own). */
 function scroller(): HTMLElement | null {
   const pane = app.activeId ? document.querySelector(`[data-pane="${CSS.escape(app.activeId)}"]`) : null;
@@ -203,6 +225,9 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   },
   newTerminal: () => void app.openTerminal(app.workdir),
   splitTerminal: () => app.splitTerminal("bottom"),
+  zoomPane,
+  restorePane,
+  toggleFull,
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
   cycleServer,

@@ -33,6 +33,9 @@ export type ActionId =
   | "focusDown"
   | "cyclePane"
   | "ungroup"
+  | "zoomPane"
+  | "restorePane"
+  | "toggleFull"
   | "newTerminal"
   | "splitTerminal"
   | "workdir"
@@ -60,7 +63,7 @@ export interface ActionDef {
   default: string;
   /** Cannot be rebound: always `default` (shown, but not editable, in Settings) */
   fixed?: boolean;
-  group: "general" | "chat" | "model" | "layout";
+  group: "general" | "chat" | "model" | "layout" | "pane";
 }
 
 const BASE: Omit<ActionDef, "group">[] = [
@@ -276,6 +279,24 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "",
   },
   {
+    id: "zoomPane",
+    label: msg("현재 창 크게 / 작게 보기"),
+    hint: msg("선택한 창을 그룹 전체 크기로 키우거나 되돌립니다. 그룹 안에서만 동작합니다"),
+    default: "",
+  },
+  {
+    id: "restorePane",
+    label: msg("창 크기 원래대로"),
+    hint: msg("크게 본 창과 그룹의 전체 보기를 모두 풀어 분할 화면으로 되돌립니다"),
+    default: "",
+  },
+  {
+    id: "toggleFull",
+    label: msg("그룹 전체 보기 전환"),
+    hint: msg("한 창만 가득 채우고 위의 띠로 창을 고르는 모드를 켜거나 끕니다. 이 기기에 저장됩니다"),
+    default: "",
+  },
+  {
     id: "workdir",
     label: msg("작업 폴더 변경"),
     hint: msg("새 대화가 시작할 작업 폴더를 고르는 창을 엽니다 (/cd)"),
@@ -308,12 +329,15 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   splitDown: "layout",
   splitLeft: "layout",
   splitUp: "layout",
-  focusLeft: "layout",
-  focusRight: "layout",
-  focusUp: "layout",
-  focusDown: "layout",
-  cyclePane: "layout",
-  ungroup: "layout",
+  focusLeft: "pane",
+  focusRight: "pane",
+  focusUp: "pane",
+  focusDown: "pane",
+  cyclePane: "pane",
+  ungroup: "pane",
+  zoomPane: "pane",
+  restorePane: "pane",
+  toggleFull: "pane",
   newTerminal: "layout",
   splitTerminal: "layout",
   forkSession: "chat",

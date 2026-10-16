@@ -20,6 +20,7 @@
 		{ id: "chat", title: msg("대화") },
 		{ id: "model", title: msg("모델 · 추론") },
 		{ id: "layout", title: msg("화면 분할") },
+		{ id: "pane", title: msg("그룹 안의 창") },
 	] as const;
 
 	const label = (id: ActionId) => t(ACTIONS.find((a) => a.id === id)?.label ?? id);
