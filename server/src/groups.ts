@@ -139,7 +139,7 @@ export class GroupManager {
 				}
 			});
 		bus.subscribe((e) => {
-			if (e.type === "session_deleted") later((e.data as { id: string }).id);
+			if (e.type === "session_deleted" || e.type === "terminal_closed") later((e.data as { id: string }).id);
 			else if (e.type === "session_updated" && (e.data as { closed?: boolean }).closed && e.sessionId) later(e.sessionId);
 		});
 	}
@@ -206,6 +206,15 @@ export class GroupManager {
 			for (const sid of panesOf(g.layout)) if (mine.has(sid)) next = next && withoutSession(next, sid);
 			if (next === g.layout) continue;
 			this.save(g, next);
+		}
+	}
+
+	/** Drop every pane whose id matches (terminals do not outlive a server restart). Groups left too small dissolve. */
+	evictWhere(match: (id: string) => boolean): void {
+		for (const g of this.list()) {
+			let next: Layout | null = g.layout;
+			for (const id of panesOf(g.layout)) if (match(id)) next = next && withoutSession(next, id);
+			if (next !== g.layout) this.save(g, next);
 		}
 	}
 

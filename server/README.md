@@ -47,6 +47,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see client/docs/notifications.md |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
+| `PIPAYA_TERMINAL` | `1` | `0` turns off terminals: interactive shells clients open on this server (the user's shell on Linux/macOS, PowerShell on Windows) |
 
 A fresh server has an empty catalog: there are no built-in providers and no environment-based authentication.
 Saved custom providers and models are restored from SQLite on restart.
@@ -91,6 +92,10 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET | `/activity` | Per-session running/pending-approval state for sidebar indicators |
 | GET/POST | `/groups` | Session groups (named split-pane layouts, 2-8 sessions). Without `name` the server uses `Group N`; clients normally send a localized name |
 | PATCH/DELETE | `/groups/:id` | Rename or re-layout a group; delete it. A group left with fewer than two sessions (closed or deleted sessions leave their group) is removed by the server and emits `group_deleted` |
+| GET | `/terminals/info` | What the server offers for terminals: `{enabled, platform, pty, shell, shells[], max}`. Linux/macOS run the user's shell in a PTY; Windows runs PowerShell (`pwsh`, else `powershell`, else `cmd`) over pipes (`pty: false`) |
+| GET/POST | `/terminals` | Open shells (in memory only: a restart ends them). `POST {cwd?, shell?, title?, cols?, rows?}`; ids start with `term_` and may stand in a group layout beside sessions |
+| PATCH/DELETE | `/terminals/:id` | Rename; end the shell (`terminal_closed`, and it leaves its group) |
+| WS | `/terminals/:id/ws` | Attach (token as `?token=`): `hello`, then the kept output (binary), then live output. Send `{type:"input",data}` / `{type:"resize",cols,rows}`; `{type:"exit",code}` when the shell ends |
 | GET | `/extensions/settings` | All client-extension settings, keyed by extension id |
 | PUT | `/extensions/:id/settings` | `{settings}`: a JSON object owned by the extension (max 16,000 chars) |
 | DELETE | `/extensions/:id` | Remove an extension's stored settings |
@@ -222,7 +227,7 @@ the default directory is created with `0700`, and new databases with `0600`.
 Use a SQLite-aware backup or stop/checkpoint before copying; do not copy only the database while it is running.
 Existing `server/data` is not auto-imported; set `PIPAYA_DATA_DIR=./data` to keep using it.
 
-The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes do not inherit any `PIPAYA_*` variable.
+The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes and terminals do not inherit any `PIPAYA_*` variable.
 
 Custom URLs intentionally allow LAN/Tailscale server-side requests; configure only trusted endpoints.
 `bash` is **not sandboxed** and runs as the server user. Keep approval policy `ask` or isolate the server in a container/VM.

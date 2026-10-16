@@ -47,6 +47,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
+| `PIPAYA_TERMINAL` | `1` | `0`이면 터미널(클라이언트가 이 서버에서 여는 대화형 셸. Linux/macOS는 사용자 셸, Windows는 PowerShell)을 끕니다 |
 
 새 서버의 카탈로그는 비어 있습니다. 내장 프로바이더도, 환경변수 기반 인증도 없습니다.
 저장된 커스텀 프로바이더와 모델은 재시작해도 SQLite에서 복원됩니다.
@@ -84,6 +85,10 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | GET | `/activity` | 사이드바 표시용: 세션별 실행 중/승인 대기 상태 |
 | GET/POST | `/groups` | 세션 그룹(이름 있는 분할 창 레이아웃, 세션 2~8개). `name`을 생략하면 서버가 `Group N`을 쓰고, 클라이언트는 보통 현지화된 이름을 보냅니다 |
 | PATCH/DELETE | `/groups/:id` | 그룹 이름·레이아웃 변경, 삭제. 세션이 2개 미만이 되면(닫히거나 삭제된 세션은 그룹을 떠납니다) 서버가 그룹을 제거하고 `group_deleted`를 보냅니다 |
+| GET | `/terminals/info` | 터미널 지원 정보: `{enabled, platform, pty, shell, shells[], max}`. Linux/macOS는 사용자 셸을 PTY로, Windows는 PowerShell(`pwsh` → `powershell` → `cmd`)을 파이프로 실행합니다(`pty: false`) |
+| GET/POST | `/terminals` | 열린 셸 목록(메모리에만 있어 재시작하면 끝남). `POST {cwd?, shell?, title?, cols?, rows?}`. id는 `term_`로 시작하며 그룹 레이아웃에 세션과 함께 들어갈 수 있습니다 |
+| PATCH/DELETE | `/terminals/:id` | 이름 변경, 셸 종료(`terminal_closed`, 그룹에서도 빠짐) |
+| WS | `/terminals/:id/ws` | 연결(토큰은 `?token=`): `hello`, 보관된 출력(binary), 이후 실시간 출력. `{type:"input",data}` / `{type:"resize",cols,rows}`를 보내고, 셸이 끝나면 `{type:"exit",code}` |
 | GET | `/skills?cwd=` | `cwd`에서 보이는 스킬(기본: 서버 기본 디렉터리)과 전역/프로젝트 켜기·끄기 상태 |
 | PUT | `/skills/:name` | `{scope:"global"\|"project",enabled,cwd?}`; 프로젝트 범위는 `enabled:null`로 재정의를 지울 수 있음 |
 | GET | `/locales` | UI 언어팩: `[{tag,name,owner?,messages,updatedAt}]` (내장 `ko`/`en`은 목록에 없음) |
@@ -218,7 +223,7 @@ SQLite는 인덱스 조회와 트랜잭션 기반 설정 갱신을 제공합니�
 백업은 SQLite를 인식하는 방식을 쓰거나 중지/체크포인트 후 복사하세요. 실행 중에 데이터베이스 파일만 복사하지 마세요.
 기존 `server/data`는 자동으로 가져오지 않습니다. 계속 쓰려면 `PIPAYA_DATA_DIR=./data`로 지정하세요.
 
-인증 토큰과 데이터 디렉터리는 로그에 출력되지 않으며 `?token=`은 가려집니다. `bash` 자식 프로세스는 `PIPAYA_*` 변수를 하나도 상속하지 않습니다.
+인증 토큰과 데이터 디렉터리는 로그에 출력되지 않으며 `?token=`은 가려집니다. `bash` 자식 프로세스와 터미널은 `PIPAYA_*` 변수를 하나도 상속하지 않습니다.
 
 커스텀 URL은 LAN/Tailscale에 대한 서버 측 요청을 의도적으로 허용합니다. 신뢰하는 엔드포인트만 설정하세요.
 `bash`는 **샌드박스되지 않으며** 서버 사용자 권한으로 실행됩니다. 승인 정책을 `ask`로 두거나 컨테이너/VM에서 서버를 격리하세요.

@@ -27,6 +27,8 @@ export interface Config {
 	corsOrigins?: string;
 	/** Uses Google Application Default Credentials; never exposed to clients/extensions. */
 	pushEnabled?: boolean;
+	/** PIPAYA_TERMINAL=0 turns off the interactive shells clients can open on this server. */
+	terminals?: boolean;
 }
 
 function int(value: string | undefined, fallback: number): number {
@@ -84,5 +86,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		corsOrigins: env.PIPAYA_CORS_ORIGINS,
 		// On by default; it only takes effect when Firebase credentials exist (see createPushTransports). "0" turns it off.
 		pushEnabled: env.PIPAYA_PUSH_FCM !== "0",
+		terminals: env.PIPAYA_TERMINAL !== "0",
 	};
 }

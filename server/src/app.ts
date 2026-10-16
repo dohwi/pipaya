@@ -29,6 +29,8 @@ import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
 import { GroupManager } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
+import { isTerminalId, TerminalManager } from "./terminals.ts";
+import { registerTerminalRoutes, TERMINAL_SOCKET } from "./terminal-routes.ts";
 import { LocaleStore } from "./locales.ts";
 import { registerLocaleRoutes } from "./locales-routes.ts";
 import { openDb } from "./db.ts";
@@ -133,7 +135,14 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		isRunning: (id) => sessions.isRunning(id),
 	});
 	const retention = new Retention(db, store, sessions, approvals, questions);
-	const groups = new GroupManager(db, bus, (id) => store.get(id) !== undefined);
+	const terminals = new TerminalManager(bus, {
+		enabled: cfg.terminals !== false,
+		defaultWorkdir: () => configuration.defaultWorkdir(),
+		confineTo: cfg.restrictWorkspace ? cfg.workspaceRoot : undefined,
+	});
+	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
+	groups.evictWhere(isTerminalId);
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
@@ -181,7 +190,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
 		const bearer = bearerOf(req.headers.authorization);
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
-		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
+		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
 		const query = (req.query as { token?: string } | undefined)?.token;
 		const given = bearer ?? (browserStream ? query : undefined);
 		if (tokenMatches(given)) return; // the admin token
@@ -481,6 +490,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
 	await registerWebSocket(server, { bus, sessions, approvals, questions }, opts.websocket);
+	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();
 	retention.start();
@@ -495,6 +505,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		agentsWatch.stop();
 		await notifications.close();
 		await push.close();
+		terminals.shutdown();
 		sessions.shutdown();
 		await sessions.idle();
 		await extensions.shutdown();
