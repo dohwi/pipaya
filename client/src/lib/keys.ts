@@ -71,7 +71,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "newChat",
     label: msg("새 대화"),
-    hint: msg("열려 있는 대화를 닫고 빈 화면으로 이동"),
+    hint: msg("빈 화면으로 이동합니다. 그룹 안이면 선택한 창만 새 대화로 바뀌고 나머지 창은 그대로입니다"),
     default: "Alt+N",
   },
   {

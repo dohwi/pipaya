@@ -987,7 +987,7 @@ export const en: Record<string, string> = {
 	"사이드바 접기 / 펼치기": "Collapse / expand sidebar",
 	"좁은 화면에서는 사이드바 서랍을 열고 닫습니다": "On a narrow screen, opens and closes the sidebar drawer",
 	"현재 대화 닫기": "Close current chat",
-	"열려 있는 대화를 닫고 빈 화면으로 이동": "Closes the open chat and goes to an empty screen",
+	"빈 화면으로 이동합니다. 그룹 안이면 선택한 창만 새 대화로 바뀌고 나머지 창은 그대로입니다": "Goes to an empty screen. In a group, only the selected pane becomes a new chat and the others stay as they are",
 	"활성 대화를 사이드바에서 치웁니다. 기록은 남고 대화 열기로 다시 열 수 있습니다. 그룹 안이면 다음 창으로 포커스가 넘어갑니다": "Removes the active chat from the sidebar. Its history is kept and you can reopen it with Open chat. In a group, focus moves to the next pane",
 	"이전 대화로 이동": "Go to previous chat",
 	"사이드바 목록에서 한 칸 위 대화로 포커스를 옮깁니다. 맨 위에서는 맨 아래로 돌아갑니다": "Moves focus up one chat in the sidebar list, wrapping from the top to the bottom",

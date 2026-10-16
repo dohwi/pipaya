@@ -169,7 +169,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
       app.sidebar.open = !app.sidebar.open;
     else app.sidebar.toggleCollapsed();
   },
-  newChat: () => app.newChat(),
+  newChat: () => app.newChatInPane(),
   closeSession: () => app.closeActive(),
   prevSession: () => stepSession(-1),
   nextSession: () => stepSession(1),
