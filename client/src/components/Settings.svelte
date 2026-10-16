@@ -214,6 +214,9 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
+	.hint.danger {
+		color: var(--danger);
+	}
 	.srvbar {
 		flex: none;
 		display: flex;
