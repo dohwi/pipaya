@@ -46,7 +46,7 @@ afterAll(async () => {
 describe("member names", () => {
 	test("nextMemberName gives the first free name, then numbers", () => {
 		expect(nextMemberName(new Set())).toBe("철수");
-		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("제임스");
+		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("가온");
 		expect(nextMemberName(new Set(MEMBER_NAMES.map((n) => n.toLowerCase())))).toBe("철수2");
 	});
 	test("the pool has no duplicates and covers the default session limit", () => {
