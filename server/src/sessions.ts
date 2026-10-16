@@ -18,7 +18,7 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
-import { memberHint, mentionedMembers, nextMemberName } from "./member-names.ts";
+import { memberHint, mentionedMembers, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -94,7 +94,7 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
-			name: nextMemberName(this.store.activeNames()),
+			name: nextMemberName(this.store.activeNames(), poolForLang(input.lang)),
 			purpose: "",
 			cwd,
 			provider,
@@ -290,7 +290,7 @@ export class SessionManager {
 
 		if (patch.closed === false && current.closed) this.assertRoom();
 		// A closed session gives its name up; on resume it takes it back unless another session has it by now.
-		if (patch.closed === false && current.closed && this.store.activeNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.store.activeNames());
+		if (patch.closed === false && current.closed && this.store.activeNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.store.activeNames(), poolOfName(current.name));
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 
@@ -334,6 +334,7 @@ export class SessionManager {
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
 				approval: src.approval,
+				lang: poolOfName(src.name) === MEMBER_NAMES_EN ? "en" : "ko",
 			},
 			src.id,
 		);

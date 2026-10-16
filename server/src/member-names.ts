@@ -1,5 +1,5 @@
-/** Given to sessions in order; the first one not taken by an active session is used. */
-export const MEMBER_NAMES = [
+/** Korean names, given to sessions in order; the first one not taken by an active session is used. */
+export const MEMBER_NAMES_KO = [
 	"철수", "미나", "가온", "영희", "민준", "나린", "지우", "도하", "하준", "라희",
 	"서연", "도윤", "서준", "예준", "시우", "주원", "지호", "지후", "준우", "현우",
 	"도현", "건우", "우진", "승민", "유준", "재민", "태양", "선우", "은호", "정우",
@@ -22,11 +22,46 @@ export const MEMBER_NAMES = [
 	"우빈", "우성", "우혁", "정훈", "정호", "정현", "정민", "정빈", "정원", "준영",
 ];
 
-/** The next free name given the lower-cased names in use: the pool first, then 철수2, 철수3, ... */
-export function nextMemberName(taken: ReadonlySet<string>): string {
-	const free = MEMBER_NAMES.find((n) => !taken.has(n.toLowerCase()));
+/** English names for sessions made from a non-Korean UI. */
+export const MEMBER_NAMES_EN = [
+	"James", "Emma", "Liam", "Olivia", "Noah", "Sophia", "Lucas", "Mia", "Ethan", "Chloe",
+	"Daniel", "Emily", "Henry", "Grace", "Oliver", "Hannah", "Jack", "Lily", "Leo", "Nora",
+	"Owen", "Ella", "Ryan", "Zoe", "Adam", "Anna", "Carter", "Ruby", "Dylan", "Ivy",
+	"Eric", "Julia", "Felix", "Laura", "Gavin", "Maya", "Hugo", "Nina", "Isaac", "Alice",
+	"Jacob", "Clara", "Kevin", "Elena", "Logan", "Vera", "Miles", "Iris", "Nathan", "Lena",
+	"Oscar", "Rita", "Peter", "Sara", "Quinn", "Tara", "Ralph", "Uma", "Simon", "Vivian",
+	"Thomas", "Wendy", "Victor", "Willa", "Xavier", "Yara", "Zachary", "Amber", "Aaron", "Bella",
+	"Blake", "Cora", "Caleb", "Dana", "Chris", "Edith", "Colin", "Erin", "David", "Faye",
+	"Derek", "Gemma", "Dean", "Hazel", "Elliot", "Irene", "Evan", "Jade", "Finn", "Kate",
+	"Floyd", "Leah", "Frank", "Lucy", "George", "Maria", "Harvey", "Nadia", "Ian", "Paula",
+	"Jason", "Rachel", "Jesse", "Sofia", "Joel", "Tessa", "Jonah", "Violet", "Julian", "Alana",
+	"Justin", "Bianca", "Keith", "Camila", "Kyle", "Diana", "Lance", "Elise", "Lewis", "Fiona",
+	"Luke", "Gina", "Marco", "Helen", "Martin", "Ingrid", "Mason", "Jenna", "Matteo", "Karen",
+	"Max", "Leila", "Nolan", "Mona", "Omar", "Naomi", "Pablo", "Olga", "Patrick", "Petra",
+	"Paul", "Renee", "Preston", "Sienna", "Reid", "Talia", "Rex", "Ursula", "Roman", "Vanessa",
+	"Ross", "Wanda", "Ryder", "Yvonne", "Samuel", "Zelda", "Sean", "Agnes", "Seth", "Brenda",
+	"Shane", "Carla", "Sidney", "Delia", "Spencer", "Esther", "Stefan", "Flora", "Tobias", "Greta",
+	"Tyler", "Heidi", "Walter", "Ines", "Warren", "Joan", "Wesley", "Kira", "Wyatt", "Lydia",
+	"Xander", "Marta", "Zane", "Nell", "Andre", "Opal", "Boris", "Pearl", "Cyrus", "Rosa",
+	"Dario", "Selma", "Elias", "Thea", "Emil", "Vida", "Fabian", "Zora", "Anton", "Bruno",
+];
+
+/** Kept for callers that mean the default (Korean) pool. */
+export const MEMBER_NAMES = MEMBER_NAMES_KO;
+
+/** The pool for a UI language tag: Korean for `ko*`, English for everything else. No tag = Korean (the original behaviour). */
+export function poolForLang(lang?: string): readonly string[] {
+	return lang && !/^ko(?:-|$)/i.test(lang) ? MEMBER_NAMES_EN : MEMBER_NAMES_KO;
+}
+
+/** The pool a given name came from (Latin letters = English), so a reopened or forked session stays in its language. */
+export const poolOfName = (name: string): readonly string[] => (/^[a-z]/i.test(name) ? MEMBER_NAMES_EN : MEMBER_NAMES_KO);
+
+/** The next free name given the lower-cased names in use: the pool first, then 철수2, 철수3, ... (James2, ...) */
+export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string[] = MEMBER_NAMES_KO): string {
+	const free = pool.find((n) => !taken.has(n.toLowerCase()));
 	if (free) return free;
-	for (let n = 2; ; n++) if (!taken.has(`${MEMBER_NAMES[0]}${n}`.toLowerCase())) return `${MEMBER_NAMES[0]}${n}`;
+	for (let n = 2; ; n++) if (!taken.has(`${pool[0]}${n}`.toLowerCase())) return `${pool[0]}${n}`;
 }
 
 /** The member a `@name` token starts with: the longest known name, not cut out of a longer ASCII word (Korean particles may follow: @미나랑). */

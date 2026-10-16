@@ -146,6 +146,7 @@ export const CreateSessionBody = Type.Object({
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000 })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
 	approval: Type.Optional(Approval),
+	lang: Type.Optional(Type.String({ maxLength: 35, description: "UI language tag (e.g. ko, en). Picks the language of the session's @name; omit for Korean names." })),
 });
 
 export const PatchSessionBody = Type.Object({

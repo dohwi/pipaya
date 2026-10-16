@@ -7,7 +7,7 @@ import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
 import { DEFAULT_MAX_SESSIONS } from "../src/config.ts";
-import { MEMBER_NAMES, memberAt, mentionedMembers, nextMemberName } from "../src/member-names.ts";
+import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentionedMembers, nextMemberName, poolForLang } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -47,11 +47,23 @@ describe("member names", () => {
 	test("nextMemberName gives the first free name, then numbers", () => {
 		expect(nextMemberName(new Set())).toBe("철수");
 		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("가온");
-		expect(nextMemberName(new Set(MEMBER_NAMES.map((n) => n.toLowerCase())))).toBe("철수2");
+		expect(nextMemberName(new Set(MEMBER_NAMES_KO.map((n) => n.toLowerCase())))).toBe("철수2");
+		expect(nextMemberName(new Set(), MEMBER_NAMES_EN)).toBe("James");
+		expect(nextMemberName(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())), MEMBER_NAMES_EN)).toBe("James2");
 	});
-	test("the pool has no duplicates and covers the default session limit", () => {
-		expect(new Set(MEMBER_NAMES.map((n) => n.toLowerCase())).size).toBe(MEMBER_NAMES.length);
-		expect(MEMBER_NAMES.length).toBeGreaterThanOrEqual(DEFAULT_MAX_SESSIONS);
+	test("each pool has no duplicates and covers the default session limit", () => {
+		for (const pool of [MEMBER_NAMES_KO, MEMBER_NAMES_EN]) {
+			expect(new Set(pool.map((n) => n.toLowerCase())).size).toBe(pool.length);
+			expect(pool.length).toBeGreaterThanOrEqual(DEFAULT_MAX_SESSIONS);
+		}
+		expect(MEMBER_NAMES_KO.every((n) => /^[가-힣]+$/.test(n))).toBe(true);
+		expect(MEMBER_NAMES_EN.every((n) => /^[A-Za-z]+$/.test(n))).toBe(true);
+		expect(poolForLang()).toBe(MEMBER_NAMES_KO);
+		expect(poolForLang("ko-KR")).toBe(MEMBER_NAMES_KO);
+		expect(poolForLang("en")).toBe(MEMBER_NAMES_EN);
+		expect(poolForLang("ja")).toBe(MEMBER_NAMES_EN);
+		expect(mentionedMembers("ask @james and @Emma2 please", ["James", "Emma"])).toEqual(["James"]);
+		expect(mentionedMembers("ask @james, then @Emma.", ["James", "Emma"])).toEqual(["James", "Emma"]);
 	});
 	test("@name mentions take the longest known name and allow Korean particles", () => {
 		const names = ["철수", "미나", "미나2", "bob"];
@@ -202,6 +214,20 @@ describe("groups API", () => {
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);
+	});
+});
+
+describe("session name language", () => {
+	test("a session takes a name from the pool of the UI language, and keeps it when forked", async () => {
+		const en = (await api("POST", "/sessions", { lang: "en" })).json;
+		const ko = (await api("POST", "/sessions", { lang: "ko-KR" })).json;
+		const none = (await api("POST", "/sessions", {})).json;
+		expect(MEMBER_NAMES_EN).toContain(en.name);
+		expect(MEMBER_NAMES_KO).toContain(ko.name);
+		expect(MEMBER_NAMES_KO).toContain(none.name);
+		const fork = (await api("POST", `/sessions/${en.id}/fork`, {})).json;
+		expect(MEMBER_NAMES_EN).toContain(fork.name);
+		expect(fork.name).not.toBe(en.name);
 	});
 });
 
