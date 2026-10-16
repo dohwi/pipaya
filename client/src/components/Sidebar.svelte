@@ -80,8 +80,12 @@
 
 	const searching = $derived(query.trim().length > 0);
 	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
-	/** Activity of a session on the open server (other servers only report what their session list carries). */
-	const stateOf = (n: Node, x: Session): Activity => (n.current ? activityOf(app, x.id) : "idle");
+	/** Activity of a session on the open server (other servers report running / waiting only). */
+	const stateOf = (n: Node, x: Session): Activity => {
+		if (n.current) return activityOf(app, x.id);
+		const ov = app.overview[n.server.id];
+		return ov ? activityOf({ running: ov.running, awaiting: ov.awaiting, unread: {}, failed: {} }, x.id) : "idle";
+	};
 
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 
@@ -93,7 +97,7 @@
 		void app.servers.length;
 		void app.serverId;
 		void app.refreshOverview();
-		const t = setInterval(() => !document.hidden && void app.refreshOverview(), 15_000);
+		const t = setInterval(() => !document.hidden && void app.refreshOverview(), 5_000);
 		const onVisible = () => !document.hidden && void app.refreshOverview();
 		document.addEventListener("visibilitychange", onVisible);
 		return () => {

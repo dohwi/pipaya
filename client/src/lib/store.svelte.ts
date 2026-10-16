@@ -65,7 +65,17 @@ class AppStore {
   serverForm = $state<string | "new" | null>(null);
   /** What the sidebar shows for servers other than the open one (read from each server, not cached by the client) */
   overview = $state<
-    Record<string, { sessions: Session[]; workspace: WorkspaceInfo | null; groups: Group[] }>
+    Record<
+      string,
+      {
+        sessions: Session[];
+        workspace: WorkspaceInfo | null;
+        groups: Group[];
+        /** Sessions of that server that are running / waiting for the user (as it reports them) */
+        running: Record<string, boolean>;
+        awaiting: Record<string, number>;
+      }
+    >
   >({});
   net = $state<NetState>("idle");
   /** What the open server said about its version on connect (`/health`), or null before that. */
@@ -594,15 +604,25 @@ class AppStore {
         .map(async (s) => {
           const api = new Api({ baseUrl: s.baseUrl, token: s.token });
           try {
-            const [list, workspace, groups] = await Promise.all([
+            const [list, workspace, groups, act] = await Promise.all([
               api.listSessions(200, false),
               api.workspace().catch(() => null),
               api.groups().catch(() => [] as Group[]),
+              api.activity().catch(() => null),
             ]);
+            const running: Record<string, boolean> = {};
+            const awaiting: Record<string, number> = {};
+            for (const a of act?.sessions ?? []) {
+              if (a.running) running[a.sessionId] = true;
+              const n = a.pendingApprovals + (a.pendingQuestions ?? 0);
+              if (n) awaiting[a.sessionId] = n;
+            }
             this.overview[s.id] = {
               sessions: list.sessions.filter((x) => !x.closed),
               workspace,
               groups,
+              running,
+              awaiting,
             };
             this.status[s.id] = "online";
           } catch (e) {
