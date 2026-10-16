@@ -30,11 +30,13 @@
 </div>
 
 <style>
+	/* A horizontal scroller clips vertically too: the bottom padding keeps the thumbnails' border and focus ring whole */
 	.thumbs {
 		display: flex;
 		gap: 8px;
-		padding: 12px 14px 0;
+		padding: 12px 14px 4px;
 		overflow-x: auto;
+		scrollbar-width: thin;
 	}
 	.thumb {
 		position: relative;
@@ -46,10 +48,13 @@
 		cursor: zoom-in;
 		border-radius: var(--radius);
 	}
+	/* Keeps the image's own shape (within limits), so a wide screenshot is not cut down to its middle square */
 	.thumb img {
 		display: block;
 		height: 64px;
-		width: 64px;
+		width: auto;
+		min-width: 48px;
+		max-width: 128px;
 		object-fit: cover;
 		border-radius: var(--radius);
 		border: 1px solid var(--border);

@@ -261,9 +261,12 @@
 	.embedded .tabs {
 		padding: 0;
 	}
+	/* It still scrolls, and a scroller clips: 4px of side room (taken back by the margin, so the content stays aligned
+	   with the page) keeps full-width fields' and edge buttons' focus rings whole */
 	.embedded .body,
 	.embedded .body.pane {
-		padding: 18px 0 8px;
+		margin: 0 -4px;
+		padding: 18px 4px 8px;
 	}
 	.embedded footer {
 		padding: 12px 0 0;
@@ -350,6 +353,7 @@
 		gap: 14px;
 		padding: 14px 22px 8px;
 		overflow-y: auto;
+		scroll-padding-block: 12px;
 	}
 	.body.pane {
 		padding: 18px 22px 22px;

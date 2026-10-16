@@ -484,6 +484,10 @@
 		margin-left: auto;
 		margin-right: -9.5px; /* the 19px icon's right edge sits on the 16px gutter, like the server chevron below */
 	}
+	/* 38px in a 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
+	.foldbtn:focus-visible {
+		outline-offset: -2px;
+	}
 	.forkmark {
 		display: grid;
 		flex: none;

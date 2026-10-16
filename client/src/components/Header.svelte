@@ -98,6 +98,10 @@
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
+	/* 40px in a 44px bar: an outer ring would run into the window's top edge, so it is drawn inside */
+	.tool:focus-visible {
+		outline-offset: -2px;
+	}
 	.tool:hover {
 		background: var(--bg-hover);
 		color: var(--text);

@@ -166,6 +166,11 @@
 		text-align: left;
 		min-height: 44px;
 	}
+	/* the card clips (overflow: hidden) and the header fills it, so an outer ring would be cut away entirely */
+	.head:focus-visible {
+		outline-offset: -2px;
+		border-radius: var(--radius);
+	}
 	.ico {
 		display: grid;
 		color: var(--text-dim);

@@ -858,11 +858,13 @@
 			}
 		}
 	}
+	/* bottom padding: the scroller clips vertically too, and the chips' border and focus ring end there */
 	.files {
 		display: flex;
 		gap: 10px;
-		padding: 12px 14px 0;
+		padding: 12px 14px 4px;
 		overflow-x: auto;
+		scrollbar-width: thin;
 	}
 	.drop {
 		position: fixed;

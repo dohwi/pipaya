@@ -14,6 +14,7 @@
 	import ServerForm from "./ServerForm.svelte";
 	import Switch from "./Switch.svelte";
 	import Segmented from "./Segmented.svelte";
+	import FilterChip from "./FilterChip.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
 	import UpdateSettings from "./UpdateSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
@@ -112,7 +113,7 @@
 	{#if app.servers.length > 1}
 		<div class="srvbar" role="group" aria-label={t("서버")}>
 			{#each app.servers as s (s.id)}
-				<button class="srvchip" class:on={s.id === app.serverId} aria-pressed={s.id === app.serverId} onclick={() => app.openServer(s.id)}>{app.serverLabel(s)}</button>
+				<FilterChip on={s.id === app.serverId} title={app.serverLabel(s)} onclick={() => app.openServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
 			{/each}
 		</div>
 	{/if}
@@ -362,46 +363,28 @@
 	.hint.danger {
 		color: var(--danger);
 	}
+	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
 	.srvbar {
 		flex: none;
 		display: flex;
 		gap: 6px;
-		padding: 0 22px 12px;
+		margin-top: -4px;
+		padding: 4px 22px 12px;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
 	.srvbar::-webkit-scrollbar {
 		display: none;
 	}
-	.srvchip {
-		flex: none;
-		max-width: 220px;
-		padding: 5px 12px;
-		border-radius: 999px;
-		border: 1px solid var(--border);
-		background: var(--bg-elev);
-		font-size: var(--fs-sm);
-		color: var(--text-dim);
+	.srvname {
+		min-width: 0;
+		max-width: 200px;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			background var(--motion-fast) var(--ease-std);
-	}
-	.srvchip:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.srvchip.on {
-		border-color: var(--text);
-		background: var(--bg-active);
-		color: var(--text);
-		font-weight: 600;
 	}
 	@media (max-width: 760px) {
 		.srvbar {
-			padding: 0 14px 10px;
+			padding: 4px 14px 10px;
 		}
 	}
 	.ngroup {
@@ -452,6 +435,7 @@
 		padding: 12px 10px;
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
+		scroll-padding-block: 8px;
 	}
 	.nav button {
 		position: relative;
@@ -521,6 +505,7 @@
 		padding: 22px 28px 28px;
 		overflow-y: auto;
 		overflow-x: clip; /* the incoming pane starts a few px to the side */
+		scroll-padding-block: 12px; /* Tab scrolls the focused control in with its focus ring, not flush with the edge */
 	}
 	.pane {
 		display: flex;

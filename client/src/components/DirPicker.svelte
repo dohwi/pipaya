@@ -382,9 +382,13 @@
 		color: var(--text-faint);
 		flex: none;
 	}
+	/* the scroller clips on both axes: 4px of room (taken back by the margin) keeps the chips' focus ring whole */
 	.chips {
 		display: flex;
 		gap: 6px;
+		margin: -4px;
+		padding: 4px;
+		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
