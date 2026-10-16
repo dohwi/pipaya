@@ -135,7 +135,7 @@
 				{#if !x.server || server}
 					{#if x.server && !tabs[i - 1].server}<div class="ngroup" role="presentation">{serverName}</div>{/if}
 					{#if !x.server && tabs[i - 1]?.server}<div class="nsep" role="presentation"></div>{/if}
-					<button role="tab" class:srv={x.server} aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
+					<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
 						<Icon name={x.icon} />
 						<span class="nt">
 							<span class="nl">{t(x.label)}</span>
@@ -396,6 +396,7 @@
 		}
 	}
 	.ngroup {
+		flex: none;
 		padding: 10px 12px 4px;
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
@@ -406,6 +407,7 @@
 		white-space: nowrap;
 	}
 	.nsep {
+		flex: none;
 		height: 1px;
 		margin: 8px 12px;
 		background: var(--border);
@@ -416,7 +418,7 @@
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
-	.nav button.srv {
+	.nav button.srvtab {
 		padding: 8px 12px;
 	}
 	@media (max-width: 760px) {
@@ -521,27 +523,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-	}
-	.srv {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 8px 8px 8px 14px;
-		background: var(--bg-elev);
-		border-bottom: 1px solid var(--border);
-	}
-	.srv:last-child {
-		border-bottom: 0;
-	}
-	.srv > :global(svg) {
-		flex: none;
-		width: 17px;
-		height: 17px;
-		stroke: var(--text-dim);
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	@media (max-width: 760px) {
 		.layout {
