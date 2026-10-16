@@ -221,6 +221,8 @@ export interface ModelInfo {
 	vision: boolean;
 	/** A usable credential exists for this model's provider */
 	configured: boolean;
+	/** false = the connection's own model list no longer has it. Missing on older servers = available. */
+	available?: boolean;
 }
 
 export interface ProviderInfo {
@@ -277,6 +279,8 @@ export interface CustomModel {
 	thinkingLevels?: ThinkingLevel[];
 	/** The OpenRouter model this one corresponds to. null = none (manual values); absent = matched by name. */
 	catalogId?: string | null;
+	/** Response only: the upstream's model list no longer contains this model */
+	unavailable?: boolean;
 	/** Response only: where the strengths come from. Absent on older servers. */
 	thinkingSource?: { kind: "custom" | "catalog" | "default"; catalogId?: string; levels: ThinkingLevel[] };
 }

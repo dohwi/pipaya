@@ -368,6 +368,7 @@ export const en: Record<string, string> = {
 	"모델 없음": "No model",
 	"모델 검색": "Search models",
 	"키 없음": "No key",
+	"불러오지 못함": "Not available",
 	"일치하는 모델이 없습니다": "No matching models",
 	"추론 강도": "Reasoning effort",
 	"직접 지정": "Custom",

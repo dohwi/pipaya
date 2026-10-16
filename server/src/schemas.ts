@@ -282,6 +282,7 @@ export const ModelInfo = Type.Object({
 	maxTokens: Type.Number(),
 	vision: Type.Boolean(),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
+	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),
 });
 export const ModelsQuery = Type.Object({
 	provider: Type.Optional(Type.String()),

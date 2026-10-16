@@ -9,7 +9,7 @@ import { APPROVAL_POLICIES, type ApprovalPolicy, type Config } from "./config.ts
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Approval, Thinking } from "./schemas.ts";
-import { catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
+import { catalogEntries, catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
 import { isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
@@ -62,7 +62,11 @@ export const ThinkingSource = Type.Object({
 	catalogId: Type.Optional(Type.String({ description: "The bundled OpenRouter catalog id the name was matched to (kind \"catalog\")" })),
 	levels: Type.Array(Thinking, { description: "The strengths the model offers, weakest first; empty without reasoning" }),
 });
-const PublicModel = Type.Object({ ...CustomProviderBody.properties.models.items.properties, thinkingSource: ThinkingSource });
+const PublicModel = Type.Object({
+	...CustomProviderBody.properties.models.items.properties,
+	thinkingSource: ThinkingSource,
+	unavailable: Type.Optional(Type.Boolean({ description: "The upstream's own model list no longer contains this model (response only)." })),
+});
 export const CustomProviderPublic = Type.Object({
 	...CustomProviderBody.properties,
 	models: Type.Array(PublicModel),
@@ -90,6 +94,59 @@ const implementations: Record<CustomProvider["api"], () => ProviderStreams> = {
 	"openai-responses": openAIResponsesApi,
 	"anthropic-messages": anthropicMessagesApi,
 };
+
+const REFRESH_INTERVAL_MS = 60_000;
+const MAX_MODELS = 100;
+
+/** A model the upstream lists that we do not know yet: limits and capabilities come from the matching OpenRouter entry, else plain defaults. */
+function upstreamModel(m: { id: string; name?: string }): CustomProvider["models"][number] {
+	const hit = catalogMatch(m.id);
+	const e = hit ? catalogEntries().find((c) => c.id === hit.id) : undefined;
+	const contextWindow = e?.contextWindow ?? 128_000;
+	return {
+		id: m.id, ...(m.name ? { name: m.name } : {}), contextWindow, maxTokens: Math.min(e?.maxTokens ?? 8192, contextWindow),
+		reasoning: e?.reasoning ?? false, vision: e?.vision ?? false, fromUpstream: true, catalogId: e?.id ?? null,
+	};
+}
+
+/** GET {baseUrl}/models. Throws a 400 with a readable reason when the list cannot be read. */
+async function fetchUpstreamModels(baseUrl: string, api: CustomProvider["api"], apiKey?: string): Promise<{ id: string; name?: string }[]> {
+	let url: URL;
+	try { url = new URL(baseUrl); } catch { throw badRequest("baseUrl must be a valid HTTP(S) URL"); }
+	if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+		throw badRequest("baseUrl must be HTTP(S) without embedded credentials, query or fragment");
+	}
+	const headers: Record<string, string> = { accept: "application/json" };
+	if (apiKey) {
+		if (api === "anthropic-messages") { headers["x-api-key"] = apiKey; headers["anthropic-version"] = "2023-06-01"; }
+		else headers.authorization = `Bearer ${apiKey}`;
+	}
+	const target = `${url.toString().replace(/\/$/, "")}/models`;
+	let res: Response;
+	try {
+		res = await fetch(target, { headers, signal: AbortSignal.timeout(10_000), redirect: "error" });
+	} catch {
+		throw badRequest("Could not reach the endpoint's /models. Check the URL and that the server is running.");
+	}
+	if (res.status === 401 || res.status === 403) throw badRequest("The endpoint rejected the request (401/403). Check the API key.");
+	if (!res.ok) throw badRequest(`The endpoint's /models answered ${res.status}. It may not offer a model list; add models by hand.`);
+	let body: any;
+	try { body = await res.json(); } catch { throw badRequest("The endpoint's /models did not return JSON."); }
+	const list: unknown[] = Array.isArray(body?.data) ? body.data : Array.isArray(body?.models) ? body.models : Array.isArray(body) ? body : [];
+	const seen = new Set<string>();
+	const models: { id: string; name?: string }[] = [];
+	for (const item of list) {
+		const o = item as { id?: unknown; display_name?: unknown } | null | undefined;
+		const id = typeof o === "string" ? o : typeof o?.id === "string" ? o.id : undefined;
+		if (!id || id.length > 200 || seen.has(id)) continue;
+		seen.add(id);
+		const name = typeof o?.display_name === "string" && o.display_name && o.display_name !== id ? o.display_name.slice(0, 200) : undefined;
+		models.push({ id, ...(name ? { name } : {}) });
+		if (models.length >= MAX_MODELS) break;
+	}
+	if (!models.length) throw badRequest("The endpoint's /models returned no models.");
+	return models;
+}
 
 /** Persisted user model configuration. Secrets live only in the separate CredentialStore. */
 export class Configuration {
@@ -178,7 +235,7 @@ export class Configuration {
 
 	async describe(p: CustomProvider) {
 		const c = await this.credentials.read(p.id);
-		const models = p.models.map((m) => ({ ...m, thinkingSource: this.thinkingSource(p.id, m) }));
+		const models = p.models.map((m) => ({ ...m, thinkingSource: this.thinkingSource(p.id, m), ...(this.isUnavailable(p.id, m.id) ? { unavailable: true } : {}) }));
 		return { ...p, models, configured: Boolean(await this.registry.models.checkAuth(p.id)), hasStoredKey: c?.type === "api_key" && Boolean(c.key) };
 	}
 
@@ -202,48 +259,69 @@ export class Configuration {
 		this.db.query("INSERT INTO custom_providers (id, data) VALUES ($id, $data) ON CONFLICT(id) DO UPDATE SET data = $data")
 			.run({ id, data: JSON.stringify(p) });
 		this.registry.models.setProvider(runtime);
+		this.missing.delete(id);
+		this.checkedAt.delete(id);
 		return this.describe(p);
 	}
 
 	/** Ask the upstream for its own model list (GET {baseUrl}/models), using the connection's stored key when it has one. */
 	async discover(input: Static<typeof DiscoverBody>): Promise<Static<typeof DiscoverResult>> {
-		let url: URL;
-		try { url = new URL(input.baseUrl); } catch { throw badRequest("baseUrl must be a valid HTTP(S) URL"); }
-		if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-			throw badRequest("baseUrl must be HTTP(S) without embedded credentials, query or fragment");
-		}
 		const key = input.providerId && !input.apiKey?.trim() ? (await this.credentials.read(input.providerId)) : undefined;
 		const apiKey = input.apiKey?.trim() || (key?.type === "api_key" ? key.key : undefined);
-		const headers: Record<string, string> = { accept: "application/json" };
-		if (apiKey) {
-			if (input.api === "anthropic-messages") { headers["x-api-key"] = apiKey; headers["anthropic-version"] = "2023-06-01"; }
-			else headers.authorization = `Bearer ${apiKey}`;
+		return { models: await fetchUpstreamModels(input.baseUrl, input.api, apiKey) };
+	}
+
+	/* ---------- keeping the model lists current ---------- */
+
+	/** Models of `fromUpstream` connections that the upstream's list no longer contains (memory only: rebuilt by the next refresh). */
+	private missing = new Map<string, Set<string>>();
+	private checkedAt = new Map<string, number>();
+	private refreshing: Promise<void> | null = null;
+	/** Called after a refresh changed a connection's models, so clients reload. */
+	onModelsChanged?: (providerId: string) => void;
+
+	isUnavailable(providerId: string, modelId: string): boolean { return this.missing.get(providerId)?.has(modelId) ?? false; }
+
+	/** Re-read the model list of every connection that was not checked for a minute, in the background. Never throws. */
+	refreshStale(): void {
+		if (this.refreshing) return;
+		const due = this.list().filter((p) => Date.now() - (this.checkedAt.get(p.id) ?? 0) > REFRESH_INTERVAL_MS);
+		if (!due.length) return;
+		this.refreshing = Promise.all(due.map((p) => this.refresh(p.id).then((changed) => { if (changed) this.onModelsChanged?.(p.id); }, () => {})))
+			.then(() => {}).finally(() => { this.refreshing = null; });
+	}
+
+	/**
+	 * Sync one connection with its upstream: models it lists that we do not have are added, and `fromUpstream` models it no longer
+	 * lists are flagged unavailable (kept, since sessions and defaults may use them). An unreachable upstream changes nothing.
+	 * Resolves true when something changed.
+	 */
+	async refresh(id: string): Promise<boolean> {
+		const p = this.get(id);
+		if (!p) return false;
+		this.checkedAt.set(id, Date.now());
+		const c = await this.credentials.read(id);
+		const apiKey = c?.type === "api_key" ? c.key : undefined;
+		if (p.authRequired && !apiKey) return false;
+		let listed: { id: string; name?: string }[];
+		try { listed = await fetchUpstreamModels(p.baseUrl, p.api, apiKey); } catch { return false; }
+		const current = this.get(id); // the connection may have been edited while waiting
+		if (!current) return false;
+		const ids = new Set(listed.map((m) => m.id));
+		const have = new Set(current.models.map((m) => m.id));
+		const gone = new Set(current.models.filter((m) => m.fromUpstream && !ids.has(m.id)).map((m) => m.id));
+		const before = this.missing.get(id);
+		let changed = gone.size !== (before?.size ?? 0) || [...gone].some((m) => !before?.has(m));
+		this.missing.set(id, gone);
+		const room = Math.max(0, MAX_MODELS - current.models.length);
+		const added = listed.filter((m) => !have.has(m.id)).slice(0, room).map(upstreamModel);
+		if (added.length) {
+			const next: CustomProvider = { ...current, models: [...current.models, ...added] };
+			this.db.query("UPDATE custom_providers SET data = $data WHERE id = $id").run({ id, data: JSON.stringify(next) });
+			this.registry.models.setProvider(this.buildProvider(next));
+			changed = true;
 		}
-		const target = `${url.toString().replace(/\/$/, "")}/models`;
-		let res: Response;
-		try {
-			res = await fetch(target, { headers, signal: AbortSignal.timeout(10_000), redirect: "error" });
-		} catch {
-			throw badRequest("Could not reach the endpoint's /models. Check the URL and that the server is running.");
-		}
-		if (res.status === 401 || res.status === 403) throw badRequest("The endpoint rejected the request (401/403). Check the API key.");
-		if (!res.ok) throw badRequest(`The endpoint's /models answered ${res.status}. It may not offer a model list; add models by hand.`);
-		let body: any;
-		try { body = await res.json(); } catch { throw badRequest("The endpoint's /models did not return JSON."); }
-		const list: unknown[] = Array.isArray(body?.data) ? body.data : Array.isArray(body?.models) ? body.models : Array.isArray(body) ? body : [];
-		const seen = new Set<string>();
-		const models: { id: string; name?: string }[] = [];
-		for (const item of list) {
-			const o = item as { id?: unknown; display_name?: unknown } | null | undefined;
-			const id = typeof o === "string" ? o : typeof o?.id === "string" ? o.id : undefined;
-			if (!id || id.length > 200 || seen.has(id)) continue;
-			seen.add(id);
-			const name = typeof o?.display_name === "string" && o.display_name && o.display_name !== id ? o.display_name.slice(0, 200) : undefined;
-			models.push({ id, ...(name ? { name } : {}) });
-			if (models.length >= 100) break;
-		}
-		if (!models.length) throw badRequest("The endpoint's /models returned no models.");
-		return { models };
+		return changed;
 	}
 
 	async delete(id: string) {
@@ -257,6 +335,8 @@ export class Configuration {
 			}
 			this.db.query("DELETE FROM custom_providers WHERE id = $id").run({ id });
 		});
+		this.missing.delete(id);
+		this.checkedAt.delete(id);
 		this.registry.models.deleteProvider(id);
 		const builtin = builtinProvider(id); // a custom endpoint may have shadowed a built-in provider: bring it back
 		if (builtin) this.registry.models.setProvider(builtin);

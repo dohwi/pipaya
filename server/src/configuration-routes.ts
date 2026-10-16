@@ -16,9 +16,10 @@ const CatalogResult = Type.Object({
 /** Authenticated configuration API for any client. No assets or frontend build. */
 export function registerConfigurationRoutes(server: FastifyInstance, config: Configuration, bus: EventBus): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
+	config.onModelsChanged = (id) => bus.publish(null, "configuration_updated", { scope: "provider", id, action: "saved" });
 	app.get("/configuration", {
 		schema: { response: { 200: ConfigurationResult, ...errors(401) } },
-		handler: async () => config.snapshot(),
+		handler: async () => { config.refreshStale(); return config.snapshot(); },
 	});
 	app.get("/configuration/catalog", {
 		schema: { response: { 200: CatalogResult, ...errors(401) } },

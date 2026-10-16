@@ -57,6 +57,8 @@
 		catalogId?: string | null;
 		/** What the server matched this model to, for display only */
 		thinkingSource?: CustomModel["thinkingSource"];
+		/** The upstream's model list no longer contains it */
+		unavailable?: boolean;
 	}
 	const allLevels: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 	interface Form {
@@ -229,6 +231,7 @@
 				thinkingLevels: m.thinkingLevels ?? [],
 				catalogId: m.catalogId,
 				thinkingSource: m.thinkingSource,
+				unavailable: m.unavailable,
 			})),
 		};
 	}
@@ -518,7 +521,9 @@
 									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
 									{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}
-									{#if !r.id.trim()}
+									{#if r.unavailable}
+										<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
+									{:else if !r.id.trim()}
 										<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
 									{:else if matchedOf(r)}
 										<Badge tone="ok" size="sm" mono><Icon name="check" />{matchedOf(r)?.id}</Badge>

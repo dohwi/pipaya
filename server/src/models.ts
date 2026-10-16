@@ -30,9 +30,11 @@ export interface ModelInfo {
 	maxTokens: number;
 	vision: boolean;
 	configured: boolean;
+	/** false = the connection's own model list no longer contains this model */
+	available: boolean;
 }
 
-export async function describeModels(reg: ModelRegistry, provider?: string): Promise<ModelInfo[]> {
+export async function describeModels(reg: ModelRegistry, provider?: string, unavailable: (provider: string, id: string) => boolean = () => false): Promise<ModelInfo[]> {
 	const available = new Set((await reg.models.getAvailable(provider)).map((m) => `${m.provider}/${m.id}`));
 	return reg.models.getModels(provider).map((m: Model<Api>) => ({
 		provider: m.provider,
@@ -45,5 +47,6 @@ export async function describeModels(reg: ModelRegistry, provider?: string): Pro
 		maxTokens: m.maxTokens,
 		vision: m.input.includes("image"),
 		configured: available.has(`${m.provider}/${m.id}`),
+		available: !unavailable(m.provider, m.id),
 	}));
 }

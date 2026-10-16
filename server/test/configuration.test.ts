@@ -22,6 +22,7 @@ const api = async (method: any, url: string, payload?: unknown, auth = true) => 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-settings-"));
 	upstream = Bun.serve({ hostname: "0.0.0.0", port: 0, async fetch(req) {
+		if (req.method === "GET") return new Response("not found", { status: 404 }); // background model-list refresh
 		requests.push({ path: new URL(req.url).pathname, key: req.headers.get("authorization"), body: await req.json() });
 		if (new URL(req.url).pathname.endsWith("/messages")) {
 			const message = { id: "msg_mock", type: "message", role: "assistant", model: "test-model", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 4, output_tokens: 0 } };
