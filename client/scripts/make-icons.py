@@ -9,8 +9,10 @@ Each OS wants a different shape, so the master is never just resized:
            masks it to a circle / squircle / ...), plus legacy rounded and round PNGs   -> icons/android/
   iOS      full-bleed opaque square WITHOUT an alpha channel (iOS applies the mask)    -> icons/ios/
 
-The master is the pipaya app icon (logo/svg/app-icon.svg). app-icon-glyph.png is the same artwork on a transparent background
-(the master with its <rect> removed); both are rendered from the SVG, e.g. with @resvg/resvg-js at 1024 px.
+The master is the pipaya app icon (logo/svg/app-icon.svg): a cream tile, the crown fills ~86% of its width and the trunk runs off the
+bottom edge, so the master is always used at full size inside each OS shape (never shrunk, which would leave the trunk floating).
+app-icon-adaptive.png is the Android adaptive foreground (crown inside the safe zone), app-icon-mark.png the whole tree as a
+single-colour silhouette (notification icon). All are rendered from the SVGs by scripts/render-icons.ts (run that first).
 
 Needs Pillow and `bun` (the Tauri CLI builds the .icns/.ico containers).  Run from client/:  python3 scripts/make-icons.py
 """
@@ -25,21 +27,18 @@ ROOT = Path(__file__).resolve().parent.parent / "src-tauri"
 ICONS = ROOT / "icons"
 MASTER = Image.open(ROOT / "app-icon.png").convert("RGB")
 assert MASTER.size == (1024, 1024), MASTER.size
-GLYPH = Image.open(ROOT / "app-icon-glyph.png").convert("RGBA")  # the artwork alone, transparent background
-assert GLYPH.size == (1024, 1024), GLYPH.size
+ADAPTIVE = Image.open(ROOT / "app-icon-adaptive.png").convert("RGBA")  # Android adaptive foreground, transparent
+SILHOUETTE = Image.open(ROOT / "app-icon-mark.png").convert("RGBA")  # whole tree, single colour, transparent
 
 BG = MASTER.getpixel((4, 4))  # flat background colour of the master
 SS = 4  # supersampling for smooth mask edges
-# How much of the tile the glyph may use on each desktop OS. The master tree spans ~68% of the tile height; on top of that it looks cramped once an OS draws
-# the icon next to others: the Dock expects ~10% of transparent margin AND air around the artwork, Windows tiles want a little less.
-MAC_GLYPH = 0.80
-WIN_GLYPH = 0.92
-GLYPH_SCALE = 0.64  # master tree spans ~86% of the canvas height; 0.64 keeps it inside the safe circle of an adaptive icon, same as before
+# Transparent margin around the tile on macOS (the Dock draws no mask of its own and expects ~10% of air).
+MAC_INSET = 0.098
 
 
 def glyph_alpha() -> Image.Image:
-    """The artwork's alpha channel (multi-colour logo: taken from the transparent render, not from luminance)."""
-    return GLYPH.getchannel("A")
+    """The silhouette's alpha channel (taken from the transparent render, not from luminance)."""
+    return SILHOUETTE.getchannel("A")
 
 
 def mask(size: int, inset: float, shape: str, radius: float = 0.22) -> Image.Image:
@@ -66,18 +65,12 @@ def mask(size: int, inset: float, shape: str, radius: float = 0.22) -> Image.Ima
     return m.resize((size, size), Image.BOX)  # area average: LANCZOS rings and leaves stray alpha outside the shape
 
 
-def framed(glyph: float) -> Image.Image:
-    """The master with its glyph scaled to `glyph` of the tile, centred on the flat background colour."""
-    if glyph == 1.0:
-        return MASTER
-    out = Image.new("RGB", MASTER.size, BG)
-    n = round(MASTER.width * glyph)
-    out.paste(MASTER.resize((n, n), Image.LANCZOS), ((MASTER.width - n) // 2, (MASTER.height - n) // 2))
-    return out
-
-def shaped(size: int, inset: float, shape: str, radius: float = 0.22, glyph: float = 1.0) -> Image.Image:
-    img = framed(glyph).resize((size, size), Image.LANCZOS).convert("RGBA")
-    img.putalpha(mask(size, inset, shape, radius))
+def shaped(size: int, inset: float, shape: str, radius: float = 0.22) -> Image.Image:
+    """The master scaled into the shape (the shape fills the canvas minus `inset` on every side), transparent outside it."""
+    inner = round(size * (1 - 2 * inset))
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    img.paste(MASTER.resize((inner, inner), Image.LANCZOS).convert("RGBA"), ((size - inner) // 2, (size - inner) // 2))
+    img.putalpha(ImageChops.multiply(img.getchannel("A"), mask(size, inset, shape, radius)))
     return img
 
 
@@ -101,7 +94,7 @@ BORDER_ALPHA = 0.16
 def win_tile(size: int) -> Image.Image:
     """One Windows icon size, drawn for that size: a rounded white tile with a clean anti-aliased edge and a hairline border.
     Resizing a finished 1024px icon down to 16/32px leaves ragged corners and a dark fringe, so each size is built from the master."""
-    img = framed(WIN_GLYPH).resize((size, size), Image.LANCZOS).convert("RGBA")
+    img = MASTER.resize((size, size), Image.LANCZOS).convert("RGBA")
     outer = mask(size, 0.0, "round", 0.2)
     if size >= 24:
         w = max(1.0, size / 128) / size  # ~1px at 128px and below, thicker on the big sizes
@@ -131,10 +124,10 @@ def desktop():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         # Windows / Linux: rounded square, full size
-        tauri_icon(shaped(1024, 0.0, "round", 0.2, WIN_GLYPH), tmp / "win")
+        tauri_icon(shaped(1024, 0.0, "round", 0.2), tmp / "win")
         windows_icons(tmp)
         # macOS: squircle with the standard ~10% transparent margin
-        tauri_icon(shaped(1024, 0.098, "squircle", glyph=MAC_GLYPH), tmp / "mac")
+        tauri_icon(shaped(1024, MAC_INSET, "squircle"), tmp / "mac")
         shutil.copyfile(tmp / "mac" / "icon.icns", ICONS / "icon.icns")
 
 
@@ -147,13 +140,9 @@ def android():
     for dens, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}.items():
         legacy, layer = round(48 * scale), round(108 * scale)
         d = base / f"mipmap-{dens}"
-        # adaptive foreground: transparent, glyph only. The master glyph already sits inside the 66% safe zone.
-        # Adaptive icons show only the centre 72/108 and circular masks cut further, so the glyph is shrunk to fit
-        # inside the 66dp safe circle.
-        inner = round(layer * GLYPH_SCALE)
-        fg = Image.new("RGBA", (layer, layer), (0, 0, 0, 0))
-        fg.paste(GLYPH.resize((inner, inner), Image.LANCZOS), ((layer - inner) // 2, (layer - inner) // 2))
-        save(fg, d / "ic_launcher_foreground.png")
+        # adaptive foreground: transparent, drawn for the full 108dp layer. Launchers show only the centre 72dp and
+        # mask it further (circle, squircle, ...), so the crown sits inside the 66dp safe circle and the trunk runs to the bottom.
+        save(ADAPTIVE.resize((layer, layer), Image.LANCZOS), d / "ic_launcher_foreground.png")
         # pre-Android 8 launchers draw the file as is
         save(shaped(legacy, 0.04, "round", 0.2), d / "ic_launcher.png")
         save(shaped(legacy, 0.02, "circle"), d / "ic_launcher_round.png")
