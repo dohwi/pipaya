@@ -950,6 +950,10 @@ dialog[data-closing]::backdrop {
 	animation: glow-breathe 2.4s ease-in-out infinite;
 }
 /* extra specificity so it wins over the scoped `.bubble` / `.box` border rules (also the resting look when motion is reduced) */
+/* compacting context: same breathing outline, but in the warning (yellow) colour */
+.glow-working.glow-compacting {
+	--glow: var(--warn);
+}
 html .glow-working.glow-working {
 	border-color: color-mix(in srgb, var(--glow) 55%, var(--glow-base));
 }
