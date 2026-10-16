@@ -225,7 +225,7 @@
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)}>
 				<AgentBadge id={x.id} state={stateOf(n, x)} size={18} />
 				{#if x.parentId}<span class="forkmark" title={t("분기된 대화")}><Icon name="fork" /></span>{/if}
-				{#if nested && app.groupOf(x.id)?.names?.[x.id]}<span class="who mono">@{app.groupOf(x.id)?.names?.[x.id]}</span>{/if}
+				{#if nested && app.groupOf(x.id)?.names?.[x.id]}<span class="who mono {stateOf(n, x)}">@{app.groupOf(x.id)?.names?.[x.id]}</span>{/if}
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 			</button>
 			<div class="acts">
@@ -359,8 +359,12 @@
 		flex: none;
 		font-size: var(--fs-2xs);
 		font-weight: 700;
-		color: var(--mark-member);
+		color: var(--text-dim); /* follows the agent icon: dim when idle, the state colour otherwise */
 	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
 	.side {
 		display: flex;
 		flex-direction: column;

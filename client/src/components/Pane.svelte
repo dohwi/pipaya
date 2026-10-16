@@ -50,7 +50,7 @@
 		>
 			<AgentBadge {id} {state} size={16} />
 			<span class="tt">
-				<span class="t">{#if memberName}<span class="who mono" title={t("그룹에서의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
+				<span class="t">{#if memberName}<span class="who mono {state}" title={t("그룹에서의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			</span>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => (app.zoomId = zoomed ? null : id)} aria-label={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")} title={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
@@ -161,9 +161,13 @@
 	}
 	.who {
 		margin-right: 6px;
-		color: var(--mark-member);
+		color: var(--text-dim);
 		font-weight: 700;
 	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
 	.focused .t {
 		color: var(--text);
 	}
