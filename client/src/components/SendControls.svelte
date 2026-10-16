@@ -165,11 +165,44 @@
 		font-size: var(--fs-2xs);
 		opacity: 0.6;
 	}
-	@media (max-width: 640px), (pointer: coarse) {
+	/* Sized by the pane, not the window: a pane in a split group is narrow on a wide screen. */
+	@media (pointer: coarse) {
+		kbd {
+			display: none;
+		}
+	}
+	@container (max-width: 480px) {
 		kbd {
 			display: none;
 		}
 		/* One row cannot hold the model picker, two labelled buttons and stop: keep the buttons icon-only so none is squashed */
+		.mode {
+			width: 34px;
+			height: 34px;
+			padding: 0;
+			margin-right: 0;
+			justify-content: center;
+			border-radius: 50%;
+		}
+		.mode span {
+			display: none;
+		}
+		.mode :global(svg) {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	@container (max-width: 340px) {
+		.send {
+			width: 32px;
+			height: 32px;
+		}
+		.mode {
+			width: 30px;
+			height: 30px;
+		}
+	}
+	@media (pointer: coarse) {
 		.mode {
 			width: 36px;
 			height: 36px;

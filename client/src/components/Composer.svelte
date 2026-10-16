@@ -813,6 +813,41 @@
 	}
 	.grow {
 		flex: 1;
+		min-width: 0;
+	}
+	/* narrow pane (split group, small window): tighter paddings and smaller type instead of wrapping or overlapping */
+	@container (max-width: 480px) {
+		.wrap {
+			padding: 0 10px calc(8px + var(--sab));
+		}
+		.bar {
+			gap: 2px;
+			padding: 2px 6px 6px;
+			min-width: 0;
+		}
+	}
+	@container (max-width: 420px) {
+		.box {
+			border-radius: 18px;
+		}
+		textarea,
+		.mirror {
+			padding: 10px 14px 2px;
+		}
+		.prompt-hint {
+			top: 10px;
+			left: 14px;
+			right: 14px;
+		}
+	}
+	@container (max-width: 420px) {
+		@media (pointer: fine) {
+			textarea,
+			.mirror,
+			.prompt-hint {
+				font-size: var(--fs-md);
+			}
+		}
 	}
 	.files {
 		display: flex;

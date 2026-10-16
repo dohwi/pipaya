@@ -326,4 +326,16 @@
 			gap: 10px;
 		}
 	}
+	/* narrow pane: the stats line gives way before the buttons do, and the text shrinks a notch */
+	@container (max-width: 420px) {
+		.foot {
+			min-width: 0;
+		}
+		.stats {
+			flex: 1;
+			min-width: 0;
+			margin-left: 4px;
+			font-size: 10px;
+		}
+	}
 </style>

@@ -315,4 +315,23 @@
 			display: none;
 		}
 	}
+	/* narrow pane: tighter spacing and smaller type so the line stays on as few rows as possible */
+	@container (max-width: 420px) {
+		.statusline {
+			column-gap: 10px;
+			padding: 6px 6px 0;
+			font-size: 10px;
+		}
+		.b {
+			gap: 3px;
+		}
+		.b :global(svg:not(.ring)),
+		.ring {
+			width: 11px;
+			height: 11px;
+		}
+		.wide {
+			display: none;
+		}
+	}
 </style>

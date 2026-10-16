@@ -137,6 +137,28 @@
 	.inline .mname {
 		max-width: 38vw;
 	}
+	/* narrow pane: the name gives way (ellipsis) and the label chip / chevron shrink so the send buttons keep their room */
+	@container (max-width: 420px) {
+		.trigger.inline {
+			gap: 4px;
+			padding: 0 6px;
+			height: 32px;
+			font-size: var(--fs-xs);
+			flex: 0 1 auto;
+		}
+		.inline .mname {
+			max-width: none;
+		}
+		.inline .chip {
+			flex: none;
+		}
+	}
+	@container (max-width: 340px) {
+		.inline .chip,
+		.inline .chev {
+			display: none;
+		}
+	}
 	.chev {
 		display: grid;
 		flex: none;
