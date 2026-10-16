@@ -71,6 +71,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | POST | `/sessions` | 선택 `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools,approval}`. `cwd`는 서버의 존재하는 절대 경로이거나 기본 작업 디렉터리 기준 상대 경로(없으면 생성) |
 | POST | `/sessions/:id/compact` | 선택 `{customInstructions}`. 오래된 메시지를 요약해 모델이 요약을 대신 보게 합니다(저장된 대화 기록은 그대로). 실행 중이거나 기록이 짧으면 409, 요약 모델 실패 시 502 |
 | GET/PUT | `/compaction` | `{auto, model}`. `model`은 `{provider, model, thinkingLevel?}` 또는 `null`(세션 모델 그대로 사용) |
+| GET/PUT | `/system-model` | `{model}`: 메시지 후 백그라운드에서 세션 이름과 `purpose`(역할)를 쓰는 가벼운 모델. `{provider, model, thinkingLevel?}` 또는 `null`(끄기, 제목은 첫 메시지를 줄여 씀) |
 | GET/PUT | `/subagents` | `{settings: {enabled, agents: [{name, description, enabled, model, tools, maxTurns, prompt}]}, toolChoices}`. `model`은 `{provider, model, thinkingLevel?}` 또는 `null`(호출한 대화의 모델), 강도를 생략하면 `minimal`. 각 agent는 `delegate` 도구 뒤의 읽기 전용 도우미입니다(`tools`는 `read`, `grep`, `ls` 중에서, 최대 10개, `name`은 고유). `delegate`는 선택 인자 `agent`(이름)를 받고, 생략하면 켜진 첫 도우미를 씁니다. `prompt`는 기본 조사 지침 뒤에 덧붙습니다 |
 | GET | `/sessions?limit=&before=&closed=` | 세션 목록과 `nextBefore` 커서 |
 | GET/PATCH/DELETE | `/sessions/:id` | 세션 조회/수정/삭제. PATCH는 `closed`도 받습니다 |

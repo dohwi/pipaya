@@ -23,6 +23,7 @@ process.on("SIGINT", () => void stop("SIGINT"));
 process.on("SIGTERM", () => void stop("SIGTERM"));
 
 await app.server.listen({ host: cfg.host, port: cfg.port });
+app.sessions.describeAll(); // sessions from before a system model was set get their title and role in the background
 app.server.log.info(`workspace: ${cfg.workspaceRoot}`);
 app.server.log.info(`db: ${cfg.dbPath}`);
 if (!process.env.PIPAYA_TOKEN) app.server.log.info(`auth token: ${cfg.dataDir}/token`);

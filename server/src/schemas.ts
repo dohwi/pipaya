@@ -44,6 +44,7 @@ const sessionFields = {
 	id: Type.String(),
 	title: Type.String(),
 	name: Type.String({ description: "How other sessions address this one (@name); unique among active sessions" }),
+	purpose: Type.String({ description: "What this session's agent works on, written by the system model (GET /system-model); empty until then" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
 	provider: Type.String(),
 	model: Type.String(),
@@ -149,6 +150,7 @@ export const CreateSessionBody = Type.Object({
 
 export const PatchSessionBody = Type.Object({
 	title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+	purpose: Type.Optional(Type.String({ maxLength: 200, description: "What this session works on; \"\" clears it so the system model writes it again" })),
 	provider: Type.Optional(Type.String()),
 	model: Type.Optional(Type.String()),
 	thinkingLevel: Type.Optional(Thinking),
@@ -388,7 +390,7 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("approval"), Type.Literal("ask_user"), Type.Literal("retention"), Type.Literal("model-roles"), Type.Literal("subagents"), Type.Literal("compaction")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()), enabled: Type.Optional(Type.Boolean()), days: Type.Optional(Type.Integer()), onlyClosed: Type.Optional(Type.Boolean()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("approval"), Type.Literal("ask_user"), Type.Literal("retention"), Type.Literal("model-roles"), Type.Literal("subagents"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()), enabled: Type.Optional(Type.Boolean()), days: Type.Optional(Type.Integer()), onlyClosed: Type.Optional(Type.Boolean()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,

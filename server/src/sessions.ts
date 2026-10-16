@@ -20,6 +20,7 @@ import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TO
 import type { ApprovalPolicy } from "./config.ts";
 import { memberHint, mentionedMembers, nextMemberName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
+import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
@@ -33,6 +34,8 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 
 /** How many messages one run may send to group members. */
 const MAX_PEER_SENDS = 10;
+/** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
+const DESCRIBE_RETRY_MS = 10 * 60_000;
 
 export class SessionManager {
 	private live = new Map<string, Live>();
@@ -40,6 +43,12 @@ export class SessionManager {
 	private peerSends = new Map<string, number>();
 	/** Runs that have not yet published run_finished. Tracked apart from `live`, which shutdown and delete empty first. */
 	private pendingRuns = new Set<Promise<void>>();
+	/** Title/role calls in flight (one per session), and when one last failed. */
+	private describing = new Map<string, AbortController>();
+	private describeFailedAt = new Map<string, number>();
+	private pendingDescribes = new Set<Promise<void>>();
+	private backfilling = false;
+	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
 
 	constructor(
@@ -60,6 +69,8 @@ export class SessionManager {
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
 		/** Whether the agent may ask the user questions; off withholds `ask_user`. */
 		private askUserEnabled: () => boolean = () => true,
+		/** The light model that writes session titles and roles; none = titles stay the first message cut short. */
+		private systemModel?: SystemModelSettings,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -77,6 +88,7 @@ export class SessionManager {
 			id,
 			title: input.title?.trim() || "New session",
 			name: nextMemberName(this.store.activeNames()),
+			purpose: "",
 			cwd,
 			provider,
 			model,
@@ -295,6 +307,7 @@ export class SessionManager {
 		this.get(id);
 		const live = this.live.get(id);
 		if (live?.running) live.agent.abort();
+		this.describing.get(id)?.abort();
 		this.dispose(id);
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
@@ -360,7 +373,7 @@ export class SessionManager {
 		const peers = this.peers(id);
 		if (peers.length) {
 			const asked = mentionedMembers(input.text, peers.map((p) => p.name));
-			if (asked.length) content.push({ type: "text", text: memberHint(HINT_OPEN, asked) });
+			if (asked.length) content.push({ type: "text", text: memberHint(HINT_OPEN, asked, Object.fromEntries(peers.map((p) => [p.name, p.purpose]))) });
 		}
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
@@ -386,9 +399,10 @@ export class SessionManager {
 		}
 
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
-		if (record.title === "New session" && this.store.nextSeq(id) === 0) {
-			this.update(id, { title: (call && marker ? call.name : input.text).trim().replace(/\s+/g, " ").slice(0, 60) || "New session" });
-		}
+		const first = this.store.nextSeq(id) === 0;
+		const shortTitle = autoTitle(call && marker ? call.name : input.text);
+		if (record.title === "New session" && first) this.update(id, { title: shortTitle });
+		this.describe(id, first ? input.text : undefined, input.text, shortTitle);
 		this.run(id, live, "prompt", async () => {
 			await this.autoCompact(id);
 			live.runSystem = undefined;
@@ -402,6 +416,86 @@ export class SessionManager {
 			await live.agent.prompt(message);
 		});
 		return { accepted: "prompt" };
+	}
+
+	/**
+	 * In the background, has the system model write a short title and the session's role, while the role is still
+	 * empty: on the first message, and on a later one for sessions that started before a system model was set. The
+	 * title is only replaced while it is still the automatic one, so a name the user gave is kept. Never fails the
+	 * message: without a usable model, or when the call fails, the session keeps what it has.
+	 */
+	private describe(id: string, first: string | undefined, latest: string, shortTitle?: string): Promise<void> | undefined {
+		const target = this.systemModel?.resolve();
+		if (!target || this.closing || this.describing.has(id)) return;
+		const record = this.store.get(id);
+		if (!record || record.purpose) return;
+		if (Date.now() - (this.describeFailedAt.get(id) ?? 0) < DESCRIBE_RETRY_MS) return;
+		const firstText = first ?? this.firstUserText(id) ?? latest;
+		if (!firstText.trim()) return;
+		const controller = new AbortController();
+		this.describing.set(id, controller);
+		const job = (async () => {
+			try {
+				const model = this.registry.models.getModel(target.provider, target.model);
+				if (!model || !(await this.registry.models.checkAuth(target.provider))) throw new Error("system model unavailable");
+				const reply = await this.registry.models.completeSimple(
+					model,
+					{ systemPrompt: DESCRIBE_SYSTEM, messages: [{ role: "user", content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }] },
+					{ maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
+				);
+				if (controller.signal.aborted) return;
+				if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage || reply.stopReason);
+				const found = parseDescription(reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join(""));
+				if (!found) throw new Error("the system model gave no title");
+				const now = this.store.get(id);
+				if (!now || now.purpose) return;
+				// Only a title that is still the automatic one is replaced; one the user gave is kept.
+				const automatic = now.title === "New session" || now.title === autoTitle(firstText) || now.title === shortTitle;
+				const patch: SessionPatch = { purpose: found.purpose || found.title };
+				if (found.title && automatic) patch.title = found.title;
+				this.describeFailedAt.delete(id);
+				this.update(id, patch);
+			} catch {
+				if (!controller.signal.aborted) this.describeFailedAt.set(id, Date.now());
+			} finally {
+				this.describing.delete(id);
+			}
+		})();
+		this.pendingDescribes.add(job);
+		void job.finally(() => this.pendingDescribes.delete(job));
+		return job;
+	}
+
+	/** Gives a role to the active sessions that have talked but have none yet (after a system model is set, and at start). */
+	describeAll(): void {
+		if (!this.systemModel?.resolve() || this.backfilling) return;
+		this.backfilling = true;
+		const job = (async () => {
+			try {
+				// One at a time: a server with many sessions must not fire them all at the model at once.
+				for (const r of this.store.list({ limit: 200, closed: false })) {
+					if (!this.systemModel?.resolve()) return;
+					if (r.purpose || this.store.nextSeq(r.id) === 0) continue;
+					const first = this.firstUserText(r.id);
+					if (first) await this.describe(r.id, first, first);
+				}
+			} finally {
+				this.backfilling = false;
+			}
+		})();
+		this.pendingDescribes.add(job);
+		void job.finally(() => this.pendingDescribes.delete(job));
+	}
+
+	/** The text of the session's first user message, without the hints the server adds. */
+	private firstUserText(id: string): string | null {
+		const m = this.store.messages(id, { limit: 50 }).find((r) => r.role === "user")?.message;
+		if (!m) return null;
+		const c = (m as { content?: unknown }).content;
+		if (typeof c === "string") return c;
+		if (!Array.isArray(c)) return null;
+		const part = (c as { type: string; text?: string }[]).find((p) => p.type === "text" && p.text && !p.text.startsWith(HINT_OPEN) && !p.text.startsWith("<pipaya-"));
+		return part?.text ?? null;
 	}
 
 	/** `input` hooks and `/command` handling. A swallowed message is never sent to the model. */
@@ -500,6 +594,8 @@ export class SessionManager {
 
 	shutdown(): void {
 		clearInterval(this.sweeper);
+		this.closing = true;
+		for (const c of this.describing.values()) c.abort();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of this.live) {
 			if (live.running) live.agent.abort();
@@ -530,6 +626,7 @@ export class SessionManager {
 	async idle(): Promise<void> {
 		await Promise.all([...this.live.values()].map((l) => l.agent.waitForIdle()));
 		await Promise.all([...this.pendingRuns]);
+		await Promise.all([...this.pendingDescribes]);
 	}
 
 	// ── Internals ───────────────────────────────────────────────────────────
@@ -679,8 +776,8 @@ export class SessionManager {
 	}
 
 	/** The other active sessions, which a session can address by name; read fresh on every call. */
-	private peers(sessionId: string): { name: string; sessionId: string }[] {
-		return this.store.list({ limit: 1000, closed: false }).filter((r) => r.id !== sessionId && r.name).map((r) => ({ name: r.name, sessionId: r.id }));
+	private peers(sessionId: string): { name: string; sessionId: string; purpose: string }[] {
+		return this.store.list({ limit: 1000, closed: false }).filter((r) => r.id !== sessionId && r.name).map((r) => ({ name: r.name, sessionId: r.id, purpose: r.purpose }));
 	}
 
 	/** Messages to and from the other sessions of this server. */

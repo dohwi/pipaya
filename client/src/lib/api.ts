@@ -1,4 +1,4 @@
-import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, RetentionInfo, RetentionPolicy, SubAgentSettings, SubAgentSettingsInfo,
+import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, RetentionInfo, RetentionPolicy, SubAgentSettings, SubAgentSettingsInfo, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Approval,
 	Question,
@@ -240,6 +240,8 @@ export class Api {
 
 	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
 	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);
+	systemModelSettings = () => this.req<SystemModelSettingsInfo>("GET", "/system-model");
+	setSystemModelSettings = (settings: SystemModelSettings) => this.req<SystemModelSettingsInfo>("PUT", "/system-model", settings);
 
 	/** `closed`: false = active only (the sidebar), true = closed only (/resume). */
 	listSessions = (limit = 100, closed?: boolean) =>

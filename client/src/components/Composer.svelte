@@ -193,15 +193,17 @@
 	const members = $derived(
 		app.sessions.filter((s) => s.id !== pane.id && !s.closed && s.name).map((s) => {
 			const fresh = s.title === "New session";
-			// What the member is for follows its pane name (the session title); a session not yet named shows its folder.
+			// What the member is for: the role the system model wrote, else its pane name (the session title); a session
+			// not yet named shows its folder.
 			const dir = s.cwd.split("/").slice(-2).join("/");
-			return { id: s.id, name: s.name, title: fresh ? dir : s.title, dir: fresh ? "" : dir, state: activityOf(app, s.id) };
+			const about = s.purpose?.trim() || (fresh ? "" : s.title);
+			return { id: s.id, name: s.name, title: about || dir, alt: s.title, dir: about ? dir : "", state: activityOf(app, s.id) };
 		}),
 	);
 	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
 	const memberMatches = $derived(memberMention ? members.filter((m) => {
 		const q = memberMention.query.toLowerCase();
-		return m.name.toLowerCase().startsWith(q) || m.title.toLowerCase().includes(q);
+		return m.name.toLowerCase().startsWith(q) || m.title.toLowerCase().includes(q) || m.alt.toLowerCase().includes(q);
 	}) : []);
 
 	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);

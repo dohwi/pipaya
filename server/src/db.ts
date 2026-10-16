@@ -147,6 +147,8 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id: s.id, name });
 		}
 	},
+	// v20: what a session's agent works on (written by the system model), shown beside its @name.
+	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "purpose")) db.exec("ALTER TABLE sessions ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"); },
 ];
 
 export function openDb(path: string): Database {

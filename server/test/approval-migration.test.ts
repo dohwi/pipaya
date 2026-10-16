@@ -13,7 +13,7 @@ describe("approval policy migration", () => {
 		try {
 			const record: SessionRecord = {
 				id: "ro", title: "t", name: "t", cwd: dir, provider: "custom", model: "manual", thinkingLevel: "medium",
-				systemPrompt: "p", tools: ["read"], approval: "readonly", parentId: null, closed: false, createdAt: 1, updatedAt: 2,
+				systemPrompt: "p", tools: ["read"], approval: "readonly", purpose: "", parentId: null, closed: false, createdAt: 1, updatedAt: 2,
 			};
 			const store = new SessionStore(db);
 			store.create(record);

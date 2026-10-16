@@ -18,6 +18,8 @@ import { SubAgentSettings } from "./subagent-settings.ts";
 import { CompactionSettings } from "./compaction.ts";
 import { registerSubAgentRoutes } from "./subagent-routes.ts";
 import { registerCompactionRoutes } from "./compaction-routes.ts";
+import { SystemModelSettings } from "./system-model.ts";
+import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
@@ -120,6 +122,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const modelRoles = new ModelRoles(db, registry);
 	const subagentSettings = new SubAgentSettings(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
+	const systemModel = new SystemModelSettings(db, registry);
 	const extensions = new ExtensionHost({
 		db, bus, registry, dataDir: cfg.dataDir,
 		dirs: opts.extensionDirs ?? ExtensionHost.defaultDirs(cfg.dataDir, opts.home),
@@ -127,7 +130,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		log: (m) => server.log.warn(m),
 	});
 	const templates = new TemplateService({ home: opts.home, defaultWorkdir: () => configuration.defaultWorkdir() });
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates, () => configuration.approvalInfo().effective, () => configuration.askUserEnabled());
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates, () => configuration.approvalInfo().effective, () => configuration.askUserEnabled(), systemModel);
 	extensions.attach({
 		cwd: (id) => store.get(id)?.cwd,
 		send: (id, text, mode) => sessions.send(id, { text, mode }),
@@ -480,6 +483,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerLlmRoutes(server, modelRoles, new Llm(registry, modelRoles), bus);
 	registerSubAgentRoutes(server, subagentSettings, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
+	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
 	registerGroupRoutes(server, groups);

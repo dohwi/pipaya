@@ -12,6 +12,8 @@ export interface SessionRecord {
 	title: string;
 	/** How other sessions address this one (`@name`); unique among active sessions. */
 	name: string;
+	/** What this session's agent works on, written by the system model; "" until then. */
+	purpose: string;
 	cwd: string;
 	provider: string;
 	model: string;
@@ -30,6 +32,7 @@ interface SessionRow {
 	id: string;
 	title: string;
 	name: string;
+	purpose: string;
 	cwd: string;
 	provider: string;
 	model: string;
@@ -47,6 +50,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	id: r.id,
 	title: r.title,
 	name: r.name,
+	purpose: r.purpose ?? "",
 	cwd: r.cwd,
 	provider: r.provider,
 	model: r.model,
@@ -61,12 +65,13 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "provider" | "model" | "thinkingLevel" | "approval" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "approval" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	title: "title",
 	name: "name",
+	purpose: "purpose",
 	provider: "provider",
 	model: "model",
 	thinkingLevel: "thinking_level",
@@ -99,13 +104,14 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, name, cwd, provider, model, thinking_level, system_prompt, tools, approval, parent_id, created_at, updated_at)
-				 VALUES ($id, $title, $name, $cwd, $provider, $model, $thinking, $system, $tools, $approval, $parent, $created, $updated)`,
+				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, approval, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $approval, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
 				title: r.title,
 				name: r.name,
+				purpose: r.purpose,
 				cwd: r.cwd,
 				provider: r.provider,
 				model: r.model,

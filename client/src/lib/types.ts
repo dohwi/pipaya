@@ -53,6 +53,11 @@ export interface CompactionSettings {
 	model: ModelChoice | null;
 }
 export interface CompactionSettingsInfo { settings: CompactionSettings; defaults: CompactionSettings }
+export interface SystemModelSettings {
+	/** The light model that writes session titles and roles; null = off */
+	model: ModelChoice | null;
+}
+export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
 export interface SubAgentSettingsInfo { settings: SubAgentSettings; defaults: SubAgentSettings; toolChoices: SubAgentTool[] }
 
 export interface RetentionInfo { policy: RetentionPolicy; lastRun: number | null; lastDeleted: number; due: number }
@@ -62,6 +67,8 @@ export interface Session {
 	title: string;
 	/** How other sessions address this one (`@name`); unique among active sessions */
 	name: string;
+	/** What this session's agent works on, written by the system model; "" until then (absent on older servers) */
+	purpose?: string;
 	/** Absolute path inside the workspace root */
 	cwd: string;
 	provider: string;

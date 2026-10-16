@@ -13,6 +13,7 @@
 	import Badge from "./Badge.svelte";
 	import ConnectionForm, { localPresets, type LocalPreset } from "./ConnectionForm.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
+	import SystemModelSection from "./SystemModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "./ConnectModal.svelte";
 	import { indexCatalog } from "../lib/catalog-match";
@@ -252,6 +253,8 @@
 		</section>
 
 		<CompactionSection {serverId} {models} providers={providerList} />
+
+		<SystemModelSection {serverId} {models} providers={providerList} />
 
 		<section>
 			<div class="mono-label">{t("연결")}</div>

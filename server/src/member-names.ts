@@ -32,7 +32,7 @@ export function mentionedMembers(text: string, names: readonly string[]): string
 }
 
 /** Tells the model which sessions the user named, and how to reach them. */
-export function memberHint(open: string, names: string[]): string {
-	const list = names.map((n) => `@${n}`).join(", ");
+export function memberHint(open: string, names: string[], purposes: Readonly<Record<string, string>> = {}): string {
+	const list = names.map((n) => (purposes[n] ? `@${n} (${purposes[n]})` : `@${n}`)).join(", ");
 	return `${open}The user mentioned ${list}: other sessions (agents) on this server. Use peer_send to give them work or ask them something (they run independently and see only what you send), and peer_read to look at what they said or did. Do not guess what they did.</pipaya-hint>`;
 }
