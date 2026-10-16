@@ -22,6 +22,7 @@ export const K = {
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
   groupOrder: "pipaya.grouporder", // sidebar group order set by dragging: { <serverId>: [groupId, ...] }
+  fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
 };
 

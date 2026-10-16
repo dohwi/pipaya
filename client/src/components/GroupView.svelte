@@ -156,7 +156,12 @@
 	const pct = (n: number) => `${(n * 100).toFixed(4)}%`;
 
 	// Zoom: the chosen cell grows from where it is to fill the group; Esc (handled in lib/actions) shrinks it back.
-	const zoomId = $derived(app.zoomId && geo.panes.some((p) => p.id === app.zoomId) ? app.zoomId : null);
+	// Full mode: the focused pane is always the zoomed one (the strip under the header picks it).
+	const full = $derived(app.isFull(group.id));
+	const zoomId = $derived.by(() => {
+		const want = full ? app.activeId : app.zoomId;
+		return want && geo.panes.some((p) => p.id === want) ? want : null;
+	});
 	// Transitions only run around a zoom change, so dragging a divider stays instant.
 	let animating = $state(false);
 	let animTimer: ReturnType<typeof setTimeout> | undefined;
@@ -171,7 +176,7 @@
 	});
 	// A zoom never outlives its group or session.
 	$effect(() => {
-		if (app.zoomId && !zoomId) app.zoomId = null;
+		if (!full && app.zoomId && !zoomId) app.zoomId = null;
 	});
 	$effect(() => () => {
 		clearTimeout(animTimer);

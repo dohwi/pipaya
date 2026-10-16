@@ -24,7 +24,15 @@
 	const focused = $derived(!grouped || id === app.activeId);
 	setPane(() => ({ id, focused }));
 
-	const zoomed = $derived(grouped && !!id && app.zoomId === id);
+	const group = $derived(grouped && id ? app.groupOf(id) : undefined);
+	const full = $derived(app.isFull(group?.id));
+	const zoomed = $derived(grouped && !!id && (full || app.zoomId === id));
+	/** The button: full mode toggles back to the grid, otherwise the temporary zoom. */
+	function toggleZoom() {
+		if (!id) return;
+		if (full && group) app.toggleFull(group.id);
+		else app.zoomId = zoomed ? null : id;
+	}
 	const chat = $derived(app.chatOf(id));
 	const session = $derived(app.session(id));
 	const state = $derived(id ? activityOf(app, id) : "idle");
@@ -61,10 +69,10 @@
 		<header
 			class="bar"
 			use:dragSource={{ id }}
-			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 크게 보기")}
+			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 전체 화면 전환")}
 			ondblclick={(e) => {
 				if ((e.target as HTMLElement).closest("button")) return;
-				app.zoomId = zoomed ? null : id;
+				if (group) app.toggleFull(group.id);
 			}}
 		>
 			<AgentBadge {id} {state} size={16} />
@@ -72,7 +80,7 @@
 				<span class="t">{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			</span>
-			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => (app.zoomId = zoomed ? null : id)} aria-label={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")} title={zoomed ? t("작게 보기 (Esc)") : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
+			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
 		</header>
 	{/if}

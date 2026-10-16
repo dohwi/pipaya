@@ -145,6 +145,8 @@ class AppStore {
   running = $state<Record<string, boolean>>({});
   /** The grouped session shown full-size in its group for a moment (Esc returns to the grid) */
   zoomId = $state<string | null>(null);
+  /** Groups in "full" mode (kept on this device): one pane fills the group and a strip under the header picks the pane. */
+  fullGroups = $state<string[]>(read<string[]>(K.fullGroups, []));
   awaiting = $state<Record<string, number>>({});
   unread = $state<Record<string, boolean>>({});
   /** Sessions whose last run ended in an error and have not been looked at yet */
@@ -240,6 +242,22 @@ class AppStore {
     if (g && !viewport.narrow)
       for (const id of panesOf(g.layout)) if (this.session(id)) out.add(id);
     return [...out];
+  }
+
+  private dropFull(groupId: string) {
+    if (!this.fullGroups.includes(groupId)) return;
+    this.fullGroups = this.fullGroups.filter((x) => x !== groupId);
+    write(K.fullGroups, this.fullGroups);
+  }
+
+  isFull(groupId: string | undefined): boolean {
+    return !!groupId && this.fullGroups.includes(groupId);
+  }
+
+  toggleFull(groupId: string) {
+    this.fullGroups = this.isFull(groupId) ? this.fullGroups.filter((x) => x !== groupId) : [...this.fullGroups, groupId];
+    this.zoomId = null;
+    write(K.fullGroups, this.fullGroups);
   }
 
   groupOf(sessionId: string): Group | undefined {
@@ -884,6 +902,7 @@ class AppStore {
       }
       case "group_deleted":
         this.groups = this.groups.filter((x) => x.id !== (e.data as { id: string }).id);
+        this.dropFull((e.data as { id: string }).id);
         break;
       case "session_deleted": {
         const id = e.data.id as string;
@@ -1986,6 +2005,7 @@ class AppStore {
     try {
       await this.api.deleteGroup(id);
       this.groups = this.groups.filter((g) => g.id !== id);
+      this.dropFull(id);
     } catch (e) {
       this.fail(e, t("그룹을 해제하지 못했습니다"));
     }
