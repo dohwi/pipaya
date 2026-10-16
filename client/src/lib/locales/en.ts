@@ -1157,7 +1157,6 @@ export const en: Record<string, string> = {
 	"나중에": "Later",
 	"앱 업데이트": "App updates",
 	"시작할 때 새 버전 확인": "Check for updates on launch",
-	"현재 버전 {version}": "Current version {version}",
 	"업데이트 확인": "Check for updates",
 	"확인하는 중…": "Checking…",
 	"최신 버전입니다": "You're up to date",
@@ -1281,5 +1280,7 @@ export const en: Record<string, string> = {
 	"서버가 앱보다 오래된 버전입니다. 일부 기능이 동작하지 않을 수 있습니다": "The server is older than the app. Some features may not work",
 	"서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)": "The server is older than the app. Run the update on the server (install.sh update)",
 	"서버 업데이트": "Update server",
+	"앱": "App",
+	"서버 버전": "Server",
 	"서버에 새 버전이 있습니다": "A new server version is available",
 };
