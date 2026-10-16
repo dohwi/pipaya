@@ -125,8 +125,6 @@
 	/* ---------- upstream model list ---------- */
 
 	let discovering = $state(false);
-	/** A new connection could not read its upstream model list: offer to save it without models. */
-	let discoverFailed = $state(false);
 	let discoverNote = $state("");
 	/** Fetch the upstream's own /models and add what is not listed yet. Fetched models keep their id fixed. */
 	async function discover(): Promise<boolean> {
@@ -192,7 +190,6 @@
 		void ensureCatalog();
 		formError = "";
 		discoverNote = "";
-		discoverFailed = false;
 		editing = null;
 		form = {
 			isNew: true,
@@ -250,14 +247,14 @@
 	function closeModel() {
 		if (form && editing !== null) {
 			const r = form.rows[editing];
-			if (fresh && r && !r.id.trim() && !r.name.trim() && form.rows.length > 1) form.rows.splice(editing, 1);
+			if (fresh && r && !r.id.trim() && !r.name.trim()) form.rows.splice(editing, 1);
 		}
 		formError = "";
 		fresh = false;
 		editing = null;
 	}
 	function removeModel() {
-		if (!form || editing === null || form.rows.length === 1) return;
+		if (!form || editing === null) return;
 		form.rows.splice(editing, 1);
 		fresh = false;
 		editing = null;
@@ -275,11 +272,11 @@
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
-		void save(false);
+		void save();
 	}
 
-	/** `withoutModels`: a new connection whose upstream has no readable model list is saved empty; models are added afterwards. */
-	async function save(withoutModels: boolean) {
+	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
+	async function save() {
 		const a = api();
 		const f = form;
 		if (!a || !f) return;
@@ -288,14 +285,14 @@
 		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
 		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
 		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
-		// A new connection is checked against its upstream first (endpoint + key); its models then come from there.
-		if (f.isNew && !withoutModels) {
+		// A new connection with no models yet tries to read them from its upstream; if that fails it is still saved, empty.
+		if (f.isNew && !f.rows.some((r) => r.id.trim())) {
 			busy = true;
-			const ok = await discover();
+			await discover();
 			busy = false;
-			discoverFailed = !ok;
-			if (!ok) return;
+			formError = "";
 		}
+		f.rows = f.rows.filter((r) => r.id.trim() || r.name.trim());
 		const out = [];
 		for (const [i, r] of f.rows.entries()) {
 			const ctx = Number(r.contextWindow);
@@ -457,7 +454,7 @@
 								{/if}
 							</section>
 						{/if}
-						<button type="button" class="btn ghost danger-text" disabled={form.rows.length === 1} onclick={removeModel}><Icon name="trash" /> {t("이 모델 삭제")}</button>
+						<button type="button" class="btn ghost danger-text" onclick={removeModel}><Icon name="trash" /> {t("이 모델 삭제")}</button>
 					{/if}
 				{:else}
 					<section class="fsec">
@@ -504,10 +501,9 @@
 								<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
 							</label>
 						{/if}
-						{#if form.isNew}<p class="note">{t("저장하면 이 주소에서 모델 목록을 불러옵니다. 모델 설정은 연결을 만든 뒤 수정에서 바꿀 수 있습니다.")}</p>{/if}
+						{#if form.isNew}<p class="note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
 					</section>
 
-					{#if !form.isNew}
 					<section class="fsec">
 						<div class="mhead">
 							<div class="mono-label">{t("모델 ({n})", { n: form.rows.length })}</div>
@@ -535,7 +531,6 @@
 						</div>
 						<button type="button" class="btn dashed" onclick={addModel}><Icon name="plus" /> {t("모델 추가")}</button>
 					</section>
-					{/if}
 				{/if}
 			</div>
 
@@ -546,9 +541,6 @@
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
 						<button type="button" class="btn ghost" onclick={close} disabled={busy}>{t("취소")}</button>
-						{#if form.isNew && discoverFailed}
-							<button type="button" class="btn" onclick={() => void save(true)} disabled={busy}>{t("모델 없이 저장")}</button>
-						{/if}
 						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
 					{/if}
 				</div>

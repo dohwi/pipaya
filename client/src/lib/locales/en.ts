@@ -356,9 +356,8 @@ export const en: Record<string, string> = {
 	"모델 ({n})": "Models ({n})",
 	"모델 추가": "Add model",
 	"저장 중…": "Saving…",
-	"모델 없이 저장": "Save without models",
 	"연결은 저장했지만 키를 저장하지 못했습니다: {error}": "The connection was saved, but the key could not be: {error}",
-	"저장하면 이 주소에서 모델 목록을 불러옵니다. 모델 설정은 연결을 만든 뒤 수정에서 바꿀 수 있습니다.": "Saving reads the model list from this address. Model settings can be changed in Edit once the connection exists.",
+	"모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.": "You can save without models. If empty, saving tries to read the model list from this address, and the connection is saved even if that fails.",
 	"선택\u0004optional": "optional",
 
 	/* ---- model picker ---- */
