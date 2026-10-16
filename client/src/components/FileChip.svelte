@@ -7,7 +7,7 @@
 	let { name, size, preview, onopen, onremove }: { name: string; size?: number; preview?: string; onopen?: () => void; onremove?: () => void } = $props();
 </script>
 
-<span class="chip">
+<span class="filechip">
 	<button type="button" class="open" onclick={() => onopen?.()} disabled={!onopen} aria-label={t("{name} 미리보기", { name })}>
 		{#if preview}
 			<img src={preview} alt="" />
@@ -25,7 +25,7 @@
 </span>
 
 <style>
-	.chip {
+	.filechip {
 		position: relative;
 		display: inline-flex;
 		flex: none;
