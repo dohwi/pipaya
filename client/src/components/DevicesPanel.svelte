@@ -101,6 +101,22 @@
 		return t("{n}일 전", { n: Math.floor(hour / 24) });
 	}
 	const mine = (d: NotificationDevice) => isOpen && d.id === notifications.id;
+
+	/**
+	 * A reinstall or app update registers the same phone again under a new id, so the old row lingers.
+	 * Show one row per physical device (same platform + name + OS): this window's own, else the live one, else the most recently seen.
+	 */
+	const shown = $derived.by(() => {
+		const best = new Map<string, NotificationDevice>();
+		const rank = (d: NotificationDevice) => (mine(d) ? 2 : d.live ? 1 : 0);
+		for (const d of devices ?? []) {
+			const key = d.name ? `${d.platform}|${d.name}|${d.os ?? ""}` : d.id;
+			const cur = best.get(key);
+			if (!cur || rank(d) > rank(cur) || (rank(d) === rank(cur) && (d.lastSeen ?? 0) > (cur.lastSeen ?? 0))) best.set(key, d);
+		}
+		const keep = new Set([...best.values()].map((d) => d.id));
+		return (devices ?? []).filter((d) => keep.has(d.id));
+	});
 </script>
 
 <div class="devices">
@@ -112,7 +128,7 @@
 		<p class="hint">{t("연결된 기기가 없습니다")}</p>
 	{:else if devices}
 		<ul>
-			{#each devices as d (d.id)}
+			{#each shown as d (d.id)}
 				<li class:live={d.live} animate:reflow in:rowIn out:rowOut>
 					<span class="kind" class:on={d.live} title={d.live ? t("연결됨") : t("연결 끊김")}><Icon name={icon(d.platform)} /></span>
 					<div class="meta">
