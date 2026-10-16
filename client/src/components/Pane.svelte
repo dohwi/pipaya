@@ -11,6 +11,7 @@
 	import PipayaMark from "./PipayaMark.svelte";
 	import { activityOf } from "../lib/activity";
 	import { dragSource } from "../lib/dnd.svelte";
+	import { marquee } from "../lib/fit-text";
 	import { setPane } from "../lib/pane";
 	import { app } from "../lib/store.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
@@ -92,7 +93,8 @@
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
-				<span class="t">{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}</span>
+				{#snippet label()}{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}{/snippet}
+				<span class="t" use:marquee={`${memberName ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>
@@ -257,6 +259,44 @@
 	.who.failed { color: var(--danger); }
 	.focused .t {
 		color: var(--text);
+	}
+	/* a title that does not fit flows by while the pane is focused, looping back to its start */
+	.t .track {
+		display: inline;
+	}
+	.t .dup {
+		display: none;
+	}
+	@media (hover: hover) {
+		.focused .t:global([data-over]) {
+			text-overflow: clip;
+			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+		}
+		.focused .t:global([data-over]) .track {
+			display: flex;
+			width: max-content;
+			animation: mq var(--mq-d, 8s) linear infinite;
+		}
+		.focused .t:global([data-over]) .mq,
+		.focused .t:global([data-over]) .dup {
+			display: block;
+			flex: none;
+			padding-right: 32px;
+		}
+	}
+	@keyframes mq {
+		from {
+			translate: 0;
+		}
+		to {
+			translate: -50%;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.t:global([data-over]) .track {
+			animation: none !important;
+		}
 	}
 	.ti {
 		display: inline-block;
