@@ -215,6 +215,9 @@ export class Api {
 		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);
 	saveCustomProvider = (id: string, input: CustomProviderInput) =>
 		this.req<CustomProvider>("PUT", `/configuration/providers/${encodeURIComponent(id)}`, input);
+	/** Re-read the connection's model list from its upstream now; resolves with the updated connection. */
+	refreshCustomProvider = (id: string) =>
+		this.req<CustomProvider>("POST", `/configuration/providers/${encodeURIComponent(id)}/refresh`);
 	deleteCustomProvider = (id: string) =>
 		this.req<{ ok: boolean }>("DELETE", `/configuration/providers/${encodeURIComponent(id)}`);
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
