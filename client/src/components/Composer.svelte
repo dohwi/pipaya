@@ -7,7 +7,6 @@
 
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { panesOf } from "../lib/layout";
 	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import { chipIn, chipOut, fadeIn, fadeOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
@@ -190,18 +189,14 @@
 			: [],
 	);
 
-	// ── @member: another session of this session's group, e.g. "@미나 와 얘기해서 진행해" ──
-	const groupInfo = $derived(pane.id ? app.groupOf(pane.id) : undefined);
+	// ── @member: any other active session, in a group or not, e.g. "@미나 와 얘기해서 진행해" ──
 	const members = $derived(
-		groupInfo && pane.id
-			? panesOf(groupInfo.layout).filter((id) => id !== pane.id && groupInfo.names?.[id]).map((id) => {
-				const s = app.session(id);
-				const fresh = !s || s.title === "New session";
-				// What the member is for follows its pane name (the session title); a session not yet named shows its folder.
-				const dir = s?.cwd.split("/").slice(-2).join("/") ?? "";
-				return { id, name: groupInfo.names[id]!, title: fresh ? dir : s.title, dir: fresh ? "" : dir, state: activityOf(app, id) };
-			})
-			: [],
+		app.sessions.filter((s) => s.id !== pane.id && !s.closed && s.name).map((s) => {
+			const fresh = s.title === "New session";
+			// What the member is for follows its pane name (the session title); a session not yet named shows its folder.
+			const dir = s.cwd.split("/").slice(-2).join("/");
+			return { id: s.id, name: s.name, title: fresh ? dir : s.title, dir: fresh ? "" : dir, state: activityOf(app, s.id) };
+		}),
 	);
 	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
 	const memberMatches = $derived(memberMention ? members.filter((m) => {
@@ -238,7 +233,7 @@
 			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
 		]
 		: memberMention
-			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("그룹 멤버") }))
+			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션") }))
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
@@ -576,7 +571,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running} class:disabled={app.net !== "online"} data-level={running && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("그룹 멤버") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("세션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if attachments.length}
 			<AttachmentStrip {attachments} onremove={removeAttachment} />

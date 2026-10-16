@@ -10,6 +10,8 @@ export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export interface SessionRecord {
 	id: string;
 	title: string;
+	/** How other sessions address this one (`@name`); unique among active sessions. */
+	name: string;
 	cwd: string;
 	provider: string;
 	model: string;
@@ -27,6 +29,7 @@ export interface SessionRecord {
 interface SessionRow {
 	id: string;
 	title: string;
+	name: string;
 	cwd: string;
 	provider: string;
 	model: string;
@@ -43,6 +46,7 @@ interface SessionRow {
 const toRecord = (r: SessionRow): SessionRecord => ({
 	id: r.id,
 	title: r.title,
+	name: r.name,
 	cwd: r.cwd,
 	provider: r.provider,
 	model: r.model,
@@ -57,11 +61,12 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "provider" | "model" | "thinkingLevel" | "approval" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "name" | "provider" | "model" | "thinkingLevel" | "approval" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	title: "title",
+	name: "name",
 	provider: "provider",
 	model: "model",
 	thinkingLevel: "thinking_level",
@@ -94,12 +99,13 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, approval, parent_id, created_at, updated_at)
-				 VALUES ($id, $title, $cwd, $provider, $model, $thinking, $system, $tools, $approval, $parent, $created, $updated)`,
+				`INSERT INTO sessions (id, title, name, cwd, provider, model, thinking_level, system_prompt, tools, approval, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $name, $cwd, $provider, $model, $thinking, $system, $tools, $approval, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
 				title: r.title,
+				name: r.name,
 				cwd: r.cwd,
 				provider: r.provider,
 				model: r.model,
@@ -131,6 +137,11 @@ export class SessionStore {
 				closed: opts.closed === undefined ? null : opts.closed ? 1 : 0,
 			}) as SessionRow[];
 		return rows.map(toRecord);
+	}
+
+	/** Lower-cased names of the active sessions (closed ones give theirs up). */
+	activeNames(): Set<string> {
+		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
 	}
 
 	/** Working directories that have sessions, with how many are active / closed. */

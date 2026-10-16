@@ -77,7 +77,7 @@ export interface Known {
 	templates: readonly { name: string }[];
 	skills: readonly { name: string }[];
 	agents: readonly { name: string }[];
-	/** Names of the other sessions in this session's group (`@name`) */
+	/** Names of the other active sessions (`@name`) */
 	members: readonly string[];
 	/** How many images are attached (#image1..#imageN are valid) */
 	images: number;

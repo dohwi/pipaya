@@ -18,7 +18,7 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
-import { memberHint, mentionedMembers, type GroupManager } from "./groups.ts";
+import { memberHint, mentionedMembers, nextMemberName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -58,8 +58,6 @@ export class SessionManager {
 		private templates?: TemplateService,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
-		/** Set once the group manager exists (it needs the bus, like this class); lets sessions in a group reach each other. */
-		private groups?: () => GroupManager | undefined,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -76,6 +74,7 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
+			name: nextMemberName(this.store.activeNames()),
 			cwd,
 			provider,
 			model,
@@ -267,6 +266,8 @@ export class SessionManager {
 			if (patch.tools) clean.tools = this.validateTools(patch.tools);
 		}
 
+		// A closed session gives its name up; on resume it takes it back unless another session has it by now.
+		if (patch.closed === false && current.closed && this.store.activeNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.store.activeNames());
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 
@@ -354,9 +355,9 @@ export class SessionManager {
 		if (marker) content.push({ type: "text", text: marker });
 		const asked = mentionedAgents(input.text, this.subagents?.agents(record.cwd).map((a) => a.name) ?? []);
 		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
-		const ms = this.groups?.()?.membership(id);
-		if (ms?.peers.length) {
-			const asked = mentionedMembers(input.text, ms.peers.map((p) => p.name));
+		const peers = this.peers(id);
+		if (peers.length) {
+			const asked = mentionedMembers(input.text, peers.map((p) => p.name));
 			if (asked.length) content.push({ type: "text", text: memberHint(HINT_OPEN, asked) });
 		}
 		if (this.skills) {
@@ -649,7 +650,7 @@ export class SessionManager {
 		const sub = this.subagents;
 		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
 		ctx.sessionId = sessionId;
-		if (this.groups) ctx.peers = this.peerApi(sessionId);
+		ctx.peers = this.peerApi(sessionId);
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.
 			ctx.delegateAgents = () => sub.agents(this.store.get(sessionId)?.cwd);
@@ -667,23 +668,27 @@ export class SessionManager {
 		return ctx;
 	}
 
-	/** Messages to and from the other sessions of the group this session is in; membership is read fresh on every call. */
+	/** The other active sessions, which a session can address by name; read fresh on every call. */
+	private peers(sessionId: string): { name: string; sessionId: string }[] {
+		return this.store.list({ limit: 1000, closed: false }).filter((r) => r.id !== sessionId && r.name).map((r) => ({ name: r.name, sessionId: r.id }));
+	}
+
+	/** Messages to and from the other sessions of this server. */
 	private peerApi(sessionId: string): NonNullable<ToolContext["peers"]> {
 		const find = (name: string) => {
-			const ms = this.groups?.()?.membership(sessionId);
-			if (!ms) throw badRequest("this session is not in a group");
-			const peer = ms.peers.find((p) => p.name.toLowerCase() === name.toLowerCase());
-			if (!peer) throw notFound(`group member @${name} (members: ${ms.peers.map((p) => `@${p.name}`).join(", ") || "none"})`);
-			return { ms, peer };
+			const peers = this.peers(sessionId);
+			const peer = peers.find((p) => p.name.toLowerCase() === name.toLowerCase());
+			if (!peer) throw notFound(`session @${name} (sessions: ${peers.map((p) => `@${p.name}`).join(", ") || "none"})`);
+			return { self: this.store.get(sessionId)!.name, peer };
 		};
 		return {
-			names: () => this.groups?.()?.membership(sessionId)?.peers.map((p) => p.name) ?? [],
+			names: () => this.peers(sessionId).map((p) => p.name),
 			send: async (name, text) => {
-				const { ms, peer } = find(name);
+				const { self, peer } = find(name);
 				const sent = (this.peerSends.get(sessionId) ?? 0) + 1;
 				if (sent > MAX_PEER_SENDS) throw conflict(`at most ${MAX_PEER_SENDS} peer messages per run; stop and report to the user instead`);
 				this.peerSends.set(sessionId, sent);
-				const body = `[from @${ms.self}, a session in your group "${ms.group.name}"; answer with peer_send to @${ms.self} only if a reply is needed]\n${text}`;
+				const body = `[from @${self}, another session on this server; answer with peer_send to @${self} only if a reply is needed]\n${text}`;
 				const busy = this.live.get(peer.sessionId)?.running ?? false;
 				await this.send(peer.sessionId, { text: body, mode: busy ? "follow_up" : "prompt" });
 				return `Sent to @${peer.name}${busy ? " (it is busy; the message waits until it finishes its turn)" : ""}. It works on its own; use peer_read to check on it later.`;

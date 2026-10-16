@@ -125,7 +125,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		log: (m) => server.log.warn(m),
 	});
 	const templates = new TemplateService({ home: opts.home, defaultWorkdir: () => configuration.defaultWorkdir() });
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates, () => configuration.approvalInfo().effective, () => groups);
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates, () => configuration.approvalInfo().effective);
 	extensions.attach({
 		cwd: (id) => store.get(id)?.cwd,
 		send: (id, text, mode) => sessions.send(id, { text, mode }),

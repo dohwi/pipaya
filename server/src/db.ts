@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { nextMemberName } from "./member-names.ts";
 
 const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
@@ -125,6 +126,27 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
 	// v18: each session in a group gets a name (JSON { sessionId: name }), so members can be addressed as @name.
 	(db) => { if (!(db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups ADD COLUMN names TEXT NOT NULL DEFAULT '{}'"); },
+	// v19: the @name belongs to the session, not to a group, so any two sessions can address each other. Existing sessions keep the
+	// name they had in their group; the rest are numbered in creation order (the pool lives in groups.ts, so the names are given in code).
+	(db) => {
+		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+		const taken = new Set<string>();
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const g of db.query("SELECT names FROM groups").all() as { names: string }[]) {
+			for (const [id, name] of Object.entries(JSON.parse(g.names || "{}") as Record<string, string>)) {
+				if (taken.has(name.toLowerCase())) continue;
+				const row = db.query("SELECT closed FROM sessions WHERE id = $id").get({ id }) as { closed: number } | null;
+				if (!row || row.closed) continue;
+				taken.add(name.toLowerCase());
+				set.run({ id, name });
+			}
+		}
+		for (const s of db.query("SELECT id FROM sessions WHERE name = '' AND closed = 0 ORDER BY created_at, id").all() as { id: string }[]) {
+			const name = nextMemberName(taken);
+			taken.add(name.toLowerCase());
+			set.run({ id: s.id, name });
+		}
+	},
 ];
 
 export function openDb(path: string): Database {
