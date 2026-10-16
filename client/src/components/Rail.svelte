@@ -18,8 +18,7 @@
 		server: Server;
 		current: boolean;
 		groups: ReturnType<typeof sidebarBlocks>["groups"];
-		loose: Session[];
-		terms: TerminalInfo[];
+		dirs: ReturnType<typeof sidebarBlocks>["dirs"];
 		/** activity of this server's sessions, by id */
 		state: Record<string, Activity>;
 	}
@@ -43,7 +42,7 @@
 			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
 			const state: Record<string, Activity> = {};
 			for (const x of sessions) state[x.id] = activityOf(view, x.id);
-			return [{ server, current, groups: groups.filter((b) => b.sessions.length || b.terminals.length), loose: dirs.flatMap((d) => d.sessions), terms: dirs.flatMap((d) => d.terminals), state }];
+			return [{ server, current, groups: groups.filter((b) => b.sessions.length || b.terminals.length), dirs: dirs.filter((d) => d.sessions.length || d.terminals.length), state }];
 		}),
 	);
 	const multi = $derived(sections.length > 1);
@@ -112,9 +111,12 @@
 >
 		{#each sections as sec, si (sec.server.id)}
 			{#if si > 0}<li class="sep srv" role="separator" title={app.serverLabel(sec.server)}></li>{/if}
-			{#each sec.loose as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
-			{#each sec.terms as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
-			{#if sec.groups.length && (sec.loose.length || sec.terms.length)}<li class="sep" role="separator"></li>{/if}
+			{#each sec.dirs as d, di (d.path)}
+				{#if di > 0}<li class="sep" role="separator"></li>{/if}
+				{#each d.sessions as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
+				{#each d.terminals as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
+			{/each}
+			{#if sec.groups.length && sec.dirs.length}<li class="sep" role="separator"></li>{/if}
 			{#each sec.groups as b, i (b.group.id)}
 				{#if i > 0}<li class="sep" role="separator"></li>{/if}
 				<li

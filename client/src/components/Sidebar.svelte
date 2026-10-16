@@ -909,6 +909,12 @@
 	.settingsdot {
 		margin-left: auto;
 	}
+	/* hairline between workspaces / groups */
+	.dirblock + .dirblock {
+		margin-top: 6px;
+		padding-top: 6px;
+		border-top: 1px solid var(--border);
+	}
 	.grp {
 		margin-top: 4px;
 		border-radius: var(--radius);
