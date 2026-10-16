@@ -169,6 +169,8 @@ class AppStore {
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);
+  /** Message the next prompt answers (the Reply button); the composer shows it as a badge and quotes it on send. */
+  replyTo = $state<{ text: string; who?: string } | null>(null);
   settingsOpen = $state(false);
   /** Skills dialog (opened from the footer badge). cwd decides which project's skills; sessionId marks the ones that conversation already uses. */
   skillsDialog = $state<{ cwd: string; sessionId: string | null } | null>(null);

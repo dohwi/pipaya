@@ -2,7 +2,7 @@
 	import type { Attachment as DraftAttachment } from "../lib/images";
 	/** Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. */
 	import type { FileDraft } from "../lib/files";
-	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[] }>();
+	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
 </script>
 
 <script lang="ts">
@@ -23,6 +23,7 @@
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { fileToAttachment, type Attachment } from "../lib/images";
+	import { makeQuote } from "../lib/quote";
 	import { fileToDraft, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL } from "../lib/files";
 	import FileChip from "./FileChip.svelte";
 	import { isTouch } from "../lib/format";
@@ -40,6 +41,9 @@
 	let attachments = $state<Attachment[]>([]);
 	/** Non-image files (and images a text-only model cannot see): sent as-is, saved in the working directory */
 	let files = $state<FileDraft[]>([]);
+	/** Message being answered: shown as a badge above the input, quoted into the prompt on send (never pasted into the text). */
+	let reply = $state<{ text: string; who?: string } | null>(null);
+	const replyPreview = $derived(reply ? reply.text.replace(/\s+/g, " ").trim() : "");
 	let dragging = $state(false);
 	let composing = false;
 
@@ -93,7 +97,7 @@
 	function stash() {
 		if (draftKey === undefined) return;
 		const k = draftKey ?? "";
-		if (text || attachments.length || files.length) drafts.set(k, { text, attachments, files });
+		if (text || attachments.length || files.length || reply) drafts.set(k, { text, attachments, files, reply });
 		else drafts.delete(k);
 	}
 	$effect(() => {
@@ -105,6 +109,7 @@
 			text = d?.text ?? "";
 			attachments = d?.attachments ?? [];
 			files = d?.files ?? [];
+			reply = d?.reply ?? null;
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => ta?.focus());
 		return () => untrack(stash);
@@ -118,6 +123,15 @@
 		// Keep what is already typed: append instead of overwriting.
 		const cur = untrack(() => text);
 		setText(cur.trim() ? `${cur.replace(/\s+$/, "")}\n${p}` : p);
+	});
+
+	// The Reply button on a message hands it over once.
+	$effect(() => {
+		const r = app.replyTo;
+		if (r === null || !pane.focused) return;
+		app.replyTo = null;
+		reply = r;
+		ta?.focus();
 	});
 
 	// ── commands and finite arguments share the recommendation menu above the input ──
@@ -344,6 +358,7 @@
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
 		attachments = [];
+		reply = null;
 		releaseFiles(files);
 		files = [];
 	}
@@ -359,7 +374,7 @@
 		if (rejectUnknownCommand()) return;
 		const filtered = await extensions.filterComposer(text);
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
-		const body = filtered.text;
+		const body = (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text;
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
 		const ok = await app.send(body, imgs, pane.id, files);
@@ -378,7 +393,8 @@
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
 		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
 		const key = pane.id;
-		const ok = await (kind === "steer" ? app.steer(filtered.text, imgs, pane.id, files) : app.queue(filtered.text, imgs, pane.id, files));
+		const body = (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text;
+		const ok = await (kind === "steer" ? app.steer(body, imgs, pane.id, files) : app.queue(body, imgs, pane.id, files));
 		if (ok) clearSent(key);
 	}
 
@@ -574,6 +590,14 @@
 	<div class="box" class:glow-working={running} class:disabled={app.net !== "online"} data-level={running && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("세션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+		{/if}
+		{#if reply}
+			<div class="reply-badge" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>
+				<Icon name="reply" />
+				<span class="rwho">{reply.who ?? t("답장")}</span>
+				<span class="rtext">{replyPreview}</span>
+				<button class="rx" onclick={() => (reply = null)} aria-label={t("답장 취소")} title={t("답장 취소")}>×</button>
+			</div>
 		{/if}
 		{#if attachments.length}
 			<AttachmentStrip {attachments} onremove={removeAttachment} />
@@ -861,6 +885,25 @@
 		}
 	}
 	/* bottom padding: the scroller clips vertically too, and the chips' border and focus ring end there */
+	.reply-badge {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 10px 14px 0;
+		padding: 5px 6px 5px 10px;
+		max-width: max-content;
+		min-width: 0;
+		border-radius: var(--radius-pill);
+		background: var(--accent-soft);
+		border-left: 3px solid var(--border-strong);
+		font-size: var(--fs-xs);
+		color: var(--text-dim);
+	}
+	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; }
+	.rwho { font-weight: 600; color: var(--text); flex: none; }
+	.rtext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.rx { flex: none; width: 18px; height: 18px; line-height: 16px; border-radius: 50%; padding: 0; color: inherit; }
+	.rx:hover { background: var(--accent-soft); color: var(--text); }
 	.files {
 		display: flex;
 		gap: 10px;

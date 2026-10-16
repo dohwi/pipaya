@@ -9,7 +9,7 @@
 	import { compact, duration } from "../lib/format";
 	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
-	import { makeQuote, parsePeer, splitQuote } from "../lib/quote";
+	import { parsePeer, splitQuote } from "../lib/quote";
 	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
 
 	/**
@@ -33,9 +33,9 @@
 	const peer = $derived(item.kind === "user" ? parsePeer(item.text) : null);
 	const shown = $derived(item.kind === "user" ? splitQuote(peer ? peer.body : item.text) : { quote: "", rest: "" });
 
-	/** Hand a quote of this message to the composer, so the next prompt answers it. */
+	/** Hand this message to the composer as a reply badge, so the next prompt answers it. */
 	function reply() {
-		app.prefill = makeQuote(item.kind === "user" ? (peer ? peer.body : item.text) : plainText, peer ? `@${peer.from}` : undefined);
+		app.replyTo = { text: item.kind === "user" ? (peer ? peer.body : item.text) : plainText, who: peer ? `@${peer.from}` : undefined };
 	}
 
 	let copied = $state(false);
