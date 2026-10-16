@@ -2,6 +2,7 @@
 	import { t } from "../../lib/i18n";
 	import { untrack } from "svelte";
 	import Accordion from "../Accordion.svelte";
+	import Select from "../Select.svelte";
 	import { describeSettingErrors, fillSettingDefaults, resolveSettings, type SettingField } from "../../lib/extensions/schema";
 
 	interface Props {
@@ -81,10 +82,19 @@
 			{:else}
 				<label class="name" for={fieldId(field.key)}>{field.label}{#if field.required}<span class="req" aria-hidden="true"> *</span><span class="sr-only"> ({t("필수")})</span>{/if}</label>
 				{#if field.type === "select"}
-					<select id={fieldId(field.key)} {disabled} required={field.required} aria-required={field.required ? "true" : undefined} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(field)} value={typeof draft[field.key] === "string" ? draft[field.key] as string : ""} onchange={(event) => { draft[field.key] = event.currentTarget.value; }}>
-						{#if !field.required && field.default === undefined}<option value="">{t("선택 안 함")}</option>{:else if typeof draft[field.key] !== "string" || draft[field.key] === ""}<option value="" disabled>{t("선택하세요")}</option>{/if}
-						{#each field.options ?? [] as option (option.value)}<option value={option.value}>{option.label}</option>{/each}
-					</select>
+					<Select
+						id={fieldId(field.key)}
+						{disabled}
+						required={field.required}
+						invalid={!!error}
+						describedby={describedBy(field)}
+						value={typeof draft[field.key] === "string" ? draft[field.key] as string : ""}
+						onchange={(value) => { draft[field.key] = value; }}
+						options={[
+							...(!field.required && field.default === undefined ? [{ value: "", label: t("선택 안 함") }] : typeof draft[field.key] !== "string" || draft[field.key] === "" ? [{ value: "", label: t("선택하세요"), disabled: true }] : []),
+							...(field.options ?? []),
+						]}
+					/>
 				{:else if field.type === "number"}
 					<input id={fieldId(field.key)} type="number" inputmode="decimal" step="any" min={field.min} max={field.max} placeholder={field.placeholder} {disabled} aria-required={field.required ? "true" : undefined} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(field)} value={typeof draft[field.key] === "number" ? draft[field.key] as number : ""} oninput={(event) => { const el = event.currentTarget; draft[field.key] = el.value === "" ? null : el.valueAsNumber; }} />
 				{:else}
@@ -127,16 +137,16 @@
 	.error { margin: 0; font-size: var(--fs-xs); color: var(--danger); overflow-wrap: anywhere; }
 	.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }
-	input[type="text"], input[type="password"], input[type="number"], select, textarea {
+	input[type="text"], input[type="password"], input[type="number"], textarea {
 		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: 38px;
 		border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text);
 		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
 	}
 	textarea { height: auto; min-height: 110px; resize: vertical; padding: 10px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
-	input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
-	.invalid input:not([type="checkbox"]), .invalid select, textarea[aria-invalid="true"] { border-color: var(--danger); }
-	input:disabled, select:disabled, textarea:disabled { opacity: 0.6; }
+	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
+	input:disabled, textarea:disabled { opacity: 0.6; }
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.advanced { margin-top: 4px; }

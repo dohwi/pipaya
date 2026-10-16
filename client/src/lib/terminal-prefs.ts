@@ -8,8 +8,13 @@ export interface TerminalPrefs {
   scrollback: number;
 }
 
+/** Maple Mono NGS NF when the device has it; the bundled Maple Mono (app.css) is what draws otherwise. */
+export const DEFAULT_TERMINAL_FONT = '"Maple Mono NGS NF", "Maple Mono NF", "Maple Mono"';
+/** The default before the Nerd Font was preferred: a stored copy of it is the untouched default, not a choice. */
+const LEGACY_DEFAULT_FONT = '"Maple Mono"';
+
 export const DEFAULT_TERMINAL: TerminalPrefs = {
-  fontFamily: '"Maple Mono"',
+  fontFamily: DEFAULT_TERMINAL_FONT,
   fontSize: 13,
   lineHeight: 1.15,
   cursorBlink: true,
@@ -25,12 +30,17 @@ export const TERMINAL_LIMITS = {
 const clamp = (v: unknown, min: number, max: number, fallback: number) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 
+function fontFamily(v: unknown): string {
+  const f = typeof v === "string" ? v.trim().slice(0, 300) : "";
+  return !f || f === LEGACY_DEFAULT_FONT ? DEFAULT_TERMINAL_FONT : f;
+}
+
 /** Keep only valid fields of a stored value; anything missing or broken falls back to the default. */
 export function sanitizeTerminal(raw: unknown): TerminalPrefs {
   const r = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const L = TERMINAL_LIMITS;
   return {
-    fontFamily: typeof r.fontFamily === "string" && r.fontFamily.trim() ? r.fontFamily.trim().slice(0, 300) : DEFAULT_TERMINAL.fontFamily,
+    fontFamily: fontFamily(r.fontFamily),
     fontSize: Math.round(clamp(r.fontSize, L.fontSize.min, L.fontSize.max, DEFAULT_TERMINAL.fontSize)),
     lineHeight: Math.round(clamp(r.lineHeight, L.lineHeight.min, L.lineHeight.max, DEFAULT_TERMINAL.lineHeight) * 100) / 100,
     cursorBlink: typeof r.cursorBlink === "boolean" ? r.cursorBlink : DEFAULT_TERMINAL.cursorBlink,

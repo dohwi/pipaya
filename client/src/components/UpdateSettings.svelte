@@ -5,6 +5,8 @@
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { app } from "../lib/store.svelte";
 	import Switch from "./Switch.svelte";
+	import SettingRow from "./SettingRow.svelte";
+	import { collapseIn, collapseOut } from "../lib/motion";
 
 	const android = notificationPlatform() === "android";
 	const checking = $derived(updater.phase === "checking");
@@ -43,10 +45,9 @@
 			{checking || serverUpdater.phase === "checking" ? t("확인하는 중…") : t("업데이트 확인")}
 		</button>
 	</div>
-	<div class="row">
-		<span>{t("시작할 때 새 버전 확인")}</span>
+	<SettingRow label={t("시작할 때 새 버전 확인")}>
 		<Switch checked={updater.auto} label={t("시작할 때 새 버전 확인")} onchange={(on) => updater.setAuto(on)} />
-	</div>
+	</SettingRow>
 	<div class="card">
 		<div class="item">
 			<div class="meta">
@@ -63,7 +64,7 @@
 			{/if}
 		</div>
 		{#if downloading}
-			<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(updater.progress * 100)}>
+			<div class="bar" in:collapseIn out:collapseOut role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(updater.progress * 100)}>
 				<span style:width="{Math.round(updater.progress * 100)}%"></span>
 			</div>
 		{/if}
@@ -92,8 +93,8 @@
 			</div>
 		{/if}
 	</div>
-	{#if updater.error}<p class="error" role="alert">{updater.error}</p>{/if}
-	{#if serverUpdater.error}<p class="error" role="alert">{serverUpdater.error}</p>{/if}
+	{#if updater.error}<p class="error" role="alert" in:collapseIn out:collapseOut>{updater.error}</p>{/if}
+	{#if serverUpdater.error}<p class="error" role="alert" in:collapseIn out:collapseOut>{serverUpdater.error}</p>{/if}
 	<p class="hint">
 		{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}
 	</p>
@@ -102,7 +103,6 @@
 <style>
 	.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 	.label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
-	.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: var(--fs-sm); }
 	.head .btn { flex: none; white-space: nowrap; }
 	.head .btn svg { width: 14px; height: 14px; }
 	.spin { animation: spin 0.9s linear infinite; }

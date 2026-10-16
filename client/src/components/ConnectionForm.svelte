@@ -18,6 +18,7 @@
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import Switch from "./Switch.svelte";
+	import Select from "./Select.svelte";
 	import Badge from "./Badge.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
@@ -487,9 +488,7 @@
 						</label>
 						<label>
 							<span>{t("API 형식")}</span>
-							<select class="field" bind:value={form.api}>
-								{#each formats as f (f.id)}<option value={f.id}>{t(f.label)}</option>{/each}
-							</select>
+							<Select value={form.api} onchange={(api) => { if (form) form.api = api; }} options={formats.map((f) => ({ value: f.id, label: t(f.label) }))} />
 						</label>
 						<div class="switchrow">
 							<span class="swtext">

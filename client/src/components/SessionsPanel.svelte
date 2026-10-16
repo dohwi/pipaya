@@ -10,6 +10,7 @@
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
 	import Switch from "./Switch.svelte";
+	import Select from "./Select.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
 	let { serverId }: { serverId: string } = $props();
@@ -169,11 +170,7 @@
 			<div class="opts" in:collapseIn out:collapseOut>
 				<label class="opt">
 					<span>{t("마지막 사용 후")}</span>
-					<select class="field" value={policy.days} disabled={saving} onchange={(e) => savePolicy({ ...policy, days: Number(e.currentTarget.value) })} aria-label={t("자동 삭제 기간")}>
-						{#each DAY_CHOICES.includes(policy.days) ? DAY_CHOICES : [...DAY_CHOICES, policy.days].sort((a, b) => a - b) as d (d)}
-							<option value={d}>{t("{n}일", { n: d })}</option>
-						{/each}
-					</select>
+					<Select size="sm" width="auto" value={policy.days} disabled={saving} label={t("자동 삭제 기간")} onchange={(days) => savePolicy({ ...policy, days })} options={(DAY_CHOICES.includes(policy.days) ? DAY_CHOICES : [...DAY_CHOICES, policy.days].sort((a, b) => a - b)).map((d) => ({ value: d, label: t("{n}일", { n: d }) }))} />
 					<span>{t("지나면 삭제")}</span>
 				</label>
 				<div class="opt check">
@@ -308,8 +305,7 @@
 		gap: 8px;
 		font-size: var(--fs-sm);
 	}
-	.opt .field {
-		width: auto;
+	.opt :global(.sel) {
 		min-width: 96px;
 	}
 	.opt.check {

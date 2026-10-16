@@ -24,6 +24,7 @@
 	import { paneIn } from "../../lib/motion";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { getContext, setContext, tick } from "svelte";
+	import Select from "../Select.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
 	import ExtensionGauge from "./ExtensionGauge.svelte";
 	import ExtensionIcon from "./ExtensionIcon.svelte";
@@ -474,21 +475,16 @@
 	{@const current = textOf(node)}
 	<div class="ui-field">
 		<label for={id}>{node.label}{#if node.required}<span class="req" aria-hidden="true"> *</span>{/if}</label>
-		<select
+		<Select
 			{id}
-			class="control"
 			value={current}
 			required={node.required}
 			disabled={locked || node.disabled}
-			aria-invalid={message ? "true" : undefined}
-			aria-describedby={message ? domId(namespace, node.id, "error") : undefined}
-			onchange={(event) => commitChoice(node, event)}
-		>
-			<option value="">{t("선택해 주세요")}</option>
-			{#each node.options as option (option.value)}
-				<option value={option.value}>{option.label}</option>
-			{/each}
-		</select>
+			invalid={!!message}
+			describedby={message ? domId(namespace, node.id, "error") : undefined}
+			onchange={(value) => { onchange(node.id, value); void emit({ type: "change", id: node.id, value }, node.id); }}
+			options={[{ value: "", label: t("선택해 주세요") }, ...node.options]}
+		/>
 		{@render note(node.id, message)}
 	</div>
 {:else if node.type === "checkbox"}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ApprovalMode } from "../lib/types";
 	import { approvalMode } from "../lib/store-model";
-	import { paneIn } from "../lib/motion";
+	import { collapseIn, collapseOut, fadeIn, paneIn } from "../lib/motion";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { ACTIONS, formatCombo } from "../lib/keys";
 	import { rovingKeys } from "../lib/roving";
@@ -13,6 +13,7 @@
 	import Backup from "./Backup.svelte";
 	import ServerForm from "./ServerForm.svelte";
 	import Switch from "./Switch.svelte";
+	import SettingRow from "./SettingRow.svelte";
 	import Segmented from "./Segmented.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
@@ -154,7 +155,7 @@
 
 		<div class="body">
 			{#if words.length}
-				<div class="pane" role="region" aria-label={t("검색 결과")}>
+				<div class="pane" role="region" aria-label={t("검색 결과")} in:fadeIn>
 					{#if !hits.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
 					<ul class="hits">
 						{#each hits as h (h.key)}
@@ -184,7 +185,7 @@
 					<div class="mono-label">{t("언어")}</div>
 					<Segmented variant="cards" columns={3} label={t("언어")} value={getLangPref()} onchange={setLangPref} options={langOptions.map((l) => ({ id: l.tag, label: l.name, lang: l.tag === "system" ? undefined : l.tag }))} />
 					{#if getLangPref() === "system"}
-						<span class="hint">{t("기기 언어를 따릅니다: {name}", { name: languageName(systemLang(navigator.languages)) })}</span>
+						<span class="hint" in:collapseIn out:collapseOut>{t("기기 언어를 따릅니다: {name}", { name: languageName(systemLang(navigator.languages)) })}</span>
 					{/if}
 				</section>
 
@@ -206,19 +207,17 @@
 
 				<section>
 					<div class="mono-label">{t("질문 허용")}</div>
-					<div class="switch">
-						<span>{t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}</span>
+					<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
 						<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
-					</div>
+					</SettingRow>
 					<span class="hint">{t("끄면 에이전트는 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다.")}</span>
 				</section>
 
 				<section>
 					<div class="mono-label">{t("알림음")}</div>
-					<div class="switch">
-						<span>{t("작업 완료 · 확인 필요 · 실패 때 소리 재생")}</span>
+					<SettingRow label={t("작업 완료 · 확인 필요 · 실패 때 소리 재생")}>
 						<Switch checked={app.prefs.soundOn} label={t("알림음")} onchange={(on) => app.prefs.setSound(on)} />
-					</div>
+					</SettingRow>
 					<label class="volume" class:off={!app.prefs.soundOn}>
 						<span>{t("크기")}</span>
 						<input
@@ -326,20 +325,13 @@
 			left: 26px;
 		}
 	}
-	.switch {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 14px;
-		font-size: var(--fs-md);
-		line-height: 1.4;
-	}
 	.volume {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		font-size: var(--fs-md);
 		line-height: 1.4;
+		transition: opacity var(--motion-normal) var(--ease-std);
 	}
 	.volume span {
 		flex: none;
