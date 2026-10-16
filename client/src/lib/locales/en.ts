@@ -498,7 +498,7 @@ export const en: Record<string, string> = {
 
 	/* ---- settings ---- */
 	"일반": "General",
-	"언어 · 테마 · 도구 승인 · 질문 · 알림음": "Language · theme · tool approval · questions · notification sound",
+	"언어 · 테마 · 도구 승인 · 질문 · 알림음 · 터미널": "Language · theme · tool approval · questions · notification sound · terminal",
 	"질문 허용": "Allow questions",
 	"에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다": "The agent may ask you questions during a run and wait for your answer",
 	"끄면 에이전트는 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다.": "When off, the agent makes assumptions instead of asking. Saved on the server; applies to every chat.",
@@ -528,6 +528,17 @@ export const en: Record<string, string> = {
 	"작업 완료 · 확인 필요 · 실패 때 소리 재생": "Play a sound when a run finishes, needs a response, or fails",
 	"크기": "Volume",
 	"알림음 크기": "Notification volume",
+	"기본값으로": "Reset to default",
+	"글꼴": "Font",
+	"터미널 글꼴": "Terminal font",
+	"글자 크기": "Font size",
+	"터미널 글자 크기": "Terminal font size",
+	"줄 높이": "Line height",
+	"터미널 줄 높이": "Terminal line height",
+	"스크롤백 줄 수": "Scrollback lines",
+	"터미널 스크롤백 줄 수": "Terminal scrollback lines",
+	"커서 깜빡임": "Blinking cursor",
+	"기본 글꼴은 Maple Mono입니다. 이 기기에 설치된 글꼴 이름도 쓸 수 있고, 목록은 쉼표로 이어 씁니다. 바로 적용되며 이 기기에만 저장됩니다.": "The default font is Maple Mono. You can also use fonts installed on this device; separate several with commas. Applies immediately and is saved on this device only.",
 	"보고 있는 대화가 끝날 때는 울리지 않습니다. 승인 요청은 보고 있어도 울립니다.": "No sound when the chat you're viewing finishes. Approval requests still sound even while you're viewing.",
 
 	/* ---- shortcuts ---- */
@@ -541,7 +552,6 @@ export const en: Record<string, string> = {
 	"입력창에서 글자를 쓰는 중에는 실행되지 않습니다": "Doesn't run while you're typing in the composer",
 	"키를 누르세요…": "Press keys…",
 	"없음": "None",
-	"기본값으로": "Reset to default",
 	"{name} 기본값으로": "Reset {name} to default",
 	"서버에 연결되어 있지 않습니다": "Not connected to a server",
 	"위의 시스템 알림 스위치가 꺼져 있습니다. 켠 뒤 다시 시험하세요": "The system notifications switch above is off. Turn it on and try again",

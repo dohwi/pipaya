@@ -19,6 +19,7 @@ export const K = {
   volumeV1: "pipaya.volume", // old scale, 0-100 where 70 was the base loudness
   escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
   favModels: "pipaya.fav.models", // "<provider>\u0000<modelId>"; per server: pipaya.fav.models.<serverId> (legacy: one global list)
+  terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
   groupOrder: "pipaya.grouporder", // sidebar group order set by dragging: { <serverId>: [groupId, ...] }

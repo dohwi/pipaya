@@ -18,6 +18,7 @@
 	let status = $state<"connecting" | "open" | "offline" | "exited">("connecting");
 	let exitCode = $state<number | null>(null);
 	let term: Terminal | undefined;
+	let refitNow: (() => void) | undefined;
 
 	function css(name: string, fallback: string) {
 		return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -44,6 +45,22 @@
 		void app.prefs.resolvedDark;
 		if (term) term.options.theme = theme();
 	});
+	/** The chosen family first, then the app's mono stack so Korean and missing glyphs still draw. */
+	function fontStack() {
+		return `${app.prefs.terminal.fontFamily}, ${css("--mono", "ui-monospace, monospace")}`;
+	}
+	$effect(() => {
+		const p = app.prefs.terminal;
+		const xt = term;
+		if (!xt) return;
+		xt.options.fontFamily = fontStack();
+		xt.options.fontSize = p.fontSize;
+		xt.options.lineHeight = p.lineHeight;
+		xt.options.cursorBlink = p.cursorBlink;
+		xt.options.scrollback = p.scrollback;
+		// Cell size changed: fit again (the resize observer does not fire for this).
+		requestAnimationFrame(() => refitNow?.());
+	});
 	$effect(() => {
 		if (focused && term && status !== "exited") term.focus();
 	});
@@ -53,11 +70,11 @@
 		if (!host || !conn) return;
 		const fit = new FitAddon();
 		const xt = new Terminal({
-			fontFamily: css("--mono", "ui-monospace, monospace"),
-			fontSize: 13,
-			lineHeight: 1.15,
-			cursorBlink: true,
-			scrollback: 5000,
+			fontFamily: fontStack(),
+			fontSize: app.prefs.terminal.fontSize,
+			lineHeight: app.prefs.terminal.lineHeight,
+			cursorBlink: app.prefs.terminal.cursorBlink,
+			scrollback: app.prefs.terminal.scrollback,
 			allowProposedApi: false,
 			convertEol: false,
 			theme: theme(),
@@ -86,6 +103,14 @@
 				/* not laid out yet */
 			}
 		};
+
+		refitNow = refit;
+		// A web font that arrives after the first measurement leaves wrong cell sizes: measure again once it is in.
+		void document.fonts?.load(`${app.prefs.terminal.fontSize}px ${app.prefs.terminal.fontFamily}`).then(() => {
+			if (disposed) return;
+			xt.options.fontFamily = fontStack();
+			refit();
+		}, () => {});
 
 		function connect() {
 			if (disposed) return;
@@ -149,6 +174,7 @@
 			ws?.close();
 			xt.dispose();
 			term = undefined;
+			refitNow = undefined;
 		};
 	});
 </script>

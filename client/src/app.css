@@ -12,6 +12,18 @@
 	font-display: swap;
 }
 @font-face {
+	font-family: "Maple Mono";
+	src: url("/fonts/maplemono-regular.woff2") format("woff2");
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Maple Mono";
+	src: url("/fonts/maplemono-bold.woff2") format("woff2");
+	font-weight: 700;
+	font-display: swap;
+}
+@font-face {
 	font-family: "SUIT";
 	src: url("/fonts/suit-regular.woff2") format("woff2");
 	font-weight: 400;

@@ -8,6 +8,7 @@ import { extensions } from "./extensions/host.svelte";
 import { syncSystemBars, syncWindowTheme } from "./native-push";
 import { setDurableSetting } from "./durable-storage";
 import { K, read, write } from "./persist";
+import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./terminal-prefs";
 
 export type ThemePref = "system" | "dark" | "light";
 
@@ -52,6 +53,7 @@ export class Preferences {
   soundOn = $state(read<boolean>(K.sound, true));
   soundVolume = $state(readVolume());
   bindings = $state<Record<ActionId, string>>(readBindings());
+  terminal = $state<TerminalPrefs>(sanitizeTerminal(read<unknown>(K.terminal, null)));
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
   recordingKey = $state(false);
 
@@ -69,6 +71,7 @@ export class Preferences {
     this.theme = readTheme();
     this.soundOn = read<boolean>(K.sound, true);
     this.soundVolume = readVolume();
+    this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
     this.applyTheme();
   }
 
@@ -128,6 +131,18 @@ export class Preferences {
   /** Let the user hear the current volume (called when they let go of the slider) */
   previewSound() {
     play("done", volumeGain(this.soundVolume));
+  }
+
+  /* ---------- terminal ---------- */
+
+  setTerminal(patch: Partial<TerminalPrefs>) {
+    this.terminal = sanitizeTerminal({ ...this.terminal, ...patch });
+    write(K.terminal, this.terminal);
+  }
+
+  resetTerminal() {
+    this.terminal = { ...DEFAULT_TERMINAL };
+    write(K.terminal, this.terminal);
   }
 
   /* ---------- shortcuts ---------- */

@@ -17,6 +17,7 @@
 	import FilterChip from "./FilterChip.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
 	import UpdateSettings from "./UpdateSettings.svelte";
+	import TerminalSettings from "./TerminalSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
 
@@ -26,7 +27,7 @@
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 질문 · 알림음"), server: false },
+		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 질문 · 알림음 · 터미널"), server: false },
 		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
@@ -77,6 +78,7 @@
 		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
 		{ tab: "general", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
 		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
+		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
 		{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
 	];
 	const norm = (s: string) => s.toLowerCase();
@@ -235,6 +237,7 @@
 					<span class="hint">{t("보고 있는 대화가 끝날 때는 울리지 않습니다. 승인 요청은 보고 있어도 울립니다.")}</span>
 				</section>
 				<section><NotificationSettings /></section>
+				<section><TerminalSettings /></section>
 				<section><UpdateSettings /></section>
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
