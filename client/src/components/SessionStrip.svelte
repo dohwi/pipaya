@@ -2,6 +2,7 @@
 	import FilterChip from "./FilterChip.svelte";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
+	import { dragScroll } from "../lib/drag-scroll";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "./Icon.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
@@ -21,7 +22,7 @@
 </script>
 
 {#if group && items.length}
-	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".fchip.on", variant: "accent" }}>
+	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".fchip.on", variant: "accent" }} use:dragScroll>
 		<span class="name" title={group.name}>{group.name}</span>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
