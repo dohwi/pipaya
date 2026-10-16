@@ -210,7 +210,7 @@
 		{#if tps !== null}
 			<span class="b tps {tpsLevel}" title={tpsTip}>
 				<Icon name="gauge" />
-				<span class="v">{speed(tps)}</span><span class="unit wide">tok/s</span>
+				<span class="v">{speed(tps)}</span><span class="unit wide">tps</span>
 			</span>
 		{/if}
 		{#if totals.cost > 0}
