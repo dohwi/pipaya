@@ -162,6 +162,10 @@ export class Configuration {
 		registry.defaultSelection = () => this.effectiveDefaults();
 	}
 
+	/** Whether a refresh may still write: set false on shutdown so a late upstream answer never touches a closed database. */
+	private open = true;
+	close() { this.open = false; }
+
 	/** The tool approval new sessions start with. Saved on the server, so every client sees the same one. */
 	approvalInfo(): { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy } {
 		const row = this.db.query("SELECT data FROM settings WHERE key = 'default_approval'").get() as { data: string } | null;
@@ -286,38 +290,51 @@ export class Configuration {
 
 	/* ---------- keeping the model lists current ---------- */
 
-	/** Models of `fromUpstream` connections that the upstream's list no longer contains (memory only: rebuilt by the next refresh). */
+	/** Models of `fromUpstream` connections that the upstream's list no longer contains (memory only: rebuilt by the next refresh, e.g. at startup). */
 	private missing = new Map<string, Set<string>>();
 	private checkedAt = new Map<string, number>();
 	private refreshing: Promise<void> | null = null;
-	/** Called after a refresh changed a connection's models, so clients reload. */
+	/** Called after a background refresh changed a connection's models, so clients reload. */
 	onModelsChanged?: (providerId: string) => void;
 
 	isUnavailable(providerId: string, modelId: string): boolean { return this.missing.get(providerId)?.has(modelId) ?? false; }
 
 	/** Re-read the model list of every connection that was not checked for a minute, in the background. Never throws. */
-	refreshStale(): void {
-		if (this.refreshing) return;
+	refreshStale(): Promise<void> {
+		if (this.refreshing) return this.refreshing;
 		const due = this.list().filter((p) => Date.now() - (this.checkedAt.get(p.id) ?? 0) > REFRESH_INTERVAL_MS);
-		if (!due.length) return;
+		if (!due.length) return Promise.resolve();
 		this.refreshing = Promise.all(due.map((p) => this.refresh(p.id).then((changed) => { if (changed) this.onModelsChanged?.(p.id); }, () => {})))
 			.then(() => {}).finally(() => { this.refreshing = null; });
+		return this.refreshing;
 	}
 
 	/**
-	 * Sync one connection with its upstream: models it lists that we do not have are added, and `fromUpstream` models it no longer
-	 * lists are flagged unavailable (kept, since sessions and defaults may use them). An unreachable upstream changes nothing.
+	 * Sync one connection with its upstream: models it lists that we do not have are added, typed-in models it lists become
+	 * `fromUpstream`, and `fromUpstream` models it no longer lists are flagged unavailable (kept, since sessions and defaults may
+	 * use them). Typed-in models it does not list are left alone: an upstream's list may be incomplete.
+	 * An unreachable upstream changes nothing; with `strict` the reason is thrown (a 400) instead of resolving false.
 	 * Resolves true when something changed.
 	 */
-	async refresh(id: string): Promise<boolean> {
+	async refresh(id: string, strict = false): Promise<boolean> {
 		const p = this.get(id);
-		if (!p) return false;
+		if (!p) {
+			if (strict) throw notFound("custom provider");
+			return false;
+		}
 		this.checkedAt.set(id, Date.now());
 		const c = await this.credentials.read(id);
 		const apiKey = c?.type === "api_key" ? c.key : undefined;
-		if (p.authRequired && !apiKey) return false;
+		if (p.authRequired && !apiKey) {
+			if (strict) throw badRequest("This connection needs an API key before its model list can be read.");
+			return false;
+		}
 		let listed: { id: string; name?: string }[];
-		try { listed = await fetchUpstreamModels(p.baseUrl, p.api, apiKey); } catch { return false; }
+		try { listed = await fetchUpstreamModels(p.baseUrl, p.api, apiKey); } catch (e) {
+			if (strict) throw e;
+			return false;
+		}
+		if (!this.open) return false;
 		const current = this.get(id); // the connection may have been edited while waiting
 		if (!current) return false;
 		const ids = new Set(listed.map((m) => m.id));
@@ -326,15 +343,26 @@ export class Configuration {
 		const before = this.missing.get(id);
 		let changed = gone.size !== (before?.size ?? 0) || [...gone].some((m) => !before?.has(m));
 		this.missing.set(id, gone);
+		// A model typed in by hand that the upstream does list is one of its own from now on, so it is flagged if it ever disappears.
+		const adopted = current.models.some((m) => !m.fromUpstream && ids.has(m.id));
 		const room = Math.max(0, MAX_MODELS - current.models.length);
 		const added = listed.filter((m) => !have.has(m.id)).slice(0, room).map(upstreamModel);
-		if (added.length) {
-			const next: CustomProvider = { ...current, models: [...current.models, ...added] };
+		if (added.length || adopted) {
+			const models = current.models.map((m) => (!m.fromUpstream && ids.has(m.id) ? { ...m, fromUpstream: true } : m));
+			const next: CustomProvider = { ...current, models: [...models, ...added] };
 			this.db.query("UPDATE custom_providers SET data = $data WHERE id = $id").run({ id, data: JSON.stringify(next) });
 			this.registry.models.setProvider(this.buildProvider(next));
 			changed = true;
 		}
 		return changed;
+	}
+
+	/** Re-read one connection's model list now (the refresh button). Unlike the background refresh, failures are reported. */
+	async refreshNow(id: string) {
+		await this.refresh(id, true);
+		const p = this.get(id);
+		if (!p) throw notFound("custom provider");
+		return this.describe(p);
 	}
 
 	async delete(id: string) {

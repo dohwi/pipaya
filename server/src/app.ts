@@ -499,8 +499,11 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	agentsWatch.start();
 	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);
 	prune.unref?.();
+	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
+	void configuration.refreshStale();
 	return { server, sessions, bus, retention, async close() {
 		clearInterval(prune);
+		configuration.close();
 		retention.stop();
 		agentsWatch.stop();
 		await notifications.close();

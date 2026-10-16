@@ -145,6 +145,31 @@
 		}
 	}
 
+	/** Ask the upstream for its model list now: new models are added, ones it no longer lists are marked. */
+	let refreshingId = $state<string | null>(null);
+	async function refreshModels(p: CustomProvider) {
+		const a = api();
+		if (!a || refreshingId) return;
+		refreshingId = p.id;
+		const before = new Set(p.models.map((m) => m.id));
+		try {
+			const r = await a.refreshCustomProvider(p.id);
+			const added = r.models.filter((m) => !before.has(m.id)).length;
+			const gone = r.models.filter((m) => m.unavailable).length;
+			await reload();
+			app.toast(
+				added || gone
+					? [added ? t("새 모델 {n}개", { n: added }) : "", gone ? t("사용 불가 {n}개", { n: gone }) : ""].filter(Boolean).join(" · ")
+					: t("모델 목록이 최신입니다."),
+				"ok",
+			);
+		} catch (e) {
+			app.toast(t("모델 목록을 불러오지 못했습니다: {error}", { error: errorText(e) }), "error");
+		} finally {
+			refreshingId = null;
+		}
+	}
+
 	async function saveKey(p: CustomProvider) {
 		const a = api();
 		if (!a || !keyValue.trim()) return;
@@ -251,21 +276,22 @@
 								</div>
 							{:else}
 							<Accordion variant="text">
-							{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{/snippet}
+							{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 							<ul class="mlist">
 								{#each p.models as m (m.id)}
 									{@const probe = tests[`${p.id}\u0000${m.id}`]}
-									<li>
+									<li class:unavail={m.unavailable}>
 										<span class="minfo">
 											<span class="mid mono">{m.name ?? m.id}</span>
 											{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
 										</span>
 										<span class="mtags">
+											{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 											{#if m.reasoning}<span class="tag" title={t("추론")}><Icon name="brain" /></span>{/if}
 											{#if m.vision}<span class="tag" title={t("이미지 입력")}><Icon name="image" /></span>{/if}
 											<span class="tag mono">{Math.round(m.contextWindow / 1000)}k</span>
 										</span>
-										<button class="btn ghost sm" disabled={probe === "running" || !p.configured} onclick={() => test(p.id, m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
+										<button class="btn ghost sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => test(p.id, m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 											{probe === "running" ? t("확인 중…") : t("테스트")}
 										</button>
 										{#if probe && probe !== "running"}
@@ -286,6 +312,9 @@
 										<button class="btn sm" onclick={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}><Icon name="key" /> {t("키 추가")}</button>
 									{/if}
 								{/if}
+								<button class="btn sm" disabled={busy || refreshingId !== null || !p.configured} onclick={() => refreshModels(p)} title={p.configured ? t("업스트림의 모델 목록을 다시 불러옵니다") : t("키를 먼저 추가하세요")}>
+									<span class="spin" class:on={refreshingId === p.id}><Icon name="retry" /></span> {refreshingId === p.id ? t("불러오는 중…") : t("모델 새로고침")}
+								</button>
 								<button class="btn sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="pencil" /> {t("수정")}</button>
 								<ConfirmButton size="sm" class="ghost" confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={() => remove(p)}>{t("삭제")}</ConfirmButton>
 							</div>
@@ -441,6 +470,29 @@
 		stroke-width: 1.8;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.gone {
+		margin-left: 8px;
+		color: var(--danger);
+	}
+	.mlist li.unavail .minfo {
+		opacity: 0.6;
+	}
+	.spin {
+		display: inline-flex;
+	}
+	.spin.on {
+		animation: mc-spin 0.9s linear infinite;
+	}
+	@keyframes mc-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.spin.on {
+			animation: none;
+		}
 	}
 	.res {
 		flex-basis: 100%;

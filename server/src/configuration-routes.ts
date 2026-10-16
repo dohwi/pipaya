@@ -37,6 +37,17 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			return saved;
 		},
 	});
+	app.post("/configuration/providers/:id/refresh", {
+		schema: {
+			description: "Read the connection's model list from its upstream now: new models are added, missing ones flagged unavailable",
+			params: IdParams, response: { 200: CustomProviderPublic, ...errors(400, 401, 404) },
+		},
+		handler: async (req) => {
+			const refreshed = await config.refreshNow(req.params.id);
+			bus.publish(null, "configuration_updated", { scope: "provider", id: req.params.id, action: "saved" });
+			return refreshed;
+		},
+	});
 	app.delete("/configuration/providers/:id", {
 		schema: { params: IdParams, response: { 200: Ok, ...errors(401, 404, 409) } },
 		handler: async (req) => {
