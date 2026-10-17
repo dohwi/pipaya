@@ -288,7 +288,7 @@
 
 		<main>
 			<Header />
-			{#if viewport.narrow || app.isFull(app.activeGroup?.id)}<SessionStrip />{/if}
+			{#if viewport.narrow || app.isFull(app.activeGroup?.id) || (app.activeGroup && app.zoomId)}<SessionStrip />{/if}
 
 			{#if app.net !== "online"}
 				<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
