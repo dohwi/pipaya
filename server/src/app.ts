@@ -146,6 +146,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
 	groups.evictWhere(isTerminalId);
+	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,

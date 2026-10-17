@@ -7,7 +7,8 @@
 
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
+	import { panesOf } from "../lib/layout";
+	import { groupHandle, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import { chipIn, chipOut, fadeIn, fadeOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
@@ -219,10 +220,26 @@
 		}),
 	);
 	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
-	const memberMatches = $derived(memberMention ? members.filter((m) => {
+	// A tagged group hands the agent a one-line index of its sessions (not their transcripts), so it can PR / review them as a set.
+	const groupItems = $derived(
+		app.groups.map((g) => {
+			const ids = panesOf(g.layout).filter((id) => id !== pane.id && app.session(id));
+			return { id: `group:${g.id}`, handle: groupHandle(g.name), name: g.name, count: ids.length };
+		}).filter((g) => g.count > 0 && g.handle),
+	);
+	const groupMatches = $derived(memberMention ? groupItems.filter((g) => {
+		const q = memberMention.query.toLowerCase();
+		return g.handle.toLowerCase().startsWith(q) || g.name.toLowerCase().includes(q);
+	}) : []);
+	const memberOnly = $derived(memberMention ? members.filter((m) => {
 		const q = memberMention.query.toLowerCase();
 		return m.name.toLowerCase().startsWith(q) || m.title.toLowerCase().includes(q) || m.alt.toLowerCase().includes(q);
 	}) : []);
+	/** Groups first, then sessions: one list so arrow keys and picks index into it. */
+	const memberMatches = $derived<(({ kind: "group" } & (typeof groupItems)[number]) | ({ kind: "member" } & (typeof members)[number]))[]>([
+		...groupMatches.map((g) => ({ kind: "group" as const, ...g })),
+		...memberOnly.map((m) => ({ kind: "member" as const, ...m })),
+	]);
 
 	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	$effect(() => {
@@ -253,7 +270,9 @@
 			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
 		]
 		: memberMention
-			? memberMatches.map((m) => ({ id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션"), state: m.state }))
+			? memberMatches.map((m) => m.kind === "group"
+				? { id: m.id, text: `@${m.handle}`, desc: t("{n}개 세션", { n: m.count }), group: msg("그룹") }
+				: { id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션"), state: m.state })
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
@@ -291,7 +310,7 @@
 	/** Replace the @token with the chosen group member. */
 	function pickMember(index: number) {
 		const m = memberMatches[index];
-		if (m && memberMention) applyMention(memberMention, `@${m.name} `);
+		if (m && memberMention) applyMention(memberMention, `@${m.kind === "group" ? m.handle : m.name} `);
 	}
 	// Esc hides the menu only for the text it was pressed on; any further typing brings it back.
 	$effect(() => {
@@ -489,7 +508,7 @@
 	const IMG_TOKEN = /#image(\d+)\b/g;
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, agents: agentList, members: members.map((m) => m.name), images: attachments.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, agents: agentList, members: members.map((m) => m.name), groups: groupItems.map((g) => g.handle), images: attachments.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);
@@ -593,7 +612,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("세션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("세션·그룹") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if reply}
 			<div class="reply-badge" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>

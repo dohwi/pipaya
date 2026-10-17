@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
+import { groupHandle, insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -64,5 +64,17 @@ describe("mirrorHtml", () => {
 	});
 	test("escapes the text and ends with a newline (keeps the layer as tall as the textarea)", () => {
 		expect(mirrorHtml("<b>&", known)).toBe("&lt;b&gt;&amp;\n");
+	});
+});
+
+describe("mirrorHtml group tags", () => {
+	const known = { templates: [], skills: [], agents: [], members: ["미나"], groups: ["결제-개편"], images: 0, paths: [] };
+	test("marks a group handle like a session mention, particle left outside", () => {
+		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="member">@결제-개편</mark>에');
+		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="member">@미나</mark>');
+		expect(mirrorHtml("@nobody", known)).not.toContain("<mark");
+	});
+	test("groupHandle joins words with dashes", () => {
+		expect(groupHandle("  결제   개편 ")).toBe("결제-개편");
 	});
 });

@@ -18,6 +18,7 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
+import { branchOf, capPeerRead, groupHint, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
 import { memberHint, mentionedMembers, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -50,6 +51,12 @@ export class SessionManager {
 	private backfilling = false;
 	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
+	/** Session ids of every group, wired by the app once the group manager exists; `@group` mentions read it. */
+	private groupSource: () => { name: string; sessionIds: string[] }[] = () => [];
+
+	setGroupSource(fn: () => { name: string; sessionIds: string[] }[]): void {
+		this.groupSource = fn;
+	}
 
 	constructor(
 		private cfg: Config,
@@ -402,8 +409,22 @@ export class SessionManager {
 		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
 		const peers = this.peers(id);
 		if (peers.length) {
-			const asked = mentionedMembers(input.text, peers.map((p) => p.name));
-			if (asked.length) content.push({ type: "text", text: memberHint(HINT_OPEN, asked, Object.fromEntries(peers.map((p) => [p.name, p.purpose]))) });
+			const names = peers.map((p) => p.name);
+			const groups = this.groupSource();
+			const tagged = mentionedGroups(input.text, groups, names);
+			if (tagged.length) {
+				const found = tagged.map((h) => {
+					const g = groups.find((x) => groupHandle(x.name) === h)!;
+					const members = g.sessionIds.filter((sid) => sid !== id).flatMap((sid) => { const b = this.brief(sid); return b ? [b] : []; });
+					return { handle: h, members };
+				}).filter((g) => g.members.length);
+				if (found.length) content.push({ type: "text", text: groupHint(HINT_OPEN, found) });
+			}
+			const asked = mentionedMembers(input.text, names);
+			if (asked.length) {
+				const briefs = asked.flatMap((n) => { const p = peers.find((x) => x.name === n); const b = p && this.brief(p.sessionId); return b ? [b] : []; });
+				content.push({ type: "text", text: briefs.length ? memberBriefHint(HINT_OPEN, briefs) : memberHint(HINT_OPEN, asked, Object.fromEntries(peers.map((p) => [p.name, p.purpose]))) });
+			}
 		}
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
@@ -810,6 +831,16 @@ export class SessionManager {
 		return this.store.list({ limit: 1000, closed: false }).filter((r) => r.id !== sessionId && r.name).map((r) => ({ name: r.name, sessionId: r.id, purpose: r.purpose }));
 	}
 
+	/** A one-line picture of a session for a tag: role, state, branch, directory and its last words. Never the transcript. */
+	private brief(sessionId: string): MemberBrief | null {
+		const r = this.store.get(sessionId);
+		if (!r || r.closed || !r.name) return null;
+		const lastAssistant = this.store.lastMessages(sessionId, 6).reverse().find((x) => x.message.role === "assistant");
+		const parts = (Array.isArray(lastAssistant?.message.content) ? lastAssistant!.message.content : []) as { type: string; text?: string }[];
+		const last = parts.filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ");
+		return { name: r.name, purpose: r.purpose, cwd: r.cwd, branch: branchOf(r.cwd), running: this.live.get(sessionId)?.running ?? false, last };
+	}
+
 	/** Messages to and from the other sessions of this server. */
 	private peerApi(sessionId: string): NonNullable<ToolContext["peers"]> {
 		const find = (name: string) => {
@@ -838,9 +869,9 @@ export class SessionManager {
 					const parts = (Array.isArray(m.content) ? m.content : []) as { type: string; text?: string; name?: string }[];
 					const body = parts.map((c) => (c.type === "text" && !c.text?.startsWith(HINT_OPEN) ? c.text : c.type === "toolCall" ? `[tool ${c.name}]` : "")).filter(Boolean).join(" ");
 					const who = m.role === "user" ? "user" : m.role === "assistant" ? `@${peer.name}` : m.role;
-					return `${who}: ${body.slice(0, 1500)}`;
+					return `${who}: ${body}`;
 				});
-				return `${this.live.get(peer.sessionId)?.running ? `@${peer.name} is still working.\n` : ""}${lines.join("\n")}`;
+				return `${this.live.get(peer.sessionId)?.running ? `@${peer.name} is still working.\n` : ""}${capPeerRead(lines)}`;
 			},
 		};
 	}
