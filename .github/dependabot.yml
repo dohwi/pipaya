@@ -8,3 +8,24 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: bun
+    directory: /server
+    schedule:
+      interval: monthly
+    groups:
+      server-deps:
+        patterns: ["*"]
+  - package-ecosystem: bun
+    directory: /client
+    schedule:
+      interval: monthly
+    groups:
+      client-deps:
+        patterns: ["*"]
+  - package-ecosystem: cargo
+    directory: /client/src-tauri
+    schedule:
+      interval: monthly
+    groups:
+      rust-deps:
+        patterns: ["*"]
