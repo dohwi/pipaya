@@ -5,7 +5,8 @@
 	import { onMount } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
-	import { appTakesKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../lib/terminal";
+	import { copyText } from "../lib/clipboard";
+	import { appTakesKey, clipboardKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../lib/terminal";
 
 	/**
 	 * The screen of one server terminal. Loaded on demand (xterm.js stays out of the start-up chunk). The shell runs on
@@ -83,7 +84,23 @@
 		xt.loadAddon(fit);
 		xt.open(host);
 		// xterm cancels every key it handles; the app's own Mod+Shift/Alt shortcuts must pass through untouched.
-		xt.attachCustomKeyEventHandler((e) => !appTakesKey(e, app.prefs.bindings));
+		xt.attachCustomKeyEventHandler((e) => {
+			if (appTakesKey(e, app.prefs.bindings)) return false;
+			const action = clipboardKey(e, xt.hasSelection());
+			if (!action) return true;
+			if (e.type !== "keydown") return false;
+			if (action === "copy") {
+				// Ctrl+Shift+C would open the browser's inspector: cancel it and copy ourselves.
+				e.preventDefault();
+				const text = xt.getSelection();
+				if (text) {
+					void copyText(text);
+					xt.clearSelection(); // the next Ctrl+C is an interrupt again
+				}
+			}
+			// Paste: leave the browser's own paste alone; xterm receives it as a paste event (works on plain http too).
+			return false;
+		});
 		const decoder = new TextDecoder();
 		let ws: WebSocket | null = null;
 		let retry: ReturnType<typeof setTimeout> | undefined;

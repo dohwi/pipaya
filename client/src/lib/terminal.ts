@@ -68,6 +68,17 @@ export function appTakesKey(e: { code: string; ctrlKey: boolean; metaKey: boolea
 }
 
 /**
+ * Copy / paste keys in a terminal. Ctrl+Shift+C/V always mean copy/paste; plain Ctrl/⌘+C copies only while text is
+ * selected (otherwise Ctrl+C stays the shell's interrupt), and plain Ctrl/⌘+V pastes.
+ */
+export function clipboardKey(e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, hasSelection: boolean): "copy" | "paste" | null {
+	if (e.altKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
+	if (e.code === "KeyC") return e.shiftKey || hasSelection ? "copy" : null;
+	if (e.code === "KeyV") return "paste";
+	return null;
+}
+
+/**
  * Over plain pipes (no PTY) nothing echoes what is typed: draw it locally, roughly like a line editor.
  * Returns what to write on screen for the input `data`.
  */

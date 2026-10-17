@@ -3,7 +3,7 @@ import { pair } from "../src/lib/layout";
 import { sessionOrder, sidebarBlocks } from "../src/lib/nav";
 import { DEFAULT_BINDINGS } from "../src/lib/keys";
 import { PROTOCOL_VERSION } from "../src/lib/protocol";
-import { appTakesKey, isTerminalId, localEcho, platformName, terminalSocketUrl, type TerminalInfo } from "../src/lib/terminal";
+import { appTakesKey, clipboardKey, isTerminalId, localEcho, platformName, terminalSocketUrl, type TerminalInfo } from "../src/lib/terminal";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt, title: id }) as Session;
@@ -36,6 +36,23 @@ describe("keys in a terminal", () => {
 	test("Mod+Shift shortcuts still reach the app", () => {
 		expect(appTakesKey(key("Backquote", { ctrl: true, shift: true }), DEFAULT_BINDINGS)).toBe(true);
 		expect(appTakesKey(key("KeyZ", { ctrl: true, shift: true }), DEFAULT_BINDINGS)).toBe(false); // unbound
+	});
+});
+
+describe("copy and paste keys in a terminal", () => {
+	test("Ctrl+C copies only with a selection", () => {
+		expect(clipboardKey(key("KeyC", { ctrl: true }), true)).toBe("copy");
+		expect(clipboardKey(key("KeyC", { ctrl: true }), false)).toBe(null); // interrupt
+	});
+	test("Ctrl+Shift+C always copies, Ctrl+V and Ctrl+Shift+V paste", () => {
+		expect(clipboardKey(key("KeyC", { ctrl: true, shift: true }), false)).toBe("copy");
+		expect(clipboardKey(key("KeyV", { ctrl: true }), false)).toBe("paste");
+		expect(clipboardKey(key("KeyV", { ctrl: true, shift: true }), false)).toBe("paste");
+	});
+	test("other keys are not clipboard keys", () => {
+		expect(clipboardKey(key("KeyC"), true)).toBe(null);
+		expect(clipboardKey(key("KeyV", { alt: true }), false)).toBe(null);
+		expect(clipboardKey(key("KeyX", { ctrl: true }), true)).toBe(null);
 	});
 });
 
