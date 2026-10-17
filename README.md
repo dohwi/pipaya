@@ -28,13 +28,9 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 
 ## Quick install
 
-Install the server (Linux, macOS), then a client. Requires `git` and `curl`; the script asks before installing Bun.
+Install a client first, then the server it connects to. Requires `git` and `curl` for the commands below.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
-```
-
-It registers a user service on port `8787` and prints where the access token is (`~/.pipaya/token`). The default listen address is your Tailscale IP if there is one, else `127.0.0.1`.
+### 1. Client
 
 | Client | How |
 |---|---|
@@ -42,6 +38,18 @@ It registers a user service on port `8787` and prints where the access token is 
 | macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
 | Android, iOS | Files on the [latest release](https://github.com/dohwi/pipaya/releases/tag/latest) (iOS IPA is unsigned) |
 | Linux, web | `cd client && bun install && bun run dev -- --host 0.0.0.0` |
+
+### 2. Server (Linux, macOS)
+
+The script asks before installing Bun.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
+```
+
+It registers a user service on port `8787` and prints where the access token is (`~/.pipaya/token`). The default listen address is your Tailscale IP if there is one, else `127.0.0.1`. To run the server in a container instead, see [Server in Docker](#server-in-docker-sandbox).
+
+### 3. Connect
 
 Open the app, add `http://<server address>:8787` and the token, then connect a model under **Settings → Model connections**.
 
