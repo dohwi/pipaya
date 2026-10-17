@@ -12,7 +12,7 @@ bun run typecheck && bun test
 bun run start
 ```
 
-간편 설치(서비스 등록 포함)는 [프로젝트 README](../README.ko.md#quick-install)를, 컨테이너 격리 실행은 [Docker 샌드박스](../README.ko.md#docker로-서버-실행-sandbox)를 참고하세요.
+간편 설치(서비스 등록 포함)는 [프로젝트 README](../README.ko.md#빠른-설치)를, 컨테이너 격리 실행은 [Docker 샌드박스](../README.ko.md#docker로-서버-실행-sandbox)를 참고하세요.
 
 ## Authentication
 

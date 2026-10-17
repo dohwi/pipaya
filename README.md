@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="client/src-tauri/icons/icon.png" alt="pipaya" width="200" />
-  <h1>pipaya</h1>
+  <img src=".github/assets/banner.svg" alt="pipaya" width="100%" />
 
   <p><b>English</b> · <a href="README.ko.md">한국어</a></p>
 
@@ -15,3 +14,78 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_3.0-5C5C5C?style=flat-square" alt="AGPL-3.0" /></a>
   </p>
 </div>
+
+pipaya is an **AI agent chat tool that runs on your own server**. The server calls models and runs tools; the app connects to it from any device. Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.
+
+<p align="center">
+  <img src=".github/assets/preview-desktop.png" alt="pipaya desktop" width="880" />
+</p>
+
+## Features
+
+- **Agent with 10 built-in tools**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
+- **Approval policies**: `ask` (default), `auto`, `readonly`. You decide what may change things
+- **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
+- **Many devices, one conversation**: Windows, macOS, Android, iOS and web, with notifications and mobile push
+- **Teamwork and split view**: hand work to other sessions with `@name`; up to 8 conversations on one screen
+- **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
+
+## Quick install
+
+Install the server (Linux, macOS), then a client. Requires `git` and `curl`; the script asks before installing Bun.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
+```
+
+It registers a user service on port `8787` and prints where the access token is (`~/.pipaya/token`). The default listen address is your Tailscale IP if there is one, else `127.0.0.1`.
+
+| Client | How |
+|---|---|
+| Windows x64 | `irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 \| iex` |
+| macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
+| Android, iOS | Files on the [latest release](https://github.com/dohwi/pipaya/releases/tag/latest) (iOS IPA is unsigned) |
+| Linux, web | `cd client && bun install && bun run dev -- --host 0.0.0.0` |
+
+Open the app, add `http://<server address>:8787` and the token, then connect a model under **Settings → Model connections**.
+
+Other commands: `install.sh update | status | uninstall`.
+
+## Server in Docker (Sandbox)
+
+Runs the server in a hardened container, so the agent's `bash` and file tools stay inside it.
+
+```bash
+docker compose up -d --build
+docker compose exec pipaya cat /data/token    # the auth token
+```
+
+Set `PIPAYA_WORKSPACE_DIR` (a host folder the agent may work on), `PIPAYA_BIND`, `PIPAYA_PORT` and `PIPAYA_APPROVAL` in a `.env` file. See [`compose.yaml`](compose.yaml).
+
+## Security
+
+- The token grants **administrator** access. Reach the server over Tailscale or HTTPS, never the open internet.
+- API keys are stored **unencrypted** in the server database.
+- The file tools can read outside the working folder and `bash` is **not a sandbox**. Keep the policy at `ask` and use Docker or a VM.
+
+Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+
+## Development
+
+```bash
+cd server && bun install && bun run dev          # API server
+cd client && bun install && bun run dev          # web client (port 1420)
+```
+
+Before committing:
+
+```bash
+cd server && bun run typecheck && bun run lint && bun run test
+cd client && bun run check && bun run test && bun run build
+```
+
+Prerequisites are pinned in [`mise.toml`](mise.toml) (Bun 1.3, Rust stable). The server is documented in [`server/README.md`](server/README.md) and the logo in [`logo/README.md`](logo/README.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org).
+
+## License
+
+[AGPL-3.0](LICENSE)
