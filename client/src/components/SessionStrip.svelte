@@ -27,7 +27,7 @@
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			<FilterChip current on={x.id === app.activeId} onclick={() => app.openSession(x.id)} title="{x.title} · {ACTIVITY_LABEL[st]}">
-				{#if app.terminal(x.id)}<Icon name="terminal" />{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
+				{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 				<span class="t">{x.title}</span>
 			</FilterChip>
 		{/each}
@@ -63,7 +63,10 @@
 		font-weight: 700;
 		color: var(--text-faint);
 	}
-	.strip :global(.fchip svg) {
+	.tico {
+		display: inline-grid;
+	}
+	.tico :global(svg) {
 		width: 14px;
 		height: 14px;
 		stroke: currentColor;
