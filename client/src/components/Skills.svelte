@@ -99,7 +99,7 @@
 		{#each shown as s (s.name)}
 {@const on = effective(s, mode)}
 <li class="item" class:off={!on || !s.modelInvocable} animate:reflow in:rowIn out:rowOut>
-	<span class="switch" title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없어요")}>
+	<span class="switch" title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다")}>
 		<Switch
 			checked={on && s.modelInvocable}
 			disabled={!s.modelInvocable || saving[mode + s.name]}
@@ -156,9 +156,9 @@
 		{:else if data}
 			<div class="note" role="status">
 				{#if target.sessionId}
-					{t("바꾼 설정은 이 대화의")} <b>{t("다음 메시지")}</b>{t("부터 바로 적용돼요.")}
+					{t("바꾼 설정은 이 대화의")} <b>{t("다음 메시지")}</b>{t("부터 바로 적용됩니다.")}
 				{:else}
-					{t("바꾼 설정은 새 대화와 기존 대화의")} <b>{t("다음 메시지")}</b>{t("부터 적용돼요.")}
+					{t("바꾼 설정은 새 대화와 기존 대화의")} <b>{t("다음 메시지")}</b>{t("부터 적용됩니다.")}
 				{/if}
 			</div>
 			{#each data.warnings as warning}
@@ -171,7 +171,7 @@
 			</section>
 			<section class="section">
 				<h3>{t("모든 프로젝트")}</h3>
-				<p class="hint">{t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지돼요.")}</p>
+				<p class="hint">{t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}</p>
 				{@render list("global")}
 			</section>
 		{/if}

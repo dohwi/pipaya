@@ -50,7 +50,7 @@
 			<div>
 				<h2 id="session-context-title">{t("적용된 컨텍스트")}</h2>
 				{#if data}
-					<p class="state">{data.state === "applied" ? t("이 세션에 적용 중") : t("아직 적용 전 · 다음 메시지부터 적용돼요")}</p>
+					<p class="state">{data.state === "applied" ? t("이 세션에 적용 중") : t("아직 적용 전 · 다음 메시지부터 적용됩니다")}</p>
 				{/if}
 			</div>
 			<div class="actions">

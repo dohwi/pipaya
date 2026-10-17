@@ -539,7 +539,7 @@
 					attachments.push(await fileToAttachment(f));
 					insertImageToken(attachments.length);
 				} catch {
-					app.toast(t("{name}를 읽지 못했습니다", { name: f.name || t("이미지") }), "error", pane.id);
+					app.toast(t("{name}을(를) 읽지 못했습니다", { name: f.name || t("이미지") }), "error", pane.id);
 				}
 				continue;
 			}
@@ -558,7 +558,7 @@
 			try {
 				files.push(await fileToDraft(f));
 			} catch {
-				app.toast(t("{name}를 읽지 못했습니다", { name: f.name || t("파일") }), "error", pane.id);
+				app.toast(t("{name}을(를) 읽지 못했습니다", { name: f.name || t("파일") }), "error", pane.id);
 			}
 		}
 	}

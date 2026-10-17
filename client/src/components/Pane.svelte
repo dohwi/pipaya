@@ -94,7 +94,7 @@
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
-				{#snippet label()}{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}{/snippet}
+				{#snippet label()}{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}{/snippet}
 				<span class="t" use:marquee={`${memberName ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 				{/if}
