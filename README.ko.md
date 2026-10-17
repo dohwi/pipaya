@@ -28,32 +28,28 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 
 ## 빠른 설치
 
-클라이언트를 먼저 설치한 뒤, 접속할 서버를 설치합니다. 아래 명령에는 `git`과 `curl`이 필요합니다.
-
-### 1. 클라이언트
+클라이언트를 설치하세요. Windows와 macOS 앱은 **서버를 내장**하고 있어("이 PC", loopback 전용) 따로 설치할 것이 없습니다.
 
 | 클라이언트 | 설치 방법 |
 |---|---|
 | Windows x64 | `irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 \| iex` |
 | macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
-| Android, iOS | [최신 릴리스](https://github.com/dohwi/pipaya/releases/tag/latest)의 파일 (iOS IPA는 서명 안 됨) |
-| Linux, 웹 | `cd client && bun install && bun run dev -- --host 0.0.0.0` |
+| Android, iOS | [최신 릴리스](https://github.com/dohwi/pipaya/releases/tag/latest)의 파일 (iOS IPA는 서명 안 됨). 아래 headless 서버가 필요합니다 |
+| Linux, 웹 | `cd client && bun install && bun run dev -- --host 0.0.0.0`. 아래 headless 서버가 필요합니다 |
 
-### 2. 서버 (Linux, macOS)
+앱을 열어 **설정 → 모델 연결**에서 모델을 연결하세요.
 
-Bun은 설치 전에 물어봅니다.
+## Headless 서버
+
+휴대폰, 웹, 여러 기기에서 쓰려면 서버를 따로 실행하세요. Linux 또는 macOS에서 `git`과 `curl`이 필요하고, Bun은 설치 전에 물어봅니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
 ```
 
-`8787` 포트에 사용자 서비스로 등록하고 접속 토큰 위치(`~/.pipaya/token`)를 알려 줍니다. 기본 수신 주소는 Tailscale IP가 있으면 그 주소, 없으면 `127.0.0.1`입니다. 컨테이너로 실행하려면 [Docker로 서버 실행](#docker로-서버-실행-sandbox)을 보세요.
+`8787` 포트에 사용자 서비스로 등록하고 접속 토큰 위치(`~/.pipaya/token`)를 알려 줍니다. 기본 수신 주소는 Tailscale IP가 있으면 그 주소, 없으면 `127.0.0.1`입니다. 앱에서 `http://<서버 주소>:8787`과 토큰을 추가하세요.
 
-### 3. 연결
-
-앱을 열어 `http://<서버 주소>:8787`과 토큰을 추가한 뒤, **설정 → 모델 연결**에서 모델을 연결하세요.
-
-그 밖의 명령: `install.sh update | status | uninstall`
+그 밖의 명령: `install.sh update | status | uninstall`. 컨테이너로 실행하려면 아래를 보세요.
 
 ## Docker로 서버 실행 (Sandbox)
 
