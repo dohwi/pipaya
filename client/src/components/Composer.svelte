@@ -18,7 +18,8 @@
 	import StatusLine from "./StatusLine.svelte";
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
-	import { argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
+	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
+	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
 	import { activityOf, ACTIVITY_LABEL } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
@@ -202,7 +203,40 @@
 	let caret = $state(0);
 	let mentionFiles = $state<{ path: string; dir: boolean }[]>([]);
 	let mentionLoaded = $state(false);
-	const mention = $derived(slashQuery !== null || argSuggestions ? null : mentionAt("file", text, caret));
+	// ── /cd <path>: folders of the typed path are suggested above the input (`~`, absolute and workspace-relative) ──
+	const cdArg = $derived(slashQuery === null ? cdArgOf(text) : null);
+	const cdTarget = $derived(cdArg === null ? null : cdHint(cdArg, { root: app.workspace?.root, home: app.workspace?.home }));
+	const cdDir = $derived(cdTarget?.dir ?? null);
+	const cdHidden = $derived(!!cdTarget?.filter.startsWith("."));
+	let cdDirs = $state<{ name: string; path: string }[]>([]);
+	let cdFor = $state<string | null>(null);
+	/** The arrow keys moved the highlight: Enter then goes to that folder instead of the typed path */
+	let cdNav = $state(false);
+	$effect(() => {
+		const dir = cdDir;
+		const hidden = cdHidden;
+		const api = app.api;
+		if (dir === null || !api || app.net !== "online") {
+			cdDirs = [];
+			cdFor = null;
+			return;
+		}
+		const controller = new AbortController();
+		const timer = setTimeout(() => {
+			api.listDirs(dir, hidden)
+				.then((r) => { if (!controller.signal.aborted) { cdDirs = r.entries; cdFor = dir; } })
+				.catch(() => { if (!controller.signal.aborted) { cdDirs = []; cdFor = dir; } });
+		}, 80);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	});
+	// The list of another folder is stale while the new one loads: show nothing rather than wrong rows.
+	const cdRows = $derived(cdTarget && cdFor === cdTarget.dir ? filterDirs(cdDirs, cdTarget.filter).slice(0, 100) : []);
+	const cdOpen = $derived(cdRows.length > 0);
+	const cdValue = (name: string) => `${cdTarget?.prefix ?? ""}${name}/`;
+	const mention = $derived(slashQuery !== null || argSuggestions || cdArg !== null ? null : mentionAt("file", text, caret));
 	// Attached images share the `#` menu, above the files: "compare #image1 and #image2". A fully typed token is done, so Enter stays free to send.
 	const imageMatches = $derived(
 		mention
@@ -266,7 +300,9 @@
 	});
 
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
-	const menuItems = $derived(mention
+	const menuItems = $derived(cdArg !== null
+		? cdRows.map((d) => ({ id: d.path, text: cdValue(d.name), desc: "", group: msg("폴더") }))
+		: mention
 		? [
 			...imageMatches.map((a) => ({ id: `image${a.n}`, text: `#image${a.n}`, desc: a.name, group: msg("이미지") })),
 			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
@@ -284,7 +320,7 @@
 				: "agent" in it
 				? { id: `subagent:${it.agent.name}`, text: `/${SUBAGENT_PREFIX}${it.agent.name}`, desc: it.agent.description, tag: msg("서브에이전트"), group: msg("서브에이전트") }
 				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc, group: msg("명령") }));
-	const slashOpen = $derived(mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
+	const slashOpen = $derived(cdArg !== null ? cdOpen && !slashDismissed : mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
 	function syncCaret() {
 		caret = ta?.selectionStart ?? text.length;
@@ -319,6 +355,7 @@
 		text;
 		app.effectiveModel?.id;
 		slashIndex = 0;
+		cdNav = false;
 		slashDismissed = false;
 	});
 
@@ -345,7 +382,31 @@
 		void runSlash(cmd, "");
 	}
 
+	/** Put a folder into the `/cd` argument. The menu stays open on it, so the next level is one keystroke away. */
+	function completeCd(index: number) {
+		const d = cdRows[index];
+		if (d) setText(`/cd ${cdValue(d.name)}`);
+	}
+
+	/** Tab: the highlighted folder, else like a shell: the only match, or the longest common start of them. */
+	function tabCd() {
+		if (!cdTarget) return;
+		if (cdNav || cdRows.length === 1) return completeCd(slashIndex);
+		const pre = commonPrefix(cdRows.map((d) => d.name));
+		if (pre.length > cdTarget.filter.length) setText(`/cd ${cdTarget.prefix}${pre}`);
+		else completeCd(slashIndex);
+	}
+
+	/** Enter: go to the folder picked with the arrows. Otherwise the typed path is used as written (it may be a new folder). */
+	function enterCd(): boolean {
+		const d = cdNav ? cdRows[slashIndex] : undefined;
+		if (!cdTarget || !d) return false;
+		void runSlash(allCommands().find((c) => c.name === "cd")!, `${cdTarget.prefix}${d.name}`);
+		return true;
+	}
+
 	function pickRecommendation(index: number, completeOnly = false) {
+		if (cdArg !== null) return completeCd(index);
 		if (mention) return pickMention(index);
 		if (memberMention) return pickMember(index);
 		if (argSuggestions) {
@@ -480,6 +541,7 @@
 				if (n) {
 					e.preventDefault();
 					slashIndex = (slashIndex + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
+					if (cdArg !== null) cdNav = true;
 				}
 				return;
 			}
@@ -490,10 +552,13 @@
 			}
 			if (e.key === "Tab" && n) {
 				e.preventDefault();
-				pickRecommendation(slashIndex, true);
+				if (cdArg !== null) tabCd();
+				else pickRecommendation(slashIndex, true);
 				return;
 			}
-			if (e.key === "Enter" && !e.shiftKey && n && !isTouch()) {
+			if (e.key === "Enter" && !e.shiftKey && cdArg !== null && !isTouch()) {
+				if (enterCd()) e.preventDefault();
+			} else if (e.key === "Enter" && !e.shiftKey && n && !isTouch()) {
 				e.preventDefault();
 				pickRecommendation(slashIndex);
 				return;
@@ -631,7 +696,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={mention ? msg("파일") : memberMention ? msg("세션·그룹") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={cdArg !== null ? msg("폴더") : mention ? msg("파일") : memberMention ? msg("세션·그룹") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={cdArg !== null ? msg("일치하는 폴더가 없습니다") : mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if reply}
 			<div class="reply-badge" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>

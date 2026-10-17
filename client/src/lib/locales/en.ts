@@ -636,6 +636,8 @@ export const en: Record<string, string> = {
 	/* ---- slash menu, status line ---- */
 	"일치하는 명령이 없습니다": "No matching commands",
 	"일치하는 파일이 없습니다": "No matching files",
+	"일치하는 폴더가 없습니다": "No matching folders",
+	"홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다": "The home directory is unknown, so ~ cannot be used",
 	"파일": "Files",
 	"폴더": "Folder",
 	"현재": "Current",

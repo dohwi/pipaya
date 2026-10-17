@@ -9,6 +9,7 @@ import {
   verifyServer,
   type ServerProbe,
 } from "./api";
+import { expandHome } from "./workdir-path";
 import { isTauri } from "./tauri";
 import { compat, isClientTooOld, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -1346,7 +1347,11 @@ class AppStore {
    * An open chat keeps its own directory, so this leaves it and starts a fresh chat there.
    */
   changeWorkdir(raw: string): boolean {
-    let rel = raw.trim().replace(/\/+$/, "") || ".";
+    let rel = expandHome(raw.trim(), this.workspace?.home).replace(/\/+$/, "") || ".";
+    if (rel === "~" || rel.startsWith("~/")) {
+      this.toast(t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다"), "error");
+      return false;
+    }
     if (/[\0\\]/.test(rel)) {
       this.toast(t("경로에 사용할 수 없는 문자가 있습니다"), "error");
       return false;
