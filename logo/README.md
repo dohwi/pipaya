@@ -35,7 +35,7 @@ cd logo && python3 -m http.server 4747 --bind 0.0.0.0
 
 - 마크 기하의 기준은 `build_mark.py`. 양쪽 잎을 수평 아래로 늘어뜨려 크라운을 1:1에 가깝게 만들고 열매를 키웠다.
 - 사이드바·레일·빈 화면·QR 등은 `client/src/components/PipayaMark.svelte` (`build_mark.py`와 같은 값). 단색이던 곳은 단색, `color`인 곳은 투톤 그대로.
-- 파비콘(`client/public/favicon*`)과 문서 사이트(`docs/public/img/`)는 같은 마크. 파비콘은 단색 `#111`.
+- 파비콘(`client/public/favicon*`)과 문서 사이트(별도 저장소 `wiki`의 `public/img/`)는 같은 마크. 파비콘은 단색 `#111`.
 - 앱 아이콘은 크림 타일(`#fbf3e2`) + 라이트 팔레트 컬러 나무. 크라운이 타일 폭의 86%, 줄기는 타일 아래로 흘러 나간다.
 - 알림 아이콘(안드로이드 상태 표시줄)은 나무 전체 실루엣(`app-icon-mark.svg`).
 
@@ -47,5 +47,5 @@ cd client && bun scripts/render-icons.ts    # SVG -> src-tauri/app-icon*.png, pu
 python3 scripts/make-icons.py               # OS별 아이콘 세트 (데스크톱·안드로이드·iOS·apple-touch)
 ```
 
-`PipayaMark.svelte`과 `docs/public/img/`는 `build_mark.py` 값을 바꿨을 때 직접 맞춘다.
+`PipayaMark.svelte`과 문서 사이트의 `public/img/`(별도 `wiki` 저장소)는 `build_mark.py` 값을 바꿨을 때 직접 맞춘다.
 `build.py`(표정 시안), `build_papaya.py`, `build_small.py`는 이전 시안 생성기 (`svg/papaya/`, `svg/small/`, `papaya.html`, `small.html`).
