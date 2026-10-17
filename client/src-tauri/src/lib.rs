@@ -174,6 +174,8 @@ fn disable_browser_shortcuts(app: &tauri::App) {
                     if let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() {
                         let _ = settings3.SetAreBrowserAcceleratorKeysEnabled(false);
                     }
+                    // No native right-click menu (Print, Save as, Inspect …); the page shows its own where needed.
+                    let _ = settings.SetAreDefaultContextMenusEnabled(false);
                 }
             }
         });
