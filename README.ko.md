@@ -18,6 +18,13 @@
 
 pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다. 서버가 모델 호출과 도구 실행을 맡고, 앱은 어느 기기에서든 같은 서버에 접속합니다. 세션, 설정, API 키는 내 서버의 SQLite에만 저장되며 클라우드 계정이 필요 없습니다.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/preview-dark.png" />
+    <img src=".github/assets/preview-light.png" alt="데스크톱과 모바일에서 실행 중인 pipaya" width="100%" />
+  </picture>
+</p>
+
 ## 주요 기능
 
 - **내장 도구 10종**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
