@@ -2,7 +2,7 @@
 
 The main agent can hand a task (usually a search) to a **helper**. The helper works in its own transcript and returns one short report, so the main conversation does not fill up with file contents.
 
-**A fresh server has no helpers.** Nothing is built in. Until at least one helper exists (saved on the server, or as a file), the `# Sub-agents` block is not added to the system prompt and `/subagent:name` adds no hint. The same holds for skills: with no skill available, no `<available_skills>` block is added.
+**A fresh server has no helpers (no files).** Nothing is built in. Until at least one helper exists (as a file), the `# Sub-agents` block is not added to the system prompt and `/subagent:name` adds no hint. The same holds for skills: with no skill available, no `<available_skills>` block is added.
 
 ## What a helper can and cannot do
 
@@ -12,44 +12,19 @@ The main agent can hand a task (usually a search) to a **helper**. The helper wo
 - Result: a report of at most ~300 words with `path:line` citations, cut at 6,000 chars. Output per call is limited to 2,048 tokens. Treat it as a lead and read the cited lines before changing code.
 - Default thinking strength is `minimal` unless the helper's model entry sets one.
 
-## Settings shape
+## What is stored on the server
 
-Stored on the server (`settings` table, key `subagents`). API: `GET /subagents`, `PUT /subagents` (admin or device token, `Authorization: Bearer`).
+Helpers are **files only**. The server stores just two switches, in the `settings` table (key `subagents`): the master switch and the names of helpers switched off in the settings screen. Older saves that held the helpers themselves are ignored.
 
-```json
-{
-  "settings": {
-    "enabled": true,
-    "agents": [
-      {
-        "name": "explore",
-        "description": "Searches and reads the codebase and reports back with path:line citations",
-        "enabled": true,
-        "model": null,
-        "tools": ["read", "grep", "ls"],
-        "maxTurns": 12,
-        "prompt": ""
-      }
-    ]
-  }
-}
-```
+API (admin or device token, `Authorization: Bearer`):
 
-`GET` also returns `defaults` (the factory setup: no helpers) and `toolChoices`.
-
-| Field | Rule |
+| Call | Effect |
 |---|---|
-| `settings.enabled` | Master switch for the whole `delegate` tool |
-| `agents` | At most 10; names unique |
-| `name` | `^[a-z][a-z0-9-]{0,39}$` (lowercase, digits, `-`; starts with a letter). This is what the main agent passes as `agent` and what the user types as `/subagent:name` |
-| `description` | 1-200 chars. Shown to the main agent; it decides when to pick this helper, so say *when to use it* |
-| `enabled` | A disabled helper is not offered |
-| `model` | `null` = the model of the conversation that called it. Otherwise `{provider, model, thinkingLevel?}`; the model must be registered or the save is rejected (`400`). If it is deleted later, the helper silently falls back to the caller's model |
-| `tools` | 1-6 unique items from `read`, `grep`, `ls`, `write`, `edit`, `bash` |
-| `maxTurns` | Integer 2-30 (default 12): model calls before it is stopped; the report then says it may be incomplete |
-| `prompt` | Up to 2,000 chars, **appended** to the built-in helper prompt (a read-only research prompt when the helper has no `write`/`edit`/`bash`, a general worker prompt otherwise) |
+| `GET /subagents?cwd=` | `{enabled, agents, warnings, toolChoices}`: every helper file visible from `cwd` (global + project), with `enabled` (effective), `fileEnabled`, `scope`, `path`, `model`, `tools`, `maxTurns`, `prompt`; broken files come back in `warnings` |
+| `PUT /subagents {enabled}` | Master switch for the whole `delegate` tool |
+| `PUT /subagents/:name {enabled}` | Switch one helper off/on. A helper whose file says `enabled: false` stays off. Unknown name: 404 |
 
-Unknown keys are rejected (`additionalProperties: false`). A bad save changes nothing.
+Limits (checked when a file is read; a bad file is skipped with a warning): `name` `^[a-z][a-z0-9-]{0,39}$`, `description` 1-200 chars, `tools` 1-6 unique items from `read`, `grep`, `ls`, `write`, `edit`, `bash`, `maxTurns` 2-30 (default 12), `prompt` up to 2,000 chars appended to the built-in helper prompt (read-only research prompt without `write`/`edit`/`bash`, a general worker prompt otherwise). Default thinking is `minimal`.
 
 ## Agent files (no API needed)
 
@@ -83,22 +58,19 @@ mkdir -p ~/.agents/subagents
 printf '%s\n' '---' 'description: Reads a diff area and lists risky spots with path:line. Read-only.' 'tools: [read, grep, ls]' '---' 'Focus on error handling and missing tests.' > ~/.agents/subagents/reviewer.md
 ```
 
-Unlike the API, an unknown `model` in a file is not checked when written; if it does not exist when the helper runs, the helper falls back to the caller's model. File helpers appear in the model's sub-agent list and the `delegate` description, not (yet) in the settings screen.
+An unknown `model` is not checked when written; if it does not exist when the helper runs, the helper falls back to the caller's model. The settings screen lists the files read-only and only switches helpers on or off.
 
 ## Recipes
 
-Add or change a helper through the API (keep the token out of output):
+Turn the whole feature off, or one helper off (keep the token out of output):
 
 ```bash
 TOKEN="$(< ~/.pipaya/token)"; URL=http://localhost:8787
-curl -s -H "Authorization: Bearer $TOKEN" $URL/subagents \
- | jq '.settings | .agents += [{name:"reviewer",description:"Reads a diff area and lists risky spots with path:line",enabled:true,model:null,tools:["read","grep"],maxTurns:12,prompt:"Focus on error handling and missing tests."}] | {settings:.}' \
- | curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d @- $URL/subagents
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"enabled":false}' $URL/subagents
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"enabled":false}' $URL/subagents/explore
 ```
 
-Edit one field: `jq '.settings | (.agents[] | select(.name=="explore") | .maxTurns) = 20 | {settings:.}'`. Remove: `.agents |= map(select(.name!="reviewer"))`. Turn all off: `.enabled = false`.
-
-Port and data dir may differ (`PIPAYA_PORT`, `PIPAYA_DATA_DIR`; the token file is `<data dir>/token`). Re-`GET` afterwards to confirm.
+Add, edit or remove a helper by writing, editing or deleting its `.md` file. Port and data dir may differ (`PIPAYA_PORT`, `PIPAYA_DATA_DIR`; the token file is `<data dir>/token`).
 
 ## Picking a helper by hand: `/subagent:name`
 
@@ -113,4 +85,4 @@ In the message input the user can write `/subagent:name` (preceded by start or w
 
 ## Source map (when you must read code)
 
-`server/src/subagent-settings.ts` (schema, limits, model resolution, merging files), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `/subagent:name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen).
+`server/src/subagent-settings.ts` (limits, switches, model resolution), `subagent-files.ts` (agent file parsing and lookup), `subagent.ts` (run loop, report cut, `/subagent:name` parsing/hint), `subagent-routes.ts` (API), `tools.ts` (the `delegate` tool), `sessions.ts` (wiring), client `src/components/SubAgents.svelte` (settings screen).

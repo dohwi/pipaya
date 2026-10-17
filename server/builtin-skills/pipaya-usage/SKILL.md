@@ -15,9 +15,9 @@ Facts about the user's own pipaya. Everything here was checked against the serve
 
 ## Rules
 
-1. **Settings live on the server, not in files.** Sub-agents and skill on/off are in the server database and are changed through the API or the client's settings screens. Sub-agents can *additionally* be defined as files (`references/subagents.md`, "Agent files"). `AGENTS.md` and `SKILL.md` are the opposite: plain files you can write.
+1. **Sub-agents, `AGENTS.md` and `SKILL.md` are plain files you write** (sub-agents: `references/subagents.md`). Only the on/off switches (skills, sub-agents, the sub-agent master switch) are stored in the server database and changed through the API or the client's settings screens.
 2. **Prefer the client UI when the user can use it** (sub-agents: the sub-agent screen in settings; skills: the book icon under the input). Use the API only when asked or when you have no other way.
-3. **`PUT /subagents` replaces everything.** Always `GET` first, change the one entry, and send the whole `settings` object back. A partial body would delete the other helpers.
+3. **Sub-agent definitions are never sent through the API.** `PUT /subagents` takes only `{enabled}` and `PUT /subagents/:name` only `{enabled}`; to add or change a helper, write its `.md` file.
 4. **Never print or log the token.** Read it into a shell variable (`TOKEN="$(< ~/.pipaya/token)"`, or `PIPAYA_TOKEN`) and use it in the same command. Never `cat` it. Do not touch `.env` files.
 5. **Say when it applies.** AGENTS.md is frozen at a session's first run, so edits reach new sessions only. Sub-agent and skill changes apply to the next call or message.
 6. **Give `write`/`edit`/`bash` to a helper only on request.** Those helpers act under the session's approval policy; default to `read`, `grep`, `ls`. A fresh server has no helpers, and with no helpers or skills the matching prompt blocks are not injected.

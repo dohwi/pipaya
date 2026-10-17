@@ -115,7 +115,8 @@ describe("server extensions", () => {
 
 	test("a sub-agent cannot get around the tool_call hook of the calling session", async () => {
 		writeFileSync(join(ws, "secret.txt"), "TOP-SECRET-VALUE");
-		expect((await api("PUT", "/subagents", { settings: { enabled: true, agents: [{ name: "explore", description: "reads", enabled: true, model: null, tools: ["read", "grep", "ls"], maxTurns: 6, prompt: "" }] } })).status).toBe(200);
+		mkdirSync(join(dir, ".agents", "subagents"), { recursive: true });
+		writeFileSync(join(dir, ".agents", "subagents", "explore.md"), "---\ndescription: reads\nmaxTurns: 6\n---\n");
 		const id = await newSession();
 		await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify({ task: `!read ${JSON.stringify({ path: "secret.txt" })}` })}` });
 		await untilIdle(id);

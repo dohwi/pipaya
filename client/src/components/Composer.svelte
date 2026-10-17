@@ -159,8 +159,9 @@
 		const api = app.api;
 		if (!agentsWanted || !api || app.net !== "online") return;
 		const controller = new AbortController();
-		api.subagents()
-			.then((r) => { if (!controller.signal.aborted) agentList = r.settings.enabled ? r.settings.agents.filter((a) => a.enabled).map((a) => ({ name: a.name, description: a.description })) : []; })
+		app.skillsTick; // agent files changed on disk
+		api.subagents((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs || undefined, controller.signal)
+			.then((r) => { if (!controller.signal.aborted) agentList = r.enabled ? r.agents.filter((a) => a.enabled).map((a) => ({ name: a.name, description: a.description })) : []; })
 			.catch(() => { if (!controller.signal.aborted) agentList = []; });
 		return () => controller.abort();
 	});

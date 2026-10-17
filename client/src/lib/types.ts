@@ -32,19 +32,29 @@ export interface SubAgentDef {
 	name: string;
 	/** Shown to the main agent so it knows when to pick this helper. */
 	description: string;
+	/** Effective state: the file says on and it is not switched off here. */
 	enabled: boolean;
 	/** The helper's model and strength; null = the model of the conversation that called it. */
 	model: ModelChoice | null;
 	tools: SubAgentTool[];
 	/** Model calls before the helper is stopped. */
 	maxTurns: number;
-	/** Extra instructions appended to the built-in read-only research prompt. */
+	/** Extra instructions appended to the built-in helper prompt. */
 	prompt: string;
 }
-export interface SubAgentSettings {
+/** A helper defined by an agent file (`~/.agents/subagents/*.md` or a project's `.agents/subagents/*.md`). */
+export interface SubAgentInfo extends SubAgentDef {
+	/** `enabled` as written in the file; a helper the file turns off cannot be turned on here. */
+	fileEnabled: boolean;
+	scope: "global" | "project";
+	path: string;
+}
+export interface SubAgentList {
 	/** Master switch for the `delegate` tool */
 	enabled: boolean;
-	agents: SubAgentDef[];
+	agents: SubAgentInfo[];
+	warnings: { path: string; message: string }[];
+	toolChoices: SubAgentTool[];
 }
 export interface CompactionSettings {
 	/** Compact automatically before a prompt when the context is nearly full */
@@ -60,7 +70,6 @@ export interface SystemModelSettings {
 	model: ModelChoice | null;
 }
 export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
-export interface SubAgentSettingsInfo { settings: SubAgentSettings; defaults: SubAgentSettings; toolChoices: SubAgentTool[] }
 
 export interface RetentionInfo { policy: RetentionPolicy; lastRun: number | null; lastDeleted: number; due: number }
 

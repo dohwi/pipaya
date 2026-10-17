@@ -1,11 +1,12 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { THINKING_LEVELS } from "../src/store.ts";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { defaultAgent, DEFAULT_SUBAGENT_SETTINGS, SubAgentSettings } from "../src/subagent-settings.ts";
+import { SubAgentSettings } from "../src/subagent-settings.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -31,7 +32,7 @@ beforeAll(async () => {
 	writeFileSync(join(ws, "a.txt"), "hello\n");
 	upstream = startEchoUpstream();
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
-	app = await buildApp(cfg, { strictResponses: true });
+	app = await buildApp(cfg, { strictResponses: true, home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", { ...echoProviderBody(upstream.baseUrl), models: [ECHO_MODEL, LIGHT, THINK] })).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
 });
@@ -41,11 +42,18 @@ afterAll(async () => {
 	rmSync(dir, { recursive: true, force: true });
 });
 
-const SEEDED = () => ({ enabled: true, agents: [defaultAgent()] });
-const one = (model: unknown, extra: object = {}) => ({ enabled: true, agents: [{ ...defaultAgent(), model, ...extra }] });
-const current = async () => (await api("GET", "/subagents")).json.settings;
-const currentModel = async () => (await current()).agents[0].model;
-const save = (settings: unknown) => api("PUT", "/subagents", { settings });
+
+const AGENTS = () => join(dir, ".agents", "subagents");
+/** Writes `<name>.md` into the global agents folder (the test home). */
+const agentFile = (name: string, front: Record<string, unknown> = {}, prompt = "") => {
+	mkdirSync(AGENTS(), { recursive: true });
+	const lines = Object.entries({ description: "Searches", ...front }).map(([k, v]) => `${k}: ${typeof v === "string" ? JSON.stringify(v) : JSON.stringify(v)}`);
+	writeFileSync(join(AGENTS(), `${name}.md`), `---\n${lines.join("\n")}\n---\n${prompt}\n`);
+};
+const clearAgents = () => rmSync(AGENTS(), { recursive: true, force: true });
+const list = async () => (await api("GET", "/subagents")).json;
+const sw = (enabled: boolean) => api("PUT", "/subagents", { enabled });
+const swAgent = (name: string, enabled: boolean) => api("PUT", `/subagents/${name}`, { enabled });
 async function untilIdle(id: string) {
 	for (let i = 0; i < 300; i++) {
 		if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
@@ -62,95 +70,122 @@ const delegate = async (id: string, args: object) => {
 	return msgs.map((m) => m.message).filter((m) => m.role === "toolResult" && m.toolName === "delegate").at(-1);
 };
 const helperRequest = () => upstream.requests.find((r) => JSON.stringify(r.body?.messages?.[0]).includes("read-only research assistant"));
+const reset = async () => {
+	clearAgents();
+	await sw(true);
+	for (const n of ["explore", "deep", "off"]) await swAgent(n, true).catch(() => {});
+};
 
-describe("sub-agent settings API", () => {
+describe("sub-agent API", () => {
 	test("needs the token", async () => {
 		expect((await api("GET", "/subagents", undefined, false)).status).toBe(401);
-		expect((await api("PUT", "/subagents", { settings: DEFAULT_SUBAGENT_SETTINGS() }, false)).status).toBe(401);
+		expect((await api("PUT", "/subagents", { enabled: true }, false)).status).toBe(401);
+		expect((await api("PUT", "/subagents/x", { enabled: true }, false)).status).toBe(401);
 	});
 
-	test("a fresh server has delegate on but no helper, and writing tools can be offered to a helper", async () => {
-		const r = (await api("GET", "/subagents")).json;
-		expect(r.settings).toEqual({ enabled: true, agents: [] });
+	test("a fresh server has delegate on and no helper; writing tools can be offered to a helper", async () => {
+		await reset();
+		const r = await list();
+		expect(r).toMatchObject({ enabled: true, agents: [], warnings: [] });
 		expect(r.toolChoices).toEqual(["read", "grep", "ls", "write", "edit", "bash"]);
-		expect(r.defaults).toEqual(r.settings);
 	});
 
-	test("save a model with its reasoning strength, read it back, announce the change, clear it with null", async () => {
-		const pick = { provider: "echo", model: THINK.id, thinkingLevel: "high" };
-		const put = await save(one(pick));
-		expect(put.status).toBe(200);
-		expect(put.json.settings.agents[0].model).toEqual(pick);
-		expect(await currentModel()).toEqual(pick);
-		const ev = app.bus.history({ after: 0, limit: 500 }).filter((e) => e.type === "configuration_updated" && (e.data as any).scope === "subagents");
-		expect(ev.length).toBe(1);
-		expect((await save(one({ provider: "echo", model: LIGHT.id }))).json.settings.agents[0].model).toEqual({ provider: "echo", model: LIGHT.id });
-		expect((await save(DEFAULT_SUBAGENT_SETTINGS())).json.settings).toEqual({ enabled: true, agents: [] });
+	test("lists agent files with their settings, path and scope; broken files come back as warnings", async () => {
+		await reset();
+		agentFile("explore", { model: `echo/${LIGHT.id}`, thinking: "low", maxTurns: 7 }, "Be brief.");
+		writeFileSync(join(AGENTS(), "broken.md"), "nothing");
+		const r = await list();
+		expect(r.agents).toHaveLength(1);
+		expect(r.agents[0]).toMatchObject({
+			name: "explore", description: "Searches", enabled: true, fileEnabled: true, scope: "global",
+			model: { provider: "echo", model: LIGHT.id, thinkingLevel: "low" }, tools: ["read", "grep", "ls"], maxTurns: 7, prompt: "Be brief.",
+			path: join(AGENTS(), "explore.md"),
+		});
+		expect(r.warnings.map((w: any) => w.path)).toEqual([join(AGENTS(), "broken.md")]);
+		await reset();
 	});
 
-	test("bad input is refused and changes nothing", async () => {
-		const good = one({ provider: "echo", model: LIGHT.id });
-		await save(good);
-		const bad: unknown[] = [
-			one({ provider: "echo", model: "missing" }),
-			one({ provider: "echo", model: LIGHT.id, thinkingLevel: "off" }), // reasoning cannot be switched off
-			one({ provider: "echo", model: LIGHT.id, thinkingLevel: "extreme" }),
-			one({ provider: "echo" }),
-			one({ provider: "echo", model: LIGHT.id, extra: 1 }),
-			one(null, { tools: ["delegate"] }), // a helper cannot start another helper
-			one(null, { tools: ["ask_user"] }),
-			one(null, { tools: [] }),
-			one(null, { tools: ["read", "read"] }),
-			one(null, { name: "Bad Name" }),
-			one(null, { name: "" }),
-			one(null, { description: "" }),
-			one(null, { maxTurns: 1 }),
-			one(null, { maxTurns: 31 }),
-			one(null, { prompt: "x".repeat(2001) }),
-			{ enabled: true, agents: [defaultAgent(), defaultAgent()] }, // duplicate names
-			{ enabled: true, agents: Array.from({ length: 11 }, (_, i) => ({ ...defaultAgent(), name: `a${i}` })) },
-			{ enabled: true },
-			{ agents: [] },
-			{ enabled: "yes", agents: [] },
-			{ enabled: true, agents: [], model: null }, // the one-helper shape is gone
-		];
-		for (const settings of bad) expect((await save(settings)).status).toBe(400);
-		expect(await current()).toEqual(good);
-		await save(SEEDED());
+	test("the master switch and a per-helper switch are saved and announced", async () => {
+		await reset();
+		agentFile("explore");
+		const before = app.bus.history({ after: 0, limit: 500 }).filter((e) => e.type === "configuration_updated" && (e.data as any).scope === "subagents").length;
+		expect((await sw(false)).json.enabled).toBe(false);
+		expect((await sw(true)).json.enabled).toBe(true);
+		const off = await swAgent("explore", false);
+		expect(off.status).toBe(200);
+		expect(off.json.agents[0]).toMatchObject({ enabled: false, fileEnabled: true });
+		expect((await list()).agents[0].enabled).toBe(false);
+		expect((await swAgent("explore", true)).json.agents[0].enabled).toBe(true);
+		const after = app.bus.history({ after: 0, limit: 500 }).filter((e) => e.type === "configuration_updated" && (e.data as any).scope === "subagents").length;
+		expect(after - before).toBe(4);
+		await reset();
+	});
+
+	test("a helper the file disables stays off; an unknown name is 404; bad bodies are 400", async () => {
+		await reset();
+		agentFile("explore", { enabled: false });
+		expect((await swAgent("explore", true)).json.agents[0]).toMatchObject({ enabled: false, fileEnabled: false });
+		expect((await swAgent("nobody", true)).status).toBe(404);
+		expect((await api("PUT", "/subagents", { enabled: "yes" })).status).toBe(400);
+		expect((await api("PUT", "/subagents", {})).status).toBe(400);
+		expect((await api("PUT", "/subagents", { enabled: true, agents: [] })).status).toBe(400);
+		expect((await api("PUT", "/subagents/explore", { enabled: 1 })).status).toBe(400);
+		await reset();
+	});
+
+	test("a project file for the cwd is listed and wins over the global one of the same name", async () => {
+		await reset();
+		agentFile("explore", { description: "global" });
+		mkdirSync(join(ws, ".agents", "subagents"), { recursive: true });
+		writeFileSync(join(ws, ".agents", "subagents", "explore.md"), "---\ndescription: project\n---\n");
+		try {
+			expect((await list()).agents[0].description).toBe("global");
+			const r = (await api("GET", `/subagents?cwd=${encodeURIComponent(ws)}`)).json;
+			expect(r.agents).toHaveLength(1);
+			expect(r.agents[0]).toMatchObject({ description: "project", scope: "project" });
+		} finally {
+			rmSync(join(ws, ".agents"), { recursive: true, force: true });
+			await reset();
+		}
 	});
 });
 
 describe("settings change what delegate does", () => {
 	test("the switch turns delegate off without removing the tool, and no model request is made", async () => {
-		await save({ ...SEEDED(), enabled: false });
-		const id = await newSession();
-		const result = await delegate(id, { task: "x" });
+		await reset();
+		agentFile("explore");
+		await sw(false);
+		const result = await delegate(await newSession(), { task: "x" });
 		expect(result.isError).toBe(true);
 		expect(JSON.stringify(result.content)).toContain("switched off");
 		expect(helperRequest()).toBeUndefined();
-		await save(SEEDED());
+		await sw(true);
 		expect((await delegate(await newSession(), { task: "x" })).isError).not.toBe(true);
 	});
 
 	test("with no model set the helper runs on the calling session's model", async () => {
-		await save(SEEDED());
+		await reset();
+		agentFile("explore");
 		const id = (await api("POST", "/sessions", { cwd: ws, approval: "auto", provider: "echo", model: LIGHT.id })).json.id as string;
 		const result = await delegate(id, { task: "hi" });
 		expect(result.details.model).toBe(LIGHT.id);
 		expect(helperRequest()!.body.model).toBe(LIGHT.id);
 	});
 
-	test("a configured model is used whatever model the session has", async () => {
-		await save(one({ provider: "echo", model: LIGHT.id }));
+	test("a configured model is used whatever model the session has; edits to the file apply to the next call", async () => {
+		await reset();
+		agentFile("explore", { model: `echo/${LIGHT.id}` });
 		const result = await delegate(await newSession(), { task: "hi" });
 		expect(result.details).toMatchObject({ provider: "echo", model: LIGHT.id });
 		expect(helperRequest()!.body.model).toBe(LIGHT.id);
-		await save(SEEDED());
+		agentFile("explore", { model: `echo/${THINK.id}` });
+		expect((await delegate(await newSession(), { task: "hi" })).details.model).toBe(THINK.id);
 	});
 
 	test("the model and its reasoning strength travel together; unset strength means minimal", async () => {
-		const seen = async (thinkingLevel?: string) => {
-			expect((await save(one({ provider: "echo", model: THINK.id, ...(thinkingLevel ? { thinkingLevel } : {}) }))).status).toBe(200);
+		await reset();
+		const seen = async (thinking?: string) => {
+			agentFile("explore", { model: `echo/${THINK.id}`, ...(thinking ? { thinking } : {}) });
 			const r = await delegate(await newSession(), { task: "hi" });
 			expect(r.isError).not.toBe(true);
 			return helperRequest()!.body.reasoning_effort;
@@ -158,75 +193,51 @@ describe("settings change what delegate does", () => {
 		expect(await seen("high")).toBe("high");
 		expect(await seen("low")).toBe("low");
 		expect(await seen()).toBe("minimal");
-		await save(SEEDED());
+		expect(THINKING_LEVELS).toContain("high");
 	});
 
 	test("a model without reasoning is simply called without it", async () => {
-		await save(one({ provider: "echo", model: LIGHT.id, thinkingLevel: "high" }));
-		const r = await delegate(await newSession(), { task: "hi" });
-		expect(r.isError).not.toBe(true);
-		await save(SEEDED());
+		await reset();
+		agentFile("explore", { model: `echo/${LIGHT.id}`, thinking: "high" });
+		expect((await delegate(await newSession(), { task: "hi" })).isError).not.toBe(true);
 	});
 
-	test("a model that was deleted after saving falls back to the session's model instead of failing", async () => {
+	test("a model that does not exist falls back to the session's model instead of failing", () => {
 		const db = new Database(":memory:", { strict: true });
 		db.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, data TEXT NOT NULL)");
-		db.query("INSERT INTO settings (key, data) VALUES ('subagents', $d)").run({ d: JSON.stringify({ enabled: true, agents: [{ ...defaultAgent(), model: { provider: "echo", model: "gone", thinkingLevel: "high" } }] }) });
 		const known = (_p: string, m: string) => (m === "here" ? ({} as any) : undefined);
 		const settings = new SubAgentSettings(db, { models: { getModel: known } } as any);
 		const session = { provider: "echo", model: "session" };
-		expect(settings.resolve(settings.get().agents[0]!, session)).toEqual({ provider: "echo", model: "session", thinkingLevel: "minimal", custom: false });
-		const saved = settings.set({ enabled: true, agents: [defaultAgent({ provider: "echo", model: "here" })] });
-		expect(settings.resolve(saved.agents[0]!, session)).toEqual({ provider: "echo", model: "here", thinkingLevel: "minimal", custom: true });
+		expect(settings.resolve({ model: { provider: "echo", model: "gone", thinkingLevel: "high" } as any }, session)).toEqual({ provider: "echo", model: "session", thinkingLevel: "minimal", custom: false });
+		expect(settings.resolve({ model: { provider: "echo", model: "here" } }, session)).toEqual({ provider: "echo", model: "here", thinkingLevel: "minimal", custom: true });
 	});
 });
 
 describe("settings saved by earlier versions", () => {
-	const store = (value: object, roles?: object) => {
+	const store = (value: object) => {
 		const db = new Database(":memory:", { strict: true });
 		db.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, data TEXT NOT NULL)");
 		db.query("INSERT INTO settings (key, data) VALUES ('subagents', $d)").run({ d: JSON.stringify(value) });
-		if (roles) db.query("INSERT INTO settings (key, data) VALUES ('model_roles', $d)").run({ d: JSON.stringify(roles) });
-		return new SubAgentSettings(db, {} as any).get() as any;
+		return new SubAgentSettings(db, {} as any).get();
 	};
-	const old = (extra: object = {}) => ({ name: "explore", description: "d", enabled: true, role: null, model: null, thinkingLevel: null, tools: ["read"], maxTurns: 7, maxReportChars: 1000, prompt: "p", ...extra });
-	const multi = (agents: object[]) => ({ enabled: true, allowModelChoice: true, allowedRoles: ["light"], agents });
-
-	test("the one-helper shape becomes a single 'explore' helper with that model", () => {
-		const model = { provider: "p", model: "m", thinkingLevel: "low" };
-		expect(store({ enabled: true, model })).toEqual({ enabled: true, agents: [defaultAgent(model as any)] });
-		expect(store({ enabled: false, model: null })).toEqual({ enabled: false, agents: [defaultAgent()] });
-	});
-	test("the several-helpers shape keeps every helper, with its tools, steps and prompt", () => {
-		const r = store(multi([old({ model: { provider: "p", model: "m" }, thinkingLevel: "low" }), old({ name: "second", enabled: false })]));
-		expect(r.agents).toEqual([
-			{ name: "explore", description: "d", enabled: true, model: { provider: "p", model: "m", thinkingLevel: "low" }, tools: ["read"], maxTurns: 7, prompt: "p" },
-			{ name: "second", description: "d", enabled: false, model: null, tools: ["read"], maxTurns: 7, prompt: "p" },
-		]);
-	});
-	test("a role is replaced by the model it pointed at; an unmapped role becomes 'the session's model'", () => {
-		expect(store(multi([old({ role: "explore" })]), { explore: { provider: "p", model: "light" } }).agents[0].model).toEqual({ provider: "p", model: "light" });
-		expect(store(multi([old({ role: "explore" })])).agents[0].model).toBeNull();
-	});
-	test("the master switch carries over", () => {
-		expect(store({ ...multi([old()]), enabled: false }).enabled).toBe(false);
+	test("only the master switch survives; helpers that lived in the database are ignored", () => {
+		expect(store({ enabled: false, agents: [{ name: "explore" }] })).toEqual({ enabled: false, disabled: [] });
+		expect(store({ enabled: true, model: null })).toEqual({ enabled: true, disabled: [] });
+		expect(store({ nonsense: 1 })).toEqual({ enabled: true, disabled: [] });
 	});
 });
 
 describe("several helpers", () => {
-	const two = () => ({
-		enabled: true,
-		agents: [
-			{ ...defaultAgent({ provider: "echo", model: LIGHT.id }), name: "explore", prompt: "Be brief." },
-			{ ...defaultAgent({ provider: "echo", model: THINK.id, thinkingLevel: "high" } as any), name: "deep", description: "Reads slowly and carefully", tools: ["read"], maxTurns: 3 },
-			{ ...defaultAgent(), name: "off", description: "Disabled one", enabled: false },
-		],
-	});
+	const two = () => {
+		agentFile("explore", { model: `echo/${LIGHT.id}` }, "Be brief.");
+		agentFile("deep", { description: "Reads slowly and carefully", model: `echo/${THINK.id}`, thinking: "high", tools: ["read"], maxTurns: 3 });
+		agentFile("off", { description: "Disabled one", enabled: false });
+	};
 
 	test("the tool description lists the enabled helpers by name; a disabled one is not offered", async () => {
-		expect((await save(two())).status).toBe(200);
-		const id = await newSession();
-		await delegate(id, { task: "hi" });
+		await reset();
+		two();
+		await delegate(await newSession(), { task: "hi" });
 		const main = upstream.requests.find((r) => !JSON.stringify(r.body?.messages?.[0]).includes("read-only research assistant"))!;
 		const desc = main.body.tools.find((t: any) => t.function.name === "delegate").function.description as string;
 		expect(desc).toContain("- explore:");
@@ -234,8 +245,19 @@ describe("several helpers", () => {
 		expect(desc).not.toContain("Disabled one");
 	});
 
+	test("switching a helper off in settings removes it from the tool description", async () => {
+		await reset();
+		two();
+		await swAgent("deep", false);
+		await delegate(await newSession(), { task: "hi" });
+		const main = upstream.requests.find((r) => !JSON.stringify(r.body?.messages?.[0]).includes("read-only research assistant"))!;
+		expect(main.body.tools.find((t: any) => t.function.name === "delegate").function.description).not.toContain("- deep:");
+		await swAgent("deep", true);
+	});
+
 	test("`agent` picks the helper: its model, strength, tools and extra prompt are the ones used", async () => {
-		await save(two());
+		await reset();
+		two();
 		const deep = await delegate(await newSession(), { task: "hi", agent: "deep" });
 		expect(deep.isError).not.toBe(true);
 		expect(deep.details).toMatchObject({ agent: "deep", model: THINK.id });
@@ -252,37 +274,40 @@ describe("several helpers", () => {
 	});
 
 	test("without `agent` the first enabled helper runs", async () => {
-		const s = two();
-		s.agents[0]!.enabled = false;
-		await save(s);
+		await reset();
+		two();
+		await swAgent("deep", true);
+		await swAgent("explore", false);
 		const r = await delegate(await newSession(), { task: "hi" });
 		expect(r.details.agent).toBe("deep");
+		await swAgent("explore", true);
 	});
 
 	test("an unknown or disabled name is a tool error that names the helpers that exist; nothing is called", async () => {
-		await save(two());
+		await reset();
+		two();
 		for (const agent of ["nope", "off"]) {
 			const r = await delegate(await newSession(), { task: "hi", agent });
 			expect(r.isError).toBe(true);
-			expect(JSON.stringify(r.content)).toContain("available: explore, deep");
+			expect(JSON.stringify(r.content)).toContain("available: deep, explore");
 			expect(helperRequest()).toBeUndefined();
 		}
 	});
 
 	test("with every helper disabled, delegate says so", async () => {
-		await save({ enabled: true, agents: [{ ...defaultAgent(), enabled: false }] });
+		await reset();
+		agentFile("explore", { enabled: false });
 		const r = await delegate(await newSession(), { task: "hi" });
 		expect(r.isError).toBe(true);
 		expect(JSON.stringify(r.content)).toContain("no sub-agent is enabled");
-		await save(SEEDED());
 	});
 
 	test("the step limit is per helper", async () => {
-		const s = two();
-		s.agents[1]!.maxTurns = 2;
-		await save(s);
+		await reset();
+		two();
 		const r = await delegate(await newSession(), { task: `!read ${JSON.stringify({ path: "a.txt" })}`, agent: "deep" });
-		expect(r.details.turns).toBeLessThanOrEqual(2);
-		await save(SEEDED());
+		expect(r.details.turns).toBeLessThanOrEqual(3);
+		unlinkSync(join(AGENTS(), "deep.md"));
+		await reset();
 	});
 });

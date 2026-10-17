@@ -120,7 +120,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const questions = new QuestionManager(bus);
 	const skills = new SkillService(db, { home: opts.home, builtin: opts.builtinSkills, defaultWorkdir: () => configuration.defaultWorkdir() });
 	const modelRoles = new ModelRoles(db, registry);
-	const subagentSettings = new SubAgentSettings(db, registry);
+	const subagentSettings = new SubAgentSettings(db, registry, { home: opts.home });
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
 	const extensions = new ExtensionHost({

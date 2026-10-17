@@ -1,8 +1,7 @@
 import type { Database } from "bun:sqlite";
 import Type, { type Static } from "typebox";
-import Value from "typebox/value";
-import { badRequest } from "./errors.ts";
-import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
+import { notFound } from "./errors.ts";
+import { ModelChoice } from "./model-choice.ts";
 import type { ModelRegistry } from "./models.ts";
 import type { ThinkingLevel } from "./store.ts";
 import { loadAgentFiles } from "./subagent-files.ts";
@@ -39,111 +38,93 @@ export const SubAgentDef = Type.Object(
 );
 export type SubAgentDefinition = Static<typeof SubAgentDef>;
 
+/** What is stored: the master switch and the names of file helpers the owner switched off. The helpers themselves are files. */
 export const SubAgentSettingsSchema = Type.Object(
 	{
 		enabled: Type.Boolean({ description: "Master switch for the `delegate` tool" }),
-		agents: Type.Array(SubAgentDef, { maxItems: MAX_AGENTS }),
+		disabled: Type.Array(Type.String(), { maxItems: 200, description: "Helpers switched off here, by name" }),
 	},
 	{ additionalProperties: false },
 );
 export type SubAgentSettingsValue = Static<typeof SubAgentSettingsSchema>;
 
-export const SubAgentSettingsBody = Type.Object({ settings: SubAgentSettingsSchema }, { additionalProperties: false });
-export const SubAgentSettingsResult = Type.Object({
-	settings: SubAgentSettingsSchema,
-	defaults: SubAgentSettingsSchema,
+export const SubAgentSwitchBody = Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false });
+export const SubAgentListQuery = Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096 })) });
+export const SubAgentInfo = Type.Object(
+	{
+		...SubAgentDef.properties,
+		fileEnabled: Type.Boolean({ description: "`enabled` as written in the file; a helper the file disables cannot be switched on here" }),
+		scope: Type.Union([Type.Literal("global"), Type.Literal("project")]),
+		path: Type.String(),
+	},
+	{ additionalProperties: false },
+);
+export const SubAgentListResult = Type.Object({
+	enabled: Type.Boolean(),
+	agents: Type.Array(SubAgentInfo),
+	warnings: Type.Array(Type.Object({ path: Type.String(), message: Type.String() })),
 	toolChoices: Type.Array(Type.String()),
 });
+export type SubAgentListValue = Static<typeof SubAgentListResult>;
 
-export const defaultAgent = (model: ModelChoiceValue | null = null): SubAgentDefinition => ({
-	name: "explore",
-	description: "Searches and reads the codebase and reports back with path:line citations",
-	enabled: true,
-	model,
-	tools: [...READ_ONLY_SUBAGENT_TOOLS],
-	maxTurns: DEFAULT_MAX_TURNS,
-	prompt: "",
-});
-/** The built-in "explore" helper is only a template the owner can add; a fresh server has no helpers at all. */
-export const DEFAULT_SUBAGENT_SETTINGS = (): SubAgentSettingsValue => ({ enabled: true, agents: [] });
+export const DEFAULT_SUBAGENT_SETTINGS = (): SubAgentSettingsValue => ({ enabled: true, disabled: [] });
 
 const KEY = "subagents";
-
-/**
- * Older saved shapes: `{enabled, model}` (one helper) and `{enabled, agents: [{role|model, thinkingLevel, maxReportChars, ...}]}`
- * (several helpers, each with a model role). Both become the current shape; a role is looked up in the role table.
- */
-function fromLegacy(db: Database, parsed: any): SubAgentSettingsValue | null {
-	if (!parsed || typeof parsed !== "object") return null;
-	if (!Array.isArray(parsed.agents)) {
-		if (!("model" in parsed) || typeof parsed.enabled !== "boolean") return null;
-		const next = { enabled: parsed.enabled, agents: [defaultAgent(parsed.model ?? null)] };
-		return Value.Check(SubAgentSettingsSchema, next) ? next : null;
-	}
-	const roles = (): Record<string, any> => {
-		const row = db.query("SELECT data FROM settings WHERE key = 'model_roles'").get() as { data: string } | null;
-		try { return row ? JSON.parse(row.data) ?? {} : {}; } catch { return {}; }
-	};
-	const agents: SubAgentDefinition[] = [];
-	for (const a of parsed.agents) {
-		if (!a || typeof a !== "object") continue;
-		let pick: { provider?: unknown; model?: unknown } | null = a.model ?? null;
-		if (!pick && typeof a.role === "string") pick = roles()[a.role] ?? null;
-		let model: ModelChoiceValue | null = null;
-		if (pick && typeof pick.provider === "string" && typeof pick.model === "string") {
-			model = { provider: pick.provider, model: pick.model, ...(typeof a.thinkingLevel === "string" ? { thinkingLevel: a.thinkingLevel } : {}) } as ModelChoiceValue;
-		}
-		const def = { name: a.name, description: a.description, enabled: a.enabled, model, tools: a.tools, maxTurns: a.maxTurns, prompt: a.prompt };
-		if (Value.Check(SubAgentDef, def) && !agents.some((x) => x.name === def.name)) agents.push(def);
-	}
-	const next = { enabled: parsed.enabled !== false, agents };
-	return Value.Check(SubAgentSettingsSchema, next) ? next : null;
-}
 
 export class SubAgentSettings {
 	constructor(private db: Database, private registry: ModelRegistry, private opts: { home?: string } = {}) {}
 
-	/** Stored settings, or the defaults when nothing usable is stored. */
+	/** Stored switches, or the defaults. Older saves also held the helpers themselves; those are ignored (helpers are files now). */
 	get(): SubAgentSettingsValue {
 		const row = this.db.query("SELECT data FROM settings WHERE key = $key").get({ key: KEY }) as { data: string } | null;
 		if (!row) return DEFAULT_SUBAGENT_SETTINGS();
 		try {
 			const parsed = JSON.parse(row.data);
-			if (Value.Check(SubAgentSettingsSchema, parsed)) return parsed;
-			return fromLegacy(this.db, parsed) ?? DEFAULT_SUBAGENT_SETTINGS();
+			if (!parsed || typeof parsed !== "object" || typeof parsed.enabled !== "boolean") return DEFAULT_SUBAGENT_SETTINGS();
+			const disabled = Array.isArray(parsed.disabled) ? parsed.disabled.filter((n: unknown): n is string => typeof n === "string") : [];
+			return { enabled: parsed.enabled, disabled };
 		} catch {
 			return DEFAULT_SUBAGENT_SETTINGS();
 		}
 	}
 
-	/** Replaces everything. Rules the schema cannot express are checked here so a bad save changes nothing. */
-	set(next: SubAgentSettingsValue): SubAgentSettingsValue {
-		const names = new Set<string>();
-		for (const a of next.agents) {
-			if (names.has(a.name)) throw badRequest(`duplicate sub-agent name "${a.name}"`);
-			names.add(a.name);
-			if (a.model && !this.registry.models.getModel(a.model.provider, a.model.model)) {
-				throw badRequest(`sub-agent "${a.name}": unknown model ${a.model.provider}/${a.model.model}`);
-			}
-			if (new Set(a.tools).size !== a.tools.length) throw badRequest(`sub-agent "${a.name}": duplicate tools`);
-		}
+	private save(next: SubAgentSettingsValue): void {
 		this.db.query("INSERT INTO settings (key, data) VALUES ($key, $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ key: KEY, data: JSON.stringify(next) });
-		return this.get();
 	}
 
-	/**
-	 * Helpers the main agent may pick: the ones saved on the server, then agent files (global, then project files
-	 * for `cwd`). A file with the same name replaces the saved helper. Empty when nothing is defined anywhere.
-	 */
+	/** The master switch. */
+	setEnabled(enabled: boolean): void {
+		this.save({ ...this.get(), enabled });
+	}
+
+	/** Switches one file helper on or off for the whole server. Unknown names are a 404. */
+	setAgentEnabled(name: string, enabled: boolean, cwd?: string): void {
+		const s = this.get();
+		const known = loadAgentFiles(cwd, this.opts.home).agents.some((a) => a.name === name);
+		if (!known && !s.disabled.includes(name)) throw notFound(`sub-agent "${name}"`);
+		const disabled = s.disabled.filter((n) => n !== name);
+		if (!enabled) disabled.push(name);
+		this.save({ ...s, disabled });
+	}
+
+	/** Every helper file visible from `cwd` with its effective state, for the settings screen. */
+	list(cwd?: string): Omit<SubAgentListValue, "toolChoices"> {
+		const s = this.get();
+		const { agents, warnings } = loadAgentFiles(cwd, this.opts.home);
+		return {
+			enabled: s.enabled,
+			agents: agents.map(({ source, ...a }) => ({ ...a, scope: source, fileEnabled: a.enabled, enabled: a.enabled && !s.disabled.includes(a.name) })),
+			warnings,
+		};
+	}
+
+	/** Helpers the main agent may pick: enabled agent files for `cwd` (global, then project; the nearest wins). Empty when none exist. */
 	available(cwd?: string): SubAgentDefinition[] {
 		const s = this.get();
 		if (!s.enabled) return [];
-		const merged = new Map<string, SubAgentDefinition>(s.agents.map((a) => [a.name, a]));
-		for (const { source: _s, path: _p, ...a } of loadAgentFiles(cwd, this.opts.home).agents) {
-			merged.delete(a.name);
-			merged.set(a.name, a);
-		}
-		return [...merged.values()].filter((a) => a.enabled);
+		return loadAgentFiles(cwd, this.opts.home).agents
+			.filter((a) => a.enabled && !s.disabled.includes(a.name))
+			.map(({ source: _s, path: _p, ...a }) => a);
 	}
 
 	/**

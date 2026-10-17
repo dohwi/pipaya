@@ -1,23 +1,34 @@
 import type { FastifyInstance } from "fastify";
 import type { EventBus } from "./events.ts";
-import { errors } from "./schemas.ts";
-import { DEFAULT_SUBAGENT_SETTINGS, SUBAGENT_TOOL_CHOICES, SubAgentSettingsBody, SubAgentSettingsResult, type SubAgentSettings } from "./subagent-settings.ts";
+import { errors, IdParams } from "./schemas.ts";
+import { SUBAGENT_TOOL_CHOICES, SubAgentListQuery, SubAgentListResult, SubAgentSwitchBody, type SubAgentSettings } from "./subagent-settings.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
-/** Whether the `delegate` tool is on, and the read-only helpers it can hand work to. */
+/**
+ * Sub-agents are Markdown files (`~/.agents/subagents/*.md`, `<dir>/.agents/subagents/*.md`), like skills. The server
+ * only stores two kinds of switch: the master one and a per-helper on/off. Everything else is edited in the files.
+ */
 export function registerSubAgentRoutes(server: FastifyInstance, settings: SubAgentSettings, bus: EventBus): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
-	const view = () => ({ settings: settings.get(), defaults: DEFAULT_SUBAGENT_SETTINGS(), toolChoices: [...SUBAGENT_TOOL_CHOICES] });
+	const view = (cwd?: string) => ({ ...settings.list(cwd), toolChoices: [...SUBAGENT_TOOL_CHOICES] });
 	app.get("/subagents", {
-		schema: { response: { 200: SubAgentSettingsResult, ...errors(401) } },
-		handler: async () => view(),
+		schema: { querystring: SubAgentListQuery, response: { 200: SubAgentListResult, ...errors(400, 401) } },
+		handler: async (req) => view(req.query.cwd),
 	});
 	app.put("/subagents", {
-		schema: { body: SubAgentSettingsBody, response: { 200: SubAgentSettingsResult, ...errors(400, 401) } },
+		schema: { querystring: SubAgentListQuery, body: SubAgentSwitchBody, response: { 200: SubAgentListResult, ...errors(400, 401) } },
 		handler: async (req) => {
-			settings.set(req.body.settings);
+			settings.setEnabled(req.body.enabled);
 			bus.publish(null, "configuration_updated", { scope: "subagents" });
-			return view();
+			return view(req.query.cwd);
+		},
+	});
+	app.put("/subagents/:id", {
+		schema: { params: IdParams, querystring: SubAgentListQuery, body: SubAgentSwitchBody, response: { 200: SubAgentListResult, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			settings.setAgentEnabled(req.params.id, req.body.enabled, req.query.cwd);
+			bus.publish(null, "configuration_updated", { scope: "subagents" });
+			return view(req.query.cwd);
 		},
 	});
 }

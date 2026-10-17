@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultAgent } from "../src/subagent-settings.ts";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { finishReport, MAX_REPORT_CHARS, MAX_TURNS, SUBAGENT_TOOLS } from "../src/subagent.ts";
@@ -12,6 +11,7 @@ let app: App;
 let dir: string;
 let ws: string;
 let upstream: EchoUpstream;
+let EXPLORE = "";
 const api = async (method: any, url: string, payload?: unknown) => {
 	const r = await app.server.inject({
 		method,
@@ -24,6 +24,7 @@ const api = async (method: any, url: string, payload?: unknown) => {
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-subagent-"));
+	EXPLORE = join(dir, ".agents", "subagents", "explore.md");
 	ws = join(dir, "ws");
 	mkdirSync(ws, { recursive: true });
 	writeFileSync(join(ws, "notes.txt"), "the answer is 42\n");
@@ -31,11 +32,12 @@ beforeAll(async () => {
 	symlinkSync(join(dir, "outside.txt"), join(ws, "link.txt"));
 	upstream = startEchoUpstream();
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
-	app = await buildApp(cfg, { strictResponses: true });
+	app = await buildApp(cfg, { strictResponses: true, home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
-	// A fresh server has no helpers; these tests need the usual read-only "explore".
-	expect((await api("PUT", "/subagents", { settings: { enabled: true, agents: [defaultAgent()] } })).status).toBe(200);
+	// Helpers are files; these tests need the usual read-only "explore".
+	mkdirSync(join(dir, ".agents", "subagents"), { recursive: true });
+	writeFileSync(EXPLORE, "---\ndescription: Searches and reads the codebase and reports back with path:line citations\n---\n");
 });
 afterAll(async () => {
 	await app.close();
@@ -163,7 +165,7 @@ describe("delegate (read-only sub-agent)", () => {
 	});
 
 	test("the system prompt lists the enabled helpers by name and description, and follows settings changes", async () => {
-		const cur = (await api("GET", "/subagents")).json.settings;
+		const cur = (await api("GET", "/subagents")).json;
 		const prompt = async () => {
 			const id = await newSession();
 			upstream.requests.length = 0;
@@ -174,44 +176,42 @@ describe("delegate (read-only sub-agent)", () => {
 		};
 		try {
 			const on = await prompt();
-			expect(on).toContain("# Sub-agents");
+			expect(on).toContain("Helpers you can hand work to");
 			for (const a of cur.agents.filter((x: any) => x.enabled)) expect(on).toContain(`- ${a.name}: `);
 
-			const off = (await api("PUT", "/subagents", { settings: { ...cur, enabled: false } }));
+			const off = (await api("PUT", "/subagents", { enabled: false }));
 			expect(off.status).toBe(200);
-			expect(await prompt()).not.toContain("# Sub-agents");
+			expect(await prompt()).not.toContain("Helpers you can hand work to");
 
 			// A session without the delegate tool is not told about helpers it cannot call.
-			expect((await api("PUT", "/subagents", { settings: cur })).status).toBe(200);
+			expect((await api("PUT", "/subagents", { enabled: true })).status).toBe(200);
 			const id = await newSession({ tools: ["read"] });
 			upstream.requests.length = 0;
 			await api("POST", `/sessions/${id}/messages`, { text: "hi" });
 			await untilIdle(id);
-			expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("# Sub-agents");
+			expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("Helpers you can hand work to");
 		} finally {
-			await api("PUT", "/subagents", { settings: cur });
+			await api("PUT", "/subagents", { enabled: true });
 		}
 	});
 
 	test("with no helper defined nothing about sub-agents is injected, and no hint is added", async () => {
-		const cur = (await api("GET", "/subagents")).json.settings;
-		expect((await api("PUT", "/subagents", { settings: { enabled: true, agents: [] } })).status).toBe(200);
+		renameSync(EXPLORE, `${EXPLORE}.off`);
 		try {
 			const id = await newSession();
 			upstream.requests.length = 0;
 			await api("POST", `/sessions/${id}/messages`, { text: "$explore hi" });
 			await untilIdle(id);
 			const sent = JSON.stringify(upstream.requests.at(0)?.body.messages);
-			expect(sent).not.toContain("# Sub-agents");
+			expect(sent).not.toContain("Helpers you can hand work to");
 			expect(sent).not.toContain("<pipaya-hint>");
 		} finally {
-			await api("PUT", "/subagents", { settings: cur });
+			renameSync(`${EXPLORE}.off`, EXPLORE);
 		}
 	});
 
 	test("no hint when sub-agents are switched off", async () => {
-		const cur = (await api("GET", "/subagents")).json.settings;
-		expect((await api("PUT", "/subagents", { settings: { ...cur, enabled: false } })).status).toBe(200);
+		expect((await api("PUT", "/subagents", { enabled: false })).status).toBe(200);
 		try {
 			const id = await newSession();
 			upstream.requests.length = 0;
@@ -219,7 +219,7 @@ describe("delegate (read-only sub-agent)", () => {
 			await untilIdle(id);
 			expect(JSON.stringify(upstream.requests.at(0)?.body.messages)).not.toContain("<pipaya-hint>");
 		} finally {
-			await api("PUT", "/subagents", { settings: cur });
+			await api("PUT", "/subagents", { enabled: true });
 		}
 	});
 });
