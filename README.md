@@ -17,10 +17,6 @@
 
 pipaya is an **AI agent chat tool that runs on your own server**. The server calls models and runs tools; the app connects to it from any device. Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.
 
-<p align="center">
-  <img src=".github/assets/preview-desktop.png" alt="pipaya desktop" width="880" />
-</p>
-
 ## Features
 
 - **Agent with 10 built-in tools**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
