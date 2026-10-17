@@ -13,7 +13,6 @@
 	let tab = $state(0);
 	let answers = $state<string[]>([]);
 	const cur = $derived(items ? items[tab]! : question);
-	const done = $derived(items ? items.every((_, i) => !!answers[i]?.trim()) : false);
 
 	// Show the saved answer of the tab being opened in the text field.
 	function go(i: number) {
@@ -32,12 +31,11 @@
 		answers[tab] = a;
 		const next = items.findIndex((_, i) => i > tab && !answers[i]?.trim());
 		if (next >= 0) go(next);
-		else typed = "";
-	}
-
-	function submit() {
-		if (!items || !done) return;
-		void app.answerQuestion(id, items.map((_, i) => answers[i]!.trim()), paneId ?? undefined);
+		else {
+			typed = "";
+			// The last missing answer sends everything at once.
+			void app.answerQuestion(id, items.map((_, i) => answers[i]!.trim()), paneId ?? undefined);
+		}
 	}
 </script>
 
@@ -79,7 +77,6 @@
 	{/if}
 	{#if items}
 		{#if answers[tab]}<div class="saved">{t("답변")}: {answers[tab]}</div>{/if}
-		<button class="btn primary submit" disabled={!done} onclick={submit}><Icon name="send" /> {t("모두 보내기")}</button>
 	{/if}
 </div>
 
@@ -142,19 +139,25 @@
 	.free .btn {
 		flex: none;
 		height: 38px;
+		min-width: 76px;
+		justify-content: center;
 	}
 	.tabs {
 		display: flex;
-		gap: 6px;
+		gap: 8px;
 		overflow-x: auto;
+		padding: 2px; /* room for the selected outline so it is not clipped */
+		margin: -2px;
 	}
 	.tab {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		max-width: 180px;
+		box-sizing: border-box;
+		max-width: 200px;
 		flex: none;
-		padding: 6px 12px;
+		height: 38px;
+		padding: 0 16px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-pill);
 		background: transparent;
@@ -178,9 +181,5 @@
 		font-size: var(--fs-sm);
 		opacity: 0.8;
 		overflow-wrap: anywhere;
-	}
-	.submit {
-		align-self: flex-end;
-		height: 38px;
 	}
 </style>
