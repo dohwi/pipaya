@@ -12,6 +12,10 @@ updates:
     directory: /server
     schedule:
       interval: monthly
+    ignore:
+      # TypeScript 7 needs a TS6 alias for svelte-check and duplicates pi-ai types; revisit when tooling supports it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       server-deps:
         patterns: ["*"]
@@ -19,6 +23,10 @@ updates:
     directory: /client
     schedule:
       interval: monthly
+    ignore:
+      # TypeScript 7 needs a TS6 alias for svelte-check and duplicates pi-ai types; revisit when tooling supports it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       client-deps:
         patterns: ["*"]
