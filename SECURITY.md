@@ -13,8 +13,8 @@ Include the affected version or commit, steps to reproduce, and the impact you o
 
 ## Supported versions / 지원 범위
 
-Only the latest commit on `main` and the current `latest` client release receive fixes.
-`main`의 최신 커밋과 현재 `latest` 클라이언트 릴리스만 수정 대상입니다.
+Only the latest commit on `main` and the newest stable release (`latest`) receive fixes.
+`main`의 최신 커밋과 최신 정식 릴리스(`latest`)만 수정 대상입니다.
 
 ## Threat model / 위협 모델
 

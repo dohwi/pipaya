@@ -1,11 +1,10 @@
 name: Client release
 
+# Releases are cut by pushing a version tag (`bun scripts/bump-version.ts X.Y.Z`, merge, then `git tag vX.Y.Z`).
+# A manual run on a branch builds everything as a dry run but publishes nothing.
 on:
   push:
-    branches: [main]
-    paths:
-      - "client/**"
-      - ".github/workflows/client-release.yml"
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
 permissions:
@@ -33,6 +32,11 @@ jobs:
         working-directory: client
       - run: bun run check && bun run test && bun run build
         working-directory: client
+      - name: Tag matches the app version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(jq -r .version client/src-tauri/tauri.conf.json)
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "::error::Tag $GITHUB_REF_NAME does not match app version $version"; exit 1; }
 
   windows:
     needs: validate
@@ -54,16 +58,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: server
-      - name: Set rolling build version
-        run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          number = int(os.environ["GITHUB_RUN_NUMBER"])
-          if not 1 <= number <= 65535:
-              raise SystemExit("Build number exceeds the Windows version limit")
-          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps({"version": f"0.1.{number}", "bundle": {"createUpdaterArtifacts": True}}))
-          PY
+      - name: Enable updater artifacts
+        run: echo '{"bundle":{"createUpdaterArtifacts":true}}' > src-tauri/tauri.release.conf.json
       - name: Build Windows x64 installer
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -114,15 +110,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: server
-      - name: Set rolling build version and ad-hoc signing
-        run: |
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          number = int(os.environ["GITHUB_RUN_NUMBER"])
-          config = {"version": f"0.1.{number}", "bundle": {"createUpdaterArtifacts": True, "macOS": {"signingIdentity": "-"}}}
-          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps(config))
-          PY
+      - name: Enable updater artifacts and ad-hoc signing
+        run: echo '{"bundle":{"createUpdaterArtifacts":true,"macOS":{"signingIdentity":"-"}}}' > src-tauri/tauri.release.conf.json
       - name: Build Apple Silicon DMG and update bundle
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -191,20 +180,12 @@ jobs:
           command -v xcodegen >/dev/null || brew install xcodegen
           command -v pod >/dev/null || brew install cocoapods
       - run: bun install --frozen-lockfile
-      - name: Set rolling build version
-        run: |
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          number = int(os.environ["GITHUB_RUN_NUMBER"])
-          Path("src-tauri/tauri.release.conf.json").write_text(json.dumps({"version": f"0.1.{number}"}))
-          PY
       - name: Initialize iOS project
         run: |
           bun run tauri ios init --ci --skip-targets-install
           bun run ios:prepare
       - name: Build unsigned iPhone ARM64 IPA
-        run: bun run tauri ios build --ci --no-sign --config src-tauri/tauri.release.conf.json -- --locked
+        run: bun run tauri ios build --ci --no-sign -- --locked
       - name: Verify device IPA and collect package
         run: |
           python3 - <<'PY'
@@ -317,7 +298,8 @@ jobs:
           import json, os
           from pathlib import Path
           number = int(os.environ["GITHUB_RUN_NUMBER"])
-          config = {"version": f"0.1.{number}", "bundle": {"android": {"versionCode": 100000 + number}}}
+          # versionCode must only ever grow; the run number does, whatever the semver tag is.
+          config = {"bundle": {"android": {"versionCode": 100000 + number}}}
           Path("src-tauri/tauri.release.conf.json").write_text(json.dumps(config))
           PY
       - name: Build signed Android ARM64 APK
@@ -348,7 +330,7 @@ jobs:
 
   publish:
     needs: [windows, macos, ios, android]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -365,7 +347,7 @@ jobs:
       - name: Generate updater manifest
         working-directory: release-assets
         env:
-          NUMBER: ${{ github.run_number }}
+          VERSION: ${{ github.ref_name }}
           BASE: https://github.com/${{ github.repository }}/releases/download/latest
         run: |
           python3 - <<'PY'
@@ -382,21 +364,19 @@ jobs:
               "windows-x86_64": {"signature": sig("pipaya-windows-x64-setup.exe"), "url": f"{base}/pipaya-windows-x64-setup.exe"},
               "darwin-aarch64": {"signature": sig("pipaya-macos-arm64.app.tar.gz"), "url": f"{base}/pipaya-macos-arm64.app.tar.gz"},
           }
-          manifest = {"version": f"0.1.{os.environ['NUMBER']}", "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": platforms}
+          manifest = {"version": os.environ["VERSION"].removeprefix("v"), "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": platforms}
           Path("latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
           PY
-      - name: Update the single rolling release
+      - name: Point the latest release at this version
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          VERSION: ${{ github.ref_name }}
         with:
           script: |
             const fs = require('node:fs');
             const { owner, repo } = context.repo;
             const sha = context.sha;
-            const main = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
-            if (main.data.object.sha !== sha) {
-              core.notice('A newer commit is on main; skipping this outdated build.');
-              return;
-            }
+            const version = process.env.VERSION.replace(/^v/, '');
             const tag = 'latest';
             const names = ['pipaya-windows-x64-setup.exe', 'pipaya-windows-x64-setup.exe.sig', 'pipaya-macos-arm64.dmg', 'pipaya-macos-arm64.app.tar.gz', 'pipaya-macos-arm64.app.tar.gz.sig', 'pipaya-ios-arm64-unsigned.ipa', 'pipaya-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
             // Validate every payload before touching the existing release.
@@ -404,10 +384,10 @@ jobs:
             if (payloads.some(asset => asset.data.length === 0)) throw new Error('Empty release asset');
             const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const body = [
-              'Rolling client build from `main`. Previous assets are replaced, not archived.',
+              `Latest stable client build, released from tag \`v${version}\`. This release always points at the newest stable version; previous assets are replaced.`,
               '',
               `Commit: ${sha}`,
-              `Version: 0.1.${process.env.GITHUB_RUN_NUMBER}`,
+              `Version: ${version}`,
               `Build: [GitHub Actions](${run})`,
               '',
               '- Windows x64: `pipaya-windows-x64-setup.exe` (unsigned installer; SmartScreen may warn).',
@@ -430,7 +410,7 @@ jobs:
               // GitHub creates the lightweight tag along with the first release.
               release = (await github.rest.repos.createRelease({
                 owner, repo, tag_name: tag, target_commitish: sha,
-                name: 'Latest client build', body, draft: true, prerelease: false
+                name: `Latest client build (v${version})`, body, draft: true, prerelease: false
               })).data;
             }
             // Stage new files under unique names first. A failed upload preserves old assets.
@@ -460,7 +440,7 @@ jobs:
               await github.rest.git.createRef({ owner, repo, ref: `refs/tags/${tag}`, sha });
             }
             await github.rest.repos.updateRelease({
-              owner, repo, release_id: release.id, name: 'Latest client build', body,
+              owner, repo, release_id: release.id, name: `Latest client build (v${version})`, body,
               draft: false, prerelease: false, make_latest: 'true'
             });
             // Remove leftovers from interrupted uploads, but never touch other releases.

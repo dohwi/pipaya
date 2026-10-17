@@ -67,7 +67,7 @@ describe("updater configuration", () => {
 	test("update artifacts are produced only by the release workflow, so local builds need no private key", () => {
 		expect(conf.bundle.createUpdaterArtifacts).toBeUndefined();
 		const workflow = readFileSync(new URL("../../.github/workflows/client-release.yml", import.meta.url), "utf8");
-		expect(workflow).toContain('"createUpdaterArtifacts": True');
+		expect(workflow).toContain('"createUpdaterArtifacts":true');
 	});
 	test("the updater is a desktop-only dependency and capability, so Android and iOS builds are unaffected", () => {
 		const cargo = readFileSync(new URL("../src-tauri/Cargo.toml", import.meta.url), "utf8");
