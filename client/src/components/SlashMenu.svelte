@@ -2,7 +2,6 @@
 	import { msg, t } from "../lib/i18n";
 	import { surfaceIn, surfaceOut } from "../lib/motion";
 	import { ACTIVITY_TONE, type Activity } from "../lib/activity";
-	import StatusDot from "./StatusDot.svelte";
 	let {
 		items,
 		index,
@@ -42,7 +41,6 @@
 			onclick={() => onpick(i)}
 			onmousemove={() => onhover(i)}
 		>
-			{#if item.state && item.state !== "idle"}<StatusDot tone={ACTIVITY_TONE[item.state]} pulse={item.state === "working"} />{/if}
 			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={!!item.tag}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
 			<span class="d">{t(item.desc)}</span>
 			{#if item.tag}<span class="tag">{t(item.tag)}</span>{/if}

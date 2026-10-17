@@ -20,7 +20,7 @@
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
 	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
-	import { activityOf, ACTIVITY_LABEL } from "../lib/activity";
+	import { activityOf } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -310,7 +310,7 @@
 		: memberMention
 			? memberMatches.map((m) => m.kind === "group"
 				? { id: m.id, text: `@${m.handle}`, desc: t("{n}개 세션", { n: m.count }), group: msg("그룹") }
-				: { id: m.id, text: `@${m.name}`, desc: [m.title, m.dir, m.state === "idle" ? "" : ACTIVITY_LABEL[m.state]].filter(Boolean).join(" · "), group: msg("세션"), state: m.state })
+				: { id: m.id, text: `@${m.name}`, desc: [m.title, m.dir].filter(Boolean).join(" · "), group: msg("세션"), state: m.state })
 		: argSuggestions
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
