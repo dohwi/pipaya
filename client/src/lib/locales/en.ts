@@ -588,6 +588,7 @@ export const en: Record<string, string> = {
 	"묶을 다른 대화가 없습니다": "No other chats to group with",
 	"분기된 대화": "Branched chat",
 	"다른 대화와 묶기": "Group with another chat",
+	"지금 보는 대화에 합치기": "Add to the chat you're viewing",
 	"이름 바꾸기": "Rename",
 	"더 보기": "More",
 	"닫기 (/resume 으로 다시 열기)": "Close (reopen with /resume)",

@@ -5,7 +5,7 @@
 	import Icon from "./components/Icon.svelte";
 	import Sidebar from "./components/Sidebar.svelte";
 	import Rail from "./components/Rail.svelte";
-	import { drag } from "./lib/dnd.svelte";
+	import { drag, dropTarget } from "./lib/dnd.svelte";
 	import { cancelChord, onShortcut, onShortcutCapture, onShortcutUp, resetKeyboard } from "./lib/actions";
 	import Header from "./components/Header.svelte";
 	import Pane from "./components/Pane.svelte";
@@ -169,6 +169,27 @@
 		app.sidebar.setWidth(app.sidebar.width + d * (e.shiftKey ? 4 : 1));
 	}
 
+	// Phone drawer: a session carried out of it and let go on the dimmed page joins what is being viewed (its group, or a new one).
+	let scrimOver = $state(false);
+	const catchable = (id: string) => {
+		const cur = app.activeId;
+		return !!cur && cur !== id && !app.groups.some((g) => g.id === id) && (!app.groupOf(id) || app.groupOf(id)?.id !== app.groupOf(cur)?.id);
+	};
+	const canCatch = $derived(app.sidebar.open && !!drag.id && catchable(drag.id));
+	const scrimDrop = {
+		accepts: catchable,
+		hover: (pt: unknown) => (scrimOver = !!pt),
+		drop: (id: string) => {
+			scrimOver = false;
+			const cur = app.activeId;
+			if (!cur) return;
+			app.sidebar.open = false;
+			const g = app.groupOf(cur);
+			if (g) void app.addToGroup(id, g.id).then(() => app.openSession(id));
+			else void app.groupWith(id, cur);
+		},
+	};
+
 	// Swipe sideways anywhere to drag the drawer open / shut: it follows the finger, and settles on release by
 	// distance or flick speed (touch only, narrow screens only, never while a dialog is up).
 	let sideEl: HTMLElement | undefined = $state();
@@ -289,7 +310,9 @@
 			{/if}
 		</div>
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="scrim" class:show={app.sidebar.open} class:dragging={swipe !== null} style:opacity={swipe !== null ? swipe / drawerW : undefined} onclick={() => (app.sidebar.open = false)}></div>
+		<div class="scrim" class:show={app.sidebar.open} class:dragging={swipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={swipe !== null ? swipe / drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
+			{#if canCatch}<span class="catch-hint">{t("지금 보는 대화에 합치기")}</span>{/if}
+		</div>
 
 		<main>
 			<Header />
@@ -580,6 +603,24 @@
 		.scrim.show {
 			opacity: 1;
 			pointer-events: auto;
+		}
+		.scrim.catch {
+			display: grid;
+			place-items: center;
+		}
+		.catch-hint {
+			padding: 6px 14px;
+			border-radius: var(--radius-pill);
+			background: var(--bg);
+			border: 1px solid var(--border-strong);
+			font-size: var(--fs-xs);
+			font-weight: 600;
+			pointer-events: none;
+		}
+		.scrim.over {
+			background: var(--accent-soft);
+			outline: 2px solid var(--accent);
+			outline-offset: -2px;
 		}
 	}
 </style>
