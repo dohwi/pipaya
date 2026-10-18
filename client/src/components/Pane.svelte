@@ -3,6 +3,7 @@
 	import Icon from "./Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Backdrop from "./Backdrop.svelte";
+	import EmptyHero from "./EmptyHero.svelte";
 	import Welcome from "./Welcome.svelte";
 	import MessageList from "./MessageList.svelte";
 	import FindBar from "./FindBar.svelte";
@@ -121,10 +122,7 @@
 		{#if id}<SessionToasts {id} />{/if}
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
-			<Backdrop />
-			<div class="hello" aria-hidden="true">
-				<PipayaMark size={72} />
-			</div>
+			<EmptyHero />
 		{/if}
 		{#if chat}
 			{#key chat.id}
@@ -345,16 +343,6 @@
 		display: flex;
 		flex-direction: column;
 		position: relative;
-	}
-	.hello {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		pointer-events: none;
-		user-select: none;
-		color: var(--text-faint);
-		opacity: 0.35;
 	}
 	.empty {
 		flex: 1;
