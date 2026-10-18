@@ -994,10 +994,56 @@
 		padding-top: 6px;
 		border-top: 1px solid var(--border);
 	}
+	/* A split tab and its panes are one box: the tab row on top, its panes inside, so they never read as separate tabs. */
 	.grp {
+		margin: 3px 0 3px 30px; /* starts under the tab icons (x=38) */
+		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
-		border: 1px solid transparent;
-		margin: -1px 0; /* the drop outline must not shift the rows */
+		/* no fill: the sidebar's sliding selection marker runs behind these rows too */
+	}
+	.grp .item {
+		border-radius: 0;
+	}
+	.grp > .item:first-child {
+		border-radius: calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px) 0 0;
+	}
+	.grp .members .item:last-child {
+		border-radius: 0 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px);
+	}
+	/* rows inside the box line up with the tab rows outside it */
+	.grp .item.nested .open {
+		padding-left: 19px;
+	}
+	.grp .item.member .open {
+		padding-left: 35px;
+		min-height: 32px;
+	}
+	.grp .item.member .title {
+		font-size: var(--fs-sm);
+	}
+	.members {
+		border-top: 1px solid var(--border);
+	}
+	.grprow.cur .title {
+		font-weight: 600;
+	}
+	.grprow .open {
+		padding-right: 4px;
+	}
+	.gfold {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 28px;
+		margin-right: 4px;
+		padding: 0 6px;
+		border-radius: var(--radius-sm);
+		color: var(--text-faint);
+	}
+	.gfold:hover {
+		background: var(--bg-active);
+		color: var(--text);
 	}
 	.grp.over,
 	.dir.over {
