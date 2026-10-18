@@ -1,11 +1,15 @@
+<script lang="ts" module>
+	export type Burst = { id: number; x: number; y: number; reach: number; t0: number; r: number; a: number };
+</script>
+
 <script lang="ts">
 	/**
 	 * The empty-state background: the blueprint grid, plus a soft light that follows the pointer and
 	 * brings the grid up around it. Pure decoration — pointer-events none, off for touch and reduced motion.
 	 */
+	/** The live waves, bindable so the owner can follow them (the empty-state mark turns colour as a wave passes). */
+	let { bursts = $bindable([]) }: { bursts?: Burst[] } = $props();
 	let host: HTMLDivElement | undefined = $state();
-	type Burst = { id: number; x: number; y: number; reach: number; t0: number; r: number; a: number };
-	let bursts: Burst[] = $state([]);
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
 	const DUR = 1900; // ms
