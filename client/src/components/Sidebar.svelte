@@ -365,7 +365,7 @@
 			<Icon name="search" />
 			<input class="search" data-sidebar-search placeholder={t("대화 검색")} bind:value={query} />
 		</div>
-		<button class="newbtn" onclick={() => void app.startChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
+		<button class="newbtn" onclick={() => { app.setWorkdir("."); void app.startChat(); }} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
 	</div>
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
