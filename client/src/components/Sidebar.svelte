@@ -643,6 +643,10 @@
 		padding-top: 4px;
 		border-top: 1px solid var(--border);
 	}
+	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
+	.srv:not(.solo) > .fold {
+		padding-left: 6px;
+	}
 	.srvhead {
 		display: flex;
 		align-items: center;
