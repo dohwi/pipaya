@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // Sets one version everywhere it is written: bun scripts/bump-version.ts 0.2.0
-// Then commit as `chore(release): v0.2.0`, merge to main and push the tag `v0.2.0` to publish.
+// Then commit as `chore(release): v0.2.0`, merge to main to publish (the `latest` release is updated; no version tag is created).
 import { readFileSync, writeFileSync } from "node:fs";
 
 const version = process.argv[2]?.replace(/^v/, "");

@@ -2,7 +2,7 @@
  * Pure helpers for "is there a newer client build?". No Tauri, no runes, so they are unit-tested directly.
  *
  * Desktop uses the Tauri updater (signed). Android cannot silently install, so it reads the `latest`
- * release (always the newest stable `vX.Y.Z`) from the GitHub API and hands the APK link to the system. The release body written by
+ * release (the only release; it always holds the newest stable build) from the GitHub API and hands the APK link to the system. The release body written by
  * .github/workflows/client-release.yml contains a `Version: X.Y.Z` line, which is what is compared here.
  */
 export const REPO = "dohwi/pipaya";
