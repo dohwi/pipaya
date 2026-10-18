@@ -34,11 +34,6 @@
 		}),
 	);
 	const multi = $derived(sections.length > 1);
-	const counts = $derived.by(() => {
-		const out: Record<Activity, number> = { working: 0, asking: 0, done: 0, failed: 0, idle: 0 };
-		for (const sec of sections) for (const a of Object.values(sec.state)) out[a]++;
-		return out;
-	});
 	const home = (sec: Section) => (sec.current ? app.workspace?.home : app.overview[sec.server.id]?.workspace?.home);
 	const segs = (sec: Section, path: string) => tilde(path, home(sec)).split("/").filter(Boolean);
 	/** A folder's name: its own, with as many parents as it takes to tell it from the other folders. */
@@ -58,7 +53,6 @@
 	}
 	/** How many sessions and terminals a folder holds (a group counts its members). */
 	const dirCount = (d: DirBlock) => d.tabs.reduce((n, x) => n + tabPanes(x).length, 0);
-	const top = $derived(URGENCY.find((a) => a !== "idle" && counts[a] > 0));
 </script>
 
 {#snippet dirBtn(sec: Section, d: DirBlock)}
@@ -100,9 +94,6 @@
 	</ul>
 
 	<div class="bottom">
-		{#if top}
-			<span class="sum {top}" title={t("{label} {n}개", { label: ACTIVITY_LABEL[top], n: counts[top] })}>{counts[top]}</span>
-		{/if}
 		<button class="btn-ico" onclick={() => app.openSettings()} aria-label={t("설정")} title={t("설정")}><Icon name="settings" /></button>
 	</div>
 </aside>
@@ -286,32 +277,5 @@
 		width: 100%;
 		padding: 8px 0 calc(10px + var(--sab));
 		border-top: 1px solid var(--border);
-	}
-	.sum {
-		min-width: 22px;
-		padding: 1px 6px;
-		border-radius: var(--radius-pill);
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		text-align: center;
-		background: var(--accent-soft);
-		color: var(--text);
-	}
-	.sum.working {
-		background: var(--info-soft);
-		color: var(--info);
-	}
-	.sum.asking {
-		background: var(--warn-soft);
-		color: var(--warn);
-	}
-	.sum.done {
-		background: var(--ok-soft);
-		color: var(--ok);
-	}
-	.sum.failed {
-		background: var(--danger-soft);
-		color: var(--danger);
 	}
 </style>

@@ -464,7 +464,6 @@ export const en: Record<string, string> = {
 	"그룹": "Groups",
 	"{n}개 세션": "{n} sessions",
 	"이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다": "This chat's name. Other chats can call it @{name}",
-	"{label} {n}개": "{label}: {n}",
 	"설정": "Settings",
 
 	/* ---- server form ---- */
