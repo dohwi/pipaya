@@ -404,7 +404,7 @@
 					{#each n.dirs as d (d.path)}
 						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
 						{@const label = shortName(n, d.path)}
-						{@const parent = pretty(n, d.path).slice(0, -label.length).replace(/\/$/, "")}
+						{@const parent = pretty(n, d.path)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
 						<div class="dir grabbable" class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
@@ -725,6 +725,7 @@
 		align-items: center;
 		gap: 6px;
 		height: 30px;
+		border-radius: var(--radius-sm);
 		padding: 0 6px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
 		text-align: left;
 		color: var(--text-dim);
