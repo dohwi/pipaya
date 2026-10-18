@@ -207,6 +207,34 @@
 	.stack .mode {
 		box-shadow: 0 0 0 2px var(--bg);
 	}
+	/* tonal ramp queue -> steer -> stop, derived from theme tokens so it works in light and dark */
+	.stack {
+		--step1: color-mix(in srgb, var(--text) 50%, var(--bg));
+		--step2: color-mix(in srgb, var(--text) 75%, var(--bg));
+		--step3: var(--text);
+	}
+	.stack .mode.queue {
+		background: var(--step1);
+		border-color: var(--step1);
+		color: var(--bg);
+	}
+	.stack .mode.queue:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--text) 58%, var(--bg));
+		color: var(--bg);
+	}
+	.stack .mode.primary {
+		background: var(--step2);
+		border-color: var(--step2);
+		color: var(--bg);
+	}
+	.stack .mode.primary:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--text) 83%, var(--bg));
+		color: var(--bg);
+	}
+	.stack .send.stop {
+		background: var(--step3);
+		color: var(--bg);
+	}
 	.mode {
 		display: grid;
 		place-items: center;
