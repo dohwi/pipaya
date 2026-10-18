@@ -1577,24 +1577,14 @@ class AppStore {
   /**
    * Start a new chat as a real session: it is created at once from the draft (pending model settings and working
    * directory) and shows up in the sidebar as an active "New session" right away. Without a usable model, or if the
-   * server refuses, it falls back to the blank new-chat screen. An already open empty session in the same working
-   * directory is reused rather than piling up another.
+   * server refuses, it falls back to the blank new-chat screen. Every call creates a fresh session, even if an
+   * empty one is already open.
    */
   async startChat(): Promise<void> {
     const api = this.api;
     const d = this.draft;
     if (!api || !d.model) return this.newChat();
-    const cur = this.session(this.activeId);
     const cwd = this.workdir === "." ? undefined : this.workdir;
-    if (
-      cur &&
-      this.chats[cur.id]?.items.length === 0 &&
-      !this.groupOf(cur.id) &&
-      (!cwd || this.relPath(cur.cwd) === this.relPath(cwd))
-    ) {
-      this.sidebar.open = false;
-      return;
-    }
     try {
       const s = await api.createSession({
         cwd,
