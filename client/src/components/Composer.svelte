@@ -750,7 +750,7 @@
 
 		<div class="bar">
 			<button class="iconbtn" onclick={() => fileInput?.click()} aria-label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")}>
-				<Icon name="file" />
+				<Icon name="attach" />
 			</button>
 			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void addFiles(picked); }} />
 

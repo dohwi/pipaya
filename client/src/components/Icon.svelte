@@ -1,7 +1,7 @@
 <script lang="ts" module>
 	export type IconName =
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
-		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "search"
+		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
 		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink";
 </script>
@@ -34,6 +34,7 @@
 		image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M9 9.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z",
 		terminal: "M4 5h16v14H4zM7 10l3 2.5L7 15M12 15h5",
 		file: "M7 3h7l5 5v13H7zM14 3v5h5",
+		attach: "M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
 		search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",
 		folder: "M3 6h6l2 2h10v11H3z",
 		brain: "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1",
