@@ -457,7 +457,7 @@
 													/>
 												{:else}
 													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
-														<Icon name={gfold ? "book" : "book-open"} />
+														<Icon name={gfold ? "group" : "group-open"} />
 													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
 														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
