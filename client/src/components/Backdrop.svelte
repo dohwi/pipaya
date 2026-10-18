@@ -5,11 +5,24 @@
 	 */
 	let { onburst }: { onburst?: (delayMs: number) => void } = $props();
 	let host: HTMLDivElement | undefined = $state();
-	type Burst = { id: number; x: number; y: number; reach: number; hue: number };
+	type Burst = { id: number; x: number; y: number; reach: number; hue: number; t0: number; r: number; a: number };
 	let bursts: Burst[] = $state([]);
 	let seq = 0;
 	const RING = 140; // px: width of the lit band
 	const DUR = 1300; // ms
+
+	let ripRaf = 0;
+	// Drives every ripple's radius by hand (like the hover light), so it does not depend on animating custom properties.
+	const tick = (now: number) => {
+		for (const b of bursts) {
+			const p = Math.min(1, (now - b.t0) / DUR);
+			b.r = b.reach * (1 - (1 - p) ** 2.2);
+			b.a = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+		}
+		bursts = bursts.filter((b) => now - b.t0 < DUR);
+		ripRaf = bursts.length ? requestAnimationFrame(tick) : 0;
+	};
+	$effect(() => () => cancelAnimationFrame(ripRaf));
 
 	// A click on empty space sends a colour wave out from the pointer (and tells the owner, so the mark can tint).
 	$effect(() => {
@@ -23,7 +36,8 @@
 			const x = e.clientX - r.left;
 			const y = e.clientY - r.top;
 			const far = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y));
-			bursts.push({ id: seq++, x, y, reach: far + RING, hue: Math.round(Math.random() * 360) });
+			bursts.push({ id: seq++, x, y, reach: far + RING, hue: Math.round(Math.random() * 360), t0: performance.now(), r: 0, a: 1 });
+			if (!ripRaf) ripRaf = requestAnimationFrame(tick);
 			// the mark sits at the centre: tint it when the ring gets there
 			onburst?.((Math.hypot(x - r.width / 2, y - r.height / 2) / (far + RING)) * DUR);
 		};
@@ -89,8 +103,7 @@
 	{#each bursts as b (b.id)}
 		<div
 			class="ripple"
-			style="--cx:{b.x}px;--cy:{b.y}px;--reach:{b.reach}px;--h:{b.hue};animation-duration:{DUR}ms"
-			onanimationend={() => (bursts = bursts.filter((o) => o.id !== b.id))}
+			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;--h:{b.hue};opacity:{b.a.toFixed(3)}"
 		></div>
 	{/each}
 </div>
@@ -129,15 +142,10 @@
 		mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
 	}
 	/* the hover grid again, but coloured and shown through a ring that travels out from the click */
-	@property --r {
-		syntax: "<length>";
-		inherits: true;
-		initial-value: 0px;
-	}
 	.ripple {
 		position: absolute;
 		inset: 0;
-		--line: hsl(var(--h) 85% 68% / 0.55);
+		--line: hsl(var(--h) 90% 70% / 0.85);
 		background-image:
 			linear-gradient(to right, transparent calc(100% - 1px), var(--line) 100%),
 			linear-gradient(to bottom, transparent calc(100% - 1px), var(--line) 100%);
@@ -146,7 +154,6 @@
 		--mask: radial-gradient(circle at var(--cx) var(--cy), transparent calc(var(--r) - 140px), #000 calc(var(--r) - 36px), transparent var(--r));
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
-		animation: ripple 1.3s linear forwards;
 	}
 	.ripple::after {
 		content: "";
@@ -155,19 +162,6 @@
 		background: hsl(var(--h) 85% 62% / 0.07);
 		-webkit-mask-image: inherit;
 		mask-image: inherit;
-	}
-	@keyframes ripple {
-		from {
-			--r: 0px;
-			opacity: 1;
-		}
-		75% {
-			opacity: 1;
-		}
-		to {
-			--r: var(--reach);
-			opacity: 0;
-		}
 	}
 	.lit::after {
 		content: "";
