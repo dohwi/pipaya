@@ -104,9 +104,9 @@
 </script>
 
 {#if app.serverId && app.net !== "idle"}
-	<div class="bar" class:group={app.activeTab?.tab.kind === "group"}>
+	<div class="bar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }} use:dropTarget={stripTarget}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -163,9 +163,10 @@
 	.bar.group {
 		background: var(--bg-group);
 	}
+	/* the strip is only as wide as its tabs, so the + follows the last one; once they overflow it stops at the bar's right end */
 	.tabs {
 		position: relative;
-		flex: 1;
+		flex: 0 1 auto;
 		min-width: 0;
 		height: 100%;
 		display: flex;
@@ -235,8 +236,9 @@
 	}
 	.tail {
 		position: relative;
-		flex: 1;
-		min-width: 24px;
+		flex: none;
+		width: 8px;
+		align-self: stretch;
 	}
 	.tail.over::before {
 		left: 0;
