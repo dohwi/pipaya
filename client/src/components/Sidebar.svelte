@@ -367,7 +367,6 @@
 			<Icon name="search" />
 			<input class="search" data-sidebar-search placeholder={t("대화 검색")} bind:value={query} />
 		</div>
-		<button class="newbtn" onclick={() => { app.setWorkdir("."); void app.startChat(); }} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
 	</div>
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
@@ -483,6 +482,7 @@
 						{/if}
 						</div>
 					{/each}
+					<button class="newbtn" class:on={menuId === newId(`${n.server.id}\u0000slot`)} data-menu-button onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", `${n.server.id}\u0000slot`)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 				{/if}
 			</section>
@@ -541,19 +541,21 @@
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--border);
 	}
-	/* a dashed slot under the search: the whole width is the target for "new" */
+	/* a dashed slot at the end of each server: the whole width is the target for "new" */
 	.newbtn {
 		flex: none;
 		display: grid;
+		margin-top: 12px;
 		place-items: center;
 		width: 100%;
-		height: 34px;
+		height: 30px;
 		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
 	}
-	.newbtn:hover {
+	.newbtn:hover,
+	.newbtn.on {
 		background: var(--bg-hover);
 		border-color: var(--text-faint);
 		color: var(--text);
