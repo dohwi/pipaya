@@ -55,6 +55,8 @@
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		return { root: ws?.root, total, dirs };
 	}
+	/** Where a new chat starts when nothing else is picked: the current server's chosen workdir, else the server's default root */
+	const startDir = (n: Node) => (n.current && app.workdir !== "." ? app.workdir : n.root);
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
 	const segs = (n: Node, path: string) => pretty(n, path).split("/").filter(Boolean);
@@ -389,6 +391,10 @@
 
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
+					<button class="newbtn" class:on={menuId === newId(`${n.server.id}\u0000slot`)} data-menu-button onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", `${n.server.id}\u0000slot`)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}>
+						<Icon name="plus" />
+						{#if startDir(n)}<span class="nwd mono" use:tail={pretty(n, startDir(n)!)}></span>{/if}
+					</button>
 					{#if n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}
 						<div class="nosess warnline">{t(statusText[n.state])}{n.loaded ? ` · ${t("마지막으로 확인된 목록")}` : ""}</div>
 					{/if}
@@ -482,7 +488,6 @@
 						{/if}
 						</div>
 					{/each}
-					<button class="newbtn" class:on={menuId === newId(`${n.server.id}\u0000slot`)} data-menu-button onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", `${n.server.id}\u0000slot`)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 				{/if}
 			</section>
@@ -544,15 +549,29 @@
 	/* a dashed slot at the end of each server: the whole width is the target for "new" */
 	.newbtn {
 		flex: none;
-		display: grid;
-		margin-top: 12px;
-		place-items: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
 		width: 100%;
-		height: 30px;
+		height: 46px;
+		margin-top: 6px;
+		padding: 0 10px;
 		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
+	}
+	/* the folder a new chat starts in, same small mono as a folder's parent path */
+	.nwd {
+		display: block;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
 	}
 	.newbtn:hover,
 	.newbtn.on {
