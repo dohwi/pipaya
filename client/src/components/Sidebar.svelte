@@ -956,7 +956,7 @@
 		.acts {
 			display: flex;
 		}
-		.item:not(.active):not(.menuopen) .acts {
+		.item:not(.active):not(.cur):not(.menuopen) .acts {
 			display: none;
 		}
 	}
