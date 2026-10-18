@@ -1,5 +1,8 @@
 <div align="center">
-  <img src=".github/assets/banner.svg" alt="pipaya" width="100%" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg" />
+    <img src=".github/assets/banner.svg" alt="pipaya" width="100%" />
+  </picture>
 
   <p><b>English</b> · <a href="README.ko.md">한국어</a></p>
 
