@@ -819,7 +819,8 @@
 		height: 16px;
 		color: var(--text-faint);
 	}
-	.lead :global(svg) {
+	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
+	.lead > :global(svg) {
 		width: 14px;
 		height: 14px;
 		stroke: currentColor;
