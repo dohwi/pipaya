@@ -1,6 +1,6 @@
 /**
  * The sidebar's own state: drawer open (phone), collapsed and width (desktop), which tree nodes are folded, and the
- * order the user dragged folders and groups into (per server). Persisted on this device.
+ * order the user dragged folders and tabs into (per server). Persisted on this device.
  */
 import { K, read, write } from "./persist";
 
@@ -24,8 +24,8 @@ export class SidebarState {
   width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
   folded = $state<string[]>(read<string[]>(K.folded, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
-  groupOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.groupOrder, {}));
-  sessionOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.sessionOrder, {}));
+  /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
+  tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, legacyTabOrder()));
 
   /** `save` false while dragging the edge: persist once, at the end. */
   setWidth(px: number, save = true) {
@@ -51,20 +51,28 @@ export class SidebarState {
     write(K.dirOrder, this.dirOrder);
   }
 
-  /** Put session `id` before/after `target` among the sessions of one directory (`visible`, as listed now). */
-  moveSession(serverId: string, visible: string[], id: string, target: string, after: boolean) {
+  /** Put tab `id` before/after `target` among the tabs of one directory (`visible`, as listed now) and remember it. */
+  moveTab(serverId: string, visible: string[], id: string, target: string, after: boolean) {
     const list = reorder(visible, id, target, after);
     if (!list) return;
-    const rest = (this.sessionOrder[serverId] ?? []).filter((x) => !list.includes(x));
-    this.sessionOrder = { ...this.sessionOrder, [serverId]: [...rest, ...list] };
-    write(K.sessionOrder, this.sessionOrder);
+    const rest = (this.tabOrder[serverId] ?? []).filter((x) => !list.includes(x));
+    this.tabOrder = { ...this.tabOrder, [serverId]: [...rest, ...list] };
+    write(K.tabOrder, this.tabOrder);
   }
 
-  /** Same for groups, by id. */
-  moveGroup(serverId: string, visible: string[], id: string, target: string, after: boolean) {
-    const list = reorder(visible, id, target, after);
-    if (!list) return;
-    this.groupOrder = { ...this.groupOrder, [serverId]: list };
-    write(K.groupOrder, this.groupOrder);
+  /** Remember `list` (the tabs of one directory, in order) as placed by hand. */
+  placeTabs(serverId: string, list: string[]) {
+    const rest = (this.tabOrder[serverId] ?? []).filter((x) => !list.includes(x));
+    this.tabOrder = { ...this.tabOrder, [serverId]: [...rest, ...list] };
+    write(K.tabOrder, this.tabOrder);
   }
+}
+
+/** Before tabs, loose sessions and groups were ordered apart: start from both (sessions first, as they were listed). */
+function legacyTabOrder(): Record<string, string[]> {
+  const sessions = read<Record<string, string[]>>(K.sessionOrder, {});
+  const groups = read<Record<string, string[]>>(K.groupOrder, {});
+  const out: Record<string, string[]> = {};
+  for (const id of new Set([...Object.keys(sessions), ...Object.keys(groups)])) out[id] = [...(sessions[id] ?? []), ...(groups[id] ?? [])];
+  return out;
 }

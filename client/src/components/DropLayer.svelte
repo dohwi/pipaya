@@ -26,7 +26,7 @@
 	const LABEL: Record<Zone, string> = { left: msg("왼쪽에 놓기"), right: msg("오른쪽에 놓기"), top: msg("위에 놓기"), bottom: msg("아래에 놓기") };
 </script>
 
-{#if drag.id && drag.id !== target}
+{#if drag.id && drag.id !== target && app.shows(drag.id)}
 	<div class="drop" bind:this={el} role="presentation" use:dropTarget={target_}>
 		{#if zone}
 			<div class="hint {zone}"><span>{t(LABEL[zone])}</span></div>

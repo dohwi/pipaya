@@ -2,100 +2,122 @@ import { panesOf } from "./layout";
 import type { TerminalInfo } from "./terminal";
 import type { Group, Session } from "./types";
 
-export interface GroupBlock {
-	group: Group;
-	sessions: Session[];
-	/** Terminals in the group, listed after its conversations */
-	terminals: TerminalInfo[];
-}
-export interface DirBlock {
-	path: string;
-	sessions: Session[];
-	/** Terminals started in this directory and not in a group */
-	terminals: TerminalInfo[];
-}
+/** Something a pane can show: a conversation or a terminal. */
+export type Member = Session | TerminalInfo;
 
 /**
- * The one place that decides how sessions are laid out: working directories first (hand-ordered, else most recently used first), then the
- * groups last (each with its panes in layout order). The sidebar, the folded rail and the
- * previous / next shortcuts all read this, so they can never disagree about the order.
- * `match` filters sessions (search); a group whose name matches (`matchGroup`) keeps all its members.
- * Groups left without members are kept: callers decide whether to show them.
+ * One tab of a working directory: a group (several panes laid out together), a lone conversation, or a lone terminal.
+ * A session or terminal in a group is part of that group's tab only.
  */
-export function sidebarBlocks(
-	sessions: readonly Session[],
-	groups: readonly Group[],
-	match: (s: Session) => boolean = () => true,
-	matchGroup: (g: Group) => boolean = () => false,
-	dirOrder: readonly string[] = [],
-	groupOrder: readonly string[] = [],
-	terminals: readonly TerminalInfo[] = [],
-	matchTerminal: (t: TerminalInfo) => boolean = () => true,
-	sessionOrder: readonly string[] = [],
-): { groups: GroupBlock[]; dirs: DirBlock[] } {
-	const byId = new Map(sessions.map((s) => [s.id, s]));
-	const termById = new Map(terminals.map((t) => [t.id, t]));
-	// a session in a group is listed there, not again under its directory
+export type Tab =
+	| { kind: "group"; id: string; group: Group; members: Member[] }
+	| { kind: "session"; id: string; session: Session }
+	| { kind: "terminal"; id: string; terminal: TerminalInfo };
+
+export interface DirBlock {
+	path: string;
+	tabs: Tab[];
+}
+
+/** The panes a tab shows, in layout order. */
+export const tabPanes = (t: Tab): string[] => (t.kind === "group" ? t.members.map((m) => m.id) : [t.id]);
+
+export interface BlockOpts {
+	/** search on conversations */
+	match?: (s: Session) => boolean;
+	/** search on group names: a group that matches keeps all its members */
+	matchGroup?: (g: Group) => boolean;
+	matchTerminal?: (t: TerminalInfo) => boolean;
+	/** directories placed by hand */
+	dirOrder?: readonly string[];
+	/** tabs (group / session / terminal ids) placed by hand, across all directories */
+	tabOrder?: readonly string[];
+}
+
+/** The folder a group belongs to: the one most of its panes work in (ties: the first pane's). */
+function dirOf(members: Member[]): string {
+	const n = new Map<string, number>();
+	for (const m of members) n.set(m.cwd, (n.get(m.cwd) ?? 0) + 1);
+	let best = members[0]!.cwd;
+	for (const m of members) if (n.get(m.cwd)! > n.get(best)!) best = m.cwd;
+	return best;
+}
+
+const lastActive = (m: Member) => ("updatedAt" in m ? m.updatedAt : m.createdAt);
+
+/**
+ * The one place that decides how things are laid out: working directories (hand-ordered, else most recently used
+ * first), each with its tabs (hand-ordered, the others after them in the order they were made). The sidebar, the tab
+ * bar, the folded rail and the previous / next shortcuts all read this, so they can never disagree about the order.
+ * Groups without any member left are skipped (the server dissolves them).
+ */
+export function sidebarDirs(sessions: readonly Session[], groups: readonly Group[], terminals: readonly TerminalInfo[] = [], o: BlockOpts = {}): DirBlock[] {
+	const match = o.match ?? (() => true);
+	const matchTerminal = o.matchTerminal ?? (() => true);
+	const matchGroup = o.matchGroup ?? (() => false);
+	const termIds = new Set(terminals.map((t) => t.id));
+	const byId = new Map<string, Member>([...sessions.map((s) => [s.id, s] as const), ...terminals.map((t) => [t.id, t] as const)]);
+	const matches = (m: Member) => (termIds.has(m.id) ? matchTerminal(m as TerminalInfo) : match(m as Session));
 	const grouped = new Set<string>();
-	const blocks: GroupBlock[] = [];
+	const all: { cwd: string; tab: Tab; created: number; active: number }[] = [];
 	for (const g of groups) {
-		const ids = panesOf(g.layout);
-		const members = ids.map((id) => byId.get(id)).filter((s): s is Session => !!s);
-		const terms = ids.map((id) => termById.get(id)).filter((t): t is TerminalInfo => !!t);
-		members.forEach((s) => grouped.add(s.id));
-		terms.forEach((t) => grouped.add(t.id));
-		const all = matchGroup(g);
-		blocks.push({ group: g, sessions: all ? members : members.filter(match), terminals: all ? terms : terms.filter(matchTerminal) });
+		const members = panesOf(g.layout)
+			.map((id) => byId.get(id))
+			.filter((m): m is Member => !!m);
+		if (!members.length) continue;
+		members.forEach((m) => grouped.add(m.id));
+		const shown = matchGroup(g) ? members : members.filter(matches);
+		if (!shown.length) continue;
+		all.push({ cwd: dirOf(members), tab: { kind: "group", id: g.id, group: g, members: shown }, created: g.createdAt ?? 0, active: Math.max(0, ...members.map(lastActive)) });
 	}
-	const by = new Map<string, Session[]>();
-	const termsBy = new Map<string, TerminalInfo[]>();
 	for (const s of sessions) {
 		if (grouped.has(s.id) || !match(s)) continue;
-		const list = by.get(s.cwd);
-		if (list) list.push(s);
-		else by.set(s.cwd, [s]);
+		all.push({ cwd: s.cwd, tab: { kind: "session", id: s.id, session: s }, created: s.createdAt ?? 0, active: s.updatedAt ?? 0 });
 	}
 	for (const t of terminals) {
 		if (grouped.has(t.id) || !matchTerminal(t)) continue;
-		if (!by.has(t.cwd)) by.set(t.cwd, []);
-		const list = termsBy.get(t.cwd);
-		if (list) list.push(t);
-		else termsBy.set(t.cwd, [t]);
+		all.push({ cwd: t.cwd, tab: { kind: "terminal", id: t.id, terminal: t }, created: t.createdAt ?? 0, active: t.createdAt ?? 0 });
 	}
-	// sessions placed by hand keep that order within their directory; the others (new ones) come first
-	if (sessionOrder.length) {
-		const srank = (s: Session) => sessionOrder.indexOf(s.id); // -1 (not placed yet) sorts first
-		for (const list of by.values()) list.sort((a, b) => srank(a) - srank(b)); // stable
+	const tabOrder = o.tabOrder ?? [];
+	const trank = (id: string) => {
+		const i = tabOrder.indexOf(id);
+		return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+	};
+	// placed tabs keep their place; new ones go after them, oldest first (a new tab lands at the end, like an editor's)
+	all.sort((a, b) => trank(a.tab.id) - trank(b.tab.id) || a.created - b.created);
+	const by = new Map<string, { tabs: Tab[]; active: number }>();
+	for (const x of all) {
+		const d = by.get(x.cwd);
+		if (d) (d.tabs.push(x.tab), (d.active = Math.max(d.active, x.active)));
+		else by.set(x.cwd, { tabs: [x.tab], active: x.active });
 	}
-	const newest = (path: string, list: Session[]) => Math.max(0, ...list.map((s) => s.updatedAt), ...(termsBy.get(path) ?? []).map((t) => t.createdAt));
-	// directories the user has placed by hand keep that order; the others (new ones) come first, most recent first
+	const dirOrder = o.dirOrder ?? [];
 	const rank = (p: string) => dirOrder.indexOf(p);
-	const dirs = [...by.entries()]
-		.map(([path, list]) => ({ path, sessions: list, terminals: termsBy.get(path) ?? [] }))
-		.sort((a, b) => {
-			const ra = rank(a.path);
-			const rb = rank(b.path);
+	return [...by.entries()]
+		.sort(([pa, a], [pb, b]) => {
+			const ra = rank(pa);
+			const rb = rank(pb);
 			if (ra >= 0 && rb >= 0) return ra - rb;
 			if (ra >= 0) return 1;
 			if (rb >= 0) return -1;
-			return newest(b.path, b.sessions) - newest(a.path, a.sessions);
-		});
-	// groups placed by hand keep that order; new ones (not listed yet) land below them, in creation order
-	const grank = (g: GroupBlock) => {
-		const i = groupOrder.indexOf(g.group.id);
-		return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-	};
-	blocks.sort((a, b) => grank(a) - grank(b)); // stable: unlisted groups keep their creation order
-	return { groups: blocks, dirs };
+			return b.active - a.active;
+		})
+		.map(([path, d]) => ({ path, tabs: d.tabs }));
 }
 
-/** Session ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
-export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], groupOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = [], sessionRank: readonly string[] = []): string[] {
-	const { groups: gs, dirs } = sidebarBlocks(sessions, groups, undefined, undefined, dirOrder, groupOrder, terminals, undefined, sessionRank);
+/** The tab showing pane `id` (a session or terminal id, or a group id), if any. */
+export function tabOf(dirs: readonly DirBlock[], id: string | null | undefined): { dir: DirBlock; tab: Tab } | null {
+	if (!id) return null;
+	for (const dir of dirs) for (const tab of dir.tabs) if (tab.id === id || tabPanes(tab).includes(id)) return { dir, tab };
+	return null;
+}
+
+/** Session and terminal ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
+export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = []): string[] {
 	const out: string[] = [];
 	const seen = new Set<string>();
-	for (const b of [...dirs.map((d) => [...d.sessions, ...d.terminals]), ...gs.map((g) => [...g.sessions, ...g.terminals])])
-		for (const s of b) if (!seen.has(s.id)) (seen.add(s.id), out.push(s.id));
+	for (const d of sidebarDirs(sessions, groups, terminals, { dirOrder, tabOrder }))
+		for (const t of d.tabs) for (const id of tabPanes(t)) if (!seen.has(id)) (seen.add(id), out.push(id));
 	return out;
 }
 

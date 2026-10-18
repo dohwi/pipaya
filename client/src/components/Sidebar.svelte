@@ -12,12 +12,12 @@
 	import { activityOf, type Activity } from "../lib/activity";
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
-	import { drag, dragSource, dropTarget } from "../lib/dnd.svelte";
+	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { collapseIn, collapseOut } from "../lib/motion";
-	import { sidebarBlocks, type DirBlock, type GroupBlock } from "../lib/nav";
+	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
-	import { platformName, type TerminalInfo } from "../lib/terminal";
+	import { isTerminalId, platformName, type TerminalInfo } from "../lib/terminal";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -39,27 +39,21 @@
 		home: string | undefined;
 		total: number;
 		dirs: DirBlock[];
-		groups: GroupBlock[];
 		/** What the server runs (linux, darwin, win32), when it says so */
 		platform: string | undefined;
 	}
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, gorder: string[] | undefined, terminals: TerminalInfo[], sorder: string[] | undefined): Pick<Node, "root" | "total" | "dirs" | "groups"> {
-		const { groups: all, dirs } = sidebarBlocks(
-			sessions,
-			groups,
-			(x) => !q || x.title.toLowerCase().includes(q),
-			(g) => !!q && g.name.toLowerCase().includes(q),
-			order,
-			gorder,
-			terminals,
-			(x) => !q || x.title.toLowerCase().includes(q),
-			sorder,
-		);
-		const blocks = all.filter((b) => b.sessions.length || b.terminals.length || !q);
-		const total = dirs.reduce((n, d) => n + d.sessions.length + d.terminals.length, 0) + blocks.reduce((n, b) => n + b.sessions.length + b.terminals.length, 0);
-		return { root: ws?.root, total, dirs, groups: blocks };
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs"> {
+		const dirs = sidebarDirs(sessions, groups, terminals, {
+			match: (x) => !q || x.title.toLowerCase().includes(q),
+			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
+			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
+			dirOrder: order,
+			tabOrder: torder,
+		});
+		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
+		return { root: ws?.root, total, dirs };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
@@ -79,7 +73,7 @@
 							: "offline"
 				: ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.groupOrder[server.id], current ? app.terminals : (ov?.terminals ?? []), app.sidebar.sessionOrder[server.id]);
+			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], current ? app.terminals : (ov?.terminals ?? []));
 			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
 		});
 	});
@@ -149,41 +143,57 @@
 		if (pt) dropOn = key;
 		else if (dropOn === key) dropOn = null;
 	};
-	/** Let go on a group: join it. */
-	const dropOnGroup = (groupId: string) => (id: string) => void app.addToGroup(id, groupId);
-	/** Let go on a session: they become a group right there (or it joins that session's group). */
-	const dropOnSession = (other: string) => (id: string) => void app.groupWith(id, other);
-	/* ---- reordering loose sessions of a directory by dragging them next to each other ---- */
-	/** the session row a carried session would land before / after (only among the loose sessions of one directory) */
-	let sessDrop = $state<{ id: string; after: boolean } | null>(null);
-	/** Over the top / bottom quarter of a row = put it there; over the middle = group with it. */
-	function edgeAt(pt: { x: number; y: number }): "before" | "after" | null {
-		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item")?.getBoundingClientRect();
+	const isGroupId = (id: string | null) => !!id && app.groups.some((g) => g.id === id);
+	/* ---- reordering the tabs of a directory by dragging them next to each other ---- */
+	/** the tab row a carried tab would land before / after */
+	let tabDrop = $state<{ id: string; after: boolean } | null>(null);
+	/**
+	 * Over the top / bottom of a row = put it there; over the middle = put the two together (a group never goes into
+	 * another group, so a carried group only ever reorders).
+	 */
+	function edgeAt(pt: { x: number; y: number }, whole: boolean): "before" | "after" | null {
+		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item, .grphead")?.getBoundingClientRect();
 		if (!r) return null;
-		if (pt.y < r.top + r.height * 0.28) return "before";
-		if (pt.y > r.bottom - r.height * 0.28) return "after";
+		const f = whole ? 0.5 : 0.28;
+		if (pt.y < r.top + r.height * f) return "before";
+		if (pt.y > r.bottom - r.height * f) return "after";
 		return null;
 	}
-	/** The edge a drag over row `x` means, when it is a reorder: both are loose sessions in the same list (`siblings`). */
-	const reorderEdge = (x: string, siblings: string[] | null, pt: { x: number; y: number }) =>
-		siblings && !searching && drag.id && drag.id !== x && siblings.includes(drag.id) && siblings.includes(x) ? edgeAt(pt) : null;
-	const rowHover = (x: string, siblings: string[] | null) => (pt: { x: number; y: number } | null) => {
-		const edge = pt ? reorderEdge(x, siblings, pt) : null;
-		sessDrop = edge ? { id: x, after: edge === "after" } : sessDrop?.id === x ? null : sessDrop;
-		if (pt && !edge) dropOn = x;
-		else if (dropOn === x) dropOn = null;
+	/** Can the carried thing become a tab of directory `d` beside its others: one of its tabs, or a pane of one of its groups. */
+	const ofDir = (d: DirBlock, id: string) => d.tabs.some((x) => x.id === id || (x.kind === "group" && x.members.some((m) => m.id === id)));
+	/** The edge a drag over tab `x` means, when it is a reorder. */
+	const reorderEdge = (d: DirBlock, x: string, pt: { x: number; y: number }) =>
+		!searching && drag.id && drag.id !== x && ofDir(d, drag.id) ? edgeAt(pt, isGroupId(drag.id)) : null;
+	const tabHover = (d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
+		const edge = pt ? reorderEdge(d, x.id, pt) : null;
+		tabDrop = edge ? { id: x.id, after: edge === "after" } : tabDrop?.id === x.id ? null : tabDrop;
+		const pairs = !!pt && !edge && !isGroupId(drag.id) && !(x.kind === "group" && x.members.some((m) => m.id === drag.id));
+		if (pairs) dropOn = x.id;
+		else if (dropOn === x.id) dropOn = null;
 	};
-	const rowDrop = (n: Node, x: string, siblings: string[] | null) => (id: string, pt: { x: number; y: number }) => {
-		const edge = reorderEdge(x, siblings, pt);
-		if (edge && siblings) app.sidebar.moveSession(n.server.id, siblings, id, x, edge === "after");
-		else void app.groupWith(id, x);
+	const tabDropAt = (n: Node, d: DirBlock, x: Tab) => async (id: string, pt: { x: number; y: number }) => {
+		const edge = reorderEdge(d, x.id, pt);
+		tabDrop = null;
+		if (edge) {
+			if (!d.tabs.some((t) => t.id === id)) await app.leaveGroup(id); // a pane steps out of its group into a tab
+			const now = app.dirs.find((y) => y.path === d.path)?.tabs.map((t) => t.id) ?? d.tabs.map((t) => t.id);
+			app.sidebar.moveTab(n.server.id, now, id, x.id, edge === "after");
+		} else if (isGroupId(id)) return;
+		else if (x.kind === "group") void app.addToGroup(id, x.id);
+		else void app.groupWith(id, x.id);
 	};
-	/* ---- reordering directories / groups by dragging their header ---- */
-	/** the block being carried (`kind:key`), and the one of the same kind it would land next to */
+	/** A row inside a group: something dropped on it joins that group. */
+	const memberTarget = (n: Node, m: { id: string }) => ({
+		accepts: (id: string) => n.current && id !== m.id && !isGroupId(id) && app.groupOf(id)?.id !== app.groupOf(m.id)?.id,
+		hover: hover(m.id),
+		drop: (id: string) => void app.groupWith(id, m.id),
+	});
+	/* ---- reordering directories by dragging their header ---- */
+	/** the block being carried (`dir:path`), and the one it would land next to */
 	let dirDrag = $state<string | null>(null);
 	let dirDrop = $state<{ id: string; after: boolean } | null>(null);
 	const bid = (kind: "dir" | "group", key: string) => `${kind}:${key}`;
-	/** `use:dirSource`: drag a directory / group header to reorder it (lib/block-drag.ts), drawn through dirDrag/dirDrop. */
+	/** `use:dirSource`: drag a directory header to reorder it (lib/block-drag.ts), drawn through dirDrag/dirDrop. */
 	const dirSource = blockDrag({
 		set: (drag, drop) => {
 			dirDrag = drag;
@@ -191,10 +201,9 @@
 		},
 		get: () => dirDrop,
 		key: bid,
-		move: (o, target, after) =>
-			o.kind === "dir" ? app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after) : app.sidebar.moveGroup(o.serverId, o.paths, o.path, target, after),
+		move: (o, target, after) => app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after),
 	});
-	/** Let go on a folder: the session steps out of its group. */
+	/** Let go on a folder: the pane steps out of its group, as a tab of its own. */
 	const dropOnDir = (id: string) => void app.leaveGroup(id);
 	function newIn(n: Node, path: string) {
 		app.openIn(n.server.id, { workdir: path });
@@ -253,19 +262,19 @@
 </script>
 
 
-{#snippet row(n: Node, x: Session, nested: boolean, siblings: string[] | null = null)}
+{#snippet row(n: Node, x: Session, drop: DropOpts, member = false)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="item"
-		class:nested
+		class="item nested"
+		class:member
 		class:active={n.current && x.id === app.activeId}
 		class:over={dropOn === x.id}
-		class:before={sessDrop?.id === x.id && !sessDrop.after}
-		class:after={sessDrop?.id === x.id && sessDrop.after}
+		class:before={tabDrop?.id === x.id && !tabDrop.after}
+		class:after={tabDrop?.id === x.id && tabDrop.after}
 		class:grabbable={n.current && editing !== x.id}
 		class:menuopen={menuId === x.id}
 		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
-		use:dropTarget={{ accepts: (id) => n.current && id !== x.id, hover: rowHover(x.id, siblings), drop: rowDrop(n, x.id, siblings) }}
+		use:dropTarget={drop}
 	>
 		{#if n.current && editing === x.id}
 			<input
@@ -294,16 +303,19 @@
 	</div>
 {/snippet}
 
-{#snippet termRow(n: Node, x: TerminalInfo)}
+{#snippet termRow(n: Node, x: TerminalInfo, drop: DropOpts, member = false)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="item nested term"
+		class:member
 		class:active={n.current && x.id === app.activeId}
 		class:over={dropOn === x.id}
+		class:before={tabDrop?.id === x.id && !tabDrop.after}
+		class:after={tabDrop?.id === x.id && tabDrop.after}
 		class:grabbable={n.current && editing !== x.id}
 		class:menuopen={menuId === x.id}
 		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
-		use:dropTarget={{ accepts: (id) => n.current && id !== x.id, hover: hover(x.id), drop: dropOnSession(x.id) }}
+		use:dropTarget={drop}
 	>
 		{#if n.current && editing === x.id}
 			<input
@@ -375,60 +387,77 @@
 						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
-						<div class="dir grabbable" class:cur={n.current && d.path === app.workdirAbs} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
+						<div class="dir grabbable" class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={d.path}>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
 								<span class="dname mono" use:tail={pretty(n, d.path)}></span>
-								<span class="dcount mono">{d.sessions.length + d.terminals.length}</span>
+								<span class="dcount mono">{d.tabs.length}</span>
 							</button>
 							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
-								{#each d.sessions as x (x.id)}{@render row(n, x, true, d.sessions.map((s) => s.id))}{/each}
-								{#each d.terminals as x (x.id)}{@render termRow(n, x)}{/each}
-							</div>
-						{/if}
-						</div>
-					{/each}
-
-					{#each n.groups as b (b.group.id)}
-						{@const gfold = isFolded(`group\u0000${b.group.id}`)}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="grp dirblock" data-block={bid("group", b.group.id)} data-server={n.server.id} class:carried={dirDrag === bid("group", b.group.id)} class:before={dirDrop?.id === bid("group", b.group.id) && !dirDrop.after && dirDrag !== bid("group", b.group.id)} class:after={dirDrop?.id === bid("group", b.group.id) && dirDrop.after && dirDrag !== bid("group", b.group.id)} class:over={dropOn === b.group.id} use:dropTarget={{ accepts: () => n.current, hover: hover(b.group.id), drop: dropOnGroup(b.group.id) }}>
-							<div class="grphead grabbable" class:cur={n.current && b.group.id === app.activeGroup?.id} class:menuopen={menuId === b.group.id} use:dirSource={{ kind: "group", serverId: n.server.id, path: b.group.id, paths: n.groups.map((x) => x.group.id), disabled: searching || n.groups.length < 2 || editingGroup === b.group.id }}>
-								{#if n.current && editingGroup === b.group.id}
-									<input
-										class="rename grpname"
-										bind:value={groupDraft}
-										use:focusSelect
-										maxlength="100"
-										onblur={commitGroupRename}
-										onkeydown={(e) => {
-											if (e.key === "Enter") commitGroupRename();
-											if (e.key === "Escape") editingGroup = null;
-										}}
-									/>
-								{:else}
-									<button class="grptoggle" onclick={() => app.sidebar.toggleFolded(`group\u0000${b.group.id}`)} ondblclick={() => n.current && startGroupRename(b.group)} aria-expanded={!gfold} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: b.group.name })}>
-										<span class="chev" class:folded={gfold}><Icon name="chevron-down" /></span>
-										<span class="gicon"><Icon name="columns" /></span>
-										<span class="dname">{b.group.name}</span>
-										<span class="dcount mono">{b.sessions.length + b.terminals.length}</span>
-									</button>
-									{#if n.current}
-										<div class="gacts">
-											<button class="more" class:on={menuId === b.group.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g: b.group })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g: b.group })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === b.group.id}><Icon name="more" /></button>
+								{#each d.tabs as tab (tab.id)}
+									{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: tabHover(d, tab), drop: tabDropAt(n, d, tab) }}
+									{#if tab.kind === "session"}
+										{@render row(n, tab.session, drop)}
+									{:else if tab.kind === "terminal"}
+										{@render termRow(n, tab.terminal, drop)}
+									{:else}
+										{@const g = tab.group}
+										{@const gfold = isFolded(`group\u0000${g.id}`)}
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
+										<div class="grp" class:over={dropOn === g.id}>
+											<div
+												class="grphead"
+												class:grabbable={n.current && editingGroup !== g.id}
+												class:cur={n.current && g.id === app.activeGroup?.id}
+												class:menuopen={menuId === g.id}
+												class:before={tabDrop?.id === g.id && !tabDrop.after}
+												class:after={tabDrop?.id === g.id && tabDrop.after}
+												use:dragSource={{ id: g.id, disabled: !n.current || editingGroup === g.id }}
+												use:dropTarget={drop}
+											>
+												{#if n.current && editingGroup === g.id}
+													<input
+														class="rename grpname"
+														bind:value={groupDraft}
+														use:focusSelect
+														maxlength="100"
+														onblur={commitGroupRename}
+														onkeydown={(e) => {
+															if (e.key === "Enter") commitGroupRename();
+															if (e.key === "Escape") editingGroup = null;
+														}}
+													/>
+												{:else}
+													<button class="gchev" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")}>
+														<span class="chev" class:folded={gfold}><Icon name="chevron-down" /></span>
+													</button>
+													<button class="grptoggle" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
+														<span class="gicon"><Icon name="columns" /></span>
+														<span class="dname">{g.name}</span>
+														<span class="dcount mono">{tab.members.length}</span>
+													</button>
+													{#if n.current}
+														<div class="gacts">
+															<button class="more" class:on={menuId === g.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === g.id}><Icon name="more" /></button>
+														</div>
+													{/if}
+												{/if}
+											</div>
+											{#if !gfold}
+												<div class="fold" in:collapseIn out:collapseOut>
+													{#each tab.members as m (m.id)}
+														{#if isTerminalId(m.id)}{@render termRow(n, m as TerminalInfo, memberTarget(n, m), true)}{:else}{@render row(n, m as Session, memberTarget(n, m), true)}{/if}
+													{/each}
+												</div>
+											{/if}
 										</div>
 									{/if}
-								{/if}
+								{/each}
 							</div>
-							{#if !gfold}
-								<div class="fold" in:collapseIn out:collapseOut>
-									{#each b.sessions as x (x.id)}{@render row(n, x, true)}{/each}
-									{#each b.terminals as x (x.id)}{@render termRow(n, x)}{/each}
-								</div>
-							{/if}
+						{/if}
 						</div>
 					{/each}
 				</div>
@@ -1000,9 +1029,39 @@
 		box-shadow: inset 0 0 0 1.5px var(--accent);
 	}
 	.grphead {
+		position: relative;
 		display: flex;
 		align-items: center;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius);
+	}
+	.grphead.cur {
+		background: var(--bg-active);
+	}
+	.grphead.before::before,
+	.grphead.after::after {
+		content: "";
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		height: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+		z-index: 1;
+		pointer-events: none;
+	}
+	.grphead.before::before {
+		top: -1px;
+	}
+	.grphead.after::after {
+		bottom: -1px;
+	}
+	/* level 2 like a lone tab: the chevron takes the place of the agent face */
+	.gchev {
+		flex: none;
+		display: grid;
+		place-items: center;
+		height: 36px;
+		padding: 0 4px 0 48px;
 	}
 	.grphead:hover {
 		background: var(--bg-hover);
@@ -1016,10 +1075,14 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		height: 30px;
-		padding: 0 6px 0 30px;
+		height: 36px;
+		padding: 0 6px 0 0;
 		text-align: left;
 		color: var(--text-dim);
+	}
+	/* panes of a group: one level further in */
+	.item.member .open {
+		padding-left: 72px;
 	}
 	.gicon {
 		display: grid;
@@ -1035,7 +1098,7 @@
 		stroke-linejoin: round;
 	}
 	.grpname {
-		margin-left: 26px;
+		margin-left: 48px;
 		height: 28px;
 		font-size: var(--fs-md);
 	}

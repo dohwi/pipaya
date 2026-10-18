@@ -7,7 +7,8 @@
 	import AgentBadge from "./AgentBadge.svelte";
 	import { app } from "../lib/store.svelte";
 	import { dragSource, dropTarget } from "../lib/dnd.svelte";
-	import { sidebarBlocks } from "../lib/nav";
+	import { sidebarDirs, type DirBlock } from "../lib/nav";
+	import { isTerminalId } from "../lib/terminal";
 	import type { Session } from "../lib/types";
 	import type { TerminalInfo } from "../lib/terminal";
 	import type { Server } from "../lib/store.svelte";
@@ -17,8 +18,7 @@
 	interface Section {
 		server: Server;
 		current: boolean;
-		groups: ReturnType<typeof sidebarBlocks>["groups"];
-		dirs: ReturnType<typeof sidebarBlocks>["dirs"];
+		dirs: DirBlock[];
 		/** activity of this server's sessions, by id */
 		state: Record<string, Activity>;
 	}
@@ -30,21 +30,11 @@
 			const sessions = current ? app.sessions : (ov?.sessions ?? []);
 			const terminals = current ? app.terminals : (ov?.terminals ?? []);
 			if (!sessions.length && !terminals.length) return [];
-			const { groups, dirs } = sidebarBlocks(
-				sessions,
-				current ? app.groups : (ov?.groups ?? []),
-				undefined,
-				undefined,
-				app.sidebar.dirOrder[server.id],
-				app.sidebar.groupOrder[server.id],
-				terminals,
-				undefined,
-				app.sidebar.sessionOrder[server.id],
-			);
+			const dirs = sidebarDirs(sessions, current ? app.groups : (ov?.groups ?? []), terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id] });
 			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
 			const state: Record<string, Activity> = {};
 			for (const x of sessions) state[x.id] = activityOf(view, x.id);
-			return [{ server, current, groups: groups.filter((b) => b.sessions.length || b.terminals.length), dirs: dirs.filter((d) => d.sessions.length || d.terminals.length), state }];
+			return [{ server, current, dirs, state }];
 		}),
 	);
 	const multi = $derived(sections.length > 1);
@@ -69,7 +59,7 @@
 		class:active={cur && x.id === app.activeId}
 		class:over={dropOn === x.id}
 		use:dragSource={{ id: x.id, disabled: !cur }}
-		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
+		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.shows(id) && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
 		onclick={() => app.openIn(sec.server.id, { session: x.id })}
 		title="{x.title} · {t('터미널')}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
 		aria-label="{x.title}, {t('터미널')}"
@@ -87,7 +77,7 @@
 		class:active={cur && x.id === app.activeId}
 		class:over={dropOn === x.id}
 		use:dragSource={{ id: x.id, disabled: !cur }}
-		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
+		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.shows(id) && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
 		onclick={() => app.openIn(sec.server.id, { session: x.id })}
 		title="{x.title} · {ACTIVITY_LABEL[st]}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
 		aria-label="{x.title}, {ACTIVITY_LABEL[st]}"
@@ -115,24 +105,27 @@
 			{#if si > 0}<li class="sep srv" role="separator" title={app.serverLabel(sec.server)}></li>{/if}
 			{#each sec.dirs as d, di (d.path)}
 				{#if di > 0}<li class="sep" role="separator"></li>{/if}
-				{#each d.sessions as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
-				{#each d.terminals as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
-			{/each}
-			{#if sec.groups.length && sec.dirs.length}<li class="sep" role="separator"></li>{/if}
-			{#each sec.groups as b, i (b.group.id)}
-				{#if i > 0}<li class="sep" role="separator"></li>{/if}
-				<li
-					class="folder"
-					class:cur={sec.current && b.group.id === app.activeGroup?.id}
-					class:over={dropOn === b.group.id}
-					title={b.group.name}
-					use:dropTarget={{ accepts: () => sec.current, hover: hover(b.group.id), drop: (id) => void app.addToGroup(id, b.group.id) }}
-				>
-					<ul class="members" aria-label={t("그룹 {name}", { name: b.group.name })}>
-						{#each b.sessions as x (x.id)}<li>{@render agent(sec, x)}</li>{/each}
-						{#each b.terminals as x (x.id)}<li>{@render termBtn(sec, x)}</li>{/each}
-					</ul>
-				</li>
+				{#each d.tabs as tab (tab.id)}
+					{#if tab.kind === "session"}
+						<li>{@render agent(sec, tab.session)}</li>
+					{:else if tab.kind === "terminal"}
+						<li>{@render termBtn(sec, tab.terminal)}</li>
+					{:else}
+						<li
+							class="folder"
+							class:cur={sec.current && tab.id === app.activeGroup?.id}
+							class:over={dropOn === tab.id}
+							title={tab.group.name}
+							use:dropTarget={{ accepts: (id) => sec.current && app.shows(id), hover: hover(tab.id), drop: (id) => void app.addToGroup(id, tab.id) }}
+						>
+							<ul class="members" aria-label={t("그룹 {name}", { name: tab.group.name })}>
+								{#each tab.members as m (m.id)}
+									<li>{#if isTerminalId(m.id)}{@render termBtn(sec, m as TerminalInfo)}{:else}{@render agent(sec, m as Session)}{/if}</li>
+								{/each}
+							</ul>
+						</li>
+					{/if}
+				{/each}
 			{/each}
 		{/each}
 	</ul>

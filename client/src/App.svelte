@@ -11,6 +11,7 @@
 	import Pane from "./components/Pane.svelte";
 	import GroupView from "./components/GroupView.svelte";
 	import SessionStrip from "./components/SessionStrip.svelte";
+	import TabBar from "./components/TabBar.svelte";
 	import Palette from "./components/Palette.svelte";
 	import NoServer from "./components/NoServer.svelte";
 	import Toasts from "./components/Toasts.svelte";
@@ -288,6 +289,7 @@
 
 		<main>
 			<Header />
+			<TabBar />
 			{#if viewport.narrow || app.isFull(app.activeGroup?.id) || (app.activeGroup && app.zoomId)}<SessionStrip />{/if}
 
 			{#if app.net !== "online"}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { pair } from "../src/lib/layout";
-import { sessionOrder, sidebarBlocks } from "../src/lib/nav";
+import { sessionOrder, sidebarDirs } from "../src/lib/nav";
 import { DEFAULT_BINDINGS } from "../src/lib/keys";
 import { PROTOCOL_VERSION } from "../src/lib/protocol";
 import { appTakesKey, clipboardKey, isTerminalId, localEcho, platformName, terminalSocketUrl, type TerminalInfo } from "../src/lib/terminal";
@@ -64,17 +64,18 @@ test("local echo over plain pipes", () => {
 
 describe("terminals in the sidebar", () => {
 	const sessions = [sess("a", "/p/one", 5), sess("b", "/p/one", 7)];
-	test("loose terminals sit in their directory; a directory with only a terminal is listed", () => {
-		const { dirs } = sidebarBlocks(sessions, [], undefined, undefined, [], [], [term("term_1", "/p/one"), term("term_2", "/p/two", 99)]);
+	test("loose terminals are tabs of their directory; a directory with only a terminal is listed", () => {
+		const dirs = sidebarDirs(sessions, [], [term("term_1", "/p/one"), term("term_2", "/p/two", 99)]);
 		expect(dirs.map((d) => d.path)).toEqual(["/p/two", "/p/one"]);
-		expect(dirs[1]!.terminals.map((t) => t.id)).toEqual(["term_1"]);
-		expect(dirs[0]!.sessions).toEqual([]);
+		expect(dirs[1]!.tabs.map((t) => t.id)).toEqual(["a", "b", "term_1"]);
+		expect(dirs[0]!.tabs.map((t) => t.kind)).toEqual(["terminal"]);
 	});
-	test("a terminal in a group is listed there only, and walked after the group's chats", () => {
+	test("a terminal in a group is a pane of that group's tab only", () => {
 		const groups = [{ id: "G", layout: pair("term_1", "b") } as Group];
-		const { dirs, groups: gs } = sidebarBlocks(sessions, groups, undefined, undefined, [], [], [term("term_1", "/p/one")]);
-		expect(dirs[0]!.terminals).toEqual([]);
-		expect(gs[0]!.terminals.map((t) => t.id)).toEqual(["term_1"]);
-		expect(sessionOrder(sessions, groups, [], [], [term("term_1", "/p/one")])).toEqual(["a", "b", "term_1"]);
+		const dirs = sidebarDirs(sessions, groups, [term("term_1", "/p/one")]);
+		expect(dirs[0]!.tabs.map((t) => t.id)).toEqual(["G", "a"]); // same age: groups first
+		const g = dirs[0]!.tabs[0]!;
+		expect(g.kind === "group" && g.members.map((m) => m.id)).toEqual(["term_1", "b"]);
+		expect(sessionOrder(sessions, groups, [], [], [term("term_1", "/p/one")])).toEqual(["term_1", "b", "a"]);
 	});
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
-import { firstUnseen, sessionOrder, stepFrom } from "../src/lib/nav";
+import { firstUnseen, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
 import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, actionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
@@ -54,17 +54,17 @@ describe("sessionOrder / stepFrom", () => {
 	const sessions = [sess("x", "/p/one", 5), sess("y", "/p/two", 9), sess("z", "/p/one", 7), sess("g1", "/p/three", 1), sess("g2", "/p/three", 2)];
 	const groups = [grp("G", pair("g1", "g2"))];
 
-	test("directories by recency come first, groups last", () => {
-		// /p/two (9) is the newest, then /p/one (7 via z)
+	test("directories by recency; a group is a tab of the directory its panes work in", () => {
+		// /p/two (9) is the newest, then /p/one (7 via z), then /p/three (the group, 2)
 		expect(sessionOrder(sessions, groups)).toEqual(["y", "x", "z", "g1", "g2"]);
 	});
 
-	test("hand-set directory and group orders are followed", () => {
+	test("hand-set directory and tab orders are followed", () => {
 		const two = [...sessions, sess("h1", "/p/four", 3), sess("h2", "/p/four", 4)];
 		const gs = [grp("G", pair("g1", "g2")), grp("H", pair("h1", "h2"))];
-		// default: groups in creation order, below the directories
-		expect(sessionOrder(two, gs)).toEqual(["y", "x", "z", "g1", "g2", "h1", "h2"]);
-		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], [gs[1]!.id, gs[0]!.id])).toEqual(["x", "z", "y", "h1", "h2", "g1", "g2"]);
+		expect(sessionOrder(two, gs)).toEqual(["y", "x", "z", "h1", "h2", "g1", "g2"]);
+		// placed directories come after the ones not placed yet; tabs follow their hand-set order inside a directory
+		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], ["z", "x"])).toEqual(["h1", "h2", "g1", "g2", "z", "x", "y"]);
 	});
 
 	test("a pane whose session is gone is skipped", () => {
@@ -309,13 +309,37 @@ describe("firstUnseen", () => {
 	});
 });
 
-describe("hand-ordered sessions", () => {
+describe("hand-ordered tabs", () => {
 	const all = [sess("a", "/p", 3), sess("b", "/p", 2), sess("c", "/p", 1)];
 	test("a placed order wins inside a directory, and prev/next follows it", () => {
-		expect(sessionOrder(all, [], [], [], [], [])).toEqual(["a", "b", "c"]);
-		expect(sessionOrder(all, [], [], [], [], ["c", "a", "b"])).toEqual(["c", "a", "b"]);
+		expect(sessionOrder(all, [], [], [], [])).toEqual(["a", "b", "c"]);
+		expect(sessionOrder(all, [], [], ["c", "a", "b"])).toEqual(["c", "a", "b"]);
 	});
-	test("sessions not placed yet come first", () => {
-		expect(sessionOrder(all, [], [], [], [], ["c", "b"])).toEqual(["a", "c", "b"]);
+	test("tabs not placed yet come after the placed ones, like a new editor tab", () => {
+		expect(sessionOrder(all, [], [], ["c", "b"])).toEqual(["c", "b", "a"]);
+	});
+});
+
+describe("sidebarDirs / tabOf", () => {
+	const sessions = [sess("a", "/w", 1), sess("b", "/w", 2), sess("c", "/x", 3), sess("d", "/w", 4)];
+	test("a group lands in the directory most of its panes work in", () => {
+		const dirs = sidebarDirs(sessions, [grp("G", pair("c", "b"))]);
+		// two dirs: /w holds a, d and the group (b in /w, c in /x: a tie goes to the first pane, c -> /x)
+		expect(dirs.find((d) => d.path === "/x")!.tabs.map((t) => t.id)).toEqual(["G"]);
+		const three = sidebarDirs(sessions, [grp("G", splitAt(pair("c", "b"), "b", "d", "right"))]);
+		// same age: groups first
+		expect(three.find((d) => d.path === "/w")!.tabs.map((t) => t.id)).toEqual(["G", "a"]);
+	});
+	test("tabOf finds the tab of a pane or of a group id", () => {
+		const dirs = sidebarDirs(sessions, [grp("G", pair("a", "b"))]);
+		expect(tabOf(dirs, "b")?.tab.id).toBe("G");
+		expect(tabOf(dirs, "G")?.dir.path).toBe("/w");
+		expect(tabOf(dirs, "d")?.tab.kind).toBe("session");
+		expect(tabOf(dirs, "zz")).toBeNull();
+	});
+	test("search keeps a group with a matching member, showing only that member", () => {
+		const dirs = sidebarDirs(sessions, [grp("G", pair("a", "b"))], [], { match: (s) => s.id === "b" });
+		const g = dirs[0]!.tabs[0]!;
+		expect(g.kind === "group" && g.members.map((m) => m.id)).toEqual(["b"]);
 	});
 });

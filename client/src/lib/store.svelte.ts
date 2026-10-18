@@ -16,7 +16,7 @@ import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
 import { viewport } from "./viewport.svelte";
-import { sessionOrder } from "./nav";
+import { sessionOrder, sidebarDirs, tabOf, type DirBlock, type Tab } from "./nav";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
 import { DEFAULT_ESCALATE, ESCALATE_CHOICES, deviceIdentity, notifications } from "./notifications";
@@ -1323,14 +1323,49 @@ class AppStore {
     return (this.serverId && this.sidebar.dirOrder[this.serverId]) || [];
   }
 
-  /** Hand-set group order of the open server (empty = creation order). */
-  get currentGroupOrder(): string[] {
-    return (this.serverId && this.sidebar.groupOrder[this.serverId]) || [];
+  /** Hand-set tab order of the open server (empty = the order they were made in). */
+  get currentTabOrder(): string[] {
+    return (this.serverId && this.sidebar.tabOrder[this.serverId]) || [];
   }
 
-  /** Hand-set order of loose sessions of the open server (empty = as the server lists them). */
-  get currentSessionOrder(): string[] {
-    return (this.serverId && this.sidebar.sessionOrder[this.serverId]) || [];
+  /** The open server's working directories and their tabs, in sidebar order. */
+  get dirs(): DirBlock[] {
+    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder });
+  }
+
+  /** The tab the focused pane is in, and its directory. */
+  get activeTab(): { dir: DirBlock; tab: Tab } | null {
+    return tabOf(this.dirs, this.activeId);
+  }
+
+  /** The pane last focused in each tab (by tab id), so switching back to a group lands where it was left. */
+  private lastPane: Record<string, string> = {};
+
+  /**
+   * The tabs `from` (as listed in `before`) became `to`: put `to` where the first of them was, in that directory, and
+   * remember the directory's order so it stays that way.
+   */
+  private replaceTabs(before: DirBlock[], from: string[], to: string[]) {
+    if (!this.serverId) return;
+    for (const d of before) {
+      const ids = d.tabs.map((x) => x.id);
+      const at = ids.findIndex((x) => from.includes(x));
+      if (at < 0) continue;
+      const list = ids.filter((x) => !from.includes(x) && !to.includes(x));
+      list.splice(Math.min(at, list.length), 0, ...to);
+      this.sidebar.placeTabs(this.serverId, list);
+      return;
+    }
+  }
+
+  /** Show tab `id` (a group, session or terminal id): a group focuses the pane last used in it. */
+  openTab(id: string) {
+    const g = this.groups.find((x) => x.id === id);
+    if (!g) return void this.openSession(id);
+    const panes = panesOf(g.layout).filter((x) => this.shows(x));
+    const last = this.lastPane[id];
+    const to = last && panes.includes(last) ? last : panes[0];
+    if (to) void this.openSession(to);
   }
 
   async refreshWorkspace() {
@@ -1415,7 +1450,7 @@ class AppStore {
       const inGroup = i < 0 ? undefined : (ids[i + 1] ?? ids[i - 1]);
       if (inGroup) return inGroup;
     }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentGroupOrder, this.terminals, this.currentSessionOrder);
+    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
   }
@@ -1595,6 +1630,8 @@ class AppStore {
     if (this.activeId && this.activeId !== id) this.previousId = this.activeId;
     this.activeId = id;
     write(this.activeKey, id);
+    const g = this.groupOf(id);
+    if (g) this.lastPane[g.id] = id;
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
@@ -2207,8 +2244,11 @@ class AppStore {
   async createGroup(layout: Layout, name?: string): Promise<Group | null> {
     if (!this.api) return null;
     try {
+      // the new group's tab takes the place of the tab the drop landed on (the pane split; `pair` puts it first or second)
+      const before = this.dirs;
       const g = await this.api.createGroup({ layout, name: name || this.nextGroupName(layout), ...(name ? {} : { autoName: true }) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
+      this.replaceTabs(before, panesOf(layout), [g.id]);
       // the server moved these sessions out of any group they were in
       await this.refreshGroups();
       return g;
@@ -2258,8 +2298,12 @@ class AppStore {
   /** Dissolve a group. Its sessions stay, as ordinary sessions. */
   async deleteGroup(id: string): Promise<void> {
     if (!this.api) return;
+    const g = this.groups.find((x) => x.id === id);
+    const before = this.dirs;
     try {
       await this.api.deleteGroup(id);
+      // what was in the group comes back as tabs of its own, where the group's tab was
+      if (g) this.replaceTabs(before, [id], panesOf(g.layout).filter((x) => this.shows(x)));
       this.groups = this.groups.filter((g) => g.id !== id);
       this.dropFull(id);
     } catch (e) {
