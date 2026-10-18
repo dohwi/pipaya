@@ -837,22 +837,24 @@
 			padding-right: 32px;
 		}
 	}
-	/* the open session's long title flows by on its own (touch has no hover; on desktop it needs no hover either) */
-	.item.active .title:global([data-over]) {
-		text-overflow: clip;
-		-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-		mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-	}
-	.item.active .title:global([data-over]) .track {
-		display: flex;
-		width: max-content;
-		animation: mq var(--mq-d, 8s) linear infinite;
-	}
-	.item.active .title:global([data-over]) .mq,
-	.item.active .title:global([data-over]) .dup {
-		display: block;
-		flex: none;
-		padding-right: 32px;
+	/* touch has no hover, so the open session's long title flows by on its own; on desktop only hover/focus (above) does */
+	@media (hover: none) {
+		.item.active .title:global([data-over]) {
+			text-overflow: clip;
+			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+		}
+		.item.active .title:global([data-over]) .track {
+			display: flex;
+			width: max-content;
+			animation: mq var(--mq-d, 8s) linear infinite;
+		}
+		.item.active .title:global([data-over]) .mq,
+		.item.active .title:global([data-over]) .dup {
+			display: block;
+			flex: none;
+			padding-right: 32px;
+		}
 	}
 	@keyframes mq {
 		from {
