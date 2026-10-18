@@ -2,7 +2,7 @@
 	import Backdrop, { arrival, type Burst } from "./Backdrop.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
 
-	const GLOW = 3200; // ms: from the wave reaching the mark until it has fully faded again (see @keyframes glow)
+	const GLOW = 2000; // ms: from the wave reaching the mark until it has fully faded again (see @keyframes glow)
 	let bursts: Burst[] = $state([]);
 	let w = $state(0);
 	let h = $state(0);
@@ -51,7 +51,7 @@
 	}
 	.tint {
 		opacity: 0;
-		animation: glow 3200ms both;
+		animation: glow 2000ms both;
 	}
 	@keyframes glow {
 		0% {
