@@ -11,7 +11,7 @@
 	const DUR = 1300; // ms
 
 	let ripRaf = 0;
-	// Drives every ripple's radius by hand (like the hover light), so it does not depend on animating custom properties.
+	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
 	const tick = (now: number) => {
 		for (const b of bursts) {
 			const p = Math.min(1, (now - b.t0) / DUR);
@@ -99,7 +99,7 @@
 	<div class="lit"></div>
 	{#each bursts as b (b.id)}
 		<div
-			class="ripple"
+			class="wave"
 			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;opacity:{b.a.toFixed(3)}"
 		></div>
 	{/each}
@@ -139,7 +139,7 @@
 		mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
 	}
 	/* the hover grid again, but shown through a ring that travels out from the click */
-	.ripple {
+	.wave {
 		position: absolute;
 		inset: 0;
 		--line: var(--grid-wave);
