@@ -8,7 +8,8 @@
 	import { marquee, tail } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
-	import { ACTIVITY_LABEL, ACTIVITY_TONE, activityOf, type Activity } from "../lib/activity";
+	import AgentBadge from "./AgentBadge.svelte";
+	import { ACTIVITY_LABEL, activityOf, type Activity } from "../lib/activity";
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
@@ -300,8 +301,8 @@
 		{:else}
 			{@const st = stateOf(n, x)}
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[x.name ? `@${x.name}` : "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
-				<!-- the lead column is empty while idle: only something worth a look (working, asking, done, failed) shows -->
-				<span class="lead">{#if st !== "idle"}<StatusDot tone={ACTIVITY_TONE[st]} pulse={st === "working" || st === "asking"} size={7} />{/if}</span>
+				<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
+				<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 				{#if member && x.name}<span class="who mono {st}">@{x.name}</span>{/if}
 			</button>
@@ -809,13 +810,13 @@
 		color: var(--text);
 		opacity: 1;
 	}
-	/* one narrow lead column: a status dot, or the terminal / split icon; empty for an idle conversation */
+	/* one lead column: the model's logo, or the terminal / split icon */
 	.lead {
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 14px;
-		height: 14px;
+		width: 16px;
+		height: 16px;
 		color: var(--text-faint);
 	}
 	.lead :global(svg) {
@@ -849,7 +850,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.item.nested .open {
-		padding-left: 44px; /* one step in: the tab's icon sits under the folder's name */
+		padding-left: 43px; /* one step in: the tab's icon sits under the folder's name */
 	}
 	.item:hover {
 		background: var(--bg-hover);
