@@ -55,8 +55,6 @@
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		return { root: ws?.root, total, dirs };
 	}
-	/** Where a new chat starts when nothing else is picked: the current server's chosen workdir, else the server's default root */
-	const startDir = (n: Node) => (n.current && app.workdir !== "." ? app.workdir : n.root);
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
 	const segs = (n: Node, path: string) => pretty(n, path).split("/").filter(Boolean);
@@ -373,11 +371,8 @@
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
-			<!-- one server: its folders are the top level; the server row only appears once there are several -->
-			{@const solo = nodes.length === 1}
-			{@const sfold = !solo && isFolded(n.server.id)}
-			<section class="srv" class:cur={n.current} class:solo>
-				{#if !solo}
+			{@const sfold = isFolded(n.server.id)}
+			<section class="srv" class:cur={n.current}>
 				<div class="srvhead">
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
@@ -387,14 +382,9 @@
 					</button>
 					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, n.current ? app.workdir : ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
-				{/if}
 
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
-					<button class="newbtn" class:on={menuId === newId(`${n.server.id}\u0000slot`)} data-menu-button onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", `${n.server.id}\u0000slot`)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}>
-						<Icon name="plus" />
-						{#if startDir(n)}<span class="nwd mono" use:tail={pretty(n, startDir(n)!)}></span>{/if}
-					</button>
 					{#if n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}
 						<div class="nosess warnline">{t(statusText[n.state])}{n.loaded ? ` · ${t("마지막으로 확인된 목록")}` : ""}</div>
 					{/if}
@@ -546,40 +536,6 @@
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--border);
 	}
-	/* a dashed slot at the end of each server: the whole width is the target for "new" */
-	.newbtn {
-		flex: none;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 2px;
-		width: 100%;
-		height: 40px;
-		margin-top: 6px;
-		padding: 0 10px;
-		border: 1px dashed var(--border-strong);
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
-	}
-	/* the folder a new chat starts in, same small mono as a folder's parent path */
-	.nwd {
-		display: block;
-		max-width: 100%;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-	}
-	.newbtn:hover,
-	.newbtn.on {
-		background: var(--bg-hover);
-		border-color: var(--text-faint);
-		color: var(--text);
-	}
-	.newbtn :global(svg),
 	.settings :global(svg) {
 		width: 18px;
 		height: 18px;
@@ -663,7 +619,7 @@
 		border-top: 1px solid var(--border);
 	}
 	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
-	.srv:not(.solo) > .fold {
+	.srv > .fold {
 		padding-left: 6px;
 	}
 	.srvhead {
