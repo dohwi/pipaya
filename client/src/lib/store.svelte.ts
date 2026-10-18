@@ -16,7 +16,7 @@ import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
 import { viewport } from "./viewport.svelte";
-import { sessionOrder, sidebarDirs, tabOf, type DirBlock, type Tab } from "./nav";
+import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
 import { DEFAULT_ESCALATE, ESCALATE_CHOICES, deviceIdentity, notifications } from "./notifications";
@@ -1450,9 +1450,21 @@ class AppStore {
       const inGroup = i < 0 ? undefined : (ids[i + 1] ?? ids[i - 1]);
       if (inGroup) return inGroup;
     }
+    // the next tab of the same folder (the previous when it was last): closing never carries you off to another folder
+    const at = this.activeTabOf(id);
+    if (at) {
+      const i = at.dir.tabs.findIndex((x) => x.id === at.tab.id);
+      const sib = at.dir.tabs[i + 1] ?? at.dir.tabs[i - 1];
+      const pane = sib && (this.lastPane[sib.id] && this.shows(this.lastPane[sib.id]) ? this.lastPane[sib.id] : tabPanes(sib)[0]);
+      if (pane) return pane;
+    }
     const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
+  }
+
+  private activeTabOf(id: string) {
+    return tabOf(this.dirs, id);
   }
 
   /**
