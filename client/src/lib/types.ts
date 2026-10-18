@@ -368,6 +368,14 @@ export interface ConfigurationInfo {
 	approval?: { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy };
 	/** Whether the agent may ask the user questions (ask_user); older servers omit it and always allow it */
 	askUser?: { enabled: boolean };
+	/** Which agent tools can be switched off and which are locked on; older servers omit it */
+	tools?: ToolsInfo;
+}
+
+export interface ToolsInfo {
+	toggleable: string[];
+	locked: string[];
+	disabled: string[];
 }
 
 export interface ConnectionResult {

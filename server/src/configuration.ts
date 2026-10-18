@@ -10,7 +10,7 @@ import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Approval, Thinking } from "./schemas.ts";
 import { catalogEntries, catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
-import { isInside } from "./tools.ts";
+import { DEFAULT_TOOLS, isInside, TOGGLEABLE_TOOLS } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
 
@@ -84,8 +84,14 @@ export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDef
 export const ApprovalBody = Type.Object({ approval: Type.Union([Approval, Type.Null()], { description: "Default tool approval for new sessions; null restores the startup default (PIPAYA_APPROVAL)" }) }, { additionalProperties: false });
 export const ApprovalInfo = Type.Object({ saved: Type.Union([Approval, Type.Null()]), effective: Approval, fallback: Approval });
 export const AskUserBody = Type.Object({ enabled: Type.Boolean({ description: "Let the agent ask the user questions (ask_user). Off: the tool is withheld from every session" }) }, { additionalProperties: false });
+export const ToolsBody = Type.Object({ disabled: Type.Array(Type.String(), { description: "Switchable tools to withhold from every session. Unknown or locked names are rejected" }) }, { additionalProperties: false });
+export const ToolsInfo = Type.Object({
+	toggleable: Type.Array(Type.String(), { description: "Tools that can be switched off" }),
+	locked: Type.Array(Type.String(), { description: "Built-in tools that always stay on" }),
+	disabled: Type.Array(Type.String()),
+});
 export const AskUserInfo = Type.Object({ enabled: Type.Boolean() });
-export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo), askUser: Type.Optional(AskUserInfo) });
+export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo), askUser: Type.Optional(AskUserInfo), tools: Type.Optional(ToolsInfo) });
 export const ConnectionResult = Type.Object({ ok: Type.Boolean(), durationMs: Type.Integer(), text: Type.Optional(Type.String()), error: Type.Optional(Type.String()) });
 export type CustomProvider = Static<typeof CustomProviderBody> & { id: string };
 export type ModelSelection = Static<typeof Selection>;
@@ -181,14 +187,35 @@ export class Configuration {
 		return this.approvalInfo();
 	}
 
-	/** Whether the agent may ask the user questions (`ask_user`). On unless switched off; saved on the server. */
-	askUserEnabled(): boolean {
-		const row = this.db.query("SELECT data FROM settings WHERE key = 'ask_user_enabled'").get() as { data: string } | null;
-		return row ? JSON.parse(row.data) !== false : true;
+	/** Tools the user switched off (only switchable ones count). Saved on the server; the older `ask_user_enabled` key still applies until this is saved. */
+	disabledTools(): string[] {
+		const row = this.db.query("SELECT data FROM settings WHERE key = 'disabled_tools'").get() as { data: string } | null;
+		if (row) {
+			const parsed: unknown = JSON.parse(row.data);
+			return Array.isArray(parsed) ? TOGGLEABLE_TOOLS.filter((n) => parsed.includes(n)) : [];
+		}
+		const legacy = this.db.query("SELECT data FROM settings WHERE key = 'ask_user_enabled'").get() as { data: string } | null;
+		return legacy && JSON.parse(legacy.data) === false ? ["ask_user"] : [];
 	}
 
+	setDisabledTools(disabled: string[]) {
+		const bad = disabled.find((n) => !TOGGLEABLE_TOOLS.includes(n));
+		if (bad) throw badRequest(`${bad} cannot be switched off`);
+		const data = JSON.stringify(TOGGLEABLE_TOOLS.filter((n) => disabled.includes(n)));
+		this.db.query("INSERT INTO settings (key, data) VALUES ('disabled_tools', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data });
+		return this.toolsInfo();
+	}
+
+	toolsInfo() {
+		return { toggleable: [...TOGGLEABLE_TOOLS], locked: DEFAULT_TOOLS.filter((n) => !TOGGLEABLE_TOOLS.includes(n)), disabled: this.disabledTools() };
+	}
+
+	/** Whether the agent may ask the user questions (`ask_user`). On unless switched off. */
+	askUserEnabled(): boolean { return !this.disabledTools().includes("ask_user"); }
+
 	setAskUser(enabled: boolean) {
-		this.db.query("INSERT INTO settings (key, data) VALUES ('ask_user_enabled', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(enabled) });
+		const rest = this.disabledTools().filter((n) => n !== "ask_user");
+		this.setDisabledTools(enabled ? rest : [...rest, "ask_user"]);
 		return { enabled: this.askUserEnabled() };
 	}
 
@@ -237,7 +264,7 @@ export class Configuration {
 	async snapshot() {
 		return {
 			providers: await Promise.all(this.list().map((p) => this.describe(p))),
-			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(), askUser: { enabled: this.askUserEnabled() },
+			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(), askUser: { enabled: this.askUserEnabled() }, tools: this.toolsInfo(),
 		};
 	}
 

@@ -22,6 +22,23 @@
 	import { app, type ThemePref } from "../lib/store.svelte";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
 
+	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
+	function toolLabel(name: string): string {
+		switch (name) {
+			case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
+			case "delegate": return t("하위 에이전트에게 조사 위임 (delegate)");
+			case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
+			case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
+			case "read": return t("파일 읽기 (read)");
+			case "write": return t("파일 만들기 · 덮어쓰기 (write)");
+			case "edit": return t("파일 일부 수정 (edit)");
+			case "ls": return t("폴더 목록 (ls)");
+			case "grep": return t("내용 검색 (grep)");
+			case "bash": return t("셸 명령 실행 (bash)");
+			default: return name;
+		}
+	}
+
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
 	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab);
@@ -206,11 +223,24 @@
 				</section>
 
 				<section>
-					<div class="mono-label">{t("질문 허용")}</div>
-					<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
-						<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
-					</SettingRow>
-					<span class="hint">{t("끄면 에이전트는 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다.")}</span>
+					<div class="mono-label">{t("에이전트 도구")}</div>
+					{#if app.toolsInfo}
+						{#each app.toolsInfo.toggleable as name (name)}
+							<SettingRow label={toolLabel(name)}>
+								<Switch checked={!app.toolsInfo.disabled.includes(name)} label={name} onchange={(on) => app.setToolEnabled(name, on)} />
+							</SettingRow>
+						{/each}
+						{#each app.toolsInfo.locked as name (name)}
+							<SettingRow label={toolLabel(name)} dim>
+								<Switch checked disabled label={name} onchange={() => {}} />
+							</SettingRow>
+						{/each}
+					{:else}
+						<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
+							<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
+						</SettingRow>
+					{/if}
+					<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 질문을 끄면 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
 				</section>
 
 				<section>

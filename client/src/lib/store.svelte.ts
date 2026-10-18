@@ -46,6 +46,7 @@ import type {
   UploadFile,
   WorkspaceInfo,
   WorkdirInfo,
+  ToolsInfo,
 } from "./types";
 
 export type NetState =
@@ -101,6 +102,8 @@ class AppStore {
   workdirInfo = $state<WorkdirInfo | null>(null);
   /** Whether the agent may ask questions (ask_user); saved on the server */
   askUserEnabled = $state(true);
+  /** Agent tools the user can switch off / always-on ones / the ones switched off; saved on the server */
+  toolsInfo = $state<ToolsInfo | null>(null);
   /** Open the directory picker */
   dirPicker = $state(false);
   /** Images open in the full-screen viewer (null = closed) */
@@ -808,6 +811,7 @@ class AppStore {
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
       this.askUserEnabled = config?.askUser?.enabled ?? true;
+      this.toolsInfo = config?.tools ?? null;
       this.ensureDraftModel();
       void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
       if (this.serverId) this.startSettingsSync(api, this.serverId);
@@ -1067,6 +1071,9 @@ class AppStore {
           const eff = (e.data as { effective?: ApprovalPolicy }).effective;
           if (eff) this.updateDraft({ approval: approvalMode(eff) });
         }
+        if ((e.data as { scope?: string } | undefined)?.scope === "tools") {
+          this.toolsInfo = e.data as ToolsInfo;
+        }
         if ((e.data as { scope?: string } | undefined)?.scope === "ask_user") {
           this.askUserEnabled = (e.data as { enabled?: boolean }).enabled !== false;
         }
@@ -1189,6 +1196,25 @@ class AppStore {
       : this.workdir.startsWith("/")
         ? this.workdir
         : `${root}/${this.workdir}`;
+  }
+
+  /** Switch one agent tool on or off for every chat. Saved on the server. */
+  async setToolEnabled(name: string, enabled: boolean): Promise<boolean> {
+    if (!this.api || !this.toolsInfo) return false;
+    const before = this.toolsInfo;
+    const disabled = enabled ? before.disabled.filter((n) => n !== name) : [...new Set([...before.disabled, name])];
+    this.toolsInfo = { ...before, disabled };
+    if (name === "ask_user") this.askUserEnabled = enabled;
+    try {
+      this.toolsInfo = await this.api.setDisabledTools(disabled);
+      this.askUserEnabled = !this.toolsInfo.disabled.includes("ask_user");
+      return true;
+    } catch (e) {
+      this.toolsInfo = before;
+      this.askUserEnabled = !before.disabled.includes("ask_user");
+      this.fail(e, t("변경하지 못했습니다"), this.activeId);
+      return false;
+    }
   }
 
   /** Let the agent ask the user questions (ask_user) or not. Saved on the server for every client. */

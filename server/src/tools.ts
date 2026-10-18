@@ -594,6 +594,8 @@ const peerReadTool: ToolDef = {
 };
 
 export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
+/** Tools the user may switch off in the settings; every other built-in tool is locked on (the agent cannot work without it). */
+export const TOGGLEABLE_TOOLS = [askUserTool.name, delegateTool.name, peerSendTool.name, peerReadTool.name];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
 	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, delegateTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),

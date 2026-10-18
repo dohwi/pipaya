@@ -4,6 +4,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	Question,
 	ActivityInfo,
 	ConfigurationInfo,
+	ToolsInfo,
 	LoginState,
 	CompactionResult,
 	ConnectionResult,
@@ -224,6 +225,7 @@ export class Api {
 		this.req<{ ok: boolean }>("DELETE", `/configuration/providers/${encodeURIComponent(id)}`);
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
+	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
 	setAskUser = (enabled: boolean) => this.req<{ enabled: boolean }>("PUT", "/configuration/ask-user", { enabled });
 	setDefaultApproval = (approval: ApprovalPolicy | null) =>
 		this.req<{ saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy }>("PUT", "/configuration/approval", { approval });

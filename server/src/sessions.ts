@@ -74,8 +74,8 @@ export class SessionManager {
 		private templates?: TemplateService,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
-		/** Whether the agent may ask the user questions; off withholds `ask_user`. */
-		private askUserEnabled: () => boolean = () => true,
+		/** Switchable tools the user turned off in the settings; withheld from every session. */
+		private disabledTools: () => string[] = () => [],
 		/** The light model that writes session titles and roles; none = titles stay the first message cut short. */
 		private systemModel?: SystemModelSettings,
 	) {
@@ -803,9 +803,10 @@ export class SessionManager {
 		live.skillsKey = key;
 	}
 
-	/** The tools a session's agent gets; `ask_user` is left out while the user has switched it off. */
+	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
-		const all = [...new Set([...names, ...PEER_TOOLS])].filter((n) => n !== "ask_user" || this.askUserEnabled());
+		const off = this.disabledTools();
+		const all = [...new Set([...names, ...PEER_TOOLS])].filter((n) => !off.includes(n));
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
@@ -813,7 +814,7 @@ export class SessionManager {
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
 		const sub = this.subagents;
-		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => !this.askUserEnabled() ? Promise.reject(new Error("ask_user is turned off in the settings")) : q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
+		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => this.disabledTools().includes("ask_user") ? Promise.reject(new Error("ask_user is turned off in the settings")) : q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
 		ctx.sessionId = sessionId;
 		ctx.peers = this.peerApi(sessionId);
 		if (sub) {

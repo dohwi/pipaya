@@ -205,6 +205,15 @@ describe("API contracts", () => {
 		expect(msgs).toContain("Tool ask_user finished:\\nblue");
 	});
 
+	test("switchable tools can be turned off, locked ones cannot", async () => {
+		const info = (await api("GET", "/configuration")).json.tools;
+		expect(info.toggleable).toEqual(["ask_user", "delegate", "peer_send", "peer_read"]);
+		expect(info.locked).toContain("read");
+		expect((await api("PUT", "/configuration/tools", { disabled: ["read"] })).status).toBe(400);
+		expect((await api("PUT", "/configuration/tools", { disabled: ["peer_send"] })).json.disabled).toEqual(["peer_send"]);
+		expect((await api("PUT", "/configuration/tools", { disabled: [] })).json.disabled).toEqual([]);
+	});
+
 	test("ask_user can be switched off in the settings", async () => {
 		expect((await api("GET", "/configuration")).json.askUser).toEqual({ enabled: true });
 		expect((await api("PUT", "/configuration/ask-user", { enabled: "no" })).status).toBe(400);

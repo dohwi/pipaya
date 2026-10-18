@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ApprovalBody, ApprovalInfo, AskUserBody, AskUserInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
+import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ApprovalBody, ApprovalInfo, AskUserBody, AskUserInfo, ToolsBody, ToolsInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
 import { IdParams, Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
@@ -85,7 +85,18 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 		handler: async (req) => {
 			const askUser = config.setAskUser(req.body.enabled);
 			bus.publish(null, "configuration_updated", { scope: "ask_user", ...askUser });
+			bus.publish(null, "configuration_updated", { scope: "tools", ...config.toolsInfo() });
 			return askUser;
+		},
+	});
+	app.put("/configuration/tools", {
+		schema: { body: ToolsBody, response: { 200: ToolsInfo, ...errors(400, 401) } },
+		handler: async (req) => {
+			const tools = config.setDisabledTools(req.body.disabled);
+			bus.publish(null, "configuration_updated", { scope: "tools", ...tools });
+			// Keep older clients' ask_user switch in step.
+			bus.publish(null, "configuration_updated", { scope: "ask_user", enabled: !tools.disabled.includes("ask_user") });
+			return tools;
 		},
 	});
 	app.post("/configuration/test", {
