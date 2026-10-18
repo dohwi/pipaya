@@ -169,7 +169,8 @@
 	.html {
 		display: block;
 		width: 100%;
-		height: 70vh;
+		/* a page's height is unknown (no script can measure it), so keep the frame modest and let long pages scroll inside */
+		height: clamp(240px, 48vh, 460px);
 		border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
 		border-radius: var(--radius);
 		background: #fff;
