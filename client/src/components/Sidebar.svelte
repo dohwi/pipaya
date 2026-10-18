@@ -409,8 +409,10 @@
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
 								<span class="dicon"><Icon name="folder" /></span>
-								<span class="dname">{label}</span>
-								{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
+								<span class="dlabel">
+									<span class="dname">{label}</span>
+									{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
+								</span>
 								{#if dfold}<span class="dcount mono">{d.tabs.length}</span>{/if}
 							</button>
 							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
@@ -742,6 +744,16 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	/* name and parent path share one baseline; the pair is centred on the icons (line-height 1 drops the uneven leading) */
+	.dlabel {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		line-height: 1;
+		padding-bottom: 1px; /* lowercase sits low in its box: lift it onto the icons' centre */
 	}
 	/* where the folder sits, dim after its name; the full path is the tooltip */
 	.dparent {
