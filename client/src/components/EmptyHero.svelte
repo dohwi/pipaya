@@ -6,8 +6,8 @@
 	let w = $state(0);
 	let h = $state(0);
 
-	const LEAD = 240; // px: the mark starts to glow this far before the wave front reaches it
-	const TRAIL = 480; // px: and keeps fading this far behind it
+	const LEAD = 420; // px: the mark starts to glow this far before the wave front reaches it
+	const TRAIL = 900; // px: and keeps fading this far behind it
 	const soft = (t: number) => {
 		const c = Math.min(1, Math.max(0, t));
 		return c * c * (3 - 2 * c);
