@@ -56,12 +56,15 @@
 		const ids = d.tabs.flatMap((x) => tabPanes(x));
 		return URGENCY.find((a) => ids.some((id) => (sec.state[id] ?? "idle") === a)) ?? "idle";
 	}
+	/** How many sessions and terminals a folder holds (a group counts its members). */
+	const dirCount = (d: DirBlock) => d.tabs.reduce((n, x) => n + tabPanes(x).length, 0);
 	const top = $derived(URGENCY.find((a) => a !== "idle" && counts[a] > 0));
 </script>
 
 {#snippet dirBtn(sec: Section, d: DirBlock)}
 	{@const st = dirState(sec, d)}
 	{@const name = dirName(sec, d.path)}
+	{@const n = dirCount(d)}
 	{@const cur = sec.current && app.activeTab?.dir.path === d.path}
 	<button
 		class="agent dir"
@@ -72,6 +75,7 @@
 		aria-current={cur ? "true" : undefined}
 	>
 		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
+		{#if n > 0}<span class="cnt" title={t("{n}개", { n })}>{n > 99 ? "99+" : n}</span>{/if}
 		{#if st !== "idle"}<i class="pip {st}"></i>{/if}
 	</button>
 {/snippet}
@@ -209,6 +213,43 @@
 	.agent.dir:hover,
 	.agent.dir.active {
 		color: var(--text);
+	}
+	/* the open folder: a filled tile and an edge bar, so it reads as selected at a glance */
+	.agent.dir.active {
+		background: var(--accent-soft);
+	}
+	.agent.dir.active::before {
+		content: "";
+		position: absolute;
+		left: -6px;
+		top: 9px;
+		bottom: 9px;
+		width: 3px;
+		border-radius: 0 2px 2px 0;
+		background: var(--text);
+	}
+	.agents:global([data-indicator-ready]) .agent.dir.active {
+		background: var(--accent-soft);
+	}
+	.cnt {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		min-width: 15px;
+		padding: 0 4px;
+		box-sizing: border-box;
+		border-radius: var(--radius-pill);
+		background: var(--bg-active);
+		color: var(--text-dim);
+		font-family: var(--mono);
+		font-size: 9px;
+		font-weight: 600;
+		line-height: 15px;
+		text-align: center;
+	}
+	.agent.dir.active .cnt {
+		background: var(--text);
+		color: var(--bg-side);
 	}
 	.pip {
 		position: absolute;
