@@ -852,14 +852,25 @@ export class SessionManager {
 		return {
 			names: () => this.peers(sessionId).map((p) => p.name),
 			send: async (name, text) => {
-				const { self, peer } = find(name);
+				const peers = this.peers(sessionId);
+				const isSession = peers.some((p) => p.name.toLowerCase() === name.toLowerCase());
+				// A group handle (e.g. App-Development) fans the message out to every other active session in that group.
+				const group = isSession ? undefined : this.groupSource().find((g) => groupHandle(g.name).toLowerCase() === name.toLowerCase());
+				const targets = group
+					? peers.filter((p) => group.sessionIds.includes(p.sessionId))
+					: [find(name).peer];
+				if (group && !targets.length) throw notFound(`active sessions in group @${name} other than yourself`);
+				const self = this.store.get(sessionId)!.name;
 				const sent = (this.peerSends.get(sessionId) ?? 0) + 1;
 				if (sent > MAX_PEER_SENDS) throw conflict(`at most ${MAX_PEER_SENDS} peer messages per run; stop and report to the user instead`);
 				this.peerSends.set(sessionId, sent);
 				const body = `[from @${self}, another session on this server; answer with peer_send to @${self} only if a reply is needed]\n${text}`;
-				const busy = this.live.get(peer.sessionId)?.running ?? false;
-				await this.send(peer.sessionId, { text: body, mode: busy ? "follow_up" : "prompt" });
-				return `Sent to @${peer.name}${busy ? " (it is busy; the message waits until it finishes its turn)" : ""}. It works on its own; use peer_read to check on it later.`;
+				const results = await Promise.all(targets.map(async (peer) => {
+					const busy = this.live.get(peer.sessionId)?.running ?? false;
+					await this.send(peer.sessionId, { text: body, mode: busy ? "follow_up" : "prompt" });
+					return `@${peer.name}${busy ? " (busy; waits for its turn to end)" : ""}`;
+				}));
+				return `Sent to ${group ? `group @${name}: ` : ""}${results.join(", ")}. They work on their own; use peer_read to check on them later.`;
 			},
 			read: (name, count) => {
 				const { peer } = find(name);

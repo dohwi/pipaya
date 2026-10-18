@@ -211,6 +211,25 @@ describe("groups API", () => {
 		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("session @nobody");
 	});
 
+	test("peer_send to a group name reaches every other session in that group", async () => {
+		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
+		const idle = async (id: string) => {
+			for (let i = 0; i < 200; i++) {
+				if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
+				await Bun.sleep(25);
+			}
+		};
+		const g = (await api("POST", "/groups", { name: "Fan Out", layout: split(pane(a), split(pane(b), pane(c))) })).json;
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "Fan-Out", message: "to everyone" })}` });
+		await idle(a);
+		await Bun.sleep(100);
+		await Promise.all([idle(b), idle(c)]);
+		for (const id of [b, c]) expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("to everyone");
+		// the sender is not among the targets
+		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).not.toContain("from @");
+		await api("DELETE", `/groups/${g.id}`);
+	});
+
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);

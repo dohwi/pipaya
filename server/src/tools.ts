@@ -558,7 +558,7 @@ const peerSendTool: ToolDef = {
 			name: "peer_send",
 			label: "Message another session",
 			description:
-				"Send a message to another active session, addressed by name (without @). It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." +
+				"Send a message to another active session, addressed by name (without @). A group name (e.g. a tagged @group) sends it to every other session in that group. It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." +
 				peerNote,
 			parameters: Type.Object({
 				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
