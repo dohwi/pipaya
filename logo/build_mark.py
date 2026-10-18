@@ -165,7 +165,7 @@ def main():
     (SVG / "mark.svg").write_text(mark(DARK))
     (SVG / "mark-light.svg").write_text(mark(LIGHT))
     (SVG / "mark-mono.svg").write_text(mark())
-    (SVG / "favicon.svg").write_text(mark(fixed=MONO))
+    (SVG / "favicon.svg").write_text(mark(DARK))  # 컬러 (위키와 동일). 밝은/어두운 탭 모두에서 보이는 DARK 팔레트
     (SVG / "app-icon.svg").write_text(app_icon())
     (SVG / "app-icon-glyph.svg").write_text(app_icon(True))
     (SVG / "app-icon-adaptive.svg").write_text(app_icon_adaptive())

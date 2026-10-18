@@ -4,7 +4,7 @@
  *   src-tauri/app-icon-glyph.png     the same artwork on transparent
  *   src-tauri/app-icon-adaptive.png  Android adaptive foreground (crown inside the safe zone, trunk to the bottom edge)
  *   src-tauri/app-icon-mark.png      the whole tree as a single-colour silhouette (notification icon)
- *   public/favicon.svg, favicon-{16,32,64}.png, favicon.ico   single-colour mark, as before
+ *   public/favicon.svg, favicon-{16,32,64}.png, favicon.ico   colour mark (same as the wiki)
  * Then run `python3 scripts/make-icons.py` for the per-OS icon sets.
  * Run from client/:  bun scripts/render-icons.ts
  */
