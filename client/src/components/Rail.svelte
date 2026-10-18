@@ -75,8 +75,7 @@
 		aria-current={cur ? "true" : undefined}
 	>
 		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
-		{#if n > 0}<span class="cnt" title={t("{n}개", { n })}>{n > 99 ? "99+" : n}</span>{/if}
-		{#if st !== "idle"}<i class="pip {st}"></i>{/if}
+		{#if n > 0}<span class="cnt {st}">{n > 99 ? "99+" : n}</span>{/if}
 	</button>
 {/snippet}
 
@@ -197,8 +196,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: var(--radius-sm);
 	}
 	/* a folder: just its first letter; the button's own shape (hover, selected ring) is the only box */
@@ -231,40 +230,40 @@
 	.agents:global([data-indicator-ready]) .agent.dir.active {
 		background: var(--accent-soft);
 	}
+	/* one badge: the session count, tinted by the folder's most urgent state */
 	.cnt {
 		position: absolute;
-		top: 2px;
-		right: 2px;
-		min-width: 15px;
-		padding: 0 4px;
-		box-sizing: border-box;
+		top: 0;
+		right: 0;
+		min-width: 12px;
+		height: 14px;
+		padding: 0 3px;
+		box-sizing: content-box;
+		border: 2px solid var(--bg-side);
 		border-radius: var(--radius-pill);
 		background: var(--bg-active);
 		color: var(--text-dim);
 		font-family: var(--mono);
 		font-size: 9px;
 		font-weight: 600;
-		line-height: 15px;
+		line-height: 14px;
 		text-align: center;
+		font-variant-numeric: tabular-nums;
 	}
-	.agent.dir.active .cnt {
+	.agent.dir.active .cnt.idle {
 		background: var(--text);
 		color: var(--bg-side);
 	}
-	.pip {
-		position: absolute;
-		right: 5px;
-		bottom: 5px;
-		width: 9px;
-		height: 9px;
-		border-radius: 50%;
-		border: 2px solid var(--bg-side);
-		box-sizing: content-box;
+	.cnt.working { background: var(--info); color: var(--bg-side); animation: cnt-pulse 1.8s ease-in-out infinite; }
+	.cnt.asking { background: var(--warn); color: var(--bg-side); }
+	.cnt.done { background: var(--ok); color: var(--bg-side); }
+	.cnt.failed { background: var(--danger); color: var(--bg-side); }
+	@keyframes cnt-pulse {
+		50% { opacity: 0.55; }
 	}
-	.pip.working { background: var(--info); }
-	.pip.asking { background: var(--warn); }
-	.pip.done { background: var(--ok); }
-	.pip.failed { background: var(--danger); }
+	@media (prefers-reduced-motion: reduce) {
+		.cnt.working { animation: none; }
+	}
 	.agent {
 		-webkit-tap-highlight-color: transparent;
 	}
