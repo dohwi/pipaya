@@ -535,24 +535,28 @@
 	}
 	.tools {
 		display: flex;
-		align-items: center;
+		flex-direction: column;
+		align-items: stretch;
 		gap: 8px;
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--border);
 	}
+	/* a dashed slot under the search: the whole width is the target for "new" */
 	.newbtn {
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 34px;
+		width: 100%;
 		height: 34px;
-		border: 1px solid var(--border-strong);
+		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-sm);
-		color: var(--text);
-		transition: background var(--motion-fast) var(--ease-std);
+		color: var(--text-dim);
+		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
 	}
 	.newbtn:hover {
-		background: var(--bg-active);
+		background: var(--bg-hover);
+		border-color: var(--text-faint);
+		color: var(--text);
 	}
 	.newbtn :global(svg),
 	.settings :global(svg) {
