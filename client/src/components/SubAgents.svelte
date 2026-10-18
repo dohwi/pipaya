@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import { t } from "../lib/i18n";
-	import { Api, errorText } from "../lib/api";
+	import { Api, ApiError, errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { ModelInfo, SubAgentInfo, SubAgentList } from "../lib/types";
 	import Accordion from "./Accordion.svelte";
@@ -24,17 +24,24 @@
 	let openNames = $state<Record<string, boolean>>({});
 
 	async function load() {
-		if (!api) return;
+		if (!api) {
+			error = t("대상을 찾을 수 없습니다");
+			return;
+		}
 		error = "";
 		try {
-			const [list, ms] = await Promise.all([api.subagents(cwd), api.models().catch(() => [] as ModelInfo[])]);
+			const [list, ms] = await Promise.all([api.subagents(cwd, AbortSignal.timeout(15_000)), api.models().catch(() => [] as ModelInfo[])]);
+			// A server from before agent files answers with `{ settings, defaults }`; rendering that would throw and leave "loading" up.
+			if (!isSubAgentList(list)) throw new ApiError(404, "not_found", "route not found");
 			data = list;
 			models = ms;
 			loaded = true;
 		} catch (e) {
-			error = errorText(e);
+			error = (e as Error)?.name === "TimeoutError" ? t("서버에 연결할 수 없습니다") : errorText(e);
 		}
 	}
+	const isSubAgentList = (v: unknown): v is SubAgentList =>
+		Boolean(v) && typeof (v as SubAgentList).enabled === "boolean" && Array.isArray((v as SubAgentList).agents) && Array.isArray((v as SubAgentList).warnings);
 	onMount(() => void load());
 	// Agent files edited on disk arrive as skills_updated (same watcher as skills).
 	let seen = app.skillsTick;
