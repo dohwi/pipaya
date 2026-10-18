@@ -1126,6 +1126,7 @@ export const en: Record<string, string> = {
 	"접기": "Collapse",
 	"펼치기": "Expand",
 	"탭": "Tabs",
+	"탭 목록으로": "Back to tabs",
 	"새 대화 또는 터미널": "New conversation or terminal",
 	"템플릿 검색": "Search templates",
 	"템플릿 이름": "template-name",

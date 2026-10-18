@@ -10,6 +10,7 @@
 	import { tabPanes, type Tab } from "../lib/nav";
 	import { app } from "../lib/store.svelte";
 	import { platformName } from "../lib/terminal";
+	import { viewport } from "../lib/viewport.svelte";
 
 	/**
 	 * The tabs of the working directory in front of the user, like an editor's: a lone conversation, a lone terminal,
@@ -103,7 +104,7 @@
 	}
 </script>
 
-{#if app.serverId && app.net !== "idle"}
+{#if app.serverId && app.net !== "idle" && !viewport.inGroup(app.activeGroup?.id)}
 	<div class="bar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
@@ -123,7 +124,10 @@
 					title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 					use:dragSource={{ id: x.id }}
 					use:dropTarget={tabTarget(x)}
-					onclick={() => app.openTab(x.id)}
+					onclick={() => {
+						if (x.kind === "group") viewport.backedOut = null;
+						app.openTab(x.id);
+					}}
 					onauxclick={(e) => e.button === 1 && close(x)}
 				>
 					{#if x.kind === "group"}
@@ -159,6 +163,16 @@
 		padding-right: max(6px, var(--sar));
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
+	}
+	/* coming back out of a group: the group's strip folds into the tabs */
+	.bar {
+		animation: from-group var(--motion-fast) var(--ease-std);
+	}
+	@keyframes from-group {
+		from {
+			opacity: 0;
+			transform: translateX(-12px);
+		}
 	}
 	.bar.group {
 		background: var(--bg-group);

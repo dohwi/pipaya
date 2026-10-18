@@ -7,6 +7,7 @@
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
 	import { panesOf } from "../lib/layout";
 	import { app } from "../lib/store.svelte";
+	import { viewport } from "../lib/viewport.svelte";
 
 	/** Phones: the sessions of the open group as a strip under the header; a tap switches to that session. */
 	const group = $derived(app.activeGroup);
@@ -22,6 +23,9 @@
 
 {#if group && items.length}
 	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
+		{#if viewport.narrow}
+			<button class="back" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
+		{/if}
 		<span class="name" title={group.name}>{group.name}</span>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
@@ -41,13 +45,24 @@
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		padding: 4px 6px;
-		padding-left: max(10px, var(--sal));
+		height: 38px;
+		padding: 0 6px 0 max(6px, var(--sal));
+		padding-right: max(6px, var(--sar));
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
 		border-bottom: 1px solid var(--border);
 		background: var(--bg-group);
+	}
+	/* going into a group: the tab opens up into the group's sessions */
+	.strip {
+		animation: into-group var(--motion-fast) var(--ease-std);
+	}
+	@keyframes into-group {
+		from {
+			opacity: 0;
+			transform: translateX(12px);
+		}
 	}
 	.strip::-webkit-scrollbar {
 		display: none;
@@ -58,10 +73,32 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		padding-right: 4px;
-		font-size: var(--fs-2xs);
+		padding: 0 6px 0 2px;
+		font-size: var(--fs-sm);
 		font-weight: 700;
-		color: var(--text-faint);
+		color: var(--text);
+	}
+	.back {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-sm);
+		color: var(--text-dim);
+	}
+	.back:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.back :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.tico {
 		display: inline-grid;
@@ -85,7 +122,7 @@
 		padding: 0 9px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
-		font-size: var(--fs-xs);
+		font-size: var(--fs-sm);
 		white-space: nowrap;
 		transition: background var(--motion-fast) var(--ease-std);
 	}

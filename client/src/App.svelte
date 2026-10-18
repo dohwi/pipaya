@@ -45,6 +45,10 @@
 		const ids = app.visibleIds;
 		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
 	});
+	// Leaving the group the user backed out of (to another tab, or via the sidebar) forgets it, so opening it again shows its sessions.
+	$effect(() => {
+		if (viewport.backedOut && app.activeGroup?.id !== viewport.backedOut) viewport.backedOut = null;
+	});
 	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 
@@ -290,7 +294,7 @@
 		<main>
 			<Header />
 			<TabBar />
-			{#if viewport.narrow || app.isFull(app.activeGroup?.id) || (app.activeGroup && app.zoomId)}<SessionStrip />{/if}
+			{#if viewport.inGroup(app.activeGroup?.id) || (!viewport.narrow && (app.isFull(app.activeGroup?.id) || (app.activeGroup && app.zoomId)))}<SessionStrip />{/if}
 
 			{#if app.net !== "online"}
 				<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
