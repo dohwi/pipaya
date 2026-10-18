@@ -3,7 +3,7 @@
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
-		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink";
+		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "book" | "book-open";
 </script>
 
 <script lang="ts">
@@ -56,6 +56,8 @@
 		cache: "M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
 		gauge: "M4.5 18a8.5 8.5 0 1 1 15 0M12 14l4-5M12 14h.01",
 		columns: "M4 5h16v14H4zM12 5v14",
+		book: "M5 4.5A1.5 1.5 0 0 1 6.5 3H19v14H6.5A1.5 1.5 0 0 0 5 18.5zM5 18.5A1.5 1.5 0 0 0 6.5 20H19v-3",
+		"book-open": "M12 7v13M3 18V5a1 1 0 0 1 1-1h4.5A3.5 3.5 0 0 1 12 7.5 3.5 3.5 0 0 1 15.5 4H20a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-5a3 3 0 0 0-3 2 3 3 0 0 0-3-2H4a1 1 0 0 1-1-1z",
 		expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
 		shrink: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
 		unlink: "M9 7H7a4 4 0 0 0 0 8h2M15 7h2a4 4 0 0 1 0 8h-2M4 4l16 16",

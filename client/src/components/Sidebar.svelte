@@ -287,6 +287,7 @@
 		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
 		use:dropTarget={drop}
 	>
+		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 		{#if n.current && editing === x.id}
 			<input
 				class="rename"
@@ -303,8 +304,8 @@
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[x.name ? `@${x.name}` : "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
 				<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
 				<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
-				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 				{#if member && x.name}<span class="who mono {st}">@{x.name}</span>{/if}
+				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 			</button>
 			<div class="acts">
 				{#if n.current}
@@ -329,6 +330,7 @@
 		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
 		use:dropTarget={drop}
 	>
+		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 		{#if n.current && editing === x.id}
 			<input
 				class="rename"
@@ -430,7 +432,7 @@
 										{@const gfold = isFolded(`group\u0000${g.id}`)}
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div class="grp" class:over={dropOn === g.id}>
-											<!-- a split tab is a tab row like the others (icon, name, then its pane count and the fold chevron) -->
+											<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
 											<div
 												class="item nested grprow"
 												class:grabbable={n.current && editingGroup !== g.id}
@@ -454,8 +456,10 @@
 														}}
 													/>
 												{:else}
+													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
+														<Icon name={gfold ? "book" : "book-open"} />
+													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-														<span class="lead"><Icon name="columns" /></span>
 														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
 													</button>
 													<div class="acts">
@@ -463,10 +467,6 @@
 															<button class="more" class:on={menuId === g.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === g.id}><Icon name="more" /></button>
 														{/if}
 													</div>
-													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
-														<span class="dcount mono">{tab.members.length}</span>
-														<span class="chev" class:folded={gfold}><Icon name="chevron-down" /></span>
-													</button>
 												{/if}
 											</div>
 											{#if !gfold}
@@ -1054,28 +1054,16 @@
 	}
 	/* hairline between workspaces / groups */
 
-	/* A split tab and its panes are one box: the tab row on top, its panes inside, so they never read as separate tabs. */
+	/* A split tab and its panes read as one tree: the book row on top, its panes hanging off a line under the book. */
 	.grp {
-		margin: 2px 0 2px 40px; /* the box hangs under its folder like the other tabs */
-		border: 1px solid var(--border);
+		margin: 2px 0; /* full width like the other tabs, so the book sits where their icons do */
 		border-radius: var(--radius-sm);
-		/* no fill: the sidebar's sliding selection marker runs behind these rows too */
 	}
-	.grp .item {
-		border-radius: 0;
-	}
-	.grp > .item:first-child {
-		border-radius: calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px) 0 0;
-	}
-	.grp .members .item:last-child {
-		border-radius: 0 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px);
-	}
-	/* rows inside the box keep the lead column of the rows outside it (less the 1px frame); panes step in once */
 	.grp .item.nested .open {
-		padding-left: 3px;
+		padding-left: 6px;
 	}
 	.grp .item.member .open {
-		padding-left: 23px; /* one more step: under the split tab's name */
+		padding-left: 78px; /* the pane's icon, one step in from the book */
 		min-height: 30px;
 	}
 	.grp .item.member .title {
@@ -1084,31 +1072,64 @@
 	.grp .item.member.active .title {
 		color: var(--text);
 	}
-	.members {
-		border-top: 1px solid var(--border);
+	/* tree line: a vertical rule at the book's centre, an elbow into each pane, and the last pane ends it */
+	.branch {
+		position: absolute;
+		left: 50px; /* the book's centre */
+		top: 0;
+		bottom: 0;
+		width: 24px;
+		pointer-events: none;
+	}
+	.branch::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		border-left: 1.5px solid var(--border-strong, var(--border));
+	}
+	.branch::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: 50%;
+		width: 100%;
+		border-top: 1.5px solid var(--border-strong, var(--border));
+	}
+	.members .item:last-child .branch::before {
+		bottom: 50%;
+		border-bottom-left-radius: 4px;
 	}
 	.grprow.cur .title {
 		font-weight: 600;
 	}
-	.grprow .open {
-		padding-right: 4px;
-	}
 	.gfold {
 		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		height: 24px;
-		margin-right: 4px;
-		padding: 0 5px;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		margin-left: 43px; /* same left edge as the lead icon of the tabs above */
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
+	}
+	.gfold :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.gfold:hover {
 		background: var(--bg-active);
 		color: var(--text);
 	}
-	.grp.over,
+	.grp.over {
+		background: var(--accent-soft);
+	}
 	.dir.over {
 		border-color: var(--accent);
 		background: var(--accent-soft);
