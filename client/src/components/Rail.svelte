@@ -197,30 +197,23 @@
 		height: 40px;
 		border-radius: var(--radius-sm);
 	}
-	/* a folder: its first letter in a rounded square; a dot when something in it is working, asking, done or failed */
+	/* a folder: just its first letter; the button's own shape (hover, selected ring) is the only box */
 	.agent.dir {
-		color: var(--text-dim);
+		color: var(--text-faint);
 	}
 	.ini {
-		display: grid;
-		place-items: center;
-		width: 26px;
-		height: 26px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-strong);
-		font-size: var(--fs-sm);
+		font-size: var(--fs-xl);
 		font-weight: 700;
 		line-height: 1;
 	}
-	.agent.dir:hover .ini,
-	.agent.dir.active .ini {
+	.agent.dir:hover,
+	.agent.dir.active {
 		color: var(--text);
-		border-color: var(--text-faint);
 	}
 	.pip {
 		position: absolute;
-		right: 6px;
-		bottom: 6px;
+		right: 5px;
+		bottom: 5px;
 		width: 9px;
 		height: 9px;
 		border-radius: 50%;
