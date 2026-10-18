@@ -1118,8 +1118,8 @@
 		color: var(--text-faint);
 	}
 	.gfold :global(svg) {
-		width: 14px;
-		height: 14px;
+		width: 16px;
+		height: 16px;
 		stroke: currentColor;
 		fill: none;
 		stroke-width: 1.9;
