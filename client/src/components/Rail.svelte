@@ -4,13 +4,9 @@
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
-	import AgentBadge from "./AgentBadge.svelte";
 	import { app } from "../lib/store.svelte";
-	import { dragSource, dropTarget } from "../lib/dnd.svelte";
-	import { sidebarDirs, type DirBlock } from "../lib/nav";
-	import { isTerminalId } from "../lib/terminal";
-	import type { Session } from "../lib/types";
-	import type { TerminalInfo } from "../lib/terminal";
+		import { tilde } from "../lib/format";
+	import { sidebarDirs, tabPanes, type DirBlock } from "../lib/nav";
 	import type { Server } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -43,52 +39,45 @@
 		for (const sec of sections) for (const a of Object.values(sec.state)) out[a]++;
 		return out;
 	});
-	/** What a dragged session is over: an agent (pair up with it), a folder (join), or the bare rail (leave its group). */
-	let dropOn = $state<string | null>(null);
-	const hover = (key: string) => (pt: unknown) => {
-		if (pt) dropOn = key;
-		else if (dropOn === key) dropOn = null;
-	};
+	const home = (sec: Section) => (sec.current ? app.workspace?.home : app.overview[sec.server.id]?.workspace?.home);
+	const segs = (sec: Section, path: string) => tilde(path, home(sec)).split("/").filter(Boolean);
+	/** A folder's name: its own, with as many parents as it takes to tell it from the other folders. */
+	function dirName(sec: Section, path: string): string {
+		const mine = segs(sec, path);
+		const others = sec.dirs.filter((d) => d.path !== path).map((d) => segs(sec, d.path));
+		for (let k = 1; k < mine.length; k++) {
+			const tail = mine.slice(-k).join("/");
+			if (!others.some((o) => o.slice(-k).join("/") === tail)) return tail;
+		}
+		return mine.join("/") || path;
+	}
+	/** The most urgent thing going on in a folder's tabs. */
+	function dirState(sec: Section, d: DirBlock): Activity {
+		const ids = d.tabs.flatMap((x) => tabPanes(x));
+		return URGENCY.find((a) => ids.some((id) => (sec.state[id] ?? "idle") === a)) ?? "idle";
+	}
 	const top = $derived(URGENCY.find((a) => a !== "idle" && counts[a] > 0));
 </script>
 
-{#snippet termBtn(sec: Section, x: TerminalInfo)}
-	{@const cur = sec.current}
+{#snippet dirBtn(sec: Section, d: DirBlock)}
+	{@const st = dirState(sec, d)}
+	{@const name = dirName(sec, d.path)}
+	{@const cur = sec.current && app.activeTab?.dir.path === d.path}
 	<button
-		class="agent term"
-		class:active={cur && x.id === app.activeId}
-		class:over={dropOn === x.id}
-		use:dragSource={{ id: x.id, disabled: !cur }}
-		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.shows(id) && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
-		onclick={() => app.openIn(sec.server.id, { session: x.id })}
-		title="{x.title} · {t('터미널')}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
-		aria-label="{x.title}, {t('터미널')}"
-		aria-current={cur && x.id === app.activeId ? "true" : undefined}
+		class="agent dir"
+		class:active={cur}
+		onclick={() => app.openDir(sec.server.id, d.path)}
+		title="{name} · {tilde(d.path, home(sec))}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}{st !== 'idle' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
+		aria-label="{name}{st !== 'idle' ? `, ${ACTIVITY_LABEL[st]}` : ''}"
+		aria-current={cur ? "true" : undefined}
 	>
-		<Icon name="terminal" />
+		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
+		{#if st !== "idle"}<i class="pip {st}"></i>{/if}
 	</button>
 {/snippet}
 
-{#snippet agent(sec: Section, x: Session)}
-	{@const st = sec.state[x.id] ?? "idle"}
-	{@const cur = sec.current}
-	<button
-		class="agent"
-		class:active={cur && x.id === app.activeId}
-		class:over={dropOn === x.id}
-		use:dragSource={{ id: x.id, disabled: !cur }}
-		use:dropTarget={{ accepts: (id) => cur && id !== x.id && app.shows(id) && app.groupOf(id)?.id !== app.groupOf(x.id)?.id, hover: hover(x.id), drop: (id) => void app.groupWith(id, x.id) }}
-		onclick={() => app.openIn(sec.server.id, { session: x.id })}
-		title="{x.title} · {ACTIVITY_LABEL[st]}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}"
-		aria-label="{x.title}, {ACTIVITY_LABEL[st]}"
-		aria-current={cur && x.id === app.activeId ? "true" : undefined}
-	>
-		<AgentBadge id={x.id} state={st} size={22} />
-	</button>
-{/snippet}
-
-<!-- The folded sidebar: a narrow rail that keeps every active session's agent in view. -->
-<aside class="rail" aria-label={t("활성 대화")}>
+<!-- The folded sidebar: a narrow rail with one button per working folder; its tabs are in the tab bar. -->
+<aside class="rail" aria-label={t("작업 폴더")}>
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
 		<button class="btn-ico" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint}><Icon name="sidebar" /></button>
@@ -97,35 +86,12 @@
 
 	<ul
 	class="agents"
-	class:over={dropOn === "rail"}
-	use:dropTarget={{ accepts: (id) => !!app.groupOf(id), hover: hover("rail"), drop: (id) => void app.leaveGroup(id) }}
 	use:slidingIndicator={{ selector: ".agent.active", radius: "var(--radius-sm)", variant: "ring" }}
 >
 		{#each sections as sec, si (sec.server.id)}
 			{#if si > 0}<li class="sep srv" role="separator" title={app.serverLabel(sec.server)}></li>{/if}
-			{#each sec.dirs as d, di (d.path)}
-				{#if di > 0}<li class="sep" role="separator"></li>{/if}
-				{#each d.tabs as tab (tab.id)}
-					{#if tab.kind === "session"}
-						<li>{@render agent(sec, tab.session)}</li>
-					{:else if tab.kind === "terminal"}
-						<li>{@render termBtn(sec, tab.terminal)}</li>
-					{:else}
-						<li
-							class="folder"
-							class:cur={sec.current && tab.id === app.activeGroup?.id}
-							class:over={dropOn === tab.id}
-							title={tab.group.name}
-							use:dropTarget={{ accepts: (id) => sec.current && app.shows(id), hover: hover(tab.id), drop: (id) => void app.addToGroup(id, tab.id) }}
-						>
-							<ul class="members" aria-label={t("그룹 {name}", { name: tab.group.name })}>
-								{#each tab.members as m (m.id)}
-									<li>{#if isTerminalId(m.id)}{@render termBtn(sec, m as TerminalInfo)}{:else}{@render agent(sec, m as Session)}{/if}</li>
-								{/each}
-							</ul>
-						</li>
-					{/if}
-				{/each}
+			{#each sec.dirs as d (d.path)}
+				<li>{@render dirBtn(sec, d)}</li>
 			{/each}
 		{/each}
 	</ul>
@@ -208,27 +174,6 @@
 	.agents::-webkit-scrollbar {
 		display: none;
 	}
-	/* a group is a folder: its sessions sit together in one outlined box, set apart from the rest by a divider */
-	.folder {
-		width: 46px;
-		flex: none;
-		padding: 3px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-hover);
-	}
-	.folder.cur {
-		border-color: var(--text-faint);
-	}
-	.members {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2px;
-	}
 	.sep {
 		flex: none;
 		width: 28px;
@@ -252,30 +197,42 @@
 		height: 40px;
 		border-radius: var(--radius-sm);
 	}
-	.agent.term {
+	/* a folder: its first letter in a rounded square; a dot when something in it is working, asking, done or failed */
+	.agent.dir {
 		color: var(--text-dim);
 	}
-	.agent.term :global(svg) {
-		width: 18px;
-		height: 18px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+	.ini {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border-strong);
+		font-size: var(--fs-sm);
+		font-weight: 700;
+		line-height: 1;
 	}
-	.agent,
-	.folder {
+	.agent.dir:hover .ini,
+	.agent.dir.active .ini {
+		color: var(--text);
+		border-color: var(--text-faint);
+	}
+	.pip {
+		position: absolute;
+		right: 6px;
+		bottom: 6px;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		border: 2px solid var(--bg-side);
+		box-sizing: content-box;
+	}
+	.pip.working { background: var(--info); }
+	.pip.asking { background: var(--warn); }
+	.pip.done { background: var(--ok); }
+	.pip.failed { background: var(--danger); }
+	.agent {
 		-webkit-tap-highlight-color: transparent;
-		cursor: grab;
-	}
-	.agent.over,
-	.folder.over {
-		background: var(--accent-soft);
-		box-shadow: inset 0 0 0 2px var(--accent);
-	}
-	.agents.over {
-		box-shadow: inset 0 0 0 2px var(--accent);
 	}
 	.agent:hover {
 		background: var(--bg-hover);

@@ -1358,6 +1358,25 @@ class AppStore {
     }
   }
 
+  /** The tab last open in each folder (by `server\0path`), so a folder button lands where that folder was left. */
+  private lastTabIn: Record<string, string> = {};
+
+  /** Show a folder: the tab last used in it, else its first one. `serverId` other than the open one switches server. */
+  openDir(serverId: string, path: string) {
+    const ov = serverId === this.serverId ? null : this.overview[serverId];
+    const dirs = ov
+      ? sidebarDirs(ov.sessions ?? [], ov.groups ?? [], ov.terminals ?? [], { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId] })
+      : this.dirs;
+    const dir = dirs.find((d) => d.path === path);
+    if (!dir) return;
+    const last = dir.tabs.find((x) => x.id === this.lastTabIn[`${serverId}\u0000${path}`]);
+    const tab = last ?? dir.tabs[0];
+    if (!tab) return;
+    if (!ov) return this.openTab(tab.id);
+    const pane = tab.kind === "group" ? tabPanes(tab)[0] : tab.id;
+    if (pane) void this.openIn(serverId, { session: pane });
+  }
+
   /** Show tab `id` (a group, session or terminal id): a group focuses the pane last used in it. */
   openTab(id: string) {
     const g = this.groups.find((x) => x.id === id);
@@ -1644,6 +1663,8 @@ class AppStore {
     write(this.activeKey, id);
     const g = this.groupOf(id);
     if (g) this.lastPane[g.id] = id;
+    const at = this.serverId ? tabOf(this.dirs, id) : null;
+    if (at && this.serverId) this.lastTabIn[`${this.serverId}\u0000${at.dir.path}`] = at.tab.id;
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
