@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { detectShells, Scrollback, shellArgs, shellEnv } from "../src/terminals.ts";
+import { autoTitle, detectShells, foreground, scanOscTitle, Scrollback, shellArgs, shellEnv } from "../src/terminals.ts";
 
 const TOKEN = "terminal-test-token-0123456789abcdef";
 let dir: string;
@@ -78,6 +78,27 @@ describe("helpers", () => {
 		expect(env.PATH).toBe("/bin");
 		expect(env.TERM).toBe("xterm-256color");
 	});
+	test("a title the shell sets (OSC 0 / 2) is read, also when split across chunks", () => {
+		expect(scanOscTitle("a\x1b]0;user@host: ~/app\x07b")).toEqual({ title: "user@host: ~/app", carry: "" });
+		expect(scanOscTitle("\x1b]2;one\x1b\\ \x1b]0;two\x07").title).toBe("two");
+		const first = scanOscTitle("out\x1b]0;vim no");
+		expect(first).toEqual({ title: null, carry: "\x1b]0;vim no" });
+		expect(scanOscTitle(first.carry + "tes.md\x07").title).toBe("vim notes.md");
+		expect(scanOscTitle("plain text").title).toBeNull();
+	});
+	test("an unnamed terminal is titled by what runs in it", () => {
+		const base = { shell: "zsh", osc: null, shellPid: 10 };
+		expect(autoTitle({ ...base, fg: { pid: 10, argv: ["-zsh"], cwd: "/home/u/app" } })).toBe("zsh · app");
+		expect(autoTitle({ ...base, fg: { pid: 42, argv: ["/usr/bin/vim", "-p", "/home/u/app/notes.md"], cwd: "/home/u/app" } })).toBe("vim notes.md");
+		expect(autoTitle({ ...base, fg: { pid: 43, argv: ["bun", "run", "dev", "--host"], cwd: null } })).toBe("bun run dev");
+		expect(autoTitle({ ...base, osc: "htop", fg: null })).toBe("htop");
+		expect(autoTitle({ ...base, fg: null })).toBe("zsh");
+	});
+	test.skipIf(process.platform !== "linux")("the foreground process is read from /proc", () => {
+		const fg = foreground(process.pid);
+		expect(fg?.argv.length).toBeGreaterThan(0);
+		expect(foreground(2 ** 30)).toBeNull();
+	});
 	test("scrollback keeps only the tail", () => {
 		const s = new Scrollback(10);
 		s.push(new TextEncoder().encode("hello "));
@@ -119,8 +140,14 @@ describe.skipIf(process.platform === "win32")("terminals API", () => {
 		await b.open;
 		await until(() => b.state.text.includes("pi3ya"));
 
+		// unnamed: the title follows what runs in it (here the shell in its folder), until the user names it
+		for (let i = 0; i < 150 && !String((await api("GET", "/terminals")).json.terminals.find((t: { id: string }) => t.id === id)?.title).includes("·"); i++) await Bun.sleep(20);
+		const shell = (await api("GET", "/terminals")).json.terminals.find((t: { id: string }) => t.id === id)?.title as string;
+		if (process.platform === "linux") expect(shell).toContain(dir.split("/").pop()!);
 		const renamed = await api("PATCH", `/terminals/${id}`, { title: "빌드" });
 		expect(renamed.json.title).toBe("빌드");
+		await Bun.sleep(1700);
+		expect((await api("GET", "/terminals")).json.terminals.find((t: { id: string }) => t.id === id)?.title).toBe("빌드");
 
 		expect((await api("DELETE", `/terminals/${id}`)).status).toBe(200);
 		await until(() => b.state.closed);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import Type, { type Static } from "typebox";
 import { badRequest, HttpError, notFound } from "./errors.ts";
@@ -138,6 +138,12 @@ export interface TerminalClient {
 
 interface Live {
 	info: TerminalInfo;
+	/** The user named it: the title no longer follows what runs in it. */
+	named: boolean;
+	/** The last title the shell set itself (OSC 0 / 2), if it ever did. */
+	oscTitle: string | null;
+	/** Bytes of an escape sequence split across output chunks. */
+	oscCarry: string;
 	proc: Bun.Subprocess;
 	scrollback: Scrollback;
 	clients: Set<TerminalClient>;
@@ -157,6 +163,7 @@ export interface TerminalOptions {
 
 export class TerminalManager {
 	private live = new Map<string, Live>();
+	private titleTimer: ReturnType<typeof setInterval> | null = null;
 	private readonly platform: NodeJS.Platform;
 	readonly shells: Shell[];
 	readonly pty: boolean;
@@ -215,6 +222,8 @@ export class TerminalManager {
 		const emit = (data: Uint8Array) => {
 			scrollback.push(data);
 			for (const c of clients) c.output(data);
+			const t = this.live.get(id);
+			if (t) this.readOsc(t, data);
 		};
 		const cmd = [shell.path, ...shellArgs(shell.path, this.pty)];
 		const env = shellEnv();
@@ -227,6 +236,9 @@ export class TerminalManager {
 			});
 			live = {
 				info: undefined as unknown as TerminalInfo,
+				named: !!input.title?.trim(),
+				oscTitle: null,
+				oscCarry: "",
 				proc,
 				scrollback,
 				clients,
@@ -244,6 +256,9 @@ export class TerminalManager {
 			void pump(proc.stderr).catch(() => {});
 			live = {
 				info: undefined as unknown as TerminalInfo,
+				named: !!input.title?.trim(),
+				oscTitle: null,
+				oscCarry: "",
 				proc,
 				scrollback,
 				clients,
@@ -267,6 +282,7 @@ export class TerminalManager {
 		};
 		this.live.set(id, live);
 		void live.proc.exited.then((code) => this.finish(id, code));
+		this.watchTitles();
 		this.bus.publish(null, "terminal_created", live.info, { ephemeral: true });
 		return live.info;
 	}
@@ -275,6 +291,7 @@ export class TerminalManager {
 		const t = this.live.get(id);
 		if (!t) throw notFound("terminal");
 		t.info = { ...t.info, title: title.trim() || t.info.title };
+		t.named = true;
 		this.bus.publish(null, "terminal_updated", t.info, { ephemeral: true });
 		return t.info;
 	}
@@ -309,6 +326,7 @@ export class TerminalManager {
 		if (!t || t.closed) return;
 		t.closed = true;
 		this.live.delete(id);
+		if (!this.live.size && this.titleTimer) (clearInterval(this.titleTimer), (this.titleTimer = null));
 		try {
 			t.proc.terminal?.close();
 		} catch {
@@ -341,7 +359,40 @@ export class TerminalManager {
 	}
 
 	shutdown(): void {
+		if (this.titleTimer) (clearInterval(this.titleTimer), (this.titleTimer = null));
 		for (const t of this.live.values()) this.stop(t);
+	}
+
+	/* ---------- titles that follow what runs in the terminal ---------- */
+
+	/** A title the shell sets itself (`ESC ] 0 ; title BEL`, as zsh / bash prompts and many programs do) wins. */
+	private readOsc(t: Live, data: Uint8Array) {
+		if (t.named) return;
+		const text = t.oscCarry + new TextDecoder().decode(data);
+		const { title, carry } = scanOscTitle(text);
+		t.oscCarry = carry;
+		if (title !== null) {
+			t.oscTitle = title || null;
+			this.retitle(t);
+		}
+	}
+
+	private watchTitles() {
+		if (this.titleTimer || this.platform !== "linux" || !this.pty) return;
+		this.titleTimer = setInterval(() => {
+			for (const t of this.live.values()) this.retitle(t);
+		}, 1500);
+		this.titleTimer.unref?.();
+	}
+
+	private retitle(t: Live) {
+		if (t.named || t.closed) return;
+		const shell = leaf(t.info.shell).replace(/\.exe$/i, "");
+		const fg = this.platform === "linux" && this.pty ? foreground(t.proc.pid) : null;
+		const title = autoTitle({ shell, osc: t.oscTitle, fg, shellPid: t.proc.pid });
+		if (title === t.info.title) return;
+		t.info = { ...t.info, title };
+		this.bus.publish(null, "terminal_updated", t.info, { ephemeral: true });
 	}
 }
 
@@ -357,4 +408,63 @@ function normalizeNewlines(chunk: Uint8Array): Uint8Array {
 		out[j++] = chunk[i]!;
 	}
 	return out;
+}
+
+/**
+ * The last window title set in `text` (OSC 0 or 2, ended by BEL or ESC \\), or null when none; `carry` is an unfinished
+ * sequence at the end, to be prefixed to the next chunk.
+ */
+export function scanOscTitle(text: string): { title: string | null; carry: string } {
+	let title: string | null = null;
+	const re = /\x1b\]([02]);([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+	let end = 0;
+	for (let m = re.exec(text); m; m = re.exec(text)) {
+		title = m[2]!.trim().slice(0, 100);
+		end = re.lastIndex;
+	}
+	const open = text.lastIndexOf("\x1b]");
+	const carry = open >= end && text.length - open < 512 ? text.slice(open) : "";
+	return { title, carry };
+}
+
+/** What runs in the foreground of a terminal (Linux, from /proc): the process, its command line and folder. */
+export interface Foreground {
+	pid: number;
+	argv: string[];
+	cwd: string | null;
+}
+
+/** The foreground process group leader of the shell's terminal, read from /proc. null when it cannot be read. */
+export function foreground(shellPid: number, proc = "/proc"): Foreground | null {
+	try {
+		const stat = readFileSync(`${proc}/${shellPid}/stat`, "utf8");
+		// the command name may hold spaces and parentheses: fields start after the last ")"
+		const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+		const tpgid = Number(fields[5]); // field 8 of stat
+		const pid = tpgid > 0 ? tpgid : shellPid;
+		const argv = readFileSync(`${proc}/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+		let cwd: string | null = null;
+		try {
+			cwd = readlinkSync(`${proc}/${pid}/cwd`);
+		} catch {
+			/* another user's process */
+		}
+		return { pid, argv, cwd };
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The title a terminal shows when the user has not named it: what the shell said (OSC), else the program in the
+ * foreground with its first arguments (`vim notes.md`, `bun run dev`), else the shell and the folder it is in.
+ */
+export function autoTitle(x: { shell: string; osc: string | null; fg: Foreground | null; shellPid: number }): string {
+	if (x.osc) return x.osc;
+	const fg = x.fg;
+	const folder = fg?.cwd ? (fg.cwd === "/" ? "/" : leaf(fg.cwd)) : null;
+	if (!fg || fg.pid === x.shellPid || !fg.argv.length) return folder ? `${x.shell} · ${folder}` : x.shell;
+	const [cmd, ...args] = fg.argv;
+	const shown = [leaf(cmd!).replace(/^-/, ""), ...args.filter((a) => !a.startsWith("-")).slice(0, 2).map((a) => (a.includes("/") ? leaf(a) : a))];
+	return shown.join(" ").slice(0, 60);
 }
