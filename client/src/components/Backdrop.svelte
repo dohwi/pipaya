@@ -3,7 +3,30 @@
 	 * The empty-state background: the blueprint grid, plus a soft light that follows the pointer and
 	 * brings the grid up around it. Pure decoration — pointer-events none, off for touch and reduced motion.
 	 */
+	let { onburst }: { onburst?: (x: number, y: number) => void } = $props();
 	let host: HTMLDivElement | undefined = $state();
+	type Burst = { id: number; x: number; y: number; r: number; hue: number };
+	let bursts: Burst[] = $state([]);
+	let seq = 0;
+
+	// A click on empty space sends a colour wave out from the pointer (and tells the owner, so the mark can tint).
+	$effect(() => {
+		const el = host;
+		const parent = el?.parentElement;
+		if (!el || !parent || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const down = (e: PointerEvent) => {
+			if (e.button !== 0) return;
+			if ((e.target as Element | null)?.closest("button, a, input, textarea, select, summary, [contenteditable], [role=button]")) return;
+			const r = el.getBoundingClientRect();
+			const x = e.clientX - r.left;
+			const y = e.clientY - r.top;
+			const far = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y));
+			bursts.push({ id: seq++, x, y, r: far, hue: Math.round(Math.random() * 360) });
+			onburst?.(x / r.width, y / r.height);
+		};
+		parent.addEventListener("pointerdown", down, { passive: true });
+		return () => parent.removeEventListener("pointerdown", down);
+	});
 
 	$effect(() => {
 		const el = host;
@@ -60,6 +83,13 @@
 <div class="backdrop" bind:this={host} aria-hidden="true">
 	<div class="grid"></div>
 	<div class="lit"></div>
+	{#each bursts as b (b.id)}
+		<div
+			class="burst"
+			style="left:{b.x}px;top:{b.y}px;width:{b.r * 2}px;height:{b.r * 2}px;--h:{b.hue}"
+			onanimationend={() => (bursts = bursts.filter((o) => o.id !== b.id))}
+		></div>
+	{/each}
 </div>
 
 <style>
@@ -94,6 +124,34 @@
 		transition: opacity var(--motion-slow) var(--ease-std);
 		-webkit-mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
 		mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
+	}
+	.burst {
+		position: absolute;
+		border-radius: 50%;
+		transform: translate(-50%, -50%) scale(0);
+		opacity: 0;
+		background: radial-gradient(
+			circle closest-side,
+			hsl(var(--h) 90% 60% / 0.1) 0%,
+			hsl(var(--h) 90% 60% / 0.16) 45%,
+			hsl(calc(var(--h) + 50) 90% 62% / 0.34) 66%,
+			hsl(calc(var(--h) + 110) 90% 62% / 0.2) 82%,
+			transparent 100%
+		);
+		animation: burst 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+	}
+	@keyframes burst {
+		0% {
+			transform: translate(-50%, -50%) scale(0);
+			opacity: 1;
+		}
+		70% {
+			opacity: 0.8;
+		}
+		100% {
+			transform: translate(-50%, -50%) scale(1);
+			opacity: 0;
+		}
 	}
 	.lit::after {
 		content: "";
