@@ -38,6 +38,66 @@
 		app.replyTo = { text: item.kind === "user" ? (peer ? peer.body : item.text) : plainText, who: peer ? `@${peer.from}` : undefined };
 	}
 
+	/** Mobile: drag an answer right -> left to reply to it. */
+	const SWIPE_TRIGGER = 64;
+	const SWIPE_MAX = 96;
+	let swipeX = $state(0);
+	let swiping = $state(false);
+
+	function swipeable(node: HTMLElement) {
+		let x0 = 0;
+		let y0 = 0;
+		let mode: "idle" | "pending" | "swipe" | "scroll" = "idle";
+		let armed = false;
+		const canReply = () => item.kind === "assistant" && !live && !!plainText;
+		const reset = () => {
+			mode = "idle";
+			armed = false;
+			swiping = false;
+			swipeX = 0;
+		};
+		function start(e: TouchEvent) {
+			// Horizontally scrollable content (code, tables, formulas) and form fields keep their own gestures.
+			const el = e.target as Element | null;
+			if (e.touches.length !== 1 || !canReply() || el?.closest("pre, table, .katex-display, input, textarea, [contenteditable]")) return void (mode = "scroll");
+			x0 = e.touches[0].clientX;
+			y0 = e.touches[0].clientY;
+			mode = "pending";
+		}
+		function move(e: TouchEvent) {
+			if (mode === "idle" || mode === "scroll") return;
+			const dx = e.touches[0].clientX - x0;
+			const dy = e.touches[0].clientY - y0;
+			if (mode === "pending") {
+				if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+				if (Math.abs(dy) > Math.abs(dx) || dx > 0) return void (mode = "scroll");
+				mode = "swipe";
+				swiping = true;
+			}
+			e.preventDefault();
+			swipeX = Math.max(-SWIPE_MAX, dx * 0.7);
+			const hit = -swipeX >= SWIPE_TRIGGER;
+			if (hit && !armed) navigator.vibrate?.(10);
+			armed = hit;
+		}
+		function end() {
+			if (mode === "swipe" && armed) reply();
+			reset();
+		}
+		node.addEventListener("touchstart", start, { passive: true });
+		node.addEventListener("touchmove", move, { passive: false });
+		node.addEventListener("touchend", end);
+		node.addEventListener("touchcancel", reset);
+		return {
+			destroy() {
+				node.removeEventListener("touchstart", start);
+				node.removeEventListener("touchmove", move);
+				node.removeEventListener("touchend", end);
+				node.removeEventListener("touchcancel", reset);
+			},
+		};
+	}
+
 	let copied = $state(false);
 	let expanded = $state(false);
 
@@ -131,8 +191,9 @@
 		</div>
 	</div>
 {:else}
-	<div class="row assistant" class:fresh={parts[0]?.fresh}>
-		<div class="content reply-card">
+	<div class="row assistant" class:fresh={parts[0]?.fresh} use:swipeable>
+		<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
+		<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
 			{#each segments as seg, n (seg.i)}
 				{#if seg.kind === "work"}
 					<WorkBox steps={seg.steps} live={n === liveSeg} />
@@ -317,6 +378,7 @@
 
 	/* assistant: the reply fills the full width */
 	.row.assistant {
+		position: relative;
 		flex-direction: column;
 		align-items: stretch;
 		gap: 8px;
@@ -329,6 +391,32 @@
 	/* one prompt -> one answer: the turn's steps and text flow as plain content, no box */
 	.reply-card {
 		padding: 2px 0 0;
+		transition: transform var(--motion-fast) var(--ease-std);
+	}
+	.reply-card.swiping {
+		transition: none;
+	}
+	.swipehint {
+		position: absolute;
+		right: 4px;
+		top: 50%;
+		translate: 0 -50%;
+		display: none;
+		opacity: 0;
+		color: var(--text-faint);
+		pointer-events: none;
+	}
+	.swipehint.armed {
+		color: var(--accent, currentColor);
+	}
+	.swipehint :global(svg) {
+		width: 20px;
+		height: 20px;
+	}
+	@media (pointer: coarse) {
+		.swipehint {
+			display: block;
+		}
 	}
 
 	.error {
