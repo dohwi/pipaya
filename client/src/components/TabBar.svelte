@@ -108,7 +108,7 @@
 	<div class="bar" class:group={app.activeTab?.tab.kind === "group"}>
 		<span class="dir mono" title={path}>{tilde(path, app.workspace?.home).split("/").pop() || "/"}</span>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", variant: "accent" }} use:dropTarget={stripTarget}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }} use:dropTarget={stripTarget}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -149,35 +149,44 @@
 {/if}
 
 <style>
+	/* Navigation rows share one shape: rounded rectangles of --radius-sm, a soft fill for hover and the selection
+	   (the sidebar rows, the pane frames and the phone strip look the same way). */
 	.bar {
 		flex: none;
 		display: flex;
-		align-items: stretch;
-		height: 34px;
-		padding-left: var(--sal);
-		padding-right: var(--sar);
+		align-items: center;
+		gap: 4px;
+		height: 38px;
+		padding: 0 6px 0 max(6px, var(--sal));
+		padding-right: max(6px, var(--sar));
 		border-bottom: 1px solid var(--border);
-		background: var(--bg-side);
+		background: var(--bg);
+	}
+	.bar.group {
+		background: var(--bg-group);
 	}
 	.dir {
 		flex: none;
 		display: flex;
 		align-items: center;
 		max-width: 22vw;
-		padding: 0 10px 0 14px;
+		height: 28px;
+		padding: 0 8px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-2xs);
 		font-weight: 700;
 		color: var(--text-faint);
-		border-right: 1px solid var(--border);
 	}
 	.tabs {
 		position: relative;
 		flex: 1;
 		min-width: 0;
+		height: 100%;
 		display: flex;
+		align-items: center;
+		gap: 2px;
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -187,30 +196,36 @@
 	}
 	.tab {
 		position: relative;
+		z-index: 1; /* above the sliding fill */
 		flex: none;
 		display: flex;
 		align-items: center;
 		gap: 6px;
+		height: 28px;
 		max-width: 220px;
 		min-width: 0;
-		padding: 0 4px 0 10px;
-		border-right: 1px solid var(--border);
+		padding: 0 3px 0 9px;
+		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		cursor: pointer;
 		user-select: none;
 		-webkit-user-select: none;
-		transition: background var(--motion-fast) var(--ease-std);
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
 	}
 	.tab:hover {
 		background: var(--bg-hover);
-	}
-	.tab.on {
-		background: var(--bg);
 		color: var(--text);
 	}
-	.bar.group .tab.on {
-		background: var(--bg-group);
+	.tab.on {
+		background: var(--bg-active);
+		color: var(--text);
+	}
+	/* the sliding marker draws the selection */
+	.tabs:global([data-indicator-ready]) .tab.on {
+		background: transparent;
 	}
 	.tab.carried {
 		opacity: 0.45;
@@ -229,10 +244,10 @@
 		pointer-events: none;
 	}
 	.tab.before::before {
-		left: -1px;
+		left: -2px;
 	}
 	.tab.after::after {
-		right: -1px;
+		right: -2px;
 	}
 	.tail {
 		position: relative;
@@ -288,7 +303,7 @@
 		flex: none;
 		width: 22px;
 		height: 22px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 		opacity: 0;
 	}
@@ -310,9 +325,11 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 34px;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-sm);
 		color: var(--text-faint);
-		border-left: 1px solid var(--border);
+		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.add:hover,
 	.add.on {

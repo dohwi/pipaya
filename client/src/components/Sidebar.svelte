@@ -152,7 +152,7 @@
 	 * another group, so a carried group only ever reorders).
 	 */
 	function edgeAt(pt: { x: number; y: number }, whole: boolean): "before" | "after" | null {
-		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item, .grphead")?.getBoundingClientRect();
+		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item")?.getBoundingClientRect();
 		if (!r) return null;
 		const f = whole ? 0.5 : 0.28;
 		if (pt.y < r.top + r.height * f) return "before";
@@ -356,7 +356,7 @@
 		<button class="newbtn" onclick={() => void app.startChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
 	</div>
 
-	<nav class="list" use:slidingIndicator={{ selector: ".item.active" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
 			<section class="srv" class:cur={n.current}>
@@ -408,8 +408,9 @@
 										{@const gfold = isFolded(`group\u0000${g.id}`)}
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div class="grp" class:over={dropOn === g.id}>
+											<!-- a split tab is a tab row like the others (icon, name, then its pane count and the fold chevron) -->
 											<div
-												class="grphead"
+												class="item nested grprow"
 												class:grabbable={n.current && editingGroup !== g.id}
 												class:cur={n.current && g.id === app.activeGroup?.id}
 												class:menuopen={menuId === g.id}
@@ -420,7 +421,7 @@
 											>
 												{#if n.current && editingGroup === g.id}
 													<input
-														class="rename grpname"
+														class="rename"
 														bind:value={groupDraft}
 														use:focusSelect
 														maxlength="100"
@@ -431,23 +432,23 @@
 														}}
 													/>
 												{:else}
-													<button class="gchev" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")}>
+													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
+														<span class="termicon"><Icon name="columns" /></span>
+														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
+													</button>
+													<div class="acts">
+														{#if n.current}
+															<button class="more" class:on={menuId === g.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === g.id}><Icon name="more" /></button>
+														{/if}
+													</div>
+													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
+														<span class="dcount mono">{tab.members.length}</span>
 														<span class="chev" class:folded={gfold}><Icon name="chevron-down" /></span>
 													</button>
-													<button class="grptoggle" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-														<span class="gicon"><Icon name="columns" /></span>
-														<span class="dname">{g.name}</span>
-														<span class="dcount mono">{tab.members.length}</span>
-													</button>
-													{#if n.current}
-														<div class="gacts">
-															<button class="more" class:on={menuId === g.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === g.id}><Icon name="more" /></button>
-														</div>
-													{/if}
 												{/if}
 											</div>
 											{#if !gfold}
-												<div class="fold" in:collapseIn out:collapseOut>
+												<div class="members fold" in:collapseIn out:collapseOut>
 													{#each tab.members as m (m.id)}
 														{#if isTerminalId(m.id)}{@render termRow(n, m as TerminalInfo, memberTarget(n, m), true)}{:else}{@render row(n, m as Session, memberTarget(n, m), true)}{/if}
 													{/each}
@@ -659,8 +660,7 @@
 	.dir:hover {
 		background: var(--bg-hover);
 	}
-	.dir.grabbable,
-	.grphead.grabbable {
+	.dir.grabbable {
 		cursor: grab;
 		-webkit-user-select: none;
 		user-select: none;
@@ -798,7 +798,7 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		border-radius: var(--radius);
+		border-radius: var(--radius-sm);
 		margin: 0;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
@@ -995,9 +995,9 @@
 		border-top: 1px solid var(--border);
 	}
 	.grp {
-		margin-top: 4px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-sm);
 		border: 1px solid transparent;
+		margin: -1px 0; /* the drop outline must not shift the rows */
 	}
 	.grp.over,
 	.dir.over {
@@ -1027,94 +1027,6 @@
 	.item.over {
 		background: var(--accent-soft);
 		box-shadow: inset 0 0 0 1.5px var(--accent);
-	}
-	.grphead {
-		position: relative;
-		display: flex;
-		align-items: center;
-		border-radius: var(--radius);
-	}
-	.grphead.cur {
-		background: var(--bg-active);
-	}
-	.grphead.before::before,
-	.grphead.after::after {
-		content: "";
-		position: absolute;
-		left: 8px;
-		right: 8px;
-		height: 2px;
-		border-radius: 1px;
-		background: var(--accent);
-		z-index: 1;
-		pointer-events: none;
-	}
-	.grphead.before::before {
-		top: -1px;
-	}
-	.grphead.after::after {
-		bottom: -1px;
-	}
-	/* level 2 like a lone tab: the chevron takes the place of the agent face */
-	.gchev {
-		flex: none;
-		display: grid;
-		place-items: center;
-		height: 36px;
-		padding: 0 4px 0 48px;
-	}
-	.grphead:hover {
-		background: var(--bg-hover);
-	}
-	.grphead.cur .dname {
-		color: var(--text);
-	}
-	.grptoggle {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		height: 36px;
-		padding: 0 6px 0 0;
-		text-align: left;
-		color: var(--text-dim);
-	}
-	/* panes of a group: one level further in */
-	.item.member .open {
-		padding-left: 72px;
-	}
-	.gicon {
-		display: grid;
-		flex: none;
-	}
-	.gicon :global(svg) {
-		width: 14px;
-		height: 14px;
-		stroke: var(--text-dim);
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.grpname {
-		margin-left: 48px;
-		height: 28px;
-		font-size: var(--fs-md);
-	}
-	.gacts {
-		display: none;
-		padding-right: 0;
-	}
-	.grphead:hover .gacts,
-	.grphead:focus-within .gacts,
-	.grphead.menuopen .gacts {
-		display: flex;
-	}
-	@media (pointer: coarse) {
-		.gacts {
-			display: flex;
-		}
 	}
 	.item.grabbable {
 		cursor: grab;
