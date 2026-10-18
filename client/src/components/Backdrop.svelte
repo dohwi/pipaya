@@ -8,15 +8,18 @@
 	let bursts: Burst[] = $state([]);
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
-	const DUR = 1300; // ms
+	const DUR = 2800; // ms
 
 	let ripRaf = 0;
 	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
 	const tick = (now: number) => {
 		for (const b of bursts) {
 			const p = Math.min(1, (now - b.t0) / DUR);
-			b.r = b.reach * (1 - (1 - p) ** 2.2);
-			b.a = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+			b.r = b.reach * (1 - (1 - p) ** 1.7);
+			// ease in over the first 12%, hold, then fade out smoothly
+			const fin = Math.min(1, p / 0.12);
+			const fout = p < 0.45 ? 1 : 1 - (p - 0.45) / 0.55;
+			b.a = fin * fin * (3 - 2 * fin) * fout * fout * (3 - 2 * fout);
 		}
 		bursts = bursts.filter((b) => now - b.t0 < DUR);
 		ripRaf = bursts.length ? requestAnimationFrame(tick) : 0;
