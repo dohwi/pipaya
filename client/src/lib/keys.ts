@@ -14,6 +14,8 @@ export type ActionId =
   | "closeSession"
   | "prevSession"
   | "nextSession"
+  | "prevWorkspace"
+  | "nextWorkspace"
   | "lastSession"
   | "nextFinished"
   | "focusSearch"
@@ -99,6 +101,18 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("다음 대화로 이동"),
     hint: msg("사이드바 목록에서 한 칸 아래 대화로 포커스를 옮깁니다. 맨 아래에서는 맨 위로 돌아갑니다"),
     default: "",
+  },
+  {
+    id: "prevWorkspace",
+    label: msg("이전 워크스페이스로 이동"),
+    hint: msg("사이드바에서 한 칸 위 폴더(워크스페이스)의 첫 탭으로 이동합니다. 맨 위에서는 맨 아래로 돌아갑니다"),
+    default: "Alt+Shift+ArrowUp",
+  },
+  {
+    id: "nextWorkspace",
+    label: msg("다음 워크스페이스로 이동"),
+    hint: msg("사이드바에서 한 칸 아래 폴더(워크스페이스)의 첫 탭으로 이동합니다. 맨 아래에서는 맨 위로 돌아갑니다"),
+    default: "Alt+Shift+ArrowDown",
   },
   {
     id: "lastSession",

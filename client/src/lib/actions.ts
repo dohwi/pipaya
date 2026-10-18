@@ -3,7 +3,7 @@ import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
-import { firstUnseen, sessionOrder, stepFrom } from "./nav";
+import { firstUnseen, sessionOrder, stepDir, stepFrom } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -78,6 +78,12 @@ async function cycleApproval() {
 /** Previous / next conversation in sidebar order. */
 function stepSession(step: 1 | -1) {
   const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals), app.activeId, step);
+  if (id && id !== app.activeId) void app.openSession(id);
+}
+
+/** Previous / next workspace (folder block in the sidebar): opens its first tab. */
+function stepWorkspace(step: 1 | -1) {
+  const id = stepDir(app.dirs, app.activeId, step);
   if (id && id !== app.activeId) void app.openSession(id);
 }
 
@@ -202,6 +208,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   closeSession: () => app.closeActive(),
   prevSession: () => stepSession(-1),
   nextSession: () => stepSession(1),
+  prevWorkspace: () => stepWorkspace(-1),
+  nextWorkspace: () => stepWorkspace(1),
   lastSession,
   nextFinished,
   focusSearch,

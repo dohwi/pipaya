@@ -136,3 +136,16 @@ export function stepFrom(order: readonly string[], current: string | null, step:
 	if (i < 0) return step === 1 ? order[0]! : order[order.length - 1]!;
 	return order[(i + step + order.length) % order.length]!;
 }
+
+/** The first pane of the folder `step` places after the one holding `current` (wrapping). From nowhere: forward starts at the first folder, back at the last. */
+export function stepDir(dirs: readonly DirBlock[], current: string | null, step: 1 | -1): string | null {
+	const list = dirs.filter((d) => d.tabs.some((t) => tabPanes(t).length));
+	if (!list.length) return null;
+	const at = current ? list.findIndex((d) => d.tabs.some((t) => t.id === current || tabPanes(t).includes(current))) : -1;
+	const to = at < 0 ? (step === 1 ? list[0]! : list[list.length - 1]!) : list[(at + step + list.length) % list.length]!;
+	for (const t of to.tabs) {
+		const pane = tabPanes(t)[0];
+		if (pane) return pane;
+	}
+	return null;
+}

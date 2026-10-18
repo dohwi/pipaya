@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
-import { firstUnseen, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
+import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
 import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, actionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
@@ -341,5 +341,24 @@ describe("sidebarDirs / tabOf", () => {
 		const dirs = sidebarDirs(sessions, [grp("G", pair("a", "b"))], [], { match: (s) => s.id === "b" });
 		const g = dirs[0]!.tabs[0]!;
 		expect(g.kind === "group" && g.members.map((m) => m.id)).toEqual(["b"]);
+	});
+});
+
+describe("stepDir", () => {
+	const dirs = sidebarDirs([sess("a", "/x", 3), sess("b", "/x", 2), sess("c", "/y", 1)], [], [], { dirOrder: ["/x", "/y"] });
+
+	test("jumps to the first pane of the next / previous folder, wrapping", () => {
+		expect(stepDir(dirs, "b", 1)).toBe("c");
+		expect(stepDir(dirs, "c", 1)).toBe("a");
+		expect(stepDir(dirs, "a", -1)).toBe("c");
+	});
+
+	test("from a new chat, forward starts at the first folder, back at the last", () => {
+		expect(stepDir(dirs, null, 1)).toBe("a");
+		expect(stepDir(dirs, null, -1)).toBe("c");
+	});
+
+	test("nothing to step through", () => {
+		expect(stepDir([], "a", 1)).toBeNull();
 	});
 });
