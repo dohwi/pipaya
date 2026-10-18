@@ -5,7 +5,7 @@
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
-	import { marquee } from "../lib/fit-text";
+	import { marquee, tail } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, activityOf, type Activity } from "../lib/activity";
@@ -400,12 +400,16 @@
 
 					{#each n.dirs as d (d.path)}
 						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
+						{@const label = shortName(n, d.path)}
+						{@const parent = pretty(n, d.path).slice(0, -label.length).replace(/\/$/, "")}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
 						<div class="dir grabbable" class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
-								<span class="dname">{shortName(n, d.path)}</span>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
+								<span class="dicon"><Icon name="folder" /></span>
+								<span class="dname">{label}</span>
+								{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 								{#if dfold}<span class="dcount mono">{d.tabs.length}</span>{/if}
 							</button>
 							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
@@ -712,31 +716,41 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		height: 26px;
-		padding: 0 6px 0 4px; /* the label starts at the rows' lead column */
+		gap: 6px;
+		height: 30px;
+		padding: 0 6px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
 		text-align: left;
-		color: var(--text-faint);
+		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
 	}
 	.dir:hover .dirtoggle,
 	.dir.cur .dirtoggle {
-		color: var(--text-dim);
+		color: var(--text);
 	}
-	/* the fold chevron follows the label and only shows on hover (or when folded) */
-	.dirtoggle .chev {
-		opacity: 0;
-		transition: opacity var(--motion-fast) var(--ease-std), rotate var(--motion-fast) var(--ease);
+	.dicon {
+		display: grid;
+		flex: none;
+		width: 14px;
+		color: var(--text-faint);
 	}
-	.dir:hover .dirtoggle .chev,
-	.dirtoggle .chev.folded,
-	.dirtoggle:focus-visible .chev {
-		opacity: 1;
+	.dicon :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
-	@media (pointer: coarse) {
-		.dirtoggle .chev {
-			opacity: 1;
-		}
+	/* where the folder sits, dim after its name; the full path is the tooltip */
+	.dparent {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
 	}
 	.chev {
 		display: grid;
@@ -756,14 +770,13 @@
 		stroke-linejoin: round;
 	}
 	.dname {
-		min-width: 0;
+		flex: none;
+		max-width: 70%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: var(--fs-2xs);
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		font-size: var(--fs-sm);
+		font-weight: 600;
 	}
 	.dcount {
 		font-size: var(--fs-2xs);
@@ -823,7 +836,7 @@
 		stroke-linecap: round;
 	}
 	.nosess {
-		padding: 4px 10px 6px 4px;
+		padding: 4px 10px 6px 44px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
@@ -836,7 +849,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.item.nested .open {
-		padding-left: 4px; /* the lead column, then the title right under the folder label */
+		padding-left: 44px; /* one step in: the tab's icon sits under the folder's name */
 	}
 	.item:hover {
 		background: var(--bg-hover);
@@ -1025,7 +1038,7 @@
 
 	/* A split tab and its panes are one box: the tab row on top, its panes inside, so they never read as separate tabs. */
 	.grp {
-		margin: 2px 0;
+		margin: 2px 0 2px 40px; /* the box hangs under its folder like the other tabs */
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		/* no fill: the sidebar's sliding selection marker runs behind these rows too */
@@ -1044,7 +1057,7 @@
 		padding-left: 3px;
 	}
 	.grp .item.member .open {
-		padding-left: 23px;
+		padding-left: 23px; /* one more step: under the split tab's name */
 		min-height: 30px;
 	}
 	.grp .item.member .title {
