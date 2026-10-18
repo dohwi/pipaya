@@ -3,12 +3,11 @@
 	 * The empty-state background: the blueprint grid, plus a soft light that follows the pointer and
 	 * brings the grid up around it. Pure decoration — pointer-events none, off for touch and reduced motion.
 	 */
-	let { onburst }: { onburst?: (delayMs: number) => void } = $props();
 	let host: HTMLDivElement | undefined = $state();
-	type Burst = { id: number; x: number; y: number; reach: number; hue: number; t0: number; r: number; a: number };
+	type Burst = { id: number; x: number; y: number; reach: number; t0: number; r: number; a: number };
 	let bursts: Burst[] = $state([]);
 	let seq = 0;
-	const RING = 140; // px: width of the lit band
+	const RING = 220; // px: width of the lit band
 	const DUR = 1300; // ms
 
 	let ripRaf = 0;
@@ -24,7 +23,7 @@
 	};
 	$effect(() => () => cancelAnimationFrame(ripRaf));
 
-	// A click on empty space sends a colour wave out from the pointer (and tells the owner, so the mark can tint).
+	// A click on empty space sends a wave of lit grid lines out from the pointer.
 	$effect(() => {
 		const el = host;
 		const parent = el?.parentElement;
@@ -36,10 +35,8 @@
 			const x = e.clientX - r.left;
 			const y = e.clientY - r.top;
 			const far = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y));
-			bursts.push({ id: seq++, x, y, reach: far + RING, hue: Math.round(Math.random() * 360), t0: performance.now(), r: 0, a: 1 });
+			bursts.push({ id: seq++, x, y, reach: far + RING, t0: performance.now(), r: 0, a: 1 });
 			if (!ripRaf) ripRaf = requestAnimationFrame(tick);
-			// the mark sits at the centre: tint it when the ring gets there
-			onburst?.((Math.hypot(x - r.width / 2, y - r.height / 2) / (far + RING)) * DUR);
 		};
 		parent.addEventListener("pointerdown", down, { passive: true });
 		return () => parent.removeEventListener("pointerdown", down);
@@ -103,7 +100,7 @@
 	{#each bursts as b (b.id)}
 		<div
 			class="ripple"
-			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;--h:{b.hue};opacity:{b.a.toFixed(3)}"
+			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;opacity:{b.a.toFixed(3)}"
 		></div>
 	{/each}
 </div>
@@ -141,27 +138,19 @@
 		-webkit-mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
 		mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%);
 	}
-	/* the hover grid again, but coloured and shown through a ring that travels out from the click */
+	/* the hover grid again, but shown through a ring that travels out from the click */
 	.ripple {
 		position: absolute;
 		inset: 0;
-		--line: hsl(var(--h) 90% 70% / 0.85);
+		--line: var(--grid-wave);
 		background-image:
 			linear-gradient(to right, transparent calc(100% - 1px), var(--line) 100%),
 			linear-gradient(to bottom, transparent calc(100% - 1px), var(--line) 100%);
 		background-size: 2rem 2rem;
 		background-position: center top;
-		--mask: radial-gradient(circle at var(--cx) var(--cy), transparent calc(var(--r) - 140px), #000 calc(var(--r) - 36px), transparent var(--r));
+		--mask: radial-gradient(circle at var(--cx) var(--cy), transparent calc(var(--r) - 220px), #000 calc(var(--r) - 40px), transparent var(--r));
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
-	}
-	.ripple::after {
-		content: "";
-		position: absolute;
-		inset: 0;
-		background: hsl(var(--h) 85% 62% / 0.07);
-		-webkit-mask-image: inherit;
-		mask-image: inherit;
 	}
 	.lit::after {
 		content: "";
