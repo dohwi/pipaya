@@ -12,7 +12,7 @@ export interface FileDraft extends UploadFile {
 	preview?: string;
 }
 
-export type PreviewKind = "image" | "pdf" | "audio" | "video" | "markdown" | "table" | "text" | "other";
+export type PreviewKind = "image" | "pdf" | "audio" | "video" | "markdown" | "html" | "table" | "text" | "other";
 
 const TEXT_EXT = /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|xml|html?|css|[cm]?[jt]sx?|svelte|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|sh|sql|diff|patch|env)$/i;
 
@@ -22,6 +22,7 @@ export function previewKind(name: string, mimeType = ""): PreviewKind {
 	if (/^audio\//.test(mimeType) || /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus)$/i.test(name)) return "audio";
 	if (/^video\/(mp4|webm|ogg|quicktime)$/.test(mimeType) || /\.(mp4|m4v|webm|ogv|mov)$/i.test(name)) return "video";
 	if (/\.(md|markdown)$/i.test(name)) return "markdown";
+	if (/\.html?$/i.test(name)) return "html";
 	if (/\.(csv|tsv)$/i.test(name)) return "table";
 	if (mimeType.startsWith("text/") || mimeType === "application/json" || TEXT_EXT.test(name)) return "text";
 	return "other";

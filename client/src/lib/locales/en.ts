@@ -256,6 +256,7 @@ export const en: Record<string, string> = {
 	"맞춤": "Fit",
 	"확대": "Zoom in",
 	"저장": "Save",
+	"소스 보기": "View source",
 	"이전 이미지": "Previous image",
 	"이전": "Previous",
 	"다음 이미지": "Next image",

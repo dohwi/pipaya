@@ -21,6 +21,9 @@
 	let loading = $state(true);
 	let size = $state<number | undefined>(undefined);
 	let copied = $state(false);
+	/** HTML shows as a page by default; this flips it to the source */
+	let source = $state(false);
+	let htmlUrl = $state<string | null>(null);
 
 	const kind = $derived(open ? previewKind(open.file.name, open.file.mimeType) : "other");
 
@@ -29,6 +32,8 @@
 	function revoke() {
 		if (url) URL.revokeObjectURL(url);
 		url = null;
+		if (htmlUrl) URL.revokeObjectURL(htmlUrl);
+		htmlUrl = null;
 	}
 	onDestroy(revoke);
 
@@ -40,6 +45,7 @@
 		text = null;
 		failed = null;
 		truncated = false;
+		source = false;
 		loading = true;
 		app.api
 			.fetchFile(f.sessionId, f.file.path, ctl.signal)
@@ -47,12 +53,14 @@
 				size = blob.size;
 				// the server names the type; trust the file name for the preview kind, and always hand the browser the right type
 				const k = previewKind(f.file.name, blob.type || f.file.mimeType);
-				if (k === "text" || k === "markdown" || k === "table") {
+				if (k === "text" || k === "markdown" || k === "table" || k === "html") {
 					const raw = await blob.text();
 					truncated = raw.length > MAX_TEXT;
 					text = truncated ? raw.slice(0, MAX_TEXT) : raw;
 				}
 				url = URL.createObjectURL(blob);
+				// the server sends html as text/plain; the frame needs the real type
+				if (k === "html") htmlUrl = URL.createObjectURL(new Blob([await blob.arrayBuffer()], { type: "text/html" }));
 			})
 			.catch((e) => {
 				if ((e as Error).name !== "AbortError") failed = errorText(e);
@@ -80,6 +88,9 @@
 {#if open}
 	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="85vh" layer={2} portal>
 		{#snippet headerActions()}
+			{#if kind === "html"}
+				<button type="button" class="iconbtn" class:on={source} onclick={() => (source = !source)} aria-pressed={source} aria-label={t("소스 보기")} title={t("소스 보기")}><Icon name="terminal" /></button>
+			{/if}
 			{#if text !== null}
 				<button type="button" class="iconbtn" onclick={copy} aria-label={t("복사")} title={t("복사")}><Icon name={copied ? "check" : "copy"} /></button>
 			{/if}
@@ -102,6 +113,9 @@
 			{:else if kind === "video" && url}
 				<!-- svelte-ignore a11y_media_has_caption -->
 				<video class="media" src={url} controls preload="metadata" playsinline></video>
+			{:else if kind === "html" && htmlUrl && !source}
+				<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
+				<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={open.file.name}></iframe>
 			{:else if kind === "markdown" && text !== null}
 				<Markdown {text} sessionId={open.sessionId} />
 				{#if truncated}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
@@ -151,6 +165,17 @@
 		border: 0;
 		border-radius: var(--radius);
 		background: #fff;
+	}
+	.html {
+		display: block;
+		width: 100%;
+		height: 70vh;
+		border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+		border-radius: var(--radius);
+		background: #fff;
+	}
+	.iconbtn.on {
+		color: var(--accent, inherit);
 	}
 	.media {
 		display: block;

@@ -22,6 +22,7 @@ describe("previews", () => {
 		expect(previewKind("a.csv", "text/csv")).toBe("table");
 		expect(previewKind("a.mp3")).toBe("audio");
 		expect(previewKind("a.mp4", "video/mp4")).toBe("video");
+		expect(previewKind("index.html", "text/plain")).toBe("html");
 		expect(previewKind("main.py")).toBe("text");
 		expect(previewKind("data", "application/json")).toBe("text");
 		expect(previewKind("a.pdf", "application/pdf")).toBe("pdf");
