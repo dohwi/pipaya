@@ -5,11 +5,10 @@
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
-	import { marquee, tail } from "../lib/fit-text";
+	import { marquee } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
-	import AgentBadge from "./AgentBadge.svelte";
-	import { activityOf, type Activity } from "../lib/activity";
+	import { ACTIVITY_LABEL, ACTIVITY_TONE, activityOf, type Activity } from "../lib/activity";
 	import { app, type Server } from "../lib/store.svelte";
 	import { hostOf, tilde } from "../lib/format";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
@@ -57,6 +56,17 @@
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
+	const segs = (n: Node, path: string) => pretty(n, path).split("/").filter(Boolean);
+	/** A folder's label: its own name, with as many parent names as it takes to tell it from the other folders. */
+	function shortName(n: Node, path: string): string {
+		const mine = segs(n, path);
+		const others = n.dirs.filter((d) => d.path !== path).map((d) => segs(n, d.path));
+		for (let k = 1; k < mine.length; k++) {
+			const tail = mine.slice(-k).join("/");
+			if (!others.some((o) => o.slice(-k).join("/") === tail)) return tail;
+		}
+		return mine.join("/") || pretty(n, path);
+	}
 
 	const nodes = $derived.by<Node[]>(() => {
 		const q = query.trim().toLowerCase();
@@ -288,11 +298,12 @@
 				}}
 			/>
 		{:else}
-			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)}>
-				<AgentBadge id={x.id} state={stateOf(n, x)} size={18} />
-				{#if x.parentId}<span class="forkmark" title={t("분기된 대화")}><Icon name="fork" /></span>{/if}
-				{#if x.name}<span class="who mono {stateOf(n, x)}">@{x.name}</span>{/if}
+			{@const st = stateOf(n, x)}
+			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[x.name ? `@${x.name}` : "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
+				<!-- the lead column is empty while idle: only something worth a look (working, asking, done, failed) shows -->
+				<span class="lead">{#if st !== "idle"}<StatusDot tone={ACTIVITY_TONE[st]} pulse={st === "working" || st === "asking"} size={7} />{/if}</span>
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
+				{#if member && x.name}<span class="who mono {st}">@{x.name}</span>{/if}
 			</button>
 			<div class="acts">
 				{#if n.current}
@@ -330,7 +341,7 @@
 			/>
 		{:else}
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={`${x.shell}\n${x.cwd}`}>
-				<span class="termicon"><Icon name="terminal" /></span>
+				<span class="lead"><Icon name="terminal" /></span>
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 			</button>
 			<div class="acts">
@@ -358,17 +369,21 @@
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
-			{@const sfold = isFolded(n.server.id)}
-			<section class="srv" class:cur={n.current}>
+			<!-- one server: its folders are the top level; the server row only appears once there are several -->
+			{@const solo = nodes.length === 1}
+			{@const sfold = !solo && isFolded(n.server.id)}
+			<section class="srv" class:cur={n.current} class:solo>
+				{#if !solo}
 				<div class="srvhead">
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 						<span class="sdot {n.state}"></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
-						<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>
+						{#if sfold}<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>{/if}
 					</button>
 					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, n.current ? app.workdir : ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
+				{/if}
 
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
@@ -388,10 +403,10 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
 						<div class="dir grabbable" class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
-							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={d.path}>
+							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
+								<span class="dname">{shortName(n, d.path)}</span>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
-								<span class="dname mono" use:tail={pretty(n, d.path)}></span>
-								<span class="dcount mono">{d.tabs.length}</span>
+								{#if dfold}<span class="dcount mono">{d.tabs.length}</span>{/if}
 							</button>
 							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
@@ -433,7 +448,7 @@
 													/>
 												{:else}
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-														<span class="termicon"><Icon name="columns" /></span>
+														<span class="lead"><Icon name="columns" /></span>
 														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
 													</button>
 													<div class="acts">
@@ -480,11 +495,12 @@
 <RowMenu bind:this={rowMenu} bind:open={menuId} />
 
 <style>
+	/* @name of a pane in a split tab: how the other panes call it, so it stays in view there */
 	.who {
 		flex: none;
 		font-size: var(--fs-2xs);
-		font-weight: 700;
-		color: var(--text-dim); /* follows the agent icon: dim when idle, the state colour otherwise */
+		font-weight: 600;
+		color: var(--text-faint);
 	}
 	.who.working { color: var(--info); }
 	.who.asking { color: var(--warn); }
@@ -603,20 +619,21 @@
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
-		padding: 2px 8px 12px;
+		padding: 4px 8px 12px;
 		overscroll-behavior: contain;
 	}
 	.srv {
-		padding-bottom: 6px;
-		border-bottom: 1px solid var(--border);
-		margin: 0 -8px; /* rows span the full width: hairlines run edge to edge like the header's */
-		padding-left: 8px;
-		padding-right: 8px;
+		padding-bottom: 8px;
+	}
+	.srv + .srv {
+		margin-top: 4px;
+		padding-top: 4px;
+		border-top: 1px solid var(--border);
 	}
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin-top: 6px;
+		margin-top: 4px;
 		border-radius: var(--radius-sm);
 	}
 	.srvhead:hover {
@@ -628,7 +645,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 34px;
+		height: 32px;
 		padding: 0 6px 0 8px;
 		text-align: left;
 		color: var(--text-dim);
@@ -654,11 +671,11 @@
 	.dir {
 		display: flex;
 		align-items: center;
-		margin-top: 2px;
+		margin-top: 12px;
 		border-radius: var(--radius-sm);
 	}
-	.dir:hover {
-		background: var(--bg-hover);
+	.dirblock:first-child > .dir {
+		margin-top: 4px;
 	}
 	.dir.grabbable {
 		cursor: grab;
@@ -695,14 +712,31 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		height: 30px;
-		padding: 0 6px 0 30px; /* level 1: chevron under the server dot (x=38) */
+		gap: 4px;
+		height: 26px;
+		padding: 0 6px 0 4px; /* the label starts at the rows' lead column */
 		text-align: left;
+		color: var(--text-faint);
+		transition: color var(--motion-fast) var(--ease-std);
+	}
+	.dir:hover .dirtoggle,
+	.dir.cur .dirtoggle {
 		color: var(--text-dim);
 	}
-	.dir.cur .dirtoggle {
-		color: var(--text);
+	/* the fold chevron follows the label and only shows on hover (or when folded) */
+	.dirtoggle .chev {
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std), rotate var(--motion-fast) var(--ease);
+	}
+	.dir:hover .dirtoggle .chev,
+	.dirtoggle .chev.folded,
+	.dirtoggle:focus-visible .chev {
+		opacity: 1;
+	}
+	@media (pointer: coarse) {
+		.dirtoggle .chev {
+			opacity: 1;
+		}
 	}
 	.chev {
 		display: grid;
@@ -722,14 +756,14 @@
 		stroke-linejoin: round;
 	}
 	.dname {
-		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-
-		font-size: var(--fs-xs);
-		font-weight: 600;
+		font-size: var(--fs-2xs);
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
 	}
 	.dcount {
 		font-size: var(--fs-2xs);
@@ -739,17 +773,15 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 28px;
-		height: 28px;
+		width: 24px;
+		height: 24px;
 		margin-right: 2px;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 		opacity: 0;
 	}
 	.dir:hover .dirnew,
-	.dir.cur .dirnew,
 	.srvhead:hover .dirnew,
-	.srv.cur .srvhead .dirnew,
 	.dirnew:focus-visible {
 		opacity: 1;
 	}
@@ -764,17 +796,18 @@
 		color: var(--text);
 		opacity: 1;
 	}
-	.termicon {
+	/* one narrow lead column: a status dot, or the terminal / split icon; empty for an idle conversation */
+	.lead {
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 18px;
-		height: 18px;
-		color: var(--text-dim);
+		width: 14px;
+		height: 14px;
+		color: var(--text-faint);
 	}
-	.termicon :global(svg) {
-		width: 15px;
-		height: 15px;
+	.lead :global(svg) {
+		width: 14px;
+		height: 14px;
 		stroke: currentColor;
 		fill: none;
 		stroke-width: 1.9;
@@ -790,7 +823,7 @@
 		stroke-linecap: round;
 	}
 	.nosess {
-		padding: 4px 10px 6px 30px;
+		padding: 4px 10px 6px 4px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
@@ -803,7 +836,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.item.nested .open {
-		padding-left: 50px; /* level 2: sessions of a directory sit under its name (x=58) */
+		padding-left: 4px; /* the lead column, then the title right under the folder label */
 	}
 	.item:hover {
 		background: var(--bg-hover);
@@ -823,9 +856,9 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		min-height: 36px;
-		padding: 0 10px 0 30px; /* level 1: the agent face sits under the directory chevrons (x=38) */
+		gap: 6px;
+		min-height: 32px;
+		padding: 0 10px 0 4px;
 		text-align: left;
 		outline-offset: -1px;
 	}
@@ -835,7 +868,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: var(--fs-md);
+		font-size: var(--fs-sm);
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	.title .track {
@@ -989,14 +1022,10 @@
 		margin-left: auto;
 	}
 	/* hairline between workspaces / groups */
-	.dirblock + .dirblock {
-		margin-top: 6px;
-		padding-top: 6px;
-		border-top: 1px solid var(--border);
-	}
+
 	/* A split tab and its panes are one box: the tab row on top, its panes inside, so they never read as separate tabs. */
 	.grp {
-		margin: 3px 0 3px 30px; /* starts under the tab icons (x=38) */
+		margin: 2px 0;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		/* no fill: the sidebar's sliding selection marker runs behind these rows too */
@@ -1010,16 +1039,19 @@
 	.grp .members .item:last-child {
 		border-radius: 0 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px);
 	}
-	/* rows inside the box line up with the tab rows outside it */
+	/* rows inside the box keep the lead column of the rows outside it (less the 1px frame); panes step in once */
 	.grp .item.nested .open {
-		padding-left: 19px;
+		padding-left: 3px;
 	}
 	.grp .item.member .open {
-		padding-left: 35px;
-		min-height: 32px;
+		padding-left: 23px;
+		min-height: 30px;
 	}
 	.grp .item.member .title {
-		font-size: var(--fs-sm);
+		color: var(--text-dim);
+	}
+	.grp .item.member.active .title {
+		color: var(--text);
 	}
 	.members {
 		border-top: 1px solid var(--border);
@@ -1035,9 +1067,9 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 28px;
+		height: 24px;
 		margin-right: 4px;
-		padding: 0 6px;
+		padding: 0 5px;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
