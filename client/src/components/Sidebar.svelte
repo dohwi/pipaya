@@ -555,7 +555,7 @@
 		justify-content: center;
 		gap: 2px;
 		width: 100%;
-		height: 46px;
+		height: 40px;
 		margin-top: 6px;
 		padding: 0 10px;
 		border: 1px dashed var(--border-strong);
