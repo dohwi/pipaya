@@ -184,6 +184,26 @@ describe("groups API", () => {
 		expect(after).not.toBe(before[b]);
 	});
 
+	test("group names stay unique among groups and session names, so a tag has one meaning", async () => {
+		const [a, b, c, d] = [(await mk())!, (await mk())!, (await mk())!, (await mk())!];
+		const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;
+		const g1 = (await api("POST", "/groups", { name: "Docs Team", layout: split(pane(a), pane(b)) })).json;
+		const g2 = (await api("POST", "/groups", { name: "docs-team", layout: split(pane(c), pane(d)) })).json;
+		expect(g1.name).toBe("Docs Team");
+		expect(g2.name).toBe("docs-team 2");
+		// a group may not take an active session's name either
+		const g3 = (await api("PATCH", `/groups/${g2.id}`, { name: (await nameOf(a)).toUpperCase() })).json;
+		expect(g3.name).toBe(`${(await nameOf(a)).toUpperCase()} 2`);
+		// renaming to its own name keeps it
+		expect((await api("PATCH", `/groups/${g1.id}`, { name: "Docs Team" })).json.name).toBe("Docs Team");
+		// a new session skips the names of groups
+		await api("PATCH", `/groups/${g1.id}`, { name: MEMBER_NAMES_KO[0] });
+		const fresh = await nameOf((await mk())!);
+		expect(fresh.toLowerCase()).not.toBe(MEMBER_NAMES_KO[0]!.toLowerCase());
+		await api("DELETE", `/groups/${g1.id}`);
+		await api("DELETE", `/groups/${g2.id}`);
+	});
+
 	test("peer_send reaches any other session (no group needed) and peer_read shows its answer", async () => {
 		const [a, b] = [(await mk())!, (await mk())!];
 		const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;

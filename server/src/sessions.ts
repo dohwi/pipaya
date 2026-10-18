@@ -101,7 +101,7 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
-			name: nextMemberName(this.store.activeNames(), poolForLang(input.lang)),
+			name: nextMemberName(this.takenNames(), poolForLang(input.lang)),
 			purpose: "",
 			cwd,
 			provider,
@@ -281,6 +281,13 @@ export class SessionManager {
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }
 	}
 
+	/** Lower-cased names a new session must not take: the active sessions' and the tags of the groups. */
+	private takenNames(): Set<string> {
+		const taken = new Set(this.store.activeNames());
+		for (const g of this.groupSource()) taken.add(groupHandle(g.name).toLowerCase());
+		return taken;
+	}
+
 	/** The UI language changed: give every session the twin of its name in that language (민수 <-> Minsu). Returns how many were renamed. */
 	localizeNames(lang: string): number {
 		const pool = poolForLang(lang);
@@ -288,7 +295,7 @@ export class SessionManager {
 		for (const r of this.store.list({ limit: 1000 })) {
 			let name = nameInLang(r.name, lang);
 			if (name === r.name) continue;
-			if (!r.closed && this.store.activeNames().has(name.toLowerCase())) name = nextMemberName(this.store.activeNames(), pool);
+			if (!r.closed && this.takenNames().has(name.toLowerCase())) name = nextMemberName(this.takenNames(), pool);
 			this.update(r.id, { name });
 			renamed++;
 		}
@@ -315,7 +322,7 @@ export class SessionManager {
 
 		if (patch.closed === false && current.closed) this.assertRoom();
 		// A closed session gives its name up; on resume it takes it back unless another session has it by now.
-		if (patch.closed === false && current.closed && this.store.activeNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.store.activeNames(), poolOfName(current.name));
+		if (patch.closed === false && current.closed && this.takenNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.takenNames(), poolOfName(current.name));
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 

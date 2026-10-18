@@ -144,7 +144,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		confineTo: cfg.restrictWorkspace ? cfg.workspaceRoot : undefined,
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
-	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
 	groups.evictWhere(isTerminalId);
 	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	const server = Fastify({

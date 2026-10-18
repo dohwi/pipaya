@@ -149,6 +149,19 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	},
 	// v20: what a session's agent works on (written by the system model), shown beside its @name.
 	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "purpose")) db.exec("ALTER TABLE sessions ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"); },
+	// v21: a group's tag (its name with dashes, any case) must differ from every other group's and every active session's @name.
+	// Older duplicates keep the first (by creation) and get " 2", " 3", ... appended.
+	(db) => {
+		const handle = (n: string) => n.trim().replace(/\s+/g, "-").toLowerCase();
+		const taken = new Set((db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
+		const set = db.query("UPDATE groups SET name = $name WHERE id = $id");
+		for (const g of db.query("SELECT id, name FROM groups ORDER BY created_at, id").all() as { id: string; name: string }[]) {
+			let name = g.name;
+			for (let n = 2; taken.has(handle(name)); n++) name = `${g.name} ${n}`;
+			taken.add(handle(name));
+			if (name !== g.name) set.run({ id: g.id, name });
+		}
+	},
 ];
 
 export function openDb(path: string): Database {
