@@ -1,5 +1,11 @@
 <script lang="ts" module>
 	export type Burst = { id: number; x: number; y: number; reach: number; t0: number; r: number; a: number };
+	export const DUR = 1900; // ms: how long a wave travels
+	const EASE = 1.7; // radius = reach * (1 - (1 - p) ** EASE)
+	/** ms after the click at which the wave front reaches a point `dist` px from the click. */
+	export function arrival(reach: number, dist: number): number {
+		return (1 - (1 - Math.min(1, dist / reach)) ** (1 / EASE)) * DUR;
+	}
 </script>
 
 <script lang="ts">
@@ -12,14 +18,13 @@
 	let host: HTMLDivElement | undefined = $state();
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
-	const DUR = 1900; // ms
 
 	let ripRaf = 0;
 	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
 	const tick = (now: number) => {
 		for (const b of bursts) {
 			const p = Math.min(1, (now - b.t0) / DUR);
-			b.r = b.reach * (1 - (1 - p) ** 1.7);
+			b.r = b.reach * (1 - (1 - p) ** EASE);
 			// ease in over the first 12%, hold, then fade out smoothly
 			const fin = Math.min(1, p / 0.12);
 			const fout = p < 0.45 ? 1 : 1 - (p - 0.45) / 0.55;

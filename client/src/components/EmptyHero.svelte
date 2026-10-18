@@ -1,30 +1,35 @@
 <script lang="ts">
-	import Backdrop, { type Burst } from "./Backdrop.svelte";
+	import Backdrop, { arrival, type Burst } from "./Backdrop.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
 
+	const GLOW = 3200; // ms: from the wave reaching the mark until it has fully faded again (see @keyframes glow)
 	let bursts: Burst[] = $state([]);
 	let w = $state(0);
 	let h = $state(0);
+	/** One colour mark per click, each started (animation-delay) for the moment its wave front reaches the mark. */
+	let glows: { id: number; delay: number }[] = $state([]);
+	const seen = new Set<number>();
 
-	const LEAD = 420; // px: the mark starts to glow this far before the wave front reaches it
-	const TRAIL = 900; // px: and keeps fading this far behind it
-	const soft = (t: number) => {
-		const c = Math.min(1, Math.max(0, t));
-		return c * c * (3 - 2 * c);
-	};
-	/** 0..1 glow of the centred mark for one wave: eases in as the front nears, eases out slowly behind it. */
-	function glow(b: Burst): number {
-		const behind = b.r - Math.hypot(b.x - w / 2, b.y - h / 2); // >0 once the front has passed the mark
-		return (behind < 0 ? soft(1 + behind / LEAD) : soft(1 - behind / TRAIL)) * b.a;
-	}
+	$effect(() => {
+		for (const b of bursts) {
+			if (seen.has(b.id)) continue;
+			seen.add(b.id);
+			const delay = Math.round(arrival(b.reach, Math.hypot(b.x - w / 2, b.y - h / 2)));
+			glows.push({ id: b.id, delay });
+			setTimeout(() => {
+				glows = glows.filter((g) => g.id !== b.id);
+				seen.delete(b.id);
+			}, delay + GLOW + 100);
+		}
+	});
 </script>
 
 <Backdrop bind:bursts />
 <div class="hello" aria-hidden="true" bind:clientWidth={w} bind:clientHeight={h}>
 	<div class="base"><PipayaMark size={72} /></div>
-	<!-- the colour mark glows softly while a wave is near, then fades out behind it -->
-	{#each bursts as b (b.id)}
-		<div class="tint" style="opacity:{(glow(b) * 0.9).toFixed(3)}"><PipayaMark color size={72} /></div>
+	<!-- the colour mark: rises softly as the wave reaches it, stays a while, then fades out -->
+	{#each glows as g (g.id)}
+		<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark color size={72} /></div>
 	{/each}
 </div>
 
@@ -43,5 +48,25 @@
 	}
 	.base {
 		opacity: 0.35;
+	}
+	.tint {
+		opacity: 0;
+		animation: glow 3200ms both;
+	}
+	@keyframes glow {
+		0% {
+			opacity: 0;
+			animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+		}
+		25% {
+			opacity: 0.9;
+		}
+		60% {
+			opacity: 0.9;
+			animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+		}
+		100% {
+			opacity: 0;
+		}
 	}
 </style>
