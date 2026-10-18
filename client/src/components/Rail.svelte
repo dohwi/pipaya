@@ -231,15 +231,16 @@
 	}
 	.sep {
 		flex: none;
-		width: 24px;
-		height: 1px;
-		margin: 4px 0;
-		background: var(--border);
+		width: 28px;
+		height: 2px;
+		margin: 6px 0;
+		border-radius: 1px;
+		background: color-mix(in srgb, var(--text-faint) 55%, transparent);
 	}
-	/* between two servers: a longer, stronger line than the one between groups */
+	/* between two servers: a longer, stronger line than the one between workdirs */
 	.sep.srv {
-		width: 32px;
-		margin: 8px 0;
+		width: 36px;
+		margin: 10px 0;
 		background: var(--text-faint);
 	}
 	.agent {
