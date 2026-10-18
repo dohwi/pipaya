@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { compat, isClientTooOld, PROTOCOL_VERSION } from "../src/lib/protocol";
+import { compareVersions, compat, isClientTooOld, PROTOCOL_VERSION, serverReleaseState } from "../src/lib/protocol";
 
 const serverSrc = readFileSync(new URL("../../server/src/version.ts", import.meta.url), "utf8");
 const serverConst = (name: string) => Number(new RegExp(`export const ${name} = (\\d+);`).exec(serverSrc)?.[1]);
@@ -47,5 +47,23 @@ describe("426", () => {
 		expect(isClientTooOld(426, "client_too_old")).toBe(true);
 		expect(isClientTooOld(426, "other")).toBe(false);
 		expect(isClientTooOld(401, "client_too_old")).toBe(false);
+	});
+});
+
+describe("server release state", () => {
+	test("compares major.minor.patch numerically", () => {
+		expect(compareVersions("0.1.0", "0.2.1")).toBe(-1);
+		expect(compareVersions("0.10.0", "0.9.9")).toBe(1);
+		expect(compareVersions("v0.2.1", "0.2.1-beta")).toBe(0);
+		expect(compareVersions("dev", "0.2.1")).toBeNull();
+	});
+	test("a server behind the app is older, same or newer is current", () => {
+		expect(serverReleaseState("0.1.0", "0.2.1")).toBe("older");
+		expect(serverReleaseState("0.2.1", "0.2.1")).toBe("current");
+		expect(serverReleaseState("0.3.0", "0.2.1")).toBe("current");
+	});
+	test("missing versions are unknown", () => {
+		expect(serverReleaseState("", "0.2.1")).toBe("unknown");
+		expect(serverReleaseState("0.2.1", "")).toBe("unknown");
 	});
 });

@@ -4,6 +4,7 @@
 	import { notificationPlatform } from "../lib/notifications";
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { app } from "../lib/store.svelte";
+	import { serverReleaseState } from "../lib/protocol";
 	import Switch from "./Switch.svelte";
 	import SettingRow from "./SettingRow.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
@@ -14,6 +15,8 @@
 	const serverBusy = $derived(serverUpdater.busy);
 	const serverStatus = $derived(serverUpdater.status?.managed ? serverUpdater.status : null);
 	const serverVersion = $derived(app.serverVersions?.version ?? "");
+	/** Without a git status (not self-updating, or the fetch failed) compare the release with the app's: they ship together. */
+	const serverRelease = $derived(serverReleaseState(serverVersion, updater.current));
 	const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "");
 
 	/** Checks the app and, when connected as the owner, the server it talks to. */
@@ -84,7 +87,9 @@
 					<span class="chip new"><i></i>{t("서버가 다시 시작되기를 기다리는 중…")}</span>
 				{:else if serverNew}
 					<span class="chip new"><i></i>{t("서버에 새 버전이 있습니다")}</span>
-				{:else if serverStatus}
+				{:else if serverRelease === "older"}
+					<span class="chip new"><i></i>{t("앱보다 오래된 버전입니다")}</span>
+				{:else if serverStatus || serverRelease === "current"}
 					<span class="chip ok"><i></i>{t("최신 버전입니다")}</span>
 				{/if}
 				{#if serverNew}
@@ -93,6 +98,9 @@
 			</div>
 		{/if}
 	</div>
+	{#if serverRelease === "older" && !serverNew && !serverBusy}
+		<p class="hint" in:collapseIn out:collapseOut>{t("서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)")}</p>
+	{/if}
 	{#if updater.error}<p class="error" role="alert" in:collapseIn out:collapseOut>{updater.error}</p>{/if}
 	{#if serverUpdater.error}<p class="error" role="alert" in:collapseIn out:collapseOut>{serverUpdater.error}</p>{/if}
 	<p class="hint">

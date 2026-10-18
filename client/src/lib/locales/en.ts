@@ -1342,4 +1342,5 @@ export const en: Record<string, string> = {
 	"앱": "App",
 	"서버 버전": "Server",
 	"서버에 새 버전이 있습니다": "A new server version is available",
+	"앱보다 오래된 버전입니다": "Older than the app",
 };
