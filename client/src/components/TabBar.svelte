@@ -9,7 +9,6 @@
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../lib/nav";
 	import { app } from "../lib/store.svelte";
-	import { tilde } from "../lib/format";
 	import { platformName } from "../lib/terminal";
 
 	/**
@@ -106,7 +105,6 @@
 
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" class:group={app.activeTab?.tab.kind === "group"}>
-		<span class="dir mono" title={path}>{tilde(path, app.workspace?.home).split("/").pop() || "/"}</span>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }} use:dropTarget={stripTarget}>
 			{#each tabs as x (x.id)}
@@ -164,20 +162,6 @@
 	}
 	.bar.group {
 		background: var(--bg-group);
-	}
-	.dir {
-		flex: none;
-		display: flex;
-		align-items: center;
-		max-width: 22vw;
-		height: 28px;
-		padding: 0 8px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-2xs);
-		font-weight: 700;
-		color: var(--text-faint);
 	}
 	.tabs {
 		position: relative;
