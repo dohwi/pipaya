@@ -1063,7 +1063,7 @@
 		padding-left: 6px;
 	}
 	.grp .item.member .open {
-		padding-left: 78px; /* the pane's icon, one step in from the book */
+		padding-left: 70px; /* the pane's icon, just past the elbow */
 		min-height: 30px;
 	}
 	.grp .item.member .title {
@@ -1072,13 +1072,13 @@
 	.grp .item.member.active .title {
 		color: var(--text);
 	}
-	/* tree line: a vertical rule at the book's centre, an elbow into each pane, and the last pane ends it */
+	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
 	.branch {
 		position: absolute;
 		left: 50px; /* the book's centre */
 		top: 0;
 		bottom: 0;
-		width: 24px;
+		width: 12px;
 		pointer-events: none;
 	}
 	.branch::before {
@@ -1093,13 +1093,15 @@
 		content: "";
 		position: absolute;
 		left: 0;
-		top: 50%;
+		top: calc(50% - 8px);
 		width: 100%;
-		border-top: 1.5px solid var(--border-strong, var(--border));
+		height: 8px;
+		border-left: 1.5px solid var(--border-strong, var(--border));
+		border-bottom: 1.5px solid var(--border-strong, var(--border));
+		border-bottom-left-radius: 8px;
 	}
 	.members .item:last-child .branch::before {
-		bottom: 50%;
-		border-bottom-left-radius: 4px;
+		bottom: calc(50% + 8px);
 	}
 	.grprow.cur .title {
 		font-weight: 600;
