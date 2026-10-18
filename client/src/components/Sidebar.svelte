@@ -456,6 +456,7 @@
 													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
 														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
+														<span class="gcount mono" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>
 													</button>
 													<div class="acts">
 														{#if n.current}
@@ -1106,6 +1107,17 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.gcount {
+		flex: none;
+		min-width: 16px;
+		padding: 0 5px;
+		border-radius: 999px;
+		background: var(--bg-active);
+		color: var(--text-dim);
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		text-align: center;
 	}
 	.gfold:hover {
 		background: var(--bg-active);
