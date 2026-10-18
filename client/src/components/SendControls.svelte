@@ -231,6 +231,21 @@
 		background: color-mix(in srgb, var(--text) 83%, var(--bg));
 		color: var(--bg);
 	}
+	/* disabled: no opacity (it would show the overlapped neighbour through); use solid, pre-mixed colours */
+	.stack .mode:disabled {
+		opacity: 1;
+	}
+	.stack .mode:disabled {
+		color: color-mix(in srgb, var(--text) 45%, var(--bg));
+	}
+	.stack .mode.queue:disabled {
+		background: color-mix(in srgb, var(--step1) 40%, var(--bg));
+		border-color: color-mix(in srgb, var(--step1) 40%, var(--bg));
+	}
+	.stack .mode.primary:disabled {
+		background: color-mix(in srgb, var(--step2) 40%, var(--bg));
+		border-color: color-mix(in srgb, var(--step2) 40%, var(--bg));
+	}
 	.stack .send.stop {
 		background: var(--step3);
 		color: var(--bg);
