@@ -347,9 +347,11 @@ export function onShortcutCapture(e: KeyboardEvent) {
 export function onShortcut(e: KeyboardEvent) {
   if (e.defaultPrevented || app.prefs.recordingKey) return;
   // A focused terminal gets its keys (Ctrl+B, Esc, Alt+N...): only Mod+Shift/Alt shortcuts and F-keys reach the app.
-  if (inTerminal(e) && !appTakesKey(e, app.prefs.bindings)) return;
-  // Esc stops the agent even while an IME composition is open (Korean/Japanese input leaves isComposing set).
-  if (e.isComposing && e.key !== "Escape") return;
+  const fromTerminal = inTerminal(e);
+  if (fromTerminal && !appTakesKey(e, app.prefs.bindings)) return;
+  // Esc stops the agent even while an IME composition is open (Korean/Japanese input leaves isComposing set). A
+  // shortcut the app took from a terminal wins over the IME too: a half-composed Korean syllable must not eat it.
+  if (e.isComposing && e.key !== "Escape" && !fromTerminal) return;
   if (MODIFIER_CODE.test(e.code)) return;
   // Esc is fixed to "stop the agent". It only acts when nothing else wants the key: an open dialog/menu keeps it
   // (it closes them), and so does a text field other than the composer. Handlers that already used the key
@@ -373,6 +375,9 @@ export function onShortcut(e: KeyboardEvent) {
     }
     return;
   }
+  // A shortcut the app took from a terminal is a fresh press: a keyup the terminal swallowed must not leave stale
+  // held keys / "fired" state that makes it silently do nothing now and then.
+  if (fromTerminal && !e.repeat) clearHeldKeys();
   if (!e.repeat) fired = false;
   const key = keyName(e.code);
   held.add(key);
