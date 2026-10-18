@@ -8,7 +8,7 @@
 	let bursts: Burst[] = $state([]);
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
-	const DUR = 2800; // ms
+	const DUR = 1900; // ms
 
 	let ripRaf = 0;
 	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
