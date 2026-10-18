@@ -2,13 +2,20 @@ import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
-import { cleanWorkdirPath, isWorkdirPath } from "./files";
+import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath } from "./files";
 import { MARKED_OPTIONS, blocksOf, streamSplit } from "./markdown-split";
 
 const md = new Marked(MARKED_OPTIONS);
 
 const escapeHtml = (s: string) =>
 	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A picture on the server: Markdown.svelte fetches it with the token and swaps this placeholder for the image. */
+function wdImage(href: string, text: string): string {
+	const alt = escapeHtml(text || "");
+	const path = filePathOf(href);
+	return `<span class="wd-img" data-wd-src="${escapeHtml(path)}" data-alt="${alt}">${alt || escapeHtml(path)}</span>`;
+}
 
 md.use({
 	renderer: {
@@ -21,9 +28,11 @@ md.use({
 				`<pre><code>${escapeHtml(text)}</code></pre></div>`
 			);
 		},
-		link({ href, title, tokens }) {
+		link({ href, title, text, tokens }) {
 			const inner = this.parser.parseInline(tokens);
 			const t = title ? ` title="${escapeHtml(title)}"` : "";
+			// A link to a picture on the server is the picture: shown inline (and enlarged on click) like `![](...)`.
+			if ((isWorkdirPath(href) || isLocalFilePath(href)) && isImagePath(href)) return wdImage(href, text);
 			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
 			if (isWorkdirPath(href)) return `<a href="#" class="wd-file"${t} data-file="${escapeHtml(cleanWorkdirPath(href))}">${inner}</a>`;
 			return `<a href="${escapeHtml(href)}"${t} data-ext rel="noopener noreferrer">${inner}</a>`;
@@ -34,7 +43,7 @@ md.use({
 		image({ href, text }) {
 			const alt = escapeHtml(text || "");
 			// Our own server's file, not a third party: Markdown.svelte fetches it with the token and shows it inline.
-			if (isWorkdirPath(href)) return `<span class="wd-img" data-wd-src="${escapeHtml(cleanWorkdirPath(href))}" data-alt="${alt}">${alt || escapeHtml(cleanWorkdirPath(href))}</span>`;
+			if (isWorkdirPath(href) || isLocalFilePath(href)) return wdImage(href, text);
 			const host = remoteImageHost(href);
 			if (!host) return alt;
 			return (

@@ -68,6 +68,24 @@ export function isWorkdirPath(href: string): boolean {
 	return !href.split("/").includes("..");
 }
 
+/** A markdown href that names a file on the server's own disk: an absolute path, a Windows drive path or a file:// URL. */
+export function isLocalFilePath(href: string): boolean {
+	if (!href) return false;
+	if (/^file:\/\/\//i.test(href)) return true;
+	if (/^[a-z]:[\\/]/i.test(href)) return true;
+	return href.startsWith("/") && !href.startsWith("//");
+}
+
+/** Extensions a browser draws inline; a link to one of these is shown as the picture itself. */
+const INLINE_IMAGE = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i;
+export const isImagePath = (href: string): boolean => INLINE_IMAGE.test(href.replace(/[?#].*$/, ""));
+
+/** What the file route is asked for: the path a pipaya session can read (relative to its folder, or absolute on the server). */
+export function filePathOf(href: string): string {
+	const bare = href.replace(/^file:\/\//i, "");
+	return cleanWorkdirPath(/^\/[a-z]:[\\/]/i.test(bare) ? bare.slice(1) : bare);
+}
+
 /** Strip `./`, the query and the fragment, and decode. */
 export function cleanWorkdirPath(href: string): string {
 	const bare = href.replace(/[?#].*$/, "").replace(/^\.\//, "");

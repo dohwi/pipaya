@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
+import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
 describe("working-directory links", () => {
 	test("only relative paths inside the directory count", () => {
@@ -39,5 +39,18 @@ describe("previews", () => {
 		expect(sizeLabel(2048)).toBe("2.0 KB");
 		expect(sizeLabel(5 * 1024 * 1024)).toBe("5.0 MB");
 		expect(sizeLabel(undefined)).toBe("");
+	});
+
+	test("a file on the server's disk is told apart from a relative path and a web URL", () => {
+		for (const ok of ["/home/u/app/out/a.png", "file:///home/u/a.png", "C:\\work\\a.png", "D:/work/a.png"]) expect(isLocalFilePath(ok), ok).toBe(true);
+		for (const no of ["out/a.png", "//cdn.example/a.png", "https://x.com/a.png", "#top", ""]) expect(isLocalFilePath(no), no).toBe(false);
+		expect(filePathOf("file:///home/u/my%20shot.png")).toBe("/home/u/my shot.png");
+		expect(filePathOf("file:///C:/work/a.png")).toBe("C:/work/a.png");
+		expect(filePathOf("/home/u/a.png?x=1#y")).toBe("/home/u/a.png");
+		expect(filePathOf("./out/a.png")).toBe("out/a.png");
+	});
+	test("image links are recognised by extension", () => {
+		for (const ok of ["out/a.PNG", "/x/b.jpeg", "c.webp?raw=1", "d.svg#v"]) expect(isImagePath(ok), ok).toBe(true);
+		for (const no of ["out/a.pdf", "a.png.zip", "README.md"]) expect(isImagePath(no), no).toBe(false);
 	});
 });

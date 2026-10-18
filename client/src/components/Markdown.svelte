@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from "svelte";
+	import { onDestroy, tick } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { baseName } from "../lib/files";
@@ -32,12 +32,21 @@
 	// Only once the reply has settled: while streaming, the path may still be half written.
 	const loaded = new Map<string, string>();
 	$effect(() => {
-		html;
+		// read `html` for real: a bare `html;` is not a dependency, so the pictures were looked for only before the text was in the DOM
+		const rendered = html;
 		const host = root;
 		const api = app.api;
-		if (!host || !api || !sessionId || streaming) return;
+		if (!rendered || !host || !api || !sessionId || streaming) return;
 		const id = sessionId;
 		const ctl = new AbortController();
+		// the new HTML is put into the page after this effect runs: look for the picture slots once it is there
+		void tick().then(() => {
+			if (ctl.signal.aborted) return;
+			fillPictures(host, api, id, ctl);
+		});
+		return () => ctl.abort();
+	});
+	function fillPictures(host: HTMLElement, api: NonNullable<typeof app.api>, id: string, ctl: AbortController) {
 		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
 			const path = slot.dataset.wdSrc!;
 			const alt = slot.dataset.alt ?? "";
@@ -65,8 +74,7 @@
 				})
 				.catch(() => slot.classList.add("missing"));
 		}
-		return () => ctl.abort();
-	});
+	}
 	onDestroy(() => {
 		for (const src of loaded.values()) URL.revokeObjectURL(src);
 		loaded.clear();
