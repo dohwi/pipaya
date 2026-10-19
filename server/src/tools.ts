@@ -5,6 +5,8 @@ import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promise
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
 import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
+import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resize-core.ts";
+import { resizeImage } from "./image-resize.ts";
 import type { QuestionOutcome, QuestionRequest } from "./questions.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
@@ -52,6 +54,8 @@ export interface ToolContext {
 	sessionId?: string;
 	/** Whether the model that will see tool results can take pictures; asked at call time because the model can change mid-session. Missing = assume yes (the provider layer drops pictures a model cannot take). */
 	canSeeImages?(): boolean;
+	/** The model's own picture size limits, when its catalog entry has any; they replace the defaults. */
+	imageLimits?(): Partial<ResizeLimits> | undefined;
 	/** Run a read-only sub-agent and get its report (`delegate`). Missing when the server has no sub-agent runner. */
 	delegate?(req: DelegateRequest): Promise<DelegateReport>;
 	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
@@ -291,7 +295,7 @@ async function runProcess(
  * A picture file comes back as an image block the model can look at; null means "not a picture, read it as text".
  * Detection is by content, so a renamed file is still recognised and a text file named .png is not.
  */
-async function readPicture(file: string, shown: string, ctx: ToolContext): Promise<AgentToolResult<any> | null> {
+async function readPicture(file: string, shown: string, ctx: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<any> | null> {
 	const info = await stat(file);
 	if (!info.isFile()) return null;
 	const fh = await open(file, "r");
@@ -315,22 +319,42 @@ async function readPicture(file: string, shown: string, ctx: ToolContext): Promi
 	if (ctx.canSeeImages && !ctx.canSeeImages()) {
 		return text(`${shown} is an image (${label}). The current model cannot see images, so it is not included. Switch to a model with image input to view it.`, { ...details, shown: false });
 	}
-	if (info.size > MAX_IMAGE_BYTES) {
-		return text(`${shown} is an image (${label}), over the ${formatBytes(MAX_IMAGE_BYTES)} limit model providers accept. Downscale it first (for example: convert in.png -resize 1568x1568\\> out.png).`, { ...details, shown: false });
+	if (info.size > MAX_IMAGE_FILE_BYTES || (sniffed.width && sniffed.height && sniffed.width * sniffed.height > MAX_IMAGE_PIXELS)) {
+		return text(`${shown} is an image (${label}), too large to process. Downscale it first (for example: convert in.png -resize 1568x1568\\> out.png).`, { ...details, shown: false });
 	}
-	if (Math.max(sniffed.width ?? 0, sniffed.height ?? 0) > MAX_IMAGE_EDGE) {
-		return text(`${shown} is an image (${label}), larger than ${MAX_IMAGE_EDGE}px on one side, which model providers reject. Downscale it first.`, { ...details, shown: false });
+	const limits: ResizeLimits = { ...DEFAULT_LIMITS, ...Object.fromEntries(Object.entries(ctx.imageLimits?.() ?? {}).filter(([, v]) => typeof v === "number" && v > 0)) };
+	const bytes = await readFile(file);
+	const fits = (sniffed.width ?? 0) <= limits.maxWidth && (sniffed.height ?? 0) <= limits.maxHeight && Math.ceil(bytes.length / 3) * 4 < limits.maxBytes;
+	// A JPEG/WebP with an EXIF rotation is sent as it is only when it needs no resizing; the model APIs ignore EXIF, so such a file is re-encoded upright.
+	if (fits && sniffed.width && sniffed.height && exifOrientation(bytes) === 1) {
+		return picture(shown, label, bytes.toString("base64"), sniffed.mimeType, { ...details, shown: true });
 	}
-	const data = (await readFile(file)).toString("base64");
-	return {
-		content: [{ type: "text", text: `Read image ${shown} (${label}).` }, { type: "image", data, mimeType: sniffed.mimeType }],
-		details: { ...details, shown: true },
-	};
+	const resized = await resizeImage(bytes, limits, signal);
+	if (resized) {
+		const changed = resized.width !== resized.originalWidth || resized.height !== resized.originalHeight;
+		const note = changed
+			? `${label}; resized to ${resized.width}x${resized.height} (original ${resized.originalWidth}x${resized.originalHeight}) to fit the model's image limits`
+			: `${label}; re-encoded as ${resized.mimeType} to fit the model's image limits`;
+		return picture(shown, note, resized.data, resized.mimeType, { ...details, shown: true, resized: true, width: resized.width, height: resized.height, originalWidth: resized.originalWidth, originalHeight: resized.originalHeight, mimeType: resized.mimeType });
+	}
+	// The resizer is unavailable or failed: the original goes through only if providers would still accept it.
+	if (bytes.length <= MAX_IMAGE_BYTES && Math.max(sniffed.width ?? 0, sniffed.height ?? 0) <= MAX_IMAGE_EDGE) {
+		return picture(shown, label, bytes.toString("base64"), sniffed.mimeType, { ...details, shown: true });
+	}
+	return text(`${shown} is an image (${label}) and could not be resized to fit the model's limits. Downscale it first (for example: convert in.png -resize 1568x1568\\> out.png).`, { ...details, shown: false });
 }
 
-const READ_DESCRIPTION = "Read a text file, or look at an image (PNG, JPEG, GIF, WebP; up to 5 MB). Text output is capped at 2000 lines / 50KB; use offset and limit to page through.";
+function picture(shown: string, label: string, data: string, mimeType: string, details: Record<string, unknown>): AgentToolResult<any> {
+	return { content: [{ type: "text", text: `Read image ${shown} (${label}).` }, { type: "image", data, mimeType }], details };
+}
 
+const READ_DESCRIPTION = "Read a text file, or look at an image (PNG, JPEG, GIF, WebP; large ones are shrunk to fit the model). Text output is capped at 2000 lines / 50KB; use offset and limit to page through.";
+
+/** Providers reject a picture bigger than this on one side. */
 const MAX_IMAGE_EDGE = 8000;
+/** What is still worth decoding: a 100 MB file or 100 megapixels needs hundreds of MB of RAM to resize. */
+const MAX_IMAGE_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 100_000_000;
 
 const readTool: ToolDef = {
 	name: "read",
@@ -346,10 +370,10 @@ const readTool: ToolDef = {
 				offset: Type.Optional(Type.Integer({ minimum: 1, description: "1-indexed line to start from" })),
 				limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines" })),
 			}),
-			async execute(_id, params) {
+			async execute(_id, params, signal) {
 				const file = safeReadPath(cwd, params.path, readRoots);
-				const picture = await readPicture(file, params.path, ctx);
-				if (picture) return picture;
+				const image = await readPicture(file, params.path, ctx, signal);
+				if (image) return image;
 				const lines = (await readFile(file, "utf8")).split("\n");
 				const start = (params.offset ?? 1) - 1;
 				const end = Math.min(lines.length, start + Math.min(params.limit ?? MAX_READ_LINES, MAX_READ_LINES));

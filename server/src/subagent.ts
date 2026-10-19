@@ -120,7 +120,7 @@ export class SubAgents {
 				model,
 				// A model without reasoning ignores the level, so passing it is always safe.
 				thinkingLevel: target.thinkingLevel,
-				tools: buildTools([...def.tools], req.cwd, req.readRoots, { canSeeImages: () => model.input.includes("image") }, req.toolDefs),
+				tools: buildTools([...def.tools], req.cwd, req.readRoots, { canSeeImages: () => model.input.includes("image"), imageLimits: () => model.inputLimits?.images?.resize }, req.toolDefs),
 				messages: [],
 			},
 			streamFn: (m, context, options) =>

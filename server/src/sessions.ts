@@ -821,6 +821,10 @@ export class SessionManager {
 			const model = rec && this.registry.models.getModel(rec.provider, rec.model);
 			return model ? model.input.includes("image") : true;
 		};
+		ctx.imageLimits = () => {
+			const rec = this.store.get(sessionId);
+			return rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
+		};
 		ctx.peers = this.peerApi(sessionId);
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.
