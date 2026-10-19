@@ -816,6 +816,11 @@ export class SessionManager {
 		const sub = this.subagents;
 		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => this.disabledTools().includes("ask_user") ? Promise.reject(new Error("ask_user is turned off in the settings")) : q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
 		ctx.sessionId = sessionId;
+		ctx.canSeeImages = () => {
+			const rec = this.store.get(sessionId);
+			const model = rec && this.registry.models.getModel(rec.provider, rec.model);
+			return model ? model.input.includes("image") : true;
+		};
 		ctx.peers = this.peerApi(sessionId);
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.

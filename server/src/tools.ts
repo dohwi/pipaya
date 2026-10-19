@@ -1,9 +1,10 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
+import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
 import type { QuestionOutcome, QuestionRequest } from "./questions.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
@@ -49,6 +50,8 @@ export interface DelegateReport {
 export interface ToolContext {
 	/** The session the tool runs in (extension tools use it to reach their per-session storage). */
 	sessionId?: string;
+	/** Whether the model that will see tool results can take pictures; asked at call time because the model can change mid-session. Missing = assume yes (the provider layer drops pictures a model cannot take). */
+	canSeeImages?(): boolean;
 	/** Run a read-only sub-agent and get its report (`delegate`). Missing when the server has no sub-agent runner. */
 	delegate?(req: DelegateRequest): Promise<DelegateReport>;
 	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
@@ -284,15 +287,60 @@ async function runProcess(
 	}
 }
 
+/**
+ * A picture file comes back as an image block the model can look at; null means "not a picture, read it as text".
+ * Detection is by content, so a renamed file is still recognised and a text file named .png is not.
+ */
+async function readPicture(file: string, shown: string, ctx: ToolContext): Promise<AgentToolResult<any> | null> {
+	const info = await stat(file);
+	if (!info.isFile()) return null;
+	const fh = await open(file, "r");
+	let head: Buffer;
+	try {
+		head = Buffer.alloc(Math.min(info.size, 64 * 1024));
+		const { bytesRead } = await fh.read(head, 0, head.length, 0);
+		head = head.subarray(0, bytesRead);
+	} finally {
+		await fh.close();
+	}
+	const sniffed = sniffImage(head);
+	if (!sniffed) {
+		const other = isUnsupportedPicture(head);
+		if (!other) return null;
+		return text(`${shown} is a ${other} image; only PNG, JPEG, GIF and WebP can be shown to the model. Convert it first (for example with ImageMagick: convert in.${other === "BMP" ? "bmp" : "img"} out.png).`, { path: shown, image: false, format: other });
+	}
+	const size = sniffed.width && sniffed.height ? `${sniffed.width}x${sniffed.height}, ` : "";
+	const label = `${sniffed.mimeType} ${size}${formatBytes(info.size)}`;
+	const details = { path: shown, image: true, mimeType: sniffed.mimeType, bytes: info.size, width: sniffed.width, height: sniffed.height };
+	if (ctx.canSeeImages && !ctx.canSeeImages()) {
+		return text(`${shown} is an image (${label}). The current model cannot see images, so it is not included. Switch to a model with image input to view it.`, { ...details, shown: false });
+	}
+	if (info.size > MAX_IMAGE_BYTES) {
+		return text(`${shown} is an image (${label}), over the ${formatBytes(MAX_IMAGE_BYTES)} limit model providers accept. Downscale it first (for example: convert in.png -resize 1568x1568\\> out.png).`, { ...details, shown: false });
+	}
+	if (Math.max(sniffed.width ?? 0, sniffed.height ?? 0) > MAX_IMAGE_EDGE) {
+		return text(`${shown} is an image (${label}), larger than ${MAX_IMAGE_EDGE}px on one side, which model providers reject. Downscale it first.`, { ...details, shown: false });
+	}
+	const data = (await readFile(file)).toString("base64");
+	return {
+		content: [{ type: "text", text: `Read image ${shown} (${label}).` }, { type: "image", data, mimeType: sniffed.mimeType }],
+		details: { ...details, shown: true },
+	};
+}
+
+const READ_DESCRIPTION = "Read a text file, or look at an image (PNG, JPEG, GIF, WebP; up to 5 MB). Text output is capped at 2000 lines / 50KB; use offset and limit to page through.";
+
+const MAX_IMAGE_EDGE = 8000;
+
 const readTool: ToolDef = {
 	name: "read",
-	description: "Read a text file. Output is capped at 2000 lines / 50KB; use offset and limit to page through.",
+	description: READ_DESCRIPTION,
 	mutating: false,
-	create(cwd, readRoots = []) {
+	create(cwd, readRoots = [], ctx = {}) {
 		return defineTool({
 			name: "read",
 			label: "Read file",
-			description: "Read a text file. Output is capped at 2000 lines / 50KB; use offset and limit to page through.",
+			description: READ_DESCRIPTION,
 			parameters: Type.Object({
 				path: Type.String({ description: "File path, relative to the working directory" }),
 				offset: Type.Optional(Type.Integer({ minimum: 1, description: "1-indexed line to start from" })),
@@ -300,6 +348,8 @@ const readTool: ToolDef = {
 			}),
 			async execute(_id, params) {
 				const file = safeReadPath(cwd, params.path, readRoots);
+				const picture = await readPicture(file, params.path, ctx);
+				if (picture) return picture;
 				const lines = (await readFile(file, "utf8")).split("\n");
 				const start = (params.offset ?? 1) - 1;
 				const end = Math.min(lines.length, start + Math.min(params.limit ?? MAX_READ_LINES, MAX_READ_LINES));
