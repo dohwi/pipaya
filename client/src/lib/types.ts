@@ -505,6 +505,8 @@ export interface ToolRun {
 	state: ToolState;
 	/** Streaming output while running, final output once done. */
 	output: string;
+	/** Pictures the tool returned (the `read` tool on an image file). */
+	images?: ImageBlock[];
 	details?: Record<string, unknown>;
 	durationMs?: number;
 	denyReason?: string;

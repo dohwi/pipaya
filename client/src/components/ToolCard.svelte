@@ -112,9 +112,18 @@
 
 			{#if custom}
 				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
-			{:else if run.output && name !== "ask_user"}
+			{:else if (run.output || run.images?.length) && name !== "ask_user"}
 				<div class="label">{t("출력")}</div>
-				<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>
+				{#if run.output}<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>{/if}
+				{#if run.images?.length}
+					<div class="pics">
+						{#each run.images as img, i}
+							<button class="zoom" onclick={() => app.openImage((run.images ?? []).map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
+								<img src={`data:${img.mimeType};base64,${img.data}`} alt={t("이미지")} />
+							</button>
+						{/each}
+					</div>
+				{/if}
 			{:else if run.state === "denied"}
 				<div class="denied">{t("거부됨")}{run.denyReason ? `: ${run.denyReason}` : ""}</div>
 			{/if}
@@ -252,6 +261,9 @@
 		color: var(--text-faint);
 		user-select: none;
 	}
+	.pics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+	.pics .zoom { display: block; padding: 0; border-radius: var(--radius); cursor: zoom-in; }
+	.pics img { max-width: 100%; max-height: 220px; border-radius: var(--radius); display: block; }
 	.out.err {
 		color: var(--danger);
 	}

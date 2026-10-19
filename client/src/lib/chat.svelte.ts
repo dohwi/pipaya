@@ -25,6 +25,12 @@ export function textOf(content: unknown): string {
 	return content.map((c) => (c && c.type === "text" ? String(c.text ?? "") : "")).join("");
 }
 
+/** The pictures in a tool result, kept apart from its text. */
+export function imagesOf(content: unknown): ImageBlock[] {
+	if (!Array.isArray(content)) return [];
+	return content.filter((c): c is ImageBlock => !!c && c.type === "image" && typeof c.data === "string" && typeof c.mimeType === "string");
+}
+
 function blocksOf(m: AssistantMessage): AssistantBlock[] {
 	const out: AssistantBlock[] = [];
 	for (const c of m.content ?? []) {
@@ -93,6 +99,7 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
 	return {
 		state: denied ? "denied" : m.isError ? "error" : "done",
 		output: denied ? "" : output,
+		images: denied ? undefined : imagesOf(m.content),
 		denyReason: denied ? output.trim() : undefined,
 		details: m.details,
 		durationMs: m.durationMs,
@@ -510,6 +517,7 @@ export class ChatState {
 					...prev,
 					state,
 					output: denied ? "" : textOf(d.result?.content),
+					images: denied ? undefined : imagesOf(d.result?.content),
 					denyReason: denied ? (prev?.denyReason ?? textOf(d.result?.content)) : undefined,
 					details: d.result?.details,
 					durationMs: d.durationMs,
