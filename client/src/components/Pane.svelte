@@ -2,7 +2,6 @@
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
-	import Backdrop from "./Backdrop.svelte";
 	import EmptyHero from "./EmptyHero.svelte";
 	import Welcome from "./Welcome.svelte";
 	import MessageList from "./MessageList.svelte";
@@ -131,7 +130,6 @@
 			<FindBar paneId={id} {focused} />
 		{:else if !id}
 			<div class="empty">
-				<Backdrop />
 				<Welcome />
 			</div>
 		{/if}
