@@ -26,6 +26,20 @@ export function streamSplit(src: string): number {
 	return src.startsWith(tokens.slice(0, end).map((t) => t.raw).join("")) ? at : 0;
 }
 
+/**
+ * While the closing fence of a code block is being typed, its first one or two backticks are still code text: they
+ * would add a line that vanishes once the third arrives, bouncing the height (and the pinned scroll) by a line every
+ * block. Hide that unfinished fence until it is complete.
+ */
+export function hideFenceTail(src: string): string {
+	const m = /\n {0,3}(`{1,2}|~{1,2})$/.exec(src);
+	if (!m) return src;
+	const tokens = lexer().lex(src);
+	const last = tokens[tokens.length - 1];
+	if (last?.type !== "code" || !last.raw.endsWith(m[0])) return src;
+	return src.slice(0, m.index);
+}
+
 /** The top-level blocks of `src`, separators dropped. */
 export function blocksOf(src: string): string[] {
 	return lexer().lex(src).filter((t) => t.type !== "space").map((t) => t.raw);
