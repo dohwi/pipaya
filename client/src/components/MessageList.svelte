@@ -47,8 +47,10 @@
 		} else if (stuck) {
 			// Not the user (they unpin first): the browser settled layout or clamped scrollTop. Stay at the bottom.
 			if (gap() > 1) pin();
-		} else if (gap() < 2 && scroller.scrollTop >= lastTop) {
-			setStuck(true); // the user came back down to the end
+		} else if (gap() < 2 && scroller.scrollTop > lastTop) {
+			// The user came back down to the end. Strictly greater: the scroll event of our own pin() arrives a frame late,
+			// and if a wheel-up unpinned in between, that stale event (same position) must not pin again and undo the wheel.
+			setStuck(true);
 		}
 		lastTop = scroller.scrollTop;
 		showJump = gap() >= NEAR;
@@ -189,7 +191,7 @@
 			</div>
 		{:else}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
-				<div class="unit" class:settled={n < units.length - SETTLED_TAIL && !(u.kind === "user" && u.item.key === lastUserKey)}>
+				<div class="unit" class:settled={n < units.length - SETTLED_TAIL && !(u.kind === "user" && u.item.key === lastUserKey)} class:live={chat.running && n === units.length - 1}>
 					{#if u.kind === "notice"}
 						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
 					{:else if u.kind === "entry"}
@@ -222,6 +224,11 @@
 	.unit.settled {
 		content-visibility: auto;
 		contain-intrinsic-size: auto 160px;
+	}
+	/* The reply being written is rebuilt every frame and only grows at its end. As a scroll anchor it made a reader above the
+	   bottom creep down with the stream (the browser kept "correcting" for nodes that were replaced), so it is left out. */
+	.unit.live {
+		overflow-anchor: none;
 	}
 	.row.wait {
 		display: flex;

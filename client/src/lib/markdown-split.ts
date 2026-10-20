@@ -40,6 +40,22 @@ export function hideFenceTail(src: string): string {
 	return src.slice(0, m.index);
 }
 
+/** A last line that is only a block marker so far: heading hashes, quote, list bullet or number, rule, table pipes. */
+const MARKER_LINE = /(?:^|\n) {0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)]?|[-*_]{2,}|[|:\- \t]*\|[|:\- \t]*)[ \t]*$/;
+
+/**
+ * A block marker typed on its own line changes shape with every character: `#` is an empty h1, `##` a smaller h2,
+ * `--` a paragraph that becomes a rule at `---`. The block below then jumps by a few pixels per token. Hide such a
+ * marker-only last line until text follows it. Code (an open fence) keeps its lines as they are.
+ */
+export function hideMarkerTail(src: string): string {
+	const m = MARKER_LINE.exec(src);
+	if (!m) return src;
+	const last = lexer().lex(src).at(-1);
+	if (!last || last.type === "code") return src;
+	return src.slice(0, m.index);
+}
+
 /** The top-level blocks of `src`, separators dropped. */
 export function blocksOf(src: string): string[] {
 	return lexer().lex(src).filter((t) => t.type !== "space").map((t) => t.raw);

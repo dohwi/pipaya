@@ -3,7 +3,7 @@ import DOMPurify from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath } from "./files";
-import { MARKED_OPTIONS, blocksOf, hideFenceTail, streamSplit } from "./markdown-split";
+import { MARKED_OPTIONS, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 
 const md = new Marked(MARKED_OPTIONS);
 
@@ -94,7 +94,7 @@ const blockCache = new Map<string, string>();
  * blocks render independently, so the pieces join into the same HTML as a full parse); only the tail is parsed again.
  */
 export function renderStreaming(full: string): string {
-	const src = hideFenceTail(full);
+	const src = hideMarkerTail(hideFenceTail(full));
 	const cut = streamSplit(src);
 	if (!cut) return renderMarkdown(src, { cache: false });
 	let head = "";
