@@ -233,7 +233,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
   },
   newTerminal: () => void app.openTerminal(app.workdir),
-  splitTerminal: () => app.splitTerminal("bottom"),
+  splitTerminal: () => app.splitTerminal("right"),
   zoomPane,
   restorePane,
   toggleFull,

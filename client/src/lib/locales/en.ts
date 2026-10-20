@@ -448,8 +448,8 @@ export const en: Record<string, string> = {
 	"터미널을 열지 못했습니다": "Couldn't open the terminal",
 	"터미널을 닫지 못했습니다": "Couldn't close the terminal",
 	"서버의 셸(Linux·macOS는 기본 셸, Windows는 PowerShell)을 지금 작업 폴더에서 엽니다": "Opens the server's shell (the default shell on Linux and macOS, PowerShell on Windows) in the current working folder",
-	"아래에 터미널 열기": "Open a terminal below",
-	"지금 선택한 창 아래에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다": "Opens a terminal below the selected pane and groups them. The terminal starts in this pane's working folder",
+	"오른쪽에 터미널 열기": "Open a terminal to the right",
+	"지금 선택한 창 오른쪽에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다": "Opens a terminal to the right of the selected pane and groups them. The terminal starts in this pane's working folder",
 	/* ---- palette, panes, rail ---- */
 	"검색…": "Search…",
 	"일치하는 항목이 없습니다": "No matching items",
