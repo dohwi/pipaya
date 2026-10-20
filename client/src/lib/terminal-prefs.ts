@@ -6,6 +6,8 @@ export interface TerminalPrefs {
   lineHeight: number;
   cursorBlink: boolean;
   scrollback: number;
+  /** App shortcuts win over the shell for every bound Ctrl/Alt/⌘ combo (not only Mod+Shift/Alt and F-keys). */
+  appKeysFirst: boolean;
 }
 
 /** Maple Mono NGS NF when the device has it; the bundled Maple Mono (app.css) is what draws otherwise. */
@@ -19,6 +21,7 @@ export const DEFAULT_TERMINAL: TerminalPrefs = {
   lineHeight: 1.15,
   cursorBlink: true,
   scrollback: 5000,
+  appKeysFirst: false,
 };
 
 export const TERMINAL_LIMITS = {
@@ -45,5 +48,6 @@ export function sanitizeTerminal(raw: unknown): TerminalPrefs {
     lineHeight: Math.round(clamp(r.lineHeight, L.lineHeight.min, L.lineHeight.max, DEFAULT_TERMINAL.lineHeight) * 100) / 100,
     cursorBlink: typeof r.cursorBlink === "boolean" ? r.cursorBlink : DEFAULT_TERMINAL.cursorBlink,
     scrollback: Math.round(clamp(r.scrollback, L.scrollback.min, L.scrollback.max, DEFAULT_TERMINAL.scrollback)),
+    appKeysFirst: typeof r.appKeysFirst === "boolean" ? r.appKeysFirst : DEFAULT_TERMINAL.appKeysFirst,
   };
 }

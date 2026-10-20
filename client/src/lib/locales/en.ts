@@ -558,6 +558,8 @@ export const en: Record<string, string> = {
 	"스크롤백 줄 수": "Scrollback lines",
 	"터미널 스크롤백 줄 수": "Terminal scrollback lines",
 	"커서 깜빡임": "Blinking cursor",
+	"앱 단축키 우선": "App shortcuts first",
+	"켜면 터미널에서도 설정한 앱 단축키(Ctrl/⌘/Alt 조합)가 셸보다 먼저 동작합니다. 끄면 Ctrl/⌘+Shift·Alt 조합과 F키만 앱으로 넘어갑니다.": "When on, your app shortcuts (Ctrl/⌘/Alt combos) also run first inside a terminal, before the shell. When off, only Ctrl/⌘+Shift or Alt combos and F-keys reach the app.",
 	"기본 글꼴은 Maple Mono NGS NF입니다. 이 기기에 설치된 글꼴 이름도 쓸 수 있고, 목록은 쉼표로 이어 씁니다. 바로 적용되며 이 기기에만 저장됩니다.": "The default font is Maple Mono NGS NF. You can also use fonts installed on this device; separate several with commas. Applies immediately and is saved on this device only.",
 	"보고 있는 대화가 끝날 때는 울리지 않습니다. 승인 요청은 보고 있어도 울립니다.": "No sound when the chat you're viewing finishes. Approval requests still sound even while you're viewing.",
 

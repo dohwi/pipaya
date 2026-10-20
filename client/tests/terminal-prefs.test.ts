@@ -10,8 +10,10 @@ describe("terminal preferences", () => {
 	});
 	test("keeps valid values and clamps or replaces broken ones", () => {
 		expect(sanitizeTerminal({ fontFamily: " Fira Code ", fontSize: 99, lineHeight: 0.2, cursorBlink: false, scrollback: -5 })).toEqual({
-			fontFamily: "Fira Code", fontSize: 32, lineHeight: 1, cursorBlink: false, scrollback: 0,
+			fontFamily: "Fira Code", fontSize: 32, lineHeight: 1, cursorBlink: false, scrollback: 0, appKeysFirst: false,
 		});
 		expect(sanitizeTerminal({ fontFamily: "  ", fontSize: "x", cursorBlink: 1 })).toEqual(DEFAULT_TERMINAL);
+		expect(sanitizeTerminal({ appKeysFirst: true }).appKeysFirst).toBe(true);
+		expect(sanitizeTerminal({ appKeysFirst: "yes" }).appKeysFirst).toBe(false);
 	});
 });

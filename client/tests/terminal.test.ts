@@ -39,6 +39,22 @@ describe("keys in a terminal", () => {
 	});
 });
 
+describe("app shortcuts first in a terminal", () => {
+	test("off by default: Ctrl+B and Alt+N stay with the shell", () => {
+		expect(appTakesKey(key("KeyB", { ctrl: true }), DEFAULT_BINDINGS, false)).toBe(false);
+		expect(appTakesKey(key("KeyN", { alt: true }), DEFAULT_BINDINGS, false)).toBe(false);
+	});
+	test("on: bound Ctrl/Alt combos and chord starts go to the app", () => {
+		expect(appTakesKey(key("KeyN", { alt: true }), DEFAULT_BINDINGS, true)).toBe(true); // Alt+N
+		expect(appTakesKey(key("KeyB", { ctrl: true }), DEFAULT_BINDINGS, true)).toBe(true); // Ctrl+B (also starts Ctrl+B+V)
+	});
+	test("on: plain and Shift-only keys and unbound combos still go to the shell", () => {
+		expect(appTakesKey(key("KeyA"), DEFAULT_BINDINGS, true)).toBe(false);
+		expect(appTakesKey(key("KeyA", { shift: true }), DEFAULT_BINDINGS, true)).toBe(false);
+		expect(appTakesKey(key("KeyQ", { ctrl: true }), {}, true)).toBe(false);
+	});
+});
+
 describe("copy and paste keys in a terminal", () => {
 	test("Ctrl+C copies only with a selection", () => {
 		expect(clipboardKey(key("KeyC", { ctrl: true }), true)).toBe("copy");
