@@ -51,24 +51,25 @@ describe("paneToward", () => {
 });
 
 describe("sessionOrder / stepFrom", () => {
+	const sess = (id: string, cwd: string, createdAt: number) => ({ id, cwd, createdAt, updatedAt: 100 - createdAt }) as Session;
 	const sessions = [sess("x", "/p/one", 5), sess("y", "/p/two", 9), sess("z", "/p/one", 7), sess("g1", "/p/three", 1), sess("g2", "/p/three", 2)];
 	const groups = [grp("G", pair("g1", "g2"))];
 
-	test("directories by recency; a group is a tab of the directory its panes work in", () => {
-		// /p/two (9) is the newest, then /p/one (7 via z), then /p/three (the group, 2)
-		expect(sessionOrder(sessions, groups)).toEqual(["y", "x", "z", "g1", "g2"]);
+	test("directories in the order they were opened; a group is a tab of the directory its panes work in", () => {
+		// opened first: /p/three (1), then /p/one (5), then /p/two (9, newest, at the bottom)
+		expect(sessionOrder(sessions, groups)).toEqual(["g1", "g2", "x", "z", "y"]);
 	});
 
 	test("hand-set directory and tab orders are followed", () => {
 		const two = [...sessions, sess("h1", "/p/four", 3), sess("h2", "/p/four", 4)];
 		const gs = [grp("G", pair("g1", "g2")), grp("H", pair("h1", "h2"))];
-		expect(sessionOrder(two, gs)).toEqual(["y", "x", "z", "h1", "h2", "g1", "g2"]);
-		// placed directories come after the ones not placed yet; tabs follow their hand-set order inside a directory
-		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], ["z", "x"])).toEqual(["h1", "h2", "g1", "g2", "z", "x", "y"]);
+		expect(sessionOrder(two, gs)).toEqual(["g1", "g2", "h1", "h2", "x", "z", "y"]);
+		// placed directories come before the ones not placed yet; tabs follow their hand-set order inside a directory
+		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], ["z", "x"])).toEqual(["z", "x", "y", "g1", "g2", "h1", "h2"]);
 	});
 
 	test("a pane whose session is gone is skipped", () => {
-		expect(sessionOrder(sessions.filter((s) => s.id !== "g2"), groups)).toEqual(["y", "x", "z", "g1"]);
+		expect(sessionOrder(sessions.filter((s) => s.id !== "g2"), groups)).toEqual(["g1", "x", "z", "y"]);
 	});
 
 	test("steps forward and back, wrapping at both ends", () => {

@@ -82,9 +82,9 @@ describe("terminals in the sidebar", () => {
 	const sessions = [sess("a", "/p/one", 5), sess("b", "/p/one", 7)];
 	test("loose terminals are tabs of their directory; a directory with only a terminal is listed", () => {
 		const dirs = sidebarDirs(sessions, [], [term("term_1", "/p/one"), term("term_2", "/p/two", 99)]);
-		expect(dirs.map((d) => d.path)).toEqual(["/p/two", "/p/one"]);
-		expect(dirs[1]!.tabs.map((t) => t.id)).toEqual(["a", "b", "term_1"]);
-		expect(dirs[0]!.tabs.map((t) => t.kind)).toEqual(["terminal"]);
+		expect(dirs.map((d) => d.path)).toEqual(["/p/one", "/p/two"]);
+		expect(dirs[0]!.tabs.map((t) => t.id)).toEqual(["a", "b", "term_1"]);
+		expect(dirs[1]!.tabs.map((t) => t.kind)).toEqual(["terminal"]);
 	});
 	test("a terminal in a group is a pane of that group's tab only", () => {
 		const groups = [{ id: "G", layout: pair("term_1", "b") } as Group];

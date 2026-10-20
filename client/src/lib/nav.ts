@@ -43,11 +43,8 @@ function dirOf(members: Member[]): string {
 	return best;
 }
 
-const lastActive = (m: Member) => ("updatedAt" in m ? m.updatedAt : m.createdAt);
-
 /**
- * The one place that decides how things are laid out: working directories (hand-ordered, else most recently used
- * first), each with its tabs (hand-ordered, the others after them in the order they were made). The sidebar, the tab
+ * The one place that decides how things are laid out: working directories (hand-ordered, else the order they were first opened in), each with its tabs (hand-ordered, the others after them in the order they were made). The sidebar, the tab
  * bar, the folded rail and the previous / next shortcuts all read this, so they can never disagree about the order.
  * Groups without any member left are skipped (the server dissolves them).
  */
@@ -59,7 +56,7 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	const byId = new Map<string, Member>([...sessions.map((s) => [s.id, s] as const), ...terminals.map((t) => [t.id, t] as const)]);
 	const matches = (m: Member) => (termIds.has(m.id) ? matchTerminal(m as TerminalInfo) : match(m as Session));
 	const grouped = new Set<string>();
-	const all: { cwd: string; tab: Tab; created: number; active: number }[] = [];
+	const all: { cwd: string; tab: Tab; created: number }[] = [];
 	for (const g of groups) {
 		const members = panesOf(g.layout)
 			.map((id) => byId.get(id))
@@ -68,15 +65,15 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 		members.forEach((m) => grouped.add(m.id));
 		const shown = matchGroup(g) ? members : members.filter(matches);
 		if (!shown.length) continue;
-		all.push({ cwd: dirOf(members), tab: { kind: "group", id: g.id, group: g, members: shown }, created: g.createdAt ?? 0, active: Math.max(0, ...members.map(lastActive)) });
+		all.push({ cwd: dirOf(members), tab: { kind: "group", id: g.id, group: g, members: shown }, created: g.createdAt ?? 0 });
 	}
 	for (const s of sessions) {
 		if (grouped.has(s.id) || !match(s)) continue;
-		all.push({ cwd: s.cwd, tab: { kind: "session", id: s.id, session: s }, created: s.createdAt ?? 0, active: s.updatedAt ?? 0 });
+		all.push({ cwd: s.cwd, tab: { kind: "session", id: s.id, session: s }, created: s.createdAt ?? 0 });
 	}
 	for (const t of terminals) {
 		if (grouped.has(t.id) || !matchTerminal(t)) continue;
-		all.push({ cwd: t.cwd, tab: { kind: "terminal", id: t.id, terminal: t }, created: t.createdAt ?? 0, active: t.createdAt ?? 0 });
+		all.push({ cwd: t.cwd, tab: { kind: "terminal", id: t.id, terminal: t }, created: t.createdAt ?? 0 });
 	}
 	const tabOrder = o.tabOrder ?? [];
 	const trank = (id: string) => {
@@ -85,11 +82,11 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	};
 	// placed tabs keep their place; new ones go after them, oldest first (a new tab lands at the end, like an editor's)
 	all.sort((a, b) => trank(a.tab.id) - trank(b.tab.id) || a.created - b.created);
-	const by = new Map<string, { tabs: Tab[]; active: number }>();
+	const by = new Map<string, { tabs: Tab[]; first: number }>();
 	for (const x of all) {
 		const d = by.get(x.cwd);
-		if (d) (d.tabs.push(x.tab), (d.active = Math.max(d.active, x.active)));
-		else by.set(x.cwd, { tabs: [x.tab], active: x.active });
+		if (d) (d.tabs.push(x.tab), (d.first = Math.min(d.first, x.created)));
+		else by.set(x.cwd, { tabs: [x.tab], first: x.created });
 	}
 	const dirOrder = o.dirOrder ?? [];
 	const rank = (p: string) => dirOrder.indexOf(p);
@@ -98,9 +95,10 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 			const ra = rank(pa);
 			const rb = rank(pb);
 			if (ra >= 0 && rb >= 0) return ra - rb;
-			if (ra >= 0) return 1;
-			if (rb >= 0) return -1;
-			return b.active - a.active;
+			if (ra >= 0) return -1;
+			if (rb >= 0) return 1;
+			// not placed by hand: stable, the longer a directory has been open the higher it sits (new ones stack at the bottom)
+			return a.first - b.first;
 		})
 		.map(([path, d]) => ({ path, tabs: d.tabs }));
 }
