@@ -97,6 +97,7 @@
 		{ tab: "general", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
 		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
 		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
+		{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
 		{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
 	];
 	const norm = (s: string) => s.toLowerCase();

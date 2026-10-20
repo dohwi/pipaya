@@ -85,7 +85,7 @@
 		xt.open(host);
 		// xterm cancels every key it handles; the app's own Mod+Shift/Alt shortcuts must pass through untouched.
 		xt.attachCustomKeyEventHandler((e) => {
-			if (appTakesKey(e, app.prefs.bindings)) return false;
+			if (appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst)) return false;
 			const action = clipboardKey(e, xt.hasSelection());
 			if (!action) return true;
 			if (e.type !== "keydown") return false;

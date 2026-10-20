@@ -1,4 +1,4 @@
-import { actionFor, buildCombo, keyName } from "./keys";
+import { actionFor, buildCombo, hasLongerBinding, keyName } from "./keys";
 import { PROTOCOL_QUERY, PROTOCOL_VERSION } from "./protocol";
 
 /**
@@ -60,11 +60,14 @@ export function terminalSocketUrl(baseUrl: string, token: string, id: string): s
  * shortcuts reach through: the ones bound with Ctrl/⌘ together with Shift or Alt, and function keys, so the user can
  * still leave the terminal or split it without the mouse.
  */
-export function appTakesKey(e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, bindings: Record<string, string>): boolean {
+export function appTakesKey(e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, bindings: Record<string, string>, appFirst = false): boolean {
 	const mod = e.ctrlKey || e.metaKey;
 	const fn = /^F\d{1,2}$/.test(e.code);
-	if (!fn && !(mod && (e.shiftKey || e.altKey))) return false;
-	return !!actionFor(buildCombo({ mod, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]), bindings);
+	// appFirst: every bound combo with Ctrl/⌘/Alt wins (also the start of a longer one, Ctrl+B of Ctrl+B+V). Plain and
+	// Shift-only keys stay the shell's, or typing in the terminal would break.
+	if (!fn && !(mod && (e.shiftKey || e.altKey)) && !(appFirst && (mod || e.altKey))) return false;
+	const combo = buildCombo({ mod, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
+	return !!actionFor(combo, bindings) || (appFirst && hasLongerBinding(combo, bindings));
 }
 
 /**
