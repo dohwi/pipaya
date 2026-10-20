@@ -2209,8 +2209,8 @@ class AppStore {
     return made;
   }
 
-  /** A terminal beside the focused pane (right by default): it starts where that pane works. */
-  async splitTerminal(zone: Zone = "right"): Promise<void> {
+  /** A terminal beside the focused pane: below by default, or the given side: it starts where that pane works. */
+  async splitTerminal(zone: Zone = "bottom"): Promise<void> {
     const id = this.activeId;
     const cwd = this.session(id)?.cwd ?? this.terminal(id)?.cwd;
     if (!id || !cwd) return void (await this.openTerminal(this.workdir));

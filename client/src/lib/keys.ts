@@ -41,6 +41,7 @@ export type ActionId =
   | "toggleFull"
   | "newTerminal"
   | "splitTerminal"
+  | "splitTerminalRight"
   | "workdir"
   | "skills"
   | "cycleServer"
@@ -256,9 +257,15 @@ const BASE: Omit<ActionDef, "group">[] = [
   },
   {
     id: "splitTerminal",
+    label: msg("아래에 터미널 열기"),
+    hint: msg("지금 선택한 창 아래에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다"),
+    default: "Mod+Alt+Backquote",
+  },
+  {
+    id: "splitTerminalRight",
     label: msg("오른쪽에 터미널 열기"),
     hint: msg("지금 선택한 창 오른쪽에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다"),
-    default: "Mod+Alt+Backquote",
+    default: "Mod+Alt+Shift+Backquote",
   },
   {
     id: "splitDown",
@@ -376,6 +383,7 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   toggleFull: "pane",
   newTerminal: "layout",
   splitTerminal: "layout",
+  splitTerminalRight: "layout",
   forkSession: "chat",
   retry: "chat",
   compact: "chat",
