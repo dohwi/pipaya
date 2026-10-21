@@ -334,9 +334,6 @@
 	}
 	/* Touch: the queue circle folds into the long-press menu of the steer circle */
 	@media (pointer: coarse) {
-		.mode.queue {
-			display: none;
-		}
 		.stack > .steerwrap {
 			margin-left: 0;
 		}
