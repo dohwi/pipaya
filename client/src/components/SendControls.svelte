@@ -91,15 +91,18 @@
 				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
-				<div class="stack">
-					<button class="mode queue" onclick={onqueue} disabled={!hasInput} aria-label={t("대기열")} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
+				<div class="stack" class:has-input={hasInput}>
+					{#if hasInput}
+					<button class="mode queue" onclick={onqueue} aria-label={t("대기열")} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
 						<Icon name="list" />
 					</button>
+					{/if}
+					{#if hasInput}
 					<div class="steerwrap">
 						{#if menu}
 							<div class="menu" role="menu">
 								<button class="opt" role="menuitem" onpointerdown={(e) => e.stopPropagation()} onclick={() => pick(onsteer)}>
-									<span class="lbl">{t("끼워 넣기")}</span><span class="mode primary"><Icon name="bolt" /></span>
+									<span class="lbl">{t("끼워 넣기")}</span><span class="mode primary"><Icon name="send" /></span>
 								</button>
 								<button class="opt" role="menuitem" onpointerdown={(e) => e.stopPropagation()} onclick={() => pick(onqueue)}>
 									<span class="lbl">{t("대기열")}</span><span class="mode"><Icon name="list" /></span>
@@ -114,13 +117,13 @@
 							onpointercancel={pressEnd}
 							oncontextmenu={(e) => coarse() && e.preventDefault()}
 							onclick={steerClick}
-							disabled={!hasInput}
 							aria-label={t("끼워 넣기")}
 							title={t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 (Enter)")}
 						>
-							<Icon name="bolt" />
+							<Icon name="send" />
 						</button>
 					</div>
+					{/if}
 					<button class="send stop" onclick={onstop} aria-label={t("중지")} title={t("작업 중지")}><Icon name="stop" /></button>
 				</div>
 			{:else}
@@ -191,64 +194,56 @@
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}
-	/* three round buttons, each overlapping the previous one; a ring in the bar colour separates them */
+	/* icon-only controls: queue (neutral), steer (accent, same arrow as idle send), stop (danger). No overlap, no dividers */
 	.stack {
 		display: flex;
 		align-items: center;
+		gap: 6px;
 	}
-	.stack > :global(* + *),
-	.stack > .steerwrap + .send {
-		margin-left: -8px;
-	}
-	.stack > :global(*) {
-		position: relative;
-	}
-	.stack .send,
 	.stack .mode {
-		box-shadow: 0 0 0 2px var(--bg);
-	}
-	/* tonal ramp queue -> steer -> stop, derived from theme tokens so it works in light and dark */
-	.stack {
-		--step1: color-mix(in srgb, var(--text) 50%, var(--bg));
-		--step2: color-mix(in srgb, var(--text) 75%, var(--bg));
-		--step3: var(--text);
+		width: 38px;
+		height: 38px;
+		border: 0;
 	}
 	.stack .mode.queue {
-		background: var(--step1);
-		border-color: var(--step1);
-		color: var(--bg);
+		background: var(--bg-active);
+		color: var(--text);
 	}
 	.stack .mode.queue:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--text) 58%, var(--bg));
-		color: var(--bg);
+		background: var(--border-strong);
 	}
 	.stack .mode.primary {
-		background: var(--step2);
-		border-color: var(--step2);
-		color: var(--bg);
+		background: var(--accent);
+		color: var(--accent-fg);
 	}
 	.stack .mode.primary:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--text) 83%, var(--bg));
-		color: var(--bg);
+		background: var(--accent-hover);
 	}
-	/* disabled: no opacity (it would show the overlapped neighbour through); use solid, pre-mixed colours */
+	/* disabled: solid pre-mixed colours instead of opacity */
 	.stack .mode:disabled {
 		opacity: 1;
-	}
-	.stack .mode:disabled {
-		color: color-mix(in srgb, var(--text) 45%, var(--bg));
-	}
-	.stack .mode.queue:disabled {
-		background: color-mix(in srgb, var(--step1) 40%, var(--bg));
-		border-color: color-mix(in srgb, var(--step1) 40%, var(--bg));
-	}
-	.stack .mode.primary:disabled {
-		background: color-mix(in srgb, var(--step2) 40%, var(--bg));
-		border-color: color-mix(in srgb, var(--step2) 40%, var(--bg));
+		background: var(--bg-active);
+		color: var(--text-faint);
 	}
 	.stack .send.stop {
-		background: var(--step3);
-		color: var(--bg);
+		width: 38px;
+		height: 38px;
+		background: var(--danger-soft);
+		color: var(--danger);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent);
+	}
+	.stack .send.stop:hover {
+		background: color-mix(in srgb, var(--danger) 22%, transparent);
+	}
+	/* something to send: stop steps back to a small outline so it is not hit by mistake */
+	.stack.has-input .send.stop {
+		width: 32px;
+		height: 32px;
+		background: transparent;
+	}
+	.stack.has-input .send.stop :global(svg) {
+		width: 13px;
+		height: 13px;
 	}
 	.mode {
 		display: grid;
@@ -290,8 +285,8 @@
 		color: var(--accent-fg);
 	}
 	.mode :global(svg) {
-		width: 16px;
-		height: 16px;
+		width: 18px;
+		height: 18px;
 		stroke: currentColor;
 		fill: none;
 		stroke-width: 2;
@@ -334,8 +329,8 @@
 	}
 	/* Touch: the queue circle folds into the long-press menu of the steer circle */
 	@media (pointer: coarse) {
-		.stack > .steerwrap {
-			margin-left: 0;
+		.stack .mode.queue {
+			display: none;
 		}
 	}
 	@container (max-width: 340px) {
@@ -343,9 +338,10 @@
 			width: 32px;
 			height: 32px;
 		}
-		.mode {
-			width: 30px;
-			height: 30px;
+		.mode,
+		.stack .mode {
+			width: 32px;
+			height: 32px;
 		}
 	}
 </style>
