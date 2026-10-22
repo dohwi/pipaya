@@ -321,8 +321,8 @@ export class SessionManager {
 		}
 
 		if (patch.closed === false && current.closed) this.assertRoom();
-		// A closed session gives its name up; on resume it takes it back unless another session has it by now.
-		if (patch.closed === false && current.closed && this.takenNames().has(current.name.toLowerCase())) clean.name = nextMemberName(this.takenNames(), poolOfName(current.name));
+		// A closed session gives its name up; on resume it takes it back unless another session has it by now (or it never had one).
+		if (patch.closed === false && current.closed && (!current.name || this.takenNames().has(current.name.toLowerCase()))) clean.name = nextMemberName(this.takenNames(), poolOfName(current.name));
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 
