@@ -172,7 +172,6 @@
 	onwheel={onWheel}
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
-	onkeydown={onKey}
 	onpointerdown={onPointerDown}
 	role="presentation"
 >
