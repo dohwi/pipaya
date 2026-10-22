@@ -140,14 +140,14 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
       app.zoomId = id;
     },
     models() {
-      return app.models.filter(m => m.configured).map(m => ({ provider: m.provider, id: m.id, name: m.name, reasoning: m.reasoning, thinkingLevels: m.thinkingLevels ?? null, vision: m.vision, contextWindow: m.contextWindow }));
+      return app.models.filter(m => m.configured && m.available !== false).map(m => ({ provider: m.provider, id: m.id, name: m.name, reasoning: m.reasoning, thinkingLevels: m.thinkingLevels ?? null, vision: m.vision, contextWindow: m.contextWindow }));
     },
     async configure(id, settings) {
       sessionOnly(id);
       const s = app.session(id)!;
       const { title, provider, model, thinkingLevel, approval } = settings;
       if ((provider === undefined) !== (model === undefined)) fail(t("provider와 model은 함께 지정해야 합니다"));
-      const target = model === undefined ? app.models.find(m => m.provider === s.provider && m.id === s.model) : app.models.find(m => m.provider === provider && m.id === model && m.configured);
+      const target = model === undefined ? app.models.find(m => m.provider === s.provider && m.id === s.model) : app.models.find(m => m.provider === provider && m.id === model && m.configured && m.available !== false);
       if (model !== undefined && !target) fail(t("사용할 수 없는 모델입니다: {model}", { model: `${provider}/${model}` }));
       if (thinkingLevel !== undefined && target?.thinkingLevels && !target.thinkingLevels.includes(thinkingLevel as ThinkingLevel))
         fail(t("이 모델이 지원하지 않는 추론 강도입니다: {level}", { level: thinkingLevel }));

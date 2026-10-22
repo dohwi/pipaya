@@ -903,12 +903,12 @@ class AppStore {
 
   private ensureDraftModel() {
     const usable = (p: string, id: string) =>
-      this.models.some((m) => m.provider === p && m.id === id && m.configured);
+      this.models.some((m) => m.provider === p && m.id === id && m.configured && m.available !== false);
     if (usable(this.draft.provider, this.draft.model)) return;
     const d = this.serverDefault;
     if (d && usable(d.provider, d.model))
       return void this.updateDraft(draftFromDefault(d));
-    const pick = this.models.find((m) => m.configured) ?? this.models[0];
+    const pick = this.models.find((m) => m.configured && m.available !== false) ?? this.models.find((m) => m.configured) ?? this.models[0];
     if (pick) this.updateDraft({ provider: pick.provider, model: pick.id });
   }
 
@@ -1146,7 +1146,7 @@ class AppStore {
         (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel) &&
         models.some(
           (m) =>
-            m.provider === now.provider && m.id === now.model && m.configured,
+            m.provider === now.provider && m.id === now.model && m.configured && m.available !== false,
         )
       ) {
         this.updateDraft(draftFromDefault(now));
@@ -1596,7 +1596,7 @@ class AppStore {
     this.sidebar.open = false;
     // A new chat starts from the server default, not from a model picked in an earlier new chat.
     const d = this.serverDefault;
-    if (d && this.models.some((m) => m.provider === d.provider && m.id === d.model && m.configured))
+    if (d && this.models.some((m) => m.provider === d.provider && m.id === d.model && m.configured && m.available !== false))
       this.updateDraft(draftFromDefault(d));
   }
 

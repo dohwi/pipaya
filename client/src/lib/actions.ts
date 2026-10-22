@@ -43,7 +43,7 @@ function next<T>(
 
 async function cycleModel() {
   // Only the starred models, in the order they were starred
-  const starred = app.favModelList.filter((m) => m.configured);
+  const starred = app.favModelList.filter((m) => m.configured && m.available !== false);
   if (!starred.length)
     return void app.toast(
       t("즐겨찾기한 모델이 없습니다. 모델 선택창에서 별표를 눌러 추가하세요"),
