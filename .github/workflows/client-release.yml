@@ -157,77 +157,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  ios:
-    needs: validate
-    runs-on: macos-15
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: bash
-        working-directory: client
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
-        with:
-          targets: aarch64-apple-ios
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: client/src-tauri -> target
-          key: ios-arm64
-      - name: Ensure iOS project tools are installed
-        run: |
-          command -v xcodegen >/dev/null || brew install xcodegen
-          command -v pod >/dev/null || brew install cocoapods
-      - run: bun install --frozen-lockfile
-      - name: Initialize iOS project
-        run: |
-          bun run tauri ios init --ci --skip-targets-install
-          bun run ios:prepare
-      - name: Build unsigned iPhone ARM64 IPA
-        run: bun run tauri ios build --ci --no-sign -- --locked
-      - name: Verify device IPA and collect package
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import plistlib, shutil, subprocess, tempfile, zipfile
-          files = list(Path("src-tauri/gen/apple").rglob("*.ipa"))
-          if len(files) != 1:
-              raise SystemExit(f"Expected one unsigned IPA, got {files}")
-          with zipfile.ZipFile(files[0]) as package:
-              if package.testzip() is not None:
-                  raise SystemExit("Corrupt IPA archive")
-              with tempfile.TemporaryDirectory() as directory:
-                  package.extractall(directory)
-                  apps = list((Path(directory) / "Payload").glob("*.app"))
-                  if len(apps) != 1:
-                      raise SystemExit("Expected one app in IPA Payload")
-                  app = apps[0]
-                  info = plistlib.loads((app / "Info.plist").read_bytes())
-                  if info["CFBundleIdentifier"] != "work.pipaya.app":
-                      raise SystemExit("Unexpected app identifier")
-                  if info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
-                      raise SystemExit("IPA is not an iPhone device build")
-                  binary = app / info["CFBundleExecutable"]
-                  arch = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).strip()
-                  if arch != "arm64":
-                      raise SystemExit(f"Expected device ARM64 binary, got {arch}")
-                  if (app / "embedded.mobileprovision").exists():
-                      raise SystemExit("Unsigned IPA must not claim provisioning")
-                  if not info.get("NSAppTransportSecurity", {}).get("NSAllowsArbitraryLoads"):
-                      raise SystemExit("User-configured HTTP endpoints are not enabled")
-          Path("release-assets").mkdir()
-          shutil.copyfile(files[0], "release-assets/pipaya-ios-arm64-unsigned.ipa")
-          PY
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ios-release
-          path: client/release-assets/*.ipa
-          if-no-files-found: error
-          retention-days: 3
-
   android:
     needs: validate
     runs-on: ubuntu-24.04
@@ -331,7 +260,7 @@ jobs:
         run: rm -f "$ANDROID_KEYSTORE_PATH"
 
   publish:
-    needs: [validate, windows, macos, ios, android]
+    needs: [validate, windows, macos, android]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -345,7 +274,7 @@ jobs:
           path: release-assets
       - name: Generate checksums
         working-directory: release-assets
-        run: sha256sum pipaya-windows-x64-setup.exe pipaya-macos-arm64.dmg pipaya-ios-arm64-unsigned.ipa pipaya-android-arm64.apk > SHA256SUMS.txt
+        run: sha256sum pipaya-windows-x64-setup.exe pipaya-macos-arm64.dmg pipaya-android-arm64.apk > SHA256SUMS.txt
       - name: Generate updater manifest
         working-directory: release-assets
         env:
@@ -380,7 +309,7 @@ jobs:
             const sha = context.sha;
             const version = process.env.VERSION.replace(/^v/, '');
             const tag = 'latest';
-            const names = ['pipaya-windows-x64-setup.exe', 'pipaya-windows-x64-setup.exe.sig', 'pipaya-macos-arm64.dmg', 'pipaya-macos-arm64.app.tar.gz', 'pipaya-macos-arm64.app.tar.gz.sig', 'pipaya-ios-arm64-unsigned.ipa', 'pipaya-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
+            const names = ['pipaya-windows-x64-setup.exe', 'pipaya-windows-x64-setup.exe.sig', 'pipaya-macos-arm64.dmg', 'pipaya-macos-arm64.app.tar.gz', 'pipaya-macos-arm64.app.tar.gz.sig', 'pipaya-android-arm64.apk', 'SHA256SUMS.txt', 'latest.json'];
             // Validate every payload before touching the existing release.
             const payloads = names.map(name => ({ name, data: fs.readFileSync(`release-assets/${name}`) }));
             if (payloads.some(asset => asset.data.length === 0)) throw new Error('Empty release asset');
@@ -394,13 +323,12 @@ jobs:
               '',
               '- Windows x64: `pipaya-windows-x64-setup.exe` (unsigned installer; SmartScreen may warn).',
               '- macOS Apple Silicon: `pipaya-macos-arm64.dmg` (ad-hoc signed, not notarized; Gatekeeper may block the first launch).',
-              '- iOS ARM64: `pipaya-ios-arm64-unsigned.ipa` (UNSIGNED; requires re-signing and provisioning, not directly installable or TestFlight-ready).',
               '- Android ARM64: `pipaya-android-arm64.apk` (release APK signed with the persistent project key).',
               '- macOS: copy the app to Applications, then use System Settings → Privacy & Security → Open Anyway if blocked (only for a trusted download).',
               '- Verify downloads using `SHA256SUMS.txt`.',
               '',
-              'Windows and macOS apps bundle a local server ("This PC") that starts with the app, so no server install is needed. Android and iOS connect to a server: enter its URL and authentication token.',
-              'Windows and macOS apps update themselves (Settings → General → App updates); Android detects new builds and opens the APK download. iOS and unsigned installs update by reinstalling.'
+              'Windows and macOS apps bundle a local server ("This PC") that starts with the app, so no server install is needed. Android connects to a server: enter its URL and authentication token.',
+              'Windows and macOS apps update themselves (Settings → General → App updates); Android detects new builds and opens the APK download. Unsigned installs update by reinstalling.'
             ].join('\n');
             let release;
             try {

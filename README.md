@@ -33,7 +33,7 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 - **Agent with 10 built-in tools**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
 - **Approval policies**: `ask` (default), `auto`, `readonly`. You decide what may change things
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
-- **Many devices, one conversation**: Windows, macOS, Android, iOS and web, with notifications and mobile push
+- **Many devices, one conversation**: Windows, macOS, Android and web, with notifications and mobile push
 - **Teamwork and split view**: hand work to other sessions with `@name`; up to 8 conversations on one screen
 - **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
 
@@ -45,7 +45,7 @@ Install the client. On Windows and macOS the app **bundles its own server** (sho
 |---|---|
 | Windows x64 | `irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 \| iex` |
 | macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
-| Android, iOS | Files on the [latest release](https://github.com/dohwi/pipaya/releases/tag/latest) (iOS IPA is unsigned). Needs a headless server below |
+| Android | APK on the [latest release](https://github.com/dohwi/pipaya/releases/tag/latest). Needs a headless server below |
 | Linux, web | `cd client && bun install && bun run dev -- --host 0.0.0.0`. Needs a headless server below |
 
 Open the app and connect a model under **Settings → Model connections**.

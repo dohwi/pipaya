@@ -23,7 +23,7 @@
 |---|---|---|
 | Windows EXE / macOS DMG | Tauri notification plugin | 앱 프로세스가 종료되면 데스크톱 알림 없음; 등록된 모바일로 대체 |
 | Android APK | Tauri notification plugin | FCM 네이티브 등록 + Firebase 설정 시 지원. 실기기 검증 필요 |
-| iOS / 추후 IPA | 공통 Tauri 로컬 알림 경로 | **네이티브 등록 미구현**. `NativePushAdapter`에 APNs/FCM 등록·토큰 갱신·cold-start tap 연결 필요 |
+| iOS | 앱(IPA) 지원 종료 | 배포 안 함. 서버 푸시 코드와 `NativePushAdapter` 확장 지점만 남아 있음 |
 | 웹 | 브라우저 Notification API, 권한 및 secure context 필요 | Service Worker/Web Push 미구현 |
 
 Android OS 설정의 **강제 종료(force-stop)**는 일반적인 프로세스 종료와 다릅니다. 강제 종료된 앱은 사용자가 다시 열기 전 FCM을 받지 못할 수 있습니다. APNs/FCM은 전달 지연·OS 정책·네트워크 상태의 영향을 받습니다.
@@ -63,9 +63,9 @@ bun run start
 
 서버 토큰·서비스 계정·기기 푸시 토큰은 확장 SDK에 노출하지 않습니다. 알림 제목/본문은 OS 및 Google/Apple 전달 시스템에 전송될 수 있으므로 비밀·도구 인자·대화 원문을 넣지 마세요. 내장 알림은 원문 없이 일반 문구와 세션 ID만 사용합니다.
 
-## iOS / IPA 확장 지점
+## iOS 확장 지점 (IPA 배포 종료)
 
-정책과 SDK는 OS에 종속되지 않습니다.
+IPA 배포는 지원 종료됐고 공식 빌드는 APK·EXE·DMG만 제공합니다. 아래는 서버/SDK에 남은 확장 지점입니다. 정책과 SDK는 OS에 종속되지 않습니다.
 
 - `DevicePlatform`: `desktop | android | ios | web`
 - 등록: `{provider: 'fcm' | 'apns', token}`. Android는 FCM, iOS는 FCM/APNs 중 선택할 수 있습니다.
@@ -73,7 +73,6 @@ bun run start
 - 클라이언트 `NativePushAdapter`는 `register`, `onTokenChanged`, `onTap`만 제공합니다. iOS 네이티브 구현을 추가해 `nativePushAdapter()`에서 선택하면 공통 Presence/SDK를 재작성할 필요가 없습니다.
 - iOS native lifecycle에 APNs 등록 성공/실패, 토큰 갱신, 앱 종료 상태 알림 클릭, foreground presentation 억제를 연결합니다. Tauri 로컬 알림 플러그인의 `UNUserNotificationCenterDelegate`와 충돌하지 않게 통합해야 합니다.
 - Xcode에서 Push Notifications capability, 올바른 `aps-environment` entitlement, Apple Developer 팀과 provisioning profile, 서명/IPA 내보내기 설정이 필요합니다. 백그라운드 silent push만으로 알림을 보장하지 말고 사용자 표시용 alert push를 사용합니다.
-- 이 변경은 IPA 빌드/배포 파이프라인을 새로 추가하거나 실제 APNs 수신을 검증한 것은 아닙니다.
 
 ## 확장 SDK
 

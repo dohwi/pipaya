@@ -7,7 +7,6 @@ Each OS wants a different shape, so the master is never just resized:
   Linux    same rounded square                                                          -> icons/icon.png
   Android  adaptive icon: flat background colour + transparent glyph (the launcher
            masks it to a circle / squircle / ...), plus legacy rounded and round PNGs   -> icons/android/
-  iOS      full-bleed opaque square WITHOUT an alpha channel (iOS applies the mask)    -> icons/ios/
 
 The master is the pipaya app icon (logo/svg/app-icon.svg): a cream tile, the crown fills ~86% of its width and the trunk runs off the
 bottom edge, so the master is always used at full size inside each OS shape (never shrunk, which would leave the trunk floating).
@@ -165,12 +164,6 @@ def notification_icon():
         out.putalpha(a)
         save(out, base / f"drawable-{dens}" / "ic_stat_pipaya.png")
 
-def ios():
-    """iOS masks the icon itself; it must be a square without transparency (the App Store rejects an alpha channel)."""
-    for p in (ICONS / "ios").glob("*.png"):
-        size = Image.open(p).size
-        save(MASTER.resize(size, Image.LANCZOS), p)  # RGB: no alpha
-
 
 def web():
     # apple-touch-icon: also masked by iOS, so a flat square
@@ -181,6 +174,5 @@ if __name__ == "__main__":
     desktop()
     android()
     notification_icon()
-    ios()
     web()
     print("icons regenerated")

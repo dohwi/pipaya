@@ -44,7 +44,7 @@ cd logo && python3 -m http.server 4747 --bind 0.0.0.0
 ```
 python3 logo/build_mark.py                  # logo/svg/ 의 mark*, favicon, app-icon* SVG
 cd client && bun scripts/render-icons.ts    # SVG -> src-tauri/app-icon*.png, public/favicon*
-python3 scripts/make-icons.py               # OS별 아이콘 세트 (데스크톱·안드로이드·iOS·apple-touch)
+python3 scripts/make-icons.py               # OS별 아이콘 세트 (데스크톱·안드로이드·apple-touch)
 ```
 
 `PipayaMark.svelte`과 문서 사이트의 `public/img/`(별도 `wiki` 저장소)는 `build_mark.py` 값을 바꿨을 때 직접 맞춘다.

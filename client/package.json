@@ -14,11 +14,8 @@
     "tauri": "tauri",
     "build:windows": "tauri build --bundles nsis",
     "build:macos": "tauri build --target aarch64-apple-darwin --bundles dmg",
-    "ios:init": "tauri ios init",
-    "build:ios:unsigned": "tauri ios build --no-sign",
     "android:init": "tauri android init",
     "android:prepare": "bun scripts/prepare-android.ts",
-    "ios:prepare": "bun scripts/prepare-ios.ts",
     "build:android": "tauri android build --apk --target aarch64"
   },
   "devDependencies": {

@@ -33,7 +33,7 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 - **내장 도구 10종**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
 - **승인 정책**: `ask`(기본), `auto`, `readonly`. 무엇을 바꿀 수 있는지 직접 정합니다
 - **어떤 모델이든**: 내장 제공자, 로컬 서버(Ollama, LM Studio, llama.cpp, vLLM), 직접 만든 엔드포인트
-- **여러 기기, 하나의 대화**: Windows, macOS, Android, iOS, 웹. 알림과 모바일 푸시 지원
+- **여러 기기, 하나의 대화**: Windows, macOS, Android, 웹. 알림과 모바일 푸시 지원
 - **협업과 분할 화면**: `@이름`으로 다른 세션에 일을 넘기고, 한 화면에 대화를 최대 8개까지 배치
 - **확장 가능**: AGENTS.md, 스킬, 템플릿, 하위 에이전트, 서버·클라이언트 확장
 
@@ -45,7 +45,7 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 |---|---|
 | Windows x64 | `irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 \| iex` |
 | macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
-| Android, iOS | [최신 릴리스](https://github.com/dohwi/pipaya/releases/tag/latest)의 파일 (iOS IPA는 서명 안 됨). 아래 headless 서버가 필요합니다 |
+| Android | [최신 릴리스](https://github.com/dohwi/pipaya/releases/tag/latest)의 APK. 아래 headless 서버가 필요합니다 |
 | Linux, 웹 | `cd client && bun install && bun run dev -- --host 0.0.0.0`. 아래 headless 서버가 필요합니다 |
 
 앱을 열어 **설정 → 모델 연결**에서 모델을 연결하세요.
