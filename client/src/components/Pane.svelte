@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
-	import SessionName from "./SessionName.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import EmptyHero from "./EmptyHero.svelte";
 	import Welcome from "./Welcome.svelte";
@@ -95,7 +94,7 @@
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
-				{#snippet label()}{#if memberName}<SessionName inline name={memberName} title={t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: memberName })} />{/if}{session?.title ?? t("대화")}{/snippet}
+				{#snippet label()}{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}{/snippet}
 				<span class="t" use:marquee={`${memberName ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 				{/if}
@@ -247,6 +246,15 @@
 		font-weight: 600;
 		color: var(--text-dim);
 	}
+	.who {
+		margin-right: 6px;
+		color: var(--text-dim);
+		font-weight: 700;
+	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
 	.focused .t {
 		color: var(--text);
 	}
@@ -288,10 +296,16 @@
 			animation: none !important;
 		}
 	}
+	.ti {
+		display: inline-block;
+	}
 	/* A title longer than the bar scrolls through while the pane is selected, so the whole text can be read. */
 	@media (prefers-reduced-motion: no-preference) {
 		.focused .t:global(.over) {
 			text-overflow: clip;
+		}
+		.focused .t:global(.over) .ti {
+			animation: title-scroll var(--dur, 8s) ease-in-out infinite;
 		}
 	}
 	@keyframes title-scroll {

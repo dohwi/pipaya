@@ -4,7 +4,6 @@
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
-	import SessionName from "./SessionName.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { marquee, tail } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
@@ -305,7 +304,7 @@
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[x.name ? `@${x.name}` : "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
 				<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
 				<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
-				{#if x.name}<SessionName name={x.name} />{/if}
+				{#if x.name}<span class="who mono {st}">@{x.name}</span>{/if}
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 			</button>
 			<div class="acts">
@@ -500,6 +499,16 @@
 
 <style>
 	/* @name of a pane in a split tab: how the other panes call it, so it stays in view there */
+	.who {
+		flex: none;
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--text-faint);
+	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
 	.side {
 		display: flex;
 		flex-direction: column;

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
-	import SessionName from "./SessionName.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -162,7 +161,7 @@
 				</div>
 			{/if}
 			{#if peer}
-				<div class="from"><Icon name="chat" /> <SessionName name={peer.from} /></div>
+				<div class="from"><Icon name="chat" /> <span>@{peer.from}</span></div>
 			{/if}
 			{#if shown.quote}
 				<blockquote class="quote">{shown.quote}</blockquote>
