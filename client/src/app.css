@@ -224,6 +224,9 @@ body {
 	font-family: var(--font);
 	font-size: var(--fs-base);
 	line-height: 1.55;
+	/* Korean wraps at spaces, not between syllables; long URLs/paths still break instead of overflowing */
+	word-break: keep-all;
+	overflow-wrap: break-word;
 	color: var(--text);
 	background: var(--bg);
 	overflow: hidden;
