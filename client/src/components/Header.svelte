@@ -4,15 +4,12 @@
 	import Icon from "./Icon.svelte";
 	import NavbarUsage from "./extensions/NavbarUsage.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
-	import AgentBadge from "./AgentBadge.svelte";
-	import { activityOf } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
-	const st = $derived(app.activeId ? activityOf(app, app.activeId) : "idle");
 	const term = $derived(app.terminal(app.activeId));
 	// Wide screens show the whole group at once, so the header names the group rather than one session.
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
@@ -24,7 +21,6 @@
 			<Icon name="sidebar" />
 		</button>
 
-		{#if !group && !term && s && app.activeId}<span class="agent"><AgentBadge id={app.activeId} state={st} size={20} /></span>{/if}
 		<div class="title">
 			{#if group}
 				<span class="t">{group.name}</span>
@@ -33,7 +29,7 @@
 				<span class="t">{term.title}</span>
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
-				<span class="t">{#if s?.name}<span class="who mono {st}">@{s.name}</span>{/if}{s?.title ?? t("새 대화")}</span>
+				<span class="t">{s?.title ?? t("새 대화")}</span>
 				{#if s}<span class="sub mono">{s.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			{/if}
 		</div>
@@ -83,20 +79,6 @@
 		white-space: nowrap;
 		line-height: 1.2;
 	}
-	.agent {
-		display: grid;
-		flex: none;
-		margin-left: 4px;
-	}
-	.who {
-		margin-right: 6px;
-		color: var(--text-dim);
-		font-weight: 700;
-	}
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
 	.sub {
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
