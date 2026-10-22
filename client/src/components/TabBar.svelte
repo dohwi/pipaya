@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import SessionName from "./SessionName.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
@@ -138,7 +139,7 @@
 					{:else}
 						<AgentBadge id={x.id} state={st} size={16} />
 					{/if}
-					{#if x.kind === "session" && x.session.name}<span class="who mono {st}">@{x.session.name}</span>{/if}
+					{#if x.kind === "session" && x.session.name}<SessionName name={x.session.name} />{/if}
 					<span class="t">{titleOf(x)}</span>
 					{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 					<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
@@ -267,16 +268,6 @@
 	.tab.on .t {
 		font-weight: 600;
 	}
-	.who {
-		flex: none;
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		color: var(--text-faint);
-	}
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
 	.n {
 		flex: none;
 		font-size: var(--fs-2xs);

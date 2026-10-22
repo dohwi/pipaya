@@ -2,6 +2,7 @@
 	import { t } from "../lib/i18n";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
+	import SessionName from "./SessionName.svelte";
 	import NavbarUsage from "./extensions/NavbarUsage.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -33,7 +34,7 @@
 				<span class="t">{term.title}</span>
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
-				<span class="t">{#if s?.name}<span class="who mono {st}">@{s.name}</span>{/if}{s?.title ?? t("새 대화")}</span>
+				<span class="t">{#if s?.name}<SessionName inline name={s.name} />{/if}{s?.title ?? t("새 대화")}</span>
 				{#if s}<span class="sub mono">{s.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			{/if}
 		</div>
@@ -88,15 +89,6 @@
 		flex: none;
 		margin-left: 4px;
 	}
-	.who {
-		margin-right: 6px;
-		color: var(--text-dim);
-		font-weight: 700;
-	}
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
 	.sub {
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
