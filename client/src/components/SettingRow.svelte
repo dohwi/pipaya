@@ -44,5 +44,7 @@
 	label,
 	span {
 		min-width: 0;
+		/* don't split a Korean word between syllables ("글/꼴") */
+		word-break: keep-all;
 	}
 </style>

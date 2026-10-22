@@ -28,7 +28,7 @@
 		editable
 		mono
 		size="sm"
-		width="320px"
+		width="min(320px, calc(100% - 6em))"
 		label={t("터미널 글꼴")}
 		value={p.fontFamily}
 		onchange={(fontFamily) => app.prefs.setTerminal({ fontFamily })}
