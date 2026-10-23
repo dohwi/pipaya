@@ -5,7 +5,7 @@ export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "b
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 
 /** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
-export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask_user" | "skill" | "think" | "other";
+export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "other";
 
 /** `read` of …/<name>/SKILL.md → the skill's name, else null. */
 export function skillOf(name: string, args: Record<string, unknown>): string | null {
@@ -27,7 +27,6 @@ const LOOK: Record<ToolKind, { icon: ToolIcon; hue: number }> = {
 	write: { icon: "pencil", hue: 150 },
 	edit: { icon: "pencil", hue: 60 },
 	bash: { icon: "terminal", hue: 25 },
-	ask_user: { icon: "chat", hue: 345 },
 	skill: { icon: "skill", hue: 90 },
 	think: { icon: "brain", hue: 280 },
 	other: { icon: "bolt", hue: 265 },
@@ -51,8 +50,6 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 	switch (name) {
 		case "bash":
 			return firstLine(str(args.command));
-		case "ask_user":
-			return firstLine(str(args.question));
 		case "grep":
 			return `${str(args.pattern)}${args.path ? `  in ${str(args.path)}` : ""}`;
 		case "ls":

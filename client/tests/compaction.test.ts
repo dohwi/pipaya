@@ -227,7 +227,7 @@ describe("ask_user questions", () => {
 		const { chat } = setup();
 		await chat.load();
 		chat.apply(event("question_requested", { sessionId: "session", ...asked, requestedAt: 1 }));
-		chat.apply(event("question_resolved", { toolCallId: "c1", toolName: "ask_user", answered: true, source: "user" }));
+		chat.apply(event("question_resolved", { toolCallId: "c1", answered: true, source: "user" }));
 		expect(chat.tools.c1?.state).toBe("running");
 		expect(chat.tools.c1?.question).toBeUndefined();
 	});

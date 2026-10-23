@@ -94,7 +94,7 @@ export const ActivityInfo = Type.Object({
 			sessionId: Type.String(),
 			running: Type.Boolean(),
 			pendingApprovals: Type.Integer({ description: "Tool calls waiting for the user's decision" }),
-			pendingQuestions: Type.Integer({ description: "ask_user questions waiting for the user's answer" }),
+			pendingQuestions: Type.Integer({ description: "questions waiting for the user's answer" }),
 		}),
 		{ description: "Only sessions that are running or waiting on the user" },
 	),
@@ -250,7 +250,7 @@ export const ApprovalsQuery = Type.Object({ sessionId: Type.Optional(Type.String
 export const DecisionParams = Type.Object({ id: Type.String(), toolCallId: Type.String() });
 export const DecisionBody = Type.Object({ approved: Type.Boolean(), reason: Type.Optional(Type.String({ maxLength: 2000 })) });
 
-// ── Questions (ask_user) ────────────────────────────────────────────────────
+// ── Questions (ctx.ask) ────────────────────────────────────────────────────
 
 export const QuestionItem = Type.Object({
 	question: Type.String(),
@@ -507,13 +507,13 @@ export const EVENTS: EventDef[] = [
 			source: Type.Union([Type.Literal("user"), Type.Literal("timeout"), Type.Literal("abort")]),
 		}),
 	},
-	{ type: "question_requested", persisted: true, description: "The agent asked the user a question (ask_user); answer with POST /sessions/:id/questions/:toolCallId", data: QuestionRequest },
+	{ type: "question_requested", persisted: true, description: "The agent asked the user a question (ctx.ask); answer with POST /sessions/:id/questions/:toolCallId", data: QuestionRequest },
 	{
 		type: "question_resolved",
 		persisted: true,
 		description: "A question was answered or its run was aborted",
 		data: Type.Object({
-			...ToolRef,
+			toolCallId: Type.String(),
 			answered: Type.Boolean(),
 			source: Type.Union([Type.Literal("user"), Type.Literal("abort")]),
 		}),

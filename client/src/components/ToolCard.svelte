@@ -42,9 +42,10 @@
 	const none = async () => {};
 
 	const awaiting = $derived(run.state === "awaiting_approval");
-	/** An `ask_user` call: the card asks a question instead of asking for permission. */
+	/** A call that asks the user a question (any tool/extension using ctx.ask): the card asks a question instead of asking for permission. */
 	const asking = $derived(awaiting && !!run.question);
 	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
+	const asked = $derived(!!run.question || !!answer);
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	const label = $derived(
 		{
@@ -103,8 +104,8 @@
 				<pre class="mono cmd"><span class="prompt">$</span> {str(args.command)}</pre>
 			{:else if name === "write"}
 				<pre class="mono">{clip(body ?? "", 6000)}</pre>
-			{:else if name === "ask_user"}
-				<div class="q">{str(args.question)}</div>
+			{:else if asked}
+				<div class="q">{run.question?.question ?? str(args.question)}</div>
 				{#if answer}<div class="a"><span class="label">{t("답변")}</span> {answer}</div>{/if}
 			{:else if name !== "read" && name !== "ls"}
 				<pre class="mono">{JSON.stringify(args, null, 2)}</pre>
@@ -112,7 +113,7 @@
 
 			{#if custom}
 				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
-			{:else if (run.output || run.images?.length) && name !== "ask_user"}
+			{:else if (run.output || run.images?.length) && !asked}
 				<div class="label">{t("출력")}</div>
 				{#if run.output}<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>{/if}
 				{#if run.images?.length}

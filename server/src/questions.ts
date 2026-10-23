@@ -44,7 +44,7 @@ const valid = (item: QuestionItem, answer: string) =>
 	!!answer && (item.allowFreeText || !item.options?.length || item.options.includes(answer));
 
 /**
- * Holds `ask_user` tool calls that are waiting for a human answer. A question waits until it is answered or the run is
+ * Holds tool calls (any tool using ctx.ask) that are waiting for a human answer. A question waits until it is answered or the run is
  * aborted: nothing is spent while it waits, so there is no time limit.
  */
 export class QuestionManager {
@@ -66,7 +66,6 @@ export class QuestionManager {
 				this.pending.delete(key);
 				this.bus.publish(req.sessionId, "question_resolved", {
 					toolCallId: req.toolCallId,
-					toolName: "ask_user",
 					answered: outcome.status === "answered",
 					source,
 				});

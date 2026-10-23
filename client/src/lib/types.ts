@@ -328,7 +328,7 @@ export interface ConfigurationInfo {
 	effectiveDefaults: DefaultModelSelection | null;
 	/** Tool approval new sessions start with; saved on the server (older servers omit it) */
 	approval?: { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy };
-	/** Whether the agent may ask the user questions (ask_user); older servers omit it and always allow it */
+	/** Whether the agent may ask the user questions (ask); older servers omit it and always allow it */
 	/** Which agent tools can be switched off and which are locked on; older servers omit it */
 	tools?: ToolsInfo;
 }
@@ -352,7 +352,7 @@ export interface ToolInfo {
 	mutating: boolean;
 }
 
-/** An `ask_user` question the agent is waiting on. */
+/** A question to the user (ctx.ask) the agent is waiting on. */
 export interface Question {
 	sessionId: string;
 	toolCallId: string;
@@ -471,7 +471,7 @@ export interface ToolRun {
 	details?: Record<string, unknown>;
 	durationMs?: number;
 	denyReason?: string;
-	/** Set while an `ask_user` call waits for the user (state is "awaiting_approval"). */
+	/** Set while a call using ctx.ask waits for the user (state is "awaiting_approval"). */
 	question?: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items">;
 }
 

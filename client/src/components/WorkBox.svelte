@@ -91,7 +91,7 @@
 		return { lines: tail(src || toolSummary(s.name, a)), kind: "src" };
 	});
 	const awaitingCall = $derived(awaitingIdx >= 0 ? (steps[awaitingIdx] as Extract<Step, { kind: "tool" }>) : null);
-	/** The waiting call is an `ask_user` question: it is answered here, not approved. */
+	/** The waiting call is a question to the user (ctx.ask): it is answered here, not approved. */
 	const question = $derived(awaitingIdx >= 0 ? runs[awaitingIdx]?.question : undefined);
 
 	let modal = $state(false);
