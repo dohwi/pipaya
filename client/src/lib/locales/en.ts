@@ -509,7 +509,10 @@ export const en: Record<string, string> = {
 
 	/* ---- settings ---- */
 	"일반": "General",
-	"언어 · 테마 · 도구 승인 · 질문 · 알림음 · 터미널": "Language · theme · tool approval · questions · notification sound · terminal",
+	"공통": "Common",
+	"설정 범위": "Settings scope",
+	"모든 서버에 공통인 설정": "Settings shared by all servers",
+	"언어 · 테마 · 알림음 · 터미널 · 업데이트": "Language · theme · notification sound · terminal · updates",
 	"질문 허용": "Allow questions",
 	"에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다": "The agent may ask you questions during a run and wait for your answer",
 	"에이전트 도구": "Agent tools",

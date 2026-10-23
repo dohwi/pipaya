@@ -45,11 +45,12 @@
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 도구 승인 · 질문 · 알림음 · 터미널"), server: false },
+		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림음 · 터미널 · 업데이트"), server: false },
 		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
 		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
+		{ id: "tools", label: msg("도구 승인"), icon: "shield", sub: "", server: true },
 		{ id: "agents", label: msg("에이전트"), icon: "brain", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
@@ -65,8 +66,16 @@
 		tab = next;
 	}
 	const current = $derived(tabs.find((x) => x.id === tab) ?? tabs[0]);
+	/** The chips above split the sections: "공통" shows the app-wide ones, a server chip shows that server's own. */
+	const scoped = $derived(tabs.filter((x) => x.server === current.server));
+	function showCommon() {
+		if (current.server) go("general");
+	}
+	function showServer(id: string) {
+		if (id !== app.serverId) app.openServer(id);
+		if (!current.server) go("info");
+	}
 	const server = $derived(app.servers.find((s) => s.id === app.serverId) ?? null);
-	const serverName = $derived(server ? app.serverLabel(server) : "");
 	// without a server there is nothing server-specific left to show
 	$effect(() => {
 		if (!server && current.server) tab = "general";
@@ -94,7 +103,7 @@
 	const items: { tab: TabId; label: string; words: string }[] = [
 		{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
 		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
-		{ tab: "general", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
+		{ tab: "tools", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
 		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
 		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
 		{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
@@ -131,13 +140,12 @@
 
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={t("설정")} onclose={close} />
-	{#if app.servers.length > 1}
-		<div class="srvbar" role="group" aria-label={t("서버")}>
-			{#each app.servers as s (s.id)}
-				<FilterChip on={s.id === app.serverId} title={app.serverLabel(s)} onclick={() => app.openServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-			{/each}
-		</div>
-	{/if}
+	<div class="srvbar" role="group" aria-label={t("설정 범위")}>
+		<FilterChip on={!current.server} title={t("모든 서버에 공통인 설정")} onclick={showCommon}>{t("공통")}</FilterChip>
+		{#each app.servers as s (s.id)}
+			<FilterChip on={current.server && s.id === app.serverId} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
+		{/each}
+	</div>
 
 	<div class="searchbar">
 		<Icon name="search" />
@@ -153,10 +161,8 @@
 			use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius)" }}
 			use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
 		>
-			{#each tabs as x, i (x.id)}
+			{#each scoped as x (x.id)}
 				{#if !x.server || server}
-					{#if x.server && !tabs[i - 1].server}<div class="ngroup" role="presentation">{serverName}</div>{/if}
-					{#if !x.server && tabs[i - 1]?.server}<div class="nsep" role="presentation"></div>{/if}
 					<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
 						<Icon name={x.icon} />
 						<span class="nt">
@@ -215,36 +221,6 @@
 				</section>
 
 				<section>
-					<div class="mono-label">{t("도구 승인")}</div>
-					<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => app.setApprovalMode(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
-					<span class="hint" class:danger={approvals.find((a) => a.id === approval)?.tone === "danger"}>
-						{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
-						{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
-					</span>
-				</section>
-
-				<section>
-					<div class="mono-label">{t("에이전트 도구")}</div>
-					{#if app.toolsInfo}
-						{#each app.toolsInfo.toggleable as name (name)}
-							<SettingRow label={toolLabel(name)}>
-								<Switch checked={!app.toolsInfo.disabled.includes(name)} label={name} onchange={(on) => app.setToolEnabled(name, on)} />
-							</SettingRow>
-						{/each}
-						{#each app.toolsInfo.locked as name (name)}
-							<SettingRow label={toolLabel(name)} dim>
-								<Switch checked disabled label={name} onchange={() => {}} />
-							</SettingRow>
-						{/each}
-					{:else}
-						<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
-							<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
-						</SettingRow>
-					{/if}
-					<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 질문을 끄면 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
-				</section>
-
-				<section>
 					<div class="mono-label">{t("알림음")}</div>
 					<SettingRow label={t("작업 완료 · 확인 필요 · 실패 때 소리 재생")}>
 						<Switch checked={app.prefs.soundOn} label={t("알림음")} onchange={(on) => app.prefs.setSound(on)} />
@@ -269,6 +245,36 @@
 				<section><NotificationSettings /></section>
 				<section><TerminalSettings /></section>
 				<section><UpdateSettings /></section>
+			{:else if tab === "tools"}
+		<section>
+			<div class="mono-label">{t("도구 승인")}</div>
+			<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => app.setApprovalMode(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
+			<span class="hint" class:danger={approvals.find((a) => a.id === approval)?.tone === "danger"}>
+				{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
+				{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
+			</span>
+		</section>
+
+		<section>
+			<div class="mono-label">{t("에이전트 도구")}</div>
+			{#if app.toolsInfo}
+				{#each app.toolsInfo.toggleable as name (name)}
+					<SettingRow label={toolLabel(name)}>
+						<Switch checked={!app.toolsInfo.disabled.includes(name)} label={name} onchange={(on) => app.setToolEnabled(name, on)} />
+					</SettingRow>
+				{/each}
+				{#each app.toolsInfo.locked as name (name)}
+					<SettingRow label={toolLabel(name)} dim>
+						<Switch checked disabled label={name} onchange={() => {}} />
+					</SettingRow>
+				{/each}
+			{:else}
+				<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
+					<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
+				</SettingRow>
+			{/if}
+			<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 질문을 끄면 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
+		</section>
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
 			{/if}
@@ -413,23 +419,6 @@
 			padding: 4px 14px 10px;
 		}
 	}
-	.ngroup {
-		flex: none;
-		padding: 10px 12px 4px;
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		letter-spacing: 0.04em;
-		color: var(--text-faint);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.nsep {
-		flex: none;
-		height: 1px;
-		margin: 8px 12px;
-		background: var(--border);
-	}
 	.nav button.addsrv {
 		gap: 8px;
 		padding: 7px 12px;
@@ -438,12 +427,6 @@
 	}
 	.nav button.srvtab {
 		padding: 8px 12px;
-	}
-	@media (max-width: 760px) {
-		.ngroup,
-		.nsep {
-			display: none;
-		}
 	}
 	.layout {
 		flex: 1;
