@@ -7,6 +7,7 @@ import Type, { type TSchema } from "typebox";
 import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
 import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resize-core.ts";
 import { resizeImage } from "./image-resize.ts";
+import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
 import type { QuestionOutcome, QuestionRequest } from "./questions.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
@@ -243,6 +244,9 @@ async function runProcess(
 		killedAt ||= Date.now();
 		if (setsid) {
 			try { process.kill(-proc.pid, "SIGKILL"); } catch {}
+		} else if (process.platform === "win32") {
+			// No process groups on Windows: taskkill /T takes the whole tree down.
+			try { Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" }); } catch {}
 		}
 		try {
 			proc.kill("SIGKILL");
@@ -494,22 +498,25 @@ const grepTool: ToolDef = {
 	},
 };
 
+const commandShell = pickCommandShell();
+const BASH_DESCRIPTION = `Run a shell command in the working directory. Output is capped at 50KB (tail kept). Default timeout ${DEFAULT_BASH_TIMEOUT_S}s.${shellNote(commandShell)}`;
+
 const bashTool: ToolDef = {
 	name: "bash",
-	description: `Run a shell command in the working directory. Output is capped at 50KB (tail kept). Default timeout ${DEFAULT_BASH_TIMEOUT_S}s.`,
+	description: BASH_DESCRIPTION,
 	mutating: true,
 	create(cwd) {
 		return defineTool({
 			name: "bash",
 			label: "Run command",
-			description: `Run a shell command in the working directory. Output is capped at 50KB (tail kept). Default timeout ${DEFAULT_BASH_TIMEOUT_S}s.`,
+			description: BASH_DESCRIPTION,
 			parameters: Type.Object({
 				command: Type.String(),
 				timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 1800, description: "Timeout in seconds" })),
 			}),
 			executionMode: "sequential",
 			async execute(_id, params, signal, onUpdate) {
-				const res = await runProcess(["bash", "-c", params.command], {
+				const res = await runProcess(commandArgv(commandShell, params.command), {
 					cwd,
 					timeoutMs: (params.timeout ?? DEFAULT_BASH_TIMEOUT_S) * 1000,
 					signal,
