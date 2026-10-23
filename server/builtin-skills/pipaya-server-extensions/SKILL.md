@@ -12,7 +12,7 @@ Where they are read from (each entry is a file or a folder; names starting with 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
 - `~/.agents/extensions/`
 
-The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`, one repository per extension, e.g. `pipaya-extension-peer-tools`). `examples/extensions/todo.ts` is a small one to copy from.
+The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`; the default ones are folders of `pipaya-extensions`, e.g. `extensions/peer-tools`). `examples/extensions/todo.ts` is a small one to copy from.
 
 Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors`. A file that throws while loading is switched off alone; the others keep working.
 

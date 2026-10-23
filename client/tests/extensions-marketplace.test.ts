@@ -15,8 +15,13 @@ const gitEntry = (id: string, source: unknown) => ({ id, kind: "server", name: i
 
 describe("parseCatalog", () => {
   test("a server extension in its own repository is read with its pinned commit", () => {
-    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extension-peer-tools", ref: "v0.1.0", commit: C40.toUpperCase() })] });
-    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extension-peer-tools", ref: "v0.1.0", commit: C40 });
+    const c = parseCatalog({ name: "m", extensions: [gitEntry("solo", { type: "git", repo: "me/pipaya-extension-solo", ref: "v0.1.0", commit: C40.toUpperCase() })] });
+    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "me/pipaya-extension-solo", ref: "v0.1.0", commit: C40 });
+  });
+
+  test("a folder of a repository is kept as `dir`", () => {
+    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extensions", dir: "extensions/peer-tools", ref: "peer-tools-v0.1.0", commit: C40 })] });
+    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extensions", dir: "extensions/peer-tools", ref: "peer-tools-v0.1.0", commit: C40 });
   });
 
   test("a git source that does not fit is left out, never trusted", () => {
@@ -25,6 +30,8 @@ describe("parseCatalog", () => {
       { type: "git", repo: "o/r", ref: "../x", commit: C40 },
       { type: "git", repo: "o/r", ref: "v1", commit: "abc" },
       { type: "git", repo: "o/r", ref: "v1" },
+      { type: "git", repo: "o/r", dir: "../etc", ref: "v1", commit: C40 },
+      { type: "git", repo: "o/r", dir: "/abs", ref: "v1", commit: C40 },
     ];
     expect(parseCatalog({ name: "m", extensions: bad.map((x, i) => gitEntry(`x${i}`, x)) }).extensions).toEqual([]);
   });
