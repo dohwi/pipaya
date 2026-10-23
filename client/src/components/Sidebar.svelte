@@ -380,7 +380,7 @@
 						<span class="sname">{app.serverLabel(n.server)}</span>
 						{#if sfold}<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>{/if}
 					</button>
-					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, n.current ? app.workdir : ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, n.current ? app.workdir : ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 
 				{#if !sfold}
