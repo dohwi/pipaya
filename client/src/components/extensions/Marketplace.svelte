@@ -73,7 +73,7 @@
 	async function refreshServer() {
 		const api = app.api;
 		if (!api) return;
-		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* older server */ }
+		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* unreachable: nothing marked as installed */ }
 	}
 
 	/** The server entry that asked "install the client one too?" (only when its client half is not on this device yet). */

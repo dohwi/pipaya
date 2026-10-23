@@ -21,8 +21,8 @@ export interface CompactionSettings {
 	auto: boolean;
 	/** The model (and strength) that writes the summary; null = the session's own model */
 	model: ModelChoice | null;
-	/** Auto-compaction runs once the context uses at least this percent of the model's window; absent on older servers */
-	thresholdPercent?: number;
+	/** Auto-compaction runs once the context uses at least this percent of the model's window */
+	thresholdPercent: number;
 }
 export interface CompactionSettingsInfo { settings: CompactionSettings; defaults: CompactionSettings }
 export interface SystemModelSettings {
@@ -37,8 +37,8 @@ export interface Session {
 	title: string;
 	/** How other sessions address this one (`@name`); unique among active sessions */
 	name: string;
-	/** What this session's agent works on, written by the system model; "" until then (absent on older servers) */
-	purpose?: string;
+	/** What this session's agent works on, written by the system model; "" until then */
+	purpose: string;
 	/** Absolute path inside the workspace root */
 	cwd: string;
 	provider: string;
@@ -147,16 +147,15 @@ export interface CompactionResult {
 }
 
 export interface SessionDetail extends Session {
-	/** Optional for compatibility with servers predating pi compaction. */
+	/** Absent when the session's model is no longer registered. */
 	context?: ContextUsage;
 	compaction?: { supported: boolean; autoEnabled: boolean };
 	status: {
 		running: boolean;
-		/** Includes manual and automatic compaction; absent on older servers. */
-		compacting?: boolean;
+		/** Includes manual and automatic compaction. */
+		compacting: boolean;
 		pendingToolCalls: string[];
-		pendingApprovals: number;
-		pendingQuestions?: number;
+		pendingQuestions: number;
 		/** Partial assistant message while a run is streaming, else null. Lets late joiners catch up. */
 		streamingMessage: unknown;
 		queued: boolean;
@@ -186,15 +185,15 @@ export interface ModelInfo {
 	name: string;
 	api: string;
 	reasoning: boolean;
-	/** Reasoning strengths the model accepts, weakest first. Missing on older servers: then every level is offered. */
-	thinkingLevels?: ThinkingLevel[];
+	/** Reasoning strengths the model accepts, weakest first; empty without reasoning. */
+	thinkingLevels: ThinkingLevel[];
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
 	/** A usable credential exists for this model's provider */
 	configured: boolean;
-	/** false = the connection's own model list no longer has it. Missing on older servers = available. */
-	available?: boolean;
+	/** false = the connection's own model list no longer has it. */
+	available: boolean;
 }
 
 export interface ProviderInfo {
@@ -231,7 +230,7 @@ export interface LoginState {
 }
 
 export interface ActivityInfo {
-	sessions: { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions?: number }[];
+	sessions: { sessionId: string; running: boolean; pendingQuestions: number }[];
 }
 
 /* ---------- model connection settings (GET /configuration) ---------- */
@@ -253,7 +252,7 @@ export interface CustomModel {
 	catalogId?: string | null;
 	/** Response only: the upstream's model list no longer contains this model */
 	unavailable?: boolean;
-	/** Response only: where the strengths come from. Absent on older servers. */
+	/** Response only: where the strengths come from. */
 	thinkingSource?: { kind: "custom" | "catalog" | "default"; catalogId?: string; levels: ThinkingLevel[] };
 }
 
@@ -318,9 +317,8 @@ export interface ConfigurationInfo {
 	defaults: DefaultModelSelection | null;
 	/** What new sessions really use (saved default, else the server's startup default) */
 	effectiveDefaults: DefaultModelSelection | null;
-	/** Whether the agent may ask the user questions (ask); older servers omit it and always allow it */
-	/** Which agent tools can be switched off and which are locked on; older servers omit it */
-	tools?: ToolsInfo;
+	/** Which agent tools can be switched off and which are locked on */
+	tools: ToolsInfo;
 }
 
 export interface ToolsInfo {
@@ -353,14 +351,6 @@ export interface Question {
 	allowFreeText: boolean;
 	/** Several questions asked at once: shown as tabs. */
 	items?: { question: string; options?: string[]; recommended?: string; allowFreeText: boolean }[];
-	requestedAt: number;
-}
-
-export interface Approval {
-	sessionId: string;
-	toolCallId: string;
-	toolName: string;
-	args: unknown;
 	requestedAt: number;
 }
 
@@ -450,7 +440,7 @@ export interface StreamDelta {
 
 /* ---------- UI model ---------- */
 
-export type ToolState = "pending" | "awaiting_approval" | "running" | "done" | "error" | "denied" | "skipped";
+export type ToolState = "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";
 
 export interface ToolRun {
 	state: ToolState;
@@ -460,8 +450,7 @@ export interface ToolRun {
 	images?: ImageBlock[];
 	details?: Record<string, unknown>;
 	durationMs?: number;
-	denyReason?: string;
-	/** Set while a call using ctx.ask waits for the user (state is "awaiting_approval"). */
+	/** Set while a call using ctx.ask waits for the user (state is "awaiting_input"). */
 	question?: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items">;
 }
 

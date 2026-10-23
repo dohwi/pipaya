@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import { approvalText, lang as toLang, runText, testText, type Lang, type Text } from "./notification-text.ts";
+import { questionText, lang as toLang, runText, testText, type Lang, type Text } from "./notification-text.ts";
 import type { EventBus, PipayaEvent } from "./events.ts";
 
 export type DevicePlatform = "desktop" | "android" | "ios" | "web";
@@ -13,15 +13,15 @@ export interface NotificationInput { title: string; body?: string; kind?: string
 /** What a built-in notice is about. The words are chosen per receiving device, so one event can read in two languages. */
 export type BuiltinFacts =
   | { type: "run"; title: string; status: "ok" | "error"; answer?: string; error?: string | null; durationMs?: number }
-  | { type: "approval"; title: string; tool: string; args: unknown };
+  | { type: "question"; title: string; question: string };
 /** Wording for one device. Anything that is not a built-in notice keeps the title and body it was sent with. */
 export function wording(p: { title: string; body?: string; facts?: BuiltinFacts }, l: Lang): Text {
   if (p.facts?.type === "run") return runText(p.facts, l);
-  if (p.facts?.type === "approval") return approvalText(p.facts, l);
+  if (p.facts?.type === "question") return questionText(p.facts, l);
   return { title: p.title, ...(p.body ? { body: p.body } : {}) };
 }
 export interface NotificationPayload extends NotificationInput { id: string; at: number; source: string }
-export interface NotificationRule { event: "run_finished" | "approval_requested"; title: string; body?: string }
+export interface NotificationRule { event: "run_finished" | "question_requested"; title: string; body?: string }
 export interface PushTransport {
   send(token: string, payload: NotificationPayload, platform: DevicePlatform): Promise<"sent" | "invalid">;
   /** Silently asks a phone to take this session's notification out of its notification shade. Android only. */
@@ -31,7 +31,7 @@ export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
 /** Server-side defaults are English; the desktop/web client shows its own translation for these kinds (see client notifications.ts). */
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
 export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined }
-export const DEFAULT_TITLES: Record<string, string> = { approval_required: "Approval required", task_failed: "Task failed", task_completed: "Task completed" };
+export const DEFAULT_TITLES: Record<string, string> = { user_request: "Answer needed", task_failed: "Task failed", task_completed: "Task completed" };
 const LEASE_MS = 45_000;
 /** How long to wait for a PC/browser to confirm it showed a notification before pushing to the phone. A receipt normally takes well under a second. */
 const MOBILE_DELAY_MS = 5_000;
@@ -182,7 +182,7 @@ export class NotificationService {
     const previous = this.db.query("SELECT id FROM notification_dedupe WHERE key = ? AND at > ?").get(key, this.now() - 86_400_000) as { id: string } | null;
     if (previous) return { id: previous.id, delivered: 0, suppressed: true };
     // The limit exists to stop an extension from flooding the user. The server's own notices come from real events
-    // (a run ended, a tool needs approval), so dropping the sixth one in ten seconds would lose something that mattered.
+    // (a run ended, the agent asks something), so dropping the sixth one in ten seconds would lose something that mattered.
     if (source !== "pipaya") {
       const times = (this.rates.get(source) ?? []).filter(at => this.now() - at < 10_000);
       if (times.length >= 5) throw new Error("notifications limited to five per ten seconds");
@@ -257,14 +257,14 @@ export class NotificationService {
     }
   }
   private onEvent(e: PipayaEvent) {
-    if (e.type === "approval_resolved") { this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "approval_required"); if (e.sessionId) this.clearPushed([e.sessionId], null); }
+    if (e.type === "question_resolved") { this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "user_request"); if (e.sessionId) this.clearPushed([e.sessionId], null); }
     if (e.type === "run_started") { this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? "")); if (e.sessionId) this.clearPushed([e.sessionId], null); }
-    if (!e.sessionId || !["run_finished", "approval_requested"].includes(e.type)) return;
+    if (!e.sessionId || !["run_finished", "question_requested"].includes(e.type)) return;
     const data = e.data as { status?: string };
     if (data.status === "aborted") return;
     const rules = (this.db.query("SELECT owner, id, data FROM notification_rules").all() as { owner: string; id: string; data: string }[])
       .map(row => ({ ...row, rule: JSON.parse(row.data) as NotificationRule })).filter(row => row.rule.event === e.type);
-    const kind = e.type === "approval_requested" ? "approval_required" : data.status === "error" ? "task_failed" : "task_completed";
+    const kind = e.type === "question_requested" ? "user_request" : data.status === "error" ? "task_failed" : "task_completed";
     try {
       if (!rules.length) {
         const facts = this.factsFor(e, kind);
@@ -284,9 +284,9 @@ export class NotificationService {
   /** What a built-in notice is about, read from the session and its last answer. */
   private factsFor(e: PipayaEvent, kind: string): BuiltinFacts {
     const title = this.sessions?.title(e.sessionId!) ?? "";
-    if (kind === "approval_required") {
-      const d = e.data as { toolName?: string; args?: unknown };
-      return { type: "approval", title, tool: d.toolName ?? "tool", args: d.args };
+    if (kind === "user_request") {
+      const d = e.data as { question?: unknown };
+      return { type: "question", title, question: typeof d.question === "string" ? d.question : "" };
     }
     const d = e.data as { error?: string | null; durationMs?: number };
     return { type: "run", title, status: kind === "task_failed" ? "error" : "ok", answer: kind === "task_completed" ? this.sessions?.lastAnswer(e.sessionId!) : undefined, error: d.error, durationMs: d.durationMs };

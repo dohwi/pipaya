@@ -15,7 +15,7 @@ export interface ExtensionContext {
   online: boolean;
 }
 export interface ExtensionEvent {
-  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "approval_requested" | "approval_resolved" | "turn_end" | "tool_execution_end";
+  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end";
   sessionId?: string | null;
   at: number;
   status?: string;
@@ -30,7 +30,7 @@ export type ServerExtensionEvent =
 /** The tool call a renderer is asked to draw. */
 export interface ToolRenderInput {
   toolName: string;
-  state: "pending" | "awaiting_approval" | "running" | "done" | "error" | "denied" | "skipped";
+  state: "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";
   args: Record<string, unknown>;
   output: string;
   details: Record<string, unknown> | null;

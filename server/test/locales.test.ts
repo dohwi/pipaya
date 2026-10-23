@@ -21,7 +21,7 @@ const ja = { name: "日本語", messages: { "설정": "設定", "모델 {n}개":
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-locales-"));
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
 afterAll(async () => {

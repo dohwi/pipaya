@@ -12,8 +12,6 @@ export interface TerminalPrefs {
 
 /** Maple Mono NGS NF when the device has it; the bundled Maple Mono (app.css) is what draws otherwise. */
 export const DEFAULT_TERMINAL_FONT = '"Maple Mono NGS NF", "Maple Mono NF", "Maple Mono"';
-/** The default before the Nerd Font was preferred: a stored copy of it is the untouched default, not a choice. */
-const LEGACY_DEFAULT_FONT = '"Maple Mono"';
 
 export const DEFAULT_TERMINAL: TerminalPrefs = {
   fontFamily: DEFAULT_TERMINAL_FONT,
@@ -35,7 +33,7 @@ const clamp = (v: unknown, min: number, max: number, fallback: number) =>
 
 function fontFamily(v: unknown): string {
   const f = typeof v === "string" ? v.trim().slice(0, 300) : "";
-  return !f || f === LEGACY_DEFAULT_FONT ? DEFAULT_TERMINAL_FONT : f;
+  return f || DEFAULT_TERMINAL_FONT;
 }
 
 /** Keep only valid fields of a stored value; anything missing or broken falls back to the default. */

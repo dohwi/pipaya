@@ -18,8 +18,6 @@ const KILL_GRACE_MS = 2000;
 export interface ToolDef {
 	name: string;
 	description: string;
-	/** Whether the tool changes files or runs commands. */
-	mutating: boolean;
 	/** `readRoots`: extra absolute directories the read tool may open (skill folders). */
 	create(cwd: string, readRoots?: string[], ctx?: ToolContext): AgentTool<any>;
 }
@@ -267,7 +265,6 @@ const MAX_IMAGE_PIXELS = 100_000_000;
 const readTool: ToolDef = {
 	name: "read",
 	description: READ_DESCRIPTION,
-	mutating: false,
 	create(cwd, readRoots = [], ctx = {}) {
 		return defineTool({
 			name: "read",
@@ -297,7 +294,6 @@ const readTool: ToolDef = {
 const writeTool: ToolDef = {
 	name: "write",
 	description: "Create or overwrite a file. Parent directories are created automatically.",
-	mutating: true,
 	create(cwd) {
 		return defineTool({
 			name: "write",
@@ -323,7 +319,6 @@ const writeTool: ToolDef = {
 const editTool: ToolDef = {
 	name: "edit",
 	description: "Replace one exact, unique occurrence of oldText with newText in a file.",
-	mutating: true,
 	create(cwd) {
 		return defineTool({
 			name: "edit",
@@ -352,7 +347,6 @@ const editTool: ToolDef = {
 const lsTool: ToolDef = {
 	name: "ls",
 	description: "List a directory. Directories end with '/'.",
-	mutating: false,
 	create(cwd) {
 		return defineTool({
 			name: "ls",
@@ -373,7 +367,6 @@ const lsTool: ToolDef = {
 const grepTool: ToolDef = {
 	name: "grep",
 	description: "Search file contents with a regular expression (ripgrep if available, otherwise grep).",
-	mutating: false,
 	create(cwd) {
 		return defineTool({
 			name: "grep",
@@ -408,7 +401,6 @@ const BASH_DESCRIPTION = `Run a shell command in the working directory. Output i
 const bashTool: ToolDef = {
 	name: "bash",
 	description: BASH_DESCRIPTION,
-	mutating: true,
 	create(cwd) {
 		return defineTool({
 			name: "bash",
@@ -444,7 +436,6 @@ export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 
-export const isMutating = (toolName: string, defs: Record<string, ToolDef> = TOOL_DEFS): boolean => defs[toolName]?.mutating ?? true;
 
 /** `defs` lets server extensions add or replace tools; the built-in set is the default. */
 export function buildTools(names: string[], cwd: string, readRoots: string[] = [], ctx: ToolContext = {}, defs: Record<string, ToolDef> = TOOL_DEFS): AgentTool<any>[] {

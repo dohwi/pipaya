@@ -3,7 +3,6 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { ApprovalManager } from "./approvals.ts";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
@@ -14,7 +13,7 @@ import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { groupHandle, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -56,7 +55,6 @@ export class SessionManager {
 		private store: SessionStore,
 		private bus: EventBus,
 		private registry: ModelRegistry,
-		private approvals: ApprovalManager,
 		/** Where sessions start, and what relative cwd values resolve against. */
 		private defaultWorkdir: () => string = () => cfg.workspaceRoot,
 		private skills?: SkillService,
@@ -143,7 +141,6 @@ export class SessionManager {
 		return {
 			running: live?.running ?? false,
 			pendingToolCalls: live ? [...live.agent.state.pendingToolCalls] : [],
-			pendingApprovals: this.approvals.list(id).length,
 			pendingQuestions: this.questions?.list(id).length ?? 0,
 			streamingMessage: (live?.running && live.agent.state.streamingMessage) || null,
 			queued: live?.agent.hasQueuedMessages() ?? false,
@@ -181,7 +178,7 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 		if (live.compacting) throw conflict("this session is already being compacted");
 		if (live.running && reason === "manual") throw conflict("the session is working; compact after it finishes");
-		if (this.approvals.list(id).length || (this.questions?.list(id).length ?? 0)) throw conflict("the session is waiting for an answer; respond first");
+		if (this.questions?.list(id).length) throw conflict("the session is waiting for an answer; respond first");
 		if (!this.compaction) throw new HttpError(501, "compaction_not_supported", "compaction is not available on this server");
 
 		const stored = this.store.projection(id);
@@ -614,16 +611,15 @@ export class SessionManager {
 	}
 
 	/** Live state of every session that is running or waiting on the user (idle sessions are omitted). */
-	activity(): { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions: number }[] {
-		type Row = { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions: number };
+	activity(): { sessionId: string; running: boolean; pendingQuestions: number }[] {
+		type Row = { sessionId: string; running: boolean; pendingQuestions: number };
 		const out = new Map<string, Row>();
 		const row = (sessionId: string): Row => {
 			let e = out.get(sessionId);
-			if (!e) out.set(sessionId, (e = { sessionId, running: false, pendingApprovals: 0, pendingQuestions: 0 }));
+			if (!e) out.set(sessionId, (e = { sessionId, running: false, pendingQuestions: 0 }));
 			return e;
 		};
 		for (const [sessionId, l] of this.live) if (l.running) row(sessionId).running = true;
-		for (const r of this.approvals.list()) row(r.sessionId).pendingApprovals++;
 		for (const r of this.questions?.list() ?? []) row(r.sessionId).pendingQuestions++;
 		return [...out.values()];
 	}

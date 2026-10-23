@@ -30,7 +30,7 @@ const finishRun = (sid = "s1") => app.bus.publish(sid, "run_finished", { status:
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-notify-e2e-"));
-	app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false, pushTransports: transports, mobileDelayMs: 40, strictResponses: true });
+	app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, logLevel: "silent" }, { builtinSkills: false, pushTransports: transports, mobileDelayMs: 40, strictResponses: true });
 });
 afterAll(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
 
@@ -89,15 +89,14 @@ describe("notifications end to end", () => {
 		expect(pushes.filter((p) => p.token === "dead")).toHaveLength(1);
 	});
 
-	test("what is pushed names the tool and the path, never the file contents or other arguments", async () => {
+	test("a question is pushed with its text, so it can be read without opening the app", async () => {
 		await reset(0);
 		await device("phone3", "android", false, { provider: "fcm", token: "phone3" });
-		app.bus.publish("a8", "approval_requested", { toolName: "write", args: { path: "src/a.ts", content: "SECRET-ARGS" } }); await wait(150);
+		app.bus.publish("a8", "question_requested", { toolCallId: "c", question: "Deploy now?" }); await wait(150);
 		const sent = pushes.find((p) => p.token === "phone3");
 		expect(sent).toBeTruthy();
-		expect(JSON.stringify(sent!.payload)).not.toContain("SECRET");
-		expect(sent!.payload.title).toContain("Approval needed");
-		expect(sent!.payload.body).toContain("src/a.ts");
+		expect(sent!.payload.title).toContain("Answer needed");
+		expect(sent!.payload.body).toBe("Deploy now?");
 		expect(sent!.payload.sessionId).toBe("a8");
 	});
 

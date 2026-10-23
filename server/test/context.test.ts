@@ -155,7 +155,7 @@ describe("context API and application", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "context-test", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "context-test", workspaceRoot: f.cwd, logLevel: "silent" };
 		let app: App = await buildApp(cfg, { strictResponses: true });
 		const api = async (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: object, authorized = true) => {
 			const res = await app.server.inject({ method, url, payload, headers: authorized ? { authorization: `Bearer ${cfg.token}` } : {} });

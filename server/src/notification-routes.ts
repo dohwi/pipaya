@@ -6,7 +6,7 @@ import type { TypeBoxProvider } from "./typebox-provider.ts";
 const id = Type.String({ minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" });
 const text = (maxLength: number) => Type.String({ minLength: 1, maxLength });
 const owner = Type.String({ minLength: 1, maxLength: 80, pattern: "^[a-z][a-z0-9.-]*$" });
-const spec = Type.Object({ title: text(183), body: Type.Optional(text(300)), kind: Type.Optional(Type.Union((["task_completed", "task_failed", "approval_required", "user_request", "info"] as const).map(value => Type.Literal(value)))), sessionId: Type.Optional(id), key: Type.Optional(text(160)) }, { additionalProperties: false });
+const spec = Type.Object({ title: text(183), body: Type.Optional(text(300)), kind: Type.Optional(Type.Union((["task_completed", "task_failed", "user_request", "info"] as const).map(value => Type.Literal(value)))), sessionId: Type.Optional(id), key: Type.Optional(text(160)) }, { additionalProperties: false });
 export function registerNotificationRoutes(server: FastifyInstance, service: NotificationService, sessionExists: (id: string) => boolean) {
   const app = server.withTypeProvider<TypeBoxProvider>();
   app.get("/notifications/status", async () => ({ pushConfigured: service.pushConfigured, providers: service.providers }));
@@ -34,7 +34,7 @@ export function registerNotificationRoutes(server: FastifyInstance, service: Not
     },
   });
   app.put("/notifications/rules/:owner/:id", {
-    schema: { params: Type.Object({ owner, id }), body: Type.Object({ event: Type.Union([Type.Literal("run_finished"), Type.Literal("approval_requested")]), title: text(100), body: Type.Optional(text(300)) }, { additionalProperties: false }) },
+    schema: { params: Type.Object({ owner, id }), body: Type.Object({ event: Type.Union([Type.Literal("run_finished"), Type.Literal("question_requested")]), title: text(100), body: Type.Optional(text(300)) }, { additionalProperties: false }) },
     handler: async req => { if (req.params.owner === "pipaya") throw badRequest("owner \"pipaya\" is reserved"); try { service.setRule(req.params.owner, req.params.id, req.body); } catch { throw badRequest("notification rule limit reached"); } return { ok: true }; },
   });
   app.delete("/notifications/rules/:owner", { schema: { params: Type.Object({ owner }) }, handler: async req => { service.removeRules(req.params.owner); return { ok: true }; } });

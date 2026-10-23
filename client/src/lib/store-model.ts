@@ -40,32 +40,11 @@ export interface Server {
   local?: boolean;
 }
 
-/** Load saved servers, migrating the old single-connection format once. */
+/** Load saved servers. */
 export function loadServers(): Server[] {
   const list = read<Server[]>(K.servers, []);
-  if (list.length) {
-    void snapshotSettingsToDurable();
-    return list;
-  }
-  const legacy = read<{ baseUrl: string; token: string } | null>(
-    K.legacyConn,
-    null,
-  );
-  if (!legacy) return [];
-  const migrated: Server = {
-    id: uid(),
-    name: "",
-    baseUrl: legacy.baseUrl,
-    token: legacy.token,
-  };
-  write(K.servers, [migrated]);
-  write(K.currentServer, migrated.id);
-  try {
-    localStorage.removeItem(K.legacyConn);
-  } catch {
-    /* ignore */
-  }
-  return [migrated];
+  if (list.length) void snapshotSettingsToDurable();
+  return list;
 }
 
 const THINKING_LEVELS: readonly ThinkingLevel[] = [

@@ -4,7 +4,7 @@ import type { Session } from "./types";
 /**
  * What a session is doing right now, in the user's terms:
  *  working  the agent is running
- *  asking   the agent is waiting for the user (tool approval)
+ *  asking   the agent is waiting for the user to answer a question
  *  done     finished since the user last looked
  *  failed   the last run ended in an error since the user last looked
  *  idle     nothing to report

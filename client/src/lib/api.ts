@@ -1,6 +1,5 @@
 import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
-	Approval,
 	Question,
 	ActivityInfo,
 	ConfigurationInfo,
@@ -326,12 +325,6 @@ export class Api {
 	renameTerminal = (id: string, title: string) => this.req<import("./terminal").TerminalInfo>("PATCH", `/terminals/${encodeURIComponent(id)}`, { title });
 	closeTerminal = (id: string) => this.req<{ ok: boolean }>("DELETE", `/terminals/${encodeURIComponent(id)}`);
 
-	approvals = () => this.req<{ approvals: Approval[] }>("GET", "/approvals").then((r) => r.approvals);
-	decide = (sessionId: string, toolCallId: string, approved: boolean, reason?: string) =>
-		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/approvals/${encodeURIComponent(toolCallId)}`, {
-			approved,
-			reason,
-		});
 
 	questions = () =>
 		this.req<{ questions: Question[] }>("GET", "/questions").then((r) => r.questions).catch(() => [] as Question[]);
@@ -401,8 +394,6 @@ export const EVENT_TYPES = [
 	"tool_execution_start",
 	"tool_execution_update",
 	"tool_execution_end",
-	"approval_requested",
-	"approval_resolved",
 	"question_requested",
 	"question_resolved",
 	"message_queued",

@@ -38,8 +38,7 @@
 		if (!id || !key || !api) return;
 		const controller = new AbortController();
 		api.sessionContext(id, controller.signal)
-			// `skills` is absent on servers that predate skills: hide the item rather than show a wrong 0.
-			.then(r => { if (!controller.signal.aborted) loaded = { key, files: r.instructions.map(i => i.path), skills: Array.isArray(r.skills) ? r.skills.map(k => k.name) : null }; })
+			.then(r => { if (!controller.signal.aborted) loaded = { key, files: r.instructions.map(i => i.path), skills: r.skills.map(k => k.name) }; })
 			.catch(() => { if (!controller.signal.aborted && loaded?.key === key) loaded = null; });
 		return () => controller.abort();
 	});
@@ -114,7 +113,7 @@
 
 	const context = $derived(chat?.context);
 	const win = $derived(context?.contextWindow ?? app.effectiveModelOf(pane.id)?.contextWindow ?? 0);
-	// Legacy servers only offer a last-call approximation. Explicit null must NOT resurrect pre-compaction usage.
+	// No server figure (the session's model is gone): fall back to the last call's usage. Explicit null must NOT resurrect pre-compaction usage.
 	const estimated = $derived(context === undefined);
 	const ctx = $derived(estimated ? (last?.usage?.totalTokens ?? null) : context!.tokens);
 	const ctxPct = $derived(win && ctx !== null ? (ctx / win) * 100 : 0);

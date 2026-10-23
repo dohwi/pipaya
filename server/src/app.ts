@@ -4,7 +4,6 @@ import { timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { isAbsolute, relative } from "node:path";
 import Type from "typebox";
-import { ApprovalManager } from "./approvals.ts";
 import { QuestionManager } from "./questions.ts";
 import type { Config } from "./config.ts";
 import { Configuration } from "./configuration.ts";
@@ -109,7 +108,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
 	const configuration = new Configuration(db, cfg, registry, credentials);
-	const approvals = new ApprovalManager(bus, cfg.approvalTimeoutMs);
 	const questions = new QuestionManager(bus);
 	const skills = new SkillService(db, { home: opts.home, builtin: opts.builtinSkills, defaultWorkdir: () => configuration.defaultWorkdir() });
 	const modelRoles = new ModelRoles(db, registry);
@@ -122,8 +120,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
-	const busy = (id: string) => sessions.isRunning(id) || approvals.list(id).length > 0 || questions.list(id).length > 0;
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
+	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, closed: r.closed, parentId: r.parentId,
 		createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
@@ -264,7 +262,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	app.get("/tools", {
 		schema: { response: { 200: S.ToolList, ...S.errors(401) } },
 		handler: async () => ({
-			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
+			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description })),
 			defaults: extensions.defaultTools(),
 		}),
 	});
@@ -430,7 +428,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async (req, reply) => reply.status(201).send(await sessions.fork(req.params.id, req.body.atSeq, req.body.title)),
 	});
 
-	// ── messages & approvals ──
+	// ── messages & questions ──
 	app.post("/sessions/:id/messages", {
 		bodyLimit: IMAGE_BODY_LIMIT, // a route option, not part of `schema`
 		schema: { params: S.IdParams, body: S.SendBody, response: { 202: S.SendResult, ...S.errors(400, 401, 404, 409, 413) } },
@@ -443,22 +441,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return { messages: store.messages(req.params.id, { after: req.query.after, limit: req.query.limit ?? 1000 }) };
 		},
 	});
-	app.get("/approvals", {
-		schema: { querystring: S.ApprovalsQuery, response: { 200: S.ApprovalList, ...S.errors(400, 401) } },
-		handler: async (req) => ({ approvals: approvals.list(req.query.sessionId) }),
-	});
-	app.post("/sessions/:id/approvals/:toolCallId", {
-		schema: { params: S.DecisionParams, body: S.DecisionBody, response: { 200: S.Ok, ...S.errors(400, 401, 404) } },
-		handler: async (req) => {
-			const { id, toolCallId } = req.params;
-			sessions.get(id);
-			if (!approvals.decide(id, toolCallId, req.body)) throw notFound("pending approval");
-			return { ok: true };
-		},
-	});
-
 	app.get("/questions", {
-		schema: { querystring: S.ApprovalsQuery, response: { 200: S.QuestionList, ...S.errors(400, 401) } },
+		schema: { querystring: S.QuestionsQuery, response: { 200: S.QuestionList, ...S.errors(400, 401) } },
 		handler: async (req) => ({ questions: questions.list(req.query.sessionId) }),
 	});
 	app.post("/sessions/:id/questions/:toolCallId", {
@@ -525,7 +509,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerClientSettingsRoutes(server, clientSettings, bus);
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
-	await registerWebSocket(server, { bus, sessions, approvals, questions }, opts.websocket);
+	await registerWebSocket(server, { bus, sessions, questions }, opts.websocket);
 	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();

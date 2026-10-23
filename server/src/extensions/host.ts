@@ -382,7 +382,6 @@ export class ExtensionHost {
 		return {
 			name: t.name,
 			description: t.description,
-			mutating: t.mutating ?? true,
 			create: (cwd, _roots, ctx?: ToolContext): AgentTool<any> => ({
 				name: t.name,
 				label: t.label ?? t.name,

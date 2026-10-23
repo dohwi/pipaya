@@ -117,7 +117,7 @@
 				catalogLoaded = true;
 			})
 			.catch(() => {
-				/* older server without /configuration/catalog: everything stays manual */
+				/* no catalog: everything stays manual */
 			})
 			.finally(() => {
 				catalogPending = null;

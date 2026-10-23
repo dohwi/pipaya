@@ -192,7 +192,7 @@ export class NotificationClient {
     if (attended()) void this.native?.clear?.(this.visible().slice(0, 20)).catch(() => {});
     try {
       await api.notificationPresence(this.id, { platform: notificationPlatform(), focused: attended(), enabled: this.enabled && await this.permission() === "granted", visibleSessionIds: this.visible().slice(0, 20), lang: getLang(), ...await this.identity(), ...(this.registration === undefined ? {} : { push: this.registration }) });
-    } catch { /* older/offline server: notifications do not break the app */ }
+    } catch { /* offline: notifications do not break the app */ }
   }
   /**
    * Asks the server to send this device a notification, then reports the step where it stopped.

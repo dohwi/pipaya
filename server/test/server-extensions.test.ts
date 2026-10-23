@@ -38,7 +38,6 @@ export default (pi) => {
 		name: "greet",
 		description: "Greets someone",
 		parameters: T.Object({ who: T.String() }),
-		mutating: false,
 		execute: async (_id, p, ctx) => {
 			ctx.appendEntry("greeted", { who: p.who });
 			return { content: [{ type: "text", text: "hello " + p.who }], details: {} };
@@ -69,7 +68,7 @@ beforeAll(async () => {
 	writeFileSync(join(extDir, "demo.js"), EXT);
 	writeFileSync(join(extDir, "broken.js"), "export default () => { throw new Error('boom'); };");
 	upstream = startEchoUpstream();
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [extDir], home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
@@ -93,7 +92,7 @@ describe("server extensions", () => {
 
 	test("an extension tool is listed, usable by the model, and its result can be rewritten by tool_result", async () => {
 		const tools = (await api("GET", "/tools")).json;
-		expect(tools.tools.find((t: any) => t.name === "greet")).toMatchObject({ mutating: false });
+		expect(tools.tools.find((t: any) => t.name === "greet")).toBeTruthy();
 		expect(tools.defaults).toContain("greet");
 		const id = await newSession();
 		await api("POST", `/sessions/${id}/messages`, { text: `!greet ${JSON.stringify({ who: "Ada" })}` });
@@ -185,9 +184,9 @@ describe("ctx.ask", () => {
 	test("an extension tool can ask the user and gets the answer", async () => {
 		const exDir = join(dir, "ask-exts");
 		mkdirSync(exDir, { recursive: true });
-		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", mutating: false, parameters: pi.Type.Object({}),
+		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", parameters: pi.Type.Object({}),
 			execute: async (id, _p, ctx, signal) => ({ content: [{ type: "text", text: "got " + await ctx.ask(id, { question: "Which?", options: ["a", "b"], allowFreeText: false }, signal) }] }) });`);
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
@@ -217,7 +216,7 @@ describe("examples/extensions/todo.ts", () => {
 		const exDir = join(dir, "example-exts");
 		mkdirSync(exDir, { recursive: true });
 		writeFileSync(join(exDir, "todo.ts"), readFileSync(join(import.meta.dir, "../examples/extensions/todo.ts"), "utf8"));
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });

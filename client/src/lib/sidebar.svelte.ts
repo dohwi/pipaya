@@ -25,7 +25,7 @@ export class SidebarState {
   folded = $state<string[]>(read<string[]>(K.folded, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
-  tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, legacyTabOrder()));
+  tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
 
   /** `save` false while dragging the edge: persist once, at the end. */
   setWidth(px: number, save = true) {
@@ -68,11 +68,3 @@ export class SidebarState {
   }
 }
 
-/** Before tabs, loose sessions and groups were ordered apart: start from both (sessions first, as they were listed). */
-function legacyTabOrder(): Record<string, string[]> {
-  const sessions = read<Record<string, string[]>>(K.sessionOrder, {});
-  const groups = read<Record<string, string[]>>(K.groupOrder, {});
-  const out: Record<string, string[]> = {};
-  for (const id of new Set([...Object.keys(sessions), ...Object.keys(groups)])) out[id] = [...(sessions[id] ?? []), ...(groups[id] ?? [])];
-  return out;
-}

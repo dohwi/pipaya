@@ -8,12 +8,11 @@
 export default (pi: any) => {
 	const T = pi.Type;
 
-	// A tool. `mutating: false` = it only reads or writes this extension's own record.
+	// A tool. It only reads or writes this extension's own record.
 	pi.registerTool({
 		name: "todo_add",
 		description: "Add an item to this conversation's todo list",
 		parameters: T.Object({ text: T.String({ minLength: 1, maxLength: 200 }) }),
-		mutating: false,
 		execute: async (_toolCallId: string, params: { text: string }, ctx: any) => {
 			ctx.appendEntry("todo", { text: params.text, done: false });
 			return { content: [{ type: "text", text: `Added: ${params.text}` }] };

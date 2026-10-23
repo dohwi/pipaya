@@ -221,19 +221,14 @@ export class ExtensionHost {
   private sharesSettings(entry: InstalledExtension): boolean { return entry.scope === "server" && entry.package.manifest.settingsScope !== "local"; }
   private localSettings(): boolean { return localStorage.getItem(SETTINGS_SOURCE) === "local"; }
 
-  /** Storage key of the open server's list (the old single list when no server is open) */
+  /** Storage key of the open server's list (the device-wide list when no server is open) */
   private listKey(): string {
     const id = this.adapter?.serverId?.() ?? null;
     return id ? `${KEY}.${id}` : KEY;
   }
-  /** The open server's list; a device that only has the old single list lends it to the first server it opens, then retires it. */
+  /** The open server's list as stored on this device. */
   private storedList(): string | null {
-    const key = this.listKey();
-    const own = localStorage.getItem(key);
-    if (own !== null || key === KEY) return own;
-    const legacy = localStorage.getItem(KEY);
-    if (legacy !== null) { localStorage.setItem(key, legacy); localStorage.removeItem(KEY); }
-    return legacy;
+    return localStorage.getItem(this.listKey());
   }
   private ready!: () => void;
   private readyPromise = new Promise<void>(resolve => { this.ready = resolve; });
@@ -381,7 +376,7 @@ export class ExtensionHost {
         entry.settings = clone(value as Record<string, unknown>); changed = true;
         if (entry.package.manifest.settings && !entry.configured) entry.configured = true; // the server already holds this id's settings
       } else if (value === undefined && Object.keys(entry.settings).length) {
-        void this.push(id); // migration: the server has nothing for this id yet
+        void this.push(id); // the server has nothing for this id yet: give it this device's copy
       }
     }
     if (changed) { try { this.save(); } catch { /* cache only */ } }

@@ -24,7 +24,7 @@ export interface ExtensionContext {
 	abort(): boolean;
 	/** True while the agent is working. */
 	isRunning(): boolean;
-	/** Ask the user and wait for the answer (the client shows the question card for `toolCallId`). Rejects when the run is aborted or the user turned asking off. */
+	/** Ask the user and wait for the answer (the client shows the question card for `toolCallId`). Rejects when the run is aborted. */
 	ask(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 }
 
@@ -53,7 +53,7 @@ export interface SessionInfo {
 	updatedAt: number;
 	/** The agent is working right now. */
 	running: boolean;
-	/** In use: running, or waiting for an approval or an answer. Such a session is never deleted. */
+	/** In use: running, or waiting for an answer from the user. Such a session is never deleted. */
 	busy: boolean;
 }
 
@@ -90,8 +90,6 @@ export interface ExtensionTool {
 	description: string;
 	/** A typebox schema (use `pi.Type`). */
 	parameters: TSchema;
-	/** Mutating tools need approval in `ask` mode and are blocked in `readonly`. Default true (safe). */
-	mutating?: boolean;
 	/** Part of the default tool set of new sessions. Default true. */
 	defaultActive?: boolean;
 	/** Given to every session, also ones created before the extension was installed. Default false. */

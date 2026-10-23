@@ -144,7 +144,7 @@ class AppStore {
   chats = $state.raw<Record<string, ChatState>>({});
   /** Session groups of the open server: named split-window layouts, stored on the server. */
   groups = $state<Group[]>([]);
-  /** Terminals open on the server (shells on its own OS), and what it supports; null support = an older server */
+  /** Terminals open on the server (shells on its own OS), and what it supports; null support = not known (yet) */
   terminals = $state<TerminalInfo[]>([]);
   terminalSupport = $state<TerminalSupport | null>(null);
 
@@ -300,7 +300,7 @@ class AppStore {
     return !viewport.narrow && !!g && layoutHas(g.layout, id);
   }
 
-  /** The model/thinking/approval shown in the UI: the session's, or the draft's for a new chat. */
+  /** The model and thinking level shown in the UI: the session's, or the draft's for a new chat. */
   get effective(): Draft {
     return this.effectiveOf(this.activeId);
   }
@@ -396,7 +396,7 @@ class AppStore {
       const now = /^ko(?:-|$)/i.test(getLang());
       if (now === korean) return;
       korean = now;
-      void this.api?.localizeNames(getLang()).catch(() => {}); // an older server has no such route: names just stay
+      void this.api?.localizeNames(getLang()).catch(() => {}); // offline: names just stay
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
@@ -693,7 +693,7 @@ class AppStore {
             const awaiting: Record<string, number> = {};
             for (const a of act?.sessions ?? []) {
               if (a.running) running[a.sessionId] = true;
-              const n = a.pendingApprovals + (a.pendingQuestions ?? 0);
+              const n = a.pendingQuestions;
               if (n) awaiting[a.sessionId] = n;
             }
             this.overview[s.id] = {
@@ -882,13 +882,13 @@ class AppStore {
       const awaiting: Record<string, number> = {};
       for (const a of sessions) {
         if (a.running) running[a.sessionId] = true;
-        const n = a.pendingApprovals + (a.pendingQuestions ?? 0);
+        const n = a.pendingQuestions;
         if (n) awaiting[a.sessionId] = n;
       }
       this.running = running;
       this.awaiting = awaiting;
     } catch {
-      /* older server: the event stream still keeps these current */
+      /* offline: the event stream keeps these current once it is back */
     }
   }
 
@@ -913,7 +913,7 @@ class AppStore {
   private handle(e: PipayaEvent) {
     const sid = e.sessionId;
     // Only metadata is forwarded, never event data, messages, tool args or credentials.
-    if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "approval_requested" || e.type === "approval_resolved") {
+    if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "question_requested" || e.type === "question_resolved") {
       extensions.emit({ type: e.type, sessionId: sid, at: e.ts, ...(e.type === "run_finished" && typeof e.data.status === "string" ? { status: e.data.status } : {}) });
     }
     if (e.type === "turn_end") extensions.emit({ type: "turn_end", sessionId: sid, at: e.ts });
@@ -1029,7 +1029,6 @@ class AppStore {
             this.feedback.announce(sid, bad ? "failed" : "done");
         }
         break;
-      case "approval_requested":
       case "question_requested":
         if (sid) {
           const first = !this.awaiting[sid];
@@ -1037,7 +1036,6 @@ class AppStore {
           if (first) this.prefs.cue("ask");
         }
         break;
-      case "approval_resolved":
       case "question_resolved":
         if (sid)
           this.awaiting[sid] = Math.max(0, (this.awaiting[sid] ?? 0) - 1);
@@ -1106,7 +1104,7 @@ class AppStore {
       if (api !== this.api) return;
       setRemotePacks(packs.filter((p) => p !== undefined));
     } catch {
-      /* older server or offline: keep the cached packs */
+      /* offline: keep the cached packs */
     }
   }
 
@@ -1245,18 +1243,9 @@ class AppStore {
     return typeof v === "number" && (ESCALATE_CHOICES as readonly number[]).includes(v) ? v : DEFAULT_ESCALATE;
   }
 
-  /** This server's starred models; a device that only has the old global list lends it to the first server it opens. */
+  /** This server's starred models. */
   private loadFavModels(serverId: string): string[] {
-    const own = read<unknown>(`${K.favModels}.${serverId}`, null);
-    let list: unknown = own;
-    if (!Array.isArray(own)) {
-      // the old single list goes to the first server opened after the update, then is retired
-      list = read<unknown>(K.favModels, []);
-      if (Array.isArray(list) && list.length) {
-        write(`${K.favModels}.${serverId}`, list);
-        try { localStorage.removeItem(K.favModels); } catch { /* ignore */ }
-      }
-    }
+    const list = read<unknown>(`${K.favModels}.${serverId}`, []);
     return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
   }
 
@@ -1272,7 +1261,7 @@ class AppStore {
     this.settingsSync?.changed("extensionStates");
   }
 
-  /** (Re)start syncing the open server's shared settings. Never throws: an unreachable or older server just keeps the local copy. */
+  /** (Re)start syncing the open server's shared settings. Never throws: an unreachable server just keeps the local copy. */
   private startSettingsSync(api: Api, serverId: string) {
     this.settingsSync?.dispose();
     const favKey = `${K.favModels}.${serverId}`;
@@ -1390,7 +1379,7 @@ class AppStore {
     try {
       this.workspace = await this.api.workspace();
     } catch {
-      /* older server: relPath falls back to the full path */
+      /* offline: relPath falls back to the full path */
     }
   }
 
@@ -1677,7 +1666,7 @@ class AppStore {
       return;
     }
     this.awaiting[id] = Object.values(chat.tools).filter(
-      (t) => t.state === "awaiting_approval",
+      (t) => t.state === "awaiting_input",
     ).length;
   }
 
@@ -1851,7 +1840,7 @@ class AppStore {
       if (api !== this.api) return;
       this.serverCommands = list.commands;
       this.tools = tools.tools;
-    } catch { /* an older server has no extensions; nothing to show */ }
+    } catch { /* unreachable: nothing to show */ }
   }
 
   /** Modal question asked by an extension (`sdk.dialog`). One at a time; a second request waits its turn. */
@@ -1940,17 +1929,6 @@ class AppStore {
       await this.api.retry(chat.id);
     } catch (e) {
       this.fail(e, t("다시 시도하지 못했습니다"), chat.id);
-    }
-  }
-
-  async decide(toolCallId: string, approved: boolean, reason?: string, id = this.activeId) {
-    const chat = this.chatOf(id);
-    if (!this.api || !chat) return;
-    try {
-      await this.api.decide(chat.id, toolCallId, approved, reason);
-    } catch (e) {
-      this.fail(e, t("승인 처리에 실패했습니다"), chat.id);
-      void chat.load();
     }
   }
 

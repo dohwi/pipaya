@@ -232,7 +232,7 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(CHANNEL_ID) != null) return
             val channel = NotificationChannel(CHANNEL_ID, "Pipaya", NotificationManager.IMPORTANCE_HIGH)
-            channel.description = "Task results and approval requests"
+            channel.description = "Task results and questions for you"
             manager.createNotificationChannel(channel)
         }
     }
