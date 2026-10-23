@@ -86,8 +86,8 @@
 		<div class="set" in:chipIn out:chipOut>
 			{#if mode === "compacting"}
 				<span class="compacting" role="status"><span class="spinner"></span> {t("압축 중")}</span>
-				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
-					{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
+				<button class="send hold" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("대기열")} title={t("압축이 끝나면 전송됩니다")}>
+					{#if sending}<span class="spinner"></span>{:else}<Icon name="list" />{/if}
 				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
@@ -169,6 +169,14 @@
 	}
 	.send:active:not(:disabled) {
 		transform: scale(0.9);
+	}
+	/* compaction: the message waits in the queue, so it gets the queue look (neutral), not the accent arrow */
+	.send.hold.on {
+		background: var(--bg-active);
+		color: var(--text);
+	}
+	.send.hold.on:hover {
+		background: var(--border-strong);
 	}
 	.send.stop {
 		background: var(--text);
