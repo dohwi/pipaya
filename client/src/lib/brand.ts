@@ -55,6 +55,25 @@ export const BRAND_COLOR: Record<Brand, string> = {
 	stepfun: "#005AFF",
 };
 
+/** Display names (the company, not the product) for every mark, including ones the picker no longer offers. */
+export const BRAND_LABEL: Record<Brand, string> = {
+	claude: "Anthropic", openai: "OpenAI", gemini: "Google", grok: "xAI", deepseek: "DeepSeek", qwen: "Alibaba", mistral: "Mistral AI",
+	meta: "Meta", zai: "Z.ai", moonshot: "Moonshot AI", minimax: "MiniMax", nvidia: "NVIDIA", perplexity: "Perplexity", cohere: "Cohere",
+	microsoft: "Microsoft", amazon: "Amazon", tencent: "Tencent", bytedance: "ByteDance", xiaomi: "Xiaomi", stepfun: "StepFun",
+};
+
+/** The pipaya mark itself, selectable as a model icon next to the model makers. */
+export const PIPAYA_ICON = "pipaya";
+
+/** What the icon picker offers: the companies that train their own models. Perplexity is a search service, so it is not listed (an icon already saved with it still shows). */
+export const MAKER_ICONS: Brand[] = [
+	"claude", "openai", "gemini", "grok", "meta", "mistral", "deepseek", "qwen", "zai", "moonshot", "minimax",
+	"cohere", "nvidia", "microsoft", "amazon", "tencent", "bytedance", "xiaomi", "stepfun",
+];
+/** Product names people search by, besides the company name. */
+export const ICON_ALIASES: Record<string, string> = { claude: "claude", gemini: "gemini gemma", grok: "grok", qwen: "qwen", zai: "glm", moonshot: "kimi", meta: "llama", microsoft: "phi", amazon: "nova", bytedance: "seed doubao", xiaomi: "mimo", nvidia: "nemotron" };
+export const ICON_LABEL: Record<string, string> = { [PIPAYA_ICON]: "pipaya", ...BRAND_LABEL };
+
 /** The model id wins over the provider, so a Claude reached through OpenRouter or Bedrock still shows Claude. */
 export function brandOf(provider: string | null | undefined, model: string | null | undefined): Brand | null {
 	for (const text of [model, provider]) {

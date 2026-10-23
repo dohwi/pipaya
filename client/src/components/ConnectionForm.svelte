@@ -20,7 +20,10 @@
 	import Switch from "./Switch.svelte";
 	import Select from "./Select.svelte";
 	import Badge from "./Badge.svelte";
+	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
+	import { ICON_LABEL } from "../lib/brand";
 	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -50,6 +53,8 @@
 		maxTokens: string;
 		reasoning: boolean;
 		vision: boolean;
+		/** Chosen brand mark; undefined = automatic (from the id) */
+		icon?: string;
 		/** Listed by the upstream itself: the id is fixed and cannot be edited */
 		fromUpstream?: boolean;
 		/** Empty = automatic (looked up by name on the server) */
@@ -187,6 +192,7 @@
 		r.thinkingLevels = [];
 	}
 	let matchFor = $state<number | null>(null);
+	let iconFor = $state<number | null>(null);
 
 
 	function startNew(preset?: LocalPreset) {
@@ -228,6 +234,7 @@
 				maxTokens: String(m.maxTokens),
 				reasoning: m.reasoning,
 				vision: m.vision,
+				icon: m.icon,
 				fromUpstream: m.fromUpstream,
 				thinkingLevels: m.thinkingLevels ?? [],
 				catalogId: m.catalogId,
@@ -319,6 +326,7 @@
 				maxTokens: max,
 				reasoning: r.reasoning,
 				vision: r.vision,
+				...(r.icon ? { icon: r.icon } : {}),
 				...(r.reasoning && r.thinkingLevels.length ? { thinkingLevels: allLevels.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			});
 		}
@@ -413,6 +421,14 @@
 								<span>{t("표시 이름")} <em>({tc("optional", "선택")})</em></span>
 								<input class="field" bind:value={r.name} placeholder={t("ID와 같으면 비워 두세요")} autocomplete="off" />
 							</label>
+						</section>
+						<section class="fsec">
+							<div class="mono-label">{t("아이콘")}</div>
+							<button type="button" class="mtrigger" onclick={() => (iconFor = editing)}>
+								<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
+								<span class="mtext">{r.icon ? (ICON_LABEL[r.icon] ?? r.icon) : t("자동")}</span>
+								<Icon name="chevron-down" />
+							</button>
 						</section>
 						<section class="fsec">
 							<div class="mono-label">{t("제한")}</div>
@@ -517,6 +533,7 @@
 						<div class="mpick">
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
+									<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
 									{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}
@@ -559,6 +576,10 @@
 				onpick={(c) => { pickMatch(mr, c); matchFor = null; }}
 				onclose={() => (matchFor = null)}
 			/>
+		{/if}
+		{#if iconFor !== null && form.rows[iconFor]}
+			{@const ir = form.rows[iconFor]!}
+			<IconPickerModal value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
 		{/if}
 	</Modal>
 {/if}
@@ -755,7 +776,7 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.mitem :global(svg) {
+	.mitem :global(svg:not(.model):not(.logo)) {
 		flex: none;
 		width: 16px;
 		height: 16px;
@@ -764,6 +785,18 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.mlogo {
+		flex: none;
+		display: grid;
+		place-items: center;
+		color: var(--text-dim);
+	}
+	.mitem :global(svg.model) {
+		stroke: none;
+		fill: currentColor;
+		width: 18px;
+		height: 18px;
 	}
 	.back {
 		margin-left: -8px;
@@ -811,7 +844,7 @@
 	.mtext.dim {
 		color: var(--text-dim);
 	}
-	.mtrigger :global(svg) {
+	.mtrigger :global(svg:not(.model):not(.logo)) {
 		width: 15px;
 		height: 15px;
 		flex: none;

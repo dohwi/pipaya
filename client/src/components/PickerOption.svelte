@@ -10,6 +10,7 @@
 		selected = false,
 		disabled = false,
 		onclick,
+		lead,
 		name,
 		meta,
 		trailing,
@@ -17,6 +18,8 @@
 		selected?: boolean;
 		disabled?: boolean;
 		onclick: () => void;
+		/** a logo or icon before the name */
+		lead?: Snippet;
 		name: Snippet;
 		meta?: Snippet;
 		trailing?: Snippet;
@@ -25,6 +28,7 @@
 
 <div class="pk-row" class:sel={selected}>
 	<button type="button" class="pk-opt" class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
+		{#if lead}<span class="lead">{@render lead()}</span>{/if}
 		<span class="main">
 			<span class="name">{@render name()}</span>
 			{#if meta}<span class="meta">{@render meta()}</span>{/if}
@@ -66,6 +70,13 @@
 	.pk-opt.dim {
 		opacity: 0.5;
 		cursor: default;
+	}
+	.lead {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		color: var(--text-dim);
 	}
 	.main {
 		display: flex;

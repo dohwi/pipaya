@@ -19,10 +19,11 @@
 		const e = app.effectiveOf(id);
 		return { provider: e.provider, model: e.model };
 	});
+	const icon = $derived(app.models.find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
+	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
 </span>
 
 <style>
@@ -57,30 +58,57 @@
 	.failed {
 		color: var(--danger);
 	}
+	/* every state moves on one beat (--beat) and one easing, so several badges side by side stay calm and in step */
+	.agent {
+		--beat: 1.8s;
+		--dim: 0.5;
+	}
 	.working .logo {
-		animation: pulse 1.2s ease-in-out infinite;
+		animation: pulse var(--beat) ease-in-out infinite;
 	}
 	.asking .logo {
-		animation: nudge 1.2s ease-in-out infinite;
+		animation: ask var(--beat) ease-in-out infinite;
 	}
+	/* failed: a short shake at the start of each beat, then rest */
+	.failed .logo {
+		animation: shake var(--beat) ease-in-out infinite;
+	}
+	/* working: bright, dims halfway, bright again */
 	@keyframes pulse {
 		50% {
-			opacity: 0.35;
+			opacity: var(--dim);
 		}
 	}
-	/* asking: the logo swells and a glow in its own shape radiates out, then fades */
-	@keyframes nudge {
-		0% {
-			transform: scale(1);
-			filter: drop-shadow(0 0 0 currentColor);
+	/* asking: the same breath and phase as working, plus a small swell and a glow in the logo's own shape while it is bright */
+	@keyframes ask {
+		0%,
+		100% {
+			transform: scale(1.12);
+			filter: drop-shadow(0 0 4px currentColor);
 		}
 		50% {
-			transform: scale(1.18);
-			filter: drop-shadow(0 0 5px currentColor);
-		}
-		100% {
+			opacity: var(--dim);
 			transform: scale(1);
 			filter: drop-shadow(0 0 0 currentColor);
+		}
+	}
+	@keyframes shake {
+		0%,
+		30%,
+		100% {
+			transform: translateX(0);
+		}
+		6% {
+			transform: translateX(-1.5px);
+		}
+		12% {
+			transform: translateX(1.5px);
+		}
+		18% {
+			transform: translateX(-1px);
+		}
+		24% {
+			transform: translateX(1px);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

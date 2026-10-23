@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
+	import ModelLogo from "./ModelLogo.svelte";
 	import Icon from "./Icon.svelte";
 	import ModelPickerModal from "./ModelPickerModal.svelte";
 	import type { ModelInfo, ProviderInfo, ThinkingLevel } from "../lib/types";
@@ -61,6 +62,7 @@
 	aria-label={variant === "field" ? label : undefined}
 	title={variant === "inline" ? label : undefined}
 >
+	{#if value}<span class="mlogo"><ModelLogo icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
@@ -124,6 +126,11 @@
 	}
 	.trigger:disabled {
 		opacity: 0.5;
+	}
+	.mlogo {
+		flex: none;
+		display: grid;
+		place-items: center;
 	}
 	.mname {
 		min-width: 0;
