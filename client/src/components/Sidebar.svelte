@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { extensions } from "../lib/extensions/host.svelte";
 	import StatusDot from "./StatusDot.svelte";
+	import Pin from "./Pin.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
@@ -490,8 +491,7 @@
 
 	<div class="bottom">
 		<button class="settings wide" onclick={() => app.openSettings()}>
-			<Icon name="settings" /> {t("설정")}
-			{#if app.net !== "online"}<span class="settingsdot"><StatusDot tone="warn" /></span>{/if}
+			<span class="sico"><Icon name="settings" />{#if app.net !== "online"}<Pin tone="warn" label={t("연결 안 됨")} />{/if}</span> {t("설정")}
 		</button>
 	</div>
 </aside>
@@ -1033,8 +1033,9 @@
 		background: var(--bg-hover);
 		color: var(--text);
 	}
-	.settingsdot {
-		margin-left: auto;
+	.sico {
+		position: relative;
+		display: inline-flex;
 	}
 	/* hairline between workspaces / groups */
 

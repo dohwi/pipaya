@@ -4,6 +4,7 @@
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
+	import Pin from "./Pin.svelte";
 	import { app } from "../lib/store.svelte";
 		import { tilde } from "../lib/format";
 	import { sidebarDirs, tabPanes, type DirBlock } from "../lib/nav";
@@ -69,7 +70,7 @@
 		aria-current={cur ? "true" : undefined}
 	>
 		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
-		{#if n > 0}<span class="cnt {st}">{n > 99 ? "99+" : n}</span>{/if}
+		{#if n > 0}<Pin count={n} tone={st === "idle" ? (cur ? "accent" : "neutral") : st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} />{/if}
 	</button>
 {/snippet}
 
@@ -190,6 +191,8 @@
 		width: 44px;
 		height: 44px;
 		border-radius: var(--radius-sm);
+		/* the list scrolls and clips, so the count stays inside the tile */
+		--pin-inset: 0px;
 	}
 	/* a folder: just its first letter; the button's own shape (hover, selected ring) is the only box */
 	.agent.dir {
@@ -220,40 +223,6 @@
 	}
 	.agents:global([data-indicator-ready]) .agent.dir.active {
 		background: var(--accent-soft);
-	}
-	/* one badge: the session count, tinted by the folder's most urgent state */
-	.cnt {
-		position: absolute;
-		top: 0;
-		right: 0;
-		min-width: 12px;
-		height: 14px;
-		padding: 0 3px;
-		box-sizing: content-box;
-		border: 2px solid var(--bg-side);
-		border-radius: var(--radius-pill);
-		background: var(--bg-active);
-		color: var(--text-dim);
-		font-family: var(--mono);
-		font-size: 9px;
-		font-weight: 600;
-		line-height: 14px;
-		text-align: center;
-		font-variant-numeric: tabular-nums;
-	}
-	.agent.dir.active .cnt.idle {
-		background: var(--text);
-		color: var(--bg-side);
-	}
-	.cnt.working { background: var(--info); color: var(--bg-side); animation: cnt-pulse 1.8s ease-in-out infinite; }
-	.cnt.asking { background: var(--warn); color: var(--bg-side); }
-	.cnt.done { background: var(--ok); color: var(--bg-side); }
-	.cnt.failed { background: var(--danger); color: var(--bg-side); }
-	@keyframes cnt-pulse {
-		50% { opacity: 0.55; }
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.cnt.working { animation: none; }
 	}
 	.agent {
 		-webkit-tap-highlight-color: transparent;

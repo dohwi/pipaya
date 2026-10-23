@@ -15,6 +15,7 @@
 	import SettingRow from "./SettingRow.svelte";
 	import Segmented from "./Segmented.svelte";
 	import FilterChip from "./FilterChip.svelte";
+	import Pin from "./Pin.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
 	import UpdateSettings from "./UpdateSettings.svelte";
 	import TerminalSettings from "./TerminalSettings.svelte";
@@ -206,7 +207,7 @@
 		{#each app.servers as s (s.id)}
 			<span class="chipwrap">
 				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-				{#if needsUpdate(s.id)}<span class="updot" role="img" aria-label={t("업데이트 필요")} title={t("업데이트 필요")}></span>{/if}
+				{#if needsUpdate(s.id)}<Pin tone="warn" label={t("업데이트 필요")} />{/if}
 			</span>
 		{/each}
 	</div>
@@ -503,18 +504,7 @@
 		position: relative;
 		flex: none;
 		display: inline-flex;
-	}
-	.updot {
-		position: absolute;
-		top: -3px;
-		right: -2px;
-		z-index: 1;
-		width: 9px;
-		height: 9px;
-		border-radius: 50%;
-		background: var(--warn);
-		box-shadow: 0 0 0 2px var(--bg-elev, var(--bg));
-		pointer-events: none;
+		--pin-ring: var(--bg-elev);
 	}
 	.srvname {
 		min-width: 0;

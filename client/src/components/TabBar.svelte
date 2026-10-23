@@ -2,6 +2,7 @@
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
+	import Pin from "./Pin.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
@@ -131,8 +132,7 @@
 					onauxclick={(e) => e.button === 1 && close(x)}
 				>
 					{#if x.kind === "group"}
-						<span class="ico"><Icon name="columns" /></span>
-						{#if st !== "idle"}<span class="dot {st}"></span>{/if}
+						<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
 					{:else if x.kind === "terminal"}
 						<span class="ico"><Icon name="terminal" /></span>
 					{:else}
@@ -275,6 +275,9 @@
 		display: grid;
 		flex: none;
 	}
+	.gico {
+		position: relative;
+	}
 	.ico :global(svg),
 	.x :global(svg),
 	.add :global(svg) {
@@ -286,17 +289,6 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.dot {
-		flex: none;
-		width: 6px;
-		height: 6px;
-		margin-left: -4px;
-		border-radius: 50%;
-	}
-	.dot.working { background: var(--info); }
-	.dot.asking { background: var(--warn); }
-	.dot.done { background: var(--ok); }
-	.dot.failed { background: var(--danger); }
 	.x {
 		display: grid;
 		place-items: center;
