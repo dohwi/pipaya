@@ -165,6 +165,8 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// The approval option is gone: every tool runs without asking, so neither the per-session policy nor the saved default is kept.
 	`ALTER TABLE sessions DROP COLUMN approval;
 	 DELETE FROM settings WHERE key = 'default_approval';`,
+	// Images uploaded as model icons (a model's `icon` is "img:<id>").
+	`CREATE TABLE IF NOT EXISTS model_icons (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);`,
 ];
 
 export function openDb(path: string): Database {

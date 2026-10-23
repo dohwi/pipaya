@@ -4,6 +4,8 @@ import { IdParams, Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
 import { catalogEntries } from "./thinking-catalog.ts";
+import { badRequest, notFound } from "./errors.ts";
+import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
 
 const CatalogResult = Type.Object({
@@ -24,6 +26,34 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 	app.get("/configuration/catalog", {
 		schema: { response: { 200: CatalogResult, ...errors(401) } },
 		handler: async () => ({ models: catalogEntries() }),
+	});
+	app.post("/configuration/icons", {
+		schema: {
+			description: "Upload an image (PNG, JPEG or WebP, up to 256 KB) to use as a model icon. Returns the value to put in a model's `icon`.",
+			body: Type.Object({ data: Type.String({ minLength: 1, maxLength: Math.ceil(MAX_ICON_BYTES * 1.4), description: "base64 of the image bytes" }) }, { additionalProperties: false }),
+			response: { 200: Type.Object({ icon: Type.String() }), ...errors(400, 401) },
+		},
+		handler: async (req) => {
+			if (!/^[A-Za-z0-9+/]+={0,2}$/.test(req.body.data)) throw badRequest("data must be base64");
+			return { icon: config.images.add(Buffer.from(req.body.data, "base64")) };
+		},
+	});
+	app.get("/configuration/icons", {
+		schema: { description: "Icon values of the uploaded images, newest first", response: { 200: Type.Object({ icons: Type.Array(Type.String()) }), ...errors(401) } },
+		handler: async () => ({ icons: config.images.list() }),
+	});
+	app.get("/configuration/icons/:id", {
+		schema: { params: IdParams, response: { ...errors(401, 404) } },
+		handler: async (req, reply) => {
+			const icon = config.images.get(req.params.id);
+			if (!icon) throw notFound("icon");
+			return reply
+				.header("content-type", icon.mime)
+				.header("x-content-type-options", "nosniff")
+				.header("content-security-policy", "sandbox; default-src 'none'")
+				.header("cache-control", "private, max-age=31536000, immutable")
+				.send(icon.data);
+		},
 	});
 	app.post("/configuration/discover", {
 		schema: { body: DiscoverBody, response: { 200: DiscoverResult, ...errors(400, 401) } },

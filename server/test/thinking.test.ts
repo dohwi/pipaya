@@ -30,7 +30,7 @@ describe("thinking levels", () => {
 			const migrated = new SessionStore(db);
 			expect(migrated.get("legacy-off")).toEqual(record);
 			expect(migrated.get("existing-high")?.thinkingLevel).toBe("high");
-			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 22 });
+			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 23 });
 			db.close();
 			db = openDb(path);
 			expect(new SessionStore(db).get("legacy-off")?.thinkingLevel).toBe("medium");

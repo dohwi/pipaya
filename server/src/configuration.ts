@@ -10,6 +10,7 @@ import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Thinking } from "./schemas.ts";
 import { catalogEntries, catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
+import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
@@ -166,12 +167,16 @@ export class Configuration {
 		return this.switchable();
 	}
 
+	/** Images owners uploaded as model icons. */
+	readonly images: ModelIcons;
+
 	constructor(
 		private db: Database,
 		private cfg: Config,
 		private registry: ModelRegistry,
 		private credentials: SqliteCredentialStore,
 	) {
+		this.images = new ModelIcons(db);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
 		registry.defaultSelection = () => this.effectiveDefaults();
 	}
@@ -208,6 +213,9 @@ export class Configuration {
 		const rows = this.db.query("SELECT id, data FROM custom_providers ORDER BY id").all() as { id: string; data: string }[];
 		return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
 	}
+
+	/** Remove uploaded icon images that no model uses (recent ones stay). */
+	pruneIcons() { this.images.prune(this.list().flatMap((p) => p.models.flatMap((m) => (m.icon ? [m.icon] : [])))); }
 
 	/** `provider/model` -> chosen icon, for the models that have one. */
 	icons(): Map<string, string> {
@@ -284,6 +292,7 @@ export class Configuration {
 		if (ids.some((m) => !m) || new Set(ids).size !== ids.length) throw badRequest("model ids must be nonempty and unique");
 		if (input.models.some((m) => m.maxTokens > m.contextWindow)) throw badRequest("maxTokens must not exceed contextWindow");
 		if (!input.name.trim()) throw badRequest("name must not be blank");
+		if (input.models.some((m) => m.icon?.startsWith("img:") && !this.images.has(m.icon))) throw badRequest("icon image not found: upload it first");
 		const p: CustomProvider = { ...input, id, name: input.name.trim(), baseUrl: url.toString().replace(/\/$/, ""), models: input.models.map((m) => ({ ...m, id: m.id.trim() })) };
 		const defaultModel = this.effectiveDefaults();
 		if (defaultModel?.provider === id && !ids.includes(defaultModel.model)) throw conflict("cannot remove the default model; change defaults first");
@@ -293,6 +302,7 @@ export class Configuration {
 		this.db.query("INSERT INTO custom_providers (id, data) VALUES ($id, $data) ON CONFLICT(id) DO UPDATE SET data = $data")
 			.run({ id, data: JSON.stringify(p) });
 		this.registry.models.setProvider(runtime);
+		this.pruneIcons();
 		this.missing.delete(id);
 		this.checkedAt.delete(id);
 		return this.describe(p);
@@ -393,6 +403,7 @@ export class Configuration {
 			}
 			this.db.query("DELETE FROM custom_providers WHERE id = $id").run({ id });
 		});
+		this.pruneIcons();
 		this.missing.delete(id);
 		this.checkedAt.delete(id);
 		this.registry.models.deleteProvider(id);
