@@ -13,7 +13,7 @@ let base: string;
 
 beforeAll(async () => {
 	dir = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-term-")));
-	const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
+	const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" };
 	app = await buildApp(cfg, { home: dir, builtinSkills: false, extensionDirs: [] });
 	await app.server.listen({ host: "127.0.0.1", port: 0 });
 	const addr = app.server.server.address() as { port: number };

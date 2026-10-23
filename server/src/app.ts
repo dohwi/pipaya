@@ -122,7 +122,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.approvalInfo().effective, () => configuration.disabledTools(), systemModel);
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
 	const busy = (id: string) => sessions.isRunning(id) || approvals.list(id).length > 0 || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, closed: r.closed, parentId: r.parentId,
@@ -266,7 +266,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async () => ({
 			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
 			defaults: extensions.defaultTools(),
-			defaultApproval: configuration.approvalInfo().effective,
 		}),
 	});
 	app.get("/models", {

@@ -225,7 +225,7 @@ describe("unread on the PC: escalate to the phone (Discord style)", () => {
 
 test("notification API requires bearer auth and strictly validates registration/rules", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pipaya-notifications-"));
-  const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
+  const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
   disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
   const headers = { authorization: "Bearer t" };
   expect((await app.server.inject({ method: "GET", url: "/notifications/status" })).statusCode).toBe(401);
@@ -340,7 +340,7 @@ describe("device list", () => {
   });
   test("over HTTP: GET lists, DELETE removes, both need the token", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pipaya-devices-"));
-    const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
+    const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
     disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
     const auth = { authorization: "Bearer t" }, headers = { ...auth, "content-type": "application/json" };
     expect((await app.server.inject({ method: "GET", url: "/notifications/devices" })).statusCode).toBe(401);

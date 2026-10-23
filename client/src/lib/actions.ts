@@ -18,11 +18,9 @@ import {
 } from "./keys";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
-import type { ApprovalMode, ThinkingLevel } from "./types";
-import { approvalMode } from "./store-model";
+import type { ThinkingLevel } from "./types";
 import { msg, t, tc } from "./i18n";
 
-const APPROVAL_LABEL: Record<ApprovalMode, string> = { ask: msg("프로젝트 밖만 확인", "approval"), auto: msg("자동", "approval") };
 
 const LEVELS: ThinkingLevel[] = [
   "minimal",
@@ -67,12 +65,6 @@ async function cycleThinking() {
   const own = model.thinkingLevels?.length ? LEVELS.filter((x) => model.thinkingLevels!.includes(x)) : LEVELS;
   const l = next(own, (x) => x === app.effective.thinkingLevel);
   if (l) await app.configure({ thinkingLevel: l });
-}
-
-async function cycleApproval() {
-  const a: ApprovalMode = approvalMode(app.effective.approval) === "auto" ? "ask" : "auto";
-  if (await app.setApprovalMode(a))
-    app.toast(t("승인 방식: {name}", { name: tc("approval", APPROVAL_LABEL[a]) }), "ok", app.activeId);
 }
 
 /** Previous / next conversation in sidebar order. */
@@ -230,7 +222,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   copyLast: () => runCommand("copy"),
   scrollTop: () => scrollTo("top"),
   scrollBottom: () => scrollTo("bottom"),
-  cycleApproval,
   approveTool: () => decideAll(true),
   denyTool: () => decideAll(false),
   focusLeft: () => focusToward("left"),

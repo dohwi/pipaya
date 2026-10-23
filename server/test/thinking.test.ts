@@ -18,18 +18,19 @@ describe("thinking levels", () => {
 			const store = new SessionStore(db);
 			const record: SessionRecord = {
 				id: "legacy-off", title: "Keep my title", name: "t", cwd: dir, provider: "custom", model: "manual",
-				thinkingLevel: "medium", systemPrompt: "Keep my prompt", tools: ["read"], approval: "ask",
+				thinkingLevel: "medium", systemPrompt: "Keep my prompt", tools: ["read"],
 				purpose: "", parentId: null, closed: false, createdAt: 100, updatedAt: 200,
 			};
 			store.create(record);
 			store.create({ ...record, id: "existing-high", thinkingLevel: "high" });
-			db.exec("UPDATE sessions SET thinking_level = 'off' WHERE id = 'legacy-off'; PRAGMA user_version = 3");
+			// The rewind below replays old migrations, which still read the approval column that the newest one drops.
+			db.exec("ALTER TABLE sessions ADD COLUMN approval TEXT NOT NULL DEFAULT 'auto'; UPDATE sessions SET thinking_level = 'off' WHERE id = 'legacy-off'; PRAGMA user_version = 3");
 			db.close();
 			db = openDb(path);
 			const migrated = new SessionStore(db);
 			expect(migrated.get("legacy-off")).toEqual(record);
 			expect(migrated.get("existing-high")?.thinkingLevel).toBe("high");
-			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 21 });
+			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 22 });
 			db.close();
 			db = openDb(path);
 			expect(new SessionStore(db).get("legacy-off")?.thinkingLevel).toBe("medium");

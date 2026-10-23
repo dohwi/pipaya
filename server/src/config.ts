@@ -3,8 +3,6 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
-export type ApprovalPolicy = "auto" | "ask" | "readonly";
-export const APPROVAL_POLICIES: readonly ApprovalPolicy[] = ["auto", "ask", "readonly"];
 
 export interface Config {
 	host: string;
@@ -19,7 +17,6 @@ export interface Config {
 	restrictWorkspace?: boolean;
 	defaultProvider?: string;
 	defaultModel?: string;
-	defaultApproval: ApprovalPolicy;
 	/** Auto-deny a pending tool approval after this many ms (0 = never). */
 	approvalTimeoutMs: number;
 	logLevel: string;
@@ -70,11 +67,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 	const dataDir = resolve(env.PIPAYA_DATA_DIR ?? join(homedir(), ".pipaya"));
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
-	const approval = (env.PIPAYA_APPROVAL ?? "auto") as ApprovalPolicy;
-	if (!APPROVAL_POLICIES.includes(approval)) {
-		throw new Error(`PIPAYA_APPROVAL must be one of ${APPROVAL_POLICIES.join(", ")}`);
-	}
-
 	return {
 		host: env.PIPAYA_HOST ?? "0.0.0.0",
 		port: int(env.PIPAYA_PORT, 8787),
@@ -85,7 +77,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		restrictWorkspace: env.PIPAYA_RESTRICT_WORKSPACE === "1",
 		defaultProvider: env.PIPAYA_PROVIDER,
 		defaultModel: env.PIPAYA_MODEL,
-		defaultApproval: approval,
 		approvalTimeoutMs: int(env.PIPAYA_APPROVAL_TIMEOUT_MS, 10 * 60_000),
 		logLevel: env.PIPAYA_LOG_LEVEL ?? "info",
 		corsOrigins: env.PIPAYA_CORS_ORIGINS,

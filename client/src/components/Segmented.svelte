@@ -6,7 +6,7 @@
 	/**
 	 * One choice out of a few, with the sliding marker (lib/sliding-indicator.ts) and arrow keys (lib/roving.ts).
 	 *  - `variant="fill"`: the compact pill track (`.seg` in app.css), for a mode switch;
-	 *  - `variant="cards"`: equal-width outlined cards, for a setting (language, theme, approval).
+	 *  - `variant="cards"`: equal-width outlined cards, for a setting (language, theme).
 	 * `tabs`: the options switch what is shown below (role=tablist/tab); otherwise they are a pressed-button group.
 	 * `option` renders an option's inside when it needs more than its label (an icon).
 	 */

@@ -54,7 +54,7 @@ beforeAll(async () => {
 		return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(end)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 	} });
 	baseUrl = `http://127.0.0.1:${upstream.port}/v1`;
-	cfg = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "workspace"), defaultApproval: "ask", approvalTimeoutMs: 1000, logLevel: "silent" };
+	cfg = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "workspace"), approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
 afterAll(async () => { await app.close(); upstream.stop(true); rmSync(dir, { recursive: true, force: true }); });
@@ -130,23 +130,6 @@ describe("settings", () => {
 		for (const path of ["/configuration", "/providers", "/events/history"]) {
 			expect(JSON.stringify((await api("GET", path)).body)).not.toContain(key);
 		}
-	});
-
-	test("default tool approval is saved on the server and applies to new sessions", async () => {
-		expect((await api("GET", "/configuration")).body.approval).toEqual({ saved: null, effective: "ask", fallback: "ask" });
-		expect((await api("PUT", "/configuration/approval", { approval: "bogus" })).status).toBe(400);
-		expect((await api("PUT", "/configuration/approval", { approval: "auto" })).body).toEqual({ saved: "auto", effective: "auto", fallback: "ask" });
-		expect((await api("GET", "/tools")).body.defaultApproval).toBe("auto");
-		const id = (await api("POST", "/sessions", {})).body.id;
-		expect((await api("GET", `/sessions/${id}`)).body.approval).toBe("auto");
-		await app.close();
-		app = await buildApp(cfg, { strictResponses: true });
-		expect((await api("GET", "/configuration")).body.approval.effective).toBe("auto");
-		expect((await api("PUT", "/configuration/approval", { approval: null })).body).toEqual({ saved: null, effective: "ask", fallback: "ask" });
-		const id2 = (await api("POST", "/sessions", {})).body;
-		expect(id2.approval).toBe("ask");
-		await api("DELETE", `/sessions/${id}`);
-		await api("DELETE", `/sessions/${id2.id}`);
 	});
 
 	test("default settings persist across restart and apply only to new sessions", async () => {

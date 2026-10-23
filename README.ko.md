@@ -31,7 +31,6 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 ## 주요 기능
 
 - **내장 도구 9종**: read, write, edit, ls, grep, bash, ask_user, peer_send, peer_read
-- **승인 정책**: `ask`(기본), `auto`, `readonly`. 무엇을 바꿀 수 있는지 직접 정합니다
 - **어떤 모델이든**: 내장 제공자, 로컬 서버(Ollama, LM Studio, llama.cpp, vLLM), 직접 만든 엔드포인트
 - **여러 기기, 하나의 대화**: Windows, macOS, Android, 웹. 알림과 모바일 푸시 지원
 - **협업과 분할 화면**: `@이름`으로 다른 세션에 일을 넘기고, 한 화면에 대화를 최대 8개까지 배치
@@ -71,7 +70,7 @@ docker compose up -d --build
 docker compose exec pipaya cat /data/token    # 접속 토큰
 ```
 
-`.env` 파일에 `PIPAYA_WORKSPACE_DIR`(에이전트가 작업할 호스트 폴더), `PIPAYA_BIND`, `PIPAYA_PORT`, `PIPAYA_APPROVAL`을 지정할 수 있습니다. 자세한 내용은 [`compose.yaml`](compose.yaml)을 보세요.
+`.env` 파일에 `PIPAYA_WORKSPACE_DIR`(에이전트가 작업할 호스트 폴더), `PIPAYA_BIND`, `PIPAYA_PORT`를 지정할 수 있습니다. 자세한 내용은 [`compose.yaml`](compose.yaml)을 보세요.
 
 ## 보안
 

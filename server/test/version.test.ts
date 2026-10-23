@@ -44,7 +44,7 @@ describe("version handshake", () => {
 		mkdirSync(join(root, ".git"), { recursive: true });
 		mkdirSync(join(root, "server", "src"), { recursive: true });
 		writeFileSync(join(root, "server", "src", "index.ts"), "");
-		const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
+		const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 0, logLevel: "silent" };
 		app = await buildApp(cfg, {
 			selfUpdate: {
 				root,

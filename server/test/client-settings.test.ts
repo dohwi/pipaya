@@ -20,7 +20,7 @@ const api = async (method: any, url: string, payload?: unknown, auth = true) => 
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-client-settings-"));
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
 afterAll(async () => {

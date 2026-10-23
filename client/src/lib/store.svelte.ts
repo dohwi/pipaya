@@ -31,8 +31,6 @@ import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState } from "./sidebar.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
-  ApprovalMode,
-  ApprovalPolicy,
   Group,
   DefaultModelSelection,
   PipayaEvent,
@@ -57,7 +55,7 @@ export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
 export { SIDEBAR_W } from "./sidebar.svelte";
 export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
-import { approvalMode, draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
+import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
 
 class AppStore {
@@ -314,7 +312,6 @@ class AppStore {
           provider: s.provider,
           model: s.model,
           thinkingLevel: normalizeThinking(s.thinkingLevel),
-          approval: s.approval,
         }
       : this.draft;
   }
@@ -802,9 +799,6 @@ class AppStore {
       this.models = models;
       this.providers = providers;
       this.tools = tools.tools;
-      // New chats follow the server's approval default, not whatever the browser last remembered.
-      const serverApproval = config?.approval?.effective ?? tools.defaultApproval;
-      if (serverApproval) this.updateDraft({ approval: approvalMode(serverApproval) });
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
@@ -1063,11 +1057,6 @@ class AppStore {
       case "configuration_updated":
         this.configTick++;
         void this.refreshProviders();
-        if ((e.data as { scope?: string } | undefined)?.scope === "approval") {
-          // The server's default changed (here or from another client): new chats follow it.
-          const eff = (e.data as { effective?: ApprovalPolicy }).effective;
-          if (eff) this.updateDraft({ approval: approvalMode(eff) });
-        }
         if ((e.data as { scope?: string } | undefined)?.scope === "tools") {
           this.toolsInfo = e.data as ToolsInfo;
         }
@@ -1600,7 +1589,6 @@ class AppStore {
         provider: d.provider,
         model: d.model,
         thinkingLevel: normalizeThinking(d.thinkingLevel),
-        approval: d.approval,
       });
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
       await this.openSession(s.id, true);
@@ -1626,7 +1614,6 @@ class AppStore {
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
-        approval: from.approval,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -1779,7 +1766,6 @@ class AppStore {
           provider: d.provider,
           model: d.model,
           thinkingLevel: normalizeThinking(d.thinkingLevel),
-          approval: d.approval,
         });
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
@@ -2078,7 +2064,6 @@ class AppStore {
         provider: base?.provider ?? d.provider,
         model: base?.model ?? d.model,
         thinkingLevel: base?.thinkingLevel ?? normalizeThinking(d.thinkingLevel),
-        approval: base?.approval ?? d.approval,
       });
       if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
       await this.dropSession(made.id, target, zone, focus);
@@ -2115,7 +2100,6 @@ class AppStore {
           provider: d.provider,
           model: d.model,
           thinkingLevel: normalizeThinking(d.thinkingLevel),
-          approval: d.approval,
         });
       } catch (e) {
         return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -2132,7 +2116,6 @@ class AppStore {
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
-        approval: from.approval,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -2211,7 +2194,7 @@ class AppStore {
     if (g && panesOf(g.layout).length >= MAX_PANES)
       return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
     try {
-      const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel), approval: d.approval });
+      const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel) });
       if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
       await this.dropSession(made.id, target, zone);
     } catch (e) {
@@ -2373,9 +2356,9 @@ class AppStore {
   /**
    * Change model/thinking. These belong to the open chat (the server stores them on the session); only a new
    * chat that has no session yet edits the draft. A change to one chat never leaks into another chat or into
-   * what new chats start with. (Tool approval is different: see setApprovalMode.)
+   * what new chats start with.
    */
-  async configure(patch: Partial<Omit<Draft, "approval">>, id = this.activeId): Promise<boolean> {
+  async configure(patch: Partial<Draft>, id = this.activeId): Promise<boolean> {
     if (this.chatOf(id)?.compacting) {
       this.toast(t("압축이 끝난 뒤 모델 설정을 변경하세요"), "error", id);
       return false;
@@ -2397,42 +2380,6 @@ class AppStore {
       return true;
     } catch (e) {
       this.fail(e, t("변경하지 못했습니다"), s.id);
-      return false;
-    }
-  }
-
-  /**
-   * Tool approval: "ask" confirms only what reaches outside the project, "auto" never asks. One setting, not one per
-   * chat: it is saved on the server as the default every new chat starts with, and the open chat follows it right
-   * away, so switching to auto once stays auto. Other chats that are already open keep the mode they have.
-   * Returns false (after telling the user) when nothing could be applied.
-   */
-  async setApprovalMode(mode: ApprovalMode): Promise<boolean> {
-    const api = this.api;
-    if (!api) return false;
-    const sid = this.activeId;
-    const s = this.session(sid);
-    const before = this.draft.approval;
-    this.updateDraft({ approval: mode });
-    let chatChanged = false;
-    try {
-      if (s && s.approval !== mode) {
-        const updated = await api.patchSession(s.id, { approval: mode });
-        const i = this.sessions.findIndex((x) => x.id === s.id);
-        if (i >= 0) this.sessions[i] = { ...this.sessions[i]!, ...updated, updatedAt: s.updatedAt };
-        chatChanged = true;
-      }
-      await api.setDefaultApproval(mode);
-      return true;
-    } catch (e) {
-      // A server from before the default existed has no such route. The open chat may already have the new mode;
-      // say why new chats will not keep it instead of showing a bare "not found".
-      if (chatChanged && isUnsupportedRoute(e)) {
-        this.toast(t("이 서버는 새 대화의 기본값을 저장하지 못합니다. 서버를 업데이트하세요"), "error", sid);
-        return true;
-      }
-      if (!chatChanged) this.updateDraft({ approval: before });
-      this.fail(e, t("변경하지 못했습니다"), sid);
       return false;
     }
   }

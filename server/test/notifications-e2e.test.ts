@@ -21,7 +21,7 @@ const setPolicy = (escalateMinutes: number) => call("PUT", "/client-settings/not
 /** A chat with a title, made directly: creating one over HTTP needs a model provider that is irrelevant here. */
 const chat = (title: string): string => {
 	const sid = `chat-${crypto.randomUUID()}`; const db = new Database(join(dir, "db"));
-	try { db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, approval, closed, created_at, updated_at) VALUES (?, ?, ?, 'p', 'm', 'medium', '', '[]', 'ask', 0, 1, 1)").run(sid, title, dir); } finally { db.close(); }
+	try { db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES (?, ?, ?, 'p', 'm', 'medium', '', '[]', 0, 1, 1)").run(sid, title, dir); } finally { db.close(); }
 	return sid;
 };
 /** Puts a message into a chat the way the agent loop does, through a second connection to the same database file. */
@@ -30,7 +30,7 @@ const finishRun = (sid = "s1") => app.bus.publish(sid, "run_finished", { status:
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-notify-e2e-"));
-	app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false, pushTransports: transports, mobileDelayMs: 40, strictResponses: true });
+	app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false, pushTransports: transports, mobileDelayMs: 40, strictResponses: true });
 });
 afterAll(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
 

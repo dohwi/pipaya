@@ -19,7 +19,7 @@ const model = (id: string, extra = {}) => ({ id, contextWindow: 8192, maxTokens:
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-refresh-"));
 	upstream = Bun.serve({ hostname: "0.0.0.0", port: 0, fetch: () => Response.json({ data: listed.map((id) => ({ id })) }) });
-	cfg = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "workspace"), defaultApproval: "ask", approvalTimeoutMs: 1000, logLevel: "silent" };
+	cfg = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "workspace"), approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
 afterAll(async () => { await app.close(); upstream.stop(true); rmSync(dir, { recursive: true, force: true }); });

@@ -14,7 +14,7 @@ let port: number;
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-ws-"));
-	const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: dir, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
+	const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: TOKEN, workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" };
 	app = await buildApp(cfg, { websocket: { heartbeatMs: 60 } });
 	const addr = await app.server.listen({ host: "0.0.0.0", port: 0 });
 	url = `${addr.replace("http", "ws")}/ws?token=${TOKEN}`;
@@ -101,7 +101,7 @@ describe("websocket heartbeat", () => {
 describe("websocket slow clients", () => {
 	test("a client whose queue is over the limit is closed with 1013 so it reconnects and replays", async () => {
 		const dir2 = mkdtempSync(join(tmpdir(), "pipaya-ws-slow-"));
-		const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir2, dbPath: join(dir2, "db.sqlite"), token: TOKEN, workspaceRoot: dir2, defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
+		const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir2, dbPath: join(dir2, "db.sqlite"), token: TOKEN, workspaceRoot: dir2, approvalTimeoutMs: 0, logLevel: "silent" };
 		// a negative limit: every send finds the queue "over", which is the path a stalled phone takes
 		const slow = await buildApp(cfg, { websocket: { maxBuffered: -1 } });
 		const addr = await slow.server.listen({ host: "0.0.0.0", port: 0 });

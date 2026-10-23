@@ -1,5 +1,4 @@
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ApprovalPolicy } from "./config.ts";
 import type { ModelChoiceValue } from "./model-choice.ts";
 import type { SkillRef } from "./skills.ts";
 import type { ThinkingLevel } from "./store.ts";
@@ -22,7 +21,6 @@ export interface CreateSessionInput {
 	thinkingLevel?: ThinkingLevel;
 	systemPrompt?: string;
 	tools?: string[];
-	approval?: ApprovalPolicy;
 	/** UI language tag of the client (`ko`, `en`, ...); picks the name pool. Omitted = Korean names. */
 	lang?: string;
 }

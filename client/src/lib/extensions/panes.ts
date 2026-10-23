@@ -1,7 +1,7 @@
 import type { app as AppStore } from "../store.svelte";
 import { measure, panesOf, resizePane, swap, type Edge, type Layout } from "../layout";
 import { isTerminalId } from "../terminal";
-import type { ApprovalPolicy, ThinkingLevel } from "../types";
+import type { ThinkingLevel } from "../types";
 import { LocalizedError, t } from "../i18n";
 
 /** What `sdk.panes` hands to extensions. Plain JSON only: nothing here may leak a token or a store object. */
@@ -20,7 +20,6 @@ export interface PaneInfo {
   model: string | null;
   provider: string | null;
   thinkingLevel: string | null;
-  approval: string | null;
   groupId: string | null;
   /** Position in the group as fractions (0..1) of its area; the full area for a pane that is alone. */
   box: { x: number; y: number; w: number; h: number };
@@ -35,7 +34,7 @@ export interface PaneGroupInfo {
 }
 export interface PaneMessage { role: "user" | "assistant" | "notice"; text: string; at: number }
 /** Per-conversation settings; every field is optional and only the given ones change. `model` needs `provider`. */
-export interface PaneSettings { title?: string; provider?: string; model?: string; thinkingLevel?: string; approval?: string }
+export interface PaneSettings { title?: string; provider?: string; model?: string; thinkingLevel?: string }
 export interface PaneModel { provider: string; id: string; name: string; reasoning: boolean; thinkingLevels: string[] | null; vision: boolean; contextWindow: number }
 export type PaneSendMode = "prompt" | "steer" | "follow_up";
 
@@ -78,7 +77,7 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
     return {
       id, kind: s ? "session" : "terminal", title: (s?.title || term?.title) ?? "", cwd: (s?.cwd || term?.cwd) ?? "",
       focused: app.activeId === id, running: !!s && !!app.running[id], awaitingApproval: s ? app.awaiting[id] ?? 0 : 0,
-      model: s?.model ?? null, provider: s?.provider ?? null, thinkingLevel: s?.thinkingLevel ?? null, approval: s?.approval ?? null, groupId: g?.id ?? null,
+      model: s?.model ?? null, provider: s?.provider ?? null, thinkingLevel: s?.thinkingLevel ?? null, groupId: g?.id ?? null,
       box: box ? { x: box.x, y: box.y, w: box.w, h: box.h } : { x: 0, y: 0, w: 1, h: 1 },
     };
   };
@@ -145,7 +144,7 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
     async configure(id, settings) {
       sessionOnly(id);
       const s = app.session(id)!;
-      const { title, provider, model, thinkingLevel, approval } = settings;
+      const { title, provider, model, thinkingLevel } = settings;
       if ((provider === undefined) !== (model === undefined)) fail(t("provider와 model은 함께 지정해야 합니다"));
       const target = model === undefined ? app.models.find(m => m.provider === s.provider && m.id === s.model) : app.models.find(m => m.provider === provider && m.id === model && m.configured && m.available !== false);
       if (model !== undefined && !target) fail(t("사용할 수 없는 모델입니다: {model}", { model: `${provider}/${model}` }));
@@ -155,14 +154,6 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
       const model_ = provider === undefined ? {} : { provider, model };
       if (provider !== undefined || thinkingLevel !== undefined) {
         if (!(await app.configure({ ...model_, ...(thinkingLevel === undefined ? {} : { thinkingLevel: thinkingLevel as ThinkingLevel }) }, id))) fail(t("변경하지 못했습니다"));
-      }
-      // Only this conversation: setApprovalMode would also change the default every new chat starts with.
-      if (approval !== undefined) {
-        try {
-          const updated = await app.api!.patchSession(id, { approval: approval as ApprovalPolicy });
-          const i = app.sessions.findIndex(x => x.id === id);
-          if (i >= 0) app.sessions[i] = { ...app.sessions[i]!, ...updated, updatedAt: s.updatedAt };
-        } catch { fail(t("변경하지 못했습니다")); }
       }
     },
     async compact(id, instructions) {

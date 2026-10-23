@@ -10,13 +10,6 @@ export interface Group {
 }
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-/**
- * What the server stores. auto: run everything. ask: a mutating tool waits for approval only when it reaches outside the
- * session's working directory. readonly: mutating tools are blocked (API / PIPAYA_APPROVAL only; the apps do not offer it).
- */
-export type ApprovalPolicy = "auto" | "ask" | "readonly";
-/** The two modes the apps offer. */
-export type ApprovalMode = "ask" | "auto";
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 /** A model with the reasoning strength to run it at; the two are always chosen together. */
@@ -53,7 +46,6 @@ export interface Session {
 	thinkingLevel: ThinkingLevel;
 	systemPrompt: string;
 	tools: string[];
-	approval: ApprovalPolicy;
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list; reopen with PATCH closed=false */
 	closed: boolean;
@@ -326,8 +318,6 @@ export interface ConfigurationInfo {
 	defaults: DefaultModelSelection | null;
 	/** What new sessions really use (saved default, else the server's startup default) */
 	effectiveDefaults: DefaultModelSelection | null;
-	/** Tool approval new sessions start with; saved on the server (older servers omit it) */
-	approval?: { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy };
 	/** Whether the agent may ask the user questions (ask_user); older servers omit it and always allow it */
 	/** Which agent tools can be switched off and which are locked on; older servers omit it */
 	tools?: ToolsInfo;

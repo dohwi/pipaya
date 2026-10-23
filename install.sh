@@ -22,7 +22,6 @@ UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT_NAME.service"
 REF="main"
 HOST=""
 PORT="8787"
-APPROVAL="auto"
 SERVICE=1
 ASSUME_YES=0
 
@@ -48,7 +47,6 @@ Server options
   --host ADDR      Listen address. Default: the Tailscale IPv4 address if there is one, else 127.0.0.1.
                    Use 0.0.0.0 only behind a firewall or a private network.
   --port N         Listen port (default 8787)
-  --approval MODE  Tool approval policy: auto (default), ask, readonly
   --ref REF        Git branch or tag to install (default main)
   --dir PATH       Install location (default ~/.local/share/pipaya)
   --no-service     Install only; do not register or start a service
@@ -137,7 +135,6 @@ write_env() {
 	{
 		echo "PIPAYA_HOST=$HOST"
 		echo "PIPAYA_PORT=$PORT"
-		echo "PIPAYA_APPROVAL=$APPROVAL"
 		echo "PIPAYA_DATA_DIR=$DATA_DIR"
 		# Commands run by the agent need the tools of the installing user (git, node, ...).
 		echo "PATH=$(dirname "$(command -v bun)"):$PATH"
@@ -203,7 +200,6 @@ install_launchd() {
 	<key>EnvironmentVariables</key><dict>
 		<key>PIPAYA_HOST</key><string>$(printf '%s' "$HOST" | xml_escape)</string>
 		<key>PIPAYA_PORT</key><string>$PORT</string>
-		<key>PIPAYA_APPROVAL</key><string>$APPROVAL</string>
 		<key>PIPAYA_DATA_DIR</key><string>$(printf '%s' "$DATA_DIR" | xml_escape)</string>
 		<key>PATH</key><string>$(printf '%s' "$path" | xml_escape)</string>
 	</dict>
@@ -271,11 +267,10 @@ print_summary() {
 cmd_server() {
 	[ "$(os)" != other ] || die "unsupported OS (Linux and macOS only; on Windows use install.ps1 for the client and run the server in WSL)"
 	if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then die "invalid --port"; fi
-	case "$APPROVAL" in ask | readonly | auto) ;; *) die "--approval must be ask, readonly or auto" ;; esac
 	[[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || die "invalid --ref"
 	if [ -z "$HOST" ]; then HOST="$(tailscale_ip)"; HOST="${HOST:-127.0.0.1}"; fi
 	valid_host "$HOST" || die "invalid --host"
-	[ "$APPROVAL" != auto ] || warn "approval 'auto' lets the model run any command as $USER without asking."
+	warn "the agent runs every tool without asking, including commands as $USER."
 
 	ensure_git
 	ensure_bun
@@ -375,7 +370,6 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--host) [ $# -ge 2 ] || die "--host needs a value"; HOST="$2"; shift 2 ;;
 		--port) [ $# -ge 2 ] || die "--port needs a value"; PORT="$2"; shift 2 ;;
-		--approval) [ $# -ge 2 ] || die "--approval needs a value"; APPROVAL="$2"; shift 2 ;;
 		--ref) [ $# -ge 2 ] || die "--ref needs a value"; REF="$2"; shift 2 ;;
 		--dir) [ $# -ge 2 ] || die "--dir needs a value"; APP_DIR="$2"; shift 2 ;;
 		--no-service) SERVICE=0; shift ;;

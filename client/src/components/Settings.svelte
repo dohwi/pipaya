@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { ApprovalMode } from "../lib/types";
-	import { approvalMode } from "../lib/store-model";
 	import { collapseIn, collapseOut, fadeIn, paneIn } from "../lib/motion";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { ACTIONS, formatCombo } from "../lib/keys";
@@ -22,7 +20,7 @@
 	import { app, type ThemePref } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { Api, errorText } from "../lib/api";
-	import type { ApprovalPolicy, ToolsInfo } from "../lib/types";
+	import type { ToolsInfo } from "../lib/types";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
 
 	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
@@ -49,7 +47,7 @@
 		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
 		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
-		{ id: "tools", label: msg("도구 승인"), icon: "shield", sub: "", server: true },
+		{ id: "tools", label: msg("에이전트 도구"), icon: "shield", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
 		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: msg("이 서버의 모든 기기가 함께 씁니다"), server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
@@ -88,8 +86,8 @@
 		if (!server && current.server) tab = "general";
 	});
 
-	/* ---------- tool approval and agent tools: read from and saved to the chosen server only ---------- */
-	let toolsCfg = $state<{ id: string; approval: ApprovalPolicy | null; tools: ToolsInfo | null } | null>(null);
+	/* ---------- agent tools: read from and saved to the chosen server only ---------- */
+	let toolsCfg = $state<{ id: string; tools: ToolsInfo | null } | null>(null);
 	let toolsError = $state("");
 	const apiOf = (id: string) => {
 		const s = app.servers.find((x) => x.id === id);
@@ -102,22 +100,10 @@
 		toolsError = "";
 		apiOf(id)
 			?.configuration()
-			.then((c) => (toolsCfg = { id, approval: c.approval?.effective ?? null, tools: c.tools ?? null }))
+			.then((c) => (toolsCfg = { id, tools: c.tools ?? null }))
 			.catch((e) => (toolsError = errorText(e)));
 	});
 	const shownCfg = $derived(toolsCfg && server && toolsCfg.id === server.id ? toolsCfg : null);
-	async function saveApproval(mode: ApprovalMode) {
-		if (!server || !shownCfg) return;
-		const before = shownCfg;
-		toolsCfg = { ...before, approval: mode };
-		try {
-			const r = await apiOf(server.id)!.setDefaultApproval(mode);
-			toolsCfg = { ...before, approval: r.effective };
-		} catch (e) {
-			toolsCfg = before;
-			toolsError = errorText(e);
-		}
-	}
 	async function saveTool(name: string, on: boolean) {
 		if (!server || !shownCfg?.tools) return;
 		const before = shownCfg;
@@ -131,11 +117,6 @@
 		}
 	}
 
-	const approvals: { id: ApprovalMode; label: string; hint: string; tone?: "danger" | "warn" }[] = [
-		{ id: "ask", label: msg("프로젝트 밖만 확인", "approval"), hint: msg("프로젝트 폴더 밖의 파일을 고치거나, 밖의 경로를 건드리는 명령을 실행할 때만 확인합니다.") },
-		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다."), tone: "danger" },
-	];
-	const approval = $derived(approvalMode(shownCfg?.approval ?? "auto"));
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
 		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "light", label: msg("라이트"), icon: "sun" },
@@ -153,7 +134,7 @@
 	const items: { tab: TabId; label: string; words: string }[] = [
 		{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
 		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
-		{ tab: "tools", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
+		{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
 		{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
 		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
 		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
@@ -313,15 +294,6 @@
 				<section><TerminalSettings /></section>
 				<section><UpdateSettings /></section>
 			{:else if tab === "tools"}
-		<section>
-			<div class="mono-label">{t("도구 승인")}</div>
-			<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => saveApproval(id)} options={approvals.map((a) => ({ id: a.id, disabled: !shownCfg, label: tc("approval", a.label), tone: a.tone }))} />
-			<span class="hint" class:danger={approvals.find((a) => a.id === approval)?.tone === "danger"}>
-				{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
-				{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
-			</span>
-		</section>
-
 		<section>
 			<div class="mono-label">{t("에이전트 도구")}</div>
 			{#if shownCfg?.tools}

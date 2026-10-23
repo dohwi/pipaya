@@ -27,7 +27,7 @@ beforeAll(async () => {
 	ws = join(dir, "ws");
 	mkdirSync(ws, { recursive: true });
 	upstream = startEchoUpstream();
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 	expect((await api("PUT", "/configuration/providers/echo", { ...echoProviderBody(upstream.baseUrl), models: [ECHO_MODEL, LIGHT] })).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
@@ -38,7 +38,7 @@ afterAll(async () => {
 	rmSync(dir, { recursive: true, force: true });
 });
 
-const newSession = async () => (await api("POST", "/sessions", { cwd: ws, approval: "auto" })).json.id as string;
+const newSession = async () => (await api("POST", "/sessions", { cwd: ws })).json.id as string;
 const settle = async () => { await app.sessions.idle(); await app.sessions.idle(); };
 
 describe("parseDescription", () => {

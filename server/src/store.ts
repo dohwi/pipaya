@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
-import type { ApprovalPolicy } from "./config.ts";
 import type { ContextSnapshot } from "./context.ts";
 
 export const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -20,7 +19,6 @@ export interface SessionRecord {
 	thinkingLevel: ThinkingLevel;
 	systemPrompt: string;
 	tools: string[];
-	approval: ApprovalPolicy;
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list until resumed. */
 	closed: boolean;
@@ -39,7 +37,6 @@ interface SessionRow {
 	thinking_level: string;
 	system_prompt: string;
 	tools: string;
-	approval: string;
 	parent_id: string | null;
 	closed: number;
 	created_at: number;
@@ -57,7 +54,6 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	thinkingLevel: r.thinking_level as ThinkingLevel,
 	systemPrompt: r.system_prompt,
 	tools: JSON.parse(r.tools),
-	approval: r.approval as ApprovalPolicy,
 	parentId: r.parent_id,
 	closed: r.closed === 1,
 	createdAt: r.created_at,
@@ -65,7 +61,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "approval" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
@@ -75,7 +71,6 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	provider: "provider",
 	model: "model",
 	thinkingLevel: "thinking_level",
-	approval: "approval",
 	systemPrompt: "system_prompt",
 	tools: "tools",
 	closed: "closed",
@@ -104,8 +99,8 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, approval, parent_id, created_at, updated_at)
-				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $approval, $parent, $created, $updated)`,
+				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
@@ -118,7 +113,6 @@ export class SessionStore {
 				thinking: r.thinkingLevel,
 				system: r.systemPrompt,
 				tools: JSON.stringify(r.tools),
-				approval: r.approval,
 				parent: r.parentId,
 				created: r.createdAt,
 				updated: r.updatedAt,
