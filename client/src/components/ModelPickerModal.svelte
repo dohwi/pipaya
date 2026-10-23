@@ -5,6 +5,7 @@
 	import { compact } from "../lib/format";
 	import Icon from "./Icon.svelte";
 	import PickerModal from "./PickerModal.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
 	import PickerOption from "./PickerOption.svelte";
 	import type { ModelInfo, ProviderInfo, ThinkingLevel } from "../lib/types";
 
@@ -108,6 +109,7 @@
 {#snippet opt(m: ModelInfo, inFavs: boolean)}
 	{@const fav = isFav(m)}
 	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
+		{#snippet lead()}<ModelLogo icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
 		{#snippet meta()}{#if inFavs}{providerName(m.provider)} · {/if}{t("컨텍스트")} {compact(m.contextWindow)}{#if m.reasoning} · {t("추론")}{/if}{#if m.vision} · {t("이미지")}{/if}{#if m.available === false} · {t("불러오지 못함")}{:else if !m.configured} · {t("키 없음")}{/if}{/snippet}
 		{#snippet trailing()}

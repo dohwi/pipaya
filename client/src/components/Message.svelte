@@ -4,6 +4,7 @@
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import FileChip from "./FileChip.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
@@ -228,7 +229,7 @@
 						<button class="iconbtn sm" onclick={() => app.retry(pane.id)} aria-label={t("다시 시도")} title={t("다시 시도")}><Icon name="retry" /></button>
 					{/if}
 					<span class="stats">
-						{#if tail.model}{tail.model}{/if}
+						{#if tail.model}<span class="slogo"><ModelLogo icon={app.models.find((m) => m.provider === tail.provider && m.id === tail.model)?.icon} provider={tail.provider} model={tail.model} size={13} /></span>{tail.model}{/if}
 						{#if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
 						{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
 						{#if took}· {duration(took)}{/if}
@@ -457,6 +458,11 @@
 	.row:hover .foot,
 	.foot:focus-within {
 		opacity: 1;
+	}
+	.slogo {
+		display: inline-flex;
+		vertical-align: -2px;
+		margin-right: 4px;
 	}
 	.stats {
 		margin-left: 8px;
