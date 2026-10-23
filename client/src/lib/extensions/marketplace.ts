@@ -21,6 +21,8 @@ export type MarketEntry = {
   author?: string;
   license?: string;
   homepage?: string;
+  /** Server entries only: id of the client entry (same catalog) that must be installed on the device for this to work. */
+  companion?: string;
   source: MarketSource;
 };
 export type MarketCatalog = { name: string; description?: string; extensions: MarketEntry[] };
@@ -71,6 +73,7 @@ export function parseCatalog(input: unknown): MarketCatalog {
       ...(str(e.author, 80) ? { author: str(e.author, 80) } : {}),
       ...(str(e.license, 40) ? { license: str(e.license, 40) } : {}),
       ...(typeof e.homepage === "string" && safeUrl(e.homepage) ? { homepage: e.homepage } : {}),
+      ...(e.kind === "server" && typeof e.companion === "string" && e.companion.length <= 80 && ID.test(e.companion) ? { companion: e.companion } : {}),
     });
   }
   return { name, ...(str(raw.description, 300) ? { description: str(raw.description, 300) } : {}), extensions };

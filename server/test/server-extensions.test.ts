@@ -160,6 +160,19 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		await api("POST", "/server-extensions/reload");
 	});
 
+	test("pipaya.companion in package.json is reported as the client extension this one needs", async () => {
+		const pkgDir = join(extDir, "paired");
+		mkdirSync(pkgDir, { recursive: true });
+		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ pipaya: { companion: "paired-ui" } }));
+		writeFileSync(join(pkgDir, "index.js"), "export default () => {};");
+		await api("POST", "/server-extensions/reload");
+		const list = (await api("GET", "/server-extensions")).json.extensions as any[];
+		expect(list.find((e) => e.name === "paired")?.companion).toBe("paired-ui");
+		expect(list.find((e) => e.name === "demo")?.companion).toBeUndefined();
+		rmSync(pkgDir, { recursive: true });
+		await api("POST", "/server-extensions/reload");
+	});
+
 	test("methods are callable by clients and reload keeps working", async () => {
 		expect((await api("POST", "/server-extensions/demo/methods/sum", { a: 2, b: 3 })).json.result).toBe(5);
 		expect((await api("POST", "/server-extensions/demo/methods/nope", {})).status).toBe(404);

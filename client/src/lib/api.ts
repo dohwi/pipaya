@@ -172,7 +172,7 @@ export class Api {
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; error?: string }[]; commands: { name: string; description?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; companion?: string; error?: string }[]; commands: { name: string; description?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {

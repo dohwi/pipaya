@@ -76,15 +76,29 @@
 		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* older server */ }
 	}
 
-	async function installServer(entry: MarketEntry) {
+	/** The server entry that asked "install the client one too?" (only when its client half is not on this device yet). */
+	let asking = $state("");
+	const companionOf = (entry: MarketEntry) => (entry.companion ? catalog?.extensions.find((e) => e.id === entry.companion && e.kind === "client") : undefined);
+
+	function startServer(entry: MarketEntry) {
+		const c = companionOf(entry);
+		if (c && !installed(c.id)) asking = entry.id;
+		else void installServer(entry, false);
+	}
+
+	/** With `both`, the client half goes through the usual preview (permissions) right after the server half is in. */
+	async function installServer(entry: MarketEntry, both: boolean) {
 		const api = app.api;
 		if (!api || entry.source.type !== "git") return;
+		asking = "";
 		working = entry.id;
 		error = "";
 		try {
 			const { repo, dir, ref, commit } = entry.source;
 			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
 			await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+			const c = both ? companionOf(entry) : undefined;
+			if (c) onpick(await fetchPackage(c), c);
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : String(cause);
 		} finally {
@@ -136,11 +150,25 @@
 							</button>
 						{:else}
 							{@const sHave = !!serverHave[entry.id]}
-							<button type="button" class="btn sm primary" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => installServer(entry)}>
+							<button type="button" class="btn sm primary" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => startServer(entry)}>
 								{working === entry.id ? t("설치하는 중…") : sHave ? t("설치됨") : t("설치하기")}
 							</button>
 						{/if}
 					</div>
+					{#if asking === entry.id}
+						{@const c = companionOf(entry)}
+						<div class="callout warn ask" role="group" aria-label={t("클라이언트 확장도 설치")}>
+							<Icon name="alert" />
+							<div>
+								<p>{t("클라이언트 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: c?.name ?? entry.companion ?? "" })}</p>
+								<div class="askbtns">
+									<button type="button" class="btn sm primary" onclick={() => installServer(entry, true)}>{t("함께 설치")}</button>
+									<button type="button" class="btn sm" onclick={() => installServer(entry, false)}>{t("서버만 설치")}</button>
+									<button type="button" class="btn sm" onclick={() => (asking = "")}>{t("취소")}</button>
+								</div>
+							</div>
+						</div>
+					{/if}
 				</li>
 			{:else}
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
@@ -190,6 +218,8 @@
 	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; margin: 0; }
 	.callout :global(svg) { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 	.callout.warn { background: var(--warn-soft); }
+	.ask p { margin: 0 0 8px; }
+	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }
 	.callout.danger { background: var(--danger-soft); }
 	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
 	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

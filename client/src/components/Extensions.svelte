@@ -25,7 +25,9 @@
 	let filename = $state("");
 	let market = $state(false);
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
-	let serverSide = $state<{ name: string; tools: string[]; commands: { name: string }[]; error?: string }[]>([]);
+	let serverSide = $state<{ name: string; tools: string[]; commands: { name: string }[]; companion?: string; error?: string }[]>([]);
+	/** A server extension that needs a client extension this device does not have runs only half: say so. */
+	const missingClient = (companion?: string) => !!companion && !extensions.installed.some((e) => e.package.manifest.id === companion);
 	async function loadServerSide() {
 		const api = app.api;
 		if (!api || view !== "server") { serverSide = []; return; }
@@ -482,7 +484,7 @@
 		{#if view === "server"}
 			{#each serverSide as ext (ext.name)}
 				<article class="card" aria-label={ext.name}>
-					<span class="top"><span class="ename">{ext.name}</span><span class="meta">{t("서버에서 실행")}</span></span>
+					<span class="top"><span class="ename">{ext.name}</span><span class="meta">{t("서버에서 실행")}</span>{#if missingClient(ext.companion)}<span class="chip warn" title={t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}>{t("클라이언트 미설치 · 동작 안 함")}</span>{/if}</span>
 					{#if ext.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{ext.error}</span></p>
 					{:else if ext.tools.length || ext.commands.length}<span class="brief">{[...ext.commands.map((c) => `/${c.name}`), ...ext.tools].join(", ")}</span>{/if}
 				</article>

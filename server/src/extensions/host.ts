@@ -47,6 +47,8 @@ export interface ExtensionInfo {
 	providers: string[];
 	flags: { name: string; description?: string; type: "boolean" | "string"; value: boolean | string | undefined }[];
 	events: string[];
+	/** Id of the client extension this one needs on the device (`pipaya.companion` in its package.json). */
+	companion?: string;
 	error?: string;
 }
 
@@ -87,23 +89,27 @@ export class ExtensionHost {
 
 	// ── loading ─────────────────────────────────────────────────────────────
 
-	private discover(): { name: string; entry: string }[] {
-		const out: { name: string; entry: string }[] = [];
+	private discover(): { name: string; entry: string; companion?: string }[] {
+		const out: { name: string; entry: string; companion?: string }[] = [];
 		const seen = new Set<string>();
-		const add = (name: string, entry: string) => { if (!seen.has(entry)) { seen.add(entry); out.push({ name, entry }); } };
+		const add = (name: string, entry: string, companion?: string) => { if (!seen.has(entry)) { seen.add(entry); out.push({ name, entry, ...(companion ? { companion } : {}) }); } };
 		const fromDir = (dir: string, name: string) => {
 			const pkg = join(dir, "package.json");
+			let companion: string | undefined;
 			if (existsSync(pkg)) {
 				try {
-					const listed = JSON.parse(readFileSync(pkg, "utf8"))?.pipaya?.extensions;
+					const meta = JSON.parse(readFileSync(pkg, "utf8"))?.pipaya;
+					const c = meta?.companion;
+					companion = typeof c === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(c) && c.length <= 80 ? c : undefined;
+					const listed = meta?.extensions;
 					if (Array.isArray(listed)) {
-						for (const rel of listed) if (typeof rel === "string") add(`${name}/${basename(rel, extname(rel))}`, resolve(dir, rel));
+						for (const rel of listed) if (typeof rel === "string") add(`${name}/${basename(rel, extname(rel))}`, resolve(dir, rel), companion);
 						return;
 					}
 				} catch { /* fall through to index */ }
 			}
 			const index = ENTRY_FILES.map((f) => join(dir, f)).find((f) => existsSync(f));
-			if (index) add(name, index);
+			if (index) add(name, index, companion);
 		};
 		const fromPath = (p: string) => {
 			let st;
@@ -123,8 +129,9 @@ export class ExtensionHost {
 	async load(): Promise<ExtensionInfo[]> {
 		await this.unloadAll();
 		const v = ++this.version;
-		for (const { name, entry } of this.discover()) {
+		for (const { name, entry, companion } of this.discover()) {
 			const ext = this.blank(name, entry);
+			if (companion) ext.companion = companion;
 			this.loaded.push(ext);
 			try {
 				const mod = await import(`${entry}?v=${v}`);
@@ -180,8 +187,8 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, methods, providers, flags, events, error }) => ({
-			name, path, tools, commands, methods, providers,
+		return this.loaded.map(({ name, path, tools, commands, methods, providers, flags, events, companion, error }) => ({
+			name, path, tools, commands, methods, providers, ...(companion ? { companion } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
 	}

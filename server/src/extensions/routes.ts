@@ -15,6 +15,7 @@ const Info = Type.Object({
 	providers: Type.Array(Type.String()),
 	flags: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), type: Type.String(), value: Type.Optional(Type.Union([Type.Boolean(), Type.String()])) })),
 	events: Type.Array(Type.String()),
+	companion: Type.Optional(Type.String()),
 	error: Type.Optional(Type.String()),
 });
 

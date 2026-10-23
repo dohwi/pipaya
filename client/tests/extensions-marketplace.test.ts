@@ -122,3 +122,15 @@ d2("marketplace card helpers", () => {
   });
   t2("formatStars", () => { e2(formatStars(950)).toBe("950"); e2(formatStars(1200)).toBe("1.2k"); });
 });
+
+d2("server entry companion", () => {
+  const git = { type: "git", repo: "o/r", ref: "v1", commit: "a".repeat(40) };
+  test("only a server entry with a valid id keeps its companion", () => {
+    const c = pc({ name: "n", extensions: [
+      { id: "s", kind: "server", name: "S", version: "1", companion: "s-ui", source: git },
+      { id: "s2", kind: "server", name: "S2", version: "1", companion: "Bad Id", source: git },
+      { id: "c", kind: "client", name: "C", version: "1", companion: "x", source: { type: "path", path: "p" } },
+    ] });
+    expect(c.extensions.map(e => e.companion)).toEqual(["s-ui", undefined, undefined]);
+  });
+});
