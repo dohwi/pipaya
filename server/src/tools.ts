@@ -61,12 +61,6 @@ export interface ToolContext {
 	delegate?(req: DelegateRequest): Promise<DelegateReport>;
 	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
 	delegateAgents?(): { name: string; description: string }[];
-	/** Other active sessions on this server (`peer_send`, `peer_read`), addressed by name. */
-	peers?: {
-		names(): string[];
-		send(name: string, text: string): Promise<string>;
-		read(name: string, count: number): string;
-	};
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -576,59 +570,11 @@ const delegateTool: ToolDef = {
 	},
 };
 
-// The tool list is built once per session, but sessions come and go later: never put names in a description (they would go stale).
-const peerNote = " Sessions are the user's @names; an unknown name is rejected with the current list.";
-
-const peerSendTool: ToolDef = {
-	name: "peer_send",
-	description: "Send a message to another session (agent) on this server.",
-	mutating: false,
-	create(_cwd, _roots, ctx) {
-		return defineTool({
-			name: "peer_send",
-			label: "Message another session",
-			description:
-				"Send a message to another active session, addressed by name (without @). A group name (e.g. a tagged @group) sends it to every other session in that group. It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." +
-				peerNote,
-			parameters: Type.Object({
-				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
-				message: Type.String({ minLength: 1, maxLength: 8000, description: "What to tell or ask; include all context it needs" }),
-			}),
-			async execute(_id, params) {
-				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
-				return text(await ctx.peers.send(params.to.replace(/^@/, ""), params.message), { to: params.to });
-			},
-		});
-	},
-};
-
-const peerReadTool: ToolDef = {
-	name: "peer_read",
-	description: "Read the latest messages of another session on this server.",
-	mutating: false,
-	create(_cwd, _roots, ctx) {
-		return defineTool({
-			name: "peer_read",
-			label: "Read another session",
-			description: "Read what another session has recently said and done (text only, newest last), addressed by name (without @)." + peerNote,
-			parameters: Type.Object({
-				from: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
-				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "How many recent messages (default 10)" })),
-			}),
-			async execute(_id, params) {
-				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
-				return text(ctx.peers.read(params.from.replace(/^@/, ""), params.count ?? 10), { from: params.from });
-			},
-		});
-	},
-};
-
-export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
 /** Tools the user may switch off in the settings; every other built-in tool is locked on (the agent cannot work without it). */
-export const TOGGLEABLE_TOOLS = [delegateTool.name, peerSendTool.name, peerReadTool.name];
+export const TOGGLEABLE_TOOLS = [delegateTool.name];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, delegateTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, delegateTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

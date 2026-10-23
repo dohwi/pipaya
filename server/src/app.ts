@@ -6,7 +6,6 @@ import { isAbsolute, relative } from "node:path";
 import Type from "typebox";
 import { ApprovalManager } from "./approvals.ts";
 import { QuestionManager } from "./questions.ts";
-import { Retention, RetentionInfo, RetentionPolicy } from "./retention.ts";
 import type { Config } from "./config.ts";
 import { Configuration } from "./configuration.ts";
 import { registerConfigurationRoutes } from "./configuration-routes.ts";
@@ -46,8 +45,6 @@ import { SessionManager } from "./sessions.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
-import { TemplateService } from "./templates.ts";
-import { registerTemplateRoutes } from "./templates-routes.ts";
 import { streamEvents } from "./sse.ts";
 import { SessionStore, SqliteCredentialStore } from "./store.ts";
 import { makeSerializerCompiler, validatorCompiler, type TypeBoxProvider } from "./typebox-provider.ts";
@@ -70,7 +67,6 @@ export interface App {
 	server: FastifyInstance;
 	sessions: SessionManager;
 	bus: EventBus;
-	retention: Retention;
 	close(): Promise<void>;
 }
 
@@ -89,6 +85,8 @@ export interface BuildOptions {
 	websocket?: WebSocketOptions;
 	/** Directories scanned for server extensions (tests); defaults to `<dataDir>/extensions` and `~/.agents/extensions`. */
 	extensionDirs?: string[];
+	/** Directory of extensions shipped with the server (tests); defaults to the bundled `builtin-extensions/`, `false` loads none. */
+	builtinExtensions?: string | false;
 	/** Extra extension files or folders to load. */
 	extensionPaths?: string[];
 	/** Self-update wiring (tests replace git, the installer and the restart); defaults to this checkout and a SIGTERM restart. */
@@ -127,12 +125,33 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		db, bus, registry, dataDir: cfg.dataDir,
 		dirs: opts.extensionDirs ?? ExtensionHost.defaultDirs(cfg.dataDir, opts.home),
 		paths: opts.extensionPaths,
+		builtinDir: opts.builtinExtensions,
+		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const templates = new TemplateService({ home: opts.home, defaultWorkdir: () => configuration.defaultWorkdir() });
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, templates, () => configuration.approvalInfo().effective, () => configuration.disabledTools(), systemModel);
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, () => configuration.approvalInfo().effective, () => configuration.disabledTools(), systemModel);
+	const busy = (id: string) => sessions.isRunning(id) || approvals.list(id).length > 0 || questions.list(id).length > 0;
+	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
+		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, closed: r.closed, parentId: r.parentId,
+		createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
+	});
 	extensions.attach({
 		cwd: (id) => store.get(id)?.cwd,
+		defaultCwd: () => configuration.defaultWorkdir(),
+		groups: () => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })),
+		sessions: {
+			list: (o) => store.list({ limit: Math.min(o?.limit ?? 1000, 5000), before: o?.before, closed: o?.closed }).map(info),
+			get: (id) => { const r = store.get(id); return r ? info(r) : undefined; },
+			messages: (id, count = 10) => store.lastMessages(id, Math.min(200, Math.max(1, count))),
+			send: async (id, text, mode) => {
+				await sessions.send(id, { text, mode: mode ?? (sessions.isRunning(id) ? "follow_up" : "prompt") });
+			},
+			delete: (id) => {
+				if (!store.get(id) || busy(id)) return false;
+				sessions.delete(id);
+				return true;
+			},
+		},
 		send: (id, text, mode) => sessions.send(id, { text, mode }),
 		abort: (id) => sessions.abort(id),
 		isRunning: (id) => sessions.isRunning(id),
@@ -143,13 +162,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return outcome.answer;
 		},
 	});
-	const retention = new Retention(db, store, sessions, approvals, questions);
 	const terminals = new TerminalManager(bus, {
 		enabled: cfg.terminals !== false,
 		defaultWorkdir: () => configuration.defaultWorkdir(),
 		confineTo: cfg.restrictWorkspace ? cfg.workspaceRoot : undefined,
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
+	configuration.setSwitchableSource(() => extensions.switchableTools());
 	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
 	groups.evictWhere(isTerminalId);
 	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
@@ -358,18 +377,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	app.post("/sessions/delete", {
 		schema: { body: S.DeleteSessionsBody, response: { 200: S.DeleteSessionsResult, ...S.errors(400, 401) } },
-		handler: async (req) => retention.remove(req.body.ids),
-	});
-	app.get("/sessions/retention", {
-		schema: { response: { 200: RetentionInfo, ...S.errors(401) } },
-		handler: async () => retention.info(),
-	});
-	app.put("/sessions/retention", {
-		schema: { body: RetentionPolicy, response: { 200: RetentionInfo, ...S.errors(400, 401) } },
 		handler: async (req) => {
-			retention.setPolicy(req.body);
-			bus.publish(null, "configuration_updated", { scope: "retention", ...retention.policy() });
-			return retention.info();
+			const deleted: string[] = [], skipped: string[] = [];
+			for (const id of new Set(req.body.ids)) {
+				if (!store.get(id) || busy(id)) skipped.push(id);
+				else { sessions.delete(id); deleted.push(id); }
+			}
+			return { deleted, skipped };
 		},
 	});
 	app.get("/sessions/:id", {
@@ -516,7 +530,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		})();
 	});
 	registerSkillRoutes(server, skills, bus);
-	registerTemplateRoutes(server, templates);
 	registerExtensionSettingsRoutes(server, new ExtensionSettings(cfg.dataDir), bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
@@ -525,7 +538,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();
-	retention.start();
 	// Skills, prompt templates and AGENTS.md live in plain files: tell open clients when they change on disk.
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
@@ -533,10 +545,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	prune.unref?.();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
 	void configuration.refreshStale();
-	return { server, sessions, bus, retention, async close() {
+	return { server, sessions, bus, async close() {
 		clearInterval(prune);
 		configuration.close();
-		retention.stop();
 		agentsWatch.stop();
 		await notifications.close();
 		await push.close();

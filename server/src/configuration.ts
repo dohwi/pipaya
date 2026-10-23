@@ -156,6 +156,17 @@ async function fetchUpstreamModels(baseUrl: string, api: CustomProvider["api"], 
 
 /** Persisted user model configuration. Secrets live only in the separate CredentialStore. */
 export class Configuration {
+	/** Tools the user may switch off: the built-in `delegate` and whatever the loaded extensions mark `switchable`. */
+	private switchable: () => string[] = () => [];
+
+	setSwitchableSource(fn: () => string[]): void {
+		this.switchable = fn;
+	}
+
+	private toggleable(): string[] {
+		return [...new Set([...TOGGLEABLE_TOOLS, ...this.switchable()])];
+	}
+
 	constructor(
 		private db: Database,
 		private cfg: Config,
@@ -190,21 +201,23 @@ export class Configuration {
 		const row = this.db.query("SELECT data FROM settings WHERE key = 'disabled_tools'").get() as { data: string } | null;
 		if (row) {
 			const parsed: unknown = JSON.parse(row.data);
-			return Array.isArray(parsed) ? TOGGLEABLE_TOOLS.filter((n) => parsed.includes(n)) : [];
+			return Array.isArray(parsed) ? parsed.filter((n): n is string => typeof n === "string") : [];
 		}
 		return [];
 	}
 
 	setDisabledTools(disabled: string[]) {
-		const bad = disabled.find((n) => !TOGGLEABLE_TOOLS.includes(n));
+		const can = this.toggleable();
+		const bad = disabled.find((n) => !can.includes(n));
 		if (bad) throw badRequest(`${bad} cannot be switched off`);
-		const data = JSON.stringify(TOGGLEABLE_TOOLS.filter((n) => disabled.includes(n)));
+		const data = JSON.stringify(can.filter((n) => disabled.includes(n)));
 		this.db.query("INSERT INTO settings (key, data) VALUES ('disabled_tools', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data });
 		return this.toolsInfo();
 	}
 
 	toolsInfo() {
-		return { toggleable: [...TOGGLEABLE_TOOLS], locked: DEFAULT_TOOLS.filter((n) => !TOGGLEABLE_TOOLS.includes(n)), disabled: this.disabledTools() };
+		const can = this.toggleable();
+		return { toggleable: can, locked: DEFAULT_TOOLS.filter((n) => !can.includes(n)), disabled: this.disabledTools().filter((n) => can.includes(n)) };
 	}
 
 	list(): CustomProvider[] {

@@ -1,8 +1,17 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { badRequest } from "./errors.ts";
-import { findRepoRoot, MAX_SKILL_DESCRIPTION, SKILL_NAME, MAX_SKILL_NAME } from "./skills.ts";
+
+const MAX_SKILL_DESCRIPTION = 1024;
+const MAX_SKILL_NAME = 64;
+const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function findRepoRoot(start: string): string | null {
+	for (let dir = start; ; dir = dirname(dir)) {
+		if (existsSync(join(dir, ".git"))) return dir;
+		if (dirname(dir) === dir) return null;
+	}
+}
 
 /**
  * Prompt templates: a long prompt saved as `<name>.md` and called with `/prompt:name [arguments]`.
@@ -138,24 +147,20 @@ export function discoverTemplates(cwd: string, opts: { home?: string } = {}): { 
 	return { templates: [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), warnings };
 }
 
-export class TemplateService {
-	constructor(private opts: { home?: string; defaultWorkdir: () => string }) {}
-
-	/** Same cwd rules as skills: a directory that does not exist yet resolves to its nearest existing ancestor. */
-	resolveCwd(input?: string): string {
-		let abs = resolve(this.opts.defaultWorkdir(), input?.trim() || ".");
-		while (!isDir(abs)) {
-			const parent = dirname(abs);
-			if (parent === abs) throw badRequest(`cwd is not a directory: ${abs}`);
-			abs = parent;
-		}
-		return abs;
+/** Same cwd rules as skills: a directory that does not exist yet resolves to its nearest existing ancestor. */
+export function resolveCwd(base: string, input?: string): string {
+	let abs = resolve(base, input?.trim() || ".");
+	while (!isDir(abs)) {
+		const parent = dirname(abs);
+		if (parent === abs) throw new Error(`cwd is not a directory: ${abs}`);
+		abs = parent;
 	}
+	return abs;
+}
 
-	list(cwdInput?: string): TemplateList {
-		const cwd = this.resolveCwd(cwdInput);
-		return { cwd, ...discoverTemplates(cwd, { home: this.opts.home }) };
-	}
+export function listTemplates(base: string, cwdInput: string | undefined, home: string): TemplateList {
+	const cwd = resolveCwd(base, cwdInput);
+	return { cwd, ...discoverTemplates(cwd, { home }) };
 }
 
 /** `/prompt:name rest…` at the very start of a message -> name + arguments. */

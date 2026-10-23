@@ -8,7 +8,7 @@ import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import type {
-	AskRequest, EventHandler, EventName, ExtensionAPI, ExtensionCommand, ExtensionContext, ExtensionFactory, ExtensionFlag, ExtensionTool, PromptMode, ToolResult,
+	AskRequest, EventHandler, EventName, ExtensionAPI, ExtensionCommand, ExtensionContext, ExtensionFactory, ExtensionFlag, ExtensionSessions, ExtensionTool, PromptMode, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -18,6 +18,9 @@ export interface SessionBridge {
 	abort(sessionId: string): boolean;
 	isRunning(sessionId: string): boolean;
 	ask?(sessionId: string, toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
+	sessions: ExtensionSessions;
+	groups(): { name: string; sessionIds: string[] }[];
+	defaultCwd(): string;
 }
 
 export interface ExtensionHostOptions {
@@ -29,6 +32,10 @@ export interface ExtensionHostOptions {
 	dirs: string[];
 	/** Extra explicit paths (files or folders). */
 	paths?: string[];
+	/** Extensions shipped with the server (`builtin-extensions/`); `false` loads none. One in `dirs` or `paths` with the same name replaces it. */
+	builtinDir?: string | false;
+	/** The user's home directory (tests); defaults to the OS user home. */
+	home?: string;
 	env?: Record<string, string | undefined>;
 	log?: (msg: string) => void;
 }
@@ -54,6 +61,9 @@ interface Loaded extends ExtensionInfo {
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
 }
+
+/** Extensions bundled with the server. */
+export const BUILTIN_EXTENSIONS_DIR = process.env.PIPAYA_BUILTIN_EXTENSIONS || join(import.meta.dir, "..", "..", "builtin-extensions");
 
 const ENTRY_FILES = ["index.ts", "index.js", "index.mjs"];
 const SCRIPT_EXT = new Set([".ts", ".js", ".mjs"]);
@@ -112,6 +122,24 @@ export class ExtensionHost {
 			for (const n of names) if (!n.startsWith(".") && n !== "node_modules") fromPath(join(dir, n));
 		}
 		for (const p of this.opts.paths ?? []) fromPath(resolve(p));
+		// Bundled ones come last and give way to a user's extension of the same name.
+		const builtin = this.opts.builtinDir === undefined ? BUILTIN_EXTENSIONS_DIR : this.opts.builtinDir;
+		if (builtin) {
+			const taken = new Set(out.map((o) => o.name));
+			const mine: { name: string; entry: string }[] = [];
+			let names: string[] = [];
+			try { names = readdirSync(builtin).sort(); } catch { /* none shipped */ }
+			for (const n of names) {
+				const base = basename(n, extname(n));
+				if (n.startsWith(".") || n === "node_modules" || taken.has(base)) continue;
+				const p = join(builtin, n);
+				let st;
+				try { st = statSync(p); } catch { continue; }
+				const entry = st.isDirectory() ? ENTRY_FILES.map((f) => join(p, f)).find((f) => existsSync(f)) : SCRIPT_EXT.has(extname(n)) ? p : undefined;
+				if (entry && !seen.has(entry)) { seen.add(entry); mine.push({ name: base, entry }); }
+			}
+			out.unshift(...mine);
+		}
 		return out;
 	}
 
@@ -203,11 +231,21 @@ export class ExtensionHost {
 	}
 
 	private apiFor(ext: Loaded): ExtensionAPI {
+		const bridgeSessions = (): ExtensionSessions => {
+			if (!this.bridge) throw new Error("sessions are not ready");
+			return this.bridge.sessions;
+		};
 		const own = (what: string, name: string, has: boolean) => { if (has) throw new Error(`${what} "${name}" is already registered by this extension`); };
 		return {
 			Type: Type as ExtensionAPI["Type"],
 			name: ext.name,
 			dataDir: this.ensureDataDir(ext.name),
+			home: this.opts.home ?? homedir(),
+			defaultCwd: () => this.bridge?.defaultCwd() ?? process.cwd(),
+			get sessions(): ExtensionSessions {
+				return bridgeSessions();
+			},
+			groups: { list: () => this.bridge?.groups() ?? [] },
 			on: (event, handler) => {
 				const list = ext.handlers.get(event) ?? [];
 				list.push(handler as EventHandler<any>);
@@ -338,6 +376,16 @@ export class ExtensionHost {
 			for (const t of ext.toolDefs.values()) defs[t.name] = this.wrapTool(ext.name, t);
 		}
 		return defs;
+	}
+
+	/** Tools every session gets, whatever list it was created with. */
+	alwaysTools(): string[] {
+		return this.active().flatMap((e) => [...e.toolDefs.values()].filter((t) => t.alwaysActive).map((t) => t.name));
+	}
+
+	/** Extension tools the user may switch off in the settings. */
+	switchableTools(): string[] {
+		return this.active().flatMap((e) => [...e.toolDefs.values()].filter((t) => t.switchable).map((t) => t.name));
 	}
 
 	defaultTools(): string[] {

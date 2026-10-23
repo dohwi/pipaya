@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverTemplates, expandTemplate, parseTemplateCall, limitTemplateText, templateMarker } from "../src/templates.ts";
+import { discoverTemplates, expandTemplate, parseTemplateCall, limitTemplateText, templateMarker } from "../builtin-extensions/prompt-templates/templates.ts";
 
 function fixture() {
 	const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-templates-")));

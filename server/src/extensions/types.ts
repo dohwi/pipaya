@@ -37,6 +37,47 @@ export interface AskRequest {
 	items?: { question: string; options?: string[]; recommended?: string; allowFreeText?: boolean }[];
 }
 
+/** A session as an extension sees it. */
+export interface SessionInfo {
+	id: string;
+	/** How other sessions address it (`@name`); "" for a closed one. */
+	name: string;
+	title: string;
+	/** What its agent works on (written by the system model); "" until then. */
+	purpose: string;
+	cwd: string;
+	closed: boolean;
+	parentId: string | null;
+	createdAt: number;
+	/** Last use, unix ms. */
+	updatedAt: number;
+	/** The agent is working right now. */
+	running: boolean;
+	/** In use: running, or waiting for an approval or an answer. Such a session is never deleted. */
+	busy: boolean;
+}
+
+export interface SessionMessage {
+	seq: number;
+	role: string;
+	createdAt: number;
+	/** The stored message as the model saw it (`content` is a string or an array of blocks). */
+	message: any;
+}
+
+/** Other sessions of this server. Works on any session, not only the one an event or tool call belongs to. */
+export interface ExtensionSessions {
+	/** Newest use first. `before` (unix ms) pages: only sessions last used before it. Default limit 1000. */
+	list(opts?: { closed?: boolean; limit?: number; before?: number }): SessionInfo[];
+	get(id: string): SessionInfo | undefined;
+	/** The last `count` messages (default 10, at most 200), oldest first. */
+	messages(id: string, count?: number): SessionMessage[];
+	/** Queue a user message in that session. Default mode: `follow_up` while it works, otherwise `prompt`. */
+	send(id: string, text: string, mode?: PromptMode): Promise<void>;
+	/** Delete a session. Returns false (and deletes nothing) when it is unknown or busy. */
+	delete(id: string): boolean;
+}
+
 export interface ToolResult {
 	content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
 	details?: Record<string, unknown>;
@@ -53,6 +94,10 @@ export interface ExtensionTool {
 	mutating?: boolean;
 	/** Part of the default tool set of new sessions. Default true. */
 	defaultActive?: boolean;
+	/** Given to every session, also ones created before the extension was installed. Default false. */
+	alwaysActive?: boolean;
+	/** The user may switch it off in the settings (for every session). Default false. */
+	switchable?: boolean;
 	execute(
 		toolCallId: string,
 		params: any,
@@ -78,7 +123,11 @@ export interface ExtensionFlag {
 
 export interface EventMap {
 	/** A user message arrived. Return `{ text }` to rewrite it or `{ handled: true }` to swallow it. */
-	input: [{ sessionId: string; text: string; mode: PromptMode }, void | { text?: string; handled?: boolean }];
+	input: [
+		{ sessionId: string; text: string; mode: PromptMode },
+		/** `title`: what to cut the session title from when this message starts it (default: the text). `parts`: extra text blocks stored with the message after `text` (the client shows blocks starting with `<pipaya-` as notes, not as text). */
+		void | { text?: string; handled?: boolean; parts?: { type: "text"; text: string }[]; title?: string },
+	];
 	/** Before a prompt starts the agent. Add context for this run only. */
 	before_agent_start: [
 		{ sessionId: string; text: string },
@@ -142,6 +191,14 @@ export interface ExtensionAPI {
 		on(channel: string, handler: (data: unknown) => void): () => void;
 		emit(channel: string, data?: unknown): void;
 	};
+	/** Other sessions of this server: list, read, message, delete. */
+	sessions: ExtensionSessions;
+	/** Session groups (`@group` tags), each with the ids of the sessions it shows. */
+	groups: { list(): { name: string; sessionIds: string[] }[] };
+	/** The user's home directory. */
+	home: string;
+	/** The server's default working directory (where a new session starts). */
+	defaultCwd(): string;
 	/** Where this extension may keep files (created on first use). */
 	dataDir: string;
 	log(...args: unknown[]): void;

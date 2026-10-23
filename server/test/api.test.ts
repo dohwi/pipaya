@@ -207,7 +207,7 @@ describe("API contracts", () => {
 
 	test("switchable tools can be turned off, locked ones cannot", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
-		expect(info.toggleable).toEqual(["delegate", "peer_send", "peer_read"]);
+		expect(info.toggleable).toEqual(["delegate", "peer_send", "peer_read"]); // the peer tools come from the bundled peer-tools extension
 		expect(info.locked).toContain("read");
 		expect((await api("PUT", "/configuration/tools", { disabled: ["read"] })).status).toBe(400);
 		expect((await api("PUT", "/configuration/tools", { disabled: ["peer_send"] })).json.disabled).toEqual(["peer_send"]);

@@ -11,6 +11,9 @@ Where they are read from (each entry is a file or a folder; names starting with 
 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
 - `~/.agents/extensions/`
+- the server's own `builtin-extensions/` (read last: an extension of the same name in the folders above replaces it)
+
+Shipped with the server: `prompt-templates` (`/prompt:name`, method `list`) and `peer-tools` (`peer_send`, `peer_read`). Copy one into `~/.pipaya/extensions/` under the same name to change it. `examples/extensions/` holds ones that are not loaded by default (`todo.ts`, `session-retention.ts`: core never deletes sessions by itself).
 
 Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors`. A file that throws while loading is switched off alone; the others keep working.
 
@@ -57,13 +60,16 @@ export default (pi) => {
 |---|---|
 | `pi.Type` | typebox, for tool parameter schemas |
 | `pi.on(event, handler)` | hooks, see below. Handlers run in load order. A throwing handler is logged and skipped, it never breaks the run |
-| `pi.registerTool(tool)` | `{name, description, parameters, mutating?, defaultActive?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
+| `pi.registerTool(tool)` | `{name, description, parameters, mutating?, defaultActive?, alwaysActive?, switchable?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
 | `pi.registerCommand(name, {description?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt}` to send it to the model, nothing to just handle it. Runs before the model sees the message |
 | `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]` |
 | `pi.registerProvider(provider)` / `unregisterProvider(id)` | a pi-ai `Provider` (custom endpoint, proxy, OAuth). Removed when the extension unloads |
 | `pi.registerFlag(name, {type?, default?, description?})`, `pi.getFlag(name)` | value from environment `PIPAYA_FLAG_<NAME>` |
 | `pi.emit(sessionId\|null, type, data?, {ephemeral?})` | publishes `extension_event` to clients (client extensions with the `server` permission receive it) |
 | `pi.events.on/emit(channel, ...)` | in-process bus between extensions |
+| `pi.sessions` | other sessions: `list({closed?, limit?, before?})`, `get(id)`, `messages(id, count?)`, `send(id, text, mode?)`, `delete(id)` (returns false for an unknown or busy one). Each `SessionInfo` has `running` and `busy` |
+| `pi.groups.list()` | session groups: `[{name, sessionIds}]` |
+| `pi.home`, `pi.defaultCwd()` | the user's home and the server's default working directory |
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
 
@@ -73,7 +79,7 @@ export default (pi) => {
 
 | Event | Payload | Return |
 |---|---|---|
-| `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow |
+| `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow, `{parts}` to store extra text blocks after it (blocks starting `<pipaya-` show as notes), `{title}` to cut the session title from something else |
 | `before_agent_start` | `{sessionId, text}` | `{systemPrompt?, appendSystemPrompt?, message?}` for this run only |
 | `context` | `{sessionId, messages}` | `{messages}`: what the model sees for this call (storage is untouched) |
 | `tool_call` | `{sessionId, toolCallId, toolName, args}` | `{block: true, reason}`; `args` may be edited in place. Also applies to tools a `delegate` helper calls |
@@ -81,6 +87,8 @@ export default (pi) => {
 | `session_before_compact` | `{sessionId, reason, messages, previousSummary, instructions?}` | `{cancel: true}` or `{summary}` (your own summary replaces the model call) |
 | `extension_unload` | `{name}` | none. Runs (2 s limit) before reload or shutdown drops the extension: close timers and files here |
 | observation only | `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_end`, `session_start`, `session_fork`, `session_compact`, `session_shutdown`, `extensions_loaded` | none |
+
+`alwaysActive: true` gives a tool to every session, also ones created before the extension was installed (otherwise only new sessions get it, through the default tool set). `switchable: true` lets the user turn it off in the settings, like `delegate`.
 
 Approval policy (`ask` / `readonly` / `auto`) still applies after `tool_call` hooks. A tool you register is `mutating: true` unless you say otherwise, so it asks for approval by default.
 

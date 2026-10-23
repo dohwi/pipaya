@@ -8,7 +8,6 @@ import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { agentsPrompt, advertisedAgents, advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type AdvertisedAgent, type ContextSnapshot, type SessionContext } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
-import { expandTemplate, parseTemplateCall, readTemplateBody, limitTemplateText, templateMarker, type TemplateService } from "./templates.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
@@ -16,9 +15,9 @@ import type { ModelRegistry } from "./models.ts";
 import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
-import { branchOf, capPeerRead, groupHint, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
+import { branchOf, groupHint, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
 import { memberHint, mentionedMembers, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -34,14 +33,11 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 }
 
 /** How many messages one run may send to group members. */
-const MAX_PEER_SENDS = 10;
 /** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
 const DESCRIBE_RETRY_MS = 10 * 60_000;
 
 export class SessionManager {
 	private live = new Map<string, Live>();
-	/** `peer_send` calls made in each session's current run; keeps two sessions from answering each other forever. */
-	private peerSends = new Map<string, number>();
 	/** Runs that have not yet published run_finished. Tracked apart from `live`, which shutdown and delete empty first. */
 	private pendingRuns = new Set<Promise<void>>();
 	/** Title/role calls in flight (one per session), and when one last failed. */
@@ -71,7 +67,6 @@ export class SessionManager {
 		private subagents?: SubAgents,
 		private compaction?: CompactionSettings,
 		private ext?: ExtensionHost,
-		private templates?: TemplateService,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
 		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
 		/** Switchable tools the user turned off in the settings; withheld from every session. */
@@ -385,10 +380,14 @@ export class SessionManager {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		const mode = input.mode ?? "prompt";
+		let extraParts: { type: "text"; text: string }[] = [];
+		let inputTitle: string | undefined;
 		if (this.ext) {
 			const pre = await this.preprocess(id, input.text, mode);
 			if (pre.handled) return { accepted: mode };
 			input = { ...input, text: pre.text };
+			extraParts = pre.parts;
+			inputTitle = pre.title;
 		}
 		// A prompt sent during a manual compaction waits for it to finish instead of being rejected.
 		const compacting = this.live.get(id);
@@ -398,20 +397,7 @@ export class SessionManager {
 		if (mode === "prompt" && active) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		const live = this.ensureLive(record);
 
-		// A template call is sent as its expanded text; a marker tells the client to show the short call as a note under the bubble.
-		const call = this.templates ? parseTemplateCall(input.text) : null;
-		let sentText = input.text;
-		let marker: string | null = null;
-		if (call) {
-			const found = this.templates!.list(record.cwd).templates.find((k) => k.name === call.name);
-			const body = found ? readTemplateBody(found.path) : null;
-			if (body !== null) {
-				sentText = limitTemplateText(expandTemplate(body, call.args));
-				marker = templateMarker(call.name, input.text.trim());
-			}
-		}
-		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: sentText }];
-		if (marker) content.push({ type: "text", text: marker });
+		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
 		const asked = mentionedAgents(input.text, this.subagents?.agents(record.cwd).map((a) => a.name) ?? []);
 		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
 		const peers = this.peers(id);
@@ -458,7 +444,7 @@ export class SessionManager {
 
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		const first = this.store.nextSeq(id) === 0;
-		const shortTitle = autoTitle(call && marker ? call.name : input.text);
+		const shortTitle = autoTitle(inputTitle ?? input.text);
 		if (record.title === "New session" && first) this.update(id, { title: shortTitle });
 		this.describe(id, first ? input.text : undefined, input.text, shortTitle);
 		this.run(id, live, "prompt", async () => {
@@ -557,17 +543,21 @@ export class SessionManager {
 	}
 
 	/** `input` hooks and `/command` handling. A swallowed message is never sent to the model. */
-	private async preprocess(id: string, text: string, mode: PromptMode): Promise<{ handled: boolean; text: string }> {
+	private async preprocess(id: string, text: string, mode: PromptMode): Promise<{ handled: boolean; text: string; parts: { type: "text"; text: string }[]; title?: string }> {
 		let current = text;
 		let handled = false;
+		const parts: { type: "text"; text: string }[] = [];
+		let title: string | undefined;
 		await this.ext!.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
 			if (typeof r.text === "string") current = r.text;
+			if (Array.isArray(r.parts)) for (const p of r.parts) if (p?.type === "text" && typeof p.text === "string") parts.push({ type: "text", text: p.text });
+			if (typeof r.title === "string" && r.title.trim()) title = r.title;
 			if (r.handled) { handled = true; return true; }
 		});
-		if (handled) return { handled, text: current };
+		if (handled) return { handled, text: current, parts, title };
 		const cmd = await this.ext!.runCommand(id, current);
-		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt } : { handled: true, text: current };
-		return { handled: false, text: current };
+		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts, title } : { handled: true, text: current, parts, title };
+		return { handled: false, text: current, parts, title };
 	}
 
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
@@ -690,7 +680,6 @@ export class SessionManager {
 	// ── Internals ───────────────────────────────────────────────────────────
 
 	private run(id: string, live: Live, mode: string, start: () => Promise<void>): void {
-		this.peerSends.delete(id);
 		live.running = true;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
@@ -806,7 +795,7 @@ export class SessionManager {
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
 		const off = this.disabledTools();
-		const all = [...new Set([...names, ...PEER_TOOLS])].filter((n) => !off.includes(n));
+		const all = [...new Set([...names, ...(this.ext?.alwaysTools() ?? [])])].filter((n) => !off.includes(n));
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
@@ -823,7 +812,6 @@ export class SessionManager {
 			const rec = this.store.get(sessionId);
 			return rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
 		};
-		ctx.peers = this.peerApi(sessionId);
 		if (sub) {
 			// A helper with no model of its own runs on this session's current model.
 			ctx.delegateAgents = () => sub.agents(this.store.get(sessionId)?.cwd);
@@ -856,52 +844,6 @@ export class SessionManager {
 		return { name: r.name, purpose: r.purpose, cwd: r.cwd, branch: branchOf(r.cwd), running: this.live.get(sessionId)?.running ?? false, last };
 	}
 
-	/** Messages to and from the other sessions of this server. */
-	private peerApi(sessionId: string): NonNullable<ToolContext["peers"]> {
-		const find = (name: string) => {
-			const peers = this.peers(sessionId);
-			const peer = peers.find((p) => p.name.toLowerCase() === name.toLowerCase());
-			if (!peer) throw notFound(`session @${name} (sessions: ${peers.map((p) => `@${p.name}`).join(", ") || "none"})`);
-			return { self: this.store.get(sessionId)!.name, peer };
-		};
-		return {
-			names: () => this.peers(sessionId).map((p) => p.name),
-			send: async (name, text) => {
-				const peers = this.peers(sessionId);
-				const isSession = peers.some((p) => p.name.toLowerCase() === name.toLowerCase());
-				// A group handle (e.g. App-Development) fans the message out to every other active session in that group.
-				const group = isSession ? undefined : this.groupSource().find((g) => groupHandle(g.name).toLowerCase() === name.toLowerCase());
-				const targets = group
-					? peers.filter((p) => group.sessionIds.includes(p.sessionId))
-					: [find(name).peer];
-				if (group && !targets.length) throw notFound(`active sessions in group @${name} other than yourself`);
-				const self = this.store.get(sessionId)!.name;
-				const sent = (this.peerSends.get(sessionId) ?? 0) + 1;
-				if (sent > MAX_PEER_SENDS) throw conflict(`at most ${MAX_PEER_SENDS} peer messages per run; stop and report to the user instead`);
-				this.peerSends.set(sessionId, sent);
-				const body = `[from @${self}, another session on this server; answer with peer_send to @${self} only if a reply is needed]\n${text}`;
-				const results = await Promise.all(targets.map(async (peer) => {
-					const busy = this.live.get(peer.sessionId)?.running ?? false;
-					await this.send(peer.sessionId, { text: body, mode: busy ? "follow_up" : "prompt" });
-					return `@${peer.name}${busy ? " (busy; waits for its turn to end)" : ""}`;
-				}));
-				return `Sent to ${group ? `group @${name}: ` : ""}${results.join(", ")}. They work on their own; use peer_read to check on them later.`;
-			},
-			read: (name, count) => {
-				const { peer } = find(name);
-				const rows = this.store.lastMessages(peer.sessionId, Math.min(40, Math.max(1, count)));
-				if (!rows.length) return `@${peer.name} has no messages yet.`;
-				const lines = rows.map(({ message: m }) => {
-					const parts = (Array.isArray(m.content) ? m.content : []) as { type: string; text?: string; name?: string }[];
-					const body = parts.map((c) => (c.type === "text" && !c.text?.startsWith(HINT_OPEN) ? c.text : c.type === "toolCall" ? `[tool ${c.name}]` : "")).filter(Boolean).join(" ");
-					const who = m.role === "user" ? "user" : m.role === "assistant" ? `@${peer.name}` : m.role;
-					return `${who}: ${body}`;
-				});
-				return `${this.live.get(peer.sessionId)?.running ? `@${peer.name} is still working.\n` : ""}${capPeerRead(lines)}`;
-			},
-		};
-	}
-
 	/**
 	 * Approval policy lives here so it applies to every client. Reads policy fresh from the DB.
 	 *  - auto: nothing waits.
@@ -912,7 +854,7 @@ export class SessionManager {
 	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
 		const rec = this.store.get(sessionId);
 		const policy = rec?.approval ?? "ask";
-		if (policy === "auto" || PEER_TOOLS.includes(toolName)) return undefined;
+		if (policy === "auto") return undefined;
 		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, rec?.cwd ?? "");
 		if (!(isMutating(toolName, this.toolDefs()) || delegated)) return undefined;
 		if (policy === "readonly") {
