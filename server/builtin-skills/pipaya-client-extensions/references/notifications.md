@@ -92,20 +92,20 @@ await sdk.notifications.send({
 await sdk.notifications.register('done', {
   event: 'run_finished', title: '작업이 끝났습니다'
 });
-await sdk.notifications.register('approval', {
-  event: 'approval_requested', title: '도구 승인이 필요합니다'
+await sdk.notifications.register('question', {
+  event: 'question_requested', title: '에이전트가 질문하고 있습니다'
 });
 await sdk.notifications.remove('done');
 ```
 
 - `send`: title 100자, body 300자, sessionId/key 80자. 알 수 없는 필드·임의 URL·force·액션은 거부합니다. 제목에는 확장 이름을 호스트가 붙입니다.
-- 종류: `task_completed`, `task_failed`, `approval_required`, `user_request`, `info`.
+- 종류: `task_completed`, `task_failed`, `user_request`, `info`.
 - `key`는 같은 서버/확장 안에서 24시간 중복 억제합니다. 이벤트 재수신 후 SDK 발송에도 사용하는 것을 권장합니다.
 - 확장당 10초에 5개, 서버 규칙은 확장당 5개입니다. 여러 기기가 동일 확장/규칙 ID를 등록하면 같은 서버 등록을 갱신합니다.
-- 서버 규칙은 코드/필터/대화/도구 인자를 받지 않고 `run_finished`와 `approval_requested`만 지원합니다. 해당 이벤트에 확장 규칙이 있으면 기본 시스템 알림 대신 등록된 규칙을 사용합니다.
+- 서버 규칙은 코드/필터/대화/도구 인자를 받지 않고 `run_finished`와 `question_requested`만 지원합니다. 해당 이벤트에 확장 규칙이 있으면 기본 시스템 알림 대신 등록된 규칙을 사용합니다.
 - 비활성화·삭제·패키지 교체·실패·안전 모드는 해당 확장의 서버 규칙을 해제합니다. 오프라인 해제는 로컬 큐에 남겨 재연결 시 재시도하며, 서버에 도달하기 전까지 기존 규칙이 동작할 수 있습니다.
 - 단순 앱 종료·페이지 새로고침에는 서버 규칙을 지우지 않습니다. 클라이언트 Worker 자체는 종료 상태에서 실행되지 않습니다.
-- `events` 권한의 이벤트 목록에 `approval_requested`/`approval_resolved`가 추가됩니다. 메타데이터만 전달하고 원문과 도구 인자는 제외합니다.
+- `events` 권한의 이벤트 목록에 `question_requested`/`question_resolved`가 추가됩니다. 메타데이터만 전달하고 원문과 도구 인자는 제외합니다.
 
 ## 코드와 검증
 

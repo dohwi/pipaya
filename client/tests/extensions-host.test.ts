@@ -1061,7 +1061,7 @@ describe("session labels, mentions and sender rules", () => {
 	test("each capability is refused without its permission", async () => {
 		const { host } = await reload();
 		const { id } = await activate(host, code("example.bare3", ["commands"]));
-		for (const [m, a] of [["sessionLabels.set", [{}]], ["mentions.set", [[]]], ["messages.setSender", ["^x"]], ["messages.clearSender", []]] as [string, unknown[]][]) {
+		for (const [m, a] of [["sessionLabels.set", [{}]], ["mentions.set", [[]]], ["messages.setHeader", ["^x"]], ["messages.clearHeader", []]] as [string, unknown[]][]) {
 			expect(() => call(host, id, m, a)).toThrow(/권한 없음|permission/i);
 		}
 		host.stop();
@@ -1075,15 +1075,15 @@ describe("session labels, mentions and sender rules", () => {
 		expect(host.labelOf("s2")).toBeUndefined();
 		call(host, id, "mentions.set", [[{ insert: "@미나", desc: "docs", group: "세션" }, { insert: "no-at" }, { insert: "@a b" }]]);
 		expect(host.mentions().map((m) => m.insert)).toEqual(["@미나"]);
-		expect(host.senderOf("[from @지우] hi")).toBeNull();
-		call(host, id, "messages.setSender", ["^\\[from (@[^,\\]]+)\\]"]);
-		expect(host.senderOf("[from @지우]\n안녕")).toEqual({ from: "@지우", body: "안녕" });
-		expect(host.senderOf("hello")).toBeNull();
-		expect(() => call(host, id, "messages.setSender", ["("])).toThrow();
+		expect(host.headerOf("[from @지우] hi")).toBeNull();
+		call(host, id, "messages.setHeader", ["^\\[from (@[^,\\]]+)\\]"]);
+		expect(host.headerOf("[from @지우]\n안녕")).toEqual({ from: "@지우", body: "안녕" });
+		expect(host.headerOf("hello")).toBeNull();
+		expect(() => call(host, id, "messages.setHeader", ["("])).toThrow();
 		host.disable(id);
 		expect(host.labelOf("s1")).toBeUndefined();
 		expect(host.mentions()).toEqual([]);
-		expect(host.senderOf("[from @지우]\n안녕")).toBeNull();
+		expect(host.headerOf("[from @지우]\n안녕")).toBeNull();
 		host.stop();
 	});
 });

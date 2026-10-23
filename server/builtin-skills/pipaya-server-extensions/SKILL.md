@@ -5,7 +5,7 @@ description: Read this when the user wants to write, install, debug or change a 
 
 # Pipaya server extensions
 
-A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `package.json` with `"harness": { "extensions": ["./a.ts"] }`) that default-exports `(pi) => { ... }`. It runs **inside the server process with the server's full privileges**: it can read any file the server can, run commands and see every credential. Only install code you trust. That is why `POST /server-extensions/reload` needs the admin token, and why a paired phone can call extension methods but never reload or install anything.
+A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `package.json` with `"pipaya": { "extensions": ["./a.ts"] }`) that default-exports `(pi) => { ... }`. It runs **inside the server process with the server's full privileges**: it can read any file the server can, run commands and see every credential. Only install code you trust. That is why `POST /server-extensions/reload` needs the admin token, and why a paired phone can call extension methods but never reload or install anything.
 
 Where they are read from (each entry is a file or a folder; names starting with `.` and `node_modules` are skipped):
 
@@ -28,7 +28,6 @@ export default (pi) => {
     name: "todo_add",
     description: "Add an item to the session's todo list",
     parameters: T.Object({ text: T.String() }),
-    mutating: false,                       // default true = needs approval in `ask` mode
     execute: async (_id, p, ctx) => {
       ctx.appendEntry("todo", { text: p.text });   // saved on the session, not sent to the model
       return { content: [{ type: "text", text: `added: ${p.text}` }] };
@@ -59,15 +58,20 @@ export default (pi) => {
 |---|---|
 | `pi.Type` | typebox, for tool parameter schemas |
 | `pi.on(event, handler)` | hooks, see below. Handlers run in load order. A throwing handler is logged and skipped, it never breaks the run |
-| `pi.registerTool(tool)` | `{name, description, parameters, mutating?, defaultActive?, alwaysActive?, switchable?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
-| `pi.registerCommand(name, {description?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt}` to send it to the model, nothing to just handle it. Runs before the model sees the message |
+| `pi.registerTool(tool)` | `{name, description, parameters, defaultActive?, alwaysActive?, switchable?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
+| `pi.registerCommand(name, {description?, args?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt, note?, title?}` to send it to the model, nothing to just handle it. Runs before the model sees the message |
+| `pi.registerCommands(prefix, {label?, list(cwd), run(name, args, ctx)})` | a family `/prefix:name args` found at run time (e.g. files in a folder). `list(cwd)` returns `[{name, description?, args?}]` for the menu (`GET /server-extensions/commands?cwd=`); `run` returns like a command. A `note` (`{text, collapse?, data?}`) is shown on the user's message and never sent to the model |
 | `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]` |
 | `pi.registerProvider(provider)` / `unregisterProvider(id)` | a pi-ai `Provider` (custom endpoint, proxy, OAuth). Removed when the extension unloads |
 | `pi.registerFlag(name, {type?, default?, description?})`, `pi.getFlag(name)` | value from environment `PIPAYA_FLAG_<NAME>` |
 | `pi.emit(sessionId\|null, type, data?, {ephemeral?})` | publishes `extension_event` to clients (client extensions with the `server` permission receive it) |
 | `pi.events.on/emit(channel, ...)` | in-process bus between extensions |
-| `pi.sessions` | other sessions: `list({closed?, limit?, before?})`, `get(id)`, `messages(id, count?)`, `send(id, text, mode?)`, `delete(id)` (returns false for an unknown or busy one). Each `SessionInfo` has `running` and `busy` |
-| `pi.groups.list()` | session groups: `[{name, sessionIds}]` |
+| `pi.sessions` | every session: `list({closed?, limit?, before?})`, `get(id)`, `messages(id, count?, {after?})`, `send(id, text, mode?)`, `create({title?, cwd?, provider?, model?, thinkingLevel?, systemPrompt?, tools?, parentId?})`, `update(id, {title?, purpose?, provider?, model?, thinkingLevel?, systemPrompt?, tools?, closed?})`, `fork(id, {atSeq?, title?})`, `abort(id)`, `compact(id, instructions?)`, `questions(id)`, `answer(id, toolCallId, answer)`, `delete(id)` (false for an unknown or busy one). Each `SessionInfo` has model, tools, `running` and `busy` |
+| `pi.groups` | split-window groups: `list()`, `get(id)`, `create({name?, layout})`, `update(id, {name?, layout?})`, `delete(id)`. `{id, name, sessionIds, layout, ...}` |
+| `pi.models` | `list({provider?})` the usable models; `complete({role? \| provider+model, system?, input, maxTokens?, signal?})` one-shot text completion (no session, no tools) |
+| `pi.subscribe(handler, {sessionId?, types?})` | every server event (the `/events` stream) as it happens; returns the unsubscribe. Removed on reload |
+| `pi.notify({title, body?, sessionId?, key?, kind?})` | OS / push notification to the user's devices, under this extension's name (5 per 10 s) |
+| `pi.settings` | `get()`, `set(obj)`, `onChange(fn)`: the object behind `/extensions/:id/settings` for this extension's id, shared with a client extension that has the same id and `settingsScope: "server"` |
 | `pi.home`, `pi.defaultCwd()` | the user's home and the server's default working directory |
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
@@ -78,7 +82,7 @@ export default (pi) => {
 
 | Event | Payload | Return |
 |---|---|---|
-| `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow, `{parts}` to store extra text blocks after it (blocks starting `<pipaya-` show as notes), `{title}` to cut the session title from something else |
+| `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow, `{parts}` to store extra text blocks for the model after it (blocks starting `<pipaya-` are hidden from the transcript), `{note}` to show a line on the message that the model never sees, `{title}` to cut the session title from something else |
 | `before_agent_start` | `{sessionId, text}` | `{systemPrompt?, appendSystemPrompt?, message?}` for this run only |
 | `context` | `{sessionId, messages}` | `{messages}`: what the model sees for this call (storage is untouched) |
 | `tool_call` | `{sessionId, toolCallId, toolName, args}` | `{block: true, reason}`; `args` may be edited in place. |
@@ -89,7 +93,7 @@ export default (pi) => {
 
 `alwaysActive: true` gives a tool to every session, also ones created before the extension was installed (otherwise only new sessions get it, through the default tool set). `switchable: true` lets the user turn it off in the settings.
 
-Approval policy (`ask` / `readonly` / `auto`) still applies after `tool_call` hooks. A tool you register is `mutating: true` unless you say otherwise, so it asks for approval by default.
+Tools run without asking the user; a `tool_call` hook is the place for a policy. To ask the user something, call `ctx.ask(...)`.
 
 ## Rules that are easy to break
 

@@ -86,8 +86,8 @@ export interface ComposerFilter { owner: string; run(text: string): Promise<stri
 export interface SessionLabel { text: string; title?: string }
 /** One `@` completion an extension offers in the composer; `insert` is what lands in the text and what is highlighted. */
 export interface MentionItem { insert: string; desc: string; group: string; keywords: string; except: string }
-/** How a user message from another session starts: the first line matches `first` and group 1 is the sender. */
-export interface SenderRule { owner: string; first: RegExp }
+/** How a user message carries a header line: the first line matches `first` and group 1 is the header text. */
+export interface HeaderRule { owner: string; first: RegExp }
 export interface ToolRenderer { owner: string; toolName: string; render(input: ToolRenderInput): Promise<UINode | null> }
 export type ExtensionDialogRequest = { owner: string; ownerName: string } & (
   | { kind: "confirm"; title: string; message?: string; confirmLabel?: string }
@@ -180,7 +180,7 @@ export class ExtensionHost {
   private composerFilters = new Map<string, ComposerFilter>();
   private labelSets = $state.raw<{ owner: string; labels: Record<string, SessionLabel> }[]>([]);
   private mentionSets = $state.raw<{ owner: string; items: MentionItem[] }[]>([]);
-  private senderRules = $state.raw<SenderRule[]>([]);
+  private headerRules = $state.raw<HeaderRule[]>([]);
   private serverSubscribed = new Set<string>();
   private sessionCalls = new Map<string, number[]>();
   private paneCalls = new Map<string, number[]>();
@@ -662,7 +662,7 @@ export class ExtensionHost {
     this.composerFilters.delete(id);
     this.labelSets = this.labelSets.filter(x => x.owner !== id);
     this.mentionSets = this.mentionSets.filter(x => x.owner !== id);
-    this.senderRules = this.senderRules.filter(x => x.owner !== id);
+    this.headerRules = this.headerRules.filter(x => x.owner !== id);
     this.commands = this.commands.filter(c => c.owner !== id);
     this.actions = this.actions.filter(c => c.owner !== id);
     this.statuses = this.statuses.filter(c => c.owner !== id);
@@ -1235,14 +1235,14 @@ export class ExtensionHost {
         }
         this.mentionSets = [...this.mentionSets.filter(x => x.owner !== id), { owner: id, items }]; return;
       }
-      case "messages.setSender": {
+      case "messages.setHeader": {
         this.require(id, "messages");
         const source = string(args[0], 400);
         let first: RegExp;
         try { first = new RegExp(source); } catch { throw new LocalizedError(t("잘못된 패턴")); }
-        this.senderRules = [...this.senderRules.filter(x => x.owner !== id), { owner: id, first }]; return;
+        this.headerRules = [...this.headerRules.filter(x => x.owner !== id), { owner: id, first }]; return;
       }
-      case "messages.clearSender": this.require(id, "messages"); this.senderRules = this.senderRules.filter(x => x.owner !== id); return;
+      case "messages.clearHeader": this.require(id, "messages"); this.headerRules = this.headerRules.filter(x => x.owner !== id); return;
       case "composerFilter.clear": this.require(id, "composer-filter"); this.composerFilters.delete(id); return;
       case "tools.removeRenderer": this.require(id, "tools"); this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id || r.toolName !== string(args[0], 64)); return;
       case "notifications.send":
@@ -1331,12 +1331,12 @@ export class ExtensionHost {
   mentions(): MentionItem[] {
     return this.mentionSets.filter(x => this.activeOwner(x.owner)).flatMap(x => x.items);
   }
-  /** The sender of a message another session sent, when an active extension recognises its first line. */
-  senderOf(text: string): { from: string; body: string } | null {
-    if (!this.senderRules.length) return null;
+  /** The header of a user message (e.g. who sent it), when an active extension recognises its first line. */
+  headerOf(text: string): { from: string; body: string } | null {
+    if (!this.headerRules.length) return null;
     const nl = text.indexOf("\n");
     const first = (nl < 0 ? text : text.slice(0, nl)).slice(0, 500);
-    for (const rule of this.senderRules) {
+    for (const rule of this.headerRules) {
       if (!this.activeOwner(rule.owner)) continue;
       const m = rule.first.exec(first);
       if (m?.[1]) return { from: m[1].trim(), body: nl < 0 ? "" : text.slice(nl + 1) };

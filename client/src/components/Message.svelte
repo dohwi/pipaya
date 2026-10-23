@@ -31,8 +31,8 @@
 	const parts = $derived<AssistantItem[]>(item.kind === "assistant" ? (turn.length ? turn : [item]) : []);
 	const tail = $derived(parts[parts.length - 1]);
 
-	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setSender`). */
-	const peer = $derived(item.kind === "user" ? extensions.senderOf(item.text) : null);
+	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setHeader`). */
+	const peer = $derived(item.kind === "user" ? extensions.headerOf(item.text) : null);
 	const shown = $derived(item.kind === "user" ? splitQuote(peer ? peer.body : item.text) : { quote: "", rest: "" });
 
 	/** Hand this message to the composer as a reply badge, so the next prompt answers it. */

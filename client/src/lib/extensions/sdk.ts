@@ -138,12 +138,12 @@ export interface ExtensionSDK {
     registerRenderer(entryType: string, render: (entry: { id: number; extension: string; type: string; data: unknown; createdAt: number }) => UINode | null | Promise<UINode | null>): Promise<void>;
     removeRenderer(entryType: string): Promise<void>;
     /**
-     * Mark messages another session sent: when the first line of a user message matches `pattern` (a RegExp source, at
-     * most 400 characters, tested on the first 500 characters), group 1 is shown as the sender and the lines after it as
-     * the text. Replaces the earlier rule of this extension.
+     * Give user messages a header: when the first line of a message matches `pattern` (a RegExp source, at most 400
+     * characters, tested on the first 500 characters), group 1 is shown as a header above the bubble and the lines after
+     * it as the text. Replaces the earlier rule of this extension.
      */
-    setSender(pattern: string): Promise<void>;
-    clearSender(): Promise<void>;
+    setHeader(pattern: string): Promise<void>;
+    clearHeader(): Promise<void>;
   };
   /**
    * Needs `session-labels`: a short label (at most 40 characters) in front of a session's title in the sidebar and the
