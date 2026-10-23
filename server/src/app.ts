@@ -136,6 +136,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		send: (id, text, mode) => sessions.send(id, { text, mode }),
 		abort: (id) => sessions.abort(id),
 		isRunning: (id) => sessions.isRunning(id),
+		ask: async (id, toolCallId, req, signal) => {
+			if (configuration.disabledTools().includes("ask_user")) throw new Error("ask_user is turned off in the settings");
+			const items = req.items?.map((q) => ({ ...q, allowFreeText: q.allowFreeText ?? true }));
+			const outcome = await questions.ask({ sessionId: id, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
+			if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
+			return outcome.answer;
+		},
 	});
 	const retention = new Retention(db, store, sessions, approvals, questions);
 	const terminals = new TerminalManager(bus, {

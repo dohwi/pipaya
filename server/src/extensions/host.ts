@@ -8,7 +8,7 @@ import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import type {
-	EventHandler, EventName, ExtensionAPI, ExtensionCommand, ExtensionContext, ExtensionFactory, ExtensionFlag, ExtensionTool, PromptMode, ToolResult,
+	AskRequest, EventHandler, EventName, ExtensionAPI, ExtensionCommand, ExtensionContext, ExtensionFactory, ExtensionFlag, ExtensionTool, PromptMode, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -17,6 +17,7 @@ export interface SessionBridge {
 	send(sessionId: string, text: string, mode: PromptMode): Promise<unknown>;
 	abort(sessionId: string): boolean;
 	isRunning(sessionId: string): boolean;
+	ask?(sessionId: string, toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 }
 
 export interface ExtensionHostOptions {
@@ -296,6 +297,7 @@ export class ExtensionHost {
 			},
 			abort: () => bridge?.abort(sessionId) ?? false,
 			isRunning: () => bridge?.isRunning(sessionId) ?? false,
+			ask: (toolCallId, req, signal) => bridge?.ask ? bridge.ask(sessionId, toolCallId, req, signal) : Promise.reject(new Error("asking the user is not available")),
 		};
 	}
 

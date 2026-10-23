@@ -24,6 +24,17 @@ export interface ExtensionContext {
 	abort(): boolean;
 	/** True while the agent is working. */
 	isRunning(): boolean;
+	/** Ask the user and wait for the answer (the client shows the question card for `toolCallId`). Rejects when the run is aborted or the user turned asking off. */
+	ask(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
+}
+
+export interface AskRequest {
+	question: string;
+	options?: string[];
+	recommended?: string;
+	allowFreeText?: boolean;
+	/** Several questions at once; `question`/`options` describe the first one. */
+	items?: { question: string; options?: string[]; recommended?: string; allowFreeText?: boolean }[];
 }
 
 export interface ToolResult {

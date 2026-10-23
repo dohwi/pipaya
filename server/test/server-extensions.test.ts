@@ -182,6 +182,37 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 	});
 });
 
+describe("ctx.ask", () => {
+	test("an extension tool can ask the user and gets the answer", async () => {
+		const exDir = join(dir, "ask-exts");
+		mkdirSync(exDir, { recursive: true });
+		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", mutating: false, parameters: pi.Type.Object({}),
+			execute: async (id, _p, ctx, signal) => ({ content: [{ type: "text", text: "got " + await ctx.ask(id, { question: "Which?", options: ["a", "b"], allowFreeText: false }, signal) }] }) });`);
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
+		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
+		const call = async (method: any, url: string, payload?: unknown) => {
+			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
+			return { status: r.statusCode, json: r.body ? r.json() : undefined };
+		};
+		try {
+			expect((await call("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
+			expect((await call("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
+			const id = (await call("POST", "/sessions", { cwd: ws, approval: "auto" })).json.id as string;
+			await call("POST", `/sessions/${id}/messages`, { text: "!ask_ext {}" });
+			let q: any;
+			for (let i = 0; i < 100 && !q; i++) { q = (await call("GET", `/questions?sessionId=${id}`)).json.questions[0]; await Bun.sleep(20); }
+			expect(q).toMatchObject({ question: "Which?", options: ["a", "b"], allowFreeText: false });
+			expect((await call("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answer: "zzz" })).status).toBe(400);
+			expect((await call("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answer: "b" })).status).toBe(200);
+			for (let i = 0; i < 300 && (await call("GET", `/sessions/${id}/status`)).json.running; i++) await Bun.sleep(20);
+			const res = ((await call("GET", `/sessions/${id}/messages`)).json.messages as any[]).map((m) => m.message).find((m) => m.role === "toolResult");
+			expect(JSON.stringify(res)).toContain("got b");
+		} finally {
+			await other.close();
+		}
+	});
+});
+
 describe("examples/extensions/todo.ts", () => {
 	test("loads, adds a todo through the model's tool, blocks rm -rf /, and counts per session", async () => {
 		const exDir = join(dir, "example-exts");

@@ -67,7 +67,7 @@ export default (pi) => {
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
 
-`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`. `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries`, and never reaches the model.
+`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`, `ask(toolCallId, {question, options?, recommended?, allowFreeText?, items?}, signal?)` (asks the user, resolves to the answer text). `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries`, and never reaches the model.
 
 ## Hooks
 
