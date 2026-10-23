@@ -139,6 +139,7 @@
 			connection: () => app.conn,
 			serverId: () => app.serverId,
 			listChanged: () => app.listChanged(),
+			statesChanged: () => app.statesChanged(),
 			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.confirmExtension(message) },
 		});
 		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); };

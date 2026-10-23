@@ -6,16 +6,20 @@ import { HttpError, badRequest } from "./errors.ts";
  * Anything a device decides for itself (theme, shortcuts, sound, language, sidebar, server list and tokens)
  * is deliberately absent and stays on the device.
  */
-export const SERVER_SCOPED_KEYS = ["favModels", "extensions", "notificationPolicy"] as const;
+export const SERVER_SCOPED_KEYS = ["favModels", "extensions", "extensionStates", "notificationPolicy"] as const;
 export type ClientSettingKey = (typeof SERVER_SCOPED_KEYS)[number];
 /** Per-key cap in characters of JSON. Extensions carry code: 50 packages of up to 256 KiB each (client MAX_PACKAGE_BYTES). */
-export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, extensions: 13_500_000, notificationPolicy: 1_000 };
+export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, extensions: 13_500_000, extensionStates: 20_000, notificationPolicy: 1_000 };
 
 /** Minutes a notification shown on a PC may stay unread before it is also pushed to the phone; 0 = never. */
 export const ESCALATE_MINUTES = [0, 1, 2, 3, 5, 10, 15, 30, 60] as const;
 export const DEFAULT_ESCALATE_MINUTES = 3;
 /** Keys the server itself acts on are checked here, so a client cannot store something the server cannot honour. */
 const VALIDATORS: Partial<Record<ClientSettingKey, (value: unknown) => string | null>> = {
+	extensionStates: (v) => {
+		if (!v || typeof v !== "object" || Array.isArray(v)) return "extensionStates must be an object";
+		return Object.values(v).every((x) => typeof x === "boolean") ? null : "extensionStates values must be booleans";
+	},
 	notificationPolicy: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "notificationPolicy must be an object";
 		const keys = Object.keys(v);

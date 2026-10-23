@@ -53,9 +53,9 @@
 		{ id: "tools", label: msg("도구 승인"), icon: "shield", sub: "", server: true },
 		{ id: "agents", label: msg("에이전트"), icon: "brain", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
-		{ id: "srvext", label: msg("확장"), icon: "bolt", sub: "", server: true },
+		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: msg("이 서버의 모든 기기가 함께 씁니다"), server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
-		{ id: "extensions", label: msg("확장"), icon: "bolt", sub: msg("이 기기의 확장 · 안전 모드"), server: false },
+		{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: msg("이 기기의 확장 · 안전 모드"), server: false },
 		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	] as const;
 	type TabId = (typeof tabs)[number]["id"];
@@ -67,7 +67,7 @@
 		tab = next;
 	}
 	const current = $derived(tabs.find((x) => x.id === tab) ?? tabs[0]);
-	/** The chips above split the sections: "공통" shows the app-wide ones, a server chip shows that server's own. */
+	/** The chips above split the sections: "내 설정" shows the app-wide ones, a server chip shows that server's own. */
 	const scoped = $derived(tabs.filter((x) => x.server === current.server));
 	function showCommon() {
 		if (current.server) go("general");
@@ -142,7 +142,7 @@
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={t("설정")} onclose={close} />
 	<div class="srvbar" role="group" aria-label={t("설정 범위")}>
-		<FilterChip on={!current.server} title={t("모든 서버에 공통인 설정")} onclick={showCommon}>{t("공통")}</FilterChip>
+		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
 		{#each app.servers as s (s.id)}
 			<FilterChip on={current.server && s.id === app.serverId} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
 		{/each}

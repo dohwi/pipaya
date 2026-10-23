@@ -431,7 +431,7 @@
 			<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</span></p>
 		{/if}
 		{#if view === "server"}
-			<p class="hint">{t("{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜는 것은 기기마다 따로 합니다.", { name: serverName })}</p>
+			<p class="hint">{t("{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜고 끄는 상태도 서버에 저장되어 모든 기기가 따라갑니다.", { name: serverName })}</p>
 		{:else}
 			<p class="hint">{t("이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.")}</p>
 		{/if}

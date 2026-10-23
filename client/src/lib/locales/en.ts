@@ -507,9 +507,12 @@ export const en: Record<string, string> = {
 
 	/* ---- settings ---- */
 	"일반": "General",
-	"공통": "Common",
+	"내 설정": "My settings",
+	"서버 확장": "Server extensions",
+	"클라이언트 확장": "Client extensions",
+	"이 서버의 모든 기기가 함께 씁니다": "Shared by every device on this server",
 	"설정 범위": "Settings scope",
-	"모든 서버에 공통인 설정": "Settings shared by all servers",
+	"이 기기에만 적용되고 모든 서버에서 같은 설정": "Applies to this device only, the same on every server",
 	"언어 · 테마 · 알림 · 터미널": "Language · theme · alerts · terminal",
 	"질문 허용": "Allow questions",
 	"에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다": "The agent may ask you questions during a run and wait for your answer",
@@ -684,7 +687,7 @@ export const en: Record<string, string> = {
 
 	/* ---- tool cards, work box ---- */
 	"준비 중": "Preparing",
-	"{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜는 것은 기기마다 따로 합니다.": "Installed on {name} and shared by every device connected to this server. Each device turns them on for itself.",
+	"{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜고 끄는 상태도 서버에 저장되어 모든 기기가 따라갑니다.": "Installed on {name} and shared by every device connected to this server. Whether each is on or off is saved on the server too, so every device follows.",
 	"이 서버에 설치된 확장이 없습니다": "No extensions on this server",
 	"이 기기의 확장": "Extensions on this device",
 	"이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.": "Installed only on this device and kept whichever server you connect to. Never sent to a server.",
@@ -1253,7 +1256,7 @@ export const en: Record<string, string> = {
 	"pipaya 연결 QR이 아닙니다. PC 앱에 표시된 QR을 스캔해 주세요.": "That isn't a pipaya connection QR. Scan the one shown in the PC app.",
 	"카메라를 열지 못했습니다.": "Couldn't open the camera.",
 	"서버에 연결하려면 주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.": "You need the server address and access token. The token is in the server's data/token file.",
-	"이 PC": "This PC",
+	"로컬": "Local",
 	"폰에서 앱을 열고 이 QR을 카메라로 스캔하면 서버가 바로 등록됩니다.": "Scan this QR with your phone's camera and the server is added right away.",
 	"폰이 접속할 주소": "Address the phone will use",
 	"localhost 주소는 폰에서 이 PC가 아니라 폰 자신을 가리킵니다. Tailscale 주소나 PC의 LAN 주소로 바꿔 주세요.": "On a phone, localhost means the phone itself, not this PC. Use the Tailscale address or the PC's LAN address instead.",

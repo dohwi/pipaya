@@ -46,6 +46,8 @@ export interface HostAdapter {
   serverId?(): string | null;
   /** The list of installed packages changed; it is shared with every client of this server */
   listChanged?(): void;
+  /** Which server extensions are switched on changed; the server keeps it so every device follows */
+  statesChanged?(): void;
   configuration?: {
     capture(): Pick<ConfigurationDocument, "servers" | "preferences" | "keybindings">;
     apply(document: ConfigurationDocument): void;
@@ -425,6 +427,40 @@ export class ExtensionHost {
   /* ---------- the list is per server ---------- */
 
   private applyingRemote = false;
+  /** What the user chose per server extension (true = on). Shared with the server; a start that fails does not change it. */
+  private wanted: Record<string, boolean> = {};
+
+  /** On/off choices of this server's extensions, or undefined while none was ever made. */
+  states(): Record<string, boolean> | undefined {
+    const out: Record<string, boolean> = {};
+    for (const e of this.installed) { const id = e.package.manifest.id; if (e.scope === "server" && Object.hasOwn(this.wanted, id)) out[id] = this.wanted[id]!; }
+    return Object.keys(out).length ? out : undefined;
+  }
+  private choose(id: string, on: boolean) {
+    const e = this.installed.find(x => x.package.manifest.id === id);
+    if (!e || e.scope !== "server" || this.wanted[id] === on) return;
+    this.wanted[id] = on;
+    if (!this.applyingRemote) this.adapter?.statesChanged?.();
+  }
+  /** Take the server's on/off choices: switch extensions on or off here to match. Failures stay on this device. */
+  applyStates(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    this.wanted = {};
+    for (const [id, on] of Object.entries(value)) if (typeof on === "boolean" && /^[a-z][a-z0-9.-]*$/.test(id)) this.wanted[id] = on;
+    this.followStates();
+  }
+  private followStates() {
+    if (this.safeMode) return;
+    this.applyingRemote = true;
+    try {
+      for (const e of [...this.installed]) {
+        const id = e.package.manifest.id;
+        if (e.scope !== "server" || !Object.hasOwn(this.wanted, id)) continue;
+        if (this.wanted[id] && !e.enabled && e.state !== "starting") void this.enable(id).catch(() => {});
+        else if (!this.wanted[id] && e.enabled) this.disable(id);
+      }
+    } finally { this.applyingRemote = false; }
+  }
 
   /** Installed packages in a stable order: what is shared with the other clients of this server. Activation and consent stay on the device. */
   packages(): unknown[] | undefined {
@@ -453,6 +489,7 @@ export class ExtensionHost {
       }
     } finally { this.applyingRemote = false; }
     try { this.save(); } catch { /* cache only */ }
+    this.followStates();
   }
 
   /** The open server changed: put that server's extensions in place of the previous one's. */
@@ -462,7 +499,7 @@ export class ExtensionHost {
     for (const e of this.installed) if (e.scope === "server") this.cleanup(e.package.manifest.id);
     this.installed = this.installed.filter(e => e.scope === "device");
     this.unreadable = this.unreadable.filter(u => u.scope === "device");
-    this.remote = {}; this.touched.clear(); this.unsynced.clear();
+    this.remote = {}; this.wanted = {}; this.touched.clear(); this.unsynced.clear();
     this.loadError = ""; this.syncNotice = ""; this.corruptRaw = null; this.panelOpen = false; this.activePanel = null;
     this.loadList({ device: false });
     this.applyThemes();
@@ -546,6 +583,7 @@ export class ExtensionHost {
     // Only this id is marked while it starts; a page reload in the middle disables just this extension.
     this.markBooting(id);
     try { await this.start(id); } finally { this.unmarkBooting(id); }
+    this.choose(id, true);
   }
   private async start(id: string) {
     const entry = this.find(id);
@@ -632,6 +670,7 @@ export class ExtensionHost {
     this.revokeNotifications(id);
     const e = this.find(id); e.enabled = false; e.state = "disabled"; e.error = undefined;
     this.cleanup(id); this.applyThemes(); this.save();
+    this.choose(id, false);
   }
   /** Removes the package, its private storage and stops it. `keepSettings` decides what happens to the settings. */
   remove(id: string, opts: { keepSettings: boolean }) {
@@ -640,6 +679,7 @@ export class ExtensionHost {
     const settings = removed.settings;
     this.unpublishLocales(removed.package);
     this.disable(id); this.installed = this.installed.filter(e => e.package.manifest.id !== id);
+    if (Object.hasOwn(this.wanted, id)) { delete this.wanted[id]; if (!this.applyingRemote) this.adapter?.statesChanged?.(); }
     localStorage.removeItem(STORE + id); localStorage.removeItem(CONFIGURATION_GRANT + id); this.save();
     if (keep) {
       // Offline fallback; an unsynced local value is newer than the cached server copy.

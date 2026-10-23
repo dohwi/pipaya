@@ -458,7 +458,7 @@ class AppStore {
         if (cur.id === this.serverId) this.openServer(cur.id, true);
       }
     } else {
-      const server: Server = { id: uid(), name: t("이 PC"), baseUrl, token: info.token, local: true };
+      const server: Server = { id: uid(), name: t("로컬"), baseUrl, token: info.token, local: true };
       this.servers.push(server);
       this.saveServers();
     }
@@ -1303,6 +1303,9 @@ class AppStore {
   listChanged() {
     this.settingsSync?.changed("extensions");
   }
+  statesChanged() {
+    this.settingsSync?.changed("extensionStates");
+  }
 
   /** (Re)start syncing the open server's shared settings. Never throws: an unreachable or older server just keeps the local copy. */
   private startSettingsSync(api: Api, serverId: string) {
@@ -1326,6 +1329,10 @@ class AppStore {
         extensions: {
           read: () => extensions.packages(),
           apply: (v) => extensions.applyPackages(v),
+        },
+        extensionStates: {
+          read: () => extensions.states(),
+          apply: (v) => extensions.applyStates(v),
         },
         notificationPolicy: {
           // only offer what the user actually chose on this device; otherwise the server's value (or its default) stands
