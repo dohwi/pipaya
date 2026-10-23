@@ -42,10 +42,16 @@
 	let notice = $state("");
 	let busy = $state<Record<string, boolean>>({});
 	let drafts = $state<Record<string, string>>({});
-	/** Folds the user has toggled, by extension and section. An untouched fold keeps its default (settings open when they need attention). */
-	let folds = $state<Record<string, boolean>>({});
-	/** Which rows are unfolded. A row shows name, version and the on/off switch; everything else is behind it. */
-	let unfolded = $state<Record<string, boolean>>({});
+	/** The extension whose detail page is open; null shows the list. */
+	let openId = $state<string | null>(null);
+	const openEntry = $derived(openId ? list.find((e) => e.package.manifest.id === openId) : undefined);
+	$effect(() => { if (openId && !openEntry) openId = null; });
+	function closeDetail() {
+		const id = openId;
+		openId = null;
+		removing = null;
+		void tick().then(() => document.getElementById(`extension-${id}`)?.querySelector<HTMLElement>(".expand")?.focus({ preventScroll: false }));
+	}
 	/** Which card asks about removal: the extension id, or `unreadable:<index>` for an unreadable entry. */
 	let removing = $state<string | null>(null);
 	let trigger: HTMLElement | null = null;
@@ -168,12 +174,8 @@
 		const id = result?.pkg?.manifest.id;
 		result = null;
 		if (!id) return;
-		unfolded[id] = true;
-		void tick().then(() => {
-			const card = document.getElementById(`extension-${id}`);
-			card?.scrollIntoView({ block: "center", behavior: "smooth" });
-			card?.focus({ preventScroll: true });
-		});
+		openId = id;
+		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
 	}
 
 	/** The default action takes focus once it can: right after a file is read it is still disabled for a moment. */
@@ -305,7 +307,7 @@
 	<p class="callout warn"><Icon name="alert" /><span>{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</span></p>
 {/snippet}
 
-{#snippet installedCard(entry: InstalledExtension)}
+{#snippet installedRow(entry: InstalledExtension)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
 	{@const gated = !!fields && extensions.configRequired(id)}
@@ -313,15 +315,15 @@
 	{@const on = entry.state === "active" || entry.state === "starting"}
 	<article class="card" id="extension-{id}" tabindex="-1" aria-label={entry.package.manifest.name}>
 		<div class="line">
-			<button type="button" class="expand" aria-expanded={!!unfolded[id]} onclick={() => (unfolded[id] = !unfolded[id])}>
-				<span class="chev" class:open={unfolded[id]}><Icon name="chevron-right" /></span>
+			<button type="button" class="expand" onclick={() => (openId = id)}>
 				<span class="who">
 					<span class="top">
 						<span class="ename">{entry.package.manifest.name}</span>
 						<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>
 					</span>
-					{#if entry.package.manifest.description}<span class="brief" class:full={unfolded[id]}>{entry.package.manifest.description}</span>{/if}
+					{#if entry.package.manifest.description}<span class="brief">{entry.package.manifest.description}</span>{/if}
 				</span>
+				<span class="chev"><Icon name="chevron-right" /></span>
 			</button>
 			{#if busy[id] || entry.state === "starting"}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
 			<Switch
@@ -334,49 +336,77 @@
 		</div>
 		{#if entry.error}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
 		{#if problem}<p in:collapseIn out:collapseOut class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
-		{#if unfolded[id]}
-			<div class="detail" in:collapseIn out:collapseOut>
-				<div class="detail-in">
-					<div class="row actions">
-						<span class="meta id">{id}</span>
-						<button type="button" class="btn sm" disabled={extensions.safeMode || busy[id] || entry.state !== "active"} onclick={() => reload(id)}>{t("다시 불러오기")}</button>
-						<button type="button" class="btn sm" disabled={busy[id]} onclick={() => exportPackage(id)}>{t("내보내기")}</button>
-						<button type="button" class="btn danger sm" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
-					</div>
-					{#if removing === id}
-						<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
-							<p id="extension-remove-{id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
-							<div class="row">
-								<button type="button" class="btn sm" disabled={busy[id]} onclick={() => remove(id, true)}>{t("설정 유지하고 삭제")}</button>
-								<button type="button" class="btn danger sm" disabled={busy[id]} onclick={() => remove(id, false)}>{t("설정까지 삭제")}</button>
-								<button type="button" class="btn sm" data-cancel disabled={busy[id]} onclick={cancelRemove}>{t("취소")}</button>
-							</div>
-						</div>
-					{/if}
-					<Accordion open={folds[`${id}:perm`] ?? false} onchange={(v) => (folds[`${id}:perm`] = v)}>
-						{#snippet head()}{t("권한과 실행 안내")}{/snippet}
-						<div class="details-body">{@render permissions(entry.package)}</div>
-					</Accordion>
-					<Accordion open={folds[`${id}:set`] ?? !!fields} onchange={(v) => (folds[`${id}:set`] = v)}>
-						{#snippet head()}{t("확장 설정")}{/snippet}
-						<div class="details-body">
-							{#if fields}
-								{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
-								<SettingsForm {id} {fields} value={entry.settings} disabled={busy[id] || entry.state === "starting"} saveLabel={entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")} onsave={(settings) => saveSettings(id, settings)} />
-							{:else}
-								<label class="settings-label" for="extension-settings-{id}">{t("설정 JSON 객체")}</label>
-								<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>
-								<p class="hint">{t("JSON 객체만 저장할 수 있습니다 (최대 16KB). 켜져 있는 확장은 다시 불러와 적용하고, 꺼져 있으면 다음에 켤 때 적용합니다.")}</p>
-								<div class="row">
-									<button type="button" class="btn sm" disabled={busy[id] || entry.state === "starting"} onclick={() => saveSettings(id)}>{entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")}</button>
-								</div>
-							{/if}
-						</div>
-					</Accordion>
-				</div>
-			</div>
-		{/if}
 	</article>
+{/snippet}
+
+{#snippet installedDetail(entry: InstalledExtension)}
+	{@const id = entry.package.manifest.id}
+	{@const fields = entry.package.manifest.settings}
+	{@const gated = !!fields && extensions.configRequired(id)}
+	{@const problem = entry.state === "active" || entry.state === "starting" ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
+	{@const on = entry.state === "active" || entry.state === "starting"}
+	<div class="page" id="extension-{id}" tabindex="-1">
+		<button type="button" class="back" onclick={closeDetail}><span class="chev flip"><Icon name="chevron-right" /></span>{t("확장")}</button>
+		<div class="line">
+			<div class="who">
+				<span class="top">
+					<h4 class="ename">{entry.package.manifest.name}</h4>
+					<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>
+				</span>
+				<span class="meta">{id}</span>
+			</div>
+			{#if busy[id] || entry.state === "starting"}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
+			<Switch
+				checked={on}
+				label={t("{name} 사용", { name: entry.package.manifest.name })}
+				disabled={busy[id] || entry.state === "starting" || (!on && (extensions.safeMode || !!problem))}
+				describedby={problem ? `extension-blocked-${id}` : undefined}
+				onchange={(next) => (next ? enable(id) : disable(id))}
+			/>
+		</div>
+		{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
+		{#if entry.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
+		{#if problem}<p class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
+
+		<section class="block">
+			<h3 class="label">{t("확장 설정")}</h3>
+			{#if fields}
+				{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
+				<SettingsForm {id} {fields} value={entry.settings} disabled={busy[id] || entry.state === "starting"} saveLabel={entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")} onsave={(settings) => saveSettings(id, settings)} />
+			{:else}
+				<label class="settings-label" for="extension-settings-{id}">{t("설정 JSON 객체")}</label>
+				<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>
+				<p class="hint">{t("JSON 객체만 저장할 수 있습니다 (최대 16KB). 켜져 있는 확장은 다시 불러와 적용하고, 꺼져 있으면 다음에 켤 때 적용합니다.")}</p>
+				<div class="row">
+					<button type="button" class="btn sm" disabled={busy[id] || entry.state === "starting"} onclick={() => saveSettings(id)}>{entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")}</button>
+				</div>
+			{/if}
+		</section>
+
+		<section class="block">
+			<h3 class="label">{t("권한과 실행 안내")}</h3>
+			{@render permissions(entry.package)}
+		</section>
+
+		<section class="block">
+			<h3 class="label">{t("관리")}</h3>
+			<div class="row">
+				<button type="button" class="btn sm" disabled={extensions.safeMode || busy[id] || entry.state !== "active"} onclick={() => reload(id)}>{t("다시 불러오기")}</button>
+				<button type="button" class="btn sm" disabled={busy[id]} onclick={() => exportPackage(id)}>{t("내보내기")}</button>
+				<button type="button" class="btn danger sm end" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
+			</div>
+			{#if removing === id}
+				<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
+					<p id="extension-remove-{id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
+					<div class="row">
+						<button type="button" class="btn sm" disabled={busy[id]} onclick={() => remove(id, true)}>{t("설정 유지하고 삭제")}</button>
+						<button type="button" class="btn danger sm" disabled={busy[id]} onclick={() => remove(id, false)}>{t("설정까지 삭제")}</button>
+						<button type="button" class="btn sm" data-cancel disabled={busy[id]} onclick={cancelRemove}>{t("취소")}</button>
+					</div>
+				</div>
+			{/if}
+		</section>
+	</div>
 {/snippet}
 
 {#snippet unreadableCard(item: UnreadableExtension, index: number)}
@@ -422,6 +452,9 @@
 	{#if extensions.syncNotice}<p in:collapseIn out:collapseOut class="callout warn" role="status"><Icon name="alert" /><span>{extensions.syncNotice}</span></p>{/if}
 	{#if extensions.loadError}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{extensions.loadError}</span></p>{/if}
 
+	{#if openEntry}
+		{@render installedDetail(openEntry)}
+	{:else}
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
@@ -443,7 +476,7 @@
 		{:else}
 			<p class="hint">{t("이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.")}</p>
 		{/if}
-		{#each list as entry (entry.package.manifest.id)}{@render installedCard(entry)}{/each}
+		{#each list as entry (entry.package.manifest.id)}{@render installedRow(entry)}{/each}
 		{#each unreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
 		{#if view === "server"}
 			{#each serverSide as ext (ext.name)}
@@ -473,6 +506,7 @@
 			{#if extensions.installed.length}<p class="hint">{t("내보내기에는 패키지만 포함되며, 개인 설정과 확장 저장 데이터는 포함되지 않습니다.")}</p>{/if}
 		</div>
 	</Accordion>
+	{/if}
 	{/if}
 </div>
 
@@ -591,11 +625,8 @@
 
 	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.btn.end { margin-left: auto; }
-	.actions .id { flex: 1 1 100%; }
-	.actions .btn.danger { margin-left: auto; }
 	.confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--danger-soft); font-size: var(--fs-sm); }
 
-	.details-body { display: flex; flex-direction: column; gap: 10px; padding-top: 2px; }
 	.settings-label { font-size: var(--fs-xs); font-weight: 550; }
 	textarea { display: block; width: 100%; box-sizing: border-box; min-height: 110px; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
 	textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -610,22 +641,28 @@
 	.add input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.add :global(svg) { width: 16px; height: 16px; }
 	.line { display: flex; align-items: center; gap: 10px; }
+	.expand .who { flex: 1; }
 	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
 	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
-	.chev.open { transform: rotate(90deg); transition: transform var(--motion-normal) var(--ease); }
 	.chev :global(svg) { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-	.brief.full { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.ename { font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
-	.detail { overflow: hidden; }
-	.detail-in { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border); margin-top: 2px; }
+	.page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+	.page:focus { outline: none; }
+	.page .line { align-items: flex-start; }
+	.page .who { flex: 1; min-width: 0; gap: 2px; }
+	.page h4.ename { font-size: var(--fs-lg); }
+	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 2px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
+	.back:hover { color: var(--text); }
+	.back:focus-visible, .page :global(.expand:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.chev.flip { transform: rotate(180deg); }
+	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
 	.adv { display: flex; flex-direction: column; gap: 10px; }
 	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-	@media (prefers-reduced-motion: reduce) { .chev, .chev.open { transition: none; } }
 
 	/* Import result dialog: above the settings window (z 60/61) it is opened from */
 	.rmodal { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 18px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
