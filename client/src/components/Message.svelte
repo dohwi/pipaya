@@ -9,7 +9,8 @@
 	import { compact, duration } from "../lib/format";
 	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
-	import { parsePeer, splitQuote } from "../lib/quote";
+	import { extensions } from "../lib/extensions/host.svelte";
+	import { splitQuote } from "../lib/quote";
 	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
 
 	/**
@@ -30,12 +31,13 @@
 	const parts = $derived<AssistantItem[]>(item.kind === "assistant" ? (turn.length ? turn : [item]) : []);
 	const tail = $derived(parts[parts.length - 1]);
 
-	const peer = $derived(item.kind === "user" ? parsePeer(item.text) : null);
+	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setSender`). */
+	const peer = $derived(item.kind === "user" ? extensions.senderOf(item.text) : null);
 	const shown = $derived(item.kind === "user" ? splitQuote(peer ? peer.body : item.text) : { quote: "", rest: "" });
 
 	/** Hand this message to the composer as a reply badge, so the next prompt answers it. */
 	function reply() {
-		app.replyTo = { text: item.kind === "user" ? (peer ? peer.body : item.text) : plainText, who: peer ? `@${peer.from}` : undefined };
+		app.replyTo = { text: item.kind === "user" ? (peer ? peer.body : item.text) : plainText, who: peer ? peer.from : undefined };
 	}
 
 	/** Mobile: drag an answer right -> left to reply to it. */
@@ -161,7 +163,7 @@
 				</div>
 			{/if}
 			{#if peer}
-				<div class="from"><Icon name="chat" /> <span>@{peer.from}</span></div>
+				<div class="from"><Icon name="chat" /> <span>{peer.from}</span></div>
 			{/if}
 			{#if shown.quote}
 				<blockquote class="quote">{shown.quote}</blockquote>

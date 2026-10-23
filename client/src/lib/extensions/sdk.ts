@@ -135,7 +135,25 @@ export interface ExtensionSDK {
   readonly messages: {
     registerRenderer(entryType: string, render: (entry: { id: number; extension: string; type: string; data: unknown; createdAt: number }) => UINode | null | Promise<UINode | null>): Promise<void>;
     removeRenderer(entryType: string): Promise<void>;
+    /**
+     * Mark messages another session sent: when the first line of a user message matches `pattern` (a RegExp source, at
+     * most 400 characters, tested on the first 500 characters), group 1 is shown as the sender and the lines after it as
+     * the text. Replaces the earlier rule of this extension.
+     */
+    setSender(pattern: string): Promise<void>;
+    clearSender(): Promise<void>;
   };
+  /**
+   * Needs `session-labels`: a short label (at most 40 characters) in front of a session's title in the sidebar and the
+   * pane header, keyed by session id. Each call replaces all labels of this extension; at most 1000.
+   */
+  readonly sessionLabels: { set(labels: Record<string, { text: string; title?: string }>): Promise<void> };
+  /**
+   * Needs `composer-mentions`: `@` completions in the composer. `insert` (`@token`, no spaces) is what lands in the text
+   * and gets highlighted; `desc`, `group` (menu heading) and `keywords` (extra match text) are shown or searched;
+   * `except` is a session id that does not get the item (usually itself). Each call replaces the list; at most 500.
+   */
+  readonly mentions: { set(items: { insert: string; desc?: string; group?: string; keywords?: string; except?: string }[]): Promise<void> };
   /**
    * Needs `slots`: read-only views above the composer (`footer`) or under the header (`header`), like navbar items but
    * wider. Same node limits as navbar items; at most 2 per extension.

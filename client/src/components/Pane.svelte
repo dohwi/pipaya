@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { extensions } from "../lib/extensions/host.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -45,8 +46,8 @@
 	const term = $derived(app.terminal(id));
 	const isTerm = $derived(isTerminalId(id));
 	const state = $derived(id && !isTerm ? activityOf(app, id) : "idle");
-	/** The name other sessions call this one by; the other sessions address it as @name. */
-	const memberName = $derived(session?.name);
+	/** A label an extension put on this session. */
+	const tag = $derived(id ? extensions.labelOf(id) : undefined);
 
 	/**
 	 * Marks a clipped title: sets `--shift` (how far the text overflows) and `.over` so CSS can scroll it into view.
@@ -94,8 +95,8 @@
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
-				{#snippet label()}{#if memberName}<span class="who mono {state}" title={t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: memberName })}>@{memberName}</span>{/if}{session?.title ?? t("대화")}{/snippet}
-				<span class="t" use:marquee={`${memberName ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
+				{#snippet label()}{#if tag}<span class="who mono {state}" title={tag.title}>{tag.text}</span>{/if}{session?.title ?? t("대화")}{/snippet}
+				<span class="t" use:marquee={`${tag?.text ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>

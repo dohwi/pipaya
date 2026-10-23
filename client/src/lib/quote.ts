@@ -1,10 +1,4 @@
-/** Peer messages and quoted replies, kept free of components so they can be unit-tested. */
-
-/** A message another session sent with peer_send: `[from @name, another session on this server; ...]\nbody`. */
-export function parsePeer(text: string): { from: string; body: string } | null {
-	const m = /^\[from @([^,\]\n]+), another session on this server;[^\]\n]*\]\n?([\s\S]*)$/.exec(text);
-	return m ? { from: m[1]!.trim(), body: m[2]! } : null;
-}
+/** Quoted replies, kept free of components so they can be unit-tested. */
 
 const MAX_LINES = 4;
 const MAX_CHARS = 240;

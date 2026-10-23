@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { extensions } from "../lib/extensions/host.svelte";
 	import StatusDot from "./StatusDot.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
@@ -301,10 +302,10 @@
 			/>
 		{:else}
 			{@const st = stateOf(n, x)}
-			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[x.name ? `@${x.name}` : "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
+			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[extensions.labelOf(x.id)?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
 				<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
 				<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
-				{#if x.name}<span class="who mono {st}">@{x.name}</span>{/if}
+				{#if extensions.labelOf(x.id)}<span class="who mono {st}">{extensions.labelOf(x.id)?.text}</span>{/if}
 				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
 			</button>
 			<div class="acts">

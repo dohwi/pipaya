@@ -82,6 +82,12 @@ export interface SlotItem extends NavbarItemSpec { owner: string; id: string; sl
 export interface MessageRenderer { owner: string; entryType: string; render(entry: EntryInput): Promise<UINode | null> }
 export interface EntryInput { id: number; extension: string; type: string; data: unknown; createdAt: number }
 export interface ComposerFilter { owner: string; run(text: string): Promise<string | { text: string } | { cancel: string } | null> }
+/** A short label a extension puts on a session in the sidebar and the pane header (e.g. `@name`). */
+export interface SessionLabel { text: string; title?: string }
+/** One `@` completion an extension offers in the composer; `insert` is what lands in the text and what is highlighted. */
+export interface MentionItem { insert: string; desc: string; group: string; keywords: string; except: string }
+/** How a user message from another session starts: the first line matches `first` and group 1 is the sender. */
+export interface SenderRule { owner: string; first: RegExp }
 export interface ToolRenderer { owner: string; toolName: string; render(input: ToolRenderInput): Promise<UINode | null> }
 export type ExtensionDialogRequest = { owner: string; ownerName: string } & (
   | { kind: "confirm"; title: string; message?: string; confirmLabel?: string }
@@ -172,6 +178,9 @@ export class ExtensionHost {
   slots = $state.raw<SlotItem[]>([]);
   messageRenderers = $state.raw<MessageRenderer[]>([]);
   private composerFilters = new Map<string, ComposerFilter>();
+  private labelSets = $state.raw<{ owner: string; labels: Record<string, SessionLabel> }[]>([]);
+  private mentionSets = $state.raw<{ owner: string; items: MentionItem[] }[]>([]);
+  private senderRules = $state.raw<SenderRule[]>([]);
   private serverSubscribed = new Set<string>();
   private sessionCalls = new Map<string, number[]>();
   private paneCalls = new Map<string, number[]>();
@@ -656,6 +665,9 @@ export class ExtensionHost {
     this.slots = this.slots.filter(s => s.owner !== id);
     this.messageRenderers = this.messageRenderers.filter(r => r.owner !== id);
     this.composerFilters.delete(id);
+    this.labelSets = this.labelSets.filter(x => x.owner !== id);
+    this.mentionSets = this.mentionSets.filter(x => x.owner !== id);
+    this.senderRules = this.senderRules.filter(x => x.owner !== id);
     this.commands = this.commands.filter(c => c.owner !== id);
     this.actions = this.actions.filter(c => c.owner !== id);
     this.statuses = this.statuses.filter(c => c.owner !== id);
@@ -1199,6 +1211,43 @@ export class ExtensionHost {
           return null;
         } }); return;
       }
+      case "sessionLabels.set": {
+        this.require(id, "session-labels");
+        const raw = args[0];
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new LocalizedError(t("라벨은 객체여야 합니다"));
+        const entries = Object.entries(raw as Record<string, unknown>);
+        if (entries.length > 1000) throw new LocalizedError(t("라벨은 최대 1000개입니다"));
+        const labels: Record<string, SessionLabel> = Object.create(null);
+        for (const [sid, v] of entries) {
+          if (!v || typeof v !== "object") continue;
+          const o = v as Record<string, unknown>;
+          if (typeof o.text !== "string" || !o.text.trim()) continue;
+          labels[sid.slice(0, 80)] = { text: o.text.slice(0, 40), ...(typeof o.title === "string" ? { title: o.title.slice(0, 200) } : {}) };
+        }
+        this.labelSets = [...this.labelSets.filter(x => x.owner !== id), { owner: id, labels }]; return;
+      }
+      case "mentions.set": {
+        this.require(id, "composer-mentions");
+        if (!Array.isArray(args[0])) throw new LocalizedError(t("멘션 목록은 배열이어야 합니다"));
+        if (args[0].length > 500) throw new LocalizedError(t("멘션은 최대 500개입니다"));
+        const items: MentionItem[] = [];
+        for (const v of args[0] as unknown[]) {
+          if (!v || typeof v !== "object") continue;
+          const o = v as Record<string, unknown>;
+          if (typeof o.insert !== "string" || !/^@[^\s@]{1,60}$/.test(o.insert)) continue;
+          const str = (x: unknown, max: number) => (typeof x === "string" ? x.slice(0, max) : "");
+          items.push({ insert: o.insert, desc: str(o.desc, 200), group: str(o.group, 20), keywords: str(o.keywords, 200), except: str(o.except, 80) });
+        }
+        this.mentionSets = [...this.mentionSets.filter(x => x.owner !== id), { owner: id, items }]; return;
+      }
+      case "messages.setSender": {
+        this.require(id, "messages");
+        const source = string(args[0], 400);
+        let first: RegExp;
+        try { first = new RegExp(source); } catch { throw new LocalizedError(t("잘못된 패턴")); }
+        this.senderRules = [...this.senderRules.filter(x => x.owner !== id), { owner: id, first }]; return;
+      }
+      case "messages.clearSender": this.require(id, "messages"); this.senderRules = this.senderRules.filter(x => x.owner !== id); return;
       case "composerFilter.clear": this.require(id, "composer-filter"); this.composerFilters.delete(id); return;
       case "tools.removeRenderer": this.require(id, "tools"); this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id || r.toolName !== string(args[0], 64)); return;
       case "notifications.send":
@@ -1274,6 +1323,30 @@ export class ExtensionHost {
       } catch { /* a broken filter must never keep the user from sending */ }
     }
     return { text: current };
+  }
+  private activeOwner(owner: string): boolean {
+    return !this.safeMode && this.installed.some(e => e.package.manifest.id === owner && e.state === "active");
+  }
+  /** The label an active extension put on a session, if any. */
+  labelOf(sessionId: string): SessionLabel | undefined {
+    for (const set of this.labelSets) if (this.activeOwner(set.owner) && set.labels[sessionId]) return set.labels[sessionId];
+    return undefined;
+  }
+  /** Every `@` completion the active extensions offer. */
+  mentions(): MentionItem[] {
+    return this.mentionSets.filter(x => this.activeOwner(x.owner)).flatMap(x => x.items);
+  }
+  /** The sender of a message another session sent, when an active extension recognises its first line. */
+  senderOf(text: string): { from: string; body: string } | null {
+    if (!this.senderRules.length) return null;
+    const nl = text.indexOf("\n");
+    const first = (nl < 0 ? text : text.slice(0, nl)).slice(0, 500);
+    for (const rule of this.senderRules) {
+      if (!this.activeOwner(rule.owner)) continue;
+      const m = rule.first.exec(first);
+      if (m?.[1]) return { from: m[1].trim(), body: nl < 0 ? "" : text.slice(nl + 1) };
+    }
+    return null;
   }
   messageRendererFor(entryType: string): MessageRenderer | undefined {
     if (this.safeMode) return undefined;

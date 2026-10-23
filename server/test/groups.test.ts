@@ -7,7 +7,7 @@ import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
 import { DEFAULT_MAX_SESSIONS } from "../src/config.ts";
-import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentionedMembers, nameInLang, nextMemberName, poolForLang, romanize } from "../src/member-names.ts";
+import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, nameInLang, nextMemberName, poolForLang, romanize } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -62,15 +62,6 @@ describe("member names", () => {
 		expect(poolForLang("ko-KR")).toBe(MEMBER_NAMES_KO);
 		expect(poolForLang("en")).toBe(MEMBER_NAMES_EN);
 		expect(poolForLang("ja")).toBe(MEMBER_NAMES_EN);
-		expect(mentionedMembers("ask @james and @Emma2 please", ["James", "Emma"])).toEqual(["James"]);
-		expect(mentionedMembers("ask @james, then @Emma.", ["James", "Emma"])).toEqual(["James", "Emma"]);
-	});
-	test("@name mentions take the longest known name and allow Korean particles", () => {
-		const names = ["철수", "미나", "미나2", "bob"];
-		expect(memberAt("미나랑", names)).toBe("미나");
-		expect(memberAt("미나2랑", names)).toBe("미나2");
-		expect(memberAt("bobby", names)).toBeNull();
-		expect(mentionedMembers("@미나랑 얘기해서 @철수 에게 전달, mail@bob @미나", names)).toEqual(["미나", "철수"]);
 	});
 });
 

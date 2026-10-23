@@ -1,4 +1,4 @@
-import { groupHandle } from "./group-mention.ts";
+import { groupHandle } from "./member-names.ts";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import Type, { type Static } from "typebox";
