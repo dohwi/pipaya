@@ -184,11 +184,11 @@ class AppStore {
     if (!this.api) return;
     this.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
   }
-  /** Prompt templates dialog (opened from the footer badge). cwd decides which project's templates are listed. */
-  templatesDialog = $state<{ cwd: string } | null>(null);
-  openTemplates(sessionId: string | null = this.activeId) {
+  /** Extension commands dialog (`/prefix:name`, opened from the footer badge). cwd decides which folder's commands are listed. */
+  commandsDialog = $state<{ cwd: string } | null>(null);
+  openCommands(sessionId: string | null = this.activeId) {
     if (!this.api) return;
-    this.templatesDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+    this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
   /** Model connections / API keys of the open server, opened from the model picker */
   connectionsOpen = $state(false);
@@ -615,7 +615,7 @@ class AppStore {
     this.workdir = read<string>(`${K.workdir}.${id}`, ".");
     this.palette = null;
     this.skillsDialog = null;
-    this.templatesDialog = null;
+    this.commandsDialog = null;
     this.queueDialog = null;
     this.sessionsLoaded = false;
     this.models = [];
@@ -916,6 +916,8 @@ class AppStore {
     if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "question_requested" || e.type === "question_resolved") {
       extensions.emit({ type: e.type, sessionId: sid, at: e.ts, ...(e.type === "run_finished" && typeof e.data.status === "string" ? { status: e.data.status } : {}) });
     }
+    if (e.type === "group_created" || e.type === "group_updated" || e.type === "group_deleted") extensions.emit({ type: e.type, sessionId: null, at: e.ts, groupId: String((e.data as { id?: unknown }).id ?? "") });
+    else if (e.type === "extensions_updated") extensions.emit({ type: "extensions_updated", sessionId: null, at: e.ts });
     if (e.type === "turn_end") extensions.emit({ type: "turn_end", sessionId: sid, at: e.ts });
     else if (e.type === "tool_execution_end") extensions.emit({ type: "tool_execution_end", sessionId: sid, at: e.ts, toolName: String((e.data as { toolName?: unknown }).toolName ?? ""), isError: (e.data as { isError?: unknown }).isError === true });
     // What server extensions publish is meant for client extensions, so it is forwarded as is.
@@ -927,6 +929,7 @@ class AppStore {
       if (sid) this.chats[sid]?.addEntry(d);
       extensions.emitServer({ kind: "entry", extension: d.extension, type: d.type, sessionId: sid, data: d.data, id: d.id });
     } else if (e.type === "extensions_updated") {
+      this.serverExtensionsTick++;
       void this.refreshServerExtensions();
     }
     switch (e.type) {
@@ -1830,8 +1833,10 @@ class AppStore {
     this.filePreview = { sessionId, file };
   }
 
+  /** Bumped when the server (re)loads its extensions, so lists that come from them are read again. */
+  serverExtensionsTick = $state(0);
   /** Commands and tools that extensions inside the server provide; refreshed when the server (re)loads them. */
-  serverCommands = $state<{ name: string; description?: string; extension: string }[]>([]);
+  serverCommands = $state<{ name: string; description?: string; args?: string; extension: string }[]>([]);
   async refreshServerExtensions() {
     const api = this.api;
     if (!api) return;

@@ -19,7 +19,7 @@
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
-	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
+	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, parseSlash, SKILL_PREFIX, type SlashCommand } from "../lib/commands";
 	import { activityOf } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
@@ -149,13 +149,14 @@
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
 	const skillMatches = $derived(slashQuery !== null ? matchSkills(skillList, slashQuery) : []);
-	// Prompt templates follow the skills as `/prompt:name`.
-	let templateList = $state<{ name: string; description: string }[]>([]);
-	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
-	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } })[]>([
+	// Commands server extensions find at run time (`/prefix:name`, e.g. prompt files) follow the skills.
+	type FamilyEntry = { prefix: string; label: string; name: string; description: string; args?: string };
+	let familyList = $state<FamilyEntry[]>([]);
+	const familyMatches = $derived(slashQuery !== null ? matchFamilyEntries(familyList, slashQuery) : []);
+	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { family: FamilyEntry })[]>([
 		...commandList,
 		...skillMatches.map((skill) => ({ skill })),
-		...templateMatches.map((template) => ({ template })),
+		...familyMatches.map((family) => ({ family })),
 	]);
 	const skillsWanted = $derived(slashQuery !== null || text.includes(`/${SKILL_PREFIX}`));
 	const skillsCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
@@ -163,11 +164,12 @@
 		const api = app.api;
 		const cwd = skillsCwd;
 		app.skillsTick;
-		if (!(slashQuery !== null || text.includes(`/${TEMPLATE_PREFIX}`)) || !api || app.net !== "online") return;
+		app.serverExtensionsTick;
+		if (!(slashQuery !== null || /(^|\s)\/[a-z][a-z0-9-]*:/.test(text)) || !api || app.net !== "online") return;
 		const controller = new AbortController();
-		api.templates(cwd, controller.signal)
-			.then((r) => { if (!controller.signal.aborted) templateList = r.templates.map((k) => ({ name: k.name, description: k.description })); })
-			.catch(() => { if (!controller.signal.aborted) templateList = []; });
+		api.commandFamilies(cwd, controller.signal)
+			.then((r) => { if (!controller.signal.aborted) familyList = r.families.flatMap((f) => f.entries.map((e) => ({ prefix: f.prefix, label: f.label ?? f.prefix, name: e.name, description: e.description ?? "", ...(e.args ? { args: e.args } : {}) }))); })
+			.catch(() => { if (!controller.signal.aborted) familyList = []; });
 		return () => controller.abort();
 	});
 	$effect(() => {
@@ -272,8 +274,8 @@
 			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
 			: slashList.map((it) => "skill" in it
 				? { id: `skill:${it.skill.name}`, text: `/${SKILL_PREFIX}${it.skill.name}`, desc: it.skill.description, tag: msg("스킬"), group: msg("스킬") }
-				: "template" in it
-				? { id: `template:${it.template.name}`, text: `/${TEMPLATE_PREFIX}${it.template.name}`, desc: it.template.description, tag: msg("템플릿"), group: msg("템플릿") }
+				: "family" in it
+				? { id: `${it.family.prefix}:${it.family.name}`, text: `/${it.family.prefix}:${it.family.name}`, args: it.family.args, desc: it.family.description, tag: it.family.label, group: it.family.label }
 				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc, group: msg("명령") }));
 	const slashOpen = $derived(cdArg !== null ? cdOpen && !slashDismissed : mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
@@ -377,7 +379,7 @@
 		const cmd = slashList[index];
 		if (!cmd) return;
 		if ("skill" in cmd) return void setText(`/${SKILL_PREFIX}${cmd.skill.name} `);
-		if ("template" in cmd) return void setText(`/${TEMPLATE_PREFIX}${cmd.template.name} `);
+		if ("family" in cmd) return void setText(`/${cmd.family.prefix}:${cmd.family.name} `);
 		if (completeOnly) setText(`${commandText(cmd)}${cmd.args ? " " : ""}`);
 		else pickSlash(cmd);
 	}
@@ -546,7 +548,7 @@
 	const IMG_TOKEN = /#image(\d+)\b/g;
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attachments.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { commands: familyList.map((f) => `${f.prefix}:${f.name}`), skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attachments.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);

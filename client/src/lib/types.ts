@@ -125,18 +125,12 @@ export interface SkillList {
 	warnings: { path: string; message: string }[];
 }
 
-export interface TemplateInfo {
-	name: string;
-	description: string;
-	/** Absolute path of the template .md file. */
-	path: string;
-	scope: "global" | "project";
-}
-
-export interface TemplateList {
-	cwd: string;
-	templates: TemplateInfo[];
-	warnings: { path: string; message: string }[];
+/** Commands a server extension finds at run time (`pi.registerCommands`), e.g. `/prompt:<name>`, for one folder. */
+export interface CommandFamily {
+	prefix: string;
+	label?: string;
+	extension: string;
+	entries: { name: string; description?: string; args?: string }[];
 }
 
 export interface CompactionResult {
@@ -440,6 +434,9 @@ export interface StreamDelta {
 
 /* ---------- UI model ---------- */
 
+/** `call`: what the user typed (e.g. `/prompt:review x`); `collapse`: the text is long and starts folded. */
+export interface MessageNote { text: string; call: string; collapse?: boolean; data?: unknown }
+
 export type ToolState = "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";
 
 export interface ToolRun {
@@ -462,8 +459,8 @@ export interface UserItem {
 	images: ImageBlock[];
 	/** Files attached to this message, saved in the session's working directory */
 	files?: FileRef[];
-	/** Set when the text is an expanded prompt template: its name and the short call the user typed. */
-	template?: { name: string; call: string };
+	/** A note a server extension stored with the message (`pipaya-note`): shown on it, never sent to the model. */
+	note?: MessageNote;
 	ts: number;
 	fresh?: boolean;
 }

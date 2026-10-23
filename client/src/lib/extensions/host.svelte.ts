@@ -1354,7 +1354,7 @@ export class ExtensionHost {
   }
   emit(event: ExtensionEvent) {
     if (this.safeMode) return;
-    const safe = { type: event.type, sessionId: event.sessionId, at: event.at, ...(event.status === undefined ? {} : { status: event.status }), ...(event.toolName === undefined ? {} : { toolName: event.toolName, isError: event.isError === true }) };
+    const safe = { type: event.type, sessionId: event.sessionId, at: event.at, ...(event.status === undefined ? {} : { status: event.status }), ...(event.toolName === undefined ? {} : { toolName: event.toolName, isError: event.isError === true }), ...(event.groupId === undefined ? {} : { groupId: event.groupId }) };
     for (const id of this.subscribed) this.runtimes.get(id)?.event(safe);
   }
 }

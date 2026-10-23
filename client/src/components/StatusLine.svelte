@@ -59,7 +59,7 @@
 			.catch(() => { if (!controller.signal.aborted && fresh?.key === key) fresh = null; });
 		return () => controller.abort();
 	});
-	// Prompt templates callable as /prompt:name in the chosen directory (the open chat's, else the new-chat one).
+	// Commands server extensions offer as /prefix:name in the chosen directory (the open chat's, else the new-chat one).
 	let tpl = $state<{ key: string; names: string[] } | null>(null);
 	const tplCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	const tplKey = $derived(`${app.serverId}:${tplCwd}`);
@@ -68,28 +68,29 @@
 		const cwd = tplCwd;
 		const api = app.api;
 		app.skillsTick;
+		app.serverExtensionsTick;
 		chat?.items.length;
 		if (!api) return;
 		const controller = new AbortController();
-		api.templates(cwd, controller.signal)
-			.then(r => { if (!controller.signal.aborted) tpl = { key, names: r.templates.map(k => k.name) }; })
-			// Servers that predate templates simply hide the item.
+		api.commandFamilies(cwd, controller.signal)
+			// No extension offers such commands: the item stays hidden.
+			.then(r => { if (!controller.signal.aborted) tpl = r.families.length ? { key, names: r.families.flatMap(f => f.entries.map(e => `/${f.prefix}:${e.name}`)) } : null; })
 			.catch(() => { if (!controller.signal.aborted && tpl?.key === key) tpl = null; });
 		return () => controller.abort();
 	});
 	const tplNames = $derived(tpl && tpl.key === tplKey ? tpl.names : null);
+	const list = (items: string[], max = 8) => items.slice(0, max).join(", ") + (items.length > max ? ` ${t("외 {n}개", { n: items.length - max })}` : "");
 	const tplTip = $derived(
 		tplNames
 			? [
-					t("사용할 수 있는 프롬프트 템플릿 {n}개", { n: tplNames.length }),
-					tplNames.length ? tplNames.slice(0, 8).map(n => `/prompt:${n}`).join(", ") + (tplNames.length > 8 ? ` ${t("외 {n}개", { n: tplNames.length - 8 })}` : "") : t("템플릿이 없습니다."),
+					t("사용할 수 있는 확장 명령 {n}개", { n: tplNames.length }),
+					tplNames.length ? list(tplNames) : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다."),
 					t("눌러서 목록 보기"),
 				].join("\n")
 			: "",
 	);
 	const skillNames = $derived(pane.id ? (here ? here.skills : null) : (fresh && fresh.key === cwdKey ? fresh.names : null));
 	const skillCount = $derived(skillNames ? skillNames.length : null);
-	const list = (items: string[], max = 8) => items.slice(0, max).join(", ") + (items.length > max ? ` ${t("외 {n}개", { n: items.length - max })}` : "");
 	const base = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 	const filesTip = $derived(
 		here
@@ -187,7 +188,7 @@
 		</button>
 	{/if}
 	{#if tplNames !== null}
-		<button class="b templates" class:empty={tplNames.length === 0} onclick={() => app.openTemplates(pane.id)} aria-haspopup="dialog" aria-label={t("템플릿 {n}개", { n: tplNames.length })} title={tplTip}>
+		<button class="b templates" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
 			<Icon name="list" />
 			<span class="v">{t("{n}개", { n: tplNames.length })}</span>
 		</button>

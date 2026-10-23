@@ -15,8 +15,10 @@ export interface ExtensionContext {
   online: boolean;
 }
 export interface ExtensionEvent {
-  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end";
+  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end" | "group_created" | "group_updated" | "group_deleted" | "extensions_updated";
   sessionId?: string | null;
+  /** `group_*` only: the group. */
+  groupId?: string;
   at: number;
   status?: string;
   /** `tool_execution_end` only: which tool ran and whether it failed. */
@@ -76,8 +78,8 @@ export interface ExtensionSDK {
     call(extension: string, method: string, params?: unknown, sessionId?: string): Promise<unknown>;
     /** Entries a server extension stored with `ctx.appendEntry` on a session (default: the open one). */
     entries(options?: { sessionId?: string; extension?: string; type?: string }): Promise<{ id: number; extension: string; type: string; data: unknown; createdAt: number }[]>;
-    /** Server extensions that are loaded, their tools, commands and methods. */
-    list(): Promise<{ name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; error?: string }[]>;
+    /** Server extensions that are loaded: what each registered (tools, commands, command families, methods, providers, flags, hooked events). */
+    list(): Promise<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>;
     on(handler: (event: ServerExtensionEvent) => void | Promise<void>): Promise<() => void>;
   };
   /** Needs `shortcuts`. The combo must contain Ctrl/⌘ (`Mod`) or `Alt`, e.g. `Mod+Shift+K`; the user can see which extension owns it. */

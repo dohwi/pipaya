@@ -22,7 +22,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	SessionDetail,
 	SessionContext,
 	SkillList,
-	TemplateList,
+	CommandFamily,
 	ToolInfo,
 	Usage,
 	WorkspaceInfo,
@@ -171,7 +171,7 @@ export class Api {
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; companion?: string; error?: string }[]; commands: { name: string; description?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {
@@ -262,9 +262,9 @@ export class Api {
 	/** scope "project"/"session": enabled null removes the override. "session" needs sessionId. */
 	setSkill = (name: string, body: { scope: "global" | "project" | "session"; enabled: boolean | null; cwd?: string; sessionId?: string }) =>
 		this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}`, body);
-	/** Prompt templates come from the server's bundled `prompt-templates` extension; without it the call fails and the UI hides them. */
-	templates = (cwd?: string, signal?: AbortSignal) =>
-		this.callServerExtension("prompt-templates", "list", cwd ? { cwd } : {}, null, signal) as Promise<TemplateList>;
+	/** Commands server extensions find at run time (`/prefix:name`), for `cwd`. */
+	commandFamilies = (cwd?: string, signal?: AbortSignal) =>
+		this.req<{ cwd: string; families: CommandFamily[] }>("GET", `/server-extensions/commands${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`, undefined, signal);
 	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
 	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);
 	/** Delete several at once. Ones running or waiting for the user are skipped and come back in `skipped`. */

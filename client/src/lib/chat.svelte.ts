@@ -11,6 +11,7 @@ import type {
 	ContextUsage,
 	PipayaEvent,
 	FileRef,
+	MessageNote,
 	ImageBlock,
 	StreamDelta,
 	ToolRun,
@@ -60,11 +61,11 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; template?: { name: string; call: string } } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
-	let template: { name: string; call: string } | undefined;
-	// The server appends a note when the user attached files or tagged a session; it is for the model, not for the transcript.
+	let note: MessageNote | undefined;
+	// Blocks the server or an extension adds (`<pipaya-…>`: attached files, hints for the model, notes) are not message text.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
 				if (c?.type !== "text") return true;
@@ -76,17 +77,17 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 					} catch { /* a note we cannot read is simply not shown */ }
 					return false;
 				}
-				if (s.startsWith("<pipaya-template>")) {
+				if (s.startsWith("<pipaya-note>")) {
 					try {
-						const j = JSON.parse(s.slice("<pipaya-template>".length, s.indexOf("</pipaya-template>")));
-						if (j && typeof j.name === "string") template = { name: j.name, call: String(j.call ?? "") };
-					} catch { /* an unreadable marker just means no note */ }
+						const j = JSON.parse(s.slice("<pipaya-note>".length, s.indexOf("</pipaya-note>")));
+						if (j && typeof j.text === "string") note = { text: j.text.slice(0, 200), call: String(j.call ?? ""), ...(j.collapse === true ? { collapse: true } : {}), ...(j.data !== undefined ? { data: j.data } : {}) };
+					} catch { /* an unreadable note is simply not shown */ }
 					return false;
 				}
-				return !s.startsWith("<pipaya-hint>");
+				return !s.startsWith("<pipaya-");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files, ...(template ? { template } : {}) };
+	return { text: textOf(shown), images, files, ...(note ? { note } : {}) };
 }
 
 function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun {
@@ -439,9 +440,9 @@ export class ChatState {
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;
-						// A template call was typed short but stored expanded: show what was really sent.
+						// A command typed short but stored expanded (with a note): show what was really sent.
 						const full = userFields(m);
-						if (full.template) Object.assign(opt, { text: full.text, template: full.template });
+						if (full.note) Object.assign(opt, { text: full.text, note: full.note });
 					} else {
 						this.items.push({ kind: "user", key: `m${seq}`, seq, ts: m.timestamp ?? e.ts, fresh: true, ...userFields(m) });
 					}
@@ -453,7 +454,6 @@ export class ChatState {
 						this.items.push({ kind: "assistant", key: `m${seq}`, seq, streaming: false, fresh: true, ...assistantFields(m) });
 					}
 				} else if (m.role === "toolResult") {
-					const prev = this.tools[m.toolCallId];
 					this.tools[m.toolCallId] = toolRunFrom(m);
 				}
 				break;

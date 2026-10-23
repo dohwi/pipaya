@@ -4,13 +4,14 @@
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { errorText, type Api } from "../lib/api";
-	import type { TemplateList } from "../lib/types";
+	import type { CommandFamily } from "../lib/types";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
+	/** Every `/prefix:name` command the server's extensions offer for one folder (`pi.registerCommands`), e.g. prompt files. */
 	let { dialog: target, api, onclose }: { dialog: { cwd: string }; api: Api; onclose: () => void } = $props();
 
-	let data = $state<TemplateList | null>(null);
+	let data = $state<{ cwd: string; families: CommandFamily[] } | null>(null);
 	let loading = $state(true);
 	let error = $state("");
 	let refresh = $state(0);
@@ -18,35 +19,36 @@
 
 	$effect(() => {
 		refresh;
-		// Files added or edited on disk arrive as skills_updated.
+		// Files added or edited on disk arrive as skills_updated; a reloaded extension as extensions_updated.
 		app.skillsTick;
+		app.serverExtensionsTick;
 		const controller = new AbortController();
 		error = "";
-		api.templates(target.cwd, controller.signal)
+		api.commandFamilies(target.cwd, controller.signal)
 			.then((list) => { if (!controller.signal.aborted) data = list; })
 			.catch((e) => { if (!controller.signal.aborted) error = errorText(e); })
 			.finally(() => { if (!controller.signal.aborted) loading = false; });
 		return () => controller.abort();
 	});
 
-	const shown = $derived(
-		(data?.templates ?? []).filter((s) => {
-			const q = query.trim().toLowerCase();
-			return !q || s.name.includes(q) || s.description.toLowerCase().includes(q);
-		}),
-	);
+	const total = $derived(data?.families.reduce((n, f) => n + f.entries.length, 0) ?? 0);
+	const match = (f: CommandFamily, e: CommandFamily["entries"][number]) => {
+		const q = query.trim().toLowerCase();
+		return !q || `${f.prefix}:${e.name}`.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q);
+	};
+	const shown = $derived((data?.families ?? []).map((f) => ({ ...f, entries: f.entries.filter((e) => match(f, e)) })).filter((f) => f.entries.length));
 
 	const home = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 </script>
 
-<Modal {onclose} title={t("프롬프트 템플릿")} sub={data ? `${t("{n}개", { n: data.templates.length })} · ${home(data.cwd)}` : null} width="680px" maxHeight="760px" safeArea>
+<Modal {onclose} title={t("확장 명령")} sub={data ? `${t("{n}개", { n: total })} · ${home(data.cwd)}` : null} width="680px" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
 		<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
 	{/snippet}
-	{#if (data?.templates.length ?? 0) > 6}
-		<div class="tools"><input class="search" type="search" placeholder={t("템플릿 검색")} bind:value={query} aria-label={t("템플릿 검색")} /></div>
+	{#if total > 6}
+		<div class="tools"><input class="search" type="search" placeholder={t("명령 검색")} bind:value={query} aria-label={t("명령 검색")} /></div>
 	{/if}
-	<p class="hint">{t("입력창에 /prompt:이름 [내용]을 쓰면 저장된 긴 프롬프트가 대화에 전달됩니다. 프롬프트 안의 $ARGUMENTS는 뒤에 쓴 내용으로 바뀝니다.")}</p>
+	<p class="hint">{t("서버 확장이 이 폴더에서 제공하는 명령입니다. 입력창에 /접두어:이름 [내용]을 쓰면 서버가 실행합니다.")}</p>
 
 	<div class="body" aria-busy={loading}>
 		{#if error}
@@ -55,29 +57,19 @@
 		{#if !data && loading}
 			<div class="empty" role="status">{t("불러오는 중…")}</div>
 		{:else if data}
-			{#each data.warnings as warning}
-				<div class="gap"><Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice></div>
+			{#each shown as f (f.prefix)}
+				<h3 class="fam">{f.label ?? f.prefix} <Badge size="sm">{f.extension}</Badge></h3>
+				<ul class="list">
+					{#each f.entries as e (e.name)}
+						<li class="item">
+							<span class="name mono">/{f.prefix}:{e.name}{#if e.args}<span class="args"> {e.args}</span>{/if}</span>
+							{#if e.description}<p class="desc">{e.description}</p>{/if}
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<div class="empty">{total ? t("일치하는 명령이 없습니다.") : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다.")}</div>
 			{/each}
-			<ul class="list">
-				{#each shown as s (s.name)}
-					<li class="item">
-						<div class="line">
-							<span class="name mono">/prompt:{s.name}</span>
-							<Badge size="sm">{s.scope === "project" ? t("프로젝트") : t("전역")}</Badge>
-						</div>
-						<p class="desc">{s.description}</p>
-						<p class="path mono">{home(s.path)}</p>
-					</li>
-				{:else}
-					<li class="empty">
-						{#if data.templates.length}
-							{t("일치하는 템플릿이 없습니다.")}
-						{:else}
-							{t("템플릿이 없습니다.")} <span class="mono">~/.agents/templates/&lt;{t("템플릿 이름")}&gt;.md</span> {t("또는 프로젝트의")} <span class="mono">.agents/templates/</span>{t("에 추가하세요.")}
-						{/if}
-					</li>
-				{/each}
-			</ul>
 		{/if}
 	</div>
 </Modal>
@@ -87,12 +79,13 @@
 	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 	.hint { margin: 8px 24px 12px; font-size: var(--fs-xs); color: var(--text-faint); flex: none; }
 	.body { overflow-y: auto; padding: 14px 24px 24px; min-height: 80px; border-top: 1px solid var(--border); }
+	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }
+	.fam:not(:first-child) { margin-top: 16px; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.item { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-	.name { font-size: var(--fs-sm); font-weight: 600; }
+	.name { font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+	.args { font-weight: 400; color: var(--text-faint); }
 	.desc { margin: 6px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-	.path { margin: 5px 0 0; font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.empty { padding: 18px 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-faint); background: var(--bg); border-radius: var(--radius); overflow-wrap: anywhere; }
 	.gap { margin-bottom: 10px; }
 	@media (max-width: 640px) {
