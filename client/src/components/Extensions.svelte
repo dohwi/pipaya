@@ -13,16 +13,15 @@
 	import { parsePackage, MAX_PACKAGE_BYTES, type ExtensionPackage, type Permission } from "../lib/extensions/schema";
 	import Marketplace from "./extensions/Marketplace.svelte";
 
+	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
+	let { scope: view }: { scope: ExtensionScope } = $props();
 	let preview = $state<ExtensionPackage | null>(null);
-	/** Where the package being imported will be installed. A server extension needs a server to belong to. */
-	let target = $state<ExtensionScope>("server");
-	const hasServer = $derived(!!app.serverId);
+	/** Where the package being imported will be installed: the scope of the tab it is imported from. */
+	const target = $derived(view);
 	const serverName = $derived(app.servers.find((s) => s.id === app.serverId)?.name ?? "");
-	const serverList = $derived(extensions.installed.filter((e) => e.scope === "server"));
-	const deviceList = $derived(extensions.installed.filter((e) => e.scope === "device"));
+	const list = $derived(extensions.installed.filter((e) => e.scope === view));
 	const indexed = $derived(extensions.unreadable.map((item, index) => ({ item, index })));
-	const serverUnreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === "server"));
-	const deviceUnreadable = $derived(indexed.filter(({ item }) => item.scope === "device"));
+	const unreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === view));
 	let filename = $state("");
 	let market = $state(false);
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
@@ -30,7 +29,6 @@
 		market = false;
 		preview = pkg;
 		filename = `${entry.id}.json`;
-		target = extensions.installed.find((e) => e.package.manifest.id === pkg.manifest.id)?.scope ?? (hasServer ? "server" : "device");
 	}
 	let error = $state("");
 	let notice = $state("");
@@ -109,8 +107,6 @@
 			const pkg = parsePackage(JSON.parse(await file.text()));
 			preview = pkg;
 			filename = file.name;
-			// A replacement stays where it is; a new one goes to the server when there is one.
-			target = extensions.installed.find((e) => e.package.manifest.id === pkg.manifest.id)?.scope ?? (hasServer ? "server" : "device");
 		}, t("파일을 불러오지 못했습니다"));
 	}
 
@@ -420,7 +416,7 @@
 
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
-			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: extensions.installed.length + extensions.unreadable.length })}</h3>
+			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length })}</h3>
 			<button type="button" class="btn sm add" disabled={busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</button>
 			<label class="btn sm add" class:disabled={busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={busy.$import} onchange={selectFile} />
@@ -431,40 +427,22 @@
 		{#if extensions.safeMode}
 			<p class="callout warn" role="status"><Icon name="shield" /><span>{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “고급”에서 해제할 수 있습니다.")}</span></p>
 		{/if}
-		{#if extensions.unreadable.length}
-			<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: extensions.unreadable.length })}</span></p>
+		{#if unreadable.length}
+			<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</span></p>
 		{/if}
-		{#if !hasServer && !extensions.installed.length && !extensions.unreadable.length}
-			<div class="empty">
-				<Icon name="bolt" />
-				<p>{t("설치된 확장이 없습니다")}</p>
-				<p class="hint">{t("오른쪽 위 “확장 추가”로 JSON 패키지를 가져와 시작하세요.")}</p>
-			</div>
-		{/if}
-		{#if hasServer}
-			<div class="zone" aria-labelledby="extensions-server">
-				<h4 id="extensions-server" class="zone-head">
-					<Icon name="server" /> {t("이 서버의 확장")}
-					<span class="zone-n">{serverList.length + serverUnreadable.length}</span>
-				</h4>
-				<p class="hint">{t("{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜는 것은 기기마다 따로 합니다.", { name: serverName })}</p>
-				{#each serverList as entry (entry.package.manifest.id)}{@render installedCard(entry)}{/each}
-				{#each serverUnreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
-				{#if !serverList.length && !serverUnreadable.length}<p class="none">{t("이 서버에 설치된 확장이 없습니다")}</p>{/if}
-			</div>
-		{/if}
-		<div class="zone" aria-labelledby="extensions-device">
-			<h4 id="extensions-device" class="zone-head">
-				<Icon name="monitor" /> {t("이 기기의 확장")}
-				<span class="zone-n">{deviceList.length + deviceUnreadable.length}</span>
-			</h4>
+		{#if view === "server"}
+			<p class="hint">{t("{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜는 것은 기기마다 따로 합니다.", { name: serverName })}</p>
+		{:else}
 			<p class="hint">{t("이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.")}</p>
-			{#each deviceList as entry (entry.package.manifest.id)}{@render installedCard(entry)}{/each}
-			{#each deviceUnreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
-			{#if !deviceList.length && !deviceUnreadable.length}<p class="none">{t("이 기기에 설치된 확장이 없습니다")}</p>{/if}
-		</div>
+		{/if}
+		{#each list as entry (entry.package.manifest.id)}{@render installedCard(entry)}{/each}
+		{#each unreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
+		{#if !list.length && !unreadable.length}
+			<p class="none">{view === "server" ? t("이 서버에 설치된 확장이 없습니다") : t("이 기기에 설치된 확장이 없습니다")}</p>
+		{/if}
 	</section>
 
+	{#if view === "device"}
 	<Accordion variant="line">
 		{#snippet head()}{t("고급")}{/snippet}
 		<div class="adv">
@@ -478,7 +456,7 @@
 			{#if extensions.installed.length}<p class="hint">{t("내보내기에는 패키지만 포함되며, 개인 설정과 확장 저장 데이터는 포함되지 않습니다.")}</p>{/if}
 		</div>
 	</Accordion>
-
+	{/if}
 </div>
 
 {#if market}
@@ -503,17 +481,7 @@
 					</div>
 				</div>
 				{#if !replacement}
-					<h5 class="rsub">{t("설치 위치")}</h5>
-					<div class="scopes" role="radiogroup" aria-label={t("설치 위치")}>
-						<label class="scope" class:on={target === "server"} class:off={!hasServer}>
-							<input type="radio" name="scope" value="server" bind:group={target} disabled={!hasServer} />
-							<span><strong>{t("이 서버")}</strong><span class="hint">{hasServer ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("연결된 서버가 없습니다")}</span></span>
-						</label>
-						<label class="scope" class:on={target === "device"}>
-							<input type="radio" name="scope" value="device" bind:group={target} />
-							<span><strong>{t("이 기기")}</strong><span class="hint">{t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</span></span>
-						</label>
-					</div>
+					<p class="hint">{target === "server" ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</p>
 				{/if}
 				<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
 				{@render permissions(p)}
@@ -663,39 +631,6 @@
 		.row > .btn { flex: 1 1 auto; }
 		.btn.end { margin-left: 0; }
 	}
-	/* Two places an extension can live: this server (shared by its devices) and this device */
-	.zone {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin-top: 14px;
-	}
-	.zone-head {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 0;
-		font-size: var(--fs-sm);
-		font-weight: 650;
-		color: var(--text);
-	}
-	.zone-head :global(svg) {
-		width: 15px;
-		height: 15px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.7;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-		color: var(--text-dim);
-	}
-	.zone-add { margin-left: auto; font-weight: 400; }
-	.zone-n {
-		font-size: var(--fs-xs);
-		font-weight: 500;
-		color: var(--text-faint);
-		font-variant-numeric: tabular-nums;
-	}
 	.none {
 		margin: 2px 0 6px;
 		padding: 12px;
@@ -704,40 +639,5 @@
 		color: var(--text-faint);
 		font-size: var(--fs-sm);
 		text-align: center;
-	}
-	.scopes {
-		display: grid;
-		gap: 8px;
-		margin-bottom: 14px;
-	}
-	.scope {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		padding: 10px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		cursor: pointer;
-	}
-	.scope.on {
-		border-color: var(--accent);
-		background: var(--accent-soft);
-	}
-	.scope.off {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-	.scope input {
-		margin-top: 3px;
-		accent-color: var(--accent);
-	}
-	.scope span {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
-	}
-	.scope strong {
-		font-size: var(--fs-sm);
 	}
 </style>

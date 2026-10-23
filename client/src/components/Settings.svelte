@@ -53,8 +53,9 @@
 		{ id: "tools", label: msg("도구 승인"), icon: "shield", sub: "", server: true },
 		{ id: "agents", label: msg("에이전트"), icon: "brain", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
+		{ id: "srvext", label: msg("확장"), icon: "bolt", sub: "", server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
-		{ id: "extensions", label: msg("확장"), icon: "bolt", sub: msg("가져오기와 관리"), server: false },
+		{ id: "extensions", label: msg("확장"), icon: "bolt", sub: msg("이 기기의 확장 · 안전 모드"), server: false },
 		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	] as const;
 	type TabId = (typeof tabs)[number]["id"];
@@ -199,7 +200,9 @@
 				{#if current.sub}<p>{t(current.sub)}</p>{/if}
 			</div>
 			{#if tab === "extensions"}
-				<Extensions />
+				<Extensions scope="device" />
+			{:else if tab === "srvext"}
+				<Extensions scope="server" />
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}
