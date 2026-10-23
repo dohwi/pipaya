@@ -15,6 +15,8 @@ export type MarketEntry = {
   kind: "server" | "client";
   name: string;
   description: string;
+  /** Optional translations keyed by language tag (`ko`, `en`, `zh-CN`, ...). */
+  descriptions?: Record<string, string>;
   version: string;
   author?: string;
   license?: string;
@@ -60,9 +62,12 @@ export function parseCatalog(input: unknown): MarketCatalog {
     }
     if (!source) continue;
     seen.add(id);
+    const dr = e.descriptions && typeof e.descriptions === "object" && !Array.isArray(e.descriptions) ? Object.entries(e.descriptions as Record<string, unknown>) : [];
+    const descriptions = Object.fromEntries(dr.filter(([k, v]) => /^[A-Za-z]{2,3}(-[A-Za-z0-9]+)*$/.test(k) && typeof v === "string" && v.length > 0).slice(0, 20).map(([k, v]) => [k, (v as string).slice(0, 500)]));
     extensions.push({
       id, kind: e.kind, name: ename, version, source,
       description: typeof e.description === "string" ? e.description.slice(0, 500) : "",
+      ...(Object.keys(descriptions).length ? { descriptions } : {}),
       ...(str(e.author, 80) ? { author: str(e.author, 80) } : {}),
       ...(str(e.license, 40) ? { license: str(e.license, 40) } : {}),
       ...(typeof e.homepage === "string" && safeUrl(e.homepage) ? { homepage: e.homepage } : {}),
@@ -132,43 +137,12 @@ export const isOfficial = (entry: MarketEntry): boolean => {
   return !!owner && OFFICIAL_OWNERS.includes(owner);
 };
 
-/** Candidate description files for a language: `<lang>.md`, then the base language, then `en.md`. */
-export function docNames(lang: string): string[] {
+/** The description in the user's language: exact tag, then base language, then the default `description`. */
+export function localizedDescription(entry: MarketEntry, lang: string): string {
+  const d = entry.descriptions;
   const l = lang.toLowerCase();
-  return [...new Set([l, l.split("-")[0]!, "en"])].filter(n => /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(n)).map(n => `${n}.md`);
-}
-
-/** The first prose paragraph of a Markdown file, without markup, capped for a card. */
-export function summarizeMarkdown(md: string, max = 280): string {
-  const para = md.replace(/\r/g, "").split(/\n\s*\n/).map(p => p.trim()).find(p => p && !/^(#|```|---|<|>|\||!\[)/.test(p));
-  if (!para) return "";
-  const text = para.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1").replace(/\s*\n\s*/g, " ").trim();
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-const docCache = new Map<string, Promise<string>>();
-/** A localized description from the extension's folder (`ko.md`, `en.md`, ...); empty when there is none. */
-export function fetchDoc(entry: MarketEntry, lang: string): Promise<string> {
-  const loc = repoLoc(entry);
-  if (!loc || loc.ref === "HEAD") return Promise.resolve("");
-  const key = `${entry.id}@${entry.version}:${lang}`;
-  let hit = docCache.get(key);
-  if (!hit) {
-    hit = (async () => {
-      for (const name of docNames(lang)) {
-        try {
-          const res = await fetch(`https://raw.githubusercontent.com/${loc.repo}/${loc.ref}/${loc.dir ? `${loc.dir}/` : ""}${name}`, { credentials: "omit", referrerPolicy: "no-referrer" });
-          if (!res.ok) continue;
-          const buf = await readLimited(res, 64 * 1024);
-          const text = summarizeMarkdown(new TextDecoder().decode(buf));
-          if (text) return text;
-        } catch { /* try the next file */ }
-      }
-      return "";
-    })();
-    docCache.set(key, hit);
-  }
-  return hit;
+  if (d) for (const k of [l, l.split("-")[0]!]) { const hit = Object.entries(d).find(([tag]) => tag.toLowerCase() === k); if (hit) return hit[1]; }
+  return entry.description;
 }
 
 const STAR_KEY = "pipaya.marketplace.stars";
