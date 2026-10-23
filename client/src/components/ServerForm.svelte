@@ -13,6 +13,7 @@
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
 	import SubAgents from "./SubAgents.svelte";
+	import ServerUpdate from "./ServerUpdate.svelte";
 	import { app, defaultServerUrl } from "../lib/store.svelte";
 	import { Api, describeConnectError, errorText, normalizeUrl, verifyServer } from "../lib/api";
 	import type { WorkdirInfo } from "../lib/types";
@@ -212,6 +213,7 @@
 				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. 인터넷을 거치면 토큰이 그대로 노출될 수 있습니다. Tailscale 주소를 쓰거나 https로 연결하세요.")}</Notice>{/if}
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
 				<p class="hint">{t("저장하기 전에 연결을 확인합니다. 토큰은 이 기기에만 저장됩니다.")}</p>
+				{#if editing && isOpen}<ServerUpdate />{/if}
 			</div>
 
 			<footer>
