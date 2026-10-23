@@ -91,7 +91,7 @@
 				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
-				<div class="stack" class:has-input={hasInput}>
+				<div class="stack">
 					{#if hasInput}
 					<button class="mode queue" onclick={onqueue} aria-label={t("대기열")} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
 						<Icon name="list" />
@@ -234,16 +234,6 @@
 	}
 	.stack .send.stop:hover {
 		background: color-mix(in srgb, var(--danger) 22%, transparent);
-	}
-	/* something to send: stop steps back to a small outline so it is not hit by mistake */
-	.stack.has-input .send.stop {
-		width: 32px;
-		height: 32px;
-		background: transparent;
-	}
-	.stack.has-input .send.stop :global(svg) {
-		width: 13px;
-		height: 13px;
 	}
 	.mode {
 		display: grid;
