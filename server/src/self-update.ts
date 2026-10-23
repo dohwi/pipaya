@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { HttpError } from "./errors.ts";
 
 /**
- * Lets a client update the server it is connected to: fetch the branch this checkout tracks, move the working tree to it,
- * reinstall dependencies, then exit so the service manager (systemd `Restart=always`, launchd `KeepAlive`) starts the new code.
+ * Lets a client update the server it is connected to: look up the tip of the branch this checkout tracks (no download), fetch and move the working tree to it,
+ * reinstall dependencies only when `package.json`/`bun.lock` changed, then exit so the service manager (systemd `Restart=always`, launchd `KeepAlive`) starts the new code.
  * It does the same as `install.sh update`, minus the service restart that would kill the server in the middle of replying.
  *
  * Only offered when something will bring the process back: a systemd/launchd service (detected from the environment they set),
@@ -123,9 +123,10 @@ export class SelfUpdater {
 		const current = head.code === 0 && SHA_PATTERN.test(head.out) ? head.out : null;
 		if (!current) return none("not_git", { ref });
 
-		const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", ref], 60_000);
-		const tip = fetched.code === 0 ? await this.git(["rev-parse", "FETCH_HEAD"]) : null;
-		const latest = tip && tip.code === 0 && SHA_PATTERN.test(tip.out) ? tip.out : null;
+		// Only asks the remote for the tip: nothing is downloaded until the update is applied.
+		const remote = await this.git(["ls-remote", "--heads", "origin", ref], 30_000);
+		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/heads/${ref}`))?.split("\t")[0] : undefined;
+		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
 		return (this.cached = { managed: true, ref, current, latest, available: latest !== current, checkedAt });
 	}
@@ -145,12 +146,17 @@ export class SelfUpdater {
 				throw new HttpError(409, "sessions_running", `${busy} session(s) are running; a restart would interrupt them`);
 			}
 
-			const moved = await this.git(["reset", "--hard", "--quiet", st.latest]);
-			const ready = moved.code === 0 && existsSync(join(this.o.serverDir, "src", "index.ts")) && (await this.install(this.o.serverDir));
+			const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", st.latest], 120_000);
+			// Dependencies are reinstalled only when the manifest or lockfile differ between the two commits (unknown = reinstall).
+			const diff = fetched.code === 0 ? await this.git(["diff", "--name-only", st.current, st.latest, "--", "server/package.json", "server/bun.lock"]) : null;
+			const depsChanged = !diff || diff.code !== 0 || diff.out.length > 0;
+			const moved = fetched.code === 0 ? await this.git(["reset", "--hard", "--quiet", st.latest]) : fetched;
+			const ready =
+				moved.code === 0 && existsSync(join(this.o.serverDir, "src", "index.ts")) && (!depsChanged || (await this.install(this.o.serverDir)));
 			if (!ready) {
 				// Leave the working tree as it was; a half-updated checkout would not start.
 				await this.git(["reset", "--hard", "--quiet", st.current]);
-				await this.install(this.o.serverDir);
+				if (depsChanged) await this.install(this.o.serverDir);
 				this.cached = null;
 				throw new HttpError(502, "update_failed", "the update could not be installed; the previous version was restored");
 			}

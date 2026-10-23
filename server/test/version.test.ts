@@ -28,8 +28,9 @@ describe("version handshake", () => {
 		const key = a.join(" ");
 		if (key.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (key === "rev-parse HEAD") return { code: 0, out: head };
+		if (key.startsWith("ls-remote")) return { code: 0, out: `${fetched}\trefs/heads/main` };
 		if (key.startsWith("fetch")) return { code: 0, out: "" };
-		if (key === "rev-parse FETCH_HEAD") return { code: 0, out: fetched };
+		if (key.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		if (key.startsWith("reset")) {
 			head = a[a.length - 1]!;
 			return { code: 0, out: "" };
@@ -174,7 +175,8 @@ describe("SelfUpdater", () => {
 		const k = cmd.slice(1).join(" ");
 		if (k.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (k === "rev-parse HEAD") return { code: 0, out: OLD };
-		if (k === "rev-parse FETCH_HEAD") return { code: 0, out: NEW };
+		if (k.startsWith("ls-remote")) return { code: 0, out: `${NEW}\trefs/heads/main` };
+		if (k.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		return { code: 0, out: "" };
 	};
 
@@ -214,9 +216,18 @@ describe("SelfUpdater", () => {
 	});
 
 	test("an unreachable remote is a soft failure, not an exception", async () => {
-		const offline: Run = async (cmd) => (cmd[1] === "fetch" ? { code: 128, out: "unable to access" } : fine(cmd, "", 0));
+		const offline: Run = async (cmd) => (cmd[1] === "ls-remote" ? { code: 128, out: "unable to access" } : fine(cmd, "", 0));
 		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: offline });
 		expect(await u.status()).toMatchObject({ managed: false, reason: "fetch_failed", current: OLD });
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("skips the dependency install when package.json and bun.lock did not change", async () => {
+		let installs = 0;
+		const same: Run = async (cmd, cwd, t) => (cmd[1] === "diff" ? { code: 0, out: "" } : fine(cmd, cwd, t));
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: same, install: async () => (installs++, true), restart: () => {} });
+		await u.apply();
+		expect(installs).toBe(0);
 		rmSync(dir, { recursive: true, force: true });
 	});
 
