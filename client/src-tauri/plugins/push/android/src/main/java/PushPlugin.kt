@@ -49,6 +49,7 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
     }
     init {
         capture(activity.intent)
+        thread(name = "pipaya-apk-cleanup") { cleanStaleApk() }
         // No createChannel here: on Android 13+ the first channel makes the system ask for notification permission,
         // which would pop up on first launch. register() creates it once permission has been granted.
     }
@@ -100,6 +101,27 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
     @Volatile private var dlTotal = 0L
     @Volatile private var dlState = "idle" // idle | downloading | done | error
     @Volatile private var dlError = ""
+    /**
+     * The installer leaves the APK in the cache for good. Drop it once the app is at least that version (the update went
+     * through) or it does not parse; a newer one stays, since the user may still be on the "allow installs" page.
+     */
+    private fun cleanStaleApk() {
+        try {
+            val dir = File(activity.cacheDir, "updates")
+            val files = dir.listFiles() ?: return
+            val apk = File(dir, "pipaya-update.apk")
+            files.filter { it.name.endsWith(".part") || (it != apk && it.isFile) }.forEach { it.delete() }
+            if (!apk.exists() || dlState == "downloading") return
+            val pm = activity.packageManager
+            val archive = pm.getPackageArchiveInfo(apk.path, 0)
+            val current = pm.getPackageInfo(activity.packageName, 0)
+            @Suppress("DEPRECATION")
+            val stale = archive == null || archive.packageName != activity.packageName ||
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode <= current.longVersionCode
+                else archive.versionCode <= current.versionCode)
+            if (stale) apk.delete()
+        } catch (e: Exception) { /* cache only: the OS reclaims it anyway */ }
+    }
     private fun apkFile() = File(File(activity.cacheDir, "updates").apply { mkdirs() }, "pipaya-update.apk")
 
     /**

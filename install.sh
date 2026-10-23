@@ -105,6 +105,8 @@ install_bun() {
 	asset="bun-$os-$arch.zip"
 	base="https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION"
 	tmp="$(mktemp -d)"
+	# set -e can stop the script at unzip/install: the trap keeps the download from being left in /tmp
+	trap "rm -rf '$tmp'" EXIT
 	curl -fSL --proto '=https' --tlsv1.2 -o "$tmp/SHASUMS256.txt" "$base/SHASUMS256.txt" || { rm -rf "$tmp"; die "could not download the Bun checksums"; }
 	curl -fSL --proto '=https' --tlsv1.2 -o "$tmp/$asset" "$base/$asset" || { rm -rf "$tmp"; die "could not download $asset"; }
 	cp "$tmp/SHASUMS256.txt" "$tmp/SHA256SUMS.txt"
@@ -113,6 +115,7 @@ install_bun() {
 	mkdir -p "$HOME/.bun/bin"
 	install -m 755 "$tmp/bun-$os-$arch/bun" "$HOME/.bun/bin/bun"
 	rm -rf "$tmp"
+	trap - EXIT
 }
 
 fetch_code() {

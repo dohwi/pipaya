@@ -182,6 +182,33 @@ fn disable_browser_shortcuts(app: &tauri::App) {
     }
 }
 
+/// The updater unpacks every downloaded installer into `<temp>/pipaya-<version>-updater-*` and never removes it, so each
+/// update leaves the whole installer behind. Sweep the old ones at start. Anything younger than an hour is kept: it may
+/// be the installer that is still running and about to relaunch the app.
+#[cfg(desktop)]
+fn sweep_updater_temp() {
+    std::thread::spawn(|| {
+        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+        let hour = std::time::Duration::from_secs(3600);
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !(name.starts_with("pipaya-") && name.contains("-updater-")) {
+                continue;
+            }
+            let old = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age > hour);
+            if old && entry.path().is_dir() {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -219,6 +246,8 @@ pub fn run() {
                     let _ = window.set_focus();
                 }
             }
+            #[cfg(desktop)]
+            sweep_updater_temp();
             #[cfg(windows)]
             disable_browser_shortcuts(app);
             #[cfg(not(desktop))]
