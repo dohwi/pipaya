@@ -10,7 +10,25 @@ const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
 const serve = (text: string, status = 200) => { globalThis.fetch = (async () => new Response(text, { status })) as typeof fetch; };
 
+const C40 = "a".repeat(40);
+const gitEntry = (id: string, source: unknown) => ({ id, kind: "server", name: id, version: "0.1.0", description: "d", source });
+
 describe("parseCatalog", () => {
+  test("a server extension in its own repository is read with its pinned commit", () => {
+    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extension-peer-tools", ref: "v0.1.0", commit: C40.toUpperCase() })] });
+    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extension-peer-tools", ref: "v0.1.0", commit: C40 });
+  });
+
+  test("a git source that does not fit is left out, never trusted", () => {
+    const bad = [
+      { type: "git", repo: "not a repo", ref: "v1", commit: C40 },
+      { type: "git", repo: "o/r", ref: "../x", commit: C40 },
+      { type: "git", repo: "o/r", ref: "v1", commit: "abc" },
+      { type: "git", repo: "o/r", ref: "v1" },
+    ];
+    expect(parseCatalog({ name: "m", extensions: bad.map((x, i) => gitEntry(`x${i}`, x)) }).extensions).toEqual([]);
+  });
+
   test("keeps valid entries and drops the rest", () => {
     const c = parseCatalog({
       name: "m",

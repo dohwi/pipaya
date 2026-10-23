@@ -5,7 +5,11 @@ import { MAX_PACKAGE_BYTES, parsePackage, type ExtensionPackage } from "./schema
 export const DEFAULT_MARKETPLACE_URL = "https://raw.githubusercontent.com/dohwi/pipaya-marketplace/main/index.json";
 export const MAX_CATALOG_BYTES = 512 * 1024;
 
-export type MarketSource = { type: "path"; path: string } | { type: "url"; url: string; sha256?: string };
+export type MarketSource =
+  | { type: "path"; path: string }
+  | { type: "url"; url: string; sha256?: string }
+  /** A server extension that is a whole GitHub repository, pinned to the commit its tag pointed at. */
+  | { type: "git"; repo: string; ref: string; commit: string };
 export type MarketEntry = {
   id: string;
   kind: "server" | "client";
@@ -48,7 +52,9 @@ export function parseCatalog(input: unknown): MarketCatalog {
     const s = e.source as Record<string, unknown> | undefined;
     let source: MarketSource | undefined;
     if (s?.type === "path" && str(s.path, 200)) source = { type: "path", path: s.path as string };
-    else if (s?.type === "url" && typeof s.url === "string" && safeUrl(s.url)) {
+    else if (s?.type === "git" && typeof s.repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(s.repo) && typeof s.ref === "string" && /^\w[\w./-]*$/.test(s.ref) && typeof s.commit === "string" && /^[0-9a-f]{40}$/i.test(s.commit)) {
+      source = { type: "git", repo: s.repo, ref: s.ref, commit: s.commit.toLowerCase() };
+    } else if (s?.type === "url" && typeof s.url === "string" && safeUrl(s.url)) {
       const sha = typeof s.sha256 === "string" && /^[0-9a-f]{64}$/i.test(s.sha256) ? s.sha256.toLowerCase() : undefined;
       source = { type: "url", url: s.url, ...(sha ? { sha256: sha } : {}) };
     }
