@@ -40,7 +40,7 @@ beforeAll(async () => {
 		host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "test.db"), token: TOKEN, workspaceRoot: join(dir, "ws"),
 		defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent",
 	};
-	app = await buildApp(cfg, { strictResponses: true });
+	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [join(import.meta.dir, "support/ext")] });
 	await app.server.listen({ host: "0.0.0.0", port: 0 });
 	base = `http://127.0.0.1:${(app.server.server.address() as { port: number }).port}`;
 	await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));

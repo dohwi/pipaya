@@ -100,8 +100,6 @@ class AppStore {
   workdir = $state(".");
   /** The server's default working directory setting (null on servers from before it existed) */
   workdirInfo = $state<WorkdirInfo | null>(null);
-  /** Whether the agent may ask questions (ask_user); saved on the server */
-  askUserEnabled = $state(true);
   /** Agent tools the user can switch off / always-on ones / the ones switched off; saved on the server */
   toolsInfo = $state<ToolsInfo | null>(null);
   /** Open the directory picker */
@@ -810,7 +808,6 @@ class AppStore {
       void this.refreshServerExtensions();
       this.serverDefault = config?.effectiveDefaults ?? null;
       this.workdirInfo = config?.workdir ?? null;
-      this.askUserEnabled = config?.askUser?.enabled ?? true;
       this.toolsInfo = config?.tools ?? null;
       this.ensureDraftModel();
       void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
@@ -1074,9 +1071,6 @@ class AppStore {
         if ((e.data as { scope?: string } | undefined)?.scope === "tools") {
           this.toolsInfo = e.data as ToolsInfo;
         }
-        if ((e.data as { scope?: string } | undefined)?.scope === "ask_user") {
-          this.askUserEnabled = (e.data as { enabled?: boolean }).enabled !== false;
-        }
         if ((e.data as { scope?: string } | undefined)?.scope === "workdir") {
           this.workdirInfo = {
             saved: (e.data as WorkdirInfo).saved,
@@ -1204,29 +1198,11 @@ class AppStore {
     const before = this.toolsInfo;
     const disabled = enabled ? before.disabled.filter((n) => n !== name) : [...new Set([...before.disabled, name])];
     this.toolsInfo = { ...before, disabled };
-    if (name === "ask_user") this.askUserEnabled = enabled;
     try {
       this.toolsInfo = await this.api.setDisabledTools(disabled);
-      this.askUserEnabled = !this.toolsInfo.disabled.includes("ask_user");
       return true;
     } catch (e) {
       this.toolsInfo = before;
-      this.askUserEnabled = !before.disabled.includes("ask_user");
-      this.fail(e, t("변경하지 못했습니다"), this.activeId);
-      return false;
-    }
-  }
-
-  /** Let the agent ask the user questions (ask_user) or not. Saved on the server for every client. */
-  async setAskUser(enabled: boolean): Promise<boolean> {
-    if (!this.api) return false;
-    const before = this.askUserEnabled;
-    this.askUserEnabled = enabled;
-    try {
-      this.askUserEnabled = (await this.api.setAskUser(enabled)).enabled;
-      return true;
-    } catch (e) {
-      this.askUserEnabled = before;
       this.fail(e, t("변경하지 못했습니다"), this.activeId);
       return false;
     }

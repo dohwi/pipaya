@@ -810,12 +810,10 @@ export class SessionManager {
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
-	/** What tools may ask of the running session. `ask` only exists when a QuestionManager is wired in. */
+	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
-		const q = this.questions;
 		const sub = this.subagents;
-		const ctx: ToolContext = q ? { sessionId, ask: (toolCallId, req, signal) => this.disabledTools().includes("ask_user") ? Promise.reject(new Error("ask_user is turned off in the settings")) : q.ask({ sessionId, toolCallId, ...req }, signal) } : {};
-		ctx.sessionId = sessionId;
+		const ctx: ToolContext = { sessionId };
 		ctx.canSeeImages = () => {
 			const rec = this.store.get(sessionId);
 			const model = rec && this.registry.models.getModel(rec.provider, rec.model);
