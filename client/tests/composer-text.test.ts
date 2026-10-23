@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
+import { insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -47,7 +47,7 @@ describe("memberOf", () => {
 });
 
 describe("mirrorHtml", () => {
-	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], members: ["미나"], images: 1, paths: ["src/a.ts"] };
+	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
 		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /prompt:fix", known);
 		expect(html).toContain('<mark class="file">#src/a.ts</mark>');
@@ -66,14 +66,12 @@ describe("mirrorHtml", () => {
 	});
 });
 
-describe("mirrorHtml group tags", () => {
-	const known = { templates: [], skills: [], members: ["미나"], groups: ["결제-개편"], images: 0, paths: [] };
-	test("marks a group handle like a session mention, particle left outside", () => {
+describe("mirrorHtml mentions", () => {
+	const known = { templates: [], skills: [], mentions: ["미나", "결제-개편"], images: 0, paths: [] };
+	test("marks an extension mention, particle left outside", () => {
 		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="member">@결제-개편</mark>에');
 		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="member">@미나</mark>');
 		expect(mirrorHtml("@nobody", known)).not.toContain("<mark");
 	});
-	test("groupHandle joins words with dashes", () => {
-		expect(groupHandle("  결제   개편 ")).toBe("결제-개편");
-	});
+
 });

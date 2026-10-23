@@ -73,16 +73,11 @@ export function memberOf(token: string, names: readonly string[]): string | null
 	return best;
 }
 
-/** How a group is written in a message: its name with whitespace turned into "-" so the tag stays one token (same rule as the server). */
-export const groupHandle = (name: string): string => name.trim().replace(/\s+/g, "-");
-
 export interface Known {
 	templates: readonly { name: string }[];
 	skills: readonly { name: string }[];
-	/** Names of the other active sessions (`@name`) */
-	members: readonly string[];
-	/** Handles of the session groups (`@handle`) */
-	groups?: readonly string[];
+	/** Tokens an extension offers after `@` (without the `@`) */
+	mentions: readonly string[];
 	/** How many images are attached (#image1..#imageN are valid) */
 	images: number;
 	/** Paths picked from the # menu: only these exact tokens are marked */
@@ -100,9 +95,7 @@ export function mirrorHtml(text: string, known: Known): string {
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);
-				const name = memberOf(rest, known.members.map(esc));
-				const group = memberOf(rest, (known.groups ?? []).map(esc));
-				const hit = name && (!group || name.length >= group.length) ? name : group;
+				const hit = memberOf(rest, known.mentions.map(esc));
 				return hit ? `${lead}<mark class="member">@${hit}</mark>${rest.slice(hit.length)}` : m;
 			}
 			if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) return `${lead}<mark class="img">${tok}</mark>`;

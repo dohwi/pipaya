@@ -57,34 +57,8 @@ export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string
 	for (let n = 2; ; n++) if (!taken.has(`${pool[0]}${n}`.toLowerCase())) return `${pool[0]}${n}`;
 }
 
-/** The member a `@name` token starts with: the longest known name, not cut out of a longer ASCII word (Korean particles may follow: @미나랑). */
-export function memberAt(token: string, names: readonly string[]): string | null {
-	const low = token.toLowerCase();
-	let best: string | null = null;
-	for (const n of names) {
-		const l = n.toLowerCase();
-		if (!low.startsWith(l) || (best && n.length <= best.length)) continue;
-		if (/[a-z0-9_-]$/.test(l) && /^[a-z0-9_-]/.test(low.slice(l.length))) continue;
-		best = n;
-	}
-	return best;
-}
-
-/** Names written as `@name` in a message, limited to known members, in order of appearance, without repeats. */
-export function mentionedMembers(text: string, names: readonly string[]): string[] {
-	const out: string[] = [];
-	for (const m of text.matchAll(/(?:^|\s)@(\S+)/g)) {
-		const name = memberAt(m[1]!, names);
-		if (name && !out.includes(name)) out.push(name);
-	}
-	return out;
-}
-
-/** Tells the model which sessions the user named, and how to reach them. */
-export function memberHint(open: string, names: string[], purposes: Readonly<Record<string, string>> = {}): string {
-	const list = names.map((n) => (purposes[n] ? `@${n} (${purposes[n]})` : `@${n}`)).join(", ");
-	return `${open}The user mentioned ${list}: other sessions (agents) on this server. Use peer_send to give them work or ask them something (they run independently and see only what you send), and peer_read to look at what they said or did. Do not guess what they did.</pipaya-hint>`;
-}
+/** What a group is called in a message: its name with whitespace turned into "-" so the tag stays one token. */
+export const groupHandle = (name: string): string => name.trim().replace(/\s+/g, "-");
 
 const SUFFIX = /\d+$/;
 

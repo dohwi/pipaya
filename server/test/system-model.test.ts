@@ -120,19 +120,6 @@ describe("system model", () => {
 		expect(s.title).toBe("Backfilled");
 	});
 
-	test("mentioning a session tells the agent its role", async () => {
-		const peer = await newSession();
-		await api("POST", `/sessions/${peer}/messages`, { text: '{"title": "Docs", "purpose": "writes the docs"}' });
-		await settle();
-		const name = (await api("GET", `/sessions/${peer}`)).json.name as string;
-		const id = await newSession();
-		upstream.requests.length = 0;
-		await api("POST", `/sessions/${id}/messages`, { text: `ask @${name} please` });
-		await settle();
-		const main = upstream.requests.find((r) => r.body.model === ECHO_MODEL.id)!;
-		expect(JSON.stringify(main.body.messages)).toContain(`@${name} (writes the docs)`);
-	});
-
 	test("a reply without JSON leaves the session as it is", async () => {
 		const id = await newSession();
 		await api("POST", `/sessions/${id}/messages`, { text: "plain words" });
