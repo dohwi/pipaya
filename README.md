@@ -14,7 +14,7 @@
     <a href="https://www.typescriptlang.org" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
     <a href="https://www.sqlite.org" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
     <img src="https://img.shields.io/badge/Docker-Sandbox-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Sandbox" />
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_3.0-5C5C5C?style=flat-square" alt="AGPL-3.0" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-5C5C5C?style=flat-square" alt="MIT" /></a>
     <a href="https://discord.gg/rn3uEghsjh" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
   </p>
 </div>
@@ -99,4 +99,4 @@ Prerequisites are pinned in [`mise.toml`](mise.toml) (Bun 1.3, Rust stable). The
 
 ## License
 
-[AGPL-3.0](LICENSE)
+[MIT](LICENSE)
