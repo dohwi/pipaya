@@ -25,7 +25,6 @@
 	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
 	function toolLabel(name: string): string {
 		switch (name) {
-			case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
 			case "delegate": return t("하위 에이전트에게 조사 위임 (delegate)");
 			case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
 			case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
@@ -271,12 +270,8 @@
 						<Switch checked disabled label={name} onchange={() => {}} />
 					</SettingRow>
 				{/each}
-			{:else}
-				<SettingRow label={t("에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다")}>
-					<Switch checked={app.askUserEnabled} label={t("질문 허용")} onchange={(on) => app.setAskUser(on)} />
-				</SettingRow>
 			{/if}
-			<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 질문을 끄면 묻지 않고 가정하고 진행합니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
+			<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
 		</section>
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}

@@ -67,12 +67,6 @@ export interface ToolContext {
 		send(name: string, text: string): Promise<string>;
 		read(name: string, count: number): string;
 	};
-	/** Ask the user a question and wait for the answer (`ask_user`). Missing when nobody can answer. */
-	ask?(
-		toolCallId: string,
-		req: Pick<QuestionRequest, "question" | "options" | "allowFreeText">,
-		signal?: AbortSignal,
-	): Promise<QuestionOutcome>;
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -535,51 +529,6 @@ const bashTool: ToolDef = {
 	},
 };
 
-const ASK_USER_DESCRIPTION =
-	"Ask the user a question and wait for the answer. Use it only when a requirement is genuinely ambiguous or a decision is hard to undo; " +
-	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known, " +
-	"and set `recommended` to the option you suggest (it is highlighted for the user).";
-
-const askUserTool: ToolDef = {
-	name: "ask_user",
-	description: ASK_USER_DESCRIPTION,
-	mutating: false,
-	create(_cwd, _readRoots, ctx) {
-		return defineTool({
-			name: "ask_user",
-			label: "Ask user",
-			description: ASK_USER_DESCRIPTION,
-			parameters: Type.Object({
-				question: Type.Optional(Type.String({ minLength: 1, maxLength: 2000, description: "One clear question. Omit when using `questions`" })),
-				options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, description: "Suggested answers" })),
-				recommended: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" })),
-				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
-				questions: Type.Optional(
-					Type.Array(
-						Type.Object({
-							question: Type.String({ minLength: 1, maxLength: 2000 }),
-							options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8 })),
-							recommended: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" })),
-							allowFreeText: Type.Optional(Type.Boolean()),
-						}),
-						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
-					),
-				),
-			}),
-			async execute(id, params, signal) {
-				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
-				const rec = (options?: string[], recommended?: string) => (recommended && options?.includes(recommended) ? { recommended } : {});
-				const items = params.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), allowFreeText: q.allowFreeText ?? true }));
-				if (!items?.length && !params.question) throw new Error("ask_user needs `question` or `questions`");
-				const first = items?.[0] ?? { question: params.question!, options: params.options, ...rec(params.options, params.recommended), allowFreeText: params.allowFreeText ?? true };
-				const outcome = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
-				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
-				return text(outcome.answer, { question: first.question, answer: outcome.answer });
-			},
-		});
-	},
-};
-
 const delegateDescription = (agents: { name: string; description: string }[] = []) =>
 	"Send a task (usually an investigation) to a helper agent and get back a short report. " +
 	"Use it when answering would take many reads or searches (\"where is X handled\", \"how does Y work across the codebase\"), " +
@@ -676,10 +625,10 @@ const peerReadTool: ToolDef = {
 
 export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
 /** Tools the user may switch off in the settings; every other built-in tool is locked on (the agent cannot work without it). */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, delegateTool.name, peerSendTool.name, peerReadTool.name];
+export const TOGGLEABLE_TOOLS = [delegateTool.name, peerSendTool.name, peerReadTool.name];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, delegateTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, delegateTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

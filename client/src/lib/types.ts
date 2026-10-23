@@ -367,7 +367,6 @@ export interface ConfigurationInfo {
 	/** Tool approval new sessions start with; saved on the server (older servers omit it) */
 	approval?: { saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy };
 	/** Whether the agent may ask the user questions (ask_user); older servers omit it and always allow it */
-	askUser?: { enabled: boolean };
 	/** Which agent tools can be switched off and which are locked on; older servers omit it */
 	tools?: ToolsInfo;
 }

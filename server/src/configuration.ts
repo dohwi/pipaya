@@ -83,15 +83,13 @@ export const WorkdirInfo = Type.Object({
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
 export const ApprovalBody = Type.Object({ approval: Type.Union([Approval, Type.Null()], { description: "Default tool approval for new sessions; null restores the startup default (PIPAYA_APPROVAL)" }) }, { additionalProperties: false });
 export const ApprovalInfo = Type.Object({ saved: Type.Union([Approval, Type.Null()]), effective: Approval, fallback: Approval });
-export const AskUserBody = Type.Object({ enabled: Type.Boolean({ description: "Let the agent ask the user questions (ask_user). Off: the tool is withheld from every session" }) }, { additionalProperties: false });
 export const ToolsBody = Type.Object({ disabled: Type.Array(Type.String(), { description: "Switchable tools to withhold from every session. Unknown or locked names are rejected" }) }, { additionalProperties: false });
 export const ToolsInfo = Type.Object({
 	toggleable: Type.Array(Type.String(), { description: "Tools that can be switched off" }),
 	locked: Type.Array(Type.String(), { description: "Built-in tools that always stay on" }),
 	disabled: Type.Array(Type.String()),
 });
-export const AskUserInfo = Type.Object({ enabled: Type.Boolean() });
-export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo), askUser: Type.Optional(AskUserInfo), tools: Type.Optional(ToolsInfo) });
+export const ConfigurationResult = Type.Object({ providers: Type.Array(CustomProviderPublic), ...DefaultsResult.properties, workdir: WorkdirInfo, approval: Type.Optional(ApprovalInfo), tools: Type.Optional(ToolsInfo) });
 export const ConnectionResult = Type.Object({ ok: Type.Boolean(), durationMs: Type.Integer(), text: Type.Optional(Type.String()), error: Type.Optional(Type.String()) });
 export type CustomProvider = Static<typeof CustomProviderBody> & { id: string };
 export type ModelSelection = Static<typeof Selection>;
@@ -187,15 +185,14 @@ export class Configuration {
 		return this.approvalInfo();
 	}
 
-	/** Tools the user switched off (only switchable ones count). Saved on the server; the older `ask_user_enabled` key still applies until this is saved. */
+	/** Tools the user switched off (only switchable ones count). Saved on the server. */
 	disabledTools(): string[] {
 		const row = this.db.query("SELECT data FROM settings WHERE key = 'disabled_tools'").get() as { data: string } | null;
 		if (row) {
 			const parsed: unknown = JSON.parse(row.data);
 			return Array.isArray(parsed) ? TOGGLEABLE_TOOLS.filter((n) => parsed.includes(n)) : [];
 		}
-		const legacy = this.db.query("SELECT data FROM settings WHERE key = 'ask_user_enabled'").get() as { data: string } | null;
-		return legacy && JSON.parse(legacy.data) === false ? ["ask_user"] : [];
+		return [];
 	}
 
 	setDisabledTools(disabled: string[]) {
@@ -208,15 +205,6 @@ export class Configuration {
 
 	toolsInfo() {
 		return { toggleable: [...TOGGLEABLE_TOOLS], locked: DEFAULT_TOOLS.filter((n) => !TOGGLEABLE_TOOLS.includes(n)), disabled: this.disabledTools() };
-	}
-
-	/** Whether the agent may ask the user questions (`ask_user`). On unless switched off. */
-	askUserEnabled(): boolean { return !this.disabledTools().includes("ask_user"); }
-
-	setAskUser(enabled: boolean) {
-		const rest = this.disabledTools().filter((n) => n !== "ask_user");
-		this.setDisabledTools(enabled ? rest : [...rest, "ask_user"]);
-		return { enabled: this.askUserEnabled() };
 	}
 
 	list(): CustomProvider[] {
@@ -264,7 +252,7 @@ export class Configuration {
 	async snapshot() {
 		return {
 			providers: await Promise.all(this.list().map((p) => this.describe(p))),
-			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(), askUser: { enabled: this.askUserEnabled() }, tools: this.toolsInfo(),
+			defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults(), workdir: this.workdirInfo(), approval: this.approvalInfo(), tools: this.toolsInfo(),
 		};
 	}
 

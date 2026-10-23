@@ -10,7 +10,7 @@ import { loadAgentFiles } from "./subagent-files.ts";
 export const DEFAULT_SUBAGENT_THINKING: ThinkingLevel = "minimal";
 
 /**
- * Tools a sub-agent may be given. `delegate` is absent so a helper cannot start another helper, and `ask_user` is
+ * Tools a sub-agent may be given. `delegate` is absent so a helper cannot start another helper, and `ask_user` (an extension) is
  * absent because a helper has no user to ask. A helper holding a tool in MUTATING_SUBAGENT_TOOLS goes through the
  * same approval policy as the main agent (see `SubAgents.mutates`).
  */
