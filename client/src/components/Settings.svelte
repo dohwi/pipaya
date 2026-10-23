@@ -50,9 +50,9 @@
 		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
 		{ id: "tools", label: msg("에이전트 도구"), icon: "shield", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
-		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: msg("이 서버의 모든 기기가 함께 씁니다"), server: true },
+		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: "", server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
-		{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: msg("이 기기의 확장 · 안전 모드"), server: false },
+		{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: "", server: false },
 		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	] as const;
 	type TabId = (typeof tabs)[number]["id"];
@@ -63,7 +63,24 @@
 	/** Sections whose extensions the user folded away in the sidebar; everything starts unfolded. */
 	let collapsed = $state<Record<string, boolean>>({});
 	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
-	const extsOf = (id: string) => { const sc = extScope(id); return sc ? extensions.installed.filter((e) => e.scope === sc) : []; };
+	/** Extensions running inside the chosen server (read-only); the sidebar lists them under "서버 확장" like installed ones. */
+	let serverSide = $state<{ id: string; names: string[] } | null>(null);
+	$effect(() => {
+		void app.configTick;
+		const id = server?.id;
+		if (!id) { serverSide = null; return; }
+		let live = true;
+		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => x.name) }; }).catch(() => { if (live) serverSide = null; });
+		return () => { live = false; };
+	});
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean };
+	const extsOf = (id: string): Kid[] => {
+		const sc = extScope(id);
+		if (!sc) return [];
+		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false }));
+		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n}`, name: n, live: true, builtin: true })) : [];
+		return [...own, ...side];
+	};
 	function openExt(tabId: TabId, id: string) {
 		if (tabId !== tab) { dir = tabs.findIndex((x) => x.id === tabId) > tabs.findIndex((x) => x.id === tab) ? 1 : -1; tab = tabId; }
 		extId = id;
@@ -226,11 +243,10 @@
 					</div>
 					{#if open}
 						<div class="tree" role="group" aria-label={t(x.label)}>
-							{#each kids as e (e.package.manifest.id)}
-								{@const eid = e.package.manifest.id}
-								<button role="tab" class="sub" aria-selected={extId === eid} tabindex={extId === eid ? 0 : -1} class:on={extId === eid} onclick={() => openExt(x.id, eid)}>
-									<span class="nl">{e.package.manifest.name}</span>
-									<span class="dot" class:live={e.state === "active" || e.state === "starting"} role="img" aria-label={e.state === "active" || e.state === "starting" ? t("실행 중") : t("꺼짐")}></span>
+							{#each kids as e (e.id)}
+								<button role="tab" class="sub" aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
+									<span class="dot" class:live={e.live} role="img" aria-label={e.live ? t("실행 중") : t("꺼짐")}></span>
+									<span class="nl">{e.name}</span>
 								</button>
 							{/each}
 						</div>
@@ -555,7 +571,6 @@
 	}
 	.nav button.sub {
 		position: relative;
-		justify-content: space-between;
 		gap: 8px;
 		padding: 7px 10px;
 	}
