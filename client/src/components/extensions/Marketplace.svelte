@@ -161,7 +161,7 @@
 	.chip.ok { background: var(--ok-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
 	.foot .btn { flex: none; }
-	.official { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 9px 2px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-fg); font-size: var(--fs-xs); font-weight: 700; line-height: 1.4; }
+	.official { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 9px 2px 7px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-xs); font-weight: 700; line-height: 1.4; }
 	.official :global(svg) { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; margin: 0; }
