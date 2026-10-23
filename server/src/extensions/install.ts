@@ -36,6 +36,9 @@ export async function installFromGit(id: string, src: GitSource, extensionsDir: 
 		const staging = `${to}.installing`;
 		rmSync(staging, { recursive: true, force: true });
 		cpSync(from, staging, { recursive: true, filter: (f) => !/(^|\/)(\.git|node_modules|tests)(\/|$)/.test(f.slice(from.length)) });
+		// The shared settings of this id live in the same folder (extension-settings.ts): an update keeps them.
+		const settings = join(to, "settings.json");
+		if (existsSync(settings)) cpSync(settings, join(staging, "settings.json"));
 		rmSync(to, { recursive: true, force: true });
 		renameSync(staging, to);
 		return to;

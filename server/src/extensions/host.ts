@@ -8,7 +8,7 @@ import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import type {
-	AskRequest, EventHandler, EventName, ExtensionAPI, ExtensionCommand, ExtensionContext, ExtensionFactory, ExtensionFlag, ExtensionSessions, ExtensionTool, PromptMode, ToolResult,
+	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionSessions, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -19,7 +19,10 @@ export interface SessionBridge {
 	isRunning(sessionId: string): boolean;
 	ask?(sessionId: string, toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 	sessions: ExtensionSessions;
-	groups(): { name: string; sessionIds: string[] }[];
+	groups: ExtensionGroups;
+	models: ExtensionModels;
+	/** An OS / push notification from extension `source`; throws past the rate limit. */
+	notify(source: string, n: { title: string; body?: string; sessionId?: string; key?: string; kind?: string }): void;
 	defaultCwd(): string;
 }
 
@@ -36,13 +39,17 @@ export interface ExtensionHostOptions {
 	home?: string;
 	env?: Record<string, string | undefined>;
 	log?: (msg: string) => void;
+	/** The per-extension settings store (`/extensions/:id/settings`). */
+	settings?: { get(id: string): Record<string, unknown> | undefined; save(id: string, value: unknown): Record<string, unknown> };
 }
 
 export interface ExtensionInfo {
 	name: string;
 	path: string;
 	tools: string[];
-	commands: { name: string; description?: string }[];
+	commands: { name: string; description?: string; args?: string }[];
+	/** Command families (`/prefix:name`), by prefix. */
+	commandFamilies: { prefix: string; label?: string }[];
 	methods: string[];
 	providers: string[];
 	flags: { name: string; description?: string; type: "boolean" | "string"; value: boolean | string | undefined }[];
@@ -56,6 +63,7 @@ interface Loaded extends ExtensionInfo {
 	handlers: Map<EventName, EventHandler<any>[]>;
 	toolDefs: Map<string, ExtensionTool>;
 	commandDefs: Map<string, ExtensionCommand>;
+	familyDefs: Map<string, ExtensionCommandFamily>;
 	methodDefs: Map<string, (params: unknown, ctx: ExtensionContext | null) => unknown>;
 	providerIds: Set<string>;
 	flagDefs: Map<string, ExtensionFlag>;
@@ -65,6 +73,8 @@ interface Loaded extends ExtensionInfo {
 const ENTRY_FILES = ["index.ts", "index.js", "index.mjs"];
 const SCRIPT_EXT = new Set([".ts", ".js", ".mjs"]);
 const MAX_ERRORS = 100;
+const FAMILY_NAME = /^[A-Za-z0-9_.-]{1,80}$/;
+const MAX_FAMILY_ENTRIES = 500;
 
 export class ExtensionHost {
 	private loaded: Loaded[] = [];
@@ -155,8 +165,8 @@ export class ExtensionHost {
 
 	private blank(name: string, path: string): Loaded {
 		return {
-			name, path, tools: [], commands: [], methods: [], providers: [], flags: [], events: [],
-			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), methodDefs: new Map(),
+			name, path, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], flags: [], events: [],
+			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(),
 			providerIds: new Set(), flagDefs: new Map(), busOff: [],
 		};
 	}
@@ -164,9 +174,9 @@ export class ExtensionHost {
 	private cleanup(ext: Loaded): void {
 		for (const id of ext.providerIds) this.opts.registry.models.deleteProvider(id);
 		for (const off of ext.busOff) off();
-		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.methodDefs.clear();
+		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.familyDefs.clear(); ext.methodDefs.clear();
 		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = [];
-		ext.tools = []; ext.commands = []; ext.methods = []; ext.providers = []; ext.flags = []; ext.events = [];
+		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.providers = []; ext.flags = []; ext.events = [];
 	}
 
 	private async unloadAll(): Promise<void> {
@@ -187,8 +197,8 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, methods, providers, flags, events, companion, error }) => ({
-			name, path, tools, commands, methods, providers, ...(companion ? { companion } : {}),
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, error }) => ({
+			name, path, tools, commands, commandFamilies, methods, providers, ...(companion ? { companion } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
 	}
@@ -219,17 +229,63 @@ export class ExtensionHost {
 			if (!this.bridge) throw new Error("sessions are not ready");
 			return this.bridge.sessions;
 		};
+		const bridged = (what: string): SessionBridge => {
+			if (!this.bridge) throw new Error(`${what} are not ready`);
+			return this.bridge;
+		};
 		const own = (what: string, name: string, has: boolean) => { if (has) throw new Error(`${what} "${name}" is already registered by this extension`); };
 		return {
 			Type: Type as ExtensionAPI["Type"],
 			name: ext.name,
 			dataDir: this.ensureDataDir(ext.name),
+			settings: ((): ExtensionAPI["settings"] => {
+				const id = ext.name.split("/")[0]!;
+				const store = () => {
+					if (!this.opts.settings) throw new Error("settings are not available");
+					return this.opts.settings;
+				};
+				return {
+					id,
+					get: () => store().get(id) ?? {},
+					set: (value) => {
+						const saved = store().save(id, value);
+						this.opts.bus.publish(null, "extension_settings_updated", { id, action: "saved" });
+						return saved;
+					},
+					onChange: (handler) => {
+						const off = this.opts.bus.subscribe((e) => {
+							if (e.type !== "extension_settings_updated" || (e.data as { id?: string })?.id !== id) return;
+							try { handler(store().get(id) ?? {}); } catch (err) { this.recordError(ext.name, "settings:onChange", err); }
+						});
+						ext.busOff.push(off);
+						return off;
+					},
+				};
+			})(),
 			home: this.opts.home ?? homedir(),
 			defaultCwd: () => this.bridge?.defaultCwd() ?? process.cwd(),
 			get sessions(): ExtensionSessions {
 				return bridgeSessions();
 			},
-			groups: { list: () => this.bridge?.groups() ?? [] },
+			get groups(): ExtensionGroups {
+				return bridged("groups").groups;
+			},
+			get models(): ExtensionModels {
+				return bridged("models").models;
+			},
+			subscribe: (handler, o) => {
+				const types = o?.types?.length ? new Set(o.types) : null;
+				const off = this.opts.bus.subscribe((e) => {
+					if (types && !types.has(e.type)) return;
+					try { void Promise.resolve(handler(e as ServerEvent)).catch((err) => this.recordError(ext.name, "subscribe", err)); } catch (err) { this.recordError(ext.name, "subscribe", err); }
+				}, o?.sessionId);
+				ext.busOff.push(off);
+				return off;
+			},
+			notify: (n) => {
+				if (!this.bridge) throw new Error("notifications are not ready");
+				this.bridge.notify(ext.name, n);
+			},
 			on: (event, handler) => {
 				const list = ext.handlers.get(event) ?? [];
 				list.push(handler as EventHandler<any>);
@@ -246,7 +302,15 @@ export class ExtensionHost {
 				if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) throw new Error(`invalid command name "${name}"`);
 				own("command", name, ext.commandDefs.has(name));
 				ext.commandDefs.set(name, command);
-				ext.commands.push({ name, description: command.description });
+				ext.commands.push({ name, description: command.description, ...(command.args ? { args: command.args } : {}) });
+			},
+			registerCommands: (prefix, family) => {
+				if (!/^[a-z][a-z0-9-]{0,19}$/.test(prefix)) throw new Error(`invalid command prefix "${prefix}"`);
+				if (prefix === "skill") throw new Error(`command prefix "${prefix}" is reserved`);
+				own("command family", prefix, ext.familyDefs.has(prefix));
+				for (const other of this.loaded) if (other !== ext && other.familyDefs.has(prefix)) throw new Error(`command prefix "${prefix}" is already used by ${other.name}`);
+				ext.familyDefs.set(prefix, family);
+				ext.commandFamilies.push({ prefix, ...(family.label ? { label: family.label } : {}) });
 			},
 			registerMethod: (name, handler) => {
 				own("method", name, ext.methodDefs.has(name));
@@ -398,27 +462,66 @@ export class ExtensionHost {
 
 	// ── commands & methods ──────────────────────────────────────────────────
 
-	commands(): { name: string; description?: string; extension: string }[] {
+	commands(): { name: string; description?: string; args?: string; extension: string }[] {
 		return this.active().flatMap((e) => e.commands.map((c) => ({ ...c, extension: e.name })));
 	}
 
-	/** `/name args` → the handler's outcome, or undefined when no extension owns that command. */
-	async runCommand(sessionId: string, text: string): Promise<{ handled: true; prompt?: string } | undefined> {
+	/** Every command family's entries for `cwd`, e.g. `{ prefix: "prompt", entries: [{ name: "review" }] }`. A failing family lists nothing. */
+	async commandEntries(cwd: string): Promise<{ prefix: string; label?: string; extension: string; entries: { name: string; description?: string; args?: string }[] }[]> {
+		const out: { prefix: string; label?: string; extension: string; entries: { name: string; description?: string; args?: string }[] }[] = [];
+		for (const ext of this.active()) {
+			for (const [prefix, family] of ext.familyDefs) {
+				let entries: { name: string; description?: string; args?: string }[] = [];
+				try {
+					const raw = await Promise.race([Promise.resolve(family.list(cwd)), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("list timed out")), 5000))]);
+					entries = (Array.isArray(raw) ? raw : [])
+						.filter((c) => c && typeof c.name === "string" && FAMILY_NAME.test(c.name))
+						.slice(0, MAX_FAMILY_ENTRIES)
+						.map((c) => ({ name: c.name, ...(typeof c.description === "string" ? { description: c.description.slice(0, 300) } : {}), ...(typeof c.args === "string" ? { args: c.args.slice(0, 60) } : {}) }));
+				} catch (e) {
+					this.recordError(ext.name, `commands:${prefix}`, e);
+				}
+				out.push({ prefix, ...(family.label ? { label: family.label } : {}), extension: ext.name, entries });
+			}
+		}
+		return out;
+	}
+
+	/** `/name args` or `/prefix:name args` → the handler's outcome, or undefined when no extension owns that command. */
+	async runCommand(sessionId: string, text: string): Promise<{ handled: true; prompt?: string; note?: MessageNote; title?: string } | undefined> {
+		const fam = /^\/([a-z][a-z0-9-]{0,19}):([A-Za-z0-9_.-]{1,80})(?:\s+([\s\S]*))?$/.exec(text.trim());
+		if (fam) {
+			for (const ext of this.active()) {
+				const family = ext.familyDefs.get(fam[1]!);
+				if (!family) continue;
+				try {
+					return this.commandOutcome(await family.run(fam[2]!, (fam[3] ?? "").trim(), this.context(sessionId, ext.name)));
+				} catch (e) {
+					this.recordError(ext.name, `commands:${fam[1]}`, e);
+					throw e;
+				}
+			}
+			return undefined;
+		}
 		const m = /^\/([A-Za-z0-9_-]{1,40})(?:\s+([\s\S]*))?$/.exec(text.trim());
 		if (!m) return undefined;
 		for (const ext of this.active()) {
 			const cmd = ext.commandDefs.get(m[1]!);
 			if (!cmd) continue;
 			try {
-				const res = await cmd.handler((m[2] ?? "").trim(), this.context(sessionId, ext.name));
-				const prompt = typeof res === "string" ? res : res && typeof res === "object" ? res.prompt : undefined;
-				return { handled: true, prompt };
+				return this.commandOutcome(await cmd.handler((m[2] ?? "").trim(), this.context(sessionId, ext.name)));
 			} catch (e) {
 				this.recordError(ext.name, `command:${m[1]}`, e);
 				throw e;
 			}
 		}
 		return undefined;
+	}
+
+	private commandOutcome(res: CommandResult): { handled: true; prompt?: string; note?: MessageNote; title?: string } {
+		if (typeof res === "string") return { handled: true, prompt: res };
+		if (!res || typeof res !== "object" || typeof res.prompt !== "string") return { handled: true };
+		return { handled: true, prompt: res.prompt, ...(res.note ? { note: res.note } : {}), ...(typeof res.title === "string" ? { title: res.title } : {}) };
 	}
 
 	async callMethod(extension: string, name: string, params: unknown, sessionId: string | null): Promise<{ found: boolean; result?: unknown }> {

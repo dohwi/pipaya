@@ -3,7 +3,8 @@ import type { Provider } from "@earendil-works/pi-ai";
 import type { TSchema } from "typebox";
 
 /**
- * Public API of a server extension. An extension is a `.ts`/`.js` file (or a folder with `index.ts`) that
+ * Public API of a server extension. An extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a folder whose
+ * `package.json` lists entry files in `pipaya.extensions`) that
  * default-exports `(pi: ExtensionAPI) => void | Promise<void>`. It runs inside the server process with the
  * server's full privileges, like any code you install: only load extensions you trust.
  */
@@ -46,6 +47,11 @@ export interface SessionInfo {
 	/** What its agent works on (written by the system model); "" until then. */
 	purpose: string;
 	cwd: string;
+	provider: string;
+	model: string;
+	thinkingLevel: string;
+	/** Names of the tools the session's agent has. */
+	tools: string[];
 	closed: boolean;
 	parentId: string | null;
 	createdAt: number;
@@ -65,17 +71,119 @@ export interface SessionMessage {
 	message: any;
 }
 
+export interface CreateSessionOptions {
+	title?: string;
+	/** Absolute, or relative to the default working directory. Default: the default working directory. */
+	cwd?: string;
+	/** `provider` and `model` go together. Default: the server's default model. */
+	provider?: string;
+	model?: string;
+	thinkingLevel?: string;
+	systemPrompt?: string;
+	/** Tool names. Default: the default tool set. */
+	tools?: string[];
+	/** Session this one was started from (shown as its parent). */
+	parentId?: string;
+}
+
+/** What `sessions.update` may change. `systemPrompt` and `tools` only before the first message. */
+export interface SessionChanges {
+	title?: string;
+	purpose?: string;
+	provider?: string;
+	model?: string;
+	thinkingLevel?: string;
+	systemPrompt?: string;
+	tools?: string[];
+	/** true closes the session (stopping its work), false reopens it. */
+	closed?: boolean;
+}
+
 /** Other sessions of this server. Works on any session, not only the one an event or tool call belongs to. */
 export interface ExtensionSessions {
 	/** Newest use first. `before` (unix ms) pages: only sessions last used before it. Default limit 1000. */
 	list(opts?: { closed?: boolean; limit?: number; before?: number }): SessionInfo[];
 	get(id: string): SessionInfo | undefined;
-	/** The last `count` messages (default 10, at most 200), oldest first. */
-	messages(id: string, count?: number): SessionMessage[];
+	/** The last `count` messages (default 10, at most 200), oldest first. `after` (a seq) returns the ones after it instead. */
+	messages(id: string, count?: number, opts?: { after?: number }): SessionMessage[];
 	/** Queue a user message in that session. Default mode: `follow_up` while it works, otherwise `prompt`. */
 	send(id: string, text: string, mode?: PromptMode): Promise<void>;
+	/** A new session. Resolves to it once it exists (it starts idle: `send` gives it work). */
+	create(opts?: CreateSessionOptions): Promise<SessionInfo>;
+	/** Change a session's settings; resolves to the updated session. */
+	update(id: string, changes: SessionChanges): SessionInfo;
+	/** Copy a session (up to message `atSeq`, default all) into a new one. */
+	fork(id: string, opts?: { atSeq?: number; title?: string }): Promise<SessionInfo>;
+	/** Stop its running agent. False when it was idle. */
+	abort(id: string): boolean;
+	/** Summarize its older messages now (not while it runs). */
+	compact(id: string, instructions?: string): Promise<{ tokensBefore: number; tokensAfter: number | null }>;
+	/** Questions its agent is waiting on (`ctx.ask`), oldest first. */
+	questions(id: string): { toolCallId: string; question: string; options?: string[]; requestedAt: number }[];
+	/** Answer one of them, as the user would. False when there is no such question or the answer is not allowed. */
+	answer(id: string, toolCallId: string, answer: string | string[]): boolean;
 	/** Delete a session. Returns false (and deletes nothing) when it is unknown or busy. */
 	delete(id: string): boolean;
+}
+
+/** A group: a named split-window layout. `sessionIds` are its session panes (terminal panes are left out). */
+export interface GroupInfo {
+	id: string;
+	name: string;
+	sessionIds: string[];
+	/** The full layout tree: `{ type: "pane", sessionId }` | `{ type: "split", dir: "row"|"col", ratio, a, b }`. */
+	layout: unknown;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface ExtensionGroups {
+	list(): GroupInfo[];
+	get(id: string): GroupInfo | undefined;
+	/** A new group with this layout (at least two panes). A session already in another group moves here. */
+	create(opts: { name?: string; layout: unknown }): GroupInfo;
+	update(id: string, changes: { name?: string; layout?: unknown }): GroupInfo;
+	delete(id: string): boolean;
+}
+
+/** A model the server can use. */
+export interface ModelSummary {
+	provider: string;
+	id: string;
+	name: string;
+	reasoning: boolean;
+	thinkingLevels: string[];
+	contextWindow: number;
+	maxTokens: number;
+	vision: boolean;
+	/** A usable credential exists for its provider. */
+	configured: boolean;
+}
+
+export interface CompleteRequest {
+	/** A model role (see `/model-roles`), or the default model when neither this nor `provider`+`model` is given. */
+	role?: string;
+	provider?: string;
+	model?: string;
+	system?: string;
+	input: string;
+	maxTokens?: number;
+	signal?: AbortSignal;
+}
+
+export interface ExtensionModels {
+	list(opts?: { provider?: string }): Promise<ModelSummary[]>;
+	/** One-shot completion: no session, no tools, no history. */
+	complete(req: CompleteRequest): Promise<{ text: string; provider: string; model: string; usage: { input: number; output: number; totalTokens: number; cost: number } }>;
+}
+
+export interface ServerEvent {
+	/** Persisted events have a growing id; live-only ones (streaming deltas) have 0. */
+	id: number;
+	sessionId: string | null;
+	type: string;
+	ts: number;
+	data: unknown;
 }
 
 export interface ToolResult {
@@ -105,10 +213,47 @@ export interface ExtensionTool {
 	): Promise<ToolResult> | ToolResult;
 }
 
+/** What a command handler returns: nothing (handled), the prompt to send instead, or the prompt plus a note shown with it. */
+export type CommandResult = void | string | { prompt: string; note?: MessageNote; title?: string };
+
 export interface ExtensionCommand {
 	description?: string;
+	/** Argument hint shown in the menu, e.g. `<file>`. */
+	args?: string;
 	/** Return a string (or `{ prompt }`) to send it to the model as the user's message; return nothing to just handle it. */
-	handler(args: string, ctx: ExtensionContext): Promise<void | string | { prompt: string }> | void | string | { prompt: string };
+	handler(args: string, ctx: ExtensionContext): Promise<CommandResult> | CommandResult;
+}
+
+/** One entry of a command family (`pi.registerCommands`), listed for a working directory. */
+export interface CommandEntry {
+	/** Without the prefix: `review` for `/prompt:review`. Letters, digits, `-`, `_`, `.` */
+	name: string;
+	description?: string;
+	args?: string;
+}
+
+/**
+ * A family of commands that share a prefix and are found at run time, e.g. `/prompt:<name>` for every prompt file of a
+ * project. `list` is asked for the menu (per working directory); `run` handles `/prefix:name args`.
+ */
+export interface ExtensionCommandFamily {
+	/** Shown as the menu heading and tag, e.g. "Templates". */
+	label?: string;
+	list(cwd: string): CommandEntry[] | Promise<CommandEntry[]>;
+	run(name: string, args: string, ctx: ExtensionContext): Promise<CommandResult> | CommandResult;
+}
+
+/**
+ * A note shown with a user message instead of (or above) its text, e.g. "used template: review". It is stored with the
+ * message for the client only; the model never sees it.
+ */
+export interface MessageNote {
+	/** Short line shown on the message. */
+	text: string;
+	/** Collapse the message text under the note (for long expanded prompts). */
+	collapse?: boolean;
+	/** Anything the client extension that renders it needs. */
+	data?: unknown;
 }
 
 export interface ExtensionFlag {
@@ -123,8 +268,12 @@ export interface EventMap {
 	/** A user message arrived. Return `{ text }` to rewrite it or `{ handled: true }` to swallow it. */
 	input: [
 		{ sessionId: string; text: string; mode: PromptMode },
-		/** `title`: what to cut the session title from when this message starts it (default: the text). `parts`: extra text blocks stored with the message after `text` (the client shows blocks starting with `<pipaya-` as notes, not as text). */
-		void | { text?: string; handled?: boolean; parts?: { type: "text"; text: string }[]; title?: string },
+		/**
+		 * `title`: what to cut the session title from when this message starts it (default: the text). `parts`: extra text
+		 * blocks for the model, stored with the message after `text`; the client hides blocks that start with `<pipaya-`.
+		 * `note`: a line shown on the message for the user (never sent to the model).
+		 */
+		void | { text?: string; handled?: boolean; parts?: { type: "text"; text: string }[]; title?: string; note?: MessageNote },
 	];
 	/** Before a prompt starts the agent. Add context for this run only. */
 	before_agent_start: [
@@ -172,6 +321,8 @@ export interface ExtensionAPI {
 	registerTool(tool: ExtensionTool): void;
 	/** A `/name args` message typed by the user. */
 	registerCommand(name: string, command: ExtensionCommand): void;
+	/** A family of `/prefix:name args` commands found at run time (see `ExtensionCommandFamily`). */
+	registerCommands(prefix: string, family: ExtensionCommandFamily): void;
 	/** Callable by clients: `POST /server-extensions/:extension/methods/:name`. */
 	registerMethod(name: string, handler: (params: unknown, ctx: ExtensionContext | null) => unknown | Promise<unknown>): void;
 	/** A model provider (custom endpoint, proxy, OAuth login …). Same shape as pi-ai's `Provider`. */
@@ -189,16 +340,33 @@ export interface ExtensionAPI {
 		on(channel: string, handler: (data: unknown) => void): () => void;
 		emit(channel: string, data?: unknown): void;
 	};
-	/** Other sessions of this server: list, read, message, delete. */
+	/** Every session of this server: list, read, create, change, message, stop, delete. */
 	sessions: ExtensionSessions;
-	/** Session groups (`@group` tags), each with the ids of the sessions it shows. */
-	groups: { list(): { name: string; sessionIds: string[] }[] };
+	/** Session groups (split-window layouts): list, create, change, delete. */
+	groups: ExtensionGroups;
+	/** The models the server can use, and one-shot completions on them. */
+	models: ExtensionModels;
+	/** Every server event (the same stream clients get from `/events`); `types` narrows it. Returns the unsubscribe. */
+	subscribe(handler: (event: ServerEvent) => void, opts?: { sessionId?: string; types?: string[] }): () => void;
+	/** An OS / push notification to the user's devices (same rules as client extensions: 5 per 10 s). */
+	notify(n: { title: string; body?: string; sessionId?: string; key?: string; kind?: "task_completed" | "task_failed" | "user_request" | "info" }): void;
 	/** The user's home directory. */
 	home: string;
 	/** The server's default working directory (where a new session starts). */
 	defaultCwd(): string;
 	/** Where this extension may keep files (created on first use). */
 	dataDir: string;
+	/**
+	 * Settings shared with clients: the object behind `GET/PUT /extensions/:id/settings` for id `settings.id` (default:
+	 * this extension's name). A client extension with the same id and `settingsScope: "server"` edits the same object.
+	 * `onChange` fires when anyone saves it.
+	 */
+	settings: {
+		readonly id: string;
+		get(): Record<string, unknown>;
+		set(value: Record<string, unknown>): Record<string, unknown>;
+		onChange(handler: (value: Record<string, unknown>) => void): () => void;
+	};
 	log(...args: unknown[]): void;
 }
 

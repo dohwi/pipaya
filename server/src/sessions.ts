@@ -16,11 +16,30 @@ import { type SessionPatch, type SessionRecord, type SessionStore, } from "./sto
 import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { groupHandle, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
+import type { MessageNote } from "./extensions/types.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
+
+export const NOTE_OPEN = "<pipaya-note>";
+const NOTE_CLOSE = "</pipaya-note>";
+
+/** A note for the client, stored with the user message: `{ text, collapse?, data?, call }` (`call` = what the user typed). */
+export function noteBlock(note: MessageNote, call: string): string {
+	const body = { text: String(note.text).slice(0, 200), ...(note.collapse ? { collapse: true } : {}), ...(note.data !== undefined ? { data: note.data } : {}), call: call.slice(0, 2000) };
+	return `${NOTE_OPEN}${JSON.stringify(body).slice(0, 16_000)}${NOTE_CLOSE}`;
+}
+
+/** The model never sees notes: they are for the people reading the transcript. */
+function withoutNotes(messages: AgentMessage[]): AgentMessage[] {
+	return messages.map((m) => {
+		if (m.role !== "user" || !Array.isArray(m.content)) return m;
+		const kept = m.content.filter((c) => !(c.type === "text" && c.text.startsWith(NOTE_OPEN)));
+		return kept.length === m.content.length ? m : { ...m, content: kept };
+	});
+}
 
 /** Strip the heavy `partial` snapshot from stream deltas; clients rebuild from deltas. */
 function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["assistantMessageEvent"]): unknown {
@@ -184,7 +203,7 @@ export class SessionManager {
 		const stored = this.store.projection(id);
 		const cutAt = pickCut(stored.messages.map((m) => m.message));
 		if (cutAt === null) throw conflict("not enough history to compact yet");
-		const toSummarize = stored.messages.slice(0, cutAt);
+		const toSummarize = stored.messages.slice(0, cutAt).map((m) => ({ ...m, message: withoutNotes([m.message])[0]! }));
 		const uptoSeq = toSummarize[toSummarize.length - 1]!.seq;
 
 		const target = this.compaction.resolveModel(record);
@@ -507,16 +526,22 @@ export class SessionManager {
 		let handled = false;
 		const parts: { type: "text"; text: string }[] = [];
 		let title: string | undefined;
+		let note: MessageNote | undefined;
+		const typed = text.trim();
 		await this.ext!.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
 			if (typeof r.text === "string") current = r.text;
 			if (Array.isArray(r.parts)) for (const p of r.parts) if (p?.type === "text" && typeof p.text === "string") parts.push({ type: "text", text: p.text });
 			if (typeof r.title === "string" && r.title.trim()) title = r.title;
+			if (r.note && typeof r.note.text === "string") note = r.note;
 			if (r.handled) { handled = true; return true; }
 		});
+		const withNote = () => (note ? [...parts, { type: "text" as const, text: noteBlock(note, typed) }] : parts);
 		if (handled) return { handled, text: current, parts, title };
 		const cmd = await this.ext!.runCommand(id, current);
-		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts, title } : { handled: true, text: current, parts, title };
-		return { handled: false, text: current, parts, title };
+		if (cmd?.note) note = cmd.note;
+		if (cmd?.title) title = cmd.title;
+		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts: withNote(), title } : { handled: true, text: current, parts, title };
+		return { handled: false, text: current, parts: withNote(), title };
 	}
 
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
@@ -829,6 +854,7 @@ export class SessionManager {
 			const base = typeof head.content === "string" ? head.content : "";
 			out = [{ ...out[0], content: `${sys.replace ?? base}${sys.append ?? ""}` } as AgentMessage, ...out.slice(1)];
 		}
+		out = withoutNotes(out);
 		if (this.ext?.has("context")) {
 			await this.ext.emit("context", { sessionId, messages: out }, sessionId, (r) => {
 				if (Array.isArray(r.messages)) out = r.messages;
