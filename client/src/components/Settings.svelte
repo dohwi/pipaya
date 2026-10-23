@@ -8,6 +8,7 @@
 	import ModalHeader from "./ModalHeader.svelte";
 	import Shortcuts from "./Shortcuts.svelte";
 	import Extensions from "./Extensions.svelte";
+	import { extensions } from "../lib/extensions/host.svelte";
 	import Backup from "./Backup.svelte";
 	import ServerForm from "./ServerForm.svelte";
 	import Switch from "./Switch.svelte";
@@ -57,8 +58,17 @@
 	type TabId = (typeof tabs)[number]["id"];
 	/** Which side the next pane enters from, so content follows the selection. */
 	let dir = $state(1);
+	/** The extension open in the "확장" panes; the sidebar lists them under their section. */
+	let extId = $state<string | null>(null);
+	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
+	const extsOf = (id: string) => { const sc = extScope(id); return sc ? extensions.installed.filter((e) => e.scope === sc) : []; };
+	function openExt(tabId: TabId, id: string) {
+		if (tabId !== tab) { dir = tabs.findIndex((x) => x.id === tabId) > tabs.findIndex((x) => x.id === tab) ? 1 : -1; tab = tabId; }
+		extId = id;
+	}
 	function go(next: TabId) {
-		if (next === tab) return;
+		if (next === tab) { extId = null; return; }
+		extId = null;
 		dir = tabs.findIndex((x) => x.id === next) > tabs.findIndex((x) => x.id === tab) ? 1 : -1;
 		tab = next;
 	}
@@ -198,13 +208,22 @@
 		>
 			{#each scoped as x (x.id)}
 				{#if !x.server || server}
-					<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id} tabindex={tab === x.id ? 0 : -1} class:on={tab === x.id} onclick={() => go(x.id)}>
+					<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
 						<Icon name={x.icon} />
 						<span class="nt">
 							<span class="nl">{t(x.label)}</span>
 							{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
 						</span>
 					</button>
+					{#if tab === x.id}
+						{#each extsOf(x.id) as e (e.package.manifest.id)}
+							{@const eid = e.package.manifest.id}
+							<button role="tab" class="sub" aria-selected={extId === eid} tabindex={extId === eid ? 0 : -1} class:on={extId === eid} onclick={() => openExt(x.id, eid)}>
+								<span class="dot" class:live={e.state === "active" || e.state === "starting"} aria-hidden="true"></span>
+								<span class="nl">{e.package.manifest.name}</span>
+							</button>
+						{/each}
+					{/if}
 					{#if x.id === "devices"}
 						<button class="addsrv" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 추가")}</button>
 					{/if}
@@ -234,9 +253,9 @@
 				{#if current.sub}<p>{t(current.sub)}</p>{/if}
 			</div>
 			{#if tab === "extensions"}
-				<Extensions scope="device" />
+				<Extensions scope="device" bind:selected={extId} />
 			{:else if tab === "srvext"}
-				<Extensions scope="server" />
+				<Extensions scope="server" bind:selected={extId} />
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}
@@ -487,6 +506,27 @@
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
+	.nav button.sub {
+		gap: 10px;
+		padding: 7px 12px 7px 43px;
+	}
+	.nav button.sub .nl {
+		font-size: var(--fs-sm);
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.nav .dot {
+		flex: none;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--border-strong);
+	}
+	.nav .dot.live {
+		background: var(--ok);
+	}
 	.nav button.srvtab {
 		padding: 8px 12px;
 	}
@@ -609,6 +649,9 @@
 			padding: 9px 12px;
 		}
 		.ns {
+			display: none;
+		}
+		.nav button.sub {
 			display: none;
 		}
 		.body {

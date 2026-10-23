@@ -14,7 +14,7 @@
 	import Marketplace from "./extensions/Marketplace.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view }: { scope: ExtensionScope } = $props();
+	let { scope: view, selected = $bindable(null) }: { scope: ExtensionScope; selected?: string | null } = $props();
 	let preview = $state<ExtensionPackage | null>(null);
 	/** Where the package being imported will be installed: the scope of the tab it is imported from. */
 	const target = $derived(view);
@@ -42,13 +42,12 @@
 	let notice = $state("");
 	let busy = $state<Record<string, boolean>>({});
 	let drafts = $state<Record<string, string>>({});
-	/** The extension whose detail page is open; null shows the list. */
-	let openId = $state<string | null>(null);
-	const openEntry = $derived(openId ? list.find((e) => e.package.manifest.id === openId) : undefined);
-	$effect(() => { if (openId && !openEntry) openId = null; });
+	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
+	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
+	$effect(() => { if (selected && !openEntry) selected = null; });
 	function closeDetail() {
-		const id = openId;
-		openId = null;
+		const id = selected;
+		selected = null;
 		removing = null;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.querySelector<HTMLElement>(".expand")?.focus({ preventScroll: false }));
 	}
@@ -174,7 +173,7 @@
 		const id = result?.pkg?.manifest.id;
 		result = null;
 		if (!id) return;
-		openId = id;
+		selected = id;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
 	}
 
@@ -315,7 +314,7 @@
 	{@const on = entry.state === "active" || entry.state === "starting"}
 	<article class="card" id="extension-{id}" tabindex="-1" aria-label={entry.package.manifest.name}>
 		<div class="line">
-			<button type="button" class="expand" onclick={() => (openId = id)}>
+			<button type="button" class="expand" onclick={() => (selected = id)}>
 				<span class="who">
 					<span class="top">
 						<span class="ename">{entry.package.manifest.name}</span>
@@ -346,7 +345,7 @@
 	{@const problem = entry.state === "active" || entry.state === "starting" ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
 	{@const on = entry.state === "active" || entry.state === "starting"}
 	<div class="page" id="extension-{id}" tabindex="-1">
-		<button type="button" class="back" onclick={closeDetail}><span class="chev flip"><Icon name="chevron-right" /></span>{t("확장")}</button>
+		<button type="button" class="back" onclick={closeDetail}><span class="chev flip"><Icon name="chevron-right" /></span>{t("목록")}</button>
 		<div class="line">
 			<div class="who">
 				<span class="top">
@@ -658,6 +657,8 @@
 	.page h4.ename { font-size: var(--fs-lg); }
 	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 2px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
 	.back:hover { color: var(--text); }
+	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */
+	@media (min-width: 761px) { .back { display: none; } }
 	.back:focus-visible, .page :global(.expand:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev.flip { transform: rotate(180deg); }
 	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
