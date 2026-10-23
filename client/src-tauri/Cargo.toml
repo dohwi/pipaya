@@ -1,6 +1,6 @@
 [package]
 name = "pipaya"
-version = "0.3.10"
+version = "0.3.11"
 license = "MIT"
 edition = "2021"
 
