@@ -320,7 +320,7 @@
 						<span class="ename">{entry.package.manifest.name}</span>
 						<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>
 					</span>
-					{#if entry.package.manifest.description}<span class="brief">{entry.package.manifest.description}</span>{/if}
+					{#if entry.package.manifest.description}<span class="brief" class:full={unfolded[id]}>{entry.package.manifest.description}</span>{/if}
 				</span>
 			</button>
 			{#if busy[id] || entry.state === "starting"}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
@@ -337,11 +337,11 @@
 		{#if unfolded[id]}
 			<div class="detail" in:collapseIn out:collapseOut>
 				<div class="detail-in">
-					<p class="meta">{id}</p>
-					<div class="row">
+					<div class="row actions">
+						<span class="meta id">{id}</span>
 						<button type="button" class="btn sm" disabled={extensions.safeMode || busy[id] || entry.state !== "active"} onclick={() => reload(id)}>{t("다시 불러오기")}</button>
 						<button type="button" class="btn sm" disabled={busy[id]} onclick={() => exportPackage(id)}>{t("내보내기")}</button>
-						<button type="button" class="btn danger sm end" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
+						<button type="button" class="btn danger sm" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
 					</div>
 					{#if removing === id}
 						<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
@@ -357,7 +357,7 @@
 						{#snippet head()}{t("권한과 실행 안내")}{/snippet}
 						<div class="details-body">{@render permissions(entry.package)}</div>
 					</Accordion>
-					<Accordion open={folds[`${id}:set`] ?? !!(fields && (problem || gated))} onchange={(v) => (folds[`${id}:set`] = v)}>
+					<Accordion open={folds[`${id}:set`] ?? !!fields} onchange={(v) => (folds[`${id}:set`] = v)}>
 						{#snippet head()}{t("확장 설정")}{/snippet}
 						<div class="details-body">
 							{#if fields}
@@ -591,6 +591,8 @@
 
 	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.btn.end { margin-left: auto; }
+	.actions .id { flex: 1 1 100%; }
+	.actions .btn.danger { margin-left: auto; }
 	.confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--danger-soft); font-size: var(--fs-sm); }
 
 	.details-body { display: flex; flex-direction: column; gap: 10px; padding-top: 2px; }
@@ -616,7 +618,8 @@
 	.chev :global(svg) { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+	.brief.full { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
 	.ename { font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
 	.detail { overflow: hidden; }
 	.detail-in { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border); margin-top: 2px; }
