@@ -43,8 +43,6 @@ beforeAll(async () => {
 		dbPath: join(dir, "test.db"),
 		token: TOKEN,
 		workspaceRoot: join(dir, "ws"),
-		
-		approvalTimeoutMs: 0,
 		logLevel: "silent",
 	};
 	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [join(import.meta.dir, "support/ext")] });

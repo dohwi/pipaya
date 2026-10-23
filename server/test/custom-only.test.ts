@@ -28,7 +28,7 @@ beforeAll(async () => {
 	upstream = startEchoUpstream();
 	const cfg: Config = {
 		host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token-0123456789-abcdefghij",
-		workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 0, logLevel: "silent",
+		workspaceRoot: join(dir, "ws"), logLevel: "silent",
 	};
 	app = await buildApp(cfg, { strictResponses: true });
 	await app.server.listen({ host: "0.0.0.0", port: 0 });

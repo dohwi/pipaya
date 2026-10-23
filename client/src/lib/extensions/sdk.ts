@@ -15,8 +15,10 @@ export interface ExtensionContext {
   online: boolean;
 }
 export interface ExtensionEvent {
-  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "approval_requested" | "approval_resolved" | "turn_end" | "tool_execution_end";
+  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end" | "group_created" | "group_updated" | "group_deleted" | "extensions_updated";
   sessionId?: string | null;
+  /** `group_*` only: the group. */
+  groupId?: string;
   at: number;
   status?: string;
   /** `tool_execution_end` only: which tool ran and whether it failed. */
@@ -30,7 +32,7 @@ export type ServerExtensionEvent =
 /** The tool call a renderer is asked to draw. */
 export interface ToolRenderInput {
   toolName: string;
-  state: "pending" | "awaiting_approval" | "running" | "done" | "error" | "denied" | "skipped";
+  state: "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";
   args: Record<string, unknown>;
   output: string;
   details: Record<string, unknown> | null;
@@ -76,8 +78,8 @@ export interface ExtensionSDK {
     call(extension: string, method: string, params?: unknown, sessionId?: string): Promise<unknown>;
     /** Entries a server extension stored with `ctx.appendEntry` on a session (default: the open one). */
     entries(options?: { sessionId?: string; extension?: string; type?: string }): Promise<{ id: number; extension: string; type: string; data: unknown; createdAt: number }[]>;
-    /** Server extensions that are loaded, their tools, commands and methods. */
-    list(): Promise<{ name: string; tools: string[]; commands: { name: string; description?: string }[]; methods: string[]; error?: string }[]>;
+    /** Server extensions that are loaded: what each registered (tools, commands, command families, methods, providers, flags, hooked events). */
+    list(): Promise<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>;
     on(handler: (event: ServerExtensionEvent) => void | Promise<void>): Promise<() => void>;
   };
   /** Needs `shortcuts`. The combo must contain Ctrl/⌘ (`Mod`) or `Alt`, e.g. `Mod+Shift+K`; the user can see which extension owns it. */
@@ -136,12 +138,12 @@ export interface ExtensionSDK {
     registerRenderer(entryType: string, render: (entry: { id: number; extension: string; type: string; data: unknown; createdAt: number }) => UINode | null | Promise<UINode | null>): Promise<void>;
     removeRenderer(entryType: string): Promise<void>;
     /**
-     * Mark messages another session sent: when the first line of a user message matches `pattern` (a RegExp source, at
-     * most 400 characters, tested on the first 500 characters), group 1 is shown as the sender and the lines after it as
-     * the text. Replaces the earlier rule of this extension.
+     * Give user messages a header: when the first line of a message matches `pattern` (a RegExp source, at most 400
+     * characters, tested on the first 500 characters), group 1 is shown as a header above the bubble and the lines after
+     * it as the text. Replaces the earlier rule of this extension.
      */
-    setSender(pattern: string): Promise<void>;
-    clearSender(): Promise<void>;
+    setHeader(pattern: string): Promise<void>;
+    clearHeader(): Promise<void>;
   };
   /**
    * Needs `session-labels`: a short label (at most 40 characters) in front of a session's title in the sidebar and the

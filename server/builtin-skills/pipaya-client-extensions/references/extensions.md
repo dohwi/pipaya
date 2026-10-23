@@ -188,10 +188,12 @@ SDK의 모든 메서드는 Promise입니다. 등록과 설정 변경을 `await`�
 | `dialogs` | `sdk.dialog.confirm/select/input(spec)` | 모달 질문. 창에 확장 이름이 표시되고, 취소하면 `confirm`은 `false`, 나머지는 `null`. 한 번에 하나씩 순서대로 표시 |
 | `session` | `sdk.session.send(text, mode?)`, `abort()` | 열려 있는 대화에 메시지 전송·실행 중지. 10초에 5번. 보낸 메시지는 에이전트가 실행하므로 승인 문구에 명시 |
 | `tools` | `sdk.tools.registerRenderer(toolName, render)`, `removeRenderer(toolName)` | 끝난 도구 호출을 확장이 만든 화면으로 표시(읽기 전용 노드 80개·깊이 5·24KiB). 실패하거나 `null`이면 기본 모양. 같은 도구는 마지막 등록이 이김. 확장당 20개 |
-| `messages` | `sdk.messages.registerRenderer(entryType, render)`, `removeRenderer(entryType)` | 서버 확장이 `ctx.appendEntry(type, data)`로 대화에 남긴 기록을, 만들어진 시각 순서로 대화 중간에 카드로 표시. 렌더러가 없거나 `null`이면 보이지 않음. 읽기 전용 노드(navbar와 같은 종류) 80개·깊이 5·24KiB. 확장당 20개 |
+| `messages` | `sdk.messages.registerRenderer(entryType, render)`, `removeRenderer(entryType)`, `setHeader(pattern)`, `clearHeader()` | 서버 확장이 `ctx.appendEntry(type, data)`로 대화에 남긴 기록을, 만들어진 시각 순서로 대화 중간에 카드로 표시. 렌더러가 없거나 `null`이면 보이지 않음. 읽기 전용 노드(navbar와 같은 종류) 80개·깊이 5·24KiB. 확장당 20개. `setHeader`: 사용자 메시지의 첫 줄이 패턴(RegExp 소스, 400자 이하)과 맞으면 그룹 1을 말풍선 위 머리글로 보여 주고 나머지 줄을 본문으로 표시(확장당 1개) |
+| `session-labels` | `sdk.sessionLabels.set({ [sessionId]: {text, title?} })` | 사이드바와 창 머리글의 대화 제목 앞에 짧은 라벨(40자 이하). 호출마다 이 확장의 라벨 전체 교체, 최대 1000개 |
+| `composer-mentions` | `sdk.mentions.set([{insert, desc?, group?, keywords?, except?}])` | 입력창 `@` 자동완성. `insert`는 `@토큰`(공백 없음)으로 텍스트에 들어가고 강조됨. 호출마다 목록 전체 교체, 최대 500개 |
 | `slots` | `sdk.slots.set('header'\|'footer', id, {label, view})`, `remove(slot, id)` | 헤더 아래·입력창 위의 읽기 전용 영역. navbar와 같은 노드·한도, 확장당 2개 |
 | `composer-filter` | `sdk.composerFilter.set(fn)`, `clear()` | 보내기 직전 텍스트를 바꾸거나 막음(`string`, `{text}`, `{cancel: '사유'}`, `null`=그대로). 2초 제한, 오류·시간 초과면 원문 그대로 전송. 슬래시 명령은 거치지 않음 |
-| `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus(id)`, `send(id,text,mode?)`, `abort(id)`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave(id)`, `close(id)`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?,approval?})`, `compact(id,instructions?)` | 열린 그룹(그룹 밖이면 열린 대화 하나)의 대화·터미널을 id로 지정해 읽고(`read`는 텍스트만) 조작. 포커스와 무관하게 `send` 가능, `split`은 `focus: true`가 아니면 포커스를 옮기지 않음. 변경은 10초에 30번. `configure`는 그 대화만 바꾸며(새 대화 기본값은 그대로) 모델은 `provider`와 함께, 추론 강도는 모델이 지원하는 값만 허용. 보낸 메시지는 에이전트가 실행하고 `close`는 터미널 작업을 끝내므로 승인 문구에 명시 |
+| `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus(id)`, `send(id,text,mode?)`, `abort(id)`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave(id)`, `close(id)`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?)`, `compact(id,instructions?)` | 열린 그룹(그룹 밖이면 열린 대화 하나)의 대화·터미널을 id로 지정해 읽고(`read`는 텍스트만) 조작. 포커스와 무관하게 `send` 가능, `split`은 `focus: true`가 아니면 포커스를 옮기지 않음. 변경은 10초에 30번. `configure`는 그 대화만 바꾸며(새 대화 기본값은 그대로) 모델은 `provider`와 함께, 추론 강도는 모델이 지원하는 값만 허용. 보낸 메시지는 에이전트가 실행하고 `close`는 터미널 작업을 끝내므로 승인 문구에 명시 |
 | 별도 권한 없음 | `sdk.settings.get()`, `sdk.log(text)` | 자신의 사용자 설정 읽기, 확장 로그 |
 
 ```js
@@ -226,7 +228,7 @@ const unsubscribe = await sdk.events.on(async event => {
   running: boolean, online: boolean }
 ```
 
-이벤트는 `{type, sessionId?, at, status?, toolName?, isError?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `approval_requested`, `approval_resolved`, `turn_end`, `tool_execution_end`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만, `toolName`과 `isError`는 `tool_execution_end`에만 전달됩니다(도구 인자와 결과 내용은 전달하지 않습니다). 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
+이벤트는 `{type, sessionId?, at, status?, toolName?, isError?, groupId?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `question_requested`, `question_resolved`, `group_created`, `group_updated`, `group_deleted`, `extensions_updated`, `turn_end`, `tool_execution_end`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만, `toolName`과 `isError`는 `tool_execution_end`에만 전달됩니다(도구 인자와 결과 내용은 전달하지 않습니다). 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
 
 설정 화면에서 확장별 JSON 객체를 편집합니다. 활성화된 확장에는 다시 불러오기로 반영합니다. 저장소의 없는 키는 `null`입니다. `__proto__`, `constructor`, `prototype` 키는 쓸 수 없습니다. 확장 삭제 시 자신의 저장소도 삭제됩니다. console 출력은 SDK 로그로 연결되며 로그는 클라이언트 실행 중 최신 100개만 유지합니다.
 

@@ -63,7 +63,7 @@ const sdk = Object.freeze({
     compact: (id, instructions) => rpc('panes.compact', id, instructions === undefined ? null : instructions)
   }),
   tools: Object.freeze({ registerRenderer: (toolName, fn) => register('tools.registerRenderer', toolName, fn), removeRenderer: toolName => rpc('tools.removeRenderer', toolName) }),
-  messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType), setSender: pattern => rpc('messages.setSender', pattern), clearSender: () => rpc('messages.clearSender') }),
+  messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType), setHeader: pattern => rpc('messages.setHeader', pattern), clearHeader: () => rpc('messages.clearHeader') }),
   sessionLabels: Object.freeze({ set: labels => rpc('sessionLabels.set', labels) }),
   mentions: Object.freeze({ set: items => rpc('mentions.set', items) }),
   slots: Object.freeze({ set: (slot, id, spec) => rpc('slots.set', slot, id, spec), remove: (slot, id) => rpc('slots.remove', slot, id) }),

@@ -59,7 +59,7 @@
 		settings: () => import("./components/Settings.svelte"),
 		modelSettings: () => import("./components/ModelSettings.svelte"),
 		skills: () => import("./components/Skills.svelte"),
-		templates: () => import("./components/Templates.svelte"),
+		commands: () => import("./components/CommandFamilies.svelte"),
 		lightbox: () => import("./components/Lightbox.svelte"),
 		queue: () => import("./components/QueueModal.svelte"),
 		filePreview: () => import("./components/FilePreview.svelte"),
@@ -364,8 +364,8 @@
 {#if app.skillsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.skills} dialog={app.skillsDialog} api={app.api} onclose={() => (app.skillsDialog = null)} />{/key}
 {/if}
-{#if app.templatesDialog && app.api}
-	{#key app.serverId}<Lazy load={load.templates} dialog={app.templatesDialog} api={app.api} onclose={() => (app.templatesDialog = null)} />{/key}
+{#if app.commandsDialog && app.api}
+	{#key app.serverId}<Lazy load={load.commands} dialog={app.commandsDialog} api={app.api} onclose={() => (app.commandsDialog = null)} />{/key}
 {/if}
 {#if app.servers.length === 0}
 	<button class="extension-entry" onclick={() => app.openSettings("extensions")}>{t("설정 · 확장")}</button>

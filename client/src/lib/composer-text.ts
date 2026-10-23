@@ -74,7 +74,8 @@ export function memberOf(token: string, names: readonly string[]): string | null
 }
 
 export interface Known {
-	templates: readonly { name: string }[];
+	/** `prefix:name` of the command-family entries (`/prompt:review`) that exist */
+	commands: readonly string[];
 	skills: readonly { name: string }[];
 	/** Tokens an extension offers after `@` (without the `@`) */
 	mentions: readonly string[];
@@ -90,8 +91,8 @@ export interface Known {
  */
 export function mirrorHtml(text: string, known: Known): string {
 	return (
-		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
-			if (tok.startsWith("/prompt:")) return known.templates.some((k) => k.name === tok.slice(8)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[a-z0-9-]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
+			if (tok.startsWith("/") && !tok.startsWith("/skill:")) return known.commands.includes(tok.slice(1)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);

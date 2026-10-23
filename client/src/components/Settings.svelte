@@ -129,7 +129,7 @@
 		toolsError = "";
 		apiOf(id)
 			?.configuration()
-			.then((c) => (toolsCfg = { id, tools: c.tools ?? null }))
+			.then((c) => (toolsCfg = { id, tools: c.tools }))
 			.catch((e) => (toolsError = errorText(e)));
 	});
 	const shownCfg = $derived(toolsCfg && server && toolsCfg.id === server.id ? toolsCfg : null);

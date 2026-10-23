@@ -14,8 +14,8 @@ export interface PaneInfo {
   focused: boolean;
   /** Sessions only. */
   running: boolean;
-  /** Sessions only: tool calls waiting for the user's approval. */
-  awaitingApproval: number;
+  /** Sessions only: questions waiting for the user's answer. */
+  awaitingInput: number;
   /** Sessions only. */
   model: string | null;
   provider: string | null;
@@ -76,7 +76,7 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
     const box = g ? measure(g.layout).panes.find(p => p.id === id) : undefined;
     return {
       id, kind: s ? "session" : "terminal", title: (s?.title || term?.title) ?? "", cwd: (s?.cwd || term?.cwd) ?? "",
-      focused: app.activeId === id, running: !!s && !!app.running[id], awaitingApproval: s ? app.awaiting[id] ?? 0 : 0,
+      focused: app.activeId === id, running: !!s && !!app.running[id], awaitingInput: s ? app.awaiting[id] ?? 0 : 0,
       model: s?.model ?? null, provider: s?.provider ?? null, thinkingLevel: s?.thinkingLevel ?? null, groupId: g?.id ?? null,
       box: box ? { x: box.x, y: box.y, w: box.w, h: box.h } : { x: 0, y: 0, w: 1, h: 1 },
     };

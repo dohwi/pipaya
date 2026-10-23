@@ -40,18 +40,18 @@ describe("notification policy", () => {
     const { service, bus, events } = setup(); service.heartbeat("pc", presence("desktop"));
     bus.publish("s1", "run_finished", { status: "aborted" }); expect(events).toHaveLength(0);
     bus.publish("s1", "run_finished", { status: "error", error: "quota exceeded", usage: { cost: "USAGE-SECRET" } });
-    bus.publish("s1", "approval_requested", { toolName: "write", args: { path: "a.ts", content: "FILE-SECRET" } });
+    bus.publish("s1", "question_requested", { toolCallId: "c", question: "Which file?", options: ["FILE-SECRET"] });
     expect(events).toHaveLength(2);
     const all = JSON.stringify(events);
     expect(all).not.toContain("USAGE-SECRET"); expect(all).not.toContain("FILE-SECRET");
     expect((events[0]!.data as any).notification.body).toBe("quota exceeded");
-    expect((events[1]!.data as any).notification.kind).toBe("approval_required");
-    expect((events[1]!.data as any).notification.body).toContain("a.ts");
+    expect((events[1]!.data as any).notification.kind).toBe("user_request");
+    expect((events[1]!.data as any).notification.body).toBe("Which file?");
   });
   test("durable rules override the default event notice, and revoke is owner-scoped", () => {
     const { service, bus, db, events } = setup(); service.heartbeat("pc", presence("desktop"));
     service.setRule("a", "done", { event: "run_finished", title: "custom" });
-    service.setRule("b", "ask", { event: "approval_requested", title: "ask" });
+    service.setRule("b", "ask", { event: "question_requested", title: "ask" });
     bus.publish("s1", "run_finished", { status: "ok" });
     expect(events).toHaveLength(1); expect((events[0]!.data as any).notification.title).toBe("[a] custom");
     service.removeRules("a"); expect((db.query("SELECT owner FROM notification_rules").all() as any[]).map(r => r.owner)).toEqual(["b"]);
@@ -100,10 +100,10 @@ describe("notification policy", () => {
     await pause(); expect(sent).toHaveLength(0);
     service.forget("pc"); service.heartbeat("phone", presence("android", false, false)); service.send("a", { title: "muted" }); await pause(); expect(sent).toHaveLength(0);
   });
-  test("resolved approvals, new runs and rule revocation cancel obsolete pending pushes", async () => {
+  test("answered questions, new runs and rule revocation cancel obsolete pending pushes", async () => {
     let calls = 0; const { service, bus, advance } = setup({ fcm: { send: async () => { calls++; return "sent"; } } });
     service.heartbeat("phone", presence("android"), { provider: "fcm", token: "phone" }); advance();
-    bus.publish("s", "approval_requested", {}); bus.publish("s", "approval_resolved", {});
+    bus.publish("s", "question_requested", {}); bus.publish("s", "question_resolved", {});
     bus.publish("s", "run_finished", { status: "ok" }); bus.publish("s", "run_started", {});
     service.setRule("ext", "done", { event: "run_finished", title: "done" });
     bus.publish("s", "run_finished", { status: "ok" }); service.removeRules("ext");
@@ -190,12 +190,12 @@ describe("unread on the PC: escalate to the phone (Discord style)", () => {
     policy.escalateMs = 20; shown(service); await wait(90); expect(sent).toEqual(["phone"]);
   });
 
-  test("a resolved approval or a new run cancels the waiting escalation", async () => {
+  test("an answered question or a new run cancels the waiting escalation", async () => {
     const { sent, transports } = pushed(); const { service, bus } = setup(transports, 60);
     service.heartbeat("phone", presence("android"), { provider: "fcm", token: "phone" }); service.heartbeat("pc", presence("desktop"));
-    bus.publish("s", "approval_requested", {});
+    bus.publish("s", "question_requested", {});
     const [id] = [...(service as any).queued.keys()] as string[]; service.acknowledge(id!); // the PC showed it
-    await wait(20); bus.publish("s", "approval_resolved", {});
+    await wait(20); bus.publish("s", "question_resolved", {});
     await wait(100); expect(sent).toHaveLength(0);
   });
 
@@ -225,7 +225,7 @@ describe("unread on the PC: escalate to the phone (Discord style)", () => {
 
 test("notification API requires bearer auth and strictly validates registration/rules", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pipaya-notifications-"));
-  const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
+  const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, logLevel: "silent" }, { builtinSkills: false });
   disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
   const headers = { authorization: "Bearer t" };
   expect((await app.server.inject({ method: "GET", url: "/notifications/status" })).statusCode).toBe(401);
@@ -236,7 +236,7 @@ test("notification API requires bearer auth and strictly validates registration/
   expect((await app.server.inject({ method: "PUT", url: "/notifications/rules/ext/done", headers: jsonHeaders, payload: { event: "message_end", title: "no" } })).statusCode).toBe(400);
   expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "ext", notification: { title: "request", kind: "user_request" } } })).statusCode).toBe(200);
   // "pipaya" is the source of the built-in notices (the client translates their titles), so an extension cannot use it.
-  expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "pipaya", notification: { title: "Approval required", kind: "approval_required" } } })).statusCode).toBe(400);
+  expect((await app.server.inject({ method: "POST", url: "/notifications", headers: jsonHeaders, payload: { source: "pipaya", notification: { title: "Answer needed", kind: "user_request" } } })).statusCode).toBe(400);
   expect((await app.server.inject({ method: "PUT", url: "/notifications/rules/pipaya/done", headers: jsonHeaders, payload: { event: "run_finished", title: "x" } })).statusCode).toBe(400);
 });
 
@@ -244,10 +244,10 @@ test("built-in notices are written in the language of the device that gets them"
   const { service, bus, events } = setup(); service.heartbeat("pc", { ...presence("desktop"), lang: "ko-KR" });
   bus.publish("s1", "run_finished", { status: "ok" });
   bus.publish("s1", "run_finished", { status: "error", error: "401" });
-  bus.publish("s1", "approval_requested", { toolName: "bash", args: { command: "ls" } });
+  bus.publish("s1", "question_requested", { question: "계속할까요?" });
   const n = events.map(e => (e.data as any).notification);
-  expect(n.map((x: any) => x.title)).toEqual(["✅ 작업 완료", "⚠️ 작업 실패", "🔐 승인 필요"]);
-  expect(n[1].body).toBe("401"); expect(n[2].body).toBe("bash 실행 승인을 기다리고 있습니다: ls");
+  expect(n.map((x: any) => x.title)).toEqual(["✅ 작업 완료", "⚠️ 작업 실패", "❓ 답변 필요"]);
+  expect(n[1].body).toBe("401"); expect(n[2].body).toBe("계속할까요?");
   expect(JSON.stringify(n)).not.toContain("facts");
 });
 test("a device with no known language gets English", () => {
@@ -340,7 +340,7 @@ describe("device list", () => {
   });
   test("over HTTP: GET lists, DELETE removes, both need the token", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pipaya-devices-"));
-    const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, approvalTimeoutMs: 0, logLevel: "silent" }, { builtinSkills: false });
+    const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db"), token: "t", workspaceRoot: dir, logLevel: "silent" }, { builtinSkills: false });
     disposals.push(async () => { await app.close(); rmSync(dir, { recursive: true, force: true }); });
     const auth = { authorization: "Bearer t" }, headers = { ...auth, "content-type": "application/json" };
     expect((await app.server.inject({ method: "GET", url: "/notifications/devices" })).statusCode).toBe(401);

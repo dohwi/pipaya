@@ -17,8 +17,6 @@
 	const pane = getPane();
 	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
-	let denying = $state(false);
-	let reason = $state("");
 
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
@@ -41,28 +39,26 @@
 	const noop = () => {};
 	const none = async () => {};
 
-	const awaiting = $derived(run.state === "awaiting_approval");
-	/** A call that asks the user a question (any tool/extension using ctx.ask): the card asks a question instead of asking for permission. */
-	const asking = $derived(awaiting && !!run.question);
+	/** A call that waits for the user's answer (any tool/extension using ctx.ask). */
+	const awaiting = $derived(run.state === "awaiting_input");
 	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
 	const asked = $derived(!!run.question || !!answer);
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	const label = $derived(
 		{
 			pending: t("준비 중"),
-			awaiting_approval: run.question ? t("답변 필요") : t("승인 필요"),
+			awaiting_input: t("답변 필요"),
 			running: t("실행 중"),
 			done: exitCode ? t("종료 코드 {code}", { code: exitCode }) : t("완료"),
 			error: t("실패"),
-			denied: t("거부됨"),
 			skipped: t("실행 안 됨"),
 		}[run.state],
 	);
 	const tone = $derived(
-		run.state === "done" && !exitCode ? "ok" : run.state === "awaiting_approval" ? "warn" : run.state === "running" || run.state === "pending" ? "accent" : run.state === "skipped" ? "" : "danger",
+		run.state === "done" && !exitCode ? "ok" : run.state === "awaiting_input" ? "warn" : run.state === "running" || run.state === "pending" ? "accent" : run.state === "skipped" ? "" : "danger",
 	);
 
-	// Pending approvals open by default so the thing being approved is visible.
+	// A question opens the card so what is asked is visible.
 	$effect(() => {
 		if (awaiting) open = true;
 	});
@@ -73,11 +69,6 @@
 		return str(args.command ?? "");
 	});
 
-	function deny() {
-		void app.decide(id, false, reason.trim() || undefined, pane.id);
-		denying = false;
-		reason = "";
-	}
 </script>
 
 <div class="card" class:awaiting data-state={run.state}>
@@ -125,31 +116,12 @@
 						{/each}
 					</div>
 				{/if}
-			{:else if run.state === "denied"}
-				<div class="denied">{t("거부됨")}{run.denyReason ? `: ${run.denyReason}` : ""}</div>
 			{/if}
 		</div>
 	{/if}
 
-	{#if asking && run.question}
+	{#if awaiting && run.question}
 		<div in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
-	{:else if awaiting}
-		<div class="approve" in:collapseIn out:collapseOut>
-			{#if denying}
-				<input
-					class="field reason"
-					placeholder={t("사유 (선택)")}
-					bind:value={reason}
-					onkeydown={(e) => e.key === "Enter" && deny()}
-				/>
-				<button class="btn danger" onclick={deny}>{t("거부")}</button>
-				<button class="btn ghost" onclick={() => (denying = false)}>{t("취소")}</button>
-			{:else}
-				<span class="ask"><Icon name="shield" /> {t("실행할까요?")}</span>
-				<button class="btn" onclick={() => (denying = true)}>{t("거부")}</button>
-				<button class="btn primary" onclick={() => app.decide(id, true, undefined, pane.id)}><Icon name="check" /> {t("승인")}</button>
-			{/if}
-		</div>
 	{/if}
 </div>
 
@@ -288,11 +260,6 @@
 		background: var(--ok-soft);
 		color: var(--ok);
 	}
-	.denied {
-		margin-top: 8px;
-		color: var(--danger);
-		font-size: var(--fs-sm);
-	}
 	.q {
 		font-size: var(--fs-sm);
 		line-height: 1.5;
@@ -303,39 +270,5 @@
 		margin-top: 8px;
 		font-size: var(--fs-sm);
 		color: var(--text-dim);
-	}
-	.approve {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 12px;
-		border-top: 1px solid var(--border);
-		background: var(--warn-soft);
-	}
-	.ask {
-		display: flex;
-		align-items: center;
-		gap: 7px;
-		flex: 1;
-		font-weight: 600;
-		color: var(--warn);
-		font-size: var(--fs-sm);
-	}
-	.ask :global(svg) {
-		width: 17px;
-		height: 17px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.reason {
-		flex: 1;
-		min-width: 0;
-		height: 38px;
-	}
-	.approve .btn {
-		height: 38px;
 	}
 </style>

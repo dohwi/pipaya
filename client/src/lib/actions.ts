@@ -61,8 +61,8 @@ async function cycleThinking() {
   const model = app.effectiveModel;
   if (!model?.reasoning)
     return void app.toast(t("이 모델은 추론 단계를 지원하지 않습니다"), "error", app.activeId);
-  // Only the strengths this model accepts (older servers do not say: then all of them).
-  const own = model.thinkingLevels?.length ? LEVELS.filter((x) => model.thinkingLevels!.includes(x)) : LEVELS;
+  // Only the strengths this model accepts.
+  const own = model.thinkingLevels.length ? LEVELS.filter((x) => model.thinkingLevels.includes(x)) : LEVELS;
   const l = next(own, (x) => x === app.effective.thinkingLevel);
   if (l) await app.configure({ thinkingLevel: l });
 }
@@ -165,17 +165,6 @@ function scrollTo(where: "top" | "bottom") {
   if (el) el.scrollTo({ top: where === "top" ? 0 : el.scrollHeight, behavior: "smooth" });
 }
 
-/** Allow or refuse every tool call of the open chat that is waiting for an answer. */
-async function decideAll(approved: boolean) {
-  const chat = app.chat;
-  if (!chat) return;
-  const ids = Object.entries(chat.tools)
-    .filter(([, tool]) => tool.state === "awaiting_approval" && !tool.question)
-    .map(([id]) => id);
-  if (!ids.length) return void app.toast(t("승인을 기다리는 도구가 없습니다"), "error", app.activeId);
-  await Promise.all(ids.map((id) => app.decide(id, approved)));
-}
-
 function cycleServer() {
   const list = app.servers;
   if (list.length < 2) return void app.toast(t("전환할 다른 서버가 없습니다"), "error");
@@ -222,8 +211,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   copyLast: () => runCommand("copy"),
   scrollTop: () => scrollTo("top"),
   scrollBottom: () => scrollTo("bottom"),
-  approveTool: () => decideAll(true),
-  denyTool: () => decideAll(false),
   focusLeft: () => focusToward("left"),
   focusRight: () => focusToward("right"),
   focusUp: () => focusToward("top"),

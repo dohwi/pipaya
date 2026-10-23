@@ -1,7 +1,6 @@
 import websocket from "@fastify/websocket";
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { ApprovalManager } from "./approvals.ts";
 import type { QuestionManager } from "./questions.ts";
 import { HttpError, parse } from "./errors.ts";
 import type { EventBus } from "./events.ts";
@@ -16,7 +15,7 @@ import { MIN_CLIENT_PROTOCOL, PROTOCOL_VERSION, SERVER_VERSION } from "./version
  *   unsubscribe      { sessionId?: string }
  *   prompt           { sessionId, text, mode?: "prompt"|"steer"|"follow_up", images? }
  *   abort            { sessionId }
- *   approve          { sessionId, toolCallId, approved, reason? }
+ *   answer           { sessionId, toolCallId, answer }
  *   ping             {}
  *
  * server -> client
@@ -41,13 +40,6 @@ const Prompt = Type.Object({
 	images: Type.Optional(Type.Array(Type.Object({ type: Type.Literal("image"), data: Type.String(), mimeType: Type.String() }), { maxItems: 8 })),
 });
 const Abort = Type.Object({ sessionId: Type.String() });
-const Approve = Type.Object({
-	sessionId: Type.String(),
-	toolCallId: Type.String(),
-	approved: Type.Boolean(),
-	reason: Type.Optional(Type.String()),
-});
-
 const Answer = Type.Object({ sessionId: Type.String(), toolCallId: Type.String(), answer: Type.String({ minLength: 1, maxLength: 10_000 }) });
 
 const ALL = "*";
@@ -67,7 +59,7 @@ export interface WebSocketOptions {
 
 export async function registerWebSocket(
 	server: FastifyInstance,
-	deps: { bus: EventBus; sessions: SessionManager; approvals: ApprovalManager; questions: QuestionManager },
+	deps: { bus: EventBus; sessions: SessionManager; questions: QuestionManager },
 	opts: WebSocketOptions = {},
 ): Promise<void> {
 	const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
@@ -153,13 +145,6 @@ export async function registerWebSocket(
 				return deps.sessions.send(a.sessionId, a);
 			},
 			abort: (m) => ({ aborted: deps.sessions.abort(parse(Abort, m).sessionId) }),
-			approve: (m) => {
-				const a = parse(Approve, m);
-				if (!deps.approvals.decide(a.sessionId, a.toolCallId, { approved: a.approved, reason: a.reason })) {
-					throw new HttpError(404, "not_found", "pending approval not found");
-				}
-				return { ok: true };
-			},
 			answer: (m) => {
 				const a = parse(Answer, m);
 				const r = deps.questions.answer(a.sessionId, a.toolCallId, { answer: a.answer });

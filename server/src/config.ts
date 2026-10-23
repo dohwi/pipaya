@@ -17,8 +17,6 @@ export interface Config {
 	restrictWorkspace?: boolean;
 	defaultProvider?: string;
 	defaultModel?: string;
-	/** Auto-deny a pending tool approval after this many ms (0 = never). */
-	approvalTimeoutMs: number;
 	logLevel: string;
 	/** Extra browser origins allowed by CORS (comma separated, "*" = any). Loopback/Tailscale/LAN/Tauri are always allowed. */
 	corsOrigins?: string;
@@ -77,7 +75,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		restrictWorkspace: env.PIPAYA_RESTRICT_WORKSPACE === "1",
 		defaultProvider: env.PIPAYA_PROVIDER,
 		defaultModel: env.PIPAYA_MODEL,
-		approvalTimeoutMs: int(env.PIPAYA_APPROVAL_TIMEOUT_MS, 10 * 60_000),
 		logLevel: env.PIPAYA_LOG_LEVEL ?? "info",
 		corsOrigins: env.PIPAYA_CORS_ORIGINS,
 		// On by default; it only takes effect when Firebase credentials exist (see createPushTransports). "0" turns it off.

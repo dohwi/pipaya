@@ -25,14 +25,14 @@
 	const tools = $derived(steps.filter((s) => s.kind === "tool"));
 	const thoughts = $derived(steps.filter((s) => s.kind === "think").length);
 
-	const awaitingIdx = $derived(runs.findIndex((r) => r?.state === "awaiting_approval"));
+	const awaitingIdx = $derived(runs.findIndex((r) => r?.state === "awaiting_input"));
 	const runningIdx = $derived(live ? runs.findIndex((r) => r?.state === "running" || r?.state === "pending") : -1);
 	const thinkingIdx = $derived(live ? steps.findIndex((s) => s.kind === "think" && !s.done) : -1);
 	/** What the box is about right now: what needs the user, else what is running, else the open thought. */
 	const cur = $derived(awaitingIdx >= 0 ? awaitingIdx : runningIdx >= 0 ? runningIdx : thinkingIdx);
 	const active = $derived(awaitingIdx >= 0 || live);
 
-	const settled = (r: ToolRun | null) => !!r && r.state !== "pending" && r.state !== "running" && r.state !== "awaiting_approval";
+	const settled = (r: ToolRun | null) => !!r && r.state !== "pending" && r.state !== "running" && r.state !== "awaiting_input";
 	const finished = $derived(runs.filter(settled).length);
 	const failed = $derived(runs.filter((r) => r && (r.state === "error" || (r.state === "done" && Number(r.details?.exitCode) > 0))).length);
 	const tone = $derived(awaitingIdx >= 0 ? "warn" : active ? "accent" : failed ? "danger" : "ok");
@@ -91,7 +91,7 @@
 		return { lines: tail(src || toolSummary(s.name, a)), kind: "src" };
 	});
 	const awaitingCall = $derived(awaitingIdx >= 0 ? (steps[awaitingIdx] as Extract<Step, { kind: "tool" }>) : null);
-	/** The waiting call is a question to the user (ctx.ask): it is answered here, not approved. */
+	/** The question the waiting call asks the user (ctx.ask); it is answered right here. */
 	const question = $derived(awaitingIdx >= 0 ? runs[awaitingIdx]?.question : undefined);
 
 	let modal = $state(false);
@@ -114,7 +114,7 @@
 
 		<span class="meta">
 			{#if awaitingIdx >= 0}
-				<span class="chip warn">{question ? t("답변 필요") : t("확인 필요")}</span>
+				<span class="chip warn">{t("답변 필요")}</span>
 			{:else if active}
 				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
 				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
@@ -143,12 +143,6 @@
 
 	{#if awaitingCall && question}
 		<div in:fadeIn out:fadeOut><QuestionReply id={awaitingCall.id} paneId={pane.id} question={question} /></div>
-	{:else if awaitingCall}
-		<div class="approve" in:fadeIn out:fadeOut>
-			<span class="ask"><Icon name="shield" /> {t("실행할까요?")}</span>
-			<button class="btn" onclick={() => (modal = true)} title={t("사유와 함께 거부하려면 상세에서")}>{t("거부…")}</button>
-			<button class="btn primary" onclick={() => app.decide(awaitingCall.id, true, undefined, pane.id)}><Icon name="check" /> {t("승인")}</button>
-		</div>
 	{/if}
 </div>
 
@@ -295,35 +289,6 @@
 	.peek.think {
 		font-family: inherit;
 		font-style: italic;
-	}
-	.approve {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 12px;
-		border-top: 1px solid var(--border);
-		background: var(--warn-soft);
-	}
-	.ask {
-		display: flex;
-		align-items: center;
-		gap: 7px;
-		flex: 1;
-		font-weight: 600;
-		font-size: var(--fs-sm);
-		color: var(--warn);
-	}
-	.ask :global(svg) {
-		width: 17px;
-		height: 17px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.approve .btn {
-		height: 36px;
 	}
 
 	.list {

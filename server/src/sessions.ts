@@ -3,7 +3,6 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { ApprovalManager } from "./approvals.ts";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
@@ -14,14 +13,33 @@ import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { groupHandle, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
+import type { MessageNote } from "./extensions/types.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
+
+export const NOTE_OPEN = "<pipaya-note>";
+const NOTE_CLOSE = "</pipaya-note>";
+
+/** A note for the client, stored with the user message: `{ text, collapse?, data?, call }` (`call` = what the user typed). */
+export function noteBlock(note: MessageNote, call: string): string {
+	const body = { text: String(note.text).slice(0, 200), ...(note.collapse ? { collapse: true } : {}), ...(note.data !== undefined ? { data: note.data } : {}), call: call.slice(0, 2000) };
+	return `${NOTE_OPEN}${JSON.stringify(body).slice(0, 16_000)}${NOTE_CLOSE}`;
+}
+
+/** The model never sees notes: they are for the people reading the transcript. */
+function withoutNotes(messages: AgentMessage[]): AgentMessage[] {
+	return messages.map((m) => {
+		if (m.role !== "user" || !Array.isArray(m.content)) return m;
+		const kept = m.content.filter((c) => !(c.type === "text" && c.text.startsWith(NOTE_OPEN)));
+		return kept.length === m.content.length ? m : { ...m, content: kept };
+	});
+}
 
 /** Strip the heavy `partial` snapshot from stream deltas; clients rebuild from deltas. */
 function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["assistantMessageEvent"]): unknown {
@@ -56,7 +74,6 @@ export class SessionManager {
 		private store: SessionStore,
 		private bus: EventBus,
 		private registry: ModelRegistry,
-		private approvals: ApprovalManager,
 		/** Where sessions start, and what relative cwd values resolve against. */
 		private defaultWorkdir: () => string = () => cfg.workspaceRoot,
 		private skills?: SkillService,
@@ -143,7 +160,6 @@ export class SessionManager {
 		return {
 			running: live?.running ?? false,
 			pendingToolCalls: live ? [...live.agent.state.pendingToolCalls] : [],
-			pendingApprovals: this.approvals.list(id).length,
 			pendingQuestions: this.questions?.list(id).length ?? 0,
 			streamingMessage: (live?.running && live.agent.state.streamingMessage) || null,
 			queued: live?.agent.hasQueuedMessages() ?? false,
@@ -181,13 +197,13 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 		if (live.compacting) throw conflict("this session is already being compacted");
 		if (live.running && reason === "manual") throw conflict("the session is working; compact after it finishes");
-		if (this.approvals.list(id).length || (this.questions?.list(id).length ?? 0)) throw conflict("the session is waiting for an answer; respond first");
+		if (this.questions?.list(id).length) throw conflict("the session is waiting for an answer; respond first");
 		if (!this.compaction) throw new HttpError(501, "compaction_not_supported", "compaction is not available on this server");
 
 		const stored = this.store.projection(id);
 		const cutAt = pickCut(stored.messages.map((m) => m.message));
 		if (cutAt === null) throw conflict("not enough history to compact yet");
-		const toSummarize = stored.messages.slice(0, cutAt);
+		const toSummarize = stored.messages.slice(0, cutAt).map((m) => ({ ...m, message: withoutNotes([m.message])[0]! }));
 		const uptoSeq = toSummarize[toSummarize.length - 1]!.seq;
 
 		const target = this.compaction.resolveModel(record);
@@ -510,16 +526,22 @@ export class SessionManager {
 		let handled = false;
 		const parts: { type: "text"; text: string }[] = [];
 		let title: string | undefined;
+		let note: MessageNote | undefined;
+		const typed = text.trim();
 		await this.ext!.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
 			if (typeof r.text === "string") current = r.text;
 			if (Array.isArray(r.parts)) for (const p of r.parts) if (p?.type === "text" && typeof p.text === "string") parts.push({ type: "text", text: p.text });
 			if (typeof r.title === "string" && r.title.trim()) title = r.title;
+			if (r.note && typeof r.note.text === "string") note = r.note;
 			if (r.handled) { handled = true; return true; }
 		});
+		const withNote = () => (note ? [...parts, { type: "text" as const, text: noteBlock(note, typed) }] : parts);
 		if (handled) return { handled, text: current, parts, title };
 		const cmd = await this.ext!.runCommand(id, current);
-		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts, title } : { handled: true, text: current, parts, title };
-		return { handled: false, text: current, parts, title };
+		if (cmd?.note) note = cmd.note;
+		if (cmd?.title) title = cmd.title;
+		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts: withNote(), title } : { handled: true, text: current, parts, title };
+		return { handled: false, text: current, parts: withNote(), title };
 	}
 
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
@@ -614,16 +636,15 @@ export class SessionManager {
 	}
 
 	/** Live state of every session that is running or waiting on the user (idle sessions are omitted). */
-	activity(): { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions: number }[] {
-		type Row = { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions: number };
+	activity(): { sessionId: string; running: boolean; pendingQuestions: number }[] {
+		type Row = { sessionId: string; running: boolean; pendingQuestions: number };
 		const out = new Map<string, Row>();
 		const row = (sessionId: string): Row => {
 			let e = out.get(sessionId);
-			if (!e) out.set(sessionId, (e = { sessionId, running: false, pendingApprovals: 0, pendingQuestions: 0 }));
+			if (!e) out.set(sessionId, (e = { sessionId, running: false, pendingQuestions: 0 }));
 			return e;
 		};
 		for (const [sessionId, l] of this.live) if (l.running) row(sessionId).running = true;
-		for (const r of this.approvals.list()) row(r.sessionId).pendingApprovals++;
 		for (const r of this.questions?.list() ?? []) row(r.sessionId).pendingQuestions++;
 		return [...out.values()];
 	}
@@ -833,6 +854,7 @@ export class SessionManager {
 			const base = typeof head.content === "string" ? head.content : "";
 			out = [{ ...out[0], content: `${sys.replace ?? base}${sys.append ?? ""}` } as AgentMessage, ...out.slice(1)];
 		}
+		out = withoutNotes(out);
 		if (this.ext?.has("context")) {
 			await this.ext.emit("context", { sessionId, messages: out }, sessionId, (r) => {
 				if (Array.isArray(r.messages)) out = r.messages;

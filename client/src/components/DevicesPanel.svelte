@@ -41,7 +41,7 @@
 		try {
 			paired = (await a.deviceTokens()).tokens;
 		} catch {
-			paired = null; // an older server, or a paired device's token: nothing to manage here
+			paired = null; // a paired device's token cannot manage tokens: nothing to show here
 		}
 		now = Date.now();
 	}

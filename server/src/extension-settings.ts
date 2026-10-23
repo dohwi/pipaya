@@ -105,9 +105,14 @@ export class ExtensionSettings {
 		return JSON.parse(json) as ExtensionSettingsValue;
 	}
 
-	/** Removes the whole extension folder. Idempotent. */
+	/**
+	 * Removes the extension's settings. Idempotent. The folder goes too only when nothing else is in it: a server extension
+	 * with the same id is installed in this very folder, and its code must survive.
+	 */
 	delete(id: string): void {
-		rmSync(this.dir(id), { recursive: true, force: true });
+		const dir = this.dir(id);
+		rmSync(join(dir, FILE), { force: true });
+		try { if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true }); } catch { /* no folder */ }
 	}
 
 	private count(): number {

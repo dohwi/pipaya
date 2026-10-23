@@ -28,14 +28,13 @@ export const COMMAND_PREFIX = "/";
 export const commandText = (cmd: SlashCommand) => `${COMMAND_PREFIX}${cmd.name}`;
 
 /** Only the explicit command prefix is reserved; paths and ordinary messages remain text. */
-export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isTemplateCall(text);
-/** `/prompt:name args` is not a client command either: the server expands the saved prompt. */
-export const TEMPLATE_PREFIX = "prompt:";
-export const isTemplateCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${TEMPLATE_PREFIX}`);
+export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isFamilyCall(text);
+/** `/prefix:name args` belongs to a server extension's command family (`pi.registerCommands`): the server runs it. */
+export const isFamilyCall = (text: string) => /^\/[a-z][a-z0-9-]*:/.test(text.trimStart()) && !isSkillCall(text);
 /** `/skill:name` is not a client command: the server turns it into a manual skill call. */
 export const SKILL_PREFIX = "skill:";
 export const isSkillCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${SKILL_PREFIX}`);
-export const commandQuery = (text: string): string | null => /^\/([a-z][a-z0-9:-]*|)$/i.exec(text)?.[1] ?? null;
+export const commandQuery = (text: string): string | null => /^\/([a-z][a-z0-9-]*(?::[A-Za-z0-9_.-]*)?|)$/i.exec(text)?.[1] ?? null;
 
 const dirLabel = (cwd: string) => {
 	const r = app.relPath(cwd);
@@ -255,7 +254,7 @@ export function serverCommands(taken: Set<string>): SlashCommand[] {
 		.filter((c) => /^[a-z][a-z0-9-]*$/.test(c.name) && !taken.has(c.name))
 		.map((c) => ({
 			name: c.name,
-			args: "[args]",
+			args: c.args ?? "[args]",
 			desc: c.description || c.extension,
 			run: async (arg: string) => { await app.send(`${COMMAND_PREFIX}${c.name}${arg.trim() ? ` ${arg.trim()}` : ""}`); },
 		}));
@@ -305,12 +304,13 @@ export function matchSkills<T extends { name: string }>(skills: T[], query: stri
 	return skills.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
-/** Templates as menu rows for a query like "tem", "prompt:" or "prompt:rev". */
-export function matchTemplates<T extends { name: string }>(templates: T[], query: string): T[] {
+/** Command-family entries (`prefix:name`) as menu rows for a query like "rev", "prompt:" or "prompt:rev". */
+export function matchFamilyEntries<T extends { prefix: string; name: string; description?: string }>(entries: T[], query: string): T[] {
 	const q = query.trim().toLowerCase();
-	const full = (k: T) => `${TEMPLATE_PREFIX}${k.name}`;
-	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.includes(q.replace(/^prompt:?/, "")) || full(k).includes(q) ? 2 : 9);
-	return templates.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
+	const full = (k: T) => `${k.prefix}:${k.name}`.toLowerCase();
+	const bare = q.includes(":") ? q.slice(q.indexOf(":") + 1) : q;
+	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.toLowerCase().includes(bare) || full(k).includes(q) ? 2 : 9);
+	return entries.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
 /** Parse "/name rest" -> command + argument. No translated or alternate command names. */

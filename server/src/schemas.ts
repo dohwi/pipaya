@@ -66,7 +66,6 @@ export const Usage = Type.Object({
 export const SessionStatus = Type.Object({
 	running: Type.Boolean(),
 	pendingToolCalls: Type.Array(Type.String()),
-	pendingApprovals: Type.Integer(),
 	pendingQuestions: Type.Integer(),
 	streamingMessage: Type.Unknown({ description: "Partial assistant message while a run is streaming, else null. Lets late joiners catch up." }),
 	queued: Type.Boolean(),
@@ -87,7 +86,6 @@ export const ActivityInfo = Type.Object({
 		Type.Object({
 			sessionId: Type.String(),
 			running: Type.Boolean(),
-			pendingApprovals: Type.Integer({ description: "Tool calls waiting for the user's decision" }),
 			pendingQuestions: Type.Integer({ description: "questions waiting for the user's answer" }),
 		}),
 		{ description: "Only sessions that are running or waiting on the user" },
@@ -228,19 +226,8 @@ export const StoredMessage = Type.Object({
 });
 export const MessageList = Type.Object({ messages: Type.Array(StoredMessage) });
 
-// ── Approvals ───────────────────────────────────────────────────────────────
-
-export const ApprovalRequest = Type.Object({
-	sessionId: Type.String(),
-	toolCallId: Type.String(),
-	toolName: Type.String(),
-	args: Type.Unknown(),
-	requestedAt: Type.Integer(),
-});
-export const ApprovalList = Type.Object({ approvals: Type.Array(ApprovalRequest) });
-export const ApprovalsQuery = Type.Object({ sessionId: Type.Optional(Type.String()) });
+export const QuestionsQuery = Type.Object({ sessionId: Type.Optional(Type.String()) });
 export const DecisionParams = Type.Object({ id: Type.String(), toolCallId: Type.String() });
-export const DecisionBody = Type.Object({ approved: Type.Boolean(), reason: Type.Optional(Type.String({ maxLength: 2000 })) });
 
 // ── Questions (ctx.ask) ────────────────────────────────────────────────────
 
@@ -314,7 +301,7 @@ export const CredentialBody = Type.Object({ key: Type.String({ minLength: 1 }) }
 export const Ok = Type.Object({ ok: Type.Boolean() });
 
 export const ToolList = Type.Object({
-	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), mutating: Type.Boolean() })),
+	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.String() })),
 	defaults: Type.Array(Type.String()),
 });
 
@@ -385,11 +372,11 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("ask_user"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,
-		description: "A skill was switched on/off globally, for a project or for one session (event sessionId is null; the payload's sessionId names the session for scope session; refetch GET /skills). Also published (empty name, source \"files\") when files under ~/.agents or a project's .agents/.pi change on disk, e.g. a skill or prompt template was added or edited (refetch GET /skills and GET /templates). Running sessions pick the change up on their next message",
+		description: "A skill was switched on/off globally, for a project or for one session (event sessionId is null; the payload's sessionId names the session for scope session; refetch GET /skills). Also published (empty name, source \"files\") when files under ~/.agents or a project's .agents/.pi change on disk, e.g. a skill or prompt template was added or edited (refetch GET /skills and GET /server-extensions/commands). Running sessions pick the change up on their next message",
 		data: Type.Object({ name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]), project: Type.String(), source: Type.Optional(Type.Literal("files")) }),
 	},
 	{
@@ -474,7 +461,7 @@ export const EVENTS: EventDef[] = [
 		description: "A message is complete and stored. `seq` matches GET /sessions/:id/messages",
 		data: Type.Object({ seq: Type.Integer(), message: Message }),
 	},
-	{ type: "tool_execution_start", persisted: true, description: "A tool started (after approval, if needed)", data: Type.Object({ ...ToolRef, args: Type.Unknown() }) },
+	{ type: "tool_execution_start", persisted: true, description: "A tool started", data: Type.Object({ ...ToolRef, args: Type.Unknown() }) },
 	{
 		type: "tool_execution_update",
 		persisted: false,
@@ -486,18 +473,6 @@ export const EVENTS: EventDef[] = [
 		persisted: true,
 		description: "A tool finished or was blocked",
 		data: Type.Object({ ...ToolRef, result: Type.Unknown(), isError: Type.Boolean(), durationMs: Type.Optional(Type.Number()) }),
-	},
-	{ type: "approval_requested", persisted: true, description: "A tool call is waiting for POST /sessions/:id/approvals/:toolCallId", data: ApprovalRequest },
-	{
-		type: "approval_resolved",
-		persisted: true,
-		description: "An approval was decided, timed out or aborted",
-		data: Type.Object({
-			...ToolRef,
-			approved: Type.Boolean(),
-			reason: Type.Optional(Type.String()),
-			source: Type.Union([Type.Literal("user"), Type.Literal("timeout"), Type.Literal("abort")]),
-		}),
 	},
 	{ type: "question_requested", persisted: true, description: "The agent asked the user a question (ctx.ask); answer with POST /sessions/:id/questions/:toolCallId", data: QuestionRequest },
 	{

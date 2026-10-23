@@ -114,7 +114,7 @@ describe("skills API", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "skills-test", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "skills-test", workspaceRoot: f.cwd, logLevel: "silent" };
 		let app: App = await buildApp(cfg, { strictResponses: true, home: f.home, builtinSkills: false });
 		const api = async (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: object, authorized = true) => {
 			const res = await app.server.inject({ method, url, payload, headers: authorized ? { authorization: `Bearer ${cfg.token}` } : {} });
@@ -214,7 +214,7 @@ describe("session-scoped skill overrides", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "skills-test", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "skills-test", workspaceRoot: f.cwd, logLevel: "silent" };
 		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home, builtinSkills: false });
 		const api = async (method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: object) => {
 			const res = await app.server.inject({ method, url, payload, headers: { authorization: `Bearer ${cfg.token}` } });
@@ -269,7 +269,7 @@ describe("skill injection end to end", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "e2e", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "e2e", workspaceRoot: f.cwd, logLevel: "silent" };
 		const open = () => buildApp(cfg, { strictResponses: true, home: f.home, builtinSkills: false });
 		let app: App = await open();
 		const api = async (method: "GET" | "POST" | "PUT", url: string, payload?: object) => {
@@ -354,7 +354,7 @@ describe("skills picked up from disk without restarting", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "disk", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "disk", workspaceRoot: f.cwd, logLevel: "silent" };
 		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home, builtinSkills: false });
 		const api = async (method: "GET" | "POST" | "PUT", url: string, payload?: object) => {
 			const res = await app.server.inject({ method, url, payload, headers: { authorization: `Bearer ${cfg.token}` } });
@@ -458,7 +458,7 @@ describe("built-in skills", () => {
 		const f = fixture();
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
-			token: "builtin", workspaceRoot: f.cwd, approvalTimeoutMs: 0, logLevel: "silent" };
+			token: "builtin", workspaceRoot: f.cwd, logLevel: "silent" };
 		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home });
 		const api = async (method: "GET" | "POST" | "PUT", url: string, payload?: object) => {
 			const res = await app.server.inject({ method, url, payload, headers: { authorization: `Bearer ${cfg.token}` } });

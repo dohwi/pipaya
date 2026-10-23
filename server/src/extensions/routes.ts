@@ -10,7 +10,8 @@ const Info = Type.Object({
 	name: Type.String(),
 	path: Type.String(),
 	tools: Type.Array(Type.String()),
-	commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })),
+	commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), args: Type.Optional(Type.String()) })),
+	commandFamilies: Type.Array(Type.Object({ prefix: Type.String(), label: Type.Optional(Type.String()) })),
 	methods: Type.Array(Type.String()),
 	providers: Type.Array(Type.String()),
 	flags: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), type: Type.String(), value: Type.Optional(Type.Union([Type.Boolean(), Type.String()])) })),
@@ -20,7 +21,7 @@ const Info = Type.Object({
 });
 
 /** Server extensions run code with the server's privileges, so every route here needs the admin token. */
-export function registerServerExtensionRoutes(server: FastifyInstance, host: ExtensionHost, sessionExists: (id: string) => boolean, installDir: string): void {
+export function registerServerExtensionRoutes(server: FastifyInstance, host: ExtensionHost, sessionExists: (id: string) => boolean, installDir: string, resolveCwd: (cwd?: string) => string): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	app.post("/server-extensions/install", {
 		schema: {
@@ -38,8 +39,19 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 		},
 	});
 	app.get("/server-extensions", {
-		schema: { response: { 200: Type.Object({ extensions: Type.Array(Info), commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), extension: Type.String() })) }), ...errors(401) } },
+		schema: { response: { 200: Type.Object({ extensions: Type.Array(Info), commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), args: Type.Optional(Type.String()), extension: Type.String() })) }), ...errors(401) } },
 		handler: async () => ({ extensions: host.list(), commands: host.commands() }),
+	});
+	const Entry = Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), args: Type.Optional(Type.String()) });
+	app.get("/server-extensions/commands", {
+		schema: {
+			querystring: Type.Object({ cwd: Type.Optional(Type.String({ description: "Working directory the entries are for; default: the server's" })) }),
+			response: { 200: Type.Object({ cwd: Type.String(), families: Type.Array(Type.Object({ prefix: Type.String(), label: Type.Optional(Type.String()), extension: Type.String(), entries: Type.Array(Entry) })) }), ...errors(401) },
+		},
+		handler: async (req) => {
+			const cwd = resolveCwd(req.query.cwd);
+			return { cwd, families: await host.commandEntries(cwd) };
+		},
 	});
 	app.post("/server-extensions/reload", {
 		schema: { response: { 200: Type.Object({ extensions: Type.Array(Info) }), ...errors(401, 403) } },

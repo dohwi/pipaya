@@ -21,8 +21,8 @@ export interface CompactionSettings {
 	auto: boolean;
 	/** The model (and strength) that writes the summary; null = the session's own model */
 	model: ModelChoice | null;
-	/** Auto-compaction runs once the context uses at least this percent of the model's window; absent on older servers */
-	thresholdPercent?: number;
+	/** Auto-compaction runs once the context uses at least this percent of the model's window */
+	thresholdPercent: number;
 }
 export interface CompactionSettingsInfo { settings: CompactionSettings; defaults: CompactionSettings }
 export interface SystemModelSettings {
@@ -37,8 +37,8 @@ export interface Session {
 	title: string;
 	/** How other sessions address this one (`@name`); unique among active sessions */
 	name: string;
-	/** What this session's agent works on, written by the system model; "" until then (absent on older servers) */
-	purpose?: string;
+	/** What this session's agent works on, written by the system model; "" until then */
+	purpose: string;
 	/** Absolute path inside the workspace root */
 	cwd: string;
 	provider: string;
@@ -125,18 +125,12 @@ export interface SkillList {
 	warnings: { path: string; message: string }[];
 }
 
-export interface TemplateInfo {
-	name: string;
-	description: string;
-	/** Absolute path of the template .md file. */
-	path: string;
-	scope: "global" | "project";
-}
-
-export interface TemplateList {
-	cwd: string;
-	templates: TemplateInfo[];
-	warnings: { path: string; message: string }[];
+/** Commands a server extension finds at run time (`pi.registerCommands`), e.g. `/prompt:<name>`, for one folder. */
+export interface CommandFamily {
+	prefix: string;
+	label?: string;
+	extension: string;
+	entries: { name: string; description?: string; args?: string }[];
 }
 
 export interface CompactionResult {
@@ -147,16 +141,15 @@ export interface CompactionResult {
 }
 
 export interface SessionDetail extends Session {
-	/** Optional for compatibility with servers predating pi compaction. */
+	/** Absent when the session's model is no longer registered. */
 	context?: ContextUsage;
 	compaction?: { supported: boolean; autoEnabled: boolean };
 	status: {
 		running: boolean;
-		/** Includes manual and automatic compaction; absent on older servers. */
-		compacting?: boolean;
+		/** Includes manual and automatic compaction. */
+		compacting: boolean;
 		pendingToolCalls: string[];
-		pendingApprovals: number;
-		pendingQuestions?: number;
+		pendingQuestions: number;
 		/** Partial assistant message while a run is streaming, else null. Lets late joiners catch up. */
 		streamingMessage: unknown;
 		queued: boolean;
@@ -186,8 +179,8 @@ export interface ModelInfo {
 	name: string;
 	api: string;
 	reasoning: boolean;
-	/** Reasoning strengths the model accepts, weakest first. Missing on older servers: then every level is offered. */
-	thinkingLevels?: ThinkingLevel[];
+	/** Reasoning strengths the model accepts, weakest first; empty without reasoning. */
+	thinkingLevels: ThinkingLevel[];
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -195,8 +188,8 @@ export interface ModelInfo {
 	icon?: string;
 	/** A usable credential exists for this model's provider */
 	configured: boolean;
-	/** false = the connection's own model list no longer has it. Missing on older servers = available. */
-	available?: boolean;
+	/** false = the connection's own model list no longer has it. */
+	available: boolean;
 }
 
 export interface ProviderInfo {
@@ -233,7 +226,7 @@ export interface LoginState {
 }
 
 export interface ActivityInfo {
-	sessions: { sessionId: string; running: boolean; pendingApprovals: number; pendingQuestions?: number }[];
+	sessions: { sessionId: string; running: boolean; pendingQuestions: number }[];
 }
 
 /* ---------- model connection settings (GET /configuration) ---------- */
@@ -257,7 +250,7 @@ export interface CustomModel {
 	catalogId?: string | null;
 	/** Response only: the upstream's model list no longer contains this model */
 	unavailable?: boolean;
-	/** Response only: where the strengths come from. Absent on older servers. */
+	/** Response only: where the strengths come from. */
 	thinkingSource?: { kind: "custom" | "catalog" | "default"; catalogId?: string; levels: ThinkingLevel[] };
 }
 
@@ -322,9 +315,8 @@ export interface ConfigurationInfo {
 	defaults: DefaultModelSelection | null;
 	/** What new sessions really use (saved default, else the server's startup default) */
 	effectiveDefaults: DefaultModelSelection | null;
-	/** Whether the agent may ask the user questions (ask); older servers omit it and always allow it */
-	/** Which agent tools can be switched off and which are locked on; older servers omit it */
-	tools?: ToolsInfo;
+	/** Which agent tools can be switched off and which are locked on */
+	tools: ToolsInfo;
 }
 
 export interface ToolsInfo {
@@ -357,14 +349,6 @@ export interface Question {
 	allowFreeText: boolean;
 	/** Several questions asked at once: shown as tabs. */
 	items?: { question: string; options?: string[]; recommended?: string; allowFreeText: boolean }[];
-	requestedAt: number;
-}
-
-export interface Approval {
-	sessionId: string;
-	toolCallId: string;
-	toolName: string;
-	args: unknown;
 	requestedAt: number;
 }
 
@@ -454,7 +438,10 @@ export interface StreamDelta {
 
 /* ---------- UI model ---------- */
 
-export type ToolState = "pending" | "awaiting_approval" | "running" | "done" | "error" | "denied" | "skipped";
+/** `call`: what the user typed (e.g. `/prompt:review x`); `collapse`: the text is long and starts folded. */
+export interface MessageNote { text: string; call: string; collapse?: boolean; data?: unknown }
+
+export type ToolState = "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";
 
 export interface ToolRun {
 	state: ToolState;
@@ -464,8 +451,7 @@ export interface ToolRun {
 	images?: ImageBlock[];
 	details?: Record<string, unknown>;
 	durationMs?: number;
-	denyReason?: string;
-	/** Set while a call using ctx.ask waits for the user (state is "awaiting_approval"). */
+	/** Set while a call using ctx.ask waits for the user (state is "awaiting_input"). */
 	question?: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items">;
 }
 
@@ -477,8 +463,8 @@ export interface UserItem {
 	images: ImageBlock[];
 	/** Files attached to this message, saved in the session's working directory */
 	files?: FileRef[];
-	/** Set when the text is an expanded prompt template: its name and the short call the user typed. */
-	template?: { name: string; call: string };
+	/** A note a server extension stored with the message (`pipaya-note`): shown on it, never sent to the model. */
+	note?: MessageNote;
 	ts: number;
 	fresh?: boolean;
 }

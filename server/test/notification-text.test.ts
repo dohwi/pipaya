@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { approvalDetail, approvalText, duration, lang, preview, runText, testText } from "../src/notification-text.ts";
+import { duration, questionText, lang, preview, runText, testText } from "../src/notification-text.ts";
 
 describe("preview", () => {
   test("keeps a short answer whole", () => expect(preview("테스트 3개를 추가했습니다.")).toBe("테스트 3개를 추가했습니다."));
@@ -40,17 +40,12 @@ describe("run notification", () => {
   });
 });
 
-describe("approval notification", () => {
-  test("names the tool and what it will touch", () => {
-    const t = approvalText({ title: "정리", tool: "bash", args: { command: "rm -rf build" } }, "ko");
-    expect(t.title).toBe("🔐 승인 필요 · 정리"); expect(t.body).toBe("bash 실행 승인을 기다리고 있습니다: rm -rf build");
+describe("question notification", () => {
+  test("names the chat and previews the question", () => {
+    const t = questionText({ title: "정리", question: "어느 브랜치에 병합할까요?" }, "ko");
+    expect(t.title).toBe("❓ 답변 필요 · 정리"); expect(t.body).toBe("어느 브랜치에 병합할까요?");
   });
-  test("file contents never reach a notification", () => {
-    expect(approvalDetail({ path: "src/a.ts", content: "SECRET TOKEN" })).toBe("src/a.ts");
-    expect(approvalDetail({ content: "SECRET TOKEN" })).toBe("");
-    expect(approvalText({ title: "x", tool: "write", args: { content: "SECRET" } }, "en").body).not.toContain("SECRET");
-  });
-  test("odd arguments do not break it", () => { expect(approvalDetail(null)).toBe(""); expect(approvalDetail("rm")).toBe(""); expect(approvalDetail({ command: 5 })).toBe(""); });
+  test("an empty question still says what is waiting", () => { expect(questionText({ title: "", question: " " }, "en")).toEqual({ title: "❓ Answer needed", body: "Waiting for your answer" }); });
 });
 
 test("language: Korean tags and nothing else", () => {

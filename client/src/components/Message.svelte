@@ -32,8 +32,8 @@
 	const parts = $derived<AssistantItem[]>(item.kind === "assistant" ? (turn.length ? turn : [item]) : []);
 	const tail = $derived(parts[parts.length - 1]);
 
-	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setSender`). */
-	const peer = $derived(item.kind === "user" ? extensions.senderOf(item.text) : null);
+	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setHeader`). */
+	const peer = $derived(item.kind === "user" ? extensions.headerOf(item.text) : null);
 	const shown = $derived(item.kind === "user" ? splitQuote(peer ? peer.body : item.text) : { quote: "", rest: "" });
 
 	/** Hand this message to the composer as a reply badge, so the next prompt answers it. */
@@ -170,12 +170,12 @@
 				<blockquote class="quote">{shown.quote}</blockquote>
 			{/if}
 			{#if shown.rest}
-				<div class="txt" class:clamp={item.template && !expanded}>{shown.rest}</div>
+				<div class="txt" class:clamp={item.note?.collapse && !expanded}>{shown.rest}</div>
 			{/if}
-			{#if item.template}
-				<div class="tplnote">
-					<span>{t("프롬프트 템플릿 사용: {name}", { name: item.template.name })}</span>
-					{#if item.text.length > 400 || item.text.split("\n").length > 8}
+			{#if item.note}
+				<div class="tplnote" title={item.note.call}>
+					<span>{item.note.text}</span>
+					{#if item.note.collapse && (item.text.length > 400 || item.text.split("\n").length > 8)}
 						<button class="more" onclick={() => (expanded = !expanded)}>{expanded ? t("접기") : t("더 보기")}</button>
 					{/if}
 				</div>

@@ -28,7 +28,6 @@ export interface CreateSessionInput {
 export interface SessionStatus {
 	running: boolean;
 	pendingToolCalls: string[];
-	pendingApprovals: number;
 	pendingQuestions: number;
 	/** Partial assistant message for late-joining clients. */
 	streamingMessage: AgentMessage | null;

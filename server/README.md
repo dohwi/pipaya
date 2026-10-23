@@ -42,7 +42,6 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
-| `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see client/docs/notifications.md |
@@ -89,7 +88,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | PUT | `/locales/:tag` | `{name,messages,owner?}`; `ko` and `en` are reserved. Max 20 packs, 3000 messages each. A pack owned by one extension is `409` for another. Saving identical content is a no-op (no event, same `updatedAt`). Emits `locales_updated` |
 | DELETE | `/locales/:tag?owner=` | Remove a pack (idempotent); with `owner`, only if that extension published it |
 | GET | `/sessions/:id/context` | Context snapshot (AGENTS.md files, enabled skills, effective system prompt) |
-| GET | `/activity` | Per-session running/pending-approval state for sidebar indicators |
+| GET | `/activity` | Per-session running/pending-question state for sidebar indicators |
 | GET/POST | `/groups` | Session groups (named split-pane layouts, 2-8 sessions). Without `name` the server uses `Group N`; clients normally send a localized name |
 | PATCH/DELETE | `/groups/:id` | Rename or re-layout a group; delete it. A group left with fewer than two sessions (closed or deleted sessions leave their group) is removed by the server and emits `group_deleted` |
 | GET | `/terminals/info` | What the server offers for terminals: `{enabled, platform, pty, shell, shells[], max}`. Linux/macOS run the user's shell in a PTY; Windows runs PowerShell (`pwsh`, else `powershell`, else `cmd`) over pipes (`pty: false`) |
@@ -104,9 +103,9 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | PUT/DELETE | `/notifications/devices/:id` | Device presence heartbeat (`platform`, `focused`, `enabled`, `visibleSessionIds`, optional `name`, optional mobile `push` token) / remove the device (it is told through a `device_revoked` event and stops reporting) |
 | POST | `/notifications/:id/received` | A device confirms it showed a notification, so delayed mobile push is skipped |
 | POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. Rate limited to 5 per 10 s per source; `source: "pipaya"` is reserved for built-in notices |
-| PUT/DELETE | `/notifications/rules/:owner/:id` | Per-extension rule that replaces the default notice for `run_finished` / `approval_requested` (max 5 per owner); `DELETE /notifications/rules/:owner` removes all |
-| GET | `/approvals?sessionId=` | Pending approvals |
-| POST | `/sessions/:id/approvals/:toolCallId` | `{approved,reason?}` |
+| PUT/DELETE | `/notifications/rules/:owner/:id` | Per-extension rule that replaces the default notice for `run_finished` / `question_requested` (max 5 per owner); `DELETE /notifications/rules/:owner` removes all |
+| GET | `/questions?sessionId=` | Questions the agent is waiting on (`ctx.ask`) |
+| POST | `/sessions/:id/questions/:toolCallId` | `{answer}` (or `{answers}` for several questions) |
 | GET | `/events/history?sessionId=&after=&limit=` | Persisted events and latest cursor |
 | GET | `/events/types` | Machine-readable event payload schemas |
 
@@ -200,7 +199,7 @@ Use `GET /events/types` for payload schemas. Event logs expire after seven days;
 | `message_update` | No; assistant deltas |
 | `tool_execution_start`, `tool_execution_end` | Yes |
 | `tool_execution_update` | No; partial tool output |
-| `approval_requested`, `approval_resolved`, `message_queued`, `message_dequeued` | Yes |
+| `question_requested`, `question_resolved`, `message_queued`, `message_dequeued` | Yes |
 | `provider_updated`, `configuration_updated`, `locales_updated`, `extension_settings_updated`, `group_*` | Yes |
 | `notification` | No; addressed to one device, not replayed |
 
@@ -209,7 +208,7 @@ Subscribe before sending a prompt; replay does not recover ephemeral deltas.
 
 WebSocket `/ws`: send `{id?,op,...args}`; receive `{type:"ack",id,ok,result|error}` and `{type:"event",event}`.
 Operations: `subscribe {sessionId?,after?,types?}`, `unsubscribe {sessionId?}`, `prompt {sessionId,text,mode?,images?}`,
-`abort {sessionId}`, `approve {sessionId,toolCallId,approved,reason?}`, `ping`.
+`abort {sessionId}`, `answer {sessionId,toolCallId,answer}`, `ping`.
 
 ## Storage and safety
 

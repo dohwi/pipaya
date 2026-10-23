@@ -67,4 +67,4 @@ Follows the Material profile. Values live in one place, the `:root` tokens in `s
 - `src/lib/chat.svelte.ts`: folds REST history and SSE events into one transcript
 - `src/lib/api.ts`: typed REST client and EventSource subscription
 - `src/lib/i18n.ts`, `src/lib/locales/`: UI language, English dictionary, language packs
-- `src/components/`: Sidebar, Header, MessageList, Message, ToolCard (approvals), Composer, ModelPicker, Settings
+- `src/components/`: Sidebar, Header, MessageList, Message, ToolCard (questions), Composer, ModelPicker, Settings

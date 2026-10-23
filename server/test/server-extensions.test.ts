@@ -38,7 +38,6 @@ export default (pi) => {
 		name: "greet",
 		description: "Greets someone",
 		parameters: T.Object({ who: T.String() }),
-		mutating: false,
 		execute: async (_id, p, ctx) => {
 			ctx.appendEntry("greeted", { who: p.who });
 			return { content: [{ type: "text", text: "hello " + p.who }], details: {} };
@@ -69,7 +68,7 @@ beforeAll(async () => {
 	writeFileSync(join(extDir, "demo.js"), EXT);
 	writeFileSync(join(extDir, "broken.js"), "export default () => { throw new Error('boom'); };");
 	upstream = startEchoUpstream();
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [extDir], home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
@@ -93,7 +92,7 @@ describe("server extensions", () => {
 
 	test("an extension tool is listed, usable by the model, and its result can be rewritten by tool_result", async () => {
 		const tools = (await api("GET", "/tools")).json;
-		expect(tools.tools.find((t: any) => t.name === "greet")).toMatchObject({ mutating: false });
+		expect(tools.tools.find((t: any) => t.name === "greet")).toBeTruthy();
 		expect(tools.defaults).toContain("greet");
 		const id = await newSession();
 		await api("POST", `/sessions/${id}/messages`, { text: `!greet ${JSON.stringify({ who: "Ada" })}` });
@@ -185,9 +184,9 @@ describe("ctx.ask", () => {
 	test("an extension tool can ask the user and gets the answer", async () => {
 		const exDir = join(dir, "ask-exts");
 		mkdirSync(exDir, { recursive: true });
-		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", mutating: false, parameters: pi.Type.Object({}),
+		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", parameters: pi.Type.Object({}),
 			execute: async (id, _p, ctx, signal) => ({ content: [{ type: "text", text: "got " + await ctx.ask(id, { question: "Which?", options: ["a", "b"], allowFreeText: false }, signal) }] }) });`);
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
@@ -217,7 +216,7 @@ describe("examples/extensions/todo.ts", () => {
 		const exDir = join(dir, "example-exts");
 		mkdirSync(exDir, { recursive: true });
 		writeFileSync(join(exDir, "todo.ts"), readFileSync(join(import.meta.dir, "../examples/extensions/todo.ts"), "utf8"));
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
@@ -246,3 +245,106 @@ describe("examples/extensions/todo.ts", () => {
 	});
 });
 
+
+describe("generic extension API", () => {
+	const GENERIC = `
+export default (pi) => {
+	const seen = [];
+	pi.subscribe((e) => seen.push(e.type), { types: ["session_created", "group_created"] });
+	pi.registerMethod("seen", () => seen);
+	pi.registerMethod("make", async (p) => {
+		const a = await pi.sessions.create({ title: "made", cwd: p.cwd });
+		const b = await pi.sessions.create({ title: "other", cwd: p.cwd, parentId: a.id });
+		const renamed = pi.sessions.update(a.id, { title: "renamed", purpose: "testing" });
+		const group = pi.groups.create({ name: "pair", layout: { type: "split", dir: "row", ratio: 0.5, a: { type: "pane", sessionId: a.id }, b: { type: "pane", sessionId: b.id } } });
+		const fork = await pi.sessions.fork(a.id, { title: "copy" });
+		return { a: renamed, b, group, fork, groups: pi.groups.list().length, abort: pi.sessions.abort(a.id), questions: pi.sessions.questions(a.id) };
+	});
+	pi.registerMethod("ungroup", (p) => pi.groups.delete(p.id));
+	pi.registerMethod("models", async () => (await pi.models.list()).map((m) => m.provider + "/" + m.id));
+	pi.registerMethod("complete", async () => (await pi.models.complete({ input: "hi there" })).text);
+	pi.registerMethod("notify", () => { pi.notify({ title: "hello", kind: "info" }); return true; });
+	pi.registerMethod("settings", (p) => (p ? pi.settings.set(p) : pi.settings.get()));
+	let changed = 0;
+	pi.settings.onChange(() => { changed++; });
+	pi.registerMethod("changed", () => changed);
+	pi.registerCommands("snip", {
+		label: "Snippets",
+		list: (cwd) => [{ name: "hello", description: "says hi in " + cwd.split("/").pop() }, { name: "bad name!" }],
+		run: (name, args) => ({ prompt: "SNIPPET " + name + " " + args, note: { text: "snippet: " + name, collapse: true, data: { name } }, title: name }),
+	});
+	pi.on("input", (e) => (e.text === "noted" ? { note: { text: "a note" } } : undefined));
+};`;
+	let other: App;
+	const call = async (method: any, url: string, payload?: unknown) => {
+		const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
+		return { status: r.statusCode, json: r.body ? r.json() : undefined };
+	};
+	const method = async (name: string, params: unknown = {}) => (await call("POST", `/server-extensions/gen/methods/${name}`, params)).json;
+	const idle = async (id: string) => { for (let i = 0; i < 300 && (await call("GET", `/sessions/${id}/status`)).json.running; i++) await Bun.sleep(20); };
+
+	beforeAll(async () => {
+		const exDir = join(dir, "generic-exts");
+		mkdirSync(exDir, { recursive: true });
+		writeFileSync(join(exDir, "gen.js"), GENERIC);
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "gen-data"), dbPath: join(dir, "gen.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
+		other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
+		expect((await call("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
+		expect((await call("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
+	});
+	afterAll(async () => { await other.close(); });
+
+	test("sessions and groups can be created, changed, forked and removed; events reach subscribe()", async () => {
+		const r = (await method("make", { cwd: ws })).result;
+		expect(r.a).toMatchObject({ title: "renamed", purpose: "testing", provider: "echo", model: ECHO_MODEL.id, cwd: ws });
+		expect(r.b.parentId).toBe(r.a.id);
+		expect(r.group.sessionIds).toEqual([r.a.id, r.b.id]);
+		expect(r.fork.title).toBe("copy");
+		expect(r.abort).toBe(false);
+		expect(r.questions).toEqual([]);
+		expect((await method("ungroup", { id: r.group.id })).result).toBe(true);
+		expect((await method("ungroup", { id: r.group.id })).result).toBe(false);
+		const seen = (await method("seen")).result as string[];
+		expect(seen.filter((t) => t === "session_created")).toHaveLength(3);
+		expect(seen).toContain("group_created");
+	});
+
+	test("models can be listed and used for a one-shot completion", async () => {
+		expect((await method("models")).result).toContain(`echo/${ECHO_MODEL.id}`);
+		expect(typeof (await method("complete")).result).toBe("string");
+	});
+
+	test("notify sends through the notification service under the extension's name", async () => {
+		expect((await method("notify")).result).toBe(true);
+	});
+
+	test("settings are the shared /extensions/:id/settings object, and changes are reported", async () => {
+		expect((await method("settings", null)).result).toEqual({});
+		expect((await method("settings", { level: 2 })).result).toEqual({ level: 2 });
+		expect((await call("GET", "/extensions/settings")).json.settings.gen).toEqual({ level: 2 });
+		await call("PUT", "/extensions/gen/settings", { settings: { level: 3 } });
+		expect((await method("settings", null)).result).toEqual({ level: 3 });
+		expect((await method("changed")).result).toBe(2);
+	});
+
+	test("a command family lists entries per folder and runs /prefix:name with a note the model never sees", async () => {
+		const ext = (await call("GET", "/server-extensions")).json.extensions[0];
+		expect(ext.commandFamilies).toEqual([{ prefix: "snip", label: "Snippets" }]);
+		const listed = (await call("GET", `/server-extensions/commands?cwd=${encodeURIComponent(ws)}`)).json;
+		expect(listed.families).toEqual([{ prefix: "snip", label: "Snippets", extension: "gen", entries: [{ name: "hello", description: "says hi in ws" }] }]);
+		const id = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
+		upstream.requests.length = 0;
+		await call("POST", `/sessions/${id}/messages`, { text: "/snip:hello world" });
+		await idle(id);
+		const user = ((await call("GET", `/sessions/${id}/messages`)).json.messages as any[])[0].message;
+		expect(user.content[0].text).toBe("SNIPPET hello world");
+		const note = user.content.find((c: any) => c.text?.startsWith("<pipaya-note>"));
+		expect(JSON.parse(note.text.slice("<pipaya-note>".length, note.text.indexOf("</pipaya-note>")))).toEqual({ text: "snippet: hello", collapse: true, data: { name: "hello" }, call: "/snip:hello world" });
+		expect(JSON.stringify(upstream.requests.at(-1)!.body)).not.toContain("pipaya-note");
+		expect((await call("GET", `/sessions/${id}`)).json.title).toBe("hello");
+		await call("POST", `/sessions/${id}/messages`, { text: "noted" });
+		await idle(id);
+		const second = ((await call("GET", `/sessions/${id}/messages`)).json.messages as any[]).filter((m) => m.role === "user")[1].message;
+		expect(JSON.stringify(second)).toContain('{\\"text\\":\\"a note\\",\\"call\\":\\"noted\\"}');
+	});
+});

@@ -11,6 +11,7 @@ import type {
 	ContextUsage,
 	PipayaEvent,
 	FileRef,
+	MessageNote,
 	ImageBlock,
 	StreamDelta,
 	ToolRun,
@@ -60,11 +61,11 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; template?: { name: string; call: string } } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
-	let template: { name: string; call: string } | undefined;
-	// The server appends a note when the user attached files or tagged a session; it is for the model, not for the transcript.
+	let note: MessageNote | undefined;
+	// Blocks the server or an extension adds (`<pipaya-…>`: attached files, hints for the model, notes) are not message text.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
 				if (c?.type !== "text") return true;
@@ -76,31 +77,24 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 					} catch { /* a note we cannot read is simply not shown */ }
 					return false;
 				}
-				if (s.startsWith("<pipaya-template>")) {
+				if (s.startsWith("<pipaya-note>")) {
 					try {
-						const j = JSON.parse(s.slice("<pipaya-template>".length, s.indexOf("</pipaya-template>")));
-						if (j && typeof j.name === "string") template = { name: j.name, call: String(j.call ?? "") };
-					} catch { /* an unreadable marker just means no note */ }
+						const j = JSON.parse(s.slice("<pipaya-note>".length, s.indexOf("</pipaya-note>")));
+						if (j && typeof j.text === "string") note = { text: j.text.slice(0, 200), call: String(j.call ?? ""), ...(j.collapse === true ? { collapse: true } : {}), ...(j.data !== undefined ? { data: j.data } : {}) };
+					} catch { /* an unreadable note is simply not shown */ }
 					return false;
 				}
-				return !s.startsWith("<pipaya-hint>");
+				return !s.startsWith("<pipaya-");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files, ...(template ? { template } : {}) };
+	return { text: textOf(shown), images, files, ...(note ? { note } : {}) };
 }
 
-// The server stores a denied/blocked call as an ordinary error result with these messages
-// (see server/src/sessions.ts), so recognise them to show "denied" after a reload too.
-const DENIED = /^(The user denied "|"[^"]+" is disabled: this session is read-only|Run aborted|Approval timed out)/;
-
 function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun {
-	const output = textOf(m.content);
-	const denied = m.isError && !m.details?.exitCode && DENIED.test(output.trim());
 	return {
-		state: denied ? "denied" : m.isError ? "error" : "done",
-		output: denied ? "" : output,
-		images: denied ? undefined : imagesOf(m.content),
-		denyReason: denied ? output.trim() : undefined,
+		state: m.isError ? "error" : "done",
+		output: textOf(m.content),
+		images: imagesOf(m.content),
 		details: m.details,
 		durationMs: m.durationMs,
 	};
@@ -210,10 +204,9 @@ export class ChatState {
 		this.loadError = "";
 		this.notFound = false;
 		try {
-			const [msgs, detail, approvals, questions, entries] = await Promise.all([
+			const [msgs, detail, questions, entries] = await Promise.all([
 				this.api.messages(this.id),
 				this.api.getSession(this.id),
-				this.api.approvals(),
 				this.api.questions(),
 				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
 			]);
@@ -225,11 +218,8 @@ export class ChatState {
 
 			const st = detail.status;
 			for (const id of st.pendingToolCalls) tools[id] ??= { state: "running", output: "" };
-			for (const a of approvals) {
-				if (a.sessionId === this.id) tools[a.toolCallId] = { state: "awaiting_approval", output: "" };
-			}
 			for (const q of questions) {
-				if (q.sessionId === this.id) tools[q.toolCallId] = { state: "awaiting_approval", output: "", question: q };
+				if (q.sessionId === this.id) tools[q.toolCallId] = { state: "awaiting_input", output: "", question: q };
 			}
 			// Extension records sit among the messages by the time they were made (they are not messages themselves).
 			for (const en of entries) this.insertEntry(items, en);
@@ -402,7 +392,7 @@ export class ChatState {
 				const s = this.streamItem();
 				if (s) s.streaming = false;
 				for (const run of Object.values(this.tools)) {
-					if (run.state === "running" || run.state === "awaiting_approval" || run.state === "pending") run.state = "skipped";
+					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
 				this.queued = [];
 				if (d.status === "error" && d.error) {
@@ -450,9 +440,9 @@ export class ChatState {
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;
-						// A template call was typed short but stored expanded: show what was really sent.
+						// A command typed short but stored expanded (with a note): show what was really sent.
 						const full = userFields(m);
-						if (full.template) Object.assign(opt, { text: full.text, template: full.template });
+						if (full.note) Object.assign(opt, { text: full.text, note: full.note });
 					} else {
 						this.items.push({ kind: "user", key: `m${seq}`, seq, ts: m.timestamp ?? e.ts, fresh: true, ...userFields(m) });
 					}
@@ -464,27 +454,14 @@ export class ChatState {
 						this.items.push({ kind: "assistant", key: `m${seq}`, seq, streaming: false, fresh: true, ...assistantFields(m) });
 					}
 				} else if (m.role === "toolResult") {
-					const prev = this.tools[m.toolCallId];
-					this.tools[m.toolCallId] = prev?.state === "denied" ? { ...toolRunFrom(m), state: "denied", output: "", denyReason: prev.denyReason ?? toolRunFrom(m).denyReason } : toolRunFrom(m);
+					this.tools[m.toolCallId] = toolRunFrom(m);
 				}
 				break;
 			}
 
 			case "tool_execution_start": {
 				const prev = this.tools[d.toolCallId];
-				if (prev?.state !== "awaiting_approval") this.tools[d.toolCallId] = { state: "running", output: "" };
-				break;
-			}
-
-			case "approval_requested":
-				this.tools[d.toolCallId] = { ...this.tools[d.toolCallId], output: "", state: "awaiting_approval" };
-				break;
-
-			case "approval_resolved": {
-				const prev = this.tools[d.toolCallId] ?? { output: "" };
-				this.tools[d.toolCallId] = d.approved
-					? { ...prev, state: "running" }
-					: { ...prev, state: "denied", denyReason: d.reason };
+				if (prev?.state !== "awaiting_input") this.tools[d.toolCallId] = { state: "running", output: "" };
 				break;
 			}
 
@@ -492,7 +469,7 @@ export class ChatState {
 				this.tools[d.toolCallId] = {
 					...this.tools[d.toolCallId],
 					output: "",
-					state: "awaiting_approval",
+					state: "awaiting_input",
 					question: { question: d.question, options: d.options, recommended: d.recommended, allowFreeText: d.allowFreeText, items: d.items },
 				};
 				break;
@@ -511,14 +488,11 @@ export class ChatState {
 
 			case "tool_execution_end": {
 				const prev = this.tools[d.toolCallId];
-				const denied = prev?.state === "denied";
-				const state = denied ? "denied" : d.isError ? "error" : "done";
 				this.tools[d.toolCallId] = {
 					...prev,
-					state,
-					output: denied ? "" : textOf(d.result?.content),
-					images: denied ? undefined : imagesOf(d.result?.content),
-					denyReason: denied ? (prev?.denyReason ?? textOf(d.result?.content)) : undefined,
+					state: d.isError ? "error" : "done",
+					output: textOf(d.result?.content),
+					images: imagesOf(d.result?.content),
 					details: d.result?.details,
 					durationMs: d.durationMs,
 				};

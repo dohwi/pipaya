@@ -27,7 +27,7 @@ const entries = () => (existsSync(root()) ? readdirSync(root()) : []);
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-ext-settings-"));
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: join(dir, "ws"), logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 });
 afterAll(async () => {
@@ -202,11 +202,16 @@ describe("extension settings", () => {
 		expect(entries()).toEqual(before);
 	});
 
-	test("delete removes the whole folder and is idempotent", async () => {
+	test("delete removes the settings (and the folder when nothing else is in it) and is idempotent", async () => {
 		await api("PUT", "/extensions/del.test/settings", { settings: { a: 1 } });
-		writeFileSync(join(root(), "del.test", "extra.bin"), "x");
 		expect(await api("DELETE", "/extensions/del.test")).toEqual({ status: 200, json: { ok: true } });
 		expect(existsSync(join(root(), "del.test"))).toBe(false);
+		// a server extension installed under the same id keeps its code
+		await api("PUT", "/extensions/del.test/settings", { settings: { a: 1 } });
+		writeFileSync(join(root(), "del.test", "index.ts"), "x");
+		expect(await api("DELETE", "/extensions/del.test")).toEqual({ status: 200, json: { ok: true } });
+		expect(readdirSync(join(root(), "del.test"))).toEqual(["index.ts"]);
+		rmSync(join(root(), "del.test"), { recursive: true, force: true });
 		expect(await api("DELETE", "/extensions/del.test")).toEqual({ status: 200, json: { ok: true } });
 		expect((await api("GET", "/extensions/settings")).json.settings["del.test"]).toBeUndefined();
 	});

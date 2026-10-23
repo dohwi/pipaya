@@ -7,7 +7,6 @@ import { setDurableSetting } from "./durable-storage";
 export const K = {
   servers: "pipaya.servers",
   currentServer: "pipaya.server",
-  legacyConn: "pipaya.conn", // single-server builds stored one connection here
   theme: "pipaya.theme",
   active: "pipaya.active", // per server: pipaya.active.<serverId>
   draft: "pipaya.draft",
@@ -16,17 +15,14 @@ export const K = {
   workdir: "pipaya.workdir", // per server: pipaya.workdir.<serverId>
   sound: "pipaya.sound", // notification sounds on/off
   volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
-  volumeV1: "pipaya.volume", // old scale, 0-100 where 70 was the base loudness
   escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
-  favModels: "pipaya.fav.models", // "<provider>\u0000<modelId>"; per server: pipaya.fav.models.<serverId> (legacy: one global list)
+  favModels: "pipaya.fav.models", // per server: pipaya.fav.models.<serverId>, entries "<provider>\u0000<modelId>"
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
-  groupOrder: "pipaya.grouporder", // legacy (read once into tabOrder): sidebar group order { <serverId>: [groupId, ...] }
   tabOrder: "pipaya.taborder", // tab order set by dragging (sidebar and tab bar): { <serverId>: [groupId | sessionId | terminalId, ...] }
   fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
-  sessionOrder: "pipaya.sessionorder", // legacy (read once into tabOrder): order of loose sessions inside a directory, set by dragging: { <serverId>: [sessionId, ...] }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
 };
 

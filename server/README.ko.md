@@ -42,7 +42,6 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite 경로 |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
-| `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
 | `PIPAYA_MAX_SESSIONS` | `200` | 동시에 활성인(닫히지 않은) 세션의 최대 수. 넘으면 생성·재개가 409로 거절됨. `0`이면 제한 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |
@@ -103,9 +102,9 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | PUT/DELETE | `/notifications/devices/:id` | 기기 접속 상태(`platform`, `focused`, `enabled`, `visibleSessionIds`, 선택적 `name`, 선택적 모바일 `push` 토큰) 전송 / 기기 해지(`device_revoked` 이벤트로 알리고 해당 기기는 보고를 멈춤) |
 | POST | `/notifications/:id/received` | 기기가 알림을 표시했음을 확인하여 지연된 모바일 푸시를 건너뜀 |
 | POST | `/notifications` | `{source,notification:{title,body?,kind?,sessionId?,key?}}`. source당 10초에 5회로 제한. `source: "pipaya"`는 내장 알림용으로 예약됨 |
-| PUT/DELETE | `/notifications/rules/:owner/:id` | `run_finished` / `approval_requested`의 기본 알림을 대체하는 확장별 규칙(소유자당 최대 5개). `DELETE /notifications/rules/:owner`는 전부 삭제 |
-| GET | `/approvals?sessionId=` | 대기 중인 승인 |
-| POST | `/sessions/:id/approvals/:toolCallId` | `{approved,reason?}` |
+| PUT/DELETE | `/notifications/rules/:owner/:id` | `run_finished` / `question_requested`의 기본 알림을 대체하는 확장별 규칙(소유자당 최대 5개). `DELETE /notifications/rules/:owner`는 전부 삭제 |
+| GET | `/questions?sessionId=` | 에이전트가 답을 기다리는 질문(`ctx.ask`) |
+| POST | `/sessions/:id/questions/:toolCallId` | `{answer}` (여러 질문이면 `{answers}`) |
 | GET | `/events/history?sessionId=&after=&limit=` | 저장된 이벤트와 최신 커서 |
 | GET | `/events/types` | 기계가 읽을 수 있는 이벤트 페이로드 스키마 |
 
@@ -195,7 +194,7 @@ SSE: `GET /events` 또는 `GET /sessions/:id/events`. `?types=a,b`로 거릅니�
 | `message_update` | 아니오. 어시스턴트 델타 |
 | `tool_execution_start`, `tool_execution_end` | 예 |
 | `tool_execution_update` | 아니오. 도구 출력 중간값 |
-| `approval_requested`, `approval_resolved`, `message_queued`, `message_dequeued` | 예 |
+| `question_requested`, `question_resolved`, `message_queued`, `message_dequeued` | 예 |
 | `provider_updated`, `configuration_updated`, `locales_updated`, `extension_settings_updated`, `group_*` | 예 |
 | `notification` | 아니오. 기기 한 대에 보내며 재생되지 않음 |
 
@@ -204,7 +203,7 @@ SSE: `GET /events` 또는 `GET /sessions/:id/events`. `?types=a,b`로 거릅니�
 
 WebSocket `/ws`: `{id?,op,...args}`를 보내고 `{type:"ack",id,ok,result|error}`와 `{type:"event",event}`를 받습니다.
 작업: `subscribe {sessionId?,after?,types?}`, `unsubscribe {sessionId?}`, `prompt {sessionId,text,mode?,images?}`,
-`abort {sessionId}`, `approve {sessionId,toolCallId,approved,reason?}`, `ping`.
+`abort {sessionId}`, `answer {sessionId,toolCallId,answer}`, `ping`.
 
 ## Storage and safety
 

@@ -4,7 +4,6 @@ import { timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { isAbsolute, relative } from "node:path";
 import Type from "typebox";
-import { ApprovalManager } from "./approvals.ts";
 import { QuestionManager } from "./questions.ts";
 import type { Config } from "./config.ts";
 import { Configuration } from "./configuration.ts";
@@ -25,7 +24,7 @@ import { Pairing } from "./pairing.ts";
 import { isAdminOnlyPath, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
-import { GroupManager, panesOf } from "./groups.ts";
+import { GroupManager, panesOf, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
 import { registerTerminalRoutes, TERMINAL_SOCKET } from "./terminal-routes.ts";
@@ -43,7 +42,7 @@ import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
 import { streamEvents } from "./sse.ts";
-import { SessionStore, SqliteCredentialStore } from "./store.ts";
+import { SessionStore, SqliteCredentialStore, THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 import { makeSerializerCompiler, validatorCompiler, type TypeBoxProvider } from "./typebox-provider.ts";
 import { registerWebSocket, type WebSocketOptions } from "./ws.ts";
 import { NotificationService, type PushTransports } from "./notifications.ts";
@@ -54,7 +53,7 @@ import { ExtensionHost } from "./extensions/host.ts";
 import { registerServerExtensionRoutes } from "./extensions/routes.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
 import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
 // A message may carry images and files (up to 100 MB of files, as base64: x1.34) alongside each other.
@@ -109,36 +108,72 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
 	const configuration = new Configuration(db, cfg, registry, credentials);
-	const approvals = new ApprovalManager(bus, cfg.approvalTimeoutMs);
 	const questions = new QuestionManager(bus);
 	const skills = new SkillService(db, { home: opts.home, builtin: opts.builtinSkills, defaultWorkdir: () => configuration.defaultWorkdir() });
 	const modelRoles = new ModelRoles(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
+	const extensionSettings = new ExtensionSettings(cfg.dataDir);
 	const extensions = new ExtensionHost({
-		db, bus, registry, dataDir: cfg.dataDir,
+		db, bus, registry, dataDir: cfg.dataDir, settings: extensionSettings,
 		dirs: opts.extensionDirs ?? ExtensionHost.defaultDirs(cfg.dataDir, opts.home),
 		paths: opts.extensionPaths,
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
-	const busy = (id: string) => sessions.isRunning(id) || approvals.list(id).length > 0 || questions.list(id).length > 0;
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
+	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
-		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, closed: r.closed, parentId: r.parentId,
-		createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
+		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
+		tools: r.tools, closed: r.closed, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
+	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
+	const thinking = (v: string | undefined) => {
+		if (v !== undefined && !(THINKING_LEVELS as readonly string[]).includes(v)) throw badRequest(`unknown thinking level "${v}"`);
+		return v as ThinkingLevel | undefined;
+	};
+	const llm = new Llm(registry, modelRoles);
 	extensions.attach({
 		cwd: (id) => store.get(id)?.cwd,
 		defaultCwd: () => configuration.defaultWorkdir(),
-		groups: () => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })),
+		groups: {
+			list: () => groups.list().map(groupInfo),
+			get: (id) => { try { return groupInfo(groups.get(id)); } catch { return undefined; } },
+			create: (o) => groupInfo(groups.create({ name: o.name, layout: o.layout })),
+			update: (id, c) => groupInfo(groups.update(id, c)),
+			delete: (id) => { try { groups.delete(id); return true; } catch { return false; } },
+		},
+		models: {
+			list: async (o) => (await describeModels(registry, o?.provider, (p, id) => configuration.isUnavailable(p, id)))
+				.map(({ provider, id, name, reasoning, thinkingLevels, contextWindow, maxTokens, vision, configured }) => ({ provider, id, name, reasoning, thinkingLevels, contextWindow, maxTokens, vision, configured })),
+			complete: async ({ signal, ...input }) => {
+				const r = await llm.complete(input, signal);
+				return { text: r.text, provider: r.provider, model: r.model, usage: { input: r.usage.input, output: r.usage.output, totalTokens: r.usage.totalTokens, cost: r.usage.cost } };
+			},
+		},
+		notify: (source, n) => { notifications.send(source, { title: n.title.slice(0, 183), ...(n.body ? { body: n.body.slice(0, 300) } : {}), ...(n.kind ? { kind: n.kind } : {}), ...(n.sessionId ? { sessionId: n.sessionId } : {}), ...(n.key ? { key: n.key.slice(0, 160) } : {}) }); },
 		sessions: {
 			list: (o) => store.list({ limit: Math.min(o?.limit ?? 1000, 5000), before: o?.before, closed: o?.closed }).map(info),
 			get: (id) => { const r = store.get(id); return r ? info(r) : undefined; },
-			messages: (id, count = 10) => store.lastMessages(id, Math.min(200, Math.max(1, count))),
+			messages: (id, count = 10, o) => (o?.after !== undefined
+				? store.messages(id, { after: o.after, limit: Math.min(200, Math.max(1, count)) })
+				: store.lastMessages(id, Math.min(200, Math.max(1, count)))),
 			send: async (id, text, mode) => {
 				await sessions.send(id, { text, mode: mode ?? (sessions.isRunning(id) ? "follow_up" : "prompt") });
 			},
+			create: async (o = {}) => {
+				const r = await sessions.create({ title: o.title, cwd: o.cwd, provider: o.provider, model: o.model, thinkingLevel: thinking(o.thinkingLevel), systemPrompt: o.systemPrompt, tools: o.tools }, o.parentId && store.get(o.parentId) ? o.parentId : null);
+				return info(r);
+			},
+			update: (id, c) => info(sessions.update(id, { ...c, thinkingLevel: thinking(c.thinkingLevel) })),
+			fork: async (id, o) => info(await sessions.fork(id, o?.atSeq, o?.title)),
+			abort: (id) => sessions.abort(id),
+			compact: async (id, instructions) => {
+				const r = await sessions.compact(id, instructions);
+				return { tokensBefore: r.tokensBefore, tokensAfter: r.context.tokens };
+			},
+			questions: (id) => questions.list(id).map((q) => ({ toolCallId: q.toolCallId, question: q.question, ...(q.options ? { options: q.options } : {}), requestedAt: q.requestedAt })),
+			answer: (id, toolCallId, a) => questions.answer(id, toolCallId, Array.isArray(a) ? { answers: a } : { answer: a }) === "ok",
 			delete: (id) => {
 				if (!store.get(id) || busy(id)) return false;
 				sessions.delete(id);
@@ -264,7 +299,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	app.get("/tools", {
 		schema: { response: { 200: S.ToolList, ...S.errors(401) } },
 		handler: async () => ({
-			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description, mutating: t.mutating })),
+			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description })),
 			defaults: extensions.defaultTools(),
 		}),
 	});
@@ -430,7 +465,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async (req, reply) => reply.status(201).send(await sessions.fork(req.params.id, req.body.atSeq, req.body.title)),
 	});
 
-	// ── messages & approvals ──
+	// ── messages & questions ──
 	app.post("/sessions/:id/messages", {
 		bodyLimit: IMAGE_BODY_LIMIT, // a route option, not part of `schema`
 		schema: { params: S.IdParams, body: S.SendBody, response: { 202: S.SendResult, ...S.errors(400, 401, 404, 409, 413) } },
@@ -443,22 +478,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return { messages: store.messages(req.params.id, { after: req.query.after, limit: req.query.limit ?? 1000 }) };
 		},
 	});
-	app.get("/approvals", {
-		schema: { querystring: S.ApprovalsQuery, response: { 200: S.ApprovalList, ...S.errors(400, 401) } },
-		handler: async (req) => ({ approvals: approvals.list(req.query.sessionId) }),
-	});
-	app.post("/sessions/:id/approvals/:toolCallId", {
-		schema: { params: S.DecisionParams, body: S.DecisionBody, response: { 200: S.Ok, ...S.errors(400, 401, 404) } },
-		handler: async (req) => {
-			const { id, toolCallId } = req.params;
-			sessions.get(id);
-			if (!approvals.decide(id, toolCallId, req.body)) throw notFound("pending approval");
-			return { ok: true };
-		},
-	});
-
 	app.get("/questions", {
-		schema: { querystring: S.ApprovalsQuery, response: { 200: S.QuestionList, ...S.errors(400, 401) } },
+		schema: { querystring: S.QuestionsQuery, response: { 200: S.QuestionList, ...S.errors(400, 401) } },
 		handler: async (req) => ({ questions: questions.list(req.query.sessionId) }),
 	});
 	app.post("/sessions/:id/questions/:toolCallId", {
@@ -494,10 +515,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.EventTypeList, ...S.errors(401) } },
 		handler: async () => ({ events: S.EVENTS.map((e) => ({ type: e.type, persisted: e.persisted, description: e.description, data: e.data })) }),
 	});
-	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"));
+	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"), (cwd) => resolve(configuration.defaultWorkdir(), cwd?.trim() || "."));
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
 	registerConfigurationRoutes(server, configuration, bus);
-	registerLlmRoutes(server, modelRoles, new Llm(registry, modelRoles), bus);
+	registerLlmRoutes(server, modelRoles, llm, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
@@ -521,11 +542,11 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		})();
 	});
 	registerSkillRoutes(server, skills, bus);
-	registerExtensionSettingsRoutes(server, new ExtensionSettings(cfg.dataDir), bus);
+	registerExtensionSettingsRoutes(server, extensionSettings, bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
-	await registerWebSocket(server, { bus, sessions, approvals, questions }, opts.websocket);
+	await registerWebSocket(server, { bus, sessions, questions }, opts.websocket);
 	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();

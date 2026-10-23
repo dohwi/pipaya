@@ -47,7 +47,7 @@ describe("memberOf", () => {
 });
 
 describe("mirrorHtml", () => {
-	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
+	const known = { commands: ["prompt:fix"], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
 		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /prompt:fix", known);
 		expect(html).toContain('<mark class="file">#src/a.ts</mark>');
@@ -67,7 +67,7 @@ describe("mirrorHtml", () => {
 });
 
 describe("mirrorHtml mentions", () => {
-	const known = { templates: [], skills: [], mentions: ["미나", "결제-개편"], images: 0, paths: [] };
+	const known = { commands: [], skills: [], mentions: ["미나", "결제-개편"], images: 0, paths: [] };
 	test("marks an extension mention, particle left outside", () => {
 		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="member">@결제-개편</mark>에');
 		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="member">@미나</mark>');

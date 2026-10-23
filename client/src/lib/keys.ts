@@ -29,8 +29,6 @@ export type ActionId =
   | "copyLast"
   | "scrollTop"
   | "scrollBottom"
-  | "approveTool"
-  | "denyTool"
   | "focusLeft"
   | "focusRight"
   | "focusUp"
@@ -216,18 +214,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "",
   },
   {
-    id: "approveTool",
-    label: msg("도구 실행 승인"),
-    hint: msg("승인을 기다리는 도구가 있으면 모두 허용합니다. 대기 중인 요청이 없으면 아무 일도 하지 않습니다"),
-    default: "",
-  },
-  {
-    id: "denyTool",
-    label: msg("도구 실행 거부"),
-    hint: msg("승인을 기다리는 도구가 있으면 모두 거부합니다"),
-    default: "",
-  },
-  {
     id: "stop",
     label: msg("작업 중지"),
     hint: msg("실행 중인 에이전트를 멈춥니다"),
@@ -403,8 +389,6 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   findInChat: "chat",
   scrollTop: "chat",
   scrollBottom: "chat",
-  approveTool: "chat",
-  denyTool: "chat",
   stop: "chat",
   steer: "chat",
   queueMessage: "chat",

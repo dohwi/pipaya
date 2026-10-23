@@ -64,8 +64,8 @@
 	const matches = (m: ModelInfo) => !filter || `${providerName(m.provider)} ${m.name} ${m.id}`.toLowerCase().includes(filter.toLowerCase());
 	const info = $derived(sel ? models.find((m) => m.provider === sel!.provider && m.id === sel!.model) : undefined);
 	const reasoning = $derived(info ? info.reasoning : true);
-	/** Only the strengths this model accepts (older servers do not say: then all of them). */
-	const available = $derived<ThinkingLevel[]>(info?.thinkingLevels?.length ? levels.filter((l) => info.thinkingLevels!.includes(l)) : levels);
+	/** Only the strengths this model accepts. */
+	const available = $derived<ThinkingLevel[]>(info?.thinkingLevels.length ? levels.filter((l) => info.thinkingLevels.includes(l)) : levels);
 	/** The highlighted strength, moved to the nearest supported one when the model does not accept it. */
 	const shownLvl = $derived.by<ThinkingLevel | null>(() => {
 		if (!lvl || available.includes(lvl)) return lvl;

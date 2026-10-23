@@ -19,7 +19,7 @@ const call = async (method: any, url: string, payload?: unknown) => {
 };
 
 async function boot(restrict: boolean) {
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, `db-${restrict}.sqlite`), token: TOKEN, workspaceRoot: ws, restrictWorkspace: restrict, approvalTimeoutMs: 0, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, `db-${restrict}.sqlite`), token: TOKEN, workspaceRoot: ws, restrictWorkspace: restrict, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 	await call("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));
 	await call("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id });

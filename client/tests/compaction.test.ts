@@ -217,7 +217,7 @@ describe("ask_user questions", () => {
 		await chat.load();
 		chat.apply(event("question_requested", { sessionId: "session", ...asked, requestedAt: 1 }));
 		const run = chat.tools.c1!;
-		expect(run.state).toBe("awaiting_approval");
+		expect(run.state).toBe("awaiting_input");
 		expect(run.question?.question).toBe("Which one?");
 		expect([...(run.question?.options ?? [])]).toEqual(["red", "blue"]);
 		expect(run.question?.allowFreeText).toBe(false);

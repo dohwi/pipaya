@@ -13,13 +13,10 @@ import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./termin
 
 export type ThemePref = "system" | "dark" | "light";
 
-/** Slider value. The first release used 0-100 with 70 as the base loudness; carry that sound over to the new scale. */
+/** Slider value, 0-MAX_VOLUME where 100 is the base loudness. */
 function readVolume(): number {
   const v = read<number | null>(K.volume, null);
-  if (typeof v === "number") return Math.min(MAX_VOLUME, Math.max(0, v));
-  const old = read<number | null>(K.volumeV1, null);
-  if (typeof old === "number") return Math.min(MAX_VOLUME, Math.max(0, Math.round((old * Math.SQRT2) / 5) * 5));
-  return 100;
+  return typeof v === "number" ? Math.min(MAX_VOLUME, Math.max(0, v)) : 100;
 }
 
 function readBindings(): Record<ActionId, string> {

@@ -7,7 +7,7 @@
 
 	/**
 	 * The light model the server uses for its own small jobs: naming each session and writing what it works on (its
-	 * role, shown beside its @name). Older servers have no /system-model: the section is simply not shown there.
+	 * role). The section stays hidden when the settings cannot be read.
 	 */
 	let { serverId, models, providers }: { serverId: string; models: ModelInfo[]; providers: ProviderInfo[] } = $props();
 
@@ -29,7 +29,7 @@
 			const r = await a.systemModelSettings();
 			if (mine === seq) settings = r.settings;
 		} catch {
-			/* not supported by this server */
+			/* unreachable: the section stays hidden */
 		}
 	}
 	$effect(() => {
