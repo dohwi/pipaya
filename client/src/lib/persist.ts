@@ -20,6 +20,7 @@ export const K = {
   escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
   favModels: "pipaya.fav.models", // "<provider>\u0000<modelId>"; per server: pipaya.fav.models.<serverId> (legacy: one global list)
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
+  uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
   groupOrder: "pipaya.grouporder", // legacy (read once into tabOrder): sidebar group order { <serverId>: [groupId, ...] }

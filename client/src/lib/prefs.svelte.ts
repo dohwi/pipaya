@@ -8,6 +8,7 @@ import { extensions } from "./extensions/host.svelte";
 import { syncSystemBars, syncWindowTheme } from "./native-push";
 import { setDurableSetting } from "./durable-storage";
 import { K, read, write } from "./persist";
+import { applyUiScale, clampScale, stepScale } from "./ui-scale";
 import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./terminal-prefs";
 
 export type ThemePref = "system" | "dark" | "light";
@@ -52,6 +53,8 @@ export class Preferences {
   prefersDark = $state(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
   soundOn = $state(read<boolean>(K.sound, true));
   soundVolume = $state(readVolume());
+  /** Whole-app zoom in percent (100 = normal). */
+  uiScale = $state(clampScale(read<unknown>(K.uiScale, 100)));
   bindings = $state<Record<ActionId, string>>(readBindings());
   terminal = $state<TerminalPrefs>(sanitizeTerminal(read<unknown>(K.terminal, null)));
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
@@ -60,6 +63,7 @@ export class Preferences {
   /** Apply the theme now and follow the OS when it is "system". */
   init() {
     this.applyTheme();
+    applyUiScale(this.uiScale);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
       this.prefersDark = e.matches;
       if (this.theme === "system") this.applyTheme();
@@ -72,6 +76,8 @@ export class Preferences {
     this.soundOn = read<boolean>(K.sound, true);
     this.soundVolume = readVolume();
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
+    this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
+    applyUiScale(this.uiScale);
     this.applyTheme();
   }
 
@@ -107,6 +113,19 @@ export class Preferences {
     requestAnimationFrame(() => syncSystemBars());
     // The desktop window frame follows the choice made here (or the OS when it is "system"), not only the page inside it.
     syncWindowTheme(this.theme);
+  }
+
+  /* ---------- zoom ---------- */
+
+  setUiScale(percent: number) {
+    this.uiScale = clampScale(percent);
+    write(K.uiScale, this.uiScale);
+    applyUiScale(this.uiScale);
+  }
+
+  /** One step up (+1) or down (-1). */
+  stepUiScale(dir: 1 | -1) {
+    this.setUiScale(stepScale(this.uiScale, dir));
   }
 
   /* ---------- sound ---------- */

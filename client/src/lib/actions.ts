@@ -271,6 +271,9 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     else app.openSettings();
   },
   toggleTheme: () => app.prefs.setTheme(app.prefs.resolvedDark ? "light" : "dark"),
+  zoomIn: () => app.prefs.stepUiScale(1),
+  zoomOut: () => app.prefs.stepUiScale(-1),
+  zoomReset: () => app.prefs.setUiScale(100),
   fullscreen: toggleFullscreen,
 };
 

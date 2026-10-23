@@ -61,6 +61,9 @@ export type ActionId =
   | "cancelQueue"
   | "settings"
   | "toggleTheme"
+  | "zoomIn"
+  | "zoomOut"
+  | "zoomReset"
   | "fullscreen";
 
 export interface ActionDef {
@@ -374,6 +377,9 @@ const BASE: Omit<ActionDef, "group">[] = [
   { id: "toggleSound", label: msg("알림음 켜기 / 끄기"), hint: "", default: "" },
   { id: "settings", label: msg("설정 열기"), hint: "", default: "Mod+Comma" },
   { id: "toggleTheme", label: msg("라이트 / 다크 전환"), hint: "", default: "" },
+  { id: "zoomIn", label: msg("화면 배율 키우기"), hint: msg("앱 전체를 10%씩 확대합니다 (최대 200%)"), default: "Mod+Equal" },
+  { id: "zoomOut", label: msg("화면 배율 줄이기"), hint: msg("앱 전체를 10%씩 축소합니다 (최소 50%)"), default: "Mod+Minus" },
+  { id: "zoomReset", label: msg("화면 배율 100%로"), hint: "", default: "Mod+0" },
   { id: "fullscreen", label: msg("전체 화면 전환"), hint: msg("창을 전체 화면으로 바꾸거나 되돌립니다"), default: "F11" },
 ];
 

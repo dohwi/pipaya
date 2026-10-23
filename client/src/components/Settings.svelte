@@ -153,6 +153,7 @@
 		{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
 		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
 		{ tab: "tools", label: msg("도구 승인"), words: "approval auto ask permission 승인 자동 확인" },
+		{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
 		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
 		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
 		{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
@@ -269,6 +270,17 @@
 					<Segmented variant="cards" label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
 						{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
 					</Segmented>
+				</section>
+
+				<section>
+					<div class="mono-label">{t("화면 배율")}</div>
+					<label class="volume">
+						<span>{t("배율")}</span>
+						<input type="range" min="50" max="200" step="10" value={app.prefs.uiScale} aria-label={t("화면 배율")} oninput={(e) => app.prefs.setUiScale(+e.currentTarget.value)} />
+						<output>{app.prefs.uiScale}%</output>
+						<button type="button" class="reset" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</button>
+					</label>
+					<span class="hint">{t("앱 전체 크기를 조절합니다. 단축키: Ctrl/⌘ + / − / 0 (설정에서 바꿀 수 있습니다)")}</span>
 				</section>
 
 				<section>
@@ -421,6 +433,14 @@
 	}
 	.volume span {
 		flex: none;
+	}
+	.volume .reset {
+		flex: none;
+		font-size: var(--fs-sm, 12px);
+		color: var(--text-dim);
+	}
+	.volume .reset:disabled {
+		opacity: 0.4;
 	}
 	.volume.off {
 		opacity: 0.45;
