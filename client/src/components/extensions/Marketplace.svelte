@@ -6,7 +6,7 @@
 	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
-	let { onclose, onpick }: { onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
+	let { scope, onclose, onpick }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
 
 	const KEY = "pipaya.marketplace.url";
 	const saved = (() => { try { return localStorage.getItem(KEY) || DEFAULT_MARKETPLACE_URL; } catch { return DEFAULT_MARKETPLACE_URL; } })();
@@ -20,7 +20,10 @@
 	let ctrl: AbortController | null = null;
 
 	const installed = (id: string) => extensions.installed.find((e) => e.package.manifest.id === id);
+	/** A server tab lists server extensions only, a device tab client ones only. */
+	const kind = $derived(scope === "server" ? "server" : "client");
 	const shown = $derived((catalog?.extensions ?? []).filter((e) => {
+		if (e.kind !== kind) return false;
 		const q = query.trim().toLowerCase();
 		return !q || `${e.id} ${e.name} ${e.description} ${Object.values(e.descriptions ?? {}).join(" ")} ${e.author ?? ""}`.toLowerCase().includes(q);
 	}));
@@ -28,7 +31,7 @@
 	let stars = $state<Record<string, number>>({});
 
 	$effect(() => {
-		const list = catalog?.extensions ?? [];
+		const list = (catalog?.extensions ?? []).filter((e) => e.kind === kind);
 		let live = true;
 		for (const e of list) {
 			const repo = repoLoc(e)?.repo;
@@ -104,7 +107,6 @@
 					{#if desc}<p class="desc">{desc}</p>{/if}
 					<div class="foot">
 						<p class="meta">
-							<span class="chip kind">{entry.kind === "server" ? t("서버") : t("클라이언트")}</span>
 							{#if entry.author}<span>{entry.author}</span>{/if}
 							{#if entry.license}<span>{entry.license}</span>{/if}
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
@@ -124,7 +126,9 @@
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
 			{/each}
 		</ul>
-		<p class="callout warn"><Icon name="alert" /><span>{t("서버 확장은 서버의 모든 권한으로 실행되어 앱에서 설치할 수 없습니다. 코드를 읽어 본 뒤 복사한 명령을 서버에서 실행하세요.")}</span></p>
+		{#if scope === "server"}
+			<p class="callout warn"><Icon name="alert" /><span>{t("서버 확장은 서버의 모든 권한으로 실행되어 앱에서 설치할 수 없습니다. 코드를 읽어 본 뒤 복사한 명령을 서버에서 실행하세요.")}</span></p>
+		{/if}
 		<details class="adv">
 			<summary>{t("카탈로그 주소")}</summary>
 			<div class="urlrow">
@@ -154,7 +158,6 @@
 	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 3px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.chip.kind { font-family: var(--font); background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
 	.btn :global(svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke: currentColor; fill: none; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.chip { font-size: var(--fs-2xs); padding: 1px 8px; border-radius: 999px; background: var(--bg-active); }

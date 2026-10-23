@@ -1352,7 +1352,6 @@ export const en: Record<string, string> = {
 	"확장 검색": "Search extensions",
 	"목록을 불러오는 중…": "Loading the list…",
 	"일치하는 확장이 없습니다": "No matching extensions",
-	"클라이언트": "Client",
 	"설치됨": "Installed",
 	"받는 중…": "Downloading…",
 	"설치 명령 복사": "Copy install command",

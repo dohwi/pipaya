@@ -460,7 +460,7 @@
 </div>
 
 {#if market}
-	<Marketplace onclose={() => (market = false)} onpick={pickFromMarket} />
+	<Marketplace scope={view} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
 {#if preview && !result}
