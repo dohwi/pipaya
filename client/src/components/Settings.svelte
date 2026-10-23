@@ -20,6 +20,8 @@
 	import UpdateSettings from "./UpdateSettings.svelte";
 	import TerminalSettings from "./TerminalSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
+	import { Api, errorText } from "../lib/api";
+	import type { ApprovalPolicy, ToolsInfo } from "../lib/types";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
 
 	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
@@ -71,21 +73,70 @@
 	function showCommon() {
 		if (current.server) go("general");
 	}
+	/**
+	 * The server whose sections are shown. Picking one here only changes what this window shows: it never switches the
+	 * open server, and nothing in here touches the open chat.
+	 */
+	// svelte-ignore state_referenced_locally
+	let sid = $state<string | null>(app.serverId);
 	function showServer(id: string) {
-		if (id !== app.serverId) app.openServer(id);
+		sid = id;
 		if (!current.server) go("info");
 	}
-	const server = $derived(app.servers.find((s) => s.id === app.serverId) ?? null);
+	const server = $derived(app.servers.find((s) => s.id === sid) ?? app.servers.find((s) => s.id === app.serverId) ?? null);
 	// without a server there is nothing server-specific left to show
 	$effect(() => {
 		if (!server && current.server) tab = "general";
 	});
 
+	/* ---------- tool approval and agent tools: read from and saved to the chosen server only ---------- */
+	let toolsCfg = $state<{ id: string; approval: ApprovalPolicy | null; tools: ToolsInfo | null } | null>(null);
+	let toolsError = $state("");
+	const apiOf = (id: string) => {
+		const s = app.servers.find((x) => x.id === id);
+		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
+	};
+	$effect(() => {
+		void app.configTick;
+		if (tab !== "tools" || !server) return;
+		const id = server.id;
+		toolsError = "";
+		apiOf(id)
+			?.configuration()
+			.then((c) => (toolsCfg = { id, approval: c.approval?.effective ?? null, tools: c.tools ?? null }))
+			.catch((e) => (toolsError = errorText(e)));
+	});
+	const shownCfg = $derived(toolsCfg && server && toolsCfg.id === server.id ? toolsCfg : null);
+	async function saveApproval(mode: ApprovalMode) {
+		if (!server || !shownCfg) return;
+		const before = shownCfg;
+		toolsCfg = { ...before, approval: mode };
+		try {
+			const r = await apiOf(server.id)!.setDefaultApproval(mode);
+			toolsCfg = { ...before, approval: r.effective };
+		} catch (e) {
+			toolsCfg = before;
+			toolsError = errorText(e);
+		}
+	}
+	async function saveTool(name: string, on: boolean) {
+		if (!server || !shownCfg?.tools) return;
+		const before = shownCfg;
+		const disabled = on ? before.tools!.disabled.filter((n) => n !== name) : [...new Set([...before.tools!.disabled, name])];
+		toolsCfg = { ...before, tools: { ...before.tools!, disabled } };
+		try {
+			toolsCfg = { ...before, tools: await apiOf(server.id)!.setDisabledTools(disabled) };
+		} catch (e) {
+			toolsCfg = before;
+			toolsError = errorText(e);
+		}
+	}
+
 	const approvals: { id: ApprovalMode; label: string; hint: string; tone?: "danger" | "warn" }[] = [
 		{ id: "ask", label: msg("프로젝트 밖만 확인", "approval"), hint: msg("프로젝트 폴더 밖의 파일을 고치거나, 밖의 경로를 건드리는 명령을 실행할 때만 확인합니다.") },
 		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다."), tone: "danger" },
 	];
-	const approval = $derived(approvalMode(app.draft.approval));
+	const approval = $derived(approvalMode(shownCfg?.approval ?? "ask"));
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
 		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "light", label: msg("라이트"), icon: "sun" },
@@ -143,7 +194,7 @@
 	<div class="srvbar" role="group" aria-label={t("설정 범위")}>
 		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
 		{#each app.servers as s (s.id)}
-			<FilterChip on={current.server && s.id === app.serverId} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
+			<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
 		{/each}
 	</div>
 
@@ -192,7 +243,7 @@
 					</ul>
 				</div>
 			{:else}
-			{#key tab + (current.server ? app.serverId : "")}
+			{#key tab + (current.server ? (server?.id ?? "") : "")}
 			<div class="pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
 			<div class="phead">
 				<h3>{t(current.label)}</h3>
@@ -250,7 +301,7 @@
 			{:else if tab === "tools"}
 		<section>
 			<div class="mono-label">{t("도구 승인")}</div>
-			<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => app.setApprovalMode(id)} options={approvals.map((a) => ({ id: a.id, label: tc("approval", a.label), tone: a.tone }))} />
+			<Segmented variant="cards" label={t("도구 승인")} value={approval} onchange={(id) => saveApproval(id)} options={approvals.map((a) => ({ id: a.id, disabled: !shownCfg, label: tc("approval", a.label), tone: a.tone }))} />
 			<span class="hint" class:danger={approvals.find((a) => a.id === approval)?.tone === "danger"}>
 				{t(approvals.find((a) => a.id === approval)?.hint ?? "")}
 				{t("서버에 저장되어 앞으로 시작할 모든 새 대화에 적용됩니다.")}
@@ -259,18 +310,20 @@
 
 		<section>
 			<div class="mono-label">{t("에이전트 도구")}</div>
-			{#if app.toolsInfo}
-				{#each app.toolsInfo.toggleable as name (name)}
+			{#if shownCfg?.tools}
+				{@const info = shownCfg.tools}
+				{#each info.toggleable as name (name)}
 					<SettingRow label={toolLabel(name)}>
-						<Switch checked={!app.toolsInfo.disabled.includes(name)} label={name} onchange={(on) => app.setToolEnabled(name, on)} />
+						<Switch checked={!info.disabled.includes(name)} label={name} onchange={(on) => saveTool(name, on)} />
 					</SettingRow>
 				{/each}
-				{#each app.toolsInfo.locked as name (name)}
+				{#each info.locked as name (name)}
 					<SettingRow label={toolLabel(name)} dim>
 						<Switch checked disabled label={name} onchange={() => {}} />
 					</SettingRow>
 				{/each}
 			{/if}
+			{#if toolsError}<span class="hint danger">{toolsError}</span>{/if}
 			<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
 		</section>
 			{:else if current.server && server}
