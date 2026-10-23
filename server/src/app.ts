@@ -495,7 +495,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.EventTypeList, ...S.errors(401) } },
 		handler: async () => ({ events: S.EVENTS.map((e) => ({ type: e.type, persisted: e.persisted, description: e.description, data: e.data })) }),
 	});
-	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined);
+	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"));
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
 	registerConfigurationRoutes(server, configuration, bus);
 	registerLlmRoutes(server, modelRoles, new Llm(registry, modelRoles), bus);

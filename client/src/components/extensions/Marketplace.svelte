@@ -3,7 +3,8 @@
 	import Icon from "../Icon.svelte";
 	import Modal from "../Modal.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
-	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { app } from "../../lib/store.svelte";
+	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { scope, onclose, onpick }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
@@ -16,7 +17,7 @@
 	let loading = $state(false);
 	let error = $state("");
 	let working = $state("");
-	let copied = $state("");
+	let serverHave = $state<Record<string, true>>({});
 	let ctrl: AbortController | null = null;
 
 	const installed = (id: string) => extensions.installed.find((e) => e.package.manifest.id === id);
@@ -69,11 +70,29 @@
 		}
 	}
 
-	async function copy(entry: MarketEntry) {
-		try { await navigator.clipboard.writeText(cliCommand(entry)); copied = entry.id; setTimeout(() => { if (copied === entry.id) copied = ""; }, 1500); } catch { /* clipboard blocked */ }
+	async function refreshServer() {
+		const api = app.api;
+		if (!api) return;
+		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* older server */ }
 	}
 
-	$effect(() => { void load(); return () => ctrl?.abort(); });
+	async function installServer(entry: MarketEntry) {
+		const api = app.api;
+		if (!api || entry.source.type !== "git") return;
+		working = entry.id;
+		error = "";
+		try {
+			const { repo, dir, ref, commit } = entry.source;
+			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
+			await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : String(cause);
+		} finally {
+			working = "";
+		}
+	}
+
+	$effect(() => { void load(); if (scope === "server") void refreshServer(); return () => ctrl?.abort(); });
 </script>
 
 <Modal {onclose} labelledby="market-title" width="1120px" maxHeight="100dvh" layer={3} sheet={false} portal>
@@ -100,7 +119,7 @@
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
 						{#if isOfficial(entry)}<span class="official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
-						{#if have && !newer}<span class="chip ok">{t("설치됨")}</span>{/if}
+						{#if (have && !newer) || (entry.kind === "server" && serverHave[entry.id])}<span class="chip ok">{t("설치됨")}</span>{/if}
 						{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
 						<span class="ver">v{entry.version}</span>
 					</div>
@@ -116,8 +135,9 @@
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
 							</button>
 						{:else}
-							<button type="button" class="btn sm" onclick={() => copy(entry)} title={cliCommand(entry)}>
-								<Icon name={copied === entry.id ? "check" : "copy"} />{copied === entry.id ? t("복사됨") : t("설치 명령 복사")}
+							{@const sHave = !!serverHave[entry.id]}
+							<button type="button" class="btn sm primary" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => installServer(entry)}>
+								{working === entry.id ? t("설치하는 중…") : sHave ? t("설치됨") : t("설치하기")}
 							</button>
 						{/if}
 					</div>
@@ -127,7 +147,7 @@
 			{/each}
 		</ul>
 		{#if scope === "server"}
-			<p class="callout warn"><Icon name="alert" /><span>{t("서버 확장은 서버의 모든 권한으로 실행되어 앱에서 설치할 수 없습니다. 코드를 읽어 본 뒤 복사한 명령을 서버에서 실행하세요.")}</span></p>
+			<p class="callout warn"><Icon name="alert" /><span>{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</span></p>
 		{/if}
 		<details class="adv">
 			<summary>{t("카탈로그 주소")}</summary>

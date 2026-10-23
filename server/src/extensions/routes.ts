@@ -4,6 +4,7 @@ import { badRequest, notFound } from "../errors.ts";
 import { errors, IdParams } from "../schemas.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
 import type { ExtensionHost } from "./host.ts";
+import { installFromGit } from "./install.ts";
 
 const Info = Type.Object({
 	name: Type.String(),
@@ -18,8 +19,23 @@ const Info = Type.Object({
 });
 
 /** Server extensions run code with the server's privileges, so every route here needs the admin token. */
-export function registerServerExtensionRoutes(server: FastifyInstance, host: ExtensionHost, sessionExists: (id: string) => boolean): void {
+export function registerServerExtensionRoutes(server: FastifyInstance, host: ExtensionHost, sessionExists: (id: string) => boolean, installDir: string): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
+	app.post("/server-extensions/install", {
+		schema: {
+			body: Type.Object({ id: Type.String(), repo: Type.String(), dir: Type.Optional(Type.String()), ref: Type.String(), commit: Type.String() }),
+			response: { 200: Type.Object({ extensions: Type.Array(Info) }), ...errors(400, 401, 403) },
+		},
+		handler: async (req) => {
+			const { id, ...src } = req.body;
+			try {
+				await installFromGit(id, src, installDir);
+			} catch (e) {
+				throw badRequest(e instanceof Error ? e.message : String(e));
+			}
+			return { extensions: await host.reload() };
+		},
+	});
 	app.get("/server-extensions", {
 		schema: { response: { 200: Type.Object({ extensions: Type.Array(Info), commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), extension: Type.String() })) }), ...errors(401) } },
 		handler: async () => ({ extensions: host.list(), commands: host.commands() }),

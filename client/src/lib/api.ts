@@ -184,6 +184,8 @@ export class Api {
 		if (type) q.set("type", type);
 		return this.req<{ entries: { id: number; extension: string; type: string; data: unknown; createdAt: number }[] }>("GET", `/sessions/${encodeURIComponent(sessionId)}/extension-entries${q.size ? `?${q}` : ""}`, undefined, signal).then((r) => r.entries);
 	};
+	installServerExtension = (src: { id: string; repo: string; dir?: string; ref: string; commit: string }, signal?: AbortSignal) =>
+		this.req<{ extensions: unknown[] }>("POST", "/server-extensions/install", src, signal);
 	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal);
 
 	/* ---------- settings that belong to this server ---------- */
