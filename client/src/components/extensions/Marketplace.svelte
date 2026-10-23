@@ -94,25 +94,31 @@
 				{@const desc = localizedDescription(entry, getLang())}
 				{@const newer = have ? compareVersions(entry.version, have.package.manifest.version) > 0 : false}
 				<li class="item">
-					<div class="info">
-						<div class="top">
-							<strong>{entry.name}</strong>
-							<span class="meta">v{entry.version}</span>
-							<span class="chip">{entry.kind === "server" ? t("서버") : t("클라이언트")}</span>
-							{#if isOfficial(entry)}<span class="chip official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
-							{#if have && !newer}<span class="chip ok">{t("설치됨")}</span>{/if}
-							{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
-						</div>
-						{#if desc}<p class="desc">{desc}</p>{/if}
-						<p class="meta">{[entry.author, entry.license].filter(Boolean).join(" · ")}{#if star !== undefined}{#if entry.author || entry.license}{" · "}{/if}<span class="star" title={t("GitHub 스타")}>★ {formatStars(star)}</span>{/if}</p>
+					<div class="top">
+						<strong class="name">{entry.name}</strong>
+						{#if isOfficial(entry)}<span class="official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
+						{#if have && !newer}<span class="chip ok">{t("설치됨")}</span>{/if}
+						{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
+						<span class="ver">v{entry.version}</span>
 					</div>
-					{#if entry.kind === "client"}
-						<button type="button" class="btn sm primary" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
-							{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
-						</button>
-					{:else}
-						<button type="button" class="btn sm" onclick={() => copy(entry)} title={cliCommand(entry)}>{copied === entry.id ? t("복사됨") : t("설치 명령 복사")}</button>
-					{/if}
+					{#if desc}<p class="desc">{desc}</p>{/if}
+					<div class="foot">
+						<p class="meta">
+							<span class="chip kind">{entry.kind === "server" ? t("서버") : t("클라이언트")}</span>
+							{#if entry.author}<span>{entry.author}</span>{/if}
+							{#if entry.license}<span>{entry.license}</span>{/if}
+							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
+						</p>
+						{#if entry.kind === "client"}
+							<button type="button" class="btn sm primary" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
+								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
+							</button>
+						{:else}
+							<button type="button" class="btn sm" onclick={() => copy(entry)} title={cliCommand(entry)}>
+								<Icon name={copied === entry.id ? "check" : "copy"} />{copied === entry.id ? t("복사됨") : t("설치 명령 복사")}
+							</button>
+						{/if}
+					</div>
 				</li>
 			{:else}
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
@@ -140,16 +146,23 @@
 	.search :global(svg) { width: 16px; height: 16px; flex: none; stroke: var(--text-faint); fill: none; stroke-width: 2; }
 	.search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 9px 0; color: inherit; outline: none; }
 	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
-	.item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
-	.info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-	.top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-	.desc { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+	.item { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }
+	.foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 4px; }
+	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0; min-width: 0; }
+	.star { display: inline-flex; align-items: center; gap: 3px; }
+	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+	.chip.kind { font-family: var(--font); background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+	.btn :global(svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke: currentColor; fill: none; stroke-width: 2; }
+	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.chip { font-size: var(--fs-2xs); padding: 1px 8px; border-radius: 999px; background: var(--bg-active); }
 	.chip.ok { background: var(--ok-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
-	.item .btn { flex: none; }
-	.chip.official { display: inline-flex; align-items: center; gap: 3px; background: var(--accent-soft); color: var(--text); font-weight: 600; }
-	.chip.official :global(svg) { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 3; }
+	.foot .btn { flex: none; }
+	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: var(--fs-2xs); font-weight: 600; color: var(--accent); }
+	.official :global(svg) { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; margin: 0; }
 	.callout :global(svg) { width: 16px; height: 16px; flex: none; margin-top: 2px; }
@@ -158,5 +171,4 @@
 	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
 	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 	.urlrow input { flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); color: inherit; }
-	@media (max-width: 400px) { .item { flex-direction: column; align-items: stretch; } }
 </style>
