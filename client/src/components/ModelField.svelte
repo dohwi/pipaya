@@ -29,6 +29,7 @@
 		onpick,
 		onfav,
 		onmanage,
+		conn = null,
 	}: {
 		models: ModelInfo[];
 		providers?: ProviderInfo[];
@@ -46,6 +47,8 @@
 		onpick: (choice: { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null) => void;
 		onfav?: (provider: string, id: string) => void;
 		onmanage?: () => void;
+		/** The server whose models these are (uploaded icon images live there); the open server when left out. */
+		conn?: { baseUrl: string; token: string } | null;
 	} = $props();
 
 	const current = $derived(value ? models.find((m) => m.provider === value.provider && m.id === value.model) : undefined);
@@ -62,7 +65,7 @@
 	aria-label={variant === "field" ? label : undefined}
 	title={variant === "inline" ? label : undefined}
 >
-	{#if value}<span class="mlogo"><ModelLogo icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={Boolean(current?.icon)} /></span>{/if}
+	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
@@ -81,6 +84,7 @@
 		{onpick}
 		{onfav}
 		{onmanage}
+		{conn}
 		onclose={() => (open = false)}
 	/>
 {/if}

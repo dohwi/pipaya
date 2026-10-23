@@ -24,6 +24,7 @@
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
 	import { ICON_LABEL } from "../lib/brand";
+	import { isImageIcon } from "../lib/model-icon-image";
 	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -425,8 +426,8 @@
 						<section class="fsec">
 							<div class="mono-label">{t("아이콘")}</div>
 							<button type="button" class="mtrigger" onclick={() => (iconFor = editing)}>
-								<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
-								<span class="mtext">{r.icon ? (ICON_LABEL[r.icon] ?? r.icon) : t("자동")}</span>
+								<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
+								<span class="mtext">{r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동")}</span>
 								<Icon name="chevron-down" />
 							</button>
 						</section>
@@ -533,7 +534,7 @@
 						<div class="mpick">
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
-									<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
+									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
 									{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}
@@ -579,7 +580,7 @@
 		{/if}
 		{#if iconFor !== null && form.rows[iconFor]}
 			{@const ir = form.rows[iconFor]!}
-			<IconPickerModal value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
+			<IconPickerModal api={api()} value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
 		{/if}
 	</Modal>
 {/if}

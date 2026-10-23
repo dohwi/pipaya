@@ -86,6 +86,10 @@ export class Api {
 	get baseUrl() {
 		return this.conn.baseUrl;
 	}
+	/** Address and token of this server, for things that fetch on their own (icon images). */
+	get connection(): Connection {
+		return this.conn;
+	}
 
 	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
 		let res: Response;
@@ -286,6 +290,10 @@ export class Api {
 			...(images?.length ? { images } : {}),
 			...(files?.length ? { files: files.map((f) => ({ name: f.name, data: f.data })) } : {}),
 		});
+	/** Upload an image (base64) to use as a model icon; returns the value for a model's `icon`. */
+	uploadIcon = (data: string) => this.req<{ icon: string }>("POST", "/configuration/icons", { data });
+	/** Icon values of the images already uploaded to this server, newest first. */
+	listIcons = () => this.req<{ icons: string[] }>("GET", "/configuration/icons");
 	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
 	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
 		let res: Response;

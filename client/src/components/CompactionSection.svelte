@@ -68,6 +68,7 @@
 		<div class="crow">
 			<div class="cfield">
 				<ModelField
+				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
 					{models}
 					{providers}
 					value={s.model}

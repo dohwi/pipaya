@@ -227,6 +227,7 @@
 		<section>
 			<div class="mono-label">{t("새 대화 기본 모델")}</div>
 			<ModelField
+				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
 				{models}
 				providers={providerList}
 				value={shownModel}
@@ -285,7 +286,7 @@
 								{#each p.models as m (m.id)}
 									{@const probe = tests[`${p.id}\u0000${m.id}`]}
 									<li class:unavail={m.unavailable}>
-										<span class="mlogo"><ModelLogo icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
+										<span class="mlogo"><ModelLogo conn={server ? { baseUrl: server.baseUrl, token: server.token } : null} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
 										<span class="minfo">
 											<span class="mid mono">{m.name ?? m.id}</span>
 											{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}

@@ -63,6 +63,7 @@
 	<section>
 		<div class="mono-label">{t("시스템 모델")}</div>
 		<ModelField
+				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
 			{models}
 			{providers}
 			value={s.model}
