@@ -78,7 +78,6 @@ export const en: Record<string, string> = {
 	"전달 대기 중인 메시지": "Queued messages",
 	"끼워 넣기": "Steer",
 	"대기열": "Queue",
-	"압축이 끝나면 전송됩니다": "Sent when compaction finishes",
 	"취소할 대기열이 없습니다": "Nothing queued to cancel",
 	"이미 전달되어 취소할 수 없습니다": "Already delivered, can't cancel",
 	"대기열에서 빼지 못했습니다": "Couldn't remove it from the queue",
