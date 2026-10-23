@@ -85,7 +85,7 @@
 	{#key mode}
 		<div class="set" in:chipIn out:chipOut>
 			{#if mode === "compacting"}
-				<span class="compacting" role="status"><span class="spinner"></span> {t("압축 중")}</span>
+				<span class="compacting" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("압축 중")}</span>
 				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
 					{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
 				</button>
@@ -194,6 +194,10 @@
 		padding: 0 8px;
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
+	}
+	/* same yellow as the composer's compaction glow */
+	.compacting .dots {
+		color: var(--warn);
 	}
 	/* icon-only controls: queue (neutral), steer (accent, same arrow as idle send), stop (danger). No overlap, no dividers */
 	.stack {
