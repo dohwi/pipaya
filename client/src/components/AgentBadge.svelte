@@ -4,7 +4,7 @@
 	import { syncAnim } from "../lib/syncAnim";
 	import { ACTIVITY_LABEL, type Activity } from "../lib/activity";
 
-	/** A session's agent: the (monochrome) logo of the model that did its last work; the dot shows what it is doing. */
+	/** A session's agent: the (monochrome) logo of the model that did its last work; the logo itself takes the state colour and animation. */
 	let { id, state = "idle", size = 20 }: { id: string; state?: Activity; size?: number } = $props();
 
 	/** The model that wrote the last reply; a session with no reply yet (or not loaded) uses its current model. */
@@ -22,8 +22,7 @@
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<span class="logo"><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
-	{#if state !== "idle"}<i class="badge" use:syncAnim={state}></i>{/if}
+	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
 </span>
 
 <style>
@@ -58,38 +57,25 @@
 	.failed {
 		color: var(--danger);
 	}
-	.badge {
-		position: absolute;
-		right: -3px;
-		bottom: -3px;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: currentColor;
-		box-shadow: 0 0 0 2px var(--bg-side);
-	}
-	.working .badge {
+	.working .logo {
 		animation: pulse 1.2s ease-in-out infinite;
 	}
-	.asking .badge {
-		animation: ping 1.2s ease-in-out infinite;
+	.asking .logo {
+		animation: nudge 1.2s ease-in-out infinite;
 	}
 	@keyframes pulse {
 		50% {
-			opacity: 0.3;
+			opacity: 0.35;
 		}
 	}
-	@keyframes ping {
-		0% {
-			box-shadow: 0 0 0 2px var(--bg-side), 0 0 0 2px currentColor;
-		}
-		70%,
-		100% {
-			box-shadow: 0 0 0 2px var(--bg-side), 0 0 0 7px transparent;
+	@keyframes nudge {
+		50% {
+			opacity: 0.55;
+			transform: scale(1.18);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.badge {
+		.logo {
 			animation: none !important;
 		}
 	}
