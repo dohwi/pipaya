@@ -1,4 +1,4 @@
-import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, RetentionInfo, RetentionPolicy, SubAgentList, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, SubAgentList, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Approval,
 	Question,
@@ -275,14 +275,13 @@ export class Api {
 	/** scope "project"/"session": enabled null removes the override. "session" needs sessionId. */
 	setSkill = (name: string, body: { scope: "global" | "project" | "session"; enabled: boolean | null; cwd?: string; sessionId?: string }) =>
 		this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}`, body);
+	/** Prompt templates come from the server's bundled `prompt-templates` extension; without it the call fails and the UI hides them. */
 	templates = (cwd?: string, signal?: AbortSignal) =>
-		this.req<TemplateList>("GET", `/templates${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
+		this.callServerExtension("prompt-templates", "list", cwd ? { cwd } : {}, null, signal) as Promise<TemplateList>;
 	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
 	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);
 	/** Delete several at once. Ones running or waiting for the user are skipped and come back in `skipped`. */
 	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids });
-	retention = () => this.req<RetentionInfo>("GET", "/sessions/retention");
-	setRetention = (policy: RetentionPolicy) => this.req<RetentionInfo>("PUT", "/sessions/retention", policy);
 	forkSession = (id: string, atSeq?: number, title?: string) =>
 		this.req<Session>("POST", `/sessions/${id}/fork`, { atSeq, title });
 	usage = (id: string) => this.req<Usage>("GET", `/sessions/${id}/usage`);

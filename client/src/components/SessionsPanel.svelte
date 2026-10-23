@@ -5,12 +5,10 @@
 	import { Api, errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import { tilde } from "../lib/format";
-	import type { RetentionInfo, RetentionPolicy, Session } from "../lib/types";
+	import type { Session } from "../lib/types";
 	import Badge from "./Badge.svelte";
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
-	import Switch from "./Switch.svelte";
-	import Select from "./Select.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
 	let { serverId }: { serverId: string } = $props();
@@ -19,7 +17,6 @@
 
 	const PAGE = 200;
 	const DAY = 24 * 3600_000;
-	const DAY_CHOICES = [7, 14, 30, 60, 90, 180, 365];
 
 	let sessions = $state<Session[] | null>(null);
 	let home = $state<string | null>(null);
@@ -28,9 +25,6 @@
 	let picked = $state<Record<string, boolean>>({});
 	let folded = $state<Record<string, boolean>>({});
 	let note = $state("");
-	let retention = $state<RetentionInfo | null>(null);
-	let policy = $state<RetentionPolicy>({ enabled: false, days: 30, onlyClosed: false });
-	let saving = $state(false);
 	let now = $state(Date.now());
 
 	/** Every session of the server, newest first. The list is paged, so keep asking until it ends. */
@@ -50,16 +44,12 @@
 		if (!api) return;
 		error = "";
 		try {
-			const [list, ws, ret] = await Promise.all([loadAll(api), api.workspace().catch(() => null), api.retention().catch(() => null)]);
+			const [list, ws] = await Promise.all([loadAll(api), api.workspace().catch(() => null)]);
 			sessions = list;
 			home = ws?.home ?? null;
 			now = Date.now();
 			const alive = new Set(list.map((s) => s.id));
 			picked = Object.fromEntries(Object.entries(picked).filter(([id]) => alive.has(id)));
-			if (ret) {
-				retention = ret;
-				policy = { ...ret.policy };
-			}
 		} catch (e) {
 			error = errorText(e);
 		}
@@ -108,14 +98,6 @@
 		else next[id] = true;
 		picked = next;
 	}
-	/** Pick every session older than the automatic limit, so it can be reviewed before deleting. */
-	function pickOlder(days: number) {
-		const cutoff = now - days * DAY;
-		const next: Record<string, boolean> = {};
-		for (const s of sessions ?? []) if (s.updatedAt < cutoff) next[s.id] = true;
-		picked = next;
-	}
-
 	async function remove() {
 		if (!api || !nChosen) return;
 		busy = true;
@@ -140,56 +122,9 @@
 		}
 	}
 
-	async function savePolicy(next: RetentionPolicy) {
-		if (!api) return;
-		saving = true;
-		error = "";
-		try {
-			retention = await api.setRetention(next);
-			policy = { ...retention.policy };
-		} catch (e) {
-			error = errorText(e);
-			if (retention) policy = { ...retention.policy };
-		} finally {
-			saving = false;
-		}
-	}
-	const lastRun = $derived(retention?.lastRun ? new Date(retention.lastRun).toLocaleString() : null);
 </script>
 
 <div class="sessions">
-	<section class="auto" aria-labelledby="ret-h">
-		<div class="row head">
-			<div class="grow">
-				<div id="ret-h" class="label">{t("자동 삭제")}</div>
-				<p class="hint">{t("오래 쓰지 않은 대화를 서버가 알아서 지웁니다. 실행 중이거나 답을 기다리는 대화는 지우지 않습니다.")}</p>
-			</div>
-			<Switch checked={policy.enabled} disabled={saving || !retention} label={t("자동 삭제")} onchange={(v) => savePolicy({ ...policy, enabled: v })} />
-		</div>
-		{#if policy.enabled}
-			<div class="opts" in:collapseIn out:collapseOut>
-				<label class="opt">
-					<span>{t("마지막 사용 후")}</span>
-					<Select size="sm" width="auto" value={policy.days} disabled={saving} label={t("자동 삭제 기간")} onchange={(days) => savePolicy({ ...policy, days })} options={(DAY_CHOICES.includes(policy.days) ? DAY_CHOICES : [...DAY_CHOICES, policy.days].sort((a, b) => a - b)).map((d) => ({ value: d, label: t("{n}일", { n: d }) }))} />
-					<span>{t("지나면 삭제")}</span>
-				</label>
-				<div class="opt check">
-					<span>{t("닫은 대화만 지우기")}</span>
-					<Switch checked={policy.onlyClosed} disabled={saving} label={t("닫은 대화만 지우기")} onchange={(on) => savePolicy({ ...policy, onlyClosed: on })} />
-				</div>
-				<p class="hint">
-					{#if retention && retention.due > 0}
-						{t("지금 기준으로 {n}개가 곧 삭제됩니다.", { n: retention.due })}
-						<button class="link" onclick={() => pickOlder(policy.days)}>{t("목록에서 보기")}</button>
-					{:else}
-						{t("지금 삭제 대상은 없습니다.")}
-					{/if}
-					{#if lastRun}<span class="dim"> · {t("마지막 정리 {when}, {n}개 삭제", { when: lastRun, n: retention?.lastDeleted ?? 0 })}</span>{/if}
-				</p>
-			</div>
-		{/if}
-	</section>
-
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if note}<Notice tone="info">{note}</Notice>{/if}
 
@@ -276,51 +211,12 @@
 		line-height: 1.5;
 		color: var(--text-faint);
 	}
-	.dim {
-		opacity: 0.85;
-	}
 	.n {
 		margin-left: 4px;
 		font-size: var(--fs-xs);
 		font-weight: 500;
 		color: var(--text-faint);
 		font-variant-numeric: tabular-nums;
-	}
-	.auto {
-		padding: 14px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-panel);
-	}
-	.opts {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		margin-top: 12px;
-		padding-top: 12px;
-		border-top: 1px solid var(--border);
-	}
-	.opt {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: var(--fs-sm);
-	}
-	.opt :global(.sel) {
-		min-width: 96px;
-	}
-	.opt.check {
-		justify-content: space-between;
-	}
-	.link {
-		background: none;
-		border: 0;
-		padding: 0;
-		color: var(--accent);
-		font: inherit;
-		cursor: pointer;
-	}
-	.link:hover {
-		text-decoration: underline;
 	}
 	.empty {
 		margin: 4px 0;

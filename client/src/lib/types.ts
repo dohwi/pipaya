@@ -19,8 +19,6 @@ export type ApprovalPolicy = "auto" | "ask" | "readonly";
 export type ApprovalMode = "ask" | "auto";
 export type SendMode = "prompt" | "steer" | "follow_up";
 
-/** What the server deletes by itself: sessions not used for `days` days (only closed ones when `onlyClosed`). */
-export interface RetentionPolicy { enabled: boolean; days: number; onlyClosed: boolean }
 /** A model with the reasoning strength to run it at; the two are always chosen together. */
 export interface ModelChoice extends ModelSelection {
 	thinkingLevel?: ThinkingLevel;
@@ -71,7 +69,6 @@ export interface SystemModelSettings {
 }
 export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
 
-export interface RetentionInfo { policy: RetentionPolicy; lastRun: number | null; lastDeleted: number; due: number }
 
 export interface Session {
 	id: string;
