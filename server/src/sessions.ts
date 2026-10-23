@@ -611,7 +611,7 @@ export class SessionManager {
 			if (!e) out.set(sessionId, (e = { sessionId, running: false, pendingQuestions: 0 }));
 			return e;
 		};
-		for (const [sessionId, l] of this.live) if (l.running) row(sessionId).running = true;
+		for (const [sessionId, l] of this.live) if (l.running || l.compacting) row(sessionId).running = true;
 		for (const r of this.questions?.list() ?? []) row(r.sessionId).pendingQuestions++;
 		return [...out.values()];
 	}

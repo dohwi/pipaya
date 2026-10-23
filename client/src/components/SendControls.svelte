@@ -147,6 +147,7 @@
 		grid-area: 1 / 1;
 		display: flex;
 		align-items: center;
+		gap: 6px;
 	}
 	.send {
 		display: grid;

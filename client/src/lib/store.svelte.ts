@@ -997,6 +997,13 @@ class AppStore {
         if (this.activeId === id) this.leave(next);
         break;
       }
+      case "compaction_started":
+        if (sid) this.running[sid] = true;
+        break;
+      case "compaction_finished":
+      case "compaction_failed":
+        if (sid && !this.chats[sid]?.running) this.running[sid] = false;
+        break;
       case "run_started":
         if (sid) {
           this.running[sid] = true;
@@ -1074,6 +1081,7 @@ class AppStore {
         void chat.refreshContext();
       }
       if (e.type === "session_updated") void chat.refreshContext();
+      if (e.type === "compaction_finished" || e.type === "compaction_failed") void this.flushHeld(chat);
     }
   }
 
@@ -1769,6 +1777,13 @@ class AppStore {
       const chat = this.chatOf(to);
       if (!chat) return false;
 
+      // During a compaction the model context is being rewritten: wait in the queue and go out right after it.
+      if (chat.compacting && !chat.running) {
+        chat.held.push({ text, images, files });
+        chat.requestBottom();
+        return true;
+      }
+
       const mode: SendMode = chat.running ? "follow_up" : "prompt";
       if (mode === "prompt" && !seeded) chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
       chat.requestBottom();
@@ -1784,6 +1799,16 @@ class AppStore {
       return false;
     } finally {
       this.sending = false;
+    }
+  }
+
+  /** Send what was held during a compaction: the first starts the run, the rest queue behind it. */
+  private async flushHeld(chat: ChatState): Promise<void> {
+    if (chat.compacting || !chat.held.length) return;
+    const list = chat.held.splice(0);
+    for (const [i, h] of list.entries()) {
+      const ok = i === 0 ? await this.send(h.text, h.images, chat.id, h.files) : await this.queue(h.text, h.images, chat.id, h.files);
+      if (!ok) break;
     }
   }
 
@@ -1859,7 +1884,7 @@ class AppStore {
   /** Queue manager dialog: the session whose queued messages are listed. null = closed. */
   queueDialog = $state<string | null>(null);
   openQueue(id: string | null = this.activeId) {
-    if (!id || !this.chatOf(id)?.queued.length) return void this.toast(t("취소할 대기열이 없습니다"), "error", id);
+    if (!id || !this.chatOf(id)?.waiting.length) return void this.toast(t("취소할 대기열이 없습니다"), "error", id);
     this.queueDialog = id;
   }
 
@@ -1867,6 +1892,12 @@ class AppStore {
   async cancelQueued(item: { mode: "steer" | "follow_up"; text: string }, id: string | null = this.queueDialog): Promise<void> {
     const chat = this.chatOf(id);
     if (!this.api || !chat) return;
+    const h = item.mode === "follow_up" ? chat.held.findIndex((x) => x.text === item.text) : -1;
+    if (h >= 0) {
+      chat.held.splice(h, 1);
+      if (chat.id === this.activeId) this.prefill = item.text;
+      return;
+    }
     try {
       const r = await this.api.cancelQueued(chat.id, item.mode, item.text);
       if (!r.cancelled) {
@@ -1919,6 +1950,8 @@ class AppStore {
       return true;
     } catch {
       return false;
+    } finally {
+      void this.flushHeld(chat);
     }
   }
 

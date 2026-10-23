@@ -673,8 +673,8 @@
 			</div>
 		{/if}
 
-		{#if chat?.queued.length}
-			<QueuedList queued={chat.queued} oncancel={(q) => app.cancelQueued(q, pane.id)} />
+		{#if chat?.waiting.length}
+			<QueuedList queued={chat.waiting} oncancel={(q) => app.cancelQueued(q, pane.id)} />
 		{/if}
 
 		<div class="field-wrap">

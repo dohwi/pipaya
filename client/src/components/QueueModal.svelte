@@ -11,7 +11,7 @@
 	 * time. Like the slash menu: ↑/↓ moves the highlight, Enter / Delete / Backspace or a click removes the row.
 	 */
 	const chat = $derived(app.chatOf(app.queueDialog));
-	const items = $derived(orderQueued(chat?.queued ?? []));
+	const items = $derived(orderQueued(chat?.waiting ?? []));
 	let listEl = $state<HTMLElement | null>(null);
 	// The highlighted row, like the slash menu: arrows move it, Enter / Delete removes it.
 	let index = $state(0);

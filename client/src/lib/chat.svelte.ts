@@ -16,6 +16,7 @@ import type {
 	StreamDelta,
 	ToolRun,
 	Usage,
+	UploadFile,
 	UserItem,
 } from "./types";
 
@@ -108,6 +109,12 @@ export class ChatState {
 	items = $state<ChatItem[]>([]);
 	tools = $state<Record<string, ToolRun>>({});
 	queued = $state<{ mode: "steer" | "follow_up"; text: string }[]>([]);
+	/** Messages sent while a compaction runs: held here and sent as soon as it ends (shown as queued). */
+	held = $state<{ text: string; images: ImageBlock[]; files: UploadFile[] }[]>([]);
+	/** Everything waiting for delivery: held messages first (they go out first), then the server's queue. */
+	get waiting(): { mode: "steer" | "follow_up"; text: string }[] {
+		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];
+	}
 	running = $state(false);
 	/** Bumped when the user sends something (prompt / steer / queue): the list jumps to the bottom, even if it was scrolled up. */
 	bottomRequest = $state(0);
