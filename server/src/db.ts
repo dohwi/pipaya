@@ -1,7 +1,6 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { nextMemberName } from "./member-names.ts";
 
 const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
@@ -126,27 +125,8 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
 	// v18: each session in a group gets a name (JSON { sessionId: name }), so members can be addressed as @name.
 	(db) => { if (!(db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups ADD COLUMN names TEXT NOT NULL DEFAULT '{}'"); },
-	// v19: the @name belongs to the session, not to a group, so any two sessions can address each other. Existing sessions keep the
-	// name they had in their group; the rest are numbered in creation order (the pool lives in groups.ts, so the names are given in code).
-	(db) => {
-		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''");
-		const taken = new Set<string>();
-		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
-		for (const g of db.query("SELECT names FROM groups").all() as { names: string }[]) {
-			for (const [id, name] of Object.entries(JSON.parse(g.names || "{}") as Record<string, string>)) {
-				if (taken.has(name.toLowerCase())) continue;
-				const row = db.query("SELECT closed FROM sessions WHERE id = $id").get({ id }) as { closed: number } | null;
-				if (!row || row.closed) continue;
-				taken.add(name.toLowerCase());
-				set.run({ id, name });
-			}
-		}
-		for (const s of db.query("SELECT id FROM sessions WHERE name = '' AND closed = 0 ORDER BY created_at, id").all() as { id: string }[]) {
-			const name = nextMemberName(taken);
-			taken.add(name.toLowerCase());
-			set.run({ id: s.id, name });
-		}
-	},
+	// v19: a name for each session (since moved out of core, see v22): the column is added; older databases already had names given here.
+	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''"); },
 	// v20: what a session's agent works on (written by the system model), shown beside its @name.
 	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "purpose")) db.exec("ALTER TABLE sessions ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"); },
 	// v21: a group's tag (its name with dashes, any case) must differ from every other group's and every active session's @name.
@@ -167,6 +147,21 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 DELETE FROM settings WHERE key = 'default_approval';`,
 	// Images uploaded as model icons (a model's `icon` is "img:<id>").
 	`CREATE TABLE IF NOT EXISTS model_icons (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);`,
+	// v22: names are no longer a core concept. A generic per-session store for extensions takes over; the names sessions
+	// had are handed to peer-tools (the extension that uses them), then the column goes.
+	`CREATE TABLE IF NOT EXISTS extension_session_data (
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		extension  TEXT NOT NULL,
+		key        TEXT NOT NULL,
+		value      TEXT NOT NULL,
+		PRIMARY KEY (session_id, extension, key)
+	);`,
+	(db) => {
+		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) return;
+		db.exec(`INSERT OR IGNORE INTO extension_session_data (session_id, extension, key, value)
+			SELECT id, 'peer-tools', 'name', json_quote(name) FROM sessions WHERE name != '' AND closed = 0;
+			ALTER TABLE sessions DROP COLUMN name;`);
+	},
 ];
 
 export function openDb(path: string): Database {

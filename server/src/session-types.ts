@@ -21,8 +21,6 @@ export interface CreateSessionInput {
 	thinkingLevel?: ThinkingLevel;
 	systemPrompt?: string;
 	tools?: string[];
-	/** UI language tag of the client (`ko`, `en`, ...); picks the name pool. Omitted = Korean names. */
-	lang?: string;
 }
 
 export interface SessionStatus {

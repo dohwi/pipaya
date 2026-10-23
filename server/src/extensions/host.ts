@@ -8,7 +8,7 @@ import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import type {
-	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionSessions, ExtensionTool, PromptMode, ServerEvent, ToolResult,
+	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -233,6 +233,22 @@ export class ExtensionHost {
 			if (!this.bridge) throw new Error(`${what} are not ready`);
 			return this.bridge;
 		};
+		const sessionData: ExtensionSessionData = {
+			get: (sid, key) => {
+				const row = this.opts.db.query("SELECT value FROM extension_session_data WHERE session_id = $sid AND extension = $ext AND key = $key").get({ sid, ext: ext.name, key }) as { value: string } | null;
+				return row ? JSON.parse(row.value) : undefined;
+			},
+			set: (sid, key, value) => {
+				const text = JSON.stringify(value ?? null);
+				if (text.length > 4000) throw new Error("a session value is at most 4000 characters");
+				if (typeof key !== "string" || !key || key.length > 80) throw new Error("key must be 1-80 characters");
+				try {
+					this.opts.db.query("INSERT INTO extension_session_data (session_id, extension, key, value) VALUES ($sid, $ext, $key, $value) ON CONFLICT (session_id, extension, key) DO UPDATE SET value = excluded.value").run({ sid, ext: ext.name, key, value: text });
+				} catch { throw new Error("unknown session"); }
+			},
+			delete: (sid, key) => void this.opts.db.query("DELETE FROM extension_session_data WHERE session_id = $sid AND extension = $ext AND key = $key").run({ sid, ext: ext.name, key }),
+			list: (key) => Object.fromEntries((this.opts.db.query("SELECT session_id, value FROM extension_session_data WHERE extension = $ext AND key = $key").all({ ext: ext.name, key }) as { session_id: string; value: string }[]).map((r) => [r.session_id, JSON.parse(r.value)])),
+		};
 		const own = (what: string, name: string, has: boolean) => { if (has) throw new Error(`${what} "${name}" is already registered by this extension`); };
 		return {
 			Type: Type as ExtensionAPI["Type"],
@@ -264,9 +280,9 @@ export class ExtensionHost {
 			})(),
 			home: this.opts.home ?? homedir(),
 			defaultCwd: () => this.bridge?.defaultCwd() ?? process.cwd(),
-			get sessions(): ExtensionSessions {
-				return bridgeSessions();
-			},
+			sessions: new Proxy({} as ExtensionSessions & { data: ExtensionSessionData }, {
+				get: (_t, prop) => (prop === "data" ? sessionData : (bridgeSessions() as unknown as Record<string | symbol, unknown>)[prop]),
+			}),
 			get groups(): ExtensionGroups {
 				return bridged("groups").groups;
 			},

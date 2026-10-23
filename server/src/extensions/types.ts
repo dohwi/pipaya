@@ -41,8 +41,6 @@ export interface AskRequest {
 /** A session as an extension sees it. */
 export interface SessionInfo {
 	id: string;
-	/** How other sessions address it (`@name`); "" for a closed one. */
-	name: string;
 	title: string;
 	/** What its agent works on (written by the system model); "" until then. */
 	purpose: string;
@@ -124,6 +122,17 @@ export interface ExtensionSessions {
 	answer(id: string, toolCallId: string, answer: string | string[]): boolean;
 	/** Delete a session. Returns false (and deletes nothing) when it is unknown or busy. */
 	delete(id: string): boolean;
+}
+
+/** This extension's own small values on sessions (a name, a label, a marker): kept with the session, removed with it, invisible to other extensions. */
+export interface ExtensionSessionData {
+	/** `undefined` when unset. */
+	get(sessionId: string, key: string): unknown;
+	/** Any JSON value, at most 4000 characters once serialized; unknown sessions are refused. */
+	set(sessionId: string, key: string, value: unknown): void;
+	delete(sessionId: string, key: string): void;
+	/** The value under `key` for every session that has one: `{ [sessionId]: value }`. */
+	list(key: string): Record<string, unknown>;
 }
 
 /** A group: a named split-window layout. `sessionIds` are its session panes (terminal panes are left out). */
@@ -341,7 +350,7 @@ export interface ExtensionAPI {
 		emit(channel: string, data?: unknown): void;
 	};
 	/** Every session of this server: list, read, create, change, message, stop, delete. */
-	sessions: ExtensionSessions;
+	sessions: ExtensionSessions & { data: ExtensionSessionData };
 	/** Session groups (split-window layouts): list, create, change, delete. */
 	groups: ExtensionGroups;
 	/** The models the server can use, and one-shot completions on them. */

@@ -390,14 +390,9 @@ class AppStore {
       }
     });
     this.prefs.init();
-    // Session @names follow the UI language (민수 <-> Minsu); the server renames, and session_updated events refresh the list.
-    let korean = /^ko(?:-|$)/i.test(getLang());
-    onLangChange(() => {
-      const now = /^ko(?:-|$)/i.test(getLang());
-      if (now === korean) return;
-      korean = now;
-      void this.api?.localizeNames(getLang()).catch(() => {}); // offline: names just stay
-    });
+    // Client extensions hear when the UI language changes (they may keep text in it); nothing else is forwarded.
+    let language = getLang();
+    onLangChange(() => { if (getLang() !== language) { language = getLang(); extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() }); } });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.hiddenAt = Date.now();

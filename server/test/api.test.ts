@@ -425,21 +425,6 @@ describe("sessions", () => {
 		await untilIdle(id);
 	});
 
-	test("resuming a closed session never duplicates an active session's @name", async () => {
-		const a = (await api("POST", "/sessions", {})).json;
-		expect(a.name).toBeTruthy();
-		await api("PATCH", `/sessions/${a.id}`, { closed: true });
-		// the freed name goes to the next new session
-		const b = (await api("POST", "/sessions", {})).json;
-		expect(b.name).toBe(a.name);
-		const back = (await api("PATCH", `/sessions/${a.id}`, { closed: false })).json;
-		expect(back.name).toBeTruthy();
-		expect(back.name).not.toBe(b.name);
-		const active = (await api("GET", "/sessions?closed=false&limit=200")).json.sessions.map((s: any) => s.name.toLowerCase());
-		expect(new Set(active).size).toBe(active.length);
-		await api("PATCH", `/sessions/${a.id}`, { closed: true });
-		await api("PATCH", `/sessions/${b.id}`, { closed: true });
-	});
 
 	test("closing a running session aborts the run", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;

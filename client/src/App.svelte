@@ -37,7 +37,7 @@
 	import { notifications } from "./lib/notifications";
 	import { nativePushAdapter } from "./lib/native-push";
 	import { notificationRules } from "./lib/notification-rules";
-	import { t } from "./lib/i18n";
+	import { getLang, t } from "./lib/i18n";
 	import { isTauri } from "./lib/tauri";
 	import { notificationPlatform } from "./lib/notifications";
 	import { listenForPairingLinks } from "./lib/pairing-intake";
@@ -135,7 +135,7 @@
 				remove: async (owner, id) => { await notificationRules.remove(api(), owner, id); },
 				revoke: async owner => { await notificationRules.revoke(api(), owner); },
 			},
-			context: () => ({ sessionId: app.activeId, model: app.effective.model, provider: app.effective.provider, running: app.runningHere, online: app.net === "online" }),
+			context: () => ({ sessionId: app.activeId, model: app.effective.model, provider: app.effective.provider, running: app.runningHere, online: app.net === "online", language: getLang() }),
 			session: {
 				send: async (text, mode) => { if (!app.activeId) throw new Error(t("열려 있는 대화가 없습니다")); const ok = mode === "steer" ? await app.steer(text) : mode === "follow_up" ? await app.queue(text) : await app.send(text); if (!ok) throw new Error(t("보내지 못했습니다")); },
 				abort: async () => { if (app.activeId) await app.abort(); },

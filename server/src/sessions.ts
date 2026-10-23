@@ -14,7 +14,6 @@ import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
-import { groupHandle, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -62,13 +61,6 @@ export class SessionManager {
 	private backfilling = false;
 	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
-	/** Session ids of every group, wired by the app once the group manager exists; `@group` mentions read it. */
-	private groupSource: () => { name: string; sessionIds: string[] }[] = () => [];
-
-	setGroupSource(fn: () => { name: string; sessionIds: string[] }[]): void {
-		this.groupSource = fn;
-	}
-
 	constructor(
 		private cfg: Config,
 		private store: SessionStore,
@@ -107,7 +99,6 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
-			name: nextMemberName(this.takenNames(), poolForLang(input.lang)),
 			purpose: "",
 			cwd,
 			provider,
@@ -276,27 +267,6 @@ export class SessionManager {
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }
 	}
 
-	/** Lower-cased names a new session must not take: the active sessions' and the tags of the groups. */
-	private takenNames(): Set<string> {
-		const taken = new Set(this.store.activeNames());
-		for (const g of this.groupSource()) taken.add(groupHandle(g.name).toLowerCase());
-		return taken;
-	}
-
-	/** The UI language changed: give every session the twin of its name in that language (민수 <-> Minsu). Returns how many were renamed. */
-	localizeNames(lang: string): number {
-		const pool = poolForLang(lang);
-		let renamed = 0;
-		for (const r of this.store.list({ limit: 1000 })) {
-			let name = nameInLang(r.name, lang);
-			if (name === r.name) continue;
-			if (!r.closed && this.takenNames().has(name.toLowerCase())) name = nextMemberName(this.takenNames(), pool);
-			this.update(r.id, { name });
-			renamed++;
-		}
-		return renamed;
-	}
-
 	update(id: string, patch: SessionPatch): SessionRecord {
 		const current = this.get(id);
 		const clean: SessionPatch = { ...patch };
@@ -316,8 +286,6 @@ export class SessionManager {
 		}
 
 		if (patch.closed === false && current.closed) this.assertRoom();
-		// A closed session gives its name up; on resume it takes it back unless another session has it by now (or it never had one).
-		if (patch.closed === false && current.closed && (!current.name || this.takenNames().has(current.name.toLowerCase()))) clean.name = nextMemberName(this.takenNames(), poolOfName(current.name));
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 
@@ -360,7 +328,6 @@ export class SessionManager {
 				thinkingLevel: src.thinkingLevel,
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
-				lang: poolOfName(src.name) === MEMBER_NAMES_EN ? "en" : "ko",
 			},
 			src.id,
 		);

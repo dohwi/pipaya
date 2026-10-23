@@ -124,7 +124,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
-		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
+		id: r.id, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
 		tools: r.tools, closed: r.closed, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
 	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
@@ -197,9 +197,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	configuration.setSwitchableSource(() => extensions.switchableTools());
-	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
 	groups.evictWhere(isTerminalId);
-	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
@@ -389,10 +388,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	app.post("/sessions", {
 		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },
 		handler: async (req, reply) => reply.status(201).send(await sessions.create(req.body)),
-	});
-	app.post("/sessions/localize-names", {
-		schema: { body: S.LocalizeNamesBody, response: { 200: Type.Object({ renamed: Type.Integer() }), ...S.errors(400, 401) } },
-		handler: async (req) => ({ renamed: sessions.localizeNames(req.body.lang) }),
 	});
 	app.get("/sessions", {
 		schema: { querystring: S.ListSessionsQuery, response: { 200: S.SessionList, ...S.errors(400, 401) } },

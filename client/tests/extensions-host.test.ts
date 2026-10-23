@@ -88,7 +88,7 @@ beforeEach(() => {
 });
 
 // ---- helpers ----
-const CONTEXT: ExtensionContext = { sessionId: "s1", model: "model-x", provider: "prov", running: false, online: true };
+const CONTEXT: ExtensionContext = { sessionId: "s1", model: "model-x", provider: "prov", running: false, online: true, language: "ko" };
 function makeAdapter(opts: { dark?: boolean; context?: () => unknown } = {}) {
 	const calls = { prefill: [] as string[], notify: [] as string[] };
 	const adapter: HostAdapter = {
@@ -490,7 +490,7 @@ describe("capability-checked SDK requests", () => {
 		const { host } = newHost();
 		const { id } = await activate(host, code("example.all"));
 		const ctx = call(host, id, "context.get");
-		expect(Object.keys(ctx).sort()).toEqual(["model", "online", "provider", "running", "sessionId"]);
+		expect(Object.keys(ctx).sort()).toEqual(["language", "model", "online", "provider", "running", "sessionId"]);
 		expect(JSON.stringify(ctx)).not.toMatch(/token|secret|password|api.?key/i);
 	});
 
@@ -500,7 +500,7 @@ describe("capability-checked SDK requests", () => {
 		const { id } = await activate(host, code("example.all"));
 		const ctx = call(host, id, "context.get");
 		expect(JSON.stringify(ctx)).not.toMatch(/secret-token|sk-123|Bearer/);
-		expect(Object.keys(ctx).sort()).toEqual(["model", "online", "provider", "running", "sessionId"]);
+		expect(Object.keys(ctx).sort()).toEqual(["language", "model", "online", "provider", "running", "sessionId"]);
 	});
 });
 

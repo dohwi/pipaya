@@ -9,8 +9,6 @@ export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export interface SessionRecord {
 	id: string;
 	title: string;
-	/** How other sessions address this one (`@name`); unique among active sessions. */
-	name: string;
 	/** What this session's agent works on, written by the system model; "" until then. */
 	purpose: string;
 	cwd: string;
@@ -29,7 +27,6 @@ export interface SessionRecord {
 interface SessionRow {
 	id: string;
 	title: string;
-	name: string;
 	purpose: string;
 	cwd: string;
 	provider: string;
@@ -46,7 +43,6 @@ interface SessionRow {
 const toRecord = (r: SessionRow): SessionRecord => ({
 	id: r.id,
 	title: r.title,
-	name: r.name,
 	purpose: r.purpose ?? "",
 	cwd: r.cwd,
 	provider: r.provider,
@@ -61,12 +57,11 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	title: "title",
-	name: "name",
 	purpose: "purpose",
 	provider: "provider",
 	model: "model",
@@ -99,13 +94,12 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at)
-				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $created, $updated)`,
+				`INSERT INTO sessions (id, title, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
 				title: r.title,
-				name: r.name,
 				purpose: r.purpose,
 				cwd: r.cwd,
 				provider: r.provider,
@@ -139,13 +133,8 @@ export class SessionStore {
 		return rows.map(toRecord);
 	}
 
-	/** Lower-cased names of the active sessions (closed ones give theirs up). */
 	activeCount(): number {
 		return (this.db.query("SELECT COUNT(*) AS n FROM sessions WHERE closed = 0").get() as { n: number }).n;
-	}
-
-	activeNames(): Set<string> {
-		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
 	}
 
 	/** Working directories that have sessions, with how many are active / closed. */

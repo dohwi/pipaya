@@ -225,10 +225,10 @@ const unsubscribe = await sdk.events.on(async event => {
 
 ```ts
 { sessionId: string | null, model: string, provider: string,
-  running: boolean, online: boolean }
+  running: boolean, online: boolean, language: string }
 ```
 
-이벤트는 `{type, sessionId?, at, status?, toolName?, isError?, groupId?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `question_requested`, `question_resolved`, `group_created`, `group_updated`, `group_deleted`, `extensions_updated`, `turn_end`, `tool_execution_end`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만, `toolName`과 `isError`는 `tool_execution_end`에만 전달됩니다(도구 인자와 결과 내용은 전달하지 않습니다). 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
+이벤트는 `{type, sessionId?, at, status?, toolName?, isError?, groupId?}` 형태입니다. 허용 목록은 `run_started`, `run_finished`, `session_created`, `session_updated`, `session_deleted`, `compaction_finished`, `question_requested`, `question_resolved`, `group_created`, `group_updated`, `group_deleted`, `extensions_updated`, `language_changed`, `turn_end`, `tool_execution_end`. `at`은 밀리초 타임스탬프, `status`는 `run_finished`에만, `toolName`과 `isError`는 `tool_execution_end`에만 전달됩니다(도구 인자와 결과 내용은 전달하지 않습니다). 재연결 중 기존 이벤트를 다시 받을 수 있으므로 정확히 한 번 실행되는 보장으로 쓰지 마세요. 해제 함수는 Worker 내부 listener를 제거하며, 전체 비활성화는 Worker와 호스트 구독도 제거합니다.
 
 설정 화면에서 확장별 JSON 객체를 편집합니다. 활성화된 확장에는 다시 불러오기로 반영합니다. 저장소의 없는 키는 `null`입니다. `__proto__`, `constructor`, `prototype` 키는 쓸 수 없습니다. 확장 삭제 시 자신의 저장소도 삭제됩니다. console 출력은 SDK 로그로 연결되며 로그는 클라이언트 실행 중 최신 100개만 유지합니다.
 

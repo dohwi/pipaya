@@ -6,8 +6,6 @@ import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 import { cleanLayout, panesOf, withoutSession, type Layout } from "../src/groups.ts";
-import { DEFAULT_MAX_SESSIONS } from "../src/config.ts";
-import { MEMBER_NAMES_EN, MEMBER_NAMES_KO, nameInLang, nextMemberName, poolForLang, romanize } from "../src/member-names.ts";
 
 let app: App;
 let base: string;
@@ -41,28 +39,6 @@ afterAll(async () => {
 	await app.close();
 	upstream.stop();
 	rmSync(dir, { recursive: true, force: true });
-});
-
-describe("member names", () => {
-	test("nextMemberName gives the first free name, then numbers", () => {
-		expect(nextMemberName(new Set())).toBe("철수");
-		expect(nextMemberName(new Set(["철수", "미나"]))).toBe("가온");
-		expect(nextMemberName(new Set(MEMBER_NAMES_KO.map((n) => n.toLowerCase())))).toBe("철수2");
-		expect(nextMemberName(new Set(), MEMBER_NAMES_EN)).toBe("Cheolsu");
-		expect(nextMemberName(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())), MEMBER_NAMES_EN)).toBe("Cheolsu2");
-	});
-	test("each pool has no duplicates and covers the default session limit", () => {
-		for (const pool of [MEMBER_NAMES_KO, MEMBER_NAMES_EN]) {
-			expect(new Set(pool.map((n) => n.toLowerCase())).size).toBe(pool.length);
-			expect(pool.length).toBeGreaterThanOrEqual(DEFAULT_MAX_SESSIONS);
-		}
-		expect(MEMBER_NAMES_KO.every((n) => /^[가-힣]+$/.test(n))).toBe(true);
-		expect(MEMBER_NAMES_EN.every((n) => /^[A-Za-z]+$/.test(n))).toBe(true);
-		expect(poolForLang()).toBe(MEMBER_NAMES_KO);
-		expect(poolForLang("ko-KR")).toBe(MEMBER_NAMES_KO);
-		expect(poolForLang("en")).toBe(MEMBER_NAMES_EN);
-		expect(poolForLang("ja")).toBe(MEMBER_NAMES_EN);
-	});
 });
 
 describe("layout helpers", () => {
@@ -159,38 +135,14 @@ describe("groups API", () => {
 		await api("DELETE", `/groups/${g.id}`);
 	});
 
-	test("every session has a unique name, whether or not it is in a group; a closed one gives its name up", async () => {
-		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
-		const names = async () => Object.fromEntries(await Promise.all([a, b, c].map(async (id) => [id, (await api("GET", `/sessions/${id}`)).json.name as string])));
-		const before = await names();
-		expect(new Set(Object.values(before)).size).toBe(3);
-		expect(Object.values(before).every(Boolean)).toBe(true);
-		await api("PATCH", `/sessions/${c}`, { closed: true });
-		const d = (await mk())!;
-		expect((await api("GET", `/sessions/${d}`)).json.name).toBe(before[c]);
-		await api("PATCH", `/sessions/${c}`, { closed: false });
-		const after = (await api("GET", `/sessions/${c}`)).json.name as string;
-		expect(after).not.toBe(before[c]);
-		expect(after).not.toBe(before[a]);
-		expect(after).not.toBe(before[b]);
-	});
-
-	test("group names stay unique among groups and session names, so a tag has one meaning", async () => {
+	test("group names stay unique among groups, so a tag has one meaning", async () => {
 		const [a, b, c, d] = [(await mk())!, (await mk())!, (await mk())!, (await mk())!];
-		const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;
 		const g1 = (await api("POST", "/groups", { name: "Docs Team", layout: split(pane(a), pane(b)) })).json;
 		const g2 = (await api("POST", "/groups", { name: "docs-team", layout: split(pane(c), pane(d)) })).json;
 		expect(g1.name).toBe("Docs Team");
 		expect(g2.name).toBe("docs-team 2");
-		// a group may not take an active session's name either
-		const g3 = (await api("PATCH", `/groups/${g2.id}`, { name: (await nameOf(a)).toUpperCase() })).json;
-		expect(g3.name).toBe(`${(await nameOf(a)).toUpperCase()} 2`);
 		// renaming to its own name keeps it
 		expect((await api("PATCH", `/groups/${g1.id}`, { name: "Docs Team" })).json.name).toBe("Docs Team");
-		// a new session skips the names of groups
-		await api("PATCH", `/groups/${g1.id}`, { name: MEMBER_NAMES_KO[0] });
-		const fresh = await nameOf((await mk())!);
-		expect(fresh.toLowerCase()).not.toBe(MEMBER_NAMES_KO[0]!.toLowerCase());
 		await api("DELETE", `/groups/${g1.id}`);
 		await api("DELETE", `/groups/${g2.id}`);
 	});
@@ -198,45 +150,6 @@ describe("groups API", () => {
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);
-	});
-});
-
-describe("name localization", () => {
-	test("romanizes Hangul names", () => {
-		expect(romanize("민수")).toBe("Minsu");
-		expect(romanize("철수")).toBe("Cheolsu");
-		expect(romanize("영희")).toBe("Yeonghui");
-		expect(romanize("가온")).toBe("Gaon");
-	});
-	test("nameInLang maps a name to its twin and back, keeping a number suffix", () => {
-		expect(nameInLang("민수", "en")).toBe("Minsu");
-		expect(nameInLang("민수2", "en")).toBe("Minsu2");
-		expect(nameInLang("Minsu", "ko")).toBe("민수");
-		expect(nameInLang("minsu2", "ko-KR")).toBe("민수2");
-		expect(nameInLang("민수", "ko")).toBe("민수");
-		expect(nameInLang("Custom", "ko")).toBe("Custom");
-	});
-	test("POST /sessions/localize-names renames every session and back", async () => {
-		const a = (await api("POST", "/sessions", {})).json;
-		const r = await api("POST", "/sessions/localize-names", { lang: "en" });
-		expect(r.json.renamed).toBeGreaterThan(0);
-		expect((await api("GET", `/sessions/${a.id}`)).json.name).toBe(nameInLang(a.name, "en"));
-		await api("POST", "/sessions/localize-names", { lang: "ko" });
-		expect((await api("GET", `/sessions/${a.id}`)).json.name).toBe(a.name);
-	});
-});
-
-describe("session name language", () => {
-	test("a session takes a name from the pool of the UI language, and keeps it when forked", async () => {
-		const en = (await api("POST", "/sessions", { lang: "en" })).json;
-		const ko = (await api("POST", "/sessions", { lang: "ko-KR" })).json;
-		const none = (await api("POST", "/sessions", {})).json;
-		expect(MEMBER_NAMES_EN).toContain(en.name);
-		expect(MEMBER_NAMES_KO).toContain(ko.name);
-		expect(MEMBER_NAMES_KO).toContain(none.name);
-		const fork = (await api("POST", `/sessions/${en.id}/fork`, {})).json;
-		expect(MEMBER_NAMES_EN).toContain(fork.name);
-		expect(fork.name).not.toBe(en.name);
 	});
 });
 

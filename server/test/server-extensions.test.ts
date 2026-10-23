@@ -260,6 +260,9 @@ export default (pi) => {
 		const fork = await pi.sessions.fork(a.id, { title: "copy" });
 		return { a: renamed, b, group, fork, groups: pi.groups.list().length, abort: pi.sessions.abort(a.id), questions: pi.sessions.questions(a.id) };
 	});
+	pi.registerMethod("tag", (p) => { pi.sessions.data.set(p.id, "tag", p.value); return pi.sessions.data.list("tag"); });
+	pi.registerMethod("untag", (p) => { pi.sessions.data.delete(p.id, "tag"); return pi.sessions.data.get(p.id, "tag") ?? null; });
+	pi.registerMethod("tagBad", (p) => { try { pi.sessions.data.set("nope", "tag", 1); return "no error"; } catch (e) { return e.message; } });
 	pi.registerMethod("ungroup", (p) => pi.groups.delete(p.id));
 	pi.registerMethod("models", async () => (await pi.models.list()).map((m) => m.provider + "/" + m.id));
 	pi.registerMethod("complete", async () => (await pi.models.complete({ input: "hi there" })).text);
@@ -307,6 +310,17 @@ export default (pi) => {
 		const seen = (await method("seen")).result as string[];
 		expect(seen.filter((t) => t === "session_created")).toHaveLength(3);
 		expect(seen).toContain("group_created");
+	});
+
+	test("sessions.data keeps an extension's own values with the session, and deleting the session removes them", async () => {
+		const id = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
+		expect((await method("tag", { id, value: { label: "x" } })).result).toEqual({ [id]: { label: "x" } });
+		expect((await method("tagBad")).result).toBe("unknown session");
+		expect((await method("untag", { id })).result).toBeNull();
+		await method("tag", { id, value: 1 });
+		await call("DELETE", `/sessions/${id}`);
+		const other = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
+		expect((await method("tag", { id: other, value: 2 })).result).toEqual({ [other]: 2 });
 	});
 
 	test("models can be listed and used for a one-shot completion", async () => {

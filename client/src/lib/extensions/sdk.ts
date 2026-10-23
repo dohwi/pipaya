@@ -13,9 +13,11 @@ export interface ExtensionContext {
   provider: string;
   running: boolean;
   online: boolean;
+  /** The UI language tag in use (`ko`, `en`, ...). */
+  language: string;
 }
 export interface ExtensionEvent {
-  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end" | "group_created" | "group_updated" | "group_deleted" | "extensions_updated";
+  type: "run_started" | "run_finished" | "session_created" | "session_updated" | "session_deleted" | "compaction_finished" | "question_requested" | "question_resolved" | "turn_end" | "tool_execution_end" | "group_created" | "group_updated" | "group_deleted" | "extensions_updated" | "language_changed";
   sessionId?: string | null;
   /** `group_*` only: the group. */
   groupId?: string;

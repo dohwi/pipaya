@@ -1021,7 +1021,7 @@ export class ExtensionHost {
       case "context.get": {
         this.require(id, "context");
         const c = this.adapter!.context();
-        return { sessionId: c.sessionId, model: c.model, provider: c.provider, running: c.running, online: c.online };
+        return { sessionId: c.sessionId, model: c.model, provider: c.provider, running: c.running, online: c.online, language: typeof c.language === "string" ? c.language : "" };
       }
       case "events.subscribe": this.require(id, "events"); this.subscribed.add(id); return;
       case "server.subscribe": this.require(id, "server"); this.serverSubscribed.add(id); return;
