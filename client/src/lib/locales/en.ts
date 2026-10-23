@@ -678,6 +678,8 @@ export const en: Record<string, string> = {
 	"서버에서 실행": "Runs on the server",
 	"관리": "Manage",
 	"목록": "List",
+	"하위 항목 접기": "Collapse items",
+	"하위 항목 펼치기": "Expand items",
 	"이 기기의 확장": "Extensions on this device",
 	"이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.": "Installed only on this device and kept whichever server you connect to. Never sent to a server.",
 	"이 기기에 설치된 확장이 없습니다": "No extensions on this device",

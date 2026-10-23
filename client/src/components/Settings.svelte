@@ -60,6 +60,8 @@
 	let dir = $state(1);
 	/** The extension open in the "확장" panes; the sidebar lists them under their section. */
 	let extId = $state<string | null>(null);
+	/** Sections whose extensions the user folded away in the sidebar; everything starts unfolded. */
+	let collapsed = $state<Record<string, boolean>>({});
 	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
 	const extsOf = (id: string) => { const sc = extScope(id); return sc ? extensions.installed.filter((e) => e.scope === sc) : []; };
 	function openExt(tabId: TabId, id: string) {
@@ -208,21 +210,30 @@
 		>
 			{#each scoped as x (x.id)}
 				{#if !x.server || server}
-					<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
-						<Icon name={x.icon} />
-						<span class="nt">
-							<span class="nl">{t(x.label)}</span>
-							{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
-						</span>
-					</button>
-					{#if tab === x.id}
-						{#each extsOf(x.id) as e (e.package.manifest.id)}
-							{@const eid = e.package.manifest.id}
-							<button role="tab" class="sub" aria-selected={extId === eid} tabindex={extId === eid ? 0 : -1} class:on={extId === eid} onclick={() => openExt(x.id, eid)}>
-								<span class="dot" class:live={e.state === "active" || e.state === "starting"} aria-hidden="true"></span>
-								<span class="nl">{e.package.manifest.name}</span>
-							</button>
-						{/each}
+					{@const kids = extsOf(x.id)}
+					{@const open = kids.length > 0 && !collapsed[x.id]}
+					<div class="row" class:has={kids.length > 0}>
+						<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
+							<Icon name={x.icon} />
+							<span class="nt">
+								<span class="nl">{t(x.label)}</span>
+								{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
+							</span>
+						</button>
+						{#if kids.length}
+							<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
+						{/if}
+					</div>
+					{#if open}
+						<div class="tree" role="group" aria-label={t(x.label)}>
+							{#each kids as e (e.package.manifest.id)}
+								{@const eid = e.package.manifest.id}
+								<button role="tab" class="sub" aria-selected={extId === eid} tabindex={extId === eid ? 0 : -1} class:on={extId === eid} onclick={() => openExt(x.id, eid)}>
+									<span class="nl">{e.package.manifest.name}</span>
+									<span class="dot" class:live={e.state === "active" || e.state === "starting"} role="img" aria-label={e.state === "active" || e.state === "starting" ? t("실행 중") : t("꺼짐")}></span>
+								</button>
+							{/each}
+						</div>
 					{/if}
 					{#if x.id === "devices"}
 						<button class="addsrv" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 추가")}</button>
@@ -506,9 +517,68 @@
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
+	.nav .row {
+		position: relative;
+		display: flex;
+	}
+	.nav .row > button:first-child {
+		flex: 1;
+		min-width: 0;
+	}
+	.nav .row.has > button:first-child {
+		padding-right: 38px;
+	}
+	.nav button.fold {
+		position: absolute;
+		top: 50%;
+		right: 6px;
+		transform: translateY(-50%);
+		padding: 4px;
+		border-radius: var(--radius-sm);
+		color: var(--text-faint);
+	}
+	.nav button.fold :global(svg) {
+		width: 15px;
+		height: 15px;
+		transition: transform var(--motion-fast) var(--ease-std);
+	}
+	.nav button.fold[aria-expanded="false"] :global(svg) {
+		transform: rotate(-90deg);
+	}
+	/* a thin trunk from the parent's icon, with a rounded elbow into each child */
+	.nav .tree {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0 0 4px 21px;
+		padding-left: 18px;
+	}
+	.nav .tree::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: -2px;
+		bottom: 18px;
+		border-left: 1.5px solid var(--border-strong);
+	}
 	.nav button.sub {
-		gap: 10px;
-		padding: 7px 12px 7px 43px;
+		position: relative;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 7px 10px;
+	}
+	.nav button.sub::before {
+		content: "";
+		position: absolute;
+		left: -18px;
+		top: 0;
+		width: 14px;
+		height: 50%;
+		border-left: 1.5px solid var(--border-strong);
+		border-bottom: 1.5px solid var(--border-strong);
+		border-bottom-left-radius: 8px;
+		pointer-events: none;
 	}
 	.nav button.sub .nl {
 		font-size: var(--fs-sm);
@@ -519,8 +589,8 @@
 	}
 	.nav .dot {
 		flex: none;
-		width: 6px;
-		height: 6px;
+		width: 7px;
+		height: 7px;
 		border-radius: 50%;
 		background: var(--border-strong);
 	}
@@ -651,8 +721,11 @@
 		.ns {
 			display: none;
 		}
-		.nav button.sub {
+		.nav .tree, .nav button.fold {
 			display: none;
+		}
+		.nav .row.has > button:first-child {
+			padding-right: 12px;
 		}
 		.body {
 			padding: 16px 16px 24px;
