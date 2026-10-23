@@ -1344,6 +1344,7 @@ export const en: Record<string, string> = {
 	"앱": "App",
 	"서버 버전": "Server",
 	"서버에 새 버전이 있습니다": "A new server version is available",
+	"업데이트 필요": "Update needed",
 	"앱보다 오래된 버전입니다": "Older than the app",
 	"마켓플레이스": "Marketplace",
 	"마켓플레이스 형식이 올바르지 않습니다.": "This marketplace has an invalid format.",

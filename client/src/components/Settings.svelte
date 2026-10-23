@@ -20,6 +20,7 @@
 	import UpdateSettings from "./UpdateSettings.svelte";
 	import TerminalSettings from "./TerminalSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
+	import { serverUpdater } from "../lib/server-update.svelte";
 	import { Api, errorText } from "../lib/api";
 	import type { ApprovalPolicy, ToolsInfo } from "../lib/types";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
@@ -79,6 +80,8 @@
 		sid = id;
 		if (!current.server) go("info");
 	}
+	/** Update state is only known for the open server: a newer server build, or server and app out of step. */
+	const needsUpdate = (id: string) => id === app.serverId && (serverUpdater.available || app.compat !== "ok");
 	const server = $derived(app.servers.find((s) => s.id === sid) ?? app.servers.find((s) => s.id === app.serverId) ?? null);
 	// without a server there is nothing server-specific left to show
 	$effect(() => {
@@ -191,7 +194,10 @@
 	<div class="srvbar" role="group" aria-label={t("설정 범위")}>
 		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
 		{#each app.servers as s (s.id)}
-			<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
+			<span class="chipwrap">
+				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
+				{#if needsUpdate(s.id)}<span class="updot" role="img" aria-label={t("업데이트 필요")} title={t("업데이트 필요")}></span>{/if}
+			</span>
 		{/each}
 	</div>
 
@@ -474,6 +480,23 @@
 	}
 	.srvbar::-webkit-scrollbar {
 		display: none;
+	}
+	.chipwrap {
+		position: relative;
+		flex: none;
+		display: inline-flex;
+	}
+	.updot {
+		position: absolute;
+		top: -3px;
+		right: -2px;
+		z-index: 1;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background: var(--warn);
+		box-shadow: 0 0 0 2px var(--bg-elev, var(--bg));
+		pointer-events: none;
 	}
 	.srvname {
 		min-width: 0;
