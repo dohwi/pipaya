@@ -58,31 +58,37 @@
 	.failed {
 		color: var(--danger);
 	}
-	/* working and asking share one beat (1.8s) so they read as the same rhythm */
+	/* every state moves on one beat (--beat) and one easing, so several badges side by side stay calm and in step */
+	.agent {
+		--beat: 1.8s;
+		--dim: 0.5;
+	}
 	.working .logo {
-		animation: pulse 1.8s ease-in-out infinite;
+		animation: pulse var(--beat) ease-in-out infinite;
 	}
 	.asking .logo {
-		animation:
-			pulse 1.8s ease-in-out infinite,
-			glow 1.8s ease-in-out infinite;
+		animation: ask var(--beat) ease-in-out infinite;
 	}
-	/* failed: a short shake, then rest, so it catches the eye without looping nonstop */
+	/* failed: a short shake at the start of each beat, then rest */
 	.failed .logo {
-		animation: shake 1.8s ease-in-out infinite;
+		animation: shake var(--beat) ease-in-out infinite;
 	}
+	/* working: bright, dims halfway, bright again */
 	@keyframes pulse {
 		50% {
-			opacity: 0.35;
+			opacity: var(--dim);
 		}
 	}
-	/* asking: breathes like working, with a glow in the logo's own shape that is strongest while it is bright */
-	@keyframes glow {
+	/* asking: the same breath and phase as working, plus a small swell and a glow in the logo's own shape while it is bright */
+	@keyframes ask {
 		0%,
 		100% {
-			filter: drop-shadow(0 0 5px currentColor);
+			transform: scale(1.12);
+			filter: drop-shadow(0 0 4px currentColor);
 		}
 		50% {
+			opacity: var(--dim);
+			transform: scale(1);
 			filter: drop-shadow(0 0 0 currentColor);
 		}
 	}
@@ -93,16 +99,16 @@
 			transform: translateX(0);
 		}
 		6% {
-			transform: translateX(-2px);
-		}
-		12% {
-			transform: translateX(2px);
-		}
-		18% {
 			transform: translateX(-1.5px);
 		}
-		24% {
+		12% {
 			transform: translateX(1.5px);
+		}
+		18% {
+			transform: translateX(-1px);
+		}
+		24% {
+			transform: translateX(1px);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
