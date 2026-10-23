@@ -370,6 +370,7 @@ export const en: Record<string, string> = {
 	"모델 ({n})": "Models ({n})",
 	"모델 추가": "Add model",
 	"아이콘": "Icon",
+	"아이콘 검색": "Search icons",
 	"자동": "Auto",
 	"저장 중…": "Saving…",
 	"연결은 저장했지만 키를 저장하지 못했습니다: {error}": "The connection was saved, but the key could not be: {error}",

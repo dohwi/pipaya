@@ -20,9 +20,10 @@
 	import Switch from "./Switch.svelte";
 	import Select from "./Select.svelte";
 	import Badge from "./Badge.svelte";
+	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
-	import { BRAND_LABEL } from "../lib/brand";
+	import { ICON_LABEL } from "../lib/brand";
 	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -191,6 +192,7 @@
 		r.thinkingLevels = [];
 	}
 	let matchFor = $state<number | null>(null);
+	let iconFor = $state<number | null>(null);
 
 
 	function startNew(preset?: LocalPreset) {
@@ -422,16 +424,11 @@
 						</section>
 						<section class="fsec">
 							<div class="mono-label">{t("아이콘")}</div>
-							<div class="icons" role="group" aria-label={t("아이콘")}>
-								<button type="button" class="icopt" aria-pressed={!r.icon} onclick={() => (r.icon = undefined)} title={t("자동")}>
-									<ModelLogo provider={form.id} model={r.id} size={18} /><span>{t("자동")}</span>
-								</button>
-								{#each Object.entries(BRAND_LABEL) as [k, label] (k)}
-									<button type="button" class="icopt" aria-pressed={r.icon === k} onclick={() => (r.icon = k)} title={label}>
-										<ModelLogo icon={k} size={18} /><span>{label}</span>
-									</button>
-								{/each}
-							</div>
+							<button type="button" class="mtrigger" onclick={() => (iconFor = editing)}>
+								<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
+								<span class="mtext">{r.icon ? (ICON_LABEL[r.icon] ?? r.icon) : t("자동")}</span>
+								<Icon name="chevron-down" />
+							</button>
 						</section>
 						<section class="fsec">
 							<div class="mono-label">{t("제한")}</div>
@@ -579,6 +576,10 @@
 				onpick={(c) => { pickMatch(mr, c); matchFor = null; }}
 				onclose={() => (matchFor = null)}
 			/>
+		{/if}
+		{#if iconFor !== null && form.rows[iconFor]}
+			{@const ir = form.rows[iconFor]!}
+			<IconPickerModal value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
 		{/if}
 	</Modal>
 {/if}
@@ -775,7 +776,7 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.mitem :global(svg) {
+	.mitem :global(svg:not(.model):not(.logo)) {
 		flex: none;
 		width: 16px;
 		height: 16px;
@@ -796,30 +797,6 @@
 		fill: currentColor;
 		width: 18px;
 		height: 18px;
-	}
-	.icons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-	}
-	.icopt {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 34px;
-		padding: 0 10px;
-		background: var(--bg);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-		font-size: var(--fs-xs);
-	}
-	.icopt:hover {
-		background: var(--bg-hover);
-	}
-	.icopt[aria-pressed="true"] {
-		border-color: var(--accent, var(--text));
-		color: var(--text);
 	}
 	.back {
 		margin-left: -8px;
@@ -867,7 +844,7 @@
 	.mtext.dim {
 		color: var(--text-dim);
 	}
-	.mtrigger :global(svg) {
+	.mtrigger :global(svg:not(.model):not(.logo)) {
 		width: 15px;
 		height: 15px;
 		flex: none;

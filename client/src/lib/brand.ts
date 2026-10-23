@@ -62,6 +62,10 @@ export const BRAND_LABEL: Record<Brand, string> = {
 	microsoft: "Microsoft", amazon: "Amazon", tencent: "Tencent", bytedance: "ByteDance", xiaomi: "Xiaomi", stepfun: "StepFun",
 };
 
+/** The pipaya mark itself, selectable as a model icon next to the brands. */
+export const PIPAYA_ICON = "pipaya";
+export const ICON_LABEL: Record<string, string> = { [PIPAYA_ICON]: "pipaya", ...BRAND_LABEL };
+
 /** The model id wins over the provider, so a Claude reached through OpenRouter or Bedrock still shows Claude. */
 export function brandOf(provider: string | null | undefined, model: string | null | undefined): Brand | null {
 	for (const text of [model, provider]) {
