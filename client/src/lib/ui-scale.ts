@@ -16,13 +16,14 @@ export function stepScale(cur: number, dir: 1 | -1): number {
 
 const desktop = (): boolean => isTauri() && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-const BASE_VIEWPORT = "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content";
+const VIEWPORT_TAIL = "viewport-fit=cover, interactive-widget=resizes-content";
 
-/** Meta viewport that makes the layout viewport `percent`% narrower, so media queries and vw/dvh follow the zoom like a real browser zoom. */
-export function viewportContent(deviceWidth: number, percent: number): string {
-  if (percent === 100) return BASE_VIEWPORT;
-  const w = Math.round((deviceWidth * 100) / percent);
-  return `width=${w}, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content`;
+/** Meta viewport for the scale. Below 100% a mobile browser lays the page out wider (device-width / initial-scale), so
+ *  media queries and vw/dvh follow the zoom out like a real browser zoom. It never lays out narrower than the screen,
+ *  so above 100% the meta stays plain and the page is zoomed with CSS (a phone is already under every breakpoint). */
+export function viewportContent(percent: number): string {
+  const scale = percent < 100 ? (percent / 100).toFixed(2) : "1";
+  return `width=device-width, initial-scale=${scale}, ${VIEWPORT_TAIL}`;
 }
 
 /** Width of the screen in CSS px at 100%, for the current orientation. */
@@ -49,15 +50,13 @@ let token = 0;
 function applyPageScale(percent: number) {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
   const run = ++token;
+  meta?.setAttribute("content", viewportContent(percent));
+  if (percent >= 100) return setCssZoom(percent);
   setCssZoom(100);
-  meta?.setAttribute("content", viewportContent(deviceWidth(), percent));
-  if (percent === 100) return;
-  // Browsers that ignore the viewport meta (desktop, some webviews) keep their width: zoom the page with CSS instead,
-  // and let the --vw / --dvh variables in app.css cancel the zoom out of viewport units.
+  // A browser that ignores the viewport meta keeps its width: zoom the page with CSS instead.
   setTimeout(() => {
     if (run !== token) return;
-    const want = deviceWidth() / (percent / 100);
-    if (Math.abs(window.innerWidth - want) > 2) setCssZoom(percent);
+    if (Math.abs(window.innerWidth - deviceWidth() / (percent / 100)) > 2) setCssZoom(percent);
   }, 150);
 }
 
