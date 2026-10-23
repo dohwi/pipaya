@@ -26,6 +26,7 @@ export const CustomProviderBody = Type.Object({
 		maxTokens: Type.Integer({ minimum: 1, maximum: 10_000_000 }),
 		reasoning: Type.Boolean(),
 		vision: Type.Boolean(),
+		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
@@ -206,6 +207,11 @@ export class Configuration {
 	list(): CustomProvider[] {
 		const rows = this.db.query("SELECT id, data FROM custom_providers ORDER BY id").all() as { id: string; data: string }[];
 		return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
+	}
+
+	/** `provider/model` -> chosen icon, for the models that have one. */
+	icons(): Map<string, string> {
+		return new Map(this.list().flatMap((p) => p.models.flatMap((m) => (m.icon ? [[`${p.id}/${m.id}`, m.icon] as [string, string]] : []))));
 	}
 
 	private get(id: string): CustomProvider | undefined { return this.list().find((p) => p.id === id); }

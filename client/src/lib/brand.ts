@@ -55,6 +55,13 @@ export const BRAND_COLOR: Record<Brand, string> = {
 	stepfun: "#005AFF",
 };
 
+/** Display names for the icon picker. */
+export const BRAND_LABEL: Record<Brand, string> = {
+	claude: "Claude", openai: "OpenAI", gemini: "Gemini", grok: "Grok", deepseek: "DeepSeek", qwen: "Qwen", mistral: "Mistral",
+	meta: "Meta", zai: "Z.ai", moonshot: "Moonshot", minimax: "MiniMax", nvidia: "NVIDIA", perplexity: "Perplexity", cohere: "Cohere",
+	microsoft: "Microsoft", amazon: "Amazon", tencent: "Tencent", bytedance: "ByteDance", xiaomi: "Xiaomi", stepfun: "StepFun",
+};
+
 /** The model id wins over the provider, so a Claude reached through OpenRouter or Bedrock still shows Claude. */
 export function brandOf(provider: string | null | undefined, model: string | null | undefined): Brand | null {
 	for (const text of [model, provider]) {

@@ -21,6 +21,8 @@
 	import Select from "./Select.svelte";
 	import Badge from "./Badge.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
+	import { BRAND_LABEL } from "../lib/brand";
 	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
 
 	/**
@@ -50,6 +52,8 @@
 		maxTokens: string;
 		reasoning: boolean;
 		vision: boolean;
+		/** Chosen brand mark; undefined = automatic (from the id) */
+		icon?: string;
 		/** Listed by the upstream itself: the id is fixed and cannot be edited */
 		fromUpstream?: boolean;
 		/** Empty = automatic (looked up by name on the server) */
@@ -228,6 +232,7 @@
 				maxTokens: String(m.maxTokens),
 				reasoning: m.reasoning,
 				vision: m.vision,
+				icon: m.icon,
 				fromUpstream: m.fromUpstream,
 				thinkingLevels: m.thinkingLevels ?? [],
 				catalogId: m.catalogId,
@@ -319,6 +324,7 @@
 				maxTokens: max,
 				reasoning: r.reasoning,
 				vision: r.vision,
+				...(r.icon ? { icon: r.icon } : {}),
 				...(r.reasoning && r.thinkingLevels.length ? { thinkingLevels: allLevels.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			});
 		}
@@ -413,6 +419,19 @@
 								<span>{t("표시 이름")} <em>({tc("optional", "선택")})</em></span>
 								<input class="field" bind:value={r.name} placeholder={t("ID와 같으면 비워 두세요")} autocomplete="off" />
 							</label>
+						</section>
+						<section class="fsec">
+							<div class="mono-label">{t("아이콘")}</div>
+							<div class="icons" role="group" aria-label={t("아이콘")}>
+								<button type="button" class="icopt" aria-pressed={!r.icon} onclick={() => (r.icon = undefined)} title={t("자동")}>
+									<ModelLogo provider={form.id} model={r.id} size={18} /><span>{t("자동")}</span>
+								</button>
+								{#each Object.entries(BRAND_LABEL) as [k, label] (k)}
+									<button type="button" class="icopt" aria-pressed={r.icon === k} onclick={() => (r.icon = k)} title={label}>
+										<ModelLogo icon={k} size={18} /><span>{label}</span>
+									</button>
+								{/each}
+							</div>
 						</section>
 						<section class="fsec">
 							<div class="mono-label">{t("제한")}</div>
@@ -517,6 +536,7 @@
 						<div class="mpick">
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
+									<span class="mlogo"><ModelLogo icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
 									{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}
@@ -764,6 +784,42 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.mlogo {
+		flex: none;
+		display: grid;
+		place-items: center;
+		color: var(--text-dim);
+	}
+	.mitem :global(svg.model) {
+		stroke: none;
+		fill: currentColor;
+		width: 18px;
+		height: 18px;
+	}
+	.icons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.icopt {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 34px;
+		padding: 0 10px;
+		background: var(--bg);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		color: var(--text-dim);
+		font-size: var(--fs-xs);
+	}
+	.icopt:hover {
+		background: var(--bg-hover);
+	}
+	.icopt[aria-pressed="true"] {
+		border-color: var(--accent, var(--text));
+		color: var(--text);
 	}
 	.back {
 		margin-left: -8px;

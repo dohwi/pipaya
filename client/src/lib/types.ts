@@ -191,6 +191,8 @@ export interface ModelInfo {
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
+	/** Brand mark chosen in the connection settings; absent = picked from the id */
+	icon?: string;
 	/** A usable credential exists for this model's provider */
 	configured: boolean;
 	/** false = the connection's own model list no longer has it. Missing on older servers = available. */
@@ -245,6 +247,8 @@ export interface CustomModel {
 	maxTokens: number;
 	reasoning: boolean;
 	vision: boolean;
+	/** Brand mark chosen for this model; absent = picked from the id */
+	icon?: string;
 	/** Came from the upstream's model list: the id is fixed */
 	fromUpstream?: boolean;
 	/** Reasoning strengths the model accepts; absent = the server looks the name up, else minimal..high */

@@ -272,7 +272,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { querystring: S.ModelsQuery, response: { 200: S.ModelList, ...S.errors(400, 401) } },
 		handler: async (req) => {
 			configuration.refreshStale();
-			const all = await describeModels(registry, req.query.provider, (p, id) => configuration.isUnavailable(p, id));
+			const all = await describeModels(registry, req.query.provider, (p, id) => configuration.isUnavailable(p, id), configuration.icons());
 			return { models: req.query.configured ? all.filter((m) => m.configured) : all };
 		},
 	});

@@ -19,10 +19,11 @@
 		const e = app.effectiveOf(id);
 		return { provider: e.provider, model: e.model };
 	});
+	const icon = $derived(app.models.find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {size} /></span>
+	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
 </span>
 
 <style>

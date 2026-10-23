@@ -29,12 +29,14 @@ export interface ModelInfo {
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
+	/** Brand mark chosen in the connection settings; absent = picked from the id */
+	icon?: string;
 	configured: boolean;
 	/** false = the connection's own model list no longer contains this model */
 	available: boolean;
 }
 
-export async function describeModels(reg: ModelRegistry, provider?: string, unavailable: (provider: string, id: string) => boolean = () => false): Promise<ModelInfo[]> {
+export async function describeModels(reg: ModelRegistry, provider?: string, unavailable: (provider: string, id: string) => boolean = () => false, icons: ReadonlyMap<string, string> = new Map()): Promise<ModelInfo[]> {
 	const available = new Set((await reg.models.getAvailable(provider)).map((m) => `${m.provider}/${m.id}`));
 	return reg.models.getModels(provider).map((m: Model<Api>) => ({
 		provider: m.provider,
@@ -46,6 +48,7 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		contextWindow: m.contextWindow,
 		maxTokens: m.maxTokens,
 		vision: m.input.includes("image"),
+		...(icons.has(`${m.provider}/${m.id}`) ? { icon: icons.get(`${m.provider}/${m.id}`) } : {}),
 		configured: available.has(`${m.provider}/${m.id}`),
 		available: !unavailable(m.provider, m.id),
 	}));

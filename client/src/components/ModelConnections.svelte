@@ -4,6 +4,7 @@
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import Icon from "./Icon.svelte";
+	import ModelLogo from "./ModelLogo.svelte";
 	import Modal from "./Modal.svelte";
 	import Switch from "./Switch.svelte";
 	import Accordion from "./Accordion.svelte";
@@ -262,13 +263,13 @@
 			{#if cfg.providers.length}
 				<div class="plist">
 					{#each cfg.providers as p (p.id)}
-						<div class="prov" animate:reflow in:rowIn out:rowOut>
+						<div class="prov" class:off={!p.models.length} animate:reflow in:rowIn out:rowOut>
 							<div class="phead">
 								<div class="pname">
 									<span class="ptitle">{p.name}</span>
 									<span class="pid mono url">{p.baseUrl}</span>
 								</div>
-								{#if p.configured}<span class="chip ok">{t("사용 가능")}</span>{:else}<span class="chip warn">{t("키 필요")}</span>{/if}
+								{#if !p.models.length}<span class="chip">{t("모델 없음")}</span>{:else if p.configured}<span class="chip ok">{t("사용 가능")}</span>{:else}<span class="chip warn">{t("키 필요")}</span>{/if}
 							</div>
 
 							<div class="models">
@@ -284,6 +285,7 @@
 								{#each p.models as m (m.id)}
 									{@const probe = tests[`${p.id}\u0000${m.id}`]}
 									<li class:unavail={m.unavailable}>
+										<span class="mlogo"><ModelLogo icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
 										<span class="minfo">
 											<span class="mid mono">{m.name ?? m.id}</span>
 											{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
@@ -422,6 +424,16 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+	}
+	.prov.off .phead,
+	.prov.off .nomodels {
+		opacity: 0.55;
+	}
+	.mlogo {
+		flex: none;
+		display: grid;
+		place-items: center;
+		color: var(--text-dim);
 	}
 	.mlist li {
 		display: flex;
