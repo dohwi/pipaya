@@ -24,6 +24,14 @@
 	const unreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === view));
 	let filename = $state("");
 	let market = $state(false);
+	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
+	let serverSide = $state<{ name: string; tools: string[]; commands: { name: string }[]; error?: string }[]>([]);
+	async function loadServerSide() {
+		const api = app.api;
+		if (!api || view !== "server") { serverSide = []; return; }
+		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
+	}
+	$effect(() => { void app.api; void market; void loadServerSide(); });
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
 	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
 		market = false;
@@ -416,7 +424,7 @@
 
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
-			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length })}</h3>
+			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
 			<button type="button" class="btn sm add" disabled={busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</button>
 			<label class="btn sm add" class:disabled={busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={busy.$import} onchange={selectFile} />
@@ -437,7 +445,16 @@
 		{/if}
 		{#each list as entry (entry.package.manifest.id)}{@render installedCard(entry)}{/each}
 		{#each unreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
-		{#if !list.length && !unreadable.length}
+		{#if view === "server"}
+			{#each serverSide as ext (ext.name)}
+				<article class="card" aria-label={ext.name}>
+					<span class="top"><span class="ename">{ext.name}</span><span class="meta">{t("서버에서 실행")}</span></span>
+					{#if ext.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{ext.error}</span></p>
+					{:else if ext.tools.length || ext.commands.length}<span class="brief">{[...ext.commands.map((c) => `/${c.name}`), ...ext.tools].join(", ")}</span>{/if}
+				</article>
+			{/each}
+		{/if}
+		{#if !list.length && !unreadable.length && !(view === "server" && serverSide.length)}
 			<p class="none">{view === "server" ? t("이 서버에 설치된 확장이 없습니다") : t("이 기기에 설치된 확장이 없습니다")}</p>
 		{/if}
 	</section>

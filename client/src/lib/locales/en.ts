@@ -683,6 +683,7 @@ export const en: Record<string, string> = {
 	"준비 중": "Preparing",
 	"{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜고 끄는 상태도 서버에 저장되어 모든 기기가 따라갑니다.": "Installed on {name} and shared by every device connected to this server. Whether each is on or off is saved on the server too, so every device follows.",
 	"이 서버에 설치된 확장이 없습니다": "No extensions on this server",
+	"서버에서 실행": "Runs on the server",
 	"이 기기의 확장": "Extensions on this device",
 	"이 기기에만 설치되며 어느 서버에 연결해도 그대로 남습니다. 서버로 올라가지 않습니다.": "Installed only on this device and kept whichever server you connect to. Never sent to a server.",
 	"이 기기에 설치된 확장이 없습니다": "No extensions on this device",
