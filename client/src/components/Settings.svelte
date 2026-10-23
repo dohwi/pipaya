@@ -473,8 +473,8 @@
 		flex: none;
 		display: flex;
 		gap: 6px;
-		margin-top: -4px;
-		padding: 4px 22px 12px;
+		margin-top: -6px;
+		padding: 8px 24px 14px;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -506,7 +506,7 @@
 	}
 	@media (max-width: 760px) {
 		.srvbar {
-			padding: 4px 14px 10px;
+			padding: 8px 16px 12px;
 		}
 	}
 	.nav button.addsrv {
