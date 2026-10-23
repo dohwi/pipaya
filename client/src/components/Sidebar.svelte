@@ -778,9 +778,9 @@
 		font-size: var(--fs-sm);
 		font-weight: 600;
 	}
-	.dcount {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
+	.dcount,
+	.dcount:empty {
+		display: none;
 	}
 	.dirnew {
 		display: grid;
@@ -1107,17 +1107,6 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-	}
-	.gcount {
-		flex: none;
-		min-width: 16px;
-		padding: 0 5px;
-		border-radius: 999px;
-		background: var(--bg-active);
-		color: var(--text-dim);
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		text-align: center;
 	}
 	.gfold:hover {
 		background: var(--bg-active);
