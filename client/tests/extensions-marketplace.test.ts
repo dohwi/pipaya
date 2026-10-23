@@ -20,8 +20,8 @@ describe("parseCatalog", () => {
   });
 
   test("a folder of a repository is kept as `dir`", () => {
-    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extensions", dir: "extensions/peer-tools", ref: "peer-tools-v0.1.0", commit: C40 })] });
-    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extensions", dir: "extensions/peer-tools", ref: "peer-tools-v0.1.0", commit: C40 });
+    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extensions", dir: "peer-tools", ref: "peer-tools-v0.1.0", commit: C40 })] });
+    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extensions", dir: "peer-tools", ref: "peer-tools-v0.1.0", commit: C40 });
   });
 
   test("a git source that does not fit is left out, never trusted", () => {
