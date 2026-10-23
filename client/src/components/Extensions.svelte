@@ -482,7 +482,7 @@
 
 {#if preview && !result}
 	{@const p = preview}
-	<Modal onclose={cancelPreview} labelledby="import-preview-title" width="l" maxHeight="100dvh" layer={3} sheet={false} portal>
+	<Modal onclose={cancelPreview} labelledby="import-preview-title" width="l" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
 		<div class="rmodal" use:focusOk>
 			<div class="rhead">
 				<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
@@ -516,7 +516,7 @@
 
 {#if result}
 	{@const r = result}
-	<Modal onclose={closeResult} role={r.tone === "danger" ? "alertdialog" : "dialog"} labelledby="import-result-title" describedby="import-result-detail" width="s" maxHeight="100dvh" layer={3} sheet={false} portal>
+	<Modal onclose={closeResult} role={r.tone === "danger" ? "alertdialog" : "dialog"} labelledby="import-result-title" describedby="import-result-detail" width="s" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
 		<div class="rmodal {r.tone}" use:focusOk>
 			<div class="rhead">
 				<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>

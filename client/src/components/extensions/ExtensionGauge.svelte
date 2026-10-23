@@ -292,7 +292,7 @@
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 	.popover {
 		position: fixed; top: 0; left: 0; z-index: var(--z-tooltip); box-sizing: border-box;
-		min-width: min(240px, calc(100vw - 16px)); max-width: min(320px, calc(100vw - 16px)); overflow-y: auto;
+		min-width: min(240px, calc(var(--vw) - 16px)); max-width: min(320px, calc(var(--vw) - 16px)); overflow-y: auto;
 		padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border-strong);
 		background: var(--bg-elev); color: var(--text); box-shadow: var(--shadow);
 		font-size: var(--fs-xs); line-height: 1.4; text-align: left; white-space: normal;

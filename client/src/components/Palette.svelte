@@ -138,7 +138,7 @@
 		top: min(14vh, 120px);
 		left: 50%;
 		translate: -50% 0;
-		width: min(var(--modal-w-l), calc(100vw - var(--modal-gutter)));
+		width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter)));
 		max-height: min(560px, 76vh);
 		display: flex;
 		flex-direction: column;

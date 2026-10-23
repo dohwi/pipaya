@@ -31,7 +31,7 @@
   {/if}
 </dialog>
 <style>
-  dialog { width: min(var(--modal-w-l), calc(100vw - var(--modal-gutter))); padding: 24px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
+  dialog { width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter))); padding: 24px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
   dialog::backdrop { background: var(--scrim); }
   h2 { margin: 0 0 12px; font-size: var(--fs-xl); }
   p { color: var(--text-dim); font-size: var(--fs-sm); }

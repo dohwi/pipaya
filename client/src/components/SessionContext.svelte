@@ -112,7 +112,7 @@
 
 <style>
 	/* The global `* { margin: 0 }` reset removes the modal's default auto margin, so center explicitly. */
-	dialog { margin: auto; width: min(var(--modal-w-xl), calc(100vw - var(--modal-gutter))); max-width: none; max-height: min(720px, calc(100dvh - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
+	dialog { margin: auto; width: min(var(--modal-w-xl), calc(var(--vw) - var(--modal-gutter))); max-width: none; max-height: min(720px, calc(var(--dvh) - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
 	dialog::backdrop { background: var(--scrim); }
 	.panel { display: flex; flex-direction: column; max-height: inherit; }
 	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 16px 24px; border-bottom: 1px solid var(--border); flex: none; }
@@ -139,7 +139,7 @@
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 14px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 	.empty { padding: 18px 14px; font-size: var(--fs-sm); color: var(--text-faint); background: var(--bg); border-radius: var(--radius); }
 	@media (max-width: 640px) {
-		dialog { width: 100vw; max-height: 90dvh; margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
+		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
 		header { padding: 14px 12px 14px 16px; }
 		h2 { font-size: var(--fs-lg); }
 		.body { padding: 16px; }

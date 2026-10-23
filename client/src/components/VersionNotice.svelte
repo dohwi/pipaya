@@ -64,7 +64,7 @@
 		left: 50%;
 		bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 		transform: translateX(-50%);
-		width: min(440px, calc(100vw - 24px));
+		width: min(440px, calc(var(--vw) - 24px));
 		display: flex;
 		flex-direction: column;
 		gap: 8px;

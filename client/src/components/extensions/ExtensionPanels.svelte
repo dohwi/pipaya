@@ -238,7 +238,7 @@
 	.toolbar-hint { font-size: var(--fs-2xs); color: var(--text-faint); }
 	.feedback { color: var(--danger); font-size: var(--fs-xs); line-height: 1.6; overflow-wrap: anywhere; }
 	.feedback:empty { display: none; }
-	dialog { width: min(1000px, 96vw); height: min(760px, 90dvh); max-width: 96vw; max-height: 90dvh; padding: 0; margin: auto; overflow: hidden; color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
+	dialog { width: min(1000px, 96vw); height: min(760px, calc(var(--dvh) * 0.9)); max-width: 96vw; max-height: calc(var(--dvh) * 0.9); padding: 0; margin: auto; overflow: hidden; color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
 	dialog::backdrop { background: var(--scrim); backdrop-filter: blur(5px); }
 	.panel-shell { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 	header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--bg-side); border-bottom: 1px solid var(--border); }

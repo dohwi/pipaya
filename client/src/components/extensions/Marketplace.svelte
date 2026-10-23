@@ -95,7 +95,7 @@
 	$effect(() => { void load(); if (scope === "server") void refreshServer(); return () => ctrl?.abort(); });
 </script>
 
-<Modal {onclose} labelledby="market-title" width="1120px" maxHeight="100dvh" layer={3} sheet={false} portal>
+<Modal {onclose} labelledby="market-title" width="1120px" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
 	<div class="market">
 		<div class="mhead">
 			<h2 id="market-title">{t("마켓플레이스")}</h2>

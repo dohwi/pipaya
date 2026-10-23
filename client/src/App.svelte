@@ -440,7 +440,7 @@
 	.app {
 		display: flex;
 		height: 100%;
-		height: 100dvh;
+		height: var(--dvh);
 		overflow: hidden;
 	}
 	.side {

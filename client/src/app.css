@@ -209,6 +209,11 @@
 *::after {
 	box-sizing: border-box;
 }
+/* Viewport units that survive the CSS-zoom fallback of ui-scale.ts (zoom multiplies them, so divide it out). */
+:root {
+	--vw: calc(100vw / var(--ui-zoom, 1));
+	--dvh: calc(100dvh / var(--ui-zoom, 1));
+}
 html,
 body,
 #app {

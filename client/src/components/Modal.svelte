@@ -139,8 +139,8 @@
 		left: 50%;
 		top: 50%;
 		translate: -50% -50%;
-		width: min(var(--modal-w), calc(100vw - var(--modal-gut)));
-		max-height: min(var(--modal-max-h), calc(100dvh - 24px));
+		width: min(var(--modal-w), calc(var(--vw) - var(--modal-gut)));
+		max-height: min(var(--modal-max-h), calc(var(--dvh) - 24px));
 		display: flex;
 		flex-direction: column;
 		background: var(--bg-side);
@@ -151,7 +151,7 @@
 		overflow: hidden;
 	}
 	.modal.fixed {
-		height: min(var(--modal-h), calc(100dvh - var(--modal-gut)));
+		height: min(var(--modal-h), calc(var(--dvh) - var(--modal-gut)));
 	}
 	.modal.elevated {
 		background: var(--bg-elev);
@@ -161,13 +161,13 @@
 			top: auto;
 			bottom: 0;
 			translate: -50% 0;
-			width: 100vw;
-			max-height: 90dvh;
+			width: var(--vw);
+			max-height: calc(var(--dvh) * 0.9);
 			border-bottom: 0;
 			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
 		}
 		.modal.sheet.fixed {
-			height: 90dvh;
+			height: calc(var(--dvh) * 0.9);
 		}
 		.modal.sheet.safe {
 			padding-bottom: var(--sab);
