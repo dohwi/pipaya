@@ -1,4 +1,4 @@
-import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, SubAgentList, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Approval,
 	Question,
@@ -235,15 +235,6 @@ export class Api {
 		this.req<{ entries: { path: string; dir: boolean }[] }>("GET", `/fs/files?${new URLSearchParams({ cwd, q })}`, undefined, signal);
 	makeDir = (parent: string, name: string) => this.req<{ path: string }>("POST", "/fs/dirs", { parent, name });
 	testModel = (sel: ModelSelection) => this.req<ConnectionResult>("POST", "/configuration/test", sel);
-
-	/* ---------- sub-agents ---------- */
-	/** Sub-agents are files; `cwd` adds the project's own `.agents/subagents`. Only the switches are stored on the server. */
-	subagents = (cwd?: string, signal?: AbortSignal) =>
-		this.req<SubAgentList>("GET", `/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
-	setSubagentsEnabled = (enabled: boolean, cwd?: string) =>
-		this.req<SubAgentList>("PUT", `/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { enabled });
-	setSubagentEnabled = (name: string, enabled: boolean, cwd?: string) =>
-		this.req<SubAgentList>("PUT", `/subagents/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { enabled });
 
 	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
 	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);

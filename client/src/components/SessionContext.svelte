@@ -79,7 +79,6 @@
 					</div>
 					{#each [
 						{ key: "skills", name: t("스킬"), text: data.skillsPrompt, count: data.skills.length },
-						{ key: "agents", name: t("서브에이전트"), text: data.agentsPrompt, count: data.agents.length },
 					] as block (block.key)}
 						{#if block.text}
 							<div class="source">

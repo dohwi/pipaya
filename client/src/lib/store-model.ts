@@ -25,8 +25,8 @@ export interface PaletteSpec {
   ondelete?: (item: PaletteItem) => void | Promise<void>;
 }
 
-/** What the apps show for a stored policy: anything but `auto` is "confirm outside the project". */
-export const approvalMode = (p: ApprovalPolicy | undefined): ApprovalMode => (p === "auto" ? "auto" : "ask");
+/** What the apps show for a stored policy: `ask` and the retired `readonly` are "confirm outside the project"; anything else (unset too) is auto. */
+export const approvalMode = (p: ApprovalPolicy | undefined): ApprovalMode => (p === "ask" || p === "readonly" ? "ask" : "auto");
 
 export interface Draft {
   provider: string;

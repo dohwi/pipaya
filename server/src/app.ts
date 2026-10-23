@@ -12,10 +12,7 @@ import { registerConfigurationRoutes } from "./configuration-routes.ts";
 import { ModelRoles } from "./model-roles.ts";
 import { Llm } from "./llm.ts";
 import { registerLlmRoutes } from "./llm-routes.ts";
-import { SubAgents } from "./subagent.ts";
-import { SubAgentSettings } from "./subagent-settings.ts";
 import { CompactionSettings } from "./compaction.ts";
-import { registerSubAgentRoutes } from "./subagent-routes.ts";
 import { registerCompactionRoutes } from "./compaction-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
@@ -116,7 +113,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const questions = new QuestionManager(bus);
 	const skills = new SkillService(db, { home: opts.home, builtin: opts.builtinSkills, defaultWorkdir: () => configuration.defaultWorkdir() });
 	const modelRoles = new ModelRoles(db, registry);
-	const subagentSettings = new SubAgentSettings(db, registry, { home: opts.home });
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
 	const extensions = new ExtensionHost({
@@ -126,7 +122,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, new SubAgents(registry, subagentSettings), compactionSettings, extensions, () => configuration.approvalInfo().effective, () => configuration.disabledTools(), systemModel);
+	const sessions = new SessionManager(cfg, store, bus, registry, approvals, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.approvalInfo().effective, () => configuration.disabledTools(), systemModel);
 	const busy = (id: string) => sessions.isRunning(id) || approvals.list(id).length > 0 || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, closed: r.closed, parentId: r.parentId,
@@ -503,7 +499,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
 	registerConfigurationRoutes(server, configuration, bus);
 	registerLlmRoutes(server, modelRoles, new Llm(registry, modelRoles), bus);
-	registerSubAgentRoutes(server, subagentSettings, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);

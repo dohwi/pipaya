@@ -27,7 +27,6 @@
 	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
 	function toolLabel(name: string): string {
 		switch (name) {
-			case "delegate": return t("하위 에이전트에게 조사 위임 (delegate)");
 			case "read": return t("파일 읽기 (read)");
 			case "write": return t("파일 만들기 · 덮어쓰기 (write)");
 			case "edit": return t("파일 일부 수정 (edit)");
@@ -50,7 +49,6 @@
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
 		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
 		{ id: "tools", label: msg("도구 승인"), icon: "shield", sub: "", server: true },
-		{ id: "agents", label: msg("에이전트"), icon: "brain", sub: "", server: true },
 		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
 		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: msg("이 서버의 모든 기기가 함께 씁니다"), server: true },
 		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
@@ -134,7 +132,7 @@
 		{ id: "ask", label: msg("프로젝트 밖만 확인", "approval"), hint: msg("프로젝트 폴더 밖의 파일을 고치거나, 밖의 경로를 건드리는 명령을 실행할 때만 확인합니다.") },
 		{ id: "auto", label: msg("자동", "approval"), hint: msg("묻지 않고 모두 실행합니다."), tone: "danger" },
 	];
-	const approval = $derived(approvalMode(shownCfg?.approval ?? "ask"));
+	const approval = $derived(approvalMode(shownCfg?.approval ?? "auto"));
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
 		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "light", label: msg("라이트"), icon: "sun" },

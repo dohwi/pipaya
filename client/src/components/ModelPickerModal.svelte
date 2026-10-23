@@ -11,7 +11,7 @@
 	/**
 	 * The one place a model is chosen. A model and its reasoning strength are a pair: the list picks the model, the
 	 * strength row sits right under it, and `onpick` always reports both. Every setting that selects a model (the
-	 * composer, the new-chat default, compaction, the sub-agent) opens this same dialog.
+	 * composer, the new-chat default, compaction) opens this same dialog.
 	 *
 	 * It holds no knowledge of which server or chat it is for: the caller passes the models in and gets the pair back.
 	 * `level` is the strength to show (null = not chosen yet, the row is shown with nothing selected).

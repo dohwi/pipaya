@@ -4,8 +4,8 @@ export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "b
 
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 
-/** What a tool call really is. A `read` of a SKILL.md is a skill being loaded, `delegate` is a sub-agent: both get their own look. */
-export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask_user" | "skill" | "subagent" | "think" | "other";
+/** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
+export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask_user" | "skill" | "think" | "other";
 
 /** `read` of …/<name>/SKILL.md → the skill's name, else null. */
 export function skillOf(name: string, args: Record<string, unknown>): string | null {
@@ -16,7 +16,6 @@ export function skillOf(name: string, args: Record<string, unknown>): string | n
 
 export function toolKind(name: string, args: Record<string, unknown> = {}): ToolKind {
 	if (skillOf(name, args)) return "skill";
-	if (name === "delegate") return "subagent";
 	return name in LOOK ? (name as ToolKind) : "other";
 }
 
@@ -30,7 +29,6 @@ const LOOK: Record<ToolKind, { icon: ToolIcon; hue: number }> = {
 	bash: { icon: "terminal", hue: 25 },
 	ask_user: { icon: "chat", hue: 345 },
 	skill: { icon: "skill", hue: 90 },
-	subagent: { icon: "fork", hue: 315 },
 	think: { icon: "brain", hue: 280 },
 	other: { icon: "bolt", hue: 265 },
 };
@@ -40,11 +38,10 @@ export const toolIcon = (name: string, args: Record<string, unknown> = {}): Tool
 /** Inline style that feeds `.tbadge` in app.css. */
 export const badgeStyle = (kind: ToolKind): string => `--th:${LOOK[kind].hue}`;
 
-/** Text on the badge: the tool name, except skills and sub-agents, which say what they are. */
+/** Text on the badge: the tool name, except skills, which say what they are. */
 export function toolLabel(name: string, args: Record<string, unknown> = {}): string {
 	const kind = toolKind(name, args);
 	if (kind === "skill") return `skill · ${skillOf(name, args)}`;
-	if (kind === "subagent") return `agent${args.agent ? ` · ${str(args.agent)}` : ""}`;
 	return name;
 }
 
@@ -56,8 +53,6 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 			return firstLine(str(args.command));
 		case "ask_user":
 			return firstLine(str(args.question));
-		case "delegate":
-			return firstLine(str(args.task));
 		case "grep":
 			return `${str(args.pattern)}${args.path ? `  in ${str(args.path)}` : ""}`;
 		case "ls":

@@ -19,7 +19,7 @@
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
-	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchSubagents, matchTemplates, parseSlash, SKILL_PREFIX, SUBAGENT_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
+	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, TEMPLATE_PREFIX, type SlashCommand } from "../lib/commands";
 	import { activityOf } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
@@ -152,24 +152,8 @@
 	// Prompt templates follow the skills as `/prompt:name`.
 	let templateList = $state<{ name: string; description: string }[]>([]);
 	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
-	// ── /subagent:name: picks a sub-agent by hand, e.g. "/subagent:explore find the login flow" (listed in the `/` menu) ──
-	let agentList = $state<{ name: string; description: string }[]>([]);
-	const agentMatches = $derived(slashQuery !== null ? matchSubagents(agentList, slashQuery) : []);
-	const agentsWanted = $derived(slashQuery !== null || text.includes(`/${SUBAGENT_PREFIX}`));
-	// Re-read the list each time the `/` menu opens, so edits made in server settings show up without a reload.
-	$effect(() => {
-		const api = app.api;
-		if (!agentsWanted || !api || app.net !== "online") return;
-		const controller = new AbortController();
-		app.skillsTick; // agent files changed on disk
-		api.subagents((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs || undefined, controller.signal)
-			.then((r) => { if (!controller.signal.aborted) agentList = r.enabled ? r.agents.filter((a) => a.enabled).map((a) => ({ name: a.name, description: a.description })) : []; })
-			.catch(() => { if (!controller.signal.aborted) agentList = []; });
-		return () => controller.abort();
-	});
-	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } } | { agent: { name: string; description: string } })[]>([
+	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } })[]>([
 		...commandList,
-		...agentMatches.map((agent) => ({ agent })),
 		...skillMatches.map((skill) => ({ skill })),
 		...templateMatches.map((template) => ({ template })),
 	]);
@@ -317,8 +301,6 @@
 				? { id: `skill:${it.skill.name}`, text: `/${SKILL_PREFIX}${it.skill.name}`, desc: it.skill.description, tag: msg("스킬"), group: msg("스킬") }
 				: "template" in it
 				? { id: `template:${it.template.name}`, text: `/${TEMPLATE_PREFIX}${it.template.name}`, desc: it.template.description, tag: msg("템플릿"), group: msg("템플릿") }
-				: "agent" in it
-				? { id: `subagent:${it.agent.name}`, text: `/${SUBAGENT_PREFIX}${it.agent.name}`, desc: it.agent.description, tag: msg("서브에이전트"), group: msg("서브에이전트") }
 				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc, group: msg("명령") }));
 	const slashOpen = $derived(cdArg !== null ? cdOpen && !slashDismissed : mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
@@ -423,7 +405,6 @@
 		if (!cmd) return;
 		if ("skill" in cmd) return void setText(`/${SKILL_PREFIX}${cmd.skill.name} `);
 		if ("template" in cmd) return void setText(`/${TEMPLATE_PREFIX}${cmd.template.name} `);
-		if ("agent" in cmd) return void setText(`/${SUBAGENT_PREFIX}${cmd.agent.name} `);
 		if (completeOnly) setText(`${commandText(cmd)}${cmd.args ? " " : ""}`);
 		else pickSlash(cmd);
 	}
@@ -592,7 +573,7 @@
 	const IMG_TOKEN = /#image(\d+)\b/g;
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, agents: agentList, members: members.map((m) => m.name), groups: groupItems.map((g) => g.handle), images: attachments.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { templates: templateList, skills: skillList, members: members.map((m) => m.name), groups: groupItems.map((g) => g.handle), images: attachments.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);
@@ -892,7 +873,7 @@
 		color: transparent;
 		pointer-events: none;
 	}
-	/* mention tags: #imageN violet, #files mint, @members sky, /subagent: amber; the hues come from the theme (app.css) */
+	/* mention tags: #imageN violet, #files mint, @members sky; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;
 		-webkit-box-decoration-break: clone;
@@ -914,10 +895,6 @@
 	.mirror :global(mark.member) {
 		background: color-mix(in srgb, var(--mark-member) 30%, transparent);
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-member) 55%, transparent);
-	}
-	.mirror :global(mark.agent) {
-		background: color-mix(in srgb, var(--mark-agent) 30%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-agent) 55%, transparent);
 	}
 	textarea::placeholder {
 		color: var(--text-faint);

@@ -126,9 +126,7 @@ export const SessionContext = Type.Object({
 		path: Type.String(),
 		scope: Type.Union([Type.Literal("global"), Type.Literal("project"), Type.Literal("builtin")]),
 	}), { description: "Skills advertised to the model in this session's prompt (empty for snapshots that predate skills)" }),
-	agents: Type.Array(Type.Object({ name: Type.String(), description: Type.String() }), { description: "Enabled sub-agents advertised to the model" }),
 	skillsPrompt: Type.String({ description: "Exact <available_skills> block in the system prompt; empty when no skills are advertised" }),
-	agentsPrompt: Type.String({ description: "Exact '# Sub-agents' block in the system prompt; empty when none are advertised" }),
 	readFiles: Type.Array(Type.Object({
 		path: Type.String(),
 		reads: Type.Integer({ minimum: 1 }),
@@ -395,7 +393,7 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("approval"), Type.Literal("ask_user"), Type.Literal("model-roles"), Type.Literal("subagents"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("approval"), Type.Literal("ask_user"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,

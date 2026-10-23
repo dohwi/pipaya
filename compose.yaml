@@ -17,7 +17,7 @@ services:
       # Tailscale (PIPAYA_BIND=<tailscale-ip>), never a public address.
       - "${PIPAYA_BIND:-127.0.0.1}:${PIPAYA_PORT:-8787}:8787"
     environment:
-      PIPAYA_APPROVAL: ${PIPAYA_APPROVAL:-ask}
+      PIPAYA_APPROVAL: ${PIPAYA_APPROVAL:-auto}
       # Leave empty to generate a token in /data/token.
       PIPAYA_TOKEN: ${PIPAYA_TOKEN:-}
       PIPAYA_CORS_ORIGINS: ${PIPAYA_CORS_ORIGINS:-}

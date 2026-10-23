@@ -10,7 +10,7 @@ import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Approval, Thinking } from "./schemas.ts";
 import { catalogEntries, catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
-import { DEFAULT_TOOLS, isInside, TOGGLEABLE_TOOLS } from "./tools.ts";
+import { DEFAULT_TOOLS, isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
 
@@ -156,7 +156,7 @@ async function fetchUpstreamModels(baseUrl: string, api: CustomProvider["api"], 
 
 /** Persisted user model configuration. Secrets live only in the separate CredentialStore. */
 export class Configuration {
-	/** Tools the user may switch off: the built-in `delegate` and whatever the loaded extensions mark `switchable`. */
+	/** Tools the user may switch off: whatever the loaded extensions mark `switchable`. */
 	private switchable: () => string[] = () => [];
 
 	setSwitchableSource(fn: () => string[]): void {
@@ -164,7 +164,7 @@ export class Configuration {
 	}
 
 	private toggleable(): string[] {
-		return [...new Set([...TOGGLEABLE_TOOLS, ...this.switchable()])];
+		return this.switchable();
 	}
 
 	constructor(

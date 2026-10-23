@@ -64,7 +64,7 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
 	let template: { name: string; call: string } | undefined;
-	// The server appends a note when the user wrote /subagent:name or attached files; it is for the model, not for the transcript.
+	// The server appends a note when the user attached files or tagged a session; it is for the model, not for the transcript.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
 				if (c?.type !== "text") return true;

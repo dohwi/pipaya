@@ -81,13 +81,13 @@ export default (pi) => {
 | `input` | `{sessionId, text, mode}` | `{text}` to rewrite, `{handled: true}` to swallow, `{parts}` to store extra text blocks after it (blocks starting `<pipaya-` show as notes), `{title}` to cut the session title from something else |
 | `before_agent_start` | `{sessionId, text}` | `{systemPrompt?, appendSystemPrompt?, message?}` for this run only |
 | `context` | `{sessionId, messages}` | `{messages}`: what the model sees for this call (storage is untouched) |
-| `tool_call` | `{sessionId, toolCallId, toolName, args}` | `{block: true, reason}`; `args` may be edited in place. Also applies to tools a `delegate` helper calls |
+| `tool_call` | `{sessionId, toolCallId, toolName, args}` | `{block: true, reason}`; `args` may be edited in place. |
 | `tool_result` | `{..., content, details, isError}` | `{content?, details?, isError?}`; each extension sees the previous one's result |
 | `session_before_compact` | `{sessionId, reason, messages, previousSummary, instructions?}` | `{cancel: true}` or `{summary}` (your own summary replaces the model call) |
 | `extension_unload` | `{name}` | none. Runs (2 s limit) before reload or shutdown drops the extension: close timers and files here |
 | observation only | `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_end`, `session_start`, `session_fork`, `session_compact`, `session_shutdown`, `extensions_loaded` | none |
 
-`alwaysActive: true` gives a tool to every session, also ones created before the extension was installed (otherwise only new sessions get it, through the default tool set). `switchable: true` lets the user turn it off in the settings, like `delegate`.
+`alwaysActive: true` gives a tool to every session, also ones created before the extension was installed (otherwise only new sessions get it, through the default tool set). `switchable: true` lets the user turn it off in the settings.
 
 Approval policy (`ask` / `readonly` / `auto`) still applies after `tool_call` hooks. A tool you register is `mutating: true` unless you say otherwise, so it asks for approval by default.
 

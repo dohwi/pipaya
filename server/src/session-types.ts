@@ -2,7 +2,6 @@ import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ApprovalPolicy } from "./config.ts";
 import type { ModelChoiceValue } from "./model-choice.ts";
 import type { SkillRef } from "./skills.ts";
-import type { AdvertisedAgent } from "./context.ts";
 import type { ThinkingLevel } from "./store.ts";
 
 /** Plain types, limits and the default prompt used by SessionManager (kept apart so the manager file is only logic). */
@@ -81,6 +80,6 @@ export const MAX_RUN_TURNS = Number(process.env.PIPAYA_MAX_RUN_TURNS) > 0 ? Numb
 /** The same tool call (same name + arguments) this many turns in a row counts as a stuck loop. */
 export const MAX_REPEATED_CALLS = 6;
 
-export const skillsKey = (skills: SkillRef[], agents: AdvertisedAgent[] = []) =>
-	JSON.stringify([skills.map((k) => [k.name, k.description, k.path]), agents.map((a) => [a.name, a.description])]);
+export const skillsKey = (skills: SkillRef[]) =>
+	JSON.stringify(skills.map((k) => [k.name, k.description, k.path]));
 

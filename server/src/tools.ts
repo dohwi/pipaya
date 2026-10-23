@@ -24,31 +24,6 @@ export interface ToolDef {
 	create(cwd: string, readRoots?: string[], ctx?: ToolContext): AgentTool<any>;
 }
 
-/** What the `delegate` tool hands to the sub-agent runner. */
-export interface DelegateRequest {
-	task: string;
-	/** Name of the helper to run. Left out = the first enabled one. */
-	agent?: string;
-	cwd: string;
-	/** Same extra read directories the calling session has (skill folders). */
-	readRoots: string[];
-	signal?: AbortSignal;
-	onProgress?: (note: string) => void;
-}
-
-export interface DelegateReport {
-	text: string;
-	/** Name of the helper that ran. */
-	agent: string;
-	turns: number;
-	stoppedEarly: boolean;
-	truncated: boolean;
-	provider: string;
-	model: string;
-	/** What the sub-agent spent. Recorded on the tool result so session usage and cost include it. */
-	usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: number };
-}
-
 /** What a tool may need from the running session beyond its working directory. */
 export interface ToolContext {
 	/** The session the tool runs in (extension tools use it to reach their per-session storage). */
@@ -57,10 +32,6 @@ export interface ToolContext {
 	canSeeImages?(): boolean;
 	/** The model's own picture size limits, when its catalog entry has any; they replace the defaults. */
 	imageLimits?(): Partial<ResizeLimits> | undefined;
-	/** Run a read-only sub-agent and get its report (`delegate`). Missing when the server has no sub-agent runner. */
-	delegate?(req: DelegateRequest): Promise<DelegateReport>;
-	/** Helpers the main agent may pick right now, for the `delegate` tool description. */
-	delegateAgents?(): { name: string; description: string }[];
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -523,58 +494,8 @@ const bashTool: ToolDef = {
 	},
 };
 
-const delegateDescription = (agents: { name: string; description: string }[] = []) =>
-	"Send a task (usually an investigation) to a helper agent and get back a short report. " +
-	"Use it when answering would take many reads or searches (\"where is X handled\", \"how does Y work across the codebase\"), " +
-	"so the files it opens never enter this conversation. It does not see this conversation: " +
-	"put everything it needs in `task`. For one file you already know, use read directly. " +
-	"Treat the report as a lead: read the cited lines yourself before you change code based on it." +
-	(agents.length ? `\nHelpers (pass the name as \`agent\`; left out = ${agents[0]!.name}):\n` + agents.map((a) => `- ${a.name}: ${a.description}`).join("\n") : "");
-
-const delegateTool: ToolDef = {
-	name: "delegate",
-	description: delegateDescription(),
-	mutating: false, // a helper with write/edit/bash is gated by SessionManager.gateTool instead
-	create(cwd, readRoots, ctx) {
-		return defineTool({
-			name: "delegate",
-			label: "Delegate research",
-			description: delegateDescription(ctx?.delegateAgents?.()),
-			parameters: Type.Object({
-				task: Type.String({ minLength: 1, maxLength: 4000, description: "What to find out, with all the context the helper needs" }),
-				agent: Type.Optional(Type.String({ description: "Which helper to use; see the list in the tool description" })),
-			}),
-			async execute(_id, params, signal, onUpdate) {
-				if (!ctx?.delegate) throw new Error("delegate is not available in this session");
-				const report = await ctx.delegate({
-					task: params.task,
-					agent: params.agent,
-					cwd,
-					readRoots: readRoots ?? [],
-					signal,
-					onProgress: (note) => onUpdate?.(text(`Researching… ${note}`, { task: params.task })),
-				});
-				return text(report.text, {
-					task: params.task,
-					subagent: true,
-					agent: report.agent,
-					provider: report.provider,
-					model: report.model,
-					turns: report.turns,
-					stoppedEarly: report.stoppedEarly,
-					truncated: report.truncated,
-					usage: report.usage,
-				});
-			},
-		});
-	},
-};
-
-/** Tools the user may switch off in the settings; every other built-in tool is locked on (the agent cannot work without it). */
-export const TOGGLEABLE_TOOLS = [delegateTool.name];
-
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, delegateTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

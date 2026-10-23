@@ -6,18 +6,17 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ApprovalManager } from "./approvals.ts";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { agentsPrompt, advertisedAgents, advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type AdvertisedAgent, type ContextSnapshot, type SessionContext } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
-import { agentHint, HINT_OPEN, mentionedAgents, type SubAgents } from "./subagent.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ApprovalPolicy } from "./config.ts";
-import { branchOf, groupHint, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
+import { branchOf, groupHint, HINT_OPEN, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
 import { memberHint, mentionedMembers, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -64,7 +63,6 @@ export class SessionManager {
 		private defaultWorkdir: () => string = () => cfg.workspaceRoot,
 		private skills?: SkillService,
 		private questions?: QuestionManager,
-		private subagents?: SubAgents,
 		private compaction?: CompactionSettings,
 		private ext?: ExtensionHost,
 		/** The approval a new session starts with (saved server setting, else the startup default). */
@@ -127,24 +125,15 @@ export class SessionManager {
 		return advertisedSkills(snapshot.tools, this.skills?.active(snapshot.cwd, id) ?? []);
 	}
 
-	/** Enabled sub-agents follow the current settings each turn, like skills. */
-	private currentAgents(snapshot: Pick<ContextSnapshot, "tools" | "cwd">): AdvertisedAgent[] {
-		return advertisedAgents(snapshot.tools, this.subagents?.agents(snapshot.cwd) ?? []);
-	}
-
 	context(id: string): SessionContext {
 		const record = this.get(id);
 		const snapshot = this.store.context(id);
-		const base = snapshot ?? previewContext(record, this.skills?.active(record.cwd, id), undefined, this.subagents?.agents(record.cwd));
+		const base = snapshot ?? previewContext(record, this.skills?.active(record.cwd, id), undefined);
 		const skills = snapshot ? this.currentSkills(id, snapshot) : (base.skills ?? []);
-		const agents = (snapshot ? this.currentAgents(snapshot) : advertisedAgents(record.tools, this.subagents?.agents(record.cwd) ?? []))
-			.map(({ name, description }) => ({ name, description }));
 		return {
 			...base,
-			agents,
 			skillsPrompt: skills.length ? skillsPrompt(skills) : "",
-			agentsPrompt: agents.length ? agentsPrompt(agents) : "",
-			effectiveSystemPrompt: snapshot ? buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, this.currentAgents(snapshot)) : base.effectiveSystemPrompt,
+			effectiveSystemPrompt: snapshot ? buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills) : base.effectiveSystemPrompt,
 			// baseDir is an internal read allow-list entry, not part of the API.
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
@@ -398,8 +387,6 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
-		const asked = mentionedAgents(input.text, this.subagents?.agents(record.cwd).map((a) => a.name) ?? []);
-		if (asked.length) content.push({ type: "text", text: agentHint(asked) });
 		const peers = this.peers(id);
 		if (peers.length) {
 			const names = peers.map((p) => p.name);
@@ -732,14 +719,13 @@ export class SessionManager {
 
 		const history = this.projectedMessages(record.id);
 		const snapshot = this.store.context(record.id) ?? this.store.captureContext(record.id, {
-			...previewContext(record, this.skills?.active(record.cwd, record.id), undefined, this.subagents?.agents(record.cwd)), capturedAt: Date.now(),
+			...previewContext(record, this.skills?.active(record.cwd, record.id), undefined), capturedAt: Date.now(),
 		});
 		const skills = this.currentSkills(record.id, snapshot);
-		const agents = this.currentAgents(snapshot);
 		const readRoots = skills.map((k) => k.baseDir);
 		const agent = new Agent({
 			initialState: {
-				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, agents),
+				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills),
 				model,
 				thinkingLevel: record.thinkingLevel,
 				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
@@ -762,7 +748,7 @@ export class SessionManager {
 			runStartedAt: 0,
 			lastActive: Date.now(),
 			unsubscribe: () => {},
-			skillsKey: skillsKey(skills, agents),
+			skillsKey: skillsKey(skills),
 			readRoots,
 			turns: 0,
 			recentCalls: [],
@@ -781,12 +767,11 @@ export class SessionManager {
 		const snapshot = this.store.context(id);
 		if (!snapshot) return;
 		const skills = this.currentSkills(id, snapshot);
-		const agents = this.currentAgents(snapshot);
-		const key = skillsKey(skills, agents);
+		const key = skillsKey(skills);
 		if (key === live.skillsKey) return;
 		const [head, ...rest] = live.agent.state.messages;
 		if (head?.role === "system") {
-			live.agent.state.messages = [{ ...head, content: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills, agents) } as AgentMessage, ...rest];
+			live.agent.state.messages = [{ ...head, content: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills) } as AgentMessage, ...rest];
 		}
 		live.readRoots.splice(0, live.readRoots.length, ...skills.map((k) => k.baseDir));
 		live.skillsKey = key;
@@ -801,7 +786,6 @@ export class SessionManager {
 
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
-		const sub = this.subagents;
 		const ctx: ToolContext = { sessionId };
 		ctx.canSeeImages = () => {
 			const rec = this.store.get(sessionId);
@@ -812,20 +796,6 @@ export class SessionManager {
 			const rec = this.store.get(sessionId);
 			return rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
 		};
-		if (sub) {
-			// A helper with no model of its own runs on this session's current model.
-			ctx.delegateAgents = () => sub.agents(this.store.get(sessionId)?.cwd);
-			ctx.delegate = async (req) => {
-				const rec = this.store.get(sessionId);
-				if (!rec) throw notFound("session");
-				return sub.run({
-					...req, fallback: { provider: rec.provider, model: rec.model },
-					toolDefs: this.toolDefs(),
-					beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
-					afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
-				});
-			};
-		}
 		return ctx;
 	}
 
@@ -848,19 +818,18 @@ export class SessionManager {
 	 * Approval policy lives here so it applies to every client. Reads policy fresh from the DB.
 	 *  - auto: nothing waits.
 	 *  - ask: a mutating tool waits for the user only when it reaches outside the session's working directory
-	 *    (leavesProject). A helper with write rights (`delegate`) cannot be judged ahead of time, so it waits too.
+	 *    (leavesProject).
 	 *  - readonly: mutating tools are blocked.
 	 */
 	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
 		const rec = this.store.get(sessionId);
-		const policy = rec?.approval ?? "ask";
+		const policy = rec?.approval ?? "auto";
 		if (policy === "auto") return undefined;
-		const delegated = toolName === "delegate" && !!this.subagents?.mutates((args as { agent?: string } | null)?.agent, rec?.cwd ?? "");
-		if (!(isMutating(toolName, this.toolDefs()) || delegated)) return undefined;
+		if (!isMutating(toolName, this.toolDefs())) return undefined;
 		if (policy === "readonly") {
 			return { block: true, reason: `"${toolName}" is disabled: this session is read-only` };
 		}
-		if (!delegated && !leavesProject(toolName, args, rec?.cwd ?? this.cfg.workspaceRoot)) return undefined;
+		if (!leavesProject(toolName, args, rec?.cwd ?? this.cfg.workspaceRoot)) return undefined;
 		const decision = await this.approvals.request({ sessionId, toolCallId, toolName, args }, signal);
 		return decision.approved ? undefined : { block: true, reason: decision.reason ?? `The user denied "${toolName}"` };
 	}

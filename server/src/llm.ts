@@ -40,7 +40,7 @@ export type CompleteOutput = Static<typeof CompleteResult>;
 
 /**
  * One-shot text completion on any registered model: no session, no tools, no history. The building block for
- * summaries, titles, classification, translation and for the sub-agent's cheap model. It only ever sees the
+ * summaries, titles, classification, and translation. It only ever sees the
  * text the caller passes in.
  */
 export class Llm {

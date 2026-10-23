@@ -70,7 +70,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 	const dataDir = resolve(env.PIPAYA_DATA_DIR ?? join(homedir(), ".pipaya"));
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
-	const approval = (env.PIPAYA_APPROVAL ?? "ask") as ApprovalPolicy;
+	const approval = (env.PIPAYA_APPROVAL ?? "auto") as ApprovalPolicy;
 	if (!APPROVAL_POLICIES.includes(approval)) {
 		throw new Error(`PIPAYA_APPROVAL must be one of ${APPROVAL_POLICIES.join(", ")}`);
 	}

@@ -322,25 +322,18 @@ export class SessionStore {
 			`SELECT COUNT(*) AS turns, ${sums("data", "$.usage", "$.usage.cost.total")}
 			 FROM messages WHERE session_id = $sid AND role = 'assistant' AND json_type(data, '$.usage') = 'object'`,
 		);
-		// A `delegate` sub-agent runs its own model calls; they are billed too, so they count toward the session.
-		// `turns` stays the main agent's calls: the sub-agent's token and cost figures are added, not its steps.
-		const delegated = run(
-			`SELECT ${sums("data", "$.details.usage", "$.details.usage.cost")}
-			 FROM messages WHERE session_id = $sid AND role = 'toolResult' AND json_extract(data, '$.toolName') = 'delegate'
-			 AND json_extract(data, '$.details.subagent') = 1 AND json_type(data, '$.details.usage') = 'object'`,
-		);
 		// Summaries are model calls too.
 		const summaries = run(
 			`SELECT ${sums("usage", "$", "$.cost")}
 			 FROM session_compactions WHERE session_id = $sid AND usage IS NOT NULL`,
 		);
 		return {
-			input: main.input + delegated.input + summaries.input,
-			output: main.output + delegated.output + summaries.output,
-			cacheRead: main.cacheRead + delegated.cacheRead + summaries.cacheRead,
-			cacheWrite: main.cacheWrite + delegated.cacheWrite + summaries.cacheWrite,
-			totalTokens: main.totalTokens + delegated.totalTokens + summaries.totalTokens,
-			cost: main.cost + delegated.cost + summaries.cost,
+			input: main.input + summaries.input,
+			output: main.output + summaries.output,
+			cacheRead: main.cacheRead + summaries.cacheRead,
+			cacheWrite: main.cacheWrite + summaries.cacheWrite,
+			totalTokens: main.totalTokens + summaries.totalTokens,
+			cost: main.cost + summaries.cost,
 			turns: main.turns ?? 0,
 		};
 	}

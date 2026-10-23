@@ -7,7 +7,7 @@
 	/**
 	 * "Which model, at which reasoning strength": the button that shows the current pair and opens the shared
 	 * ModelPickerModal. Every place that picks a model uses it, so they all look and behave the same.
-	 *  - `variant="field"`: a form field (settings: default model, compaction, sub-agent);
+	 *  - `variant="field"`: a form field (settings: default model, compaction);
 	 *  - `variant="inline"`: the composer's quiet toolbar button (ModelPicker wires it to the chat).
 	 * The caller passes the models in, so it works for any server, not only the open one.
 	 * `open` is bindable so a shortcut can open the dialog from outside.

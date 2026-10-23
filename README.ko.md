@@ -30,7 +30,7 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 
 ## 주요 기능
 
-- **내장 도구 10종**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
+- **내장 도구 9종**: read, write, edit, ls, grep, bash, ask_user, peer_send, peer_read
 - **승인 정책**: `ask`(기본), `auto`, `readonly`. 무엇을 바꿀 수 있는지 직접 정합니다
 - **어떤 모델이든**: 내장 제공자, 로컬 서버(Ollama, LM Studio, llama.cpp, vLLM), 직접 만든 엔드포인트
 - **여러 기기, 하나의 대화**: Windows, macOS, Android, 웹. 알림과 모바일 푸시 지원

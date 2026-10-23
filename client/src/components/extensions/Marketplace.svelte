@@ -3,7 +3,7 @@
 	import Icon from "../Icon.svelte";
 	import Modal from "../Modal.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
-	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchDoc, fetchPackage, fetchStars, formatStars, isOfficial, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { onclose, onpick }: { onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
@@ -22,17 +22,20 @@
 	const installed = (id: string) => extensions.installed.find((e) => e.package.manifest.id === id);
 	const shown = $derived((catalog?.extensions ?? []).filter((e) => {
 		const q = query.trim().toLowerCase();
-		return !q || `${e.id} ${e.name} ${e.description} ${Object.values(e.descriptions ?? {}).join(" ")} ${e.author ?? ""}`.toLowerCase().includes(q);
+		return !q || `${e.id} ${e.name} ${e.description} ${e.author ?? ""}`.toLowerCase().includes(q);
 	}));
 
 	let stars = $state<Record<string, number>>({});
+	let docs = $state<Record<string, string>>({});
 
 	$effect(() => {
+		const lang = getLang();
 		const list = catalog?.extensions ?? [];
 		let live = true;
 		for (const e of list) {
 			const repo = repoLoc(e)?.repo;
 			if (repo && stars[repo] === undefined) void fetchStars(repo).then((n) => { if (live && n !== undefined) stars[repo] = n; });
+			void fetchDoc(e, lang).then((d) => { if (live) docs[`${e.id}:${lang}`] = d; });
 		}
 		return () => { live = false; };
 	});
@@ -91,7 +94,7 @@
 				{@const have = installed(entry.id)}
 				{@const repo = repoLoc(entry)?.repo}
 				{@const star = repo ? stars[repo] : undefined}
-				{@const desc = localizedDescription(entry, getLang())}
+				{@const desc = docs[`${entry.id}:${getLang()}`] || entry.description}
 				{@const newer = have ? compareVersions(entry.version, have.package.manifest.version) > 0 : false}
 				<li class="item">
 					<div class="info">

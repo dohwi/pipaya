@@ -59,6 +59,8 @@ const READ_NOTE =
 	"This is only an index. Do not guess what they did: read a session with peer_read (a few messages) only when you need its words, and prefer git (branch, log, diff in its directory) for the work itself. Use peer_send to give a session work (to a whole tagged group, pass the group name as `to` once).";
 
 /** The note for tagged groups; `groups` maps a group handle to its sessions. */
+export const HINT_OPEN = "<pipaya-hint>";
+
 export function groupHint(open: string, groups: readonly { handle: string; members: readonly MemberBrief[] }[]): string {
 	const blocks = groups.map((g) => {
 		const shown = g.members.slice(0, MAX_LISTED);

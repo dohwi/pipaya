@@ -6,11 +6,11 @@ import { setLang } from "../src/lib/i18n";
 afterEach(() => setLang("ko"));
 
 describe("approvalMode", () => {
-	test("only auto is auto; ask, the retired read-only and anything unknown read as ask", () => {
+	test("auto and unset read as auto; ask and the retired read-only read as ask", () => {
 		expect(approvalMode("auto")).toBe("auto");
 		expect(approvalMode("ask")).toBe("ask");
 		expect(approvalMode("readonly")).toBe("ask");
-		expect(approvalMode(undefined)).toBe("ask");
+		expect(approvalMode(undefined)).toBe("auto");
 	});
 });
 

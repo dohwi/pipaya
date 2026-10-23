@@ -30,12 +30,12 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 
 ## Features
 
-- **Agent with 10 built-in tools**: read, write, edit, ls, grep, bash, ask_user, delegate, peer_send, peer_read
+- **Agent with 9 built-in tools**: read, write, edit, ls, grep, bash, ask_user, peer_send, peer_read
 - **Approval policies**: `ask` (default), `auto`, `readonly`. You decide what may change things
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
 - **Many devices, one conversation**: Windows, macOS, Android and web, with notifications and mobile push
 - **Teamwork and split view**: hand work to other sessions with `@name`; up to 8 conversations on one screen
-- **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
+- **Extensible**: AGENTS.md, skills, templates, server and client extensions
 
 ## Quick install
 

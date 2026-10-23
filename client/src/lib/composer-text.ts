@@ -79,7 +79,6 @@ export const groupHandle = (name: string): string => name.trim().replace(/\s+/g,
 export interface Known {
 	templates: readonly { name: string }[];
 	skills: readonly { name: string }[];
-	agents: readonly { name: string }[];
 	/** Names of the other active sessions (`@name`) */
 	members: readonly string[];
 	/** Handles of the session groups (`@handle`) */
@@ -96,10 +95,9 @@ export interface Known {
  */
 export function mirrorHtml(text: string, known: Known): string {
 	return (
-		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/subagent:[a-z0-9-]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
+		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[a-z0-9-]+|\/prompt:[a-z0-9-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
 			if (tok.startsWith("/prompt:")) return known.templates.some((k) => k.name === tok.slice(8)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
-			if (tok.startsWith("/subagent:")) return known.agents.some((a) => a.name === tok.slice(10)) ? `${lead}<mark class="agent">${tok}</mark>` : m;
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);
 				const name = memberOf(rest, known.members.map(esc));

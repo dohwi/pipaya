@@ -12,7 +12,6 @@
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
-	import SubAgents from "./SubAgents.svelte";
 	import ServerUpdate from "./ServerUpdate.svelte";
 	import { app, defaultServerUrl } from "../lib/store.svelte";
 	import { Api, describeConnectError, errorText, normalizeUrl, verifyServer } from "../lib/api";
@@ -23,7 +22,7 @@
 	 * `"new"` to add, or the id of the server being edited. `embedded` draws it as a page inside the settings window
 	 * (with a back button) instead of a modal of its own; `onclose` is then how it hands control back to the list.
 	 */
-	type Section = "info" | "workdir" | "models" | "agents" | "sessions" | "devices";
+	type Section = "info" | "workdir" | "models" | "sessions" | "devices";
 	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
 	let { target, embedded = false, onclose, section }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section } = $props();
 
@@ -34,7 +33,7 @@
 	/** Editing a server has three panes: its connection details, its default folder, and the model connections on it. */
 	// svelte-ignore state_referenced_locally
 	let tab = $state<Section>(section ?? "info");
-	const tabOrder = ["info", "workdir", "models", "agents", "sessions", "devices"] as const;
+	const tabOrder = ["info", "workdir", "models", "sessions", "devices"] as const;
 	let dir = $state(1);
 	function go(next: (typeof tabOrder)[number]) {
 		if (next === tab) return;
@@ -142,7 +141,6 @@
 			<button role="tab" aria-selected={tab === "info"} tabindex={tab === "info" ? 0 : -1} class:on={tab === "info"} onclick={() => go("info")}>{t("정보")}</button>
 			<button role="tab" aria-selected={tab === "workdir"} tabindex={tab === "workdir" ? 0 : -1} class:on={tab === "workdir"} onclick={() => go("workdir")}>{t("기본 폴더")}</button>
 			<button role="tab" aria-selected={tab === "models"} tabindex={tab === "models" ? 0 : -1} class:on={tab === "models"} onclick={() => go("models")}>{t("모델 연결")}</button>
-			<button role="tab" aria-selected={tab === "agents"} tabindex={tab === "agents" ? 0 : -1} class:on={tab === "agents"} onclick={() => go("agents")}>{t("에이전트")}</button>
 			<button role="tab" aria-selected={tab === "sessions"} tabindex={tab === "sessions" ? 0 : -1} class:on={tab === "sessions"} onclick={() => go("sessions")}>{t("대화")}</button>
 			<button role="tab" aria-selected={tab === "devices"} tabindex={tab === "devices" ? 0 : -1} class:on={tab === "devices"} onclick={() => go("devices")}>{t("기기")}</button>
 		</div>
@@ -152,8 +150,6 @@
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<DevicesPanel serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "sessions"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<SessionsPanel serverId={editing.id} />{/key}</div>
-	{:else if editing && tab === "agents"}
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<SubAgents serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "models"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}><ModelConnections serverId={editing.id} /></div>
 	{:else if editing && tab === "workdir"}

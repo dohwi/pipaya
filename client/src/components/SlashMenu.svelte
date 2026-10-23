@@ -66,7 +66,7 @@
 		padding: 4px 0;
 		z-index: 20;
 	}
-	/* a divider and a small heading wherever the kind of rows changes: commands, skills, sub-agents, files ... */
+	/* a divider and a small heading wherever the kind of rows changes: commands, skills, files ... */
 	.head {
 		margin-top: 4px;
 		padding: 8px 14px 3px;

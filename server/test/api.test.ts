@@ -207,10 +207,10 @@ describe("API contracts", () => {
 
 	test("switchable tools can be turned off, locked ones cannot", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
-		expect(info.toggleable).toEqual(["delegate"]); // extensions add their own with `switchable: true`
+		expect(info.toggleable).toEqual([]); // only extensions add their own, with `switchable: true`
 		expect(info.locked).toContain("read");
 		expect((await api("PUT", "/configuration/tools", { disabled: ["read"] })).status).toBe(400);
-		expect((await api("PUT", "/configuration/tools", { disabled: ["delegate"] })).json.disabled).toEqual(["delegate"]);
+		expect((await api("PUT", "/configuration/tools", { disabled: ["delegate"] })).status).toBe(400);
 		expect((await api("PUT", "/configuration/tools", { disabled: [] })).json.disabled).toEqual([]);
 	});
 

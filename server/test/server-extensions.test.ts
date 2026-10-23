@@ -113,20 +113,6 @@ describe("server extensions", () => {
 		expect(JSON.stringify(result.content)).toContain("nope from extension");
 	});
 
-	test("a sub-agent cannot get around the tool_call hook of the calling session", async () => {
-		writeFileSync(join(ws, "secret.txt"), "TOP-SECRET-VALUE");
-		mkdirSync(join(dir, ".agents", "subagents"), { recursive: true });
-		writeFileSync(join(dir, ".agents", "subagents", "explore.md"), "---\ndescription: reads\nmaxTurns: 6\n---\n");
-		const id = await newSession();
-		await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify({ task: `!read ${JSON.stringify({ path: "secret.txt" })}` })}` });
-		await untilIdle(id);
-		const result = (await messages(id)).find((m) => m.role === "toolResult" && m.toolName === "delegate");
-		expect(JSON.stringify(result)).not.toContain("TOP-SECRET-VALUE");
-		// Guard against passing for the wrong reason: the helper really ran and was refused by the hook.
-		expect(result.isError).toBeFalsy();
-		expect(upstream.requests.some((r) => JSON.stringify(r.body).includes("no secrets"))).toBe(true);
-	});
-
 	test("/commands run in the server; a returned string becomes the prompt; input hook can swallow", async () => {
 		const id = await newSession();
 		await api("POST", `/sessions/${id}/messages`, { text: "/ping hi" });

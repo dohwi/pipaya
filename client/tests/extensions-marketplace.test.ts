@@ -97,21 +97,17 @@ test("compareVersions and cliCommand", () => {
   expect(cliCommand(entry({ id: "guard" }))).toBe("bun scripts/market.ts install guard");
 });
 
-import { formatStars, isOfficial, localizedDescription, parseCatalog as pc, repoLoc } from "../src/lib/extensions/marketplace";
+import { docNames, formatStars, isOfficial, repoLoc, summarizeMarkdown } from "../src/lib/extensions/marketplace";
 import { describe as d2, expect as e2, test as t2 } from "bun:test";
 
 d2("marketplace card helpers", () => {
   const base = { id: "guard", kind: "server", name: "Guard", description: "", version: "1.0.0" } as const;
-  t2("localizedDescription picks tag, base language, then default", () => {
-    const e = { ...base, description: "def", descriptions: { ko: "한글", "zh-CN": "中文" }, source: { type: "path", path: "x" } } as MarketEntry;
-    e2(localizedDescription(e, "ko")).toBe("한글");
-    e2(localizedDescription(e, "ko-KR")).toBe("한글");
-    e2(localizedDescription(e, "zh-cn")).toBe("中文");
-    e2(localizedDescription(e, "fr")).toBe("def");
+  t2("docNames falls back to base language then en", () => {
+    e2(docNames("ko")).toEqual(["ko.md", "en.md"]);
+    e2(docNames("zh-CN")).toEqual(["zh-cn.md", "zh.md", "en.md"]);
   });
-  t2("parseCatalog keeps only valid translations", () => {
-    const c = pc({ name: "n", extensions: [{ id: "a", kind: "client", name: "A", version: "1", description: "d", descriptions: { ko: "k", "bad tag": "x", en: 3 }, source: { type: "path", path: "p" } }] });
-    e2(c.extensions[0]!.descriptions).toEqual({ ko: "k" });
+  t2("summarizeMarkdown takes the first prose paragraph", () => {
+    e2(summarizeMarkdown("# Title\n\n![x](a.png)\n\nHello **world** with [link](http://x).\n\nmore")).toBe("Hello world with link.");
   });
   t2("official and repo detection", () => {
     const git = { ...base, source: { type: "git", repo: "dohwi/pipaya-extensions", dir: "guard", ref: "v1", commit: "a".repeat(40) } } as MarketEntry;

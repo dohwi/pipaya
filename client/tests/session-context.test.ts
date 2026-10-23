@@ -6,7 +6,7 @@ const snapshot: SessionContext = {
 	cwd: "/workspace/project", state: "applied", capturedAt: 1000,
 	systemPrompt: "base", effectiveSystemPrompt: "base\nproject instructions",
 	instructions: [{ path: "/workspace/project/AGENTS.md", scope: "cwd", content: "project instructions", bytes: 20 }],
-	warnings: [], tools: ["read"], skills: [], agents: [], skillsPrompt: "", agentsPrompt: "",
+	warnings: [], tools: ["read"], skills: [], skillsPrompt: "",
 	readFiles: [{ path: "/workspace/project/src/index.ts", reads: 1, lastReadAt: 2000, ranges: [{ from: 1, to: 20 }] }],
 };
 

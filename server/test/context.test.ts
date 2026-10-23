@@ -174,7 +174,7 @@ describe("context API and application", () => {
 			expect((await api("GET", `/sessions/${id}/context?token=${cfg.token}`, undefined, false)).status).toBe(401);
 			expect((await api("GET", "/sessions/missing/context")).status).toBe(404);
 			const preview = (await api("GET", `/sessions/${id}/context`)).json;
-			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "skills", "agents", "skillsPrompt", "agentsPrompt", "readFiles"].sort());
+			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "skills", "skillsPrompt", "readFiles"].sort());
 			expect(preview).toMatchObject({ cwd: f.cwd, state: "preview", capturedAt: null, systemPrompt: "Base", tools: ["read"], readFiles: [] });
 			expect(preview.instructions.at(-1)).toEqual({ path: join(f.cwd, "AGENTS.md"), scope: "cwd", content: "Preview version", bytes: 15 });
 			for (const mode of ["steer", "follow_up"]) {

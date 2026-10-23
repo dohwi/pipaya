@@ -47,12 +47,11 @@ describe("memberOf", () => {
 });
 
 describe("mirrorHtml", () => {
-	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], agents: [{ name: "explore" }], members: ["미나"], images: 1, paths: ["src/a.ts"] };
+	const known = { templates: [{ name: "fix" }], skills: [{ name: "review" }], members: ["미나"], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
-		const html = mirrorHtml("#src/a.ts #nope /subagent:explore /subagent:ghost $explore #image1 #image2 @미나랑 @철수 /skill:review /prompt:fix", known);
+		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /prompt:fix", known);
 		expect(html).toContain('<mark class="file">#src/a.ts</mark>');
 		expect(html).not.toContain('<mark class="file">#nope');
-		expect(html).toContain('<mark class="agent">/subagent:explore</mark>');
 		expect(html).not.toContain("ghost</mark>");
 		expect(html).not.toContain("$explore</mark>");
 		expect(html).toContain('<mark class="img">#image1</mark>');
@@ -68,7 +67,7 @@ describe("mirrorHtml", () => {
 });
 
 describe("mirrorHtml group tags", () => {
-	const known = { templates: [], skills: [], agents: [], members: ["미나"], groups: ["결제-개편"], images: 0, paths: [] };
+	const known = { templates: [], skills: [], members: ["미나"], groups: ["결제-개편"], images: 0, paths: [] };
 	test("marks a group handle like a session mention, particle left outside", () => {
 		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="member">@결제-개편</mark>에');
 		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="member">@미나</mark>');

@@ -22,7 +22,7 @@ UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT_NAME.service"
 REF="main"
 HOST=""
 PORT="8787"
-APPROVAL="ask"
+APPROVAL="auto"
 SERVICE=1
 ASSUME_YES=0
 
@@ -48,7 +48,7 @@ Server options
   --host ADDR      Listen address. Default: the Tailscale IPv4 address if there is one, else 127.0.0.1.
                    Use 0.0.0.0 only behind a firewall or a private network.
   --port N         Listen port (default 8787)
-  --approval MODE  Tool approval policy: ask (default), readonly, auto
+  --approval MODE  Tool approval policy: auto (default), ask, readonly
   --ref REF        Git branch or tag to install (default main)
   --dir PATH       Install location (default ~/.local/share/pipaya)
   --no-service     Install only; do not register or start a service

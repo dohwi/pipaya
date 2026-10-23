@@ -32,12 +32,8 @@ export interface ReadFileTrace {
 
 export interface SessionContext extends Omit<ContextSnapshot, "capturedAt" | "skills"> {
 	skills: Omit<SkillRef, "baseDir">[];
-	/** Sub-agents advertised to the model this turn. */
-	agents: AdvertisedAgent[];
 	/** The exact `<available_skills>` block appended to the system prompt ("" when none). */
 	skillsPrompt: string;
-	/** The exact `# Sub-agents` block appended to the system prompt ("" when none). */
-	agentsPrompt: string;
 	state: "preview" | "applied";
 	capturedAt: number | null;
 	/** Historical successful read results, not a guarantee of retained model context. */
@@ -118,41 +114,21 @@ export function discoverInstructions(cwd: string, opts: { home?: string; maxFile
 /** Skills are loaded through `read`, so they are pointless (and not advertised) without that tool. */
 export const advertisedSkills = (tools: string[], skills: SkillRef[]): SkillRef[] => (tools.includes("read") ? skills : []);
 
-export interface AdvertisedAgent {
-	name: string;
-	description: string;
-}
-
-/** Helpers are only reachable through `delegate`, so they are not advertised without that tool. */
-export const advertisedAgents = (tools: string[], agents: AdvertisedAgent[]): AdvertisedAgent[] => (tools.includes("delegate") ? agents : []);
-
-/** Short list of the enabled sub-agents (name + description); the `delegate` tool description carries the call details. */
-export function agentsPrompt(agents: AdvertisedAgent[]): string {
-	const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
-	return [
-		"# Sub-agents",
-		"",
-		"Helpers you can hand work to with the `delegate` tool (pass `agent` = name). Their reports are leads: verify cited lines before changing code.",
-		...agents.map((a) => `- ${a.name}: ${oneLine(a.description)}`),
-	].join("\n");
-}
-
-/** The model's system prompt: base + frozen AGENTS.md + the skills and sub-agents that are currently enabled. */
-export function buildSystemPrompt(base: string, instructions: Instruction[], skills: SkillRef[], agents: AdvertisedAgent[] = []): string {
+/** The model's system prompt: base + frozen AGENTS.md + the skills that are currently enabled. */
+export function buildSystemPrompt(base: string, instructions: Instruction[], skills: SkillRef[]): string {
 	const parts = [base];
 	if (instructions.length) parts.push(`# Project instructions\n\n${instructions.map((i) => `## ${i.path}\n\n${i.content}`).join("\n\n")}`);
 	if (skills.length) parts.push(skillsPrompt(skills));
-	if (agents.length) parts.push(agentsPrompt(agents));
 	return parts.join("\n\n");
 }
 
-export function previewContext(record: SessionRecord, skills: SkillRef[] = [], home?: string, agents: AdvertisedAgent[] = []): Omit<ContextSnapshot, "capturedAt"> {
+export function previewContext(record: SessionRecord, skills: SkillRef[] = [], home?: string): Omit<ContextSnapshot, "capturedAt"> {
 	const { instructions, warnings } = discoverInstructions(record.cwd, { home });
 	const advertised = advertisedSkills(record.tools, skills);
 	return {
 		cwd: record.cwd,
 		systemPrompt: record.systemPrompt,
-		effectiveSystemPrompt: buildSystemPrompt(record.systemPrompt, instructions, advertised, advertisedAgents(record.tools, agents)),
+		effectiveSystemPrompt: buildSystemPrompt(record.systemPrompt, instructions, advertised),
 		instructions,
 		warnings,
 		tools: [...record.tools],

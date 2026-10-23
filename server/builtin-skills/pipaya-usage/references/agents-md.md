@@ -22,7 +22,6 @@ Behaviour to tell the user:
 
 - Before a session's first message the client shows a **preview**. At the first run a snapshot is stored and never changes. To pick up an edit, **start a new session**. Editing the file mid-session does nothing.
 - To verify: open the chat header's **session context** (file icon). It lists the applied files, scope, byte sizes, warnings, the full system prompt, active tools and files already read.
-- Sub-agents do not get AGENTS.md; their prompt is the built-in research prompt plus the helper's own `prompt` field.
 
 Writing the global file:
 

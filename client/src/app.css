@@ -140,7 +140,7 @@
 	--lv-high: #f472b6;
 	--lv-xhigh: #fb923c;
 	--lv-max: #f87171;
-	/* composer mention marks: #image (violet), #file (mint), @member (sky), /subagent: (amber) */
+	/* composer mention marks: #image (violet), #file (mint), @member (sky) */
 	--mark-img: #c4b5fd;
 	--mark-file: #86efac;
 	--mark-agent: #fcd34d;
@@ -189,7 +189,6 @@
 	--lv-max: #dc2626;
 	--mark-img: #8b5cf6;
 	--mark-file: #10b981;
-	--mark-agent: #f59e0b;
 	--mark-member: #0284c7;
 	--info: #1d6fe0;
 	--ok: #12a36a;
@@ -1024,13 +1023,9 @@ html .glow-working.glow-working {
 	--sh-base: var(--tb-fg);
 	--sh-hi: var(--text);
 }
-/* skills and sub-agents are the two that are not plain file/shell work: a dashed outline for skills, a solid fill for agents */
+/* skills are not plain file/shell work: a dashed outline */
 .tbadge.skill {
 	border-style: dashed;
-}
-.tbadge.subagent {
-	background: oklch(0.7 0.14 var(--th) / 0.26);
-	box-shadow: 0 0 0 3px oklch(0.7 0.14 var(--th) / 0.08);
 }
 
 /* Three dots that rise in turn: the quiet "working" mark for the work box (the round spinner stays for buttons and forms). */

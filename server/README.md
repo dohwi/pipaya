@@ -42,7 +42,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
-| `PIPAYA_APPROVAL` | `ask` | `ask` (confirm only what reaches outside the session's working directory), `auto` (never ask), or `readonly` (block changes; API only, the apps no longer offer it) |
+| `PIPAYA_APPROVAL` | `auto` | `ask` (confirm only what reaches outside the session's working directory), `auto` (never ask), or `readonly` (block changes; API only, the apps no longer offer it) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
@@ -73,7 +73,6 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | POST | `/sessions/:id/compact` | Optional `{customInstructions}`. Summarizes older messages; the model then sees the summary instead of them (the stored transcript is unchanged). 409 while running or too short, 502 if the summary model fails |
 | GET/PUT | `/compaction` | `{auto, model, thresholdPercent}`. Auto-compaction runs before a prompt once the context reaches `thresholdPercent` (30–95, default 90) of the model window. `model` is `{provider, model, thinkingLevel?}` or `null` = use the session's own model for the summary |
 | GET/PUT | `/system-model` | `{model}`: the light model that names sessions and writes their `purpose` (role) in the background after a message. `{provider, model, thinkingLevel?}` or `null` = off (titles are the first message cut short) |
-| GET/PUT | `/subagents` | Sub-agents are Markdown files (`~/.agents/subagents/*.md`, `<dir>/.agents/subagents/*.md`; nearest wins). `GET ?cwd=` → `{enabled, agents: [{name, description, enabled, fileEnabled, scope, path, model, tools, maxTurns, prompt}], warnings, toolChoices}`. `PUT {enabled}` is the master switch of the `delegate` tool; `PUT /subagents/:name {enabled}` switches one helper off or on (a helper whose file says `enabled: false` stays off). Everything else is edited in the file; changes apply on the next message |
 | GET | `/sessions?limit=&before=&closed=` | Sessions and `nextBefore` cursor |
 | GET/PATCH/DELETE | `/sessions/:id` | Read/update/delete a session; PATCH also accepts `closed` |
 | POST | `/sessions/:id/messages` | `{text,mode?,images?}`; async `202` |
