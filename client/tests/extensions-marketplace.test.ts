@@ -96,3 +96,25 @@ test("compareVersions and cliCommand", () => {
   expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
   expect(cliCommand(entry({ id: "guard" }))).toBe("bun scripts/market.ts install guard");
 });
+
+import { docNames, formatStars, isOfficial, repoLoc, summarizeMarkdown } from "../src/lib/extensions/marketplace";
+import { describe as d2, expect as e2, test as t2 } from "bun:test";
+
+d2("marketplace card helpers", () => {
+  const base = { id: "guard", kind: "server", name: "Guard", description: "", version: "1.0.0" } as const;
+  t2("docNames falls back to base language then en", () => {
+    e2(docNames("ko")).toEqual(["ko.md", "en.md"]);
+    e2(docNames("zh-CN")).toEqual(["zh-cn.md", "zh.md", "en.md"]);
+  });
+  t2("summarizeMarkdown takes the first prose paragraph", () => {
+    e2(summarizeMarkdown("# Title\n\n![x](a.png)\n\nHello **world** with [link](http://x).\n\nmore")).toBe("Hello world with link.");
+  });
+  t2("official and repo detection", () => {
+    const git = { ...base, source: { type: "git", repo: "dohwi/pipaya-extensions", dir: "guard", ref: "v1", commit: "a".repeat(40) } } as MarketEntry;
+    e2(isOfficial(git)).toBe(true);
+    const other = { ...base, homepage: "https://github.com/someone/ext/tree/v1/dir", source: { type: "path", path: "x" } } as MarketEntry;
+    e2(repoLoc(other)).toEqual({ repo: "someone/ext", ref: "v1", dir: "dir" });
+    e2(isOfficial(other)).toBe(false);
+  });
+  t2("formatStars", () => { e2(formatStars(950)).toBe("950"); e2(formatStars(1200)).toBe("1.2k"); });
+});

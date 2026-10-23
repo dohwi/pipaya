@@ -113,3 +113,89 @@ export function compareVersions(a: string, b: string): number {
   for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0) ? 1 : -1;
   return 0;
 }
+
+/** Owners whose extensions get the "official" badge: the owner of the default catalog. */
+export const OFFICIAL_OWNERS = [new URL(DEFAULT_MARKETPLACE_URL).pathname.split("/")[1]!.toLowerCase()];
+
+export type RepoLoc = { repo: string; ref: string; dir?: string };
+
+/** Where an entry lives on GitHub: from its git source, else from a `github.com/<repo>/tree/<ref>/<dir>` homepage. */
+export function repoLoc(entry: MarketEntry): RepoLoc | undefined {
+  if (entry.source.type === "git") return { repo: entry.source.repo, ref: entry.source.commit, ...(entry.source.dir ? { dir: entry.source.dir } : {}) };
+  const m = entry.homepage?.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)(?:\/tree\/([^/]+)(?:\/(.+?))?)?\/?$/);
+  if (!m) return undefined;
+  return { repo: m[1]!, ref: m[2] ?? "HEAD", ...(m[3] ? { dir: m[3] } : {}) };
+}
+
+export const isOfficial = (entry: MarketEntry): boolean => {
+  const owner = repoLoc(entry)?.repo.split("/")[0]?.toLowerCase();
+  return !!owner && OFFICIAL_OWNERS.includes(owner);
+};
+
+/** Candidate description files for a language: `<lang>.md`, then the base language, then `en.md`. */
+export function docNames(lang: string): string[] {
+  const l = lang.toLowerCase();
+  return [...new Set([l, l.split("-")[0]!, "en"])].filter(n => /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(n)).map(n => `${n}.md`);
+}
+
+/** The first prose paragraph of a Markdown file, without markup, capped for a card. */
+export function summarizeMarkdown(md: string, max = 280): string {
+  const para = md.replace(/\r/g, "").split(/\n\s*\n/).map(p => p.trim()).find(p => p && !/^(#|```|---|<|>|\||!\[)/.test(p));
+  if (!para) return "";
+  const text = para.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1").replace(/\s*\n\s*/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+const docCache = new Map<string, Promise<string>>();
+/** A localized description from the extension's folder (`ko.md`, `en.md`, ...); empty when there is none. */
+export function fetchDoc(entry: MarketEntry, lang: string): Promise<string> {
+  const loc = repoLoc(entry);
+  if (!loc || loc.ref === "HEAD") return Promise.resolve("");
+  const key = `${entry.id}@${entry.version}:${lang}`;
+  let hit = docCache.get(key);
+  if (!hit) {
+    hit = (async () => {
+      for (const name of docNames(lang)) {
+        try {
+          const res = await fetch(`https://raw.githubusercontent.com/${loc.repo}/${loc.ref}/${loc.dir ? `${loc.dir}/` : ""}${name}`, { credentials: "omit", referrerPolicy: "no-referrer" });
+          if (!res.ok) continue;
+          const buf = await readLimited(res, 64 * 1024);
+          const text = summarizeMarkdown(new TextDecoder().decode(buf));
+          if (text) return text;
+        } catch { /* try the next file */ }
+      }
+      return "";
+    })();
+    docCache.set(key, hit);
+  }
+  return hit;
+}
+
+const STAR_KEY = "pipaya.marketplace.stars";
+const STAR_TTL = 60 * 60 * 1000;
+const starCache = new Map<string, Promise<number | undefined>>();
+/** GitHub star count of a repository, cached for an hour (the unauthenticated API allows 60 calls an hour). */
+export function fetchStars(repo: string): Promise<number | undefined> {
+  let hit = starCache.get(repo);
+  if (!hit) {
+    hit = (async () => {
+      let store: Record<string, { n: number; at: number }> = {};
+      try { store = JSON.parse(localStorage.getItem(STAR_KEY) || "{}"); } catch { /* ignore */ }
+      const cached = store[repo];
+      if (cached && Date.now() - cached.at < STAR_TTL) return cached.n;
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: { Accept: "application/vnd.github+json" }, credentials: "omit", referrerPolicy: "no-referrer" });
+        if (!res.ok) return cached?.n;
+        const n = ((await res.json()) as { stargazers_count?: unknown }).stargazers_count;
+        if (typeof n !== "number") return cached?.n;
+        store[repo] = { n, at: Date.now() };
+        try { localStorage.setItem(STAR_KEY, JSON.stringify(store)); } catch { /* ignore */ }
+        return n;
+      } catch { return cached?.n; }
+    })();
+    starCache.set(repo, hit);
+  }
+  return hit;
+}
+
+export const formatStars = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n);

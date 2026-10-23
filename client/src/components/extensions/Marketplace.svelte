@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { t } from "../../lib/i18n";
+	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
 	import Modal from "../Modal.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
-	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchPackage, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { DEFAULT_MARKETPLACE_URL, cliCommand, compareVersions, fetchCatalog, fetchDoc, fetchPackage, fetchStars, formatStars, isOfficial, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { onclose, onpick }: { onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
@@ -24,6 +24,21 @@
 		const q = query.trim().toLowerCase();
 		return !q || `${e.id} ${e.name} ${e.description} ${e.author ?? ""}`.toLowerCase().includes(q);
 	}));
+
+	let stars = $state<Record<string, number>>({});
+	let docs = $state<Record<string, string>>({});
+
+	$effect(() => {
+		const lang = getLang();
+		const list = catalog?.extensions ?? [];
+		let live = true;
+		for (const e of list) {
+			const repo = repoLoc(e)?.repo;
+			if (repo && stars[repo] === undefined) void fetchStars(repo).then((n) => { if (live && n !== undefined) stars[repo] = n; });
+			void fetchDoc(e, lang).then((d) => { if (live) docs[`${e.id}:${lang}`] = d; });
+		}
+		return () => { live = false; };
+	});
 
 	async function load() {
 		ctrl?.abort();
@@ -61,7 +76,7 @@
 	$effect(() => { void load(); return () => ctrl?.abort(); });
 </script>
 
-<Modal {onclose} labelledby="market-title" width="l" maxHeight="100dvh" layer={3} sheet={false} portal>
+<Modal {onclose} labelledby="market-title" width="1120px" maxHeight="100dvh" layer={3} sheet={false} portal>
 	<div class="market">
 		<div class="mhead">
 			<h2 id="market-title">{t("마켓플레이스")}</h2>
@@ -77,6 +92,9 @@
 		<ul class="list">
 			{#each shown as entry (entry.id)}
 				{@const have = installed(entry.id)}
+				{@const repo = repoLoc(entry)?.repo}
+				{@const star = repo ? stars[repo] : undefined}
+				{@const desc = docs[`${entry.id}:${getLang()}`] || entry.description}
 				{@const newer = have ? compareVersions(entry.version, have.package.manifest.version) > 0 : false}
 				<li class="item">
 					<div class="info">
@@ -84,11 +102,12 @@
 							<strong>{entry.name}</strong>
 							<span class="meta">v{entry.version}</span>
 							<span class="chip">{entry.kind === "server" ? t("서버") : t("클라이언트")}</span>
+							{#if isOfficial(entry)}<span class="chip official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
 							{#if have && !newer}<span class="chip ok">{t("설치됨")}</span>{/if}
 							{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
 						</div>
-						{#if entry.description}<p class="desc">{entry.description}</p>{/if}
-						<p class="meta">{[entry.author, entry.license].filter(Boolean).join(" · ")}</p>
+						{#if desc}<p class="desc">{desc}</p>{/if}
+						<p class="meta">{[entry.author, entry.license].filter(Boolean).join(" · ")}{#if star !== undefined}<span class="star" title={t("GitHub 스타")}> · ★ {formatStars(star)}</span>{/if}</p>
 					</div>
 					{#if entry.kind === "client"}
 						<button type="button" class="btn sm primary" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
@@ -123,8 +142,8 @@
 	.search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
 	.search :global(svg) { width: 16px; height: 16px; flex: none; stroke: var(--text-faint); fill: none; stroke-width: 2; }
 	.search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 9px 0; color: inherit; outline: none; }
-	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+	.item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 	.top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.desc { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
@@ -132,7 +151,9 @@
 	.chip.ok { background: var(--ok-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
 	.item .btn { flex: none; }
-	.none { color: var(--text-faint); padding: 16px 0; text-align: center; }
+	.chip.official { display: inline-flex; align-items: center; gap: 3px; background: var(--accent-soft); color: var(--text); font-weight: 600; }
+	.chip.official :global(svg) { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 3; }
+	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; margin: 0; }
 	.callout :global(svg) { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 	.callout.warn { background: var(--warn-soft); }
@@ -140,5 +161,5 @@
 	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
 	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 	.urlrow input { flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); color: inherit; }
-	@media (max-width: 560px) { .item { flex-direction: column; align-items: stretch; } }
+	@media (max-width: 400px) { .item { flex-direction: column; align-items: stretch; } }
 </style>
