@@ -87,6 +87,14 @@ function stepWorkspace(step: 1 | -1) {
   if (id && id !== app.activeId) void app.openSession(id);
 }
 
+/** Previous / next tab of the tab bar (the active workspace's tabs), wrapping. */
+function stepTab(step: 1 | -1) {
+  const at = app.activeTab;
+  if (!at) return;
+  const id = stepFrom(at.dir.tabs.map((x) => x.id), at.tab.id, step);
+  if (id && id !== at.tab.id) app.openTab(id);
+}
+
 function lastSession() {
   const id = app.previousId;
   if (id && app.shows(id)) void app.openSession(id);
@@ -210,6 +218,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   nextSession: () => stepSession(1),
   prevWorkspace: () => stepWorkspace(-1),
   nextWorkspace: () => stepWorkspace(1),
+  prevTab: () => stepTab(-1),
+  nextTab: () => stepTab(1),
   lastSession,
   nextFinished,
   focusSearch,
