@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { ICON_LABEL } from "../lib/brand";
+	import { ICON_ALIASES, ICON_LABEL, MAKER_ICONS, PIPAYA_ICON } from "../lib/brand";
 	import ModelLogo from "./ModelLogo.svelte";
 	import PickerModal from "./PickerModal.svelte";
 
@@ -21,7 +21,8 @@
 
 	let query = $state("");
 	const q = $derived(query.trim().toLowerCase());
-	const hits = $derived(Object.entries(ICON_LABEL).filter(([k, label]) => !q || k.includes(q) || label.toLowerCase().includes(q)));
+	const offered: string[] = [PIPAYA_ICON, ...MAKER_ICONS];
+	const hits = $derived(offered.filter((k) => !q || `${k} ${ICON_LABEL[k]} ${ICON_ALIASES[k] ?? ""}`.toLowerCase().includes(q)));
 	const showAuto = $derived(!q || t("자동").toLowerCase().includes(q) || "auto".includes(q));
 </script>
 
@@ -33,7 +34,8 @@
 					<ModelLogo {provider} {model} size={26} /><span>{t("자동")}</span>
 				</button>
 			{/if}
-			{#each hits as [k, label] (k)}
+			{#each hits as k (k)}
+				{@const label = ICON_LABEL[k]}
 				<button type="button" class="pk-opt cell" aria-pressed={value === k} title={label} onclick={() => onpick(k)}>
 					<ModelLogo icon={k} size={26} colored /><span>{label}</span>
 				</button>
