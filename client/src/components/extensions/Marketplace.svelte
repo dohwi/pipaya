@@ -104,7 +104,7 @@
 							{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
 						</div>
 						{#if desc}<p class="desc">{desc}</p>{/if}
-						<p class="meta">{[entry.author, entry.license].filter(Boolean).join(" · ")}{#if star !== undefined}<span class="star" title={t("GitHub 스타")}> · ★ {formatStars(star)}</span>{/if}</p>
+						<p class="meta">{[entry.author, entry.license].filter(Boolean).join(" · ")}{#if star !== undefined}{#if entry.author || entry.license}{" · "}{/if}<span class="star" title={t("GitHub 스타")}>★ {formatStars(star)}</span>{/if}</p>
 					</div>
 					{#if entry.kind === "client"}
 						<button type="button" class="btn sm primary" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
