@@ -11,6 +11,7 @@
 	import { app } from "../lib/store.svelte";
 		import { CONFIG_REQUIRED, extensions, type ExtensionScope, type InstalledExtension, type UnreadableExtension } from "../lib/extensions/host.svelte";
 	import { parsePackage, MAX_PACKAGE_BYTES, type ExtensionPackage, type Permission } from "../lib/extensions/schema";
+	import Marketplace from "./extensions/Marketplace.svelte";
 
 	let preview = $state<ExtensionPackage | null>(null);
 	/** Where the package being imported will be installed. A server extension needs a server to belong to. */
@@ -23,6 +24,14 @@
 	const serverUnreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === "server"));
 	const deviceUnreadable = $derived(indexed.filter(({ item }) => item.scope === "device"));
 	let filename = $state("");
+	let market = $state(false);
+	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
+	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
+		market = false;
+		preview = pkg;
+		filename = `${entry.id}.json`;
+		target = extensions.installed.find((e) => e.package.manifest.id === pkg.manifest.id)?.scope ?? (hasServer ? "server" : "device");
+	}
 	let error = $state("");
 	let notice = $state("");
 	let busy = $state<Record<string, boolean>>({});
@@ -411,7 +420,8 @@
 
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
-			<h3 id="extensions-installed" class="label">{t("설치된 확장 ({n})", { n: extensions.installed.length + extensions.unreadable.length })}</h3>
+			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: extensions.installed.length + extensions.unreadable.length })}</h3>
+			<button type="button" class="btn sm add" disabled={busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</button>
 			<label class="btn sm add" class:disabled={busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={busy.$import} onchange={selectFile} />
 				<Icon name="plus" /> {t("확장 추가")}
@@ -470,6 +480,10 @@
 	</Accordion>
 
 </div>
+
+{#if market}
+	<Marketplace onclose={() => (market = false)} onpick={pickFromMarket} />
+{/if}
 
 {#if preview && !result}
 	{@const p = preview}
@@ -602,7 +616,8 @@
 	.empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 24px 16px; border: 1px dashed var(--border-strong); border-radius: var(--radius); color: var(--text-dim); text-align: center; }
 	.empty :global(svg) { width: 22px; height: 22px; margin-bottom: 4px; color: var(--text-faint); }
 
-	.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+	.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+	.bar-title { margin-right: auto; }
 	.add { position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 	.add.disabled { opacity: 0.5; cursor: default; }
 	.add input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
