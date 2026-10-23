@@ -545,22 +545,13 @@
 	.nav button.fold[aria-expanded="false"] :global(svg) {
 		transform: rotate(-90deg);
 	}
-	/* a thin trunk from the parent's icon, with a rounded elbow into each child */
+	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
-		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		margin: 0 0 4px 21px;
+		margin: -6px 0 4px 21px;
 		padding-left: 18px;
-	}
-	.nav .tree::before {
-		content: "";
-		position: absolute;
-		left: 0;
-		top: -2px;
-		bottom: 18px;
-		border-left: 1.5px solid var(--border-strong);
 	}
 	.nav button.sub {
 		position: relative;
@@ -568,17 +559,31 @@
 		gap: 8px;
 		padding: 7px 10px;
 	}
-	.nav button.sub::before {
+	.nav button.sub::before,
+	.nav button.sub::after {
 		content: "";
 		position: absolute;
 		left: -18px;
-		top: 0;
-		width: 14px;
-		height: 50%;
+		pointer-events: none;
+	}
+	.nav button.sub::after {
+		top: -2px;
+		bottom: -2px;
+		border-left: 1.5px solid var(--border-strong);
+	}
+	.nav button.sub:first-child::after {
+		top: -8px;
+	}
+	.nav button.sub:last-child::after {
+		bottom: calc(50% + 9px);
+	}
+	.nav button.sub::before {
+		top: calc(50% - 9px);
+		width: 16px;
+		height: 9px;
 		border-left: 1.5px solid var(--border-strong);
 		border-bottom: 1.5px solid var(--border-strong);
-		border-bottom-left-radius: 8px;
-		pointer-events: none;
+		border-bottom-left-radius: 9px;
 	}
 	.nav button.sub .nl {
 		font-size: var(--fs-sm);
