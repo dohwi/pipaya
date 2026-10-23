@@ -45,7 +45,7 @@
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림음 · 터미널 · 업데이트"), server: false },
+		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
 		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },

@@ -512,7 +512,7 @@ export const en: Record<string, string> = {
 	"공통": "Common",
 	"설정 범위": "Settings scope",
 	"모든 서버에 공통인 설정": "Settings shared by all servers",
-	"언어 · 테마 · 알림음 · 터미널 · 업데이트": "Language · theme · notification sound · terminal · updates",
+	"언어 · 테마 · 알림 · 터미널": "Language · theme · alerts · terminal",
 	"질문 허용": "Allow questions",
 	"에이전트가 진행 중에 사용자에게 질문하고 답을 기다립니다": "The agent may ask you questions during a run and wait for your answer",
 	"에이전트 도구": "Agent tools",
