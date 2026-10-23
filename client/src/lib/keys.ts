@@ -29,7 +29,6 @@ export type ActionId =
   | "copyLast"
   | "scrollTop"
   | "scrollBottom"
-  | "cycleApproval"
   | "approveTool"
   | "denyTool"
   | "focusLeft"
@@ -217,12 +216,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "",
   },
   {
-    id: "cycleApproval",
-    label: msg("승인 방식 변경"),
-    hint: msg("프로젝트 밖만 확인 ↔ 자동으로 바꿉니다. 서버에 저장되어 새 대화도 따릅니다. 자동은 묻지 않고 실행하니 주의하세요"),
-    default: "",
-  },
-  {
     id: "approveTool",
     label: msg("도구 실행 승인"),
     hint: msg("승인을 기다리는 도구가 있으면 모두 허용합니다. 대기 중인 요청이 없으면 아무 일도 하지 않습니다"),
@@ -387,7 +380,6 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   modelPicker: "model",
   cycleModel: "model",
   cycleThinking: "model",
-  cycleApproval: "model",
   splitRight: "layout",
   splitDown: "layout",
   splitLeft: "layout",

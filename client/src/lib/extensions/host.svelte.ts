@@ -1117,12 +1117,11 @@ export class ExtensionHost {
           }
           case "panes.configure": {
             const o = object(args[1]); const out: Record<string, string> = {};
-            for (const key of Object.keys(o)) if (!["title", "provider", "model", "thinkingLevel", "approval"].includes(key)) throw new LocalizedError(t("알 수 없는 설정: {key}", { key }));
+            for (const key of Object.keys(o)) if (!["title", "provider", "model", "thinkingLevel"].includes(key)) throw new LocalizedError(t("알 수 없는 설정: {key}", { key }));
             if (o.title !== undefined) out.title = string(o.title, 200);
             if (o.provider !== undefined) out.provider = string(o.provider, 80);
             if (o.model !== undefined) out.model = string(o.model, 200);
             if (o.thinkingLevel !== undefined) { if (!["minimal", "low", "medium", "high", "xhigh", "max"].includes(o.thinkingLevel as string)) throw new LocalizedError(t("잘못된 추론 강도")); out.thinkingLevel = o.thinkingLevel as string; }
-            if (o.approval !== undefined) { if (!["auto", "ask", "readonly"].includes(o.approval as string)) throw new LocalizedError(t("잘못된 승인 방식")); out.approval = o.approval as string; }
             if (!Object.keys(out).length) throw new LocalizedError(t("바꿀 설정이 없습니다"));
             return panes.configure(pid(args[0]), out).then(() => {});
           }

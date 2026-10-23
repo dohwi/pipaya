@@ -1170,14 +1170,14 @@ describe("panes", () => {
 	test("settings: only known fields reach the adapter, and the models list is plain data", async () => {
 		const { host, id, log } = await setup();
 		expect(await call(host, id, "panes.models")).toHaveLength(1);
-		await call(host, id, "panes.configure", ["s1", { provider: "p", model: "m", thinkingLevel: "high", approval: "ask", title: "T" }]);
+		await call(host, id, "panes.configure", ["s1", { provider: "p", model: "m", thinkingLevel: "high", title: "T" }]);
 		await call(host, id, "panes.compact", ["s1", "keep the plan"]);
 		await call(host, id, "panes.compact", ["s1"]);
 		expect(log).toEqual([
-			["configure", "s1", { title: "T", provider: "p", model: "m", thinkingLevel: "high", approval: "ask" }],
+			["configure", "s1", { title: "T", provider: "p", model: "m", thinkingLevel: "high" }],
 			["compact", "s1", "keep the plan"], ["compact", "s1", undefined],
 		]);
-		for (const bad of [{}, { token: "x" }, { thinkingLevel: "extreme" }, { approval: "yolo" }, { title: "" }])
+		for (const bad of [{}, { token: "x" }, { thinkingLevel: "extreme" }, { approval: "ask" }, { title: "" }])
 			await expect(Promise.resolve().then(() => call(host, id, "panes.configure", ["s1", bad]))).rejects.toThrow();
 		expect(log).toHaveLength(3);
 		host.stop();

@@ -42,7 +42,6 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
-| `PIPAYA_APPROVAL` | `auto` | `ask` (confirm only what reaches outside the session's working directory), `auto` (never ask), or `readonly` (block changes; API only, the apps no longer offer it) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | Auto-deny delay; `0` = no timeout |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
@@ -69,7 +68,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | PUT | `/configuration/workdir` | `{path}`: absolute existing directory, or `null` to restore the startup default |
 | GET | `/fs/dirs?path=&hidden=` | Sub-directories of an absolute path (folders only) for pickers |
 | POST | `/fs/dirs` | `{parent,name}`: create a folder |
-| POST | `/sessions` | Optional `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools,approval}`. `cwd` is an absolute existing directory anywhere on the server, or relative to the default working directory (created if missing) |
+| POST | `/sessions` | Optional `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools}`. `cwd` is an absolute existing directory anywhere on the server, or relative to the default working directory (created if missing) |
 | POST | `/sessions/:id/compact` | Optional `{customInstructions}`. Summarizes older messages; the model then sees the summary instead of them (the stored transcript is unchanged). 409 while running or too short, 502 if the summary model fails |
 | GET/PUT | `/compaction` | `{auto, model, thresholdPercent}`. Auto-compaction runs before a prompt once the context reaches `thresholdPercent` (30–95, default 90) of the model window. `model` is `{provider, model, thinkingLevel?}` or `null` = use the session's own model for the summary |
 | GET/PUT | `/system-model` | `{model}`: the light model that names sessions and writes their `purpose` (role) in the background after a message. `{provider, model, thinkingLevel?}` or `null` = off (titles are the first message cut short) |
@@ -231,8 +230,7 @@ Existing `server/data` is not auto-imported; set `PIPAYA_DATA_DIR=./data` to kee
 The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes and terminals do not inherit any `PIPAYA_*` variable.
 
 Custom URLs intentionally allow LAN/Tailscale server-side requests; configure only trusted endpoints.
-`bash` is **not sandboxed** and runs as the server user. Keep approval policy `ask` or isolate the server in a container/VM.
-Mutating tools (`write`, `edit`, `bash`) follow the approval policy.
+`bash` is **not sandboxed** and runs as the server user. Tools run without asking, so isolate the server in a container/VM.
 
 ### Built-in skills
 

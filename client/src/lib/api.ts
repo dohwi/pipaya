@@ -27,7 +27,6 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ToolInfo,
 	Usage,
 	WorkspaceInfo,
-	ApprovalPolicy,
 	ThinkingLevel,
 } from "./types";
 import { getLang, t } from "./i18n";
@@ -63,7 +62,6 @@ export interface CreateSessionInput {
 	thinkingLevel?: ThinkingLevel;
 	systemPrompt?: string;
 	tools?: string[];
-	approval?: ApprovalPolicy;
 	/** UI language; picks the language of the session's @name. Added by `createSession`. */
 	lang?: string;
 }
@@ -73,7 +71,6 @@ export interface PatchSessionInput {
 	provider?: string;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
-	approval?: ApprovalPolicy;
 	closed?: boolean;
 }
 
@@ -151,7 +148,7 @@ export class Api {
 	latestEventId = () =>
 		this.req<{ latestId: number }>("GET", "/events/history?after=0&limit=1").then((r) => r.latestId);
 
-	tools = (signal?: AbortSignal) => this.req<{ tools: ToolInfo[]; defaults: string[]; defaultApproval?: ApprovalPolicy }>("GET", "/tools", undefined, signal);
+	tools = (signal?: AbortSignal) => this.req<{ tools: ToolInfo[]; defaults: string[] }>("GET", "/tools", undefined, signal);
 	models = () => this.req<{ models: ModelInfo[] }>("GET", "/models?configured=true").then((r) => r.models);
 	providers = () => this.req<{ providers: ProviderInfo[] }>("GET", "/providers").then((r) => r.providers);
 	setCredential = (id: string, key: string) =>
@@ -228,8 +225,6 @@ export class Api {
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
 	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
-	setDefaultApproval = (approval: ApprovalPolicy | null) =>
-		this.req<{ saved: ApprovalPolicy | null; effective: ApprovalPolicy; fallback: ApprovalPolicy }>("PUT", "/configuration/approval", { approval });
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
 	listDirs = (path?: string, hidden = false) =>
 		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`);

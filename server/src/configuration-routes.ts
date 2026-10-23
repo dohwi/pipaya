@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ApprovalBody, ApprovalInfo, ToolsBody, ToolsInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
+import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ToolsBody, ToolsInfo, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
 import { IdParams, Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
@@ -70,14 +70,6 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			const workdir = config.setWorkdir(req.body.path);
 			bus.publish(null, "configuration_updated", { scope: "workdir", ...workdir });
 			return workdir;
-		},
-	});
-	app.put("/configuration/approval", {
-		schema: { body: ApprovalBody, response: { 200: ApprovalInfo, ...errors(400, 401) } },
-		handler: async (req) => {
-			const approval = config.setApproval(req.body.approval);
-			bus.publish(null, "configuration_updated", { scope: "approval", ...approval });
-			return approval;
 		},
 	});
 	app.put("/configuration/tools", {

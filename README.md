@@ -31,7 +31,6 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 ## Features
 
 - **Agent with 9 built-in tools**: read, write, edit, ls, grep, bash, ask_user, peer_send, peer_read
-- **Approval policies**: `ask` (default), `auto`, `readonly`. You decide what may change things
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
 - **Many devices, one conversation**: Windows, macOS, Android and web, with notifications and mobile push
 - **Teamwork and split view**: hand work to other sessions with `@name`; up to 8 conversations on one screen
@@ -71,7 +70,7 @@ docker compose up -d --build
 docker compose exec pipaya cat /data/token    # the auth token
 ```
 
-Set `PIPAYA_WORKSPACE_DIR` (a host folder the agent may work on), `PIPAYA_BIND`, `PIPAYA_PORT` and `PIPAYA_APPROVAL` in a `.env` file. See [`compose.yaml`](compose.yaml).
+Set `PIPAYA_WORKSPACE_DIR` (a host folder the agent may work on), `PIPAYA_BIND` and `PIPAYA_PORT` in a `.env` file. See [`compose.yaml`](compose.yaml).
 
 ## Security
 

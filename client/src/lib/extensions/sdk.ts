@@ -122,7 +122,7 @@ export interface ExtensionSDK {
     models(): Promise<import("./panes").PaneModel[]>;
     /**
      * Change one conversation's own settings (not the defaults of new chats): `title`, `provider` + `model` together,
-     * `thinkingLevel` (`minimal`…`max`, must suit the model), `approval` (`auto` | `ask` | `readonly`). Conversations only.
+     * `thinkingLevel` (`minimal`…`max`, must suit the model). Conversations only.
      */
     configure(id: string, settings: import("./panes").PaneSettings): Promise<void>;
     /** Compress the conversation's context now (not while it is running). */

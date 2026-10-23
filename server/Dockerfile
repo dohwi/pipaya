@@ -26,8 +26,7 @@ COPY --chown=pipaya:pipaya tsconfig.json ./
 ENV PIPAYA_HOST=0.0.0.0 \
 	PIPAYA_PORT=8787 \
 	PIPAYA_DATA_DIR=/data \
-	PIPAYA_WORKSPACE=/workspace \
-	PIPAYA_APPROVAL=ask
+	PIPAYA_WORKSPACE=/workspace
 
 VOLUME ["/data", "/workspace"]
 EXPOSE 8787

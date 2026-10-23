@@ -2,7 +2,7 @@
 import { uid } from "./format";
 import { K, read, write } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
-import type { ApprovalMode, ApprovalPolicy, DefaultModelSelection, ThinkingLevel } from "./types";
+import type { DefaultModelSelection, ThinkingLevel } from "./types";
 
 export interface PaletteItem {
   id: string;
@@ -25,14 +25,10 @@ export interface PaletteSpec {
   ondelete?: (item: PaletteItem) => void | Promise<void>;
 }
 
-/** What the apps show for a stored policy: `ask` and the retired `readonly` are "confirm outside the project"; anything else (unset too) is auto. */
-export const approvalMode = (p: ApprovalPolicy | undefined): ApprovalMode => (p === "ask" || p === "readonly" ? "ask" : "auto");
-
 export interface Draft {
   provider: string;
   model: string;
   thinkingLevel: ThinkingLevel;
-  approval: ApprovalPolicy;
 }
 
 export interface Server {
@@ -105,7 +101,6 @@ export function readDraft(): Draft {
     provider: "",
     model: "",
     thinkingLevel: normalizeThinking(o.thinkingLevel),
-    approval: approvalMode(o.approval),
   };
 }
 

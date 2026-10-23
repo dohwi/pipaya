@@ -42,7 +42,6 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite 경로 |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
-| `PIPAYA_APPROVAL` | `ask` | `ask`(세션 작업 디렉터리 밖에 닿는 작업만 확인), `auto`(묻지 않음), `readonly`(변경 차단. API 전용이며 앱에서는 더 이상 고르지 않음) |
 | `PIPAYA_APPROVAL_TIMEOUT_MS` | `600000` | 자동 거부까지의 시간. `0`이면 시간 제한 없음 |
 | `PIPAYA_MAX_SESSIONS` | `200` | 동시에 활성인(닫히지 않은) 세션의 최대 수. 넘으면 생성·재개가 409로 거절됨. `0`이면 제한 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
@@ -69,7 +68,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | PUT | `/configuration/workdir` | `{path}`: 존재하는 절대 경로, 또는 `null`(시작 기본값 복원) |
 | GET | `/fs/dirs?path=&hidden=` | 선택기용: 절대 경로의 하위 디렉터리(폴더만) |
 | POST | `/fs/dirs` | `{parent,name}`: 폴더 생성 |
-| POST | `/sessions` | 선택 `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools,approval}`. `cwd`는 서버의 존재하는 절대 경로이거나 기본 작업 디렉터리 기준 상대 경로(없으면 생성) |
+| POST | `/sessions` | 선택 `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools}`. `cwd`는 서버의 존재하는 절대 경로이거나 기본 작업 디렉터리 기준 상대 경로(없으면 생성) |
 | POST | `/sessions/:id/compact` | 선택 `{customInstructions}`. 오래된 메시지를 요약해 모델이 요약을 대신 보게 합니다(저장된 대화 기록은 그대로). 실행 중이거나 기록이 짧으면 409, 요약 모델 실패 시 502 |
 | GET/PUT | `/compaction` | `{auto, model, thresholdPercent}`. 컨텍스트가 모델 창의 `thresholdPercent`%(30–95, 기본 90)에 이르면 프롬프트 전에 자동 압축합니다. `model`은 `{provider, model, thinkingLevel?}` 또는 `null`(세션 모델 그대로 사용) |
 | GET/PUT | `/system-model` | `{model}`: 메시지 후 백그라운드에서 세션 이름과 `purpose`(역할)를 쓰는 가벼운 모델. `{provider, model, thinkingLevel?}` 또는 `null`(끄기, 제목은 첫 메시지를 줄여 씀) |
@@ -227,8 +226,7 @@ SQLite는 인덱스 조회와 트랜잭션 기반 설정 갱신을 제공합니�
 인증 토큰과 데이터 디렉터리는 로그에 출력되지 않으며 `?token=`은 가려집니다. `bash` 자식 프로세스와 터미널은 `PIPAYA_*` 변수를 하나도 상속하지 않습니다.
 
 커스텀 URL은 LAN/Tailscale에 대한 서버 측 요청을 의도적으로 허용합니다. 신뢰하는 엔드포인트만 설정하세요.
-`bash`는 **샌드박스되지 않으며** 서버 사용자 권한으로 실행됩니다. 승인 정책을 `ask`로 두거나 컨테이너/VM에서 서버를 격리하세요.
-변경성 도구(`write`, `edit`, `bash`)는 승인 정책을 따릅니다.
+`bash`는 **샌드박스되지 않으며** 서버 사용자 권한으로 실행됩니다. 도구는 묻지 않고 실행되므로 컨테이너/VM에서 서버를 격리하세요.
 
 ### Built-in skills
 

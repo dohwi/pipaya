@@ -14,8 +14,7 @@ import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, isMutating, leavesProject, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
-import type { ApprovalPolicy } from "./config.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, isMutating, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { branchOf, groupHint, HINT_OPEN, mentionedGroups, groupHandle, memberBriefHint, type MemberBrief } from "./group-mention.ts";
 import { memberHint, mentionedMembers, nameInLang, nextMemberName, MEMBER_NAMES_EN, poolForLang, poolOfName } from "./member-names.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
@@ -65,8 +64,6 @@ export class SessionManager {
 		private questions?: QuestionManager,
 		private compaction?: CompactionSettings,
 		private ext?: ExtensionHost,
-		/** The approval a new session starts with (saved server setting, else the startup default). */
-		private defaultApproval: () => ApprovalPolicy = () => cfg.defaultApproval,
 		/** Switchable tools the user turned off in the settings; withheld from every session. */
 		private disabledTools: () => string[] = () => [],
 		/** The light model that writes session titles and roles; none = titles stay the first message cut short. */
@@ -102,7 +99,6 @@ export class SessionManager {
 			thinkingLevel: input.thinkingLevel ?? this.registry.defaultSelection?.()?.thinkingLevel ?? "medium",
 			systemPrompt: input.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
 			tools,
-			approval: input.approval ?? this.defaultApproval(),
 			parentId,
 			closed: false,
 			createdAt: now,
@@ -349,7 +345,6 @@ export class SessionManager {
 				thinkingLevel: src.thinkingLevel,
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
-				approval: src.approval,
 				lang: poolOfName(src.name) === MEMBER_NAMES_EN ? "en" : "ko",
 			},
 			src.id,
@@ -734,10 +729,7 @@ export class SessionManager {
 			streamFn: this.registry.models.streamSimple.bind(this.registry.models),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
-			beforeToolCall: async (c, signal) => {
-				const blocked = await this.extensionToolCall(record.id, c);
-				return blocked ?? this.gateTool(record.id, c.toolCall.id, c.toolCall.name, c.args, signal);
-			},
+			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),
 			afterToolCall: async (c) => this.extensionToolResult(record.id, c),
 		});
 
@@ -814,25 +806,6 @@ export class SessionManager {
 		return { name: r.name, purpose: r.purpose, cwd: r.cwd, branch: branchOf(r.cwd), running: this.live.get(sessionId)?.running ?? false, last };
 	}
 
-	/**
-	 * Approval policy lives here so it applies to every client. Reads policy fresh from the DB.
-	 *  - auto: nothing waits.
-	 *  - ask: a mutating tool waits for the user only when it reaches outside the session's working directory
-	 *    (leavesProject).
-	 *  - readonly: mutating tools are blocked.
-	 */
-	private async gateTool(sessionId: string, toolCallId: string, toolName: string, args: unknown, signal?: AbortSignal) {
-		const rec = this.store.get(sessionId);
-		const policy = rec?.approval ?? "auto";
-		if (policy === "auto") return undefined;
-		if (!isMutating(toolName, this.toolDefs())) return undefined;
-		if (policy === "readonly") {
-			return { block: true, reason: `"${toolName}" is disabled: this session is read-only` };
-		}
-		if (!leavesProject(toolName, args, rec?.cwd ?? this.cfg.workspaceRoot)) return undefined;
-		const decision = await this.approvals.request({ sessionId, toolCallId, toolName, args }, signal);
-		return decision.approved ? undefined : { block: true, reason: decision.reason ?? `The user denied "${toolName}"` };
-	}
 
 	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */
 	private guardRunaway(sessionId: string, live: Live, event: Extract<AgentEvent, { type: "turn_end" }>): void {

@@ -28,7 +28,7 @@ const untilIdle = async (id: string) => {
 	throw new Error("never idle");
 };
 const messages = async (id: string) => ((await api("GET", `/sessions/${id}/messages`)).json.messages as any[]).map((m) => m.message);
-const newSession = async (extra: object = {}) => (await api("POST", "/sessions", { cwd: ws, approval: "auto", ...extra })).json.id as string;
+const newSession = async (extra: object = {}) => (await api("POST", "/sessions", { cwd: ws, ...extra })).json.id as string;
 
 const EXT = `
 export default (pi) => {
@@ -69,7 +69,7 @@ beforeAll(async () => {
 	writeFileSync(join(extDir, "demo.js"), EXT);
 	writeFileSync(join(extDir, "broken.js"), "export default () => { throw new Error('boom'); };");
 	upstream = startEchoUpstream();
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [extDir], home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
@@ -174,7 +174,7 @@ describe("ctx.ask", () => {
 		mkdirSync(exDir, { recursive: true });
 		writeFileSync(join(exDir, "asker.ts"), `export default (pi) => pi.registerTool({ name: "ask_ext", description: "asks", mutating: false, parameters: pi.Type.Object({}),
 			execute: async (id, _p, ctx, signal) => ({ content: [{ type: "text", text: "got " + await ctx.ask(id, { question: "Which?", options: ["a", "b"], allowFreeText: false }, signal) }] }) });`);
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ask-data"), dbPath: join(dir, "ask.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
@@ -183,7 +183,7 @@ describe("ctx.ask", () => {
 		try {
 			expect((await call("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 			expect((await call("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
-			const id = (await call("POST", "/sessions", { cwd: ws, approval: "auto" })).json.id as string;
+			const id = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
 			await call("POST", `/sessions/${id}/messages`, { text: "!ask_ext {}" });
 			let q: any;
 			for (let i = 0; i < 100 && !q; i++) { q = (await call("GET", `/questions?sessionId=${id}`)).json.questions[0]; await Bun.sleep(20); }
@@ -204,7 +204,7 @@ describe("examples/extensions/todo.ts", () => {
 		const exDir = join(dir, "example-exts");
 		mkdirSync(exDir, { recursive: true });
 		writeFileSync(join(exDir, "todo.ts"), readFileSync(join(import.meta.dir, "../examples/extensions/todo.ts"), "utf8"));
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, defaultApproval: "auto", approvalTimeoutMs: 1000, logLevel: "silent" };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "ex-data"), dbPath: join(dir, "ex.sqlite"), token: "test-token", workspaceRoot: ws, approvalTimeoutMs: 1000, logLevel: "silent" };
 		const other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
 		const call = async (method: any, url: string, payload?: unknown) => {
 			const r = await other.server.inject({ method, url, headers: { authorization: "Bearer test-token", ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
@@ -216,14 +216,13 @@ describe("examples/extensions/todo.ts", () => {
 			const listed = (await call("GET", "/server-extensions")).json.extensions[0];
 			expect(listed.error).toBeUndefined();
 			expect(listed.tools).toEqual(["todo_add"]);
-			const id = (await call("POST", "/sessions", { cwd: ws, approval: "ask" })).json.id as string;
-			// mutating:false means the tool runs without an approval prompt even in `ask` mode
+			const id = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
 			await call("POST", `/sessions/${id}/messages`, { text: `!todo_add ${JSON.stringify({ text: "write docs" })}` });
 			for (let i = 0; i < 300 && (await call("GET", `/sessions/${id}/status`)).json.running; i++) await Bun.sleep(20);
 			expect((await call("GET", `/sessions/${id}/extension-entries?type=todo`)).json.entries.map((e: any) => e.data)).toEqual([{ text: "write docs", done: false }]);
 			expect((await call("POST", `/server-extensions/todo/methods/count?sessionId=${id}`, {})).json.result).toBe(1);
 			expect((await call("POST", "/server-extensions/todo/methods/count", {})).json.result).toBe(0);
-			const id2 = (await call("POST", "/sessions", { cwd: ws, approval: "auto" })).json.id as string;
+			const id2 = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
 			await call("POST", `/sessions/${id2}/messages`, { text: `!bash ${JSON.stringify({ command: "rm -rf /" })}` });
 			for (let i = 0; i < 300 && (await call("GET", `/sessions/${id2}/status`)).json.running; i++) await Bun.sleep(20);
 			const res = ((await call("GET", `/sessions/${id2}/messages`)).json.messages as any[]).map((m) => m.message).find((m) => m.role === "toolResult");

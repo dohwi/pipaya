@@ -1,13 +1,8 @@
 import Type, { type TSchema } from "typebox";
-import { APPROVAL_POLICIES } from "./config.ts";
 import { THINKING_LEVELS } from "./store.ts";
 
 // ── Shared building blocks ──────────────────────────────────────────────────
 
-export const Approval = Type.Union(
-	APPROVAL_POLICIES.map((p) => Type.Literal(p)),
-	{ description: "auto: run everything. ask: mutating tools wait for approval only when they reach outside the session working directory (write/edit target path, absolute or .. paths in a bash command). readonly: mutating tools are blocked." },
-);
 export const Thinking = Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)));
 export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")], {
 	description: "prompt: start a run (session must be idle). steer: inject into the active run. follow_up: queue for after the active run.",
@@ -51,7 +46,6 @@ const sessionFields = {
 	thinkingLevel: Thinking,
 	systemPrompt: Type.String(),
 	tools: Type.Array(Type.String()),
-	approval: Approval,
 	parentId: Nullable(Type.String()),
 	closed: Type.Boolean({ description: "Closed sessions are hidden from the active list; reopen with PATCH closed=false" }),
 	createdAt: Type.Integer({ description: "Unix ms" }),
@@ -143,7 +137,6 @@ export const CreateSessionBody = Type.Object({
 	thinkingLevel: Type.Optional(Thinking),
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000 })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
-	approval: Type.Optional(Approval),
 	lang: Type.Optional(Type.String({ maxLength: 35, description: "UI language tag (e.g. ko, en). Picks the language of the session's @name; omit for Korean names." })),
 });
 
@@ -159,7 +152,6 @@ export const PatchSessionBody = Type.Object({
 	thinkingLevel: Type.Optional(Thinking),
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
-	approval: Type.Optional(Approval),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
 });
 
@@ -323,7 +315,6 @@ export const Ok = Type.Object({ ok: Type.Boolean() });
 export const ToolList = Type.Object({
 	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), mutating: Type.Boolean() })),
 	defaults: Type.Array(Type.String()),
-	defaultApproval: Type.Optional(Approval),
 });
 
 /** Without the token only `ok` is returned: load figures are nobody's business but the owner's. */
@@ -393,7 +384,7 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("approval"), Type.Literal("ask_user"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("ask_user"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,

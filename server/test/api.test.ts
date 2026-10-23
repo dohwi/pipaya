@@ -43,7 +43,7 @@ beforeAll(async () => {
 		dbPath: join(dir, "test.db"),
 		token: TOKEN,
 		workspaceRoot: join(dir, "ws"),
-		defaultApproval: "ask",
+		
 		approvalTimeoutMs: 0,
 		logLevel: "silent",
 	};
@@ -149,7 +149,7 @@ describe("API contracts", () => {
 	test("event catalog covers every event type the server publishes", async () => {
 		const catalog = (await api("GET", "/events/types")).json.events;
 		const known = new Set(catalog.map((e: any) => e.type));
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "!bash echo hi" });
 		await untilIdle(id);
 		const hist = (await api("GET", `/events/history?sessionId=${id}&limit=1000`)).json.events;
@@ -157,25 +157,8 @@ describe("API contracts", () => {
 		expect(catalog.find((e: any) => e.type === "message_update").persisted).toBe(false);
 	});
 
-	test("activity lists only sessions that are running or waiting on the user", async () => {
-		expect((await api("GET", "/activity")).json).toEqual({ sessions: [] });
-		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
-		expect((await api("GET", "/activity")).json.sessions).toEqual([]);
-		await api("POST", `/sessions/${id}/messages`, { text: "!bash ls /etc" });
-		let seen: any = null;
-		for (let i = 0; i < 100 && !seen?.pendingApprovals; i++) {
-			seen = (await api("GET", "/activity")).json.sessions.find((s: any) => s.sessionId === id);
-			await Bun.sleep(20);
-		}
-		expect(seen).toMatchObject({ running: true, pendingApprovals: 1 });
-		const pending = (await api("GET", `/sessions/${id}/status`)).json.pendingToolCalls as string[];
-		await api("POST", `/sessions/${id}/approvals/${pending[0]}`, { approved: false });
-		await untilIdle(id);
-		expect((await api("GET", "/activity")).json.sessions).toEqual([]);
-	});
-
 	test("ask_user waits for an answer, validates it, and hands it to the model", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const args = JSON.stringify({ question: "Which one?", options: ["red", "blue"], allowFreeText: false });
 		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${args}` });
 		let q: any;
@@ -215,7 +198,7 @@ describe("API contracts", () => {
 	});
 
 	test("aborting a run releases a waiting ask_user question", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${JSON.stringify({ question: "Still there?" })}` });
 		for (let i = 0; i < 100 && !(await api("GET", `/questions?sessionId=${id}`)).json.questions.length; i++) await Bun.sleep(20);
 		await api("POST", `/sessions/${id}/abort`);
@@ -345,7 +328,7 @@ describe("sessions", () => {
 	});
 
 	test("prompt round-trip persists messages and streams events over SSE", async () => {
-		const created = await api("POST", "/sessions", { approval: "auto" });
+		const created = await api("POST", "/sessions", {});
 		expect(created.status).toBe(201);
 		expect(created.json.thinkingLevel).toBe("medium");
 		const id = created.json.id as string;
@@ -381,14 +364,14 @@ describe("sessions", () => {
 	});
 
 	test("busy session rejects a second prompt; steer needs an active run", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const idleSteer = await api("POST", `/sessions/${id}/messages`, { text: "x", mode: "steer" });
 		expect(idleSteer.status).toBe(409);
 		expect((await api("POST", `/sessions/${id}/messages`, { text: "" })).status).toBe(400);
 	});
 
 	test("patch, fork and delete", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto", title: "orig" })).json.id as string;
+		const id = (await api("POST", "/sessions", { title: "orig" })).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "first" });
 		await untilIdle(id);
 
@@ -411,7 +394,7 @@ describe("sessions", () => {
 	});
 
 	test("closed sessions leave the active list, refuse work, and can be resumed", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto", title: "closeme", cwd: "proj/a" })).json.id as string;
+		const id = (await api("POST", "/sessions", { title: "closeme", cwd: "proj/a" })).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "hello" });
 		await untilIdle(id);
 		expect((await api("GET", `/sessions/${id}`)).json.closed).toBe(false);
@@ -445,11 +428,11 @@ describe("sessions", () => {
 	});
 
 	test("resuming a closed session never duplicates an active session's @name", async () => {
-		const a = (await api("POST", "/sessions", { approval: "auto" })).json;
+		const a = (await api("POST", "/sessions", {})).json;
 		expect(a.name).toBeTruthy();
 		await api("PATCH", `/sessions/${a.id}`, { closed: true });
 		// the freed name goes to the next new session
-		const b = (await api("POST", "/sessions", { approval: "auto" })).json;
+		const b = (await api("POST", "/sessions", {})).json;
 		expect(b.name).toBe(a.name);
 		const back = (await api("PATCH", `/sessions/${a.id}`, { closed: false })).json;
 		expect(back.name).toBeTruthy();
@@ -461,7 +444,7 @@ describe("sessions", () => {
 	});
 
 	test("closing a running session aborts the run", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "!bash sleep 20" });
 		for (let i = 0; i < 100 && !(await api("GET", `/sessions/${id}/status`)).json.running; i++) await Bun.sleep(20);
 		expect((await api("PATCH", `/sessions/${id}`, { closed: true })).json.closed).toBe(true);
@@ -469,7 +452,7 @@ describe("sessions", () => {
 	});
 
 	test("conversation resumes from SQLite history", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "one" });
 		await untilIdle(id);
 		await api("POST", `/sessions/${id}/messages`, { text: "two" });
@@ -481,9 +464,9 @@ describe("sessions", () => {
 	});
 });
 
-describe("tools & approvals", () => {
-	test("auto approval runs a tool and records the result", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+describe("tools", () => {
+	test("a tool runs without asking and records the result", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "!bash echo from-bash" });
 		await untilIdle(id);
 		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages;
@@ -492,75 +475,8 @@ describe("tools & approvals", () => {
 		expect(toolResult.message.isError).toBe(false);
 	});
 
-	test("ask mode pauses for approval only outside the project, then resumes when approved", async () => {
-		const target = join(dir, "outside", "a", "b.txt");
-		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
-		const sse = collectSse(`/sessions/${id}/events`, (ev) => ev.some((e) => e.type === "run_finished"));
-		await Bun.sleep(50);
-		await api("POST", `/sessions/${id}/messages`, { text: `!write ${JSON.stringify({ path: target, content: "hi" })}` });
-
-		let pending: any[] = [];
-		for (let i = 0; i < 100 && pending.length === 0; i++) {
-			await Bun.sleep(25);
-			pending = (await api("GET", `/approvals?sessionId=${id}`)).json.approvals;
-		}
-		expect(pending.length).toBe(1);
-		expect(pending[0].toolName).toBe("write");
-		expect((await api("GET", `/sessions/${id}/status`)).json.pendingApprovals).toBe(1);
-
-		const decided = await api("POST", `/sessions/${id}/approvals/${pending[0].toolCallId}`, { approved: true });
-		expect(decided.status).toBe(200);
-		// A second decision for the same call is a 404, not a double-resolve.
-		expect((await api("POST", `/sessions/${id}/approvals/${pending[0].toolCallId}`, { approved: true })).status).toBe(404);
-
-		const events = await sse;
-		const types = events.map((e) => e.type);
-		expect(types).toContain("approval_requested");
-		expect(types).toContain("approval_resolved");
-		expect(types).toContain("tool_execution_end");
-		expect(readFileSync(target, "utf8")).toBe("hi");
-	});
-
-	test("ask mode lets work inside the project run without asking", async () => {
-		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
-		await api("POST", `/sessions/${id}/messages`, { text: '!write {"path":"inside/ok.txt","content":"yo"}' });
-		await untilIdle(id);
-		expect((await api("GET", `/approvals?sessionId=${id}`)).json.approvals).toEqual([]);
-		expect(readFileSync(join(dir, "ws", "inside", "ok.txt"), "utf8")).toBe("yo");
-	});
-
-	test("denied tool is blocked and the file is not written", async () => {
-		const target = join(dir, "outside", "denied.txt");
-		const id = (await api("POST", "/sessions", { approval: "ask" })).json.id as string;
-		await api("POST", `/sessions/${id}/messages`, { text: `!write ${JSON.stringify({ path: target, content: "x" })}` });
-		let pending: any[] = [];
-		for (let i = 0; i < 100 && pending.length === 0; i++) {
-			await Bun.sleep(25);
-			pending = (await api("GET", `/approvals?sessionId=${id}`)).json.approvals;
-		}
-		await api("POST", `/sessions/${id}/approvals/${pending[0].toolCallId}`, { approved: false, reason: "nope" });
-		await untilIdle(id);
-		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages;
-		const result = msgs.find((m: any) => m.role === "toolResult").message;
-		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("nope");
-		expect(await Bun.file(target).exists()).toBe(false);
-	});
-
-	test("readonly blocks mutating tools but allows reads", async () => {
-		const id = (await api("POST", "/sessions", { approval: "readonly" })).json.id as string;
-		await api("POST", `/sessions/${id}/messages`, { text: '!write {"path":"ro.txt","content":"x"}' });
-		await untilIdle(id);
-		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages;
-		expect(msgs.find((m: any) => m.role === "toolResult").message.isError).toBe(true);
-		await api("POST", `/sessions/${id}/messages`, { text: "!ls {}" });
-		await untilIdle(id);
-		const last = (await api("GET", `/sessions/${id}/messages`)).json.messages.filter((m: any) => m.role === "toolResult").pop();
-		expect(last.message.isError).toBe(false);
-	});
-
 	test("file tools may leave the session directory (restriction disabled)", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: '!read {"path":"../../../etc/passwd"}' });
 		await untilIdle(id);
 		const result = (await api("GET", `/sessions/${id}/messages`)).json.messages.find((m: any) => m.role === "toolResult").message;
@@ -568,7 +484,7 @@ describe("tools & approvals", () => {
 	});
 
 	test("abort cancels a running command", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "!bash sleep 30" });
 		for (let i = 0; i < 100; i++) {
 			if ((await api("GET", `/sessions/${id}/status`)).json.pendingToolCalls.length > 0) break;
@@ -584,13 +500,13 @@ describe("tools & approvals", () => {
 
 describe("events", () => {
 	test("browser SSE accepts a query token without headers", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const events = await collectSse(`/sessions/${id}/events?after=0&token=${TOKEN}`, (ev) => ev.length >= 1, {});
 		expect(events[0].type).toBe("session_created");
 	});
 
 	test("history + Last-Event-ID replay with no gaps or duplicates", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "replay me" });
 		await untilIdle(id);
 
@@ -609,7 +525,7 @@ describe("events", () => {
 	});
 
 	test("type filter", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const sse = collectSse(`/sessions/${id}/events?types=run_started,run_finished`, (ev) => ev.length >= 2);
 		await Bun.sleep(50);
 		await api("POST", `/sessions/${id}/messages`, { text: "filter" });
@@ -620,7 +536,7 @@ describe("events", () => {
 
 describe("websocket", () => {
 	test("subscribe, prompt and receive events over one socket", async () => {
-		const id = (await api("POST", "/sessions", { approval: "auto" })).json.id as string;
+		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const ws = new WebSocket(`${base.replace("http", "ws")}/ws?token=${TOKEN}`);
 		const frames: any[] = [];
 		ws.onmessage = (m) => frames.push(JSON.parse(String(m.data)));

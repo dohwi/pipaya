@@ -30,7 +30,7 @@ const mk = async () => (await api("POST", "/sessions", {})).json?.id as string |
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-groups-"));
 	upstream = startEchoUpstream();
-	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent" };
+	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), approvalTimeoutMs: 0, logLevel: "silent" };
 	app = await buildApp(cfg, { strictResponses: true });
 	await app.server.listen({ host: "0.0.0.0", port: 0 });
 	base = `http://127.0.0.1:${(app.server.server.address() as { port: number }).port}`;
@@ -252,7 +252,7 @@ describe("session name language", () => {
 describe("active session limit", () => {
 	test("create and reopen are refused at the limit; closing frees a slot", async () => {
 		const d = mkdtempSync(join(tmpdir(), "pipaya-limit-"));
-		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: d, dbPath: join(d, "t.db"), token: "t", workspaceRoot: join(d, "ws"), defaultApproval: "ask", approvalTimeoutMs: 0, logLevel: "silent", maxActiveSessions: 2 };
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: d, dbPath: join(d, "t.db"), token: "t", workspaceRoot: join(d, "ws"), approvalTimeoutMs: 0, logLevel: "silent", maxActiveSessions: 2 };
 		const a = await buildApp(cfg, { strictResponses: true });
 		await a.server.listen({ host: "0.0.0.0", port: 0 });
 		const b = `http://127.0.0.1:${(a.server.server.address() as { port: number }).port}`;

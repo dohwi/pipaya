@@ -8,7 +8,7 @@
 export default (pi: any) => {
 	const T = pi.Type;
 
-	// A tool. `mutating: false` = no approval prompt, because it only writes this extension's own record.
+	// A tool. `mutating: false` = it only reads or writes this extension's own record.
 	pi.registerTool({
 		name: "todo_add",
 		description: "Add an item to this conversation's todo list",

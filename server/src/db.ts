@@ -162,6 +162,9 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			if (name !== g.name) set.run({ id: g.id, name });
 		}
 	},
+	// The approval option is gone: every tool runs without asking, so neither the per-session policy nor the saved default is kept.
+	`ALTER TABLE sessions DROP COLUMN approval;
+	 DELETE FROM settings WHERE key = 'default_approval';`,
 ];
 
 export function openDb(path: string): Database {
