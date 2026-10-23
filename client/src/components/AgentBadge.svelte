@@ -68,10 +68,19 @@
 			opacity: 0.35;
 		}
 	}
+	/* asking: the logo swells and a glow in its own shape radiates out, then fades */
 	@keyframes nudge {
+		0% {
+			transform: scale(1);
+			filter: drop-shadow(0 0 0 currentColor);
+		}
 		50% {
-			opacity: 0.55;
 			transform: scale(1.18);
+			filter: drop-shadow(0 0 5px currentColor);
+		}
+		100% {
+			transform: scale(1);
+			filter: drop-shadow(0 0 0 currentColor);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
