@@ -204,52 +204,6 @@ describe("groups API", () => {
 		await api("DELETE", `/groups/${g2.id}`);
 	});
 
-	test("peer_send reaches any other session (no group needed) and peer_read shows its answer", async () => {
-		const [a, b] = [(await mk())!, (await mk())!];
-		const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;
-		const bName = await nameOf(b);
-		const idle = async (id: string) => {
-			for (let i = 0; i < 200; i++) {
-				if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
-				await Bun.sleep(25);
-			}
-		};
-		upstream.requests.length = 0;
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: bName, message: "hello peer" })}` });
-		await idle(a);
-		await Bun.sleep(100);
-		await idle(b);
-		const got = (await api("GET", `/sessions/${b}/messages`)).json;
-		expect(JSON.stringify(got)).toContain("hello peer");
-		expect(JSON.stringify(got)).toContain(`from @${await nameOf(a)}`);
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_read ${JSON.stringify({ from: bName })}` });
-		await idle(a);
-		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("hello peer");
-		// an unknown name is a tool error, not a crash
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "nobody", message: "x" })}` });
-		await idle(a);
-		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).toContain("session @nobody");
-	});
-
-	test("peer_send to a group name reaches every other session in that group", async () => {
-		const [a, b, c] = [(await mk())!, (await mk())!, (await mk())!];
-		const idle = async (id: string) => {
-			for (let i = 0; i < 200; i++) {
-				if (!(await api("GET", `/sessions/${id}/status`)).json.running) return;
-				await Bun.sleep(25);
-			}
-		};
-		const g = (await api("POST", "/groups", { name: "Fan Out", layout: split(pane(a), split(pane(b), pane(c))) })).json;
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "Fan-Out", message: "to everyone" })}` });
-		await idle(a);
-		await Bun.sleep(100);
-		await Promise.all([idle(b), idle(c)]);
-		for (const id of [b, c]) expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("to everyone");
-		// the sender is not among the targets
-		expect(JSON.stringify((await api("GET", `/sessions/${a}/messages`)).json)).not.toContain("from @");
-		await api("DELETE", `/groups/${g.id}`);
-	});
-
 	test("requires the token", async () => {
 		const res = await fetch(`${base}/groups`);
 		expect(res.status).toBe(401);

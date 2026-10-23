@@ -21,7 +21,6 @@ RUN bun install --frozen-lockfile --production
 
 COPY --chown=pipaya:pipaya src ./src
 COPY --chown=pipaya:pipaya builtin-skills ./builtin-skills
-COPY --chown=pipaya:pipaya builtin-extensions ./builtin-extensions
 COPY --chown=pipaya:pipaya tsconfig.json ./
 
 ENV PIPAYA_HOST=0.0.0.0 \

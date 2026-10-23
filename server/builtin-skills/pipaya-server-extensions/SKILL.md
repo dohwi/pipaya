@@ -11,9 +11,8 @@ Where they are read from (each entry is a file or a folder; names starting with 
 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
 - `~/.agents/extensions/`
-- the server's own `builtin-extensions/` (read last: an extension of the same name in the folders above replaces it)
 
-Shipped with the server: `prompt-templates` (`/prompt:name`, method `list`) and `peer-tools` (`peer_send`, `peer_read`). Copy one into `~/.pipaya/extensions/` under the same name to change it. `examples/extensions/` holds ones that are not loaded by default (`todo.ts`, `session-retention.ts`: core never deletes sessions by itself).
+The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`, one repository per extension, e.g. `pipaya-extension-peer-tools`). `examples/extensions/todo.ts` is a small one to copy from.
 
 Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors`. A file that throws while loading is switched off alone; the others keep working.
 

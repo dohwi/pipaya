@@ -28,8 +28,6 @@
 	function toolLabel(name: string): string {
 		switch (name) {
 			case "delegate": return t("하위 에이전트에게 조사 위임 (delegate)");
-			case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
-			case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
 			case "read": return t("파일 읽기 (read)");
 			case "write": return t("파일 만들기 · 덮어쓰기 (write)");
 			case "edit": return t("파일 일부 수정 (edit)");

@@ -85,8 +85,6 @@ export interface BuildOptions {
 	websocket?: WebSocketOptions;
 	/** Directories scanned for server extensions (tests); defaults to `<dataDir>/extensions` and `~/.agents/extensions`. */
 	extensionDirs?: string[];
-	/** Directory of extensions shipped with the server (tests); defaults to the bundled `builtin-extensions/`, `false` loads none. */
-	builtinExtensions?: string | false;
 	/** Extra extension files or folders to load. */
 	extensionPaths?: string[];
 	/** Self-update wiring (tests replace git, the installer and the restart); defaults to this checkout and a SIGTERM restart. */
@@ -125,7 +123,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		db, bus, registry, dataDir: cfg.dataDir,
 		dirs: opts.extensionDirs ?? ExtensionHost.defaultDirs(cfg.dataDir, opts.home),
 		paths: opts.extensionPaths,
-		builtinDir: opts.builtinExtensions,
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});

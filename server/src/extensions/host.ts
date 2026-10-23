@@ -32,8 +32,6 @@ export interface ExtensionHostOptions {
 	dirs: string[];
 	/** Extra explicit paths (files or folders). */
 	paths?: string[];
-	/** Extensions shipped with the server (`builtin-extensions/`); `false` loads none. One in `dirs` or `paths` with the same name replaces it. */
-	builtinDir?: string | false;
 	/** The user's home directory (tests); defaults to the OS user home. */
 	home?: string;
 	env?: Record<string, string | undefined>;
@@ -61,9 +59,6 @@ interface Loaded extends ExtensionInfo {
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
 }
-
-/** Extensions bundled with the server. */
-export const BUILTIN_EXTENSIONS_DIR = process.env.PIPAYA_BUILTIN_EXTENSIONS || join(import.meta.dir, "..", "..", "builtin-extensions");
 
 const ENTRY_FILES = ["index.ts", "index.js", "index.mjs"];
 const SCRIPT_EXT = new Set([".ts", ".js", ".mjs"]);
@@ -122,24 +117,6 @@ export class ExtensionHost {
 			for (const n of names) if (!n.startsWith(".") && n !== "node_modules") fromPath(join(dir, n));
 		}
 		for (const p of this.opts.paths ?? []) fromPath(resolve(p));
-		// Bundled ones come last and give way to a user's extension of the same name.
-		const builtin = this.opts.builtinDir === undefined ? BUILTIN_EXTENSIONS_DIR : this.opts.builtinDir;
-		if (builtin) {
-			const taken = new Set(out.map((o) => o.name));
-			const mine: { name: string; entry: string }[] = [];
-			let names: string[] = [];
-			try { names = readdirSync(builtin).sort(); } catch { /* none shipped */ }
-			for (const n of names) {
-				const base = basename(n, extname(n));
-				if (n.startsWith(".") || n === "node_modules" || taken.has(base)) continue;
-				const p = join(builtin, n);
-				let st;
-				try { st = statSync(p); } catch { continue; }
-				const entry = st.isDirectory() ? ENTRY_FILES.map((f) => join(p, f)).find((f) => existsSync(f)) : SCRIPT_EXT.has(extname(n)) ? p : undefined;
-				if (entry && !seen.has(entry)) { seen.add(entry); mine.push({ name: base, entry }); }
-			}
-			out.unshift(...mine);
-		}
 		return out;
 	}
 

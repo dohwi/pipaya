@@ -517,8 +517,6 @@ export const en: Record<string, string> = {
 	"에이전트 도구": "Agent tools",
 	"끄면 해당 도구를 에이전트에게 주지 않습니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.": "A tool switched off is not given to the agent. Saved on the server; applies to every chat. Locked tools cannot be switched off.",
 	"하위 에이전트에게 조사 위임 (delegate)": "Hand research to a sub-agent (delegate)",
-	"다른 대화에 메시지 보내기 (peer_send)": "Message another chat (peer_send)",
-	"다른 대화의 최근 내용 읽기 (peer_read)": "Read another chat's recent activity (peer_read)",
 	"파일 읽기 (read)": "Read files (read)",
 	"파일 만들기 · 덮어쓰기 (write)": "Create or overwrite files (write)",
 	"파일 일부 수정 (edit)": "Edit parts of files (edit)",
