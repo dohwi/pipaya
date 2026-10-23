@@ -63,7 +63,9 @@
 		animation: pulse 1.8s ease-in-out infinite;
 	}
 	.asking .logo {
-		animation: nudge 1.8s ease-in-out infinite;
+		animation:
+			pulse 1.8s ease-in-out infinite,
+			glow 1.8s ease-in-out infinite;
 	}
 	/* failed: a short shake, then rest, so it catches the eye without looping nonstop */
 	.failed .logo {
@@ -74,18 +76,13 @@
 			opacity: 0.35;
 		}
 	}
-	/* asking: the logo swells and a glow in its own shape radiates out, then fades */
-	@keyframes nudge {
-		0% {
-			transform: scale(1);
-			filter: drop-shadow(0 0 0 currentColor);
-		}
-		50% {
-			transform: scale(1.18);
+	/* asking: breathes like working, with a glow in the logo's own shape that is strongest while it is bright */
+	@keyframes glow {
+		0%,
+		100% {
 			filter: drop-shadow(0 0 5px currentColor);
 		}
-		100% {
-			transform: scale(1);
+		50% {
 			filter: drop-shadow(0 0 0 currentColor);
 		}
 	}
