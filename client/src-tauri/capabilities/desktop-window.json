@@ -11,6 +11,10 @@
     "windows"
   ],
   "permissions": [
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    "core:window:allow-set-badge-count",
+    "core:window:allow-set-overlay-icon",
+    "core:window:allow-request-user-attention",
+    "core:image:allow-new"
   ]
 }

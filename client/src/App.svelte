@@ -25,6 +25,8 @@
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import CloseConfirm from "./components/CloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
+	import { createAttention } from "./lib/attention";
+	import { summarize } from "./lib/activity";
 	import ExtensionApproval from "./components/extensions/ExtensionApproval.svelte";
 	import ExtensionDialog from "./components/extensions/ExtensionDialog.svelte";
 	import { app, SIDEBAR_W } from "./lib/store.svelte";
@@ -81,6 +83,12 @@
 	});
 
 	onMount(() => guardWindowClose(() => app.requestClose()));
+	// Taskbar / dock: count of sessions waiting for the user (asking, failed, finished unread).
+	const setAttention = createAttention();
+	$effect(() => {
+		const n = summarize(app, app.sessions);
+		setAttention(n.asking + n.failed + n.done);
+	});
 
 	// Back button / swipe: close the top modal, else the phone drawer, before leaving the app.
 	$effect(() => {
