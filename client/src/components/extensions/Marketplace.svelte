@@ -82,6 +82,11 @@
 	let asking = $state("");
 	const companionOf = (entry: MarketEntry) => (entry.companion ? catalog?.extensions.find((e) => e.id === entry.companion && e.kind === "client") : undefined);
 
+	async function installClient(c: MarketEntry) {
+		error = "";
+		try { onpick(await fetchPackage(c), c); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
+	}
+
 	function startServer(entry: MarketEntry) {
 		const c = companionOf(entry);
 		if (c && !installed(c.id)) asking = entry.id;
@@ -159,10 +164,8 @@
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
 						<Notice tone="warn" size="sm" role="status">
-							<div class="ask">
-								<p>{t("클라이언트 확장 ‘{name}’도 설치해야 동작합니다.", { name: c?.name ?? entry.companion })}</p>
-								{#if c}<div class="askbtns"><Button variant="primary" size="sm" disabled={!!working} onclick={async () => { error = ""; try { onpick(await fetchPackage(c), c); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); } }}>{t("클라이언트 설치")}</Button></div>{/if}
-							</div>
+							{t("클라이언트 확장 ‘{name}’ 필요", { name: c?.name ?? entry.companion })}
+							{#snippet action()}{#if c}<button type="button" disabled={!!working} onclick={() => installClient(c)}>{t("설치")}</button>{/if}{/snippet}
 						</Notice>
 					{/if}
 					{#if asking === entry.id}

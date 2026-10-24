@@ -107,7 +107,7 @@
 	.sm :global(svg) {
 		width: 16px;
 		height: 16px;
-		margin-top: 2px;
+		margin-top: 1px;
 	}
 	.text {
 		flex: 1 1 auto;
@@ -115,6 +115,8 @@
 	}
 	.action {
 		flex: none;
+		white-space: nowrap;
+		font-weight: 600;
 	}
 	.action :global(button) {
 		color: inherit;
