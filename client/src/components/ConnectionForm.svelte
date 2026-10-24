@@ -98,7 +98,7 @@
 	/** Esc steps back from a model's page to the connection first; a second Esc closes the dialog. */
 	function escape() {
 		if (editing !== null) closeModel();
-		else close();
+		else void close();
 	}
 
 	const newRow = (): Row => ({ id: "", name: "", contextWindow: "128000", maxTokens: "8192", reasoning: false, vision: false, thinkingLevels: [] });
@@ -329,7 +329,14 @@
 	/* ---------- auto-save (existing connections) ---------- */
 
 	let saveState = $state<"idle" | "saving" | "saved">("idle");
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	let formEl = $state<HTMLFormElement>();
+	/** Closing with changes that could not be saved asks first; set while that question is showing. */
+	let discardAsk = $state(false);
+	/** A text box is being typed in: its edit is committed when it loses focus (or Enter), not on every key. */
+	const typing = () => {
+		const ae = document.activeElement;
+		return !!formEl && formEl.contains(ae) && (ae instanceof HTMLTextAreaElement || (ae instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(ae.type)));
+	};
 	let inflight: Promise<void> | null = null;
 	let lastSaved = "";
 	let changed = false;
@@ -354,6 +361,7 @@
 			.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: res.out })
 			.then(() => {
 				lastSaved = snap;
+				discardAsk = false;
 				changed = true;
 				saveState = "saved";
 			})
@@ -377,9 +385,8 @@
 			return;
 		}
 		if (snap === lastSaved) return;
-		clearTimeout(timer);
-		timer = setTimeout(() => void autosave(), 700);
-		return () => clearTimeout(timer);
+		// Switches, choices, deletions and pickers apply the moment they change; typed text waits for focus-out.
+		if (!typing()) void autosave();
 	});
 
 	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
@@ -388,7 +395,7 @@
 		const f = form;
 		if (!a || !f) return;
 		if (editing !== null) return closeModel(); // Enter inside a model page just goes back
-		if (!f.isNew) return close(); // existing connections save themselves
+		if (!f.isNew) return void autosave(); // Enter commits the typed text; existing connections save themselves
 		formError = "";
 		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
 		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
@@ -431,9 +438,15 @@
 	if (start.kind === "edit") startEdit(start.provider);
 	// svelte-ignore state_referenced_locally
 	else startNew(start.preset);
-	const close = async () => {
-		clearTimeout(timer);
-		if (form && !form.isNew && snapshot(form) !== lastSaved) await autosave();
+	const close = async (force = false) => {
+		if (form && !form.isNew && snapshot(form) !== lastSaved) {
+			await autosave();
+			// Still not saved (invalid or rejected): ask whether to throw those edits away.
+			if (!force && form && snapshot(form) !== lastSaved) {
+				discardAsk = true;
+				return;
+			}
+		}
 		const dirty = changed;
 		form = null;
 		onclose();
@@ -443,9 +456,9 @@
 
 {#if form}
 	<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
-	<Modal onclose={close} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
-		<form class="fform" onsubmit={submit}>
-			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
+	<Modal onclose={() => close()} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
+		<form class="fform" bind:this={formEl} onsubmit={submit} onfocusout={() => { if (form && !form.isNew) void autosave(); }}>
+			<header use:sheetPull={{ onclose: () => !busy && void close(), disabled: busy }}>
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
 					<button type="button" class="iconbtn back" onclick={closeModel} aria-label={t("연결로 돌아가기")}><Icon name="chevron-left" /></button>
@@ -459,7 +472,7 @@
 						{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
 					</div>
 				{/if}
-				<button type="button" class="iconbtn" onclick={close} aria-label={t("닫기")} disabled={busy}><Icon name="x" /></button>
+				<button type="button" class="iconbtn" onclick={() => close()} aria-label={t("닫기")} disabled={busy}><Icon name="x" /></button>
 			</header>
 
 			<div class="fbody">
@@ -638,11 +651,17 @@
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
 						{#if form.isNew}
-							<button type="button" class="btn ghost" onclick={close} disabled={busy}>{t("취소")}</button>
+							<button type="button" class="btn ghost" onclick={() => void close()} disabled={busy}>{t("취소")}</button>
 							<button class="btn primary" disabled={busy}>{busy ? t("확인 중…") : t("추가")}</button>
 						{:else}
 							<span class="savestate" role="status">{saveState === "saving" ? t("저장 중…") : saveState === "saved" ? t("자동 저장됨") : ""}</span>
-							<button type="button" class="btn primary" onclick={close}>{t("완료")}</button>
+							{#if discardAsk}
+								<span class="savestate warn" role="alert">{t("저장되지 않은 변경이 있습니다.")}</span>
+								<button type="button" class="btn ghost" onclick={() => (discardAsk = false)}>{t("계속 편집")}</button>
+								<button type="button" class="btn primary" onclick={() => void close(true)}>{t("버리고 닫기")}</button>
+							{:else}
+								<button type="button" class="btn primary" onclick={() => void close()}>{t("완료")}</button>
+							{/if}
 						{/if}
 					{/if}
 				</div>
@@ -1035,6 +1054,9 @@
 		align-self: center;
 		font-size: 12px;
 		color: var(--text-dim, currentColor);
+	}
+	.savestate.warn {
+		color: var(--danger, currentColor);
 	}
 	.fbtns {
 		display: flex;
