@@ -1096,9 +1096,11 @@
 		/* notice gets its own row above the buttons; buttons stay right-aligned on one line */
 		.savestate {
 			flex: 1 0 100%;
+			justify-content: center;
 			height: auto;
 			min-height: 24px;
 			margin-right: 0;
+			text-align: center;
 		}
 		.savestate span {
 			white-space: normal;
@@ -1106,6 +1108,12 @@
 		}
 		.fbtns {
 			row-gap: 10px;
+		}
+		/* confirm row: buttons share the width equally so they line up under the centered notice */
+		.fform > footer.warn .fbtns .btn {
+			flex: 1 1 0;
+			min-width: 0;
+			padding: 0 8px;
 		}
 	}
 </style>
