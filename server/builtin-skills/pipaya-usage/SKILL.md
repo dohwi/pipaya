@@ -17,5 +17,5 @@ Facts about the user's own pipaya. Everything here was checked against the serve
 1. **`AGENTS.md` and `SKILL.md` are plain files you write.** Only the skills on/off switches are stored in the server database and changed through the API or the client's settings screens.
 2. **Prefer the client UI when the user can use it** (skills: the book icon under the input). Use the API only when asked or when you have no other way.
 3. **Never print or log the token.** Read it into a shell variable (`TOKEN="$(< ~/.pipaya/token)"`, or `PIPAYA_TOKEN`) and use it in the same command. Never `cat` it. Do not touch `.env` files.
-4. **Say when it applies.** AGENTS.md is frozen at a session's first run, so edits reach new sessions only. Skill changes apply to the next message.
+4. **Say when it applies.** AGENTS.md and skill changes both apply from the session's next message.
 5. **Edit the right AGENTS.md.** The global file is `~/.agents/AGENTS.md` of the *server's* user. The server may be a different machine or a container from where you are running; check before editing.

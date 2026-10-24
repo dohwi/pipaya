@@ -5,7 +5,7 @@ import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
@@ -18,7 +18,7 @@ import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
-import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, skillsKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
@@ -123,7 +123,12 @@ export class SessionManager {
 		return s;
 	}
 
-	/** AGENTS.md is frozen at the first run; skills always follow the current on/off settings. */
+	/** AGENTS.md files are re-read from disk on every use, like skills: edits apply from the next run. */
+	private currentInstructions(snapshot: Pick<ContextSnapshot, "cwd">) {
+		return discoverInstructions(snapshot.cwd);
+	}
+
+	/** Skills always follow the current on/off settings. */
 	private currentSkills(id: string, snapshot: Pick<ContextSnapshot, "cwd" | "tools">): SkillRef[] {
 		return advertisedSkills(snapshot.tools, this.skills?.active(snapshot.cwd, id) ?? []);
 	}
@@ -133,10 +138,13 @@ export class SessionManager {
 		const snapshot = this.store.context(id);
 		const base = snapshot ?? previewContext(record, this.skills?.active(record.cwd, id), undefined);
 		const skills = snapshot ? this.currentSkills(id, snapshot) : (base.skills ?? []);
+		const { instructions, warnings } = snapshot ? this.currentInstructions(snapshot) : base;
 		return {
 			...base,
+			instructions,
+			warnings,
 			skillsPrompt: skills.length ? skillsPrompt(skills) : "",
-			effectiveSystemPrompt: snapshot ? buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills) : base.effectiveSystemPrompt,
+			effectiveSystemPrompt: snapshot ? buildSystemPrompt(snapshot.systemPrompt, instructions, skills) : base.effectiveSystemPrompt,
 			// baseDir is an internal read allow-list entry, not part of the API.
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
@@ -685,10 +693,11 @@ export class SessionManager {
 			...previewContext(record, this.skills?.active(record.cwd, record.id), undefined), capturedAt: Date.now(),
 		});
 		const skills = this.currentSkills(record.id, snapshot);
+		const { instructions } = this.currentInstructions(snapshot);
 		const readRoots = skills.map((k) => k.baseDir);
 		const agent = new Agent({
 			initialState: {
-				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills),
+				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, instructions, skills),
 				model,
 				thinkingLevel: record.thinkingLevel,
 				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
@@ -708,7 +717,7 @@ export class SessionManager {
 			runStartedAt: 0,
 			lastActive: Date.now(),
 			unsubscribe: () => {},
-			skillsKey: skillsKey(skills),
+			promptKey: promptKey(skills, instructions),
 			readRoots,
 			turns: 0,
 			recentCalls: [],
@@ -719,22 +728,23 @@ export class SessionManager {
 	}
 
 	/**
-	 * Applies skill on/off changes to an idle session before its next run: rewrites the leading system
-	 * message and the read allow-list. Nothing happens (and the provider's prompt cache is untouched)
-	 * unless the enabled set actually changed.
+	 * Applies skill on/off and AGENTS.md changes to an idle session before its next run: rewrites the leading
+	 * system message and the read allow-list. Nothing happens (and the provider's prompt cache is untouched)
+	 * unless the enabled skills or the instruction files actually changed.
 	 */
 	private syncSkills(id: string, live: Live): void {
 		const snapshot = this.store.context(id);
 		if (!snapshot) return;
 		const skills = this.currentSkills(id, snapshot);
-		const key = skillsKey(skills);
-		if (key === live.skillsKey) return;
+		const { instructions } = this.currentInstructions(snapshot);
+		const key = promptKey(skills, instructions);
+		if (key === live.promptKey) return;
 		const [head, ...rest] = live.agent.state.messages;
 		if (head?.role === "system") {
-			live.agent.state.messages = [{ ...head, content: buildSystemPrompt(snapshot.systemPrompt, snapshot.instructions, skills) } as AgentMessage, ...rest];
+			live.agent.state.messages = [{ ...head, content: buildSystemPrompt(snapshot.systemPrompt, instructions, skills) } as AgentMessage, ...rest];
 		}
 		live.readRoots.splice(0, live.readRoots.length, ...skills.map((k) => k.baseDir));
-		live.skillsKey = key;
+		live.promptKey = key;
 	}
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
