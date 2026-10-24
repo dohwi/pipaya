@@ -10,7 +10,7 @@
 	import { panesOf } from "../lib/layout";
 	import { abortable } from "../lib/abortable";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
-	import { fileRows, folderRows, memberRows, optionRows, slashRows } from "../lib/slash-menu";
+	import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import Icon from "./Icon.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
@@ -253,19 +253,22 @@
 		});
 	});
 
+	/** Which of the four kinds of typing owns the menu, and whether it shows (see lib/slash-menu). */
+	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, memberMention: memberMention !== null }));
+	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, members: memberMatches.length, attachments: attachments.length }));
+
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
 	const menuItems = $derived(
-		cdArg !== null
+		menuKind === "cd"
 			? folderRows(cdRows, cdValue)
-			: mention
+			: menuKind === "file"
 				? fileRows(imageMatches, mentionFiles)
-				: memberMention
+				: menuKind === "member"
 					? memberRows(memberMatches)
 					: argSuggestions
 						? optionRows(argSuggestions.options)
 						: slashRows(slashList.map((it) => ("skill" in it || "family" in it ? it : { command: it }))),
 	);
-	const slashOpen = $derived(cdArg !== null ? cdOpen && !slashDismissed : mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
 	function syncCaret() {
 		caret = ta?.selectionStart ?? text.length;
@@ -463,33 +466,34 @@
 
 	function onKey(e: KeyboardEvent) {
 		if (slashOpen && !composing && !e.isComposing) {
-			const n = menuItems.length;
-			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-				if (n) {
-					e.preventDefault();
-					slashIndex = (slashIndex + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
-					if (cdArg !== null) cdNav = true;
-				}
+			const act = menuKey(e.key, { index: slashIndex, count: menuItems.length, kind: menuKind, shift: e.shiftKey, touch: isTouch() });
+			if (act?.do === "move") {
+				e.preventDefault();
+				slashIndex = act.to;
+				if (menuKind === "cd") cdNav = true;
 				return;
 			}
-			if (e.key === "Escape") {
+			if (act?.do === "dismiss") {
 				e.preventDefault();
 				slashDismissed = true;
 				return;
 			}
-			if (e.key === "Tab" && n) {
+			if (act?.do === "complete") {
 				e.preventDefault();
-				if (cdArg !== null) tabCd();
+				if (menuKind === "cd") tabCd();
 				else pickRecommendation(slashIndex, true);
 				return;
 			}
-			if (e.key === "Enter" && !e.shiftKey && cdArg !== null && !isTouch()) {
+			if (act?.do === "enter-folder") {
+				// Only a folder chosen with the arrows is entered; otherwise the typed path is used as written, so fall through.
 				if (enterCd()) e.preventDefault();
-			} else if (e.key === "Enter" && !e.shiftKey && n && !isTouch()) {
+			} else if (act?.do === "pick") {
 				e.preventDefault();
 				pickRecommendation(slashIndex);
 				return;
 			}
+			// An arrow key with no rows to move through is not the menu's: it falls through to the input.
+			if (!act && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
 		}
 		if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !slashOpen && browseHistory(e)) {
 			e.preventDefault();
@@ -615,7 +619,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={cdArg !== null ? msg("폴더") : mention ? msg("파일") : memberMention ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={cdArg !== null ? msg("일치하는 폴더가 없습니다") : mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "member" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if reply}
 			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />
