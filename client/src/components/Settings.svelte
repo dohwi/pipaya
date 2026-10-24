@@ -18,45 +18,21 @@
 	import Pin from "./Pin.svelte";
 	import NotificationSettings from "./NotificationSettings.svelte";
 	import UpdateSettings from "./UpdateSettings.svelte";
+	import ToolSettings from "./ToolSettings.svelte";
 	import TerminalSettings from "./TerminalSettings.svelte";
 	import { app, type ThemePref } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
-	import { Api, errorText } from "../lib/api";
-	import type { ToolsInfo } from "../lib/types";
+	import { Api } from "../lib/api";
+	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
-
-	// What each tool lets the agent do. Names without a case show as-is (tools added by extensions).
-	function toolLabel(name: string): string {
-		switch (name) {
-			case "read": return t("파일 읽기 (read)");
-			case "write": return t("파일 만들기 · 덮어쓰기 (write)");
-			case "edit": return t("파일 일부 수정 (edit)");
-			case "ls": return t("폴더 목록 (ls)");
-			case "grep": return t("내용 검색 (grep)");
-			case "bash": return t("셸 명령 실행 (bash)");
-			default: return name;
-		}
-	}
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
 	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab);
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
-	const tabs = [
-		{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
-		{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
-		{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
-		{ id: "workdir", label: msg("기본 폴더"), icon: "folder", sub: "", server: true },
-		{ id: "models", label: msg("모델 연결"), icon: "key", sub: "", server: true },
-		{ id: "tools", label: msg("에이전트 도구"), icon: "shield", sub: "", server: true },
-		{ id: "sessions", label: msg("대화"), icon: "chat", sub: "", server: true },
-		{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: "", server: true },
-		{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
-		{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: "", server: false },
-		{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
-	] as const;
-	type TabId = (typeof tabs)[number]["id"];
+	const tabs = SETTINGS_TABS;
+	type TabId = SettingsTabId;
 	/** Which side the next pane enters from, so content follows the selection. */
 	let dir = $state(1);
 	/** The extension open in the "확장" panes; the sidebar lists them under their section. */
@@ -116,36 +92,10 @@
 		if (!server && current.server) tab = "general";
 	});
 
-	/* ---------- agent tools: read from and saved to the chosen server only ---------- */
-	let toolsCfg = $state<{ id: string; tools: ToolsInfo | null } | null>(null);
-	let toolsError = $state("");
 	const apiOf = (id: string) => {
 		const s = app.servers.find((x) => x.id === id);
 		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
 	};
-	$effect(() => {
-		void app.configTick;
-		if (tab !== "tools" || !server) return;
-		const id = server.id;
-		toolsError = "";
-		apiOf(id)
-			?.configuration()
-			.then((c) => (toolsCfg = { id, tools: c.tools }))
-			.catch((e) => (toolsError = errorText(e)));
-	});
-	const shownCfg = $derived(toolsCfg && server && toolsCfg.id === server.id ? toolsCfg : null);
-	async function saveTool(name: string, on: boolean) {
-		if (!server || !shownCfg?.tools) return;
-		const before = shownCfg;
-		const disabled = on ? before.tools!.disabled.filter((n) => n !== name) : [...new Set([...before.tools!.disabled, name])];
-		toolsCfg = { ...before, tools: { ...before.tools!, disabled } };
-		try {
-			toolsCfg = { ...before, tools: await apiOf(server.id)!.setDisabledTools(disabled) };
-		} catch (e) {
-			toolsCfg = before;
-			toolsError = errorText(e);
-		}
-	}
 
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
 		{ id: "system", label: msg("시스템"), icon: "monitor" },
@@ -159,41 +109,19 @@
 	let query = $state("");
 	/** Filter handed to the shortcut list when a shortcut result is opened. */
 	let keyFilter = $state("");
-	type Hit = { key: string; title: string; where: string; combo?: string; open(): void };
-	/** Settings that are not a tab of their own; the words are what a person may type for them. */
-	const items: { tab: TabId; label: string; words: string }[] = [
-		{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
-		{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
-		{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
-		{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
-		{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
-		{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
-		{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
-		{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
-	];
-	const norm = (s: string) => s.toLowerCase();
-	const words = $derived(norm(query).split(/\s+/).filter(Boolean));
-	const hit = (text: string) => words.every((w) => norm(text).includes(w));
-	const hits = $derived.by<Hit[]>(() => {
-		if (!words.length) return [];
-		const out: Hit[] = [];
-		const tabName = (id: TabId) => t(tabs.find((x) => x.id === id)!.label);
-		for (const x of tabs) {
-			if (x.server && !server) continue;
-			if (hit(`${t(x.label)} ${x.label} ${x.sub ? t(x.sub) : ""}`)) out.push({ key: `tab:${x.id}`, title: t(x.label), where: x.sub ? t(x.sub) : t("설정"), open: () => go(x.id) });
-		}
-		for (const x of items) {
-			if (hit(`${t(x.label)} ${x.label} ${x.words}`)) out.push({ key: `item:${x.label}`, title: t(x.label), where: tabName(x.tab), open: () => go(x.tab) });
-		}
-		for (const a of ACTIONS) {
-			const combo = app.prefs.bindings[a.id];
-			if (hit(`${t(a.label)} ${a.label} ${a.hint ? t(a.hint) : ""} ${combo} ${formatCombo(combo)}`))
-				out.push({ key: `key:${a.id}`, title: t(a.label), where: tabName("keys"), combo: formatCombo(combo), open: () => { keyFilter = t(a.label); go("keys"); } });
-		}
-		return out;
-	});
+	const words = $derived(queryWords(query));
+	const hits = $derived(
+		searchSettings(words, {
+			hasServer: !!server,
+			shortcuts: ACTIONS.map((a) => {
+				const combo = app.prefs.bindings[a.id];
+				return { id: a.id, label: a.label, hint: a.hint, combo, shown: formatCombo(combo) };
+			}),
+		}),
+	);
 	function pick(h: Hit) {
-		h.open();
+		if (h.target.keyFilter !== undefined) keyFilter = h.target.keyFilter;
+		go(h.target.tab);
 		query = "";
 	}
 
@@ -340,25 +268,8 @@
 				<section><NotificationSettings /></section>
 				<section><TerminalSettings /></section>
 				<section><UpdateSettings /></section>
-			{:else if tab === "tools"}
-		<section>
-			<div class="mono-label">{t("에이전트 도구")}</div>
-			{#if shownCfg?.tools}
-				{@const info = shownCfg.tools}
-				{#each info.toggleable as name (name)}
-					<SettingRow label={toolLabel(name)}>
-						<Switch checked={!info.disabled.includes(name)} label={name} onchange={(on) => saveTool(name, on)} />
-					</SettingRow>
-				{/each}
-				{#each info.locked as name (name)}
-					<SettingRow label={toolLabel(name)} dim>
-						<Switch checked disabled label={name} onchange={() => {}} />
-					</SettingRow>
-				{/each}
-			{/if}
-			{#if toolsError}<span class="hint danger">{toolsError}</span>{/if}
-			<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
-		</section>
+			{:else if tab === "tools" && server}
+				<ToolSettings serverId={server.id} />
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
 			{/if}
