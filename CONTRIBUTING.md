@@ -32,7 +32,7 @@ Users only get an update when a version bump reaches `main`. Only the rolling `l
 1. Branch `chore/release-X.Y.Z`, run `bun scripts/bump-version.ts X.Y.Z`, commit `chore(release): vX.Y.Z`.
 2. Merge it to `main`. The *Client release* workflow (triggered by the `tauri.conf.json` change) builds every platform and updates the `latest` release.
 
-Versioning is SemVer (`0.MINOR.PATCH` until 1.0): `fix` → patch, `feat` or breaking → minor.
+Every release raises the version by exactly 0.0.1, regardless of the change type. PATCH only runs 0–9 and rolls over into MINOR (`0.4.8` → `0.4.9` → `0.5.0`).
 Group work with a GitHub milestone named after the version, not with a long-lived version branch.
 
 ## 한국어
