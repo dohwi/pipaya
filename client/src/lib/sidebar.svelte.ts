@@ -60,6 +60,25 @@ export class SidebarState {
     write(K.tabOrder, this.tabOrder);
   }
 
+  /**
+   * Freeze what is listed now: directories and tabs not placed yet are appended in their current order, so closing,
+   * grouping or searching later can never make them jump. Already placed entries (even gone ones) keep their rank.
+   */
+  pin(serverId: string, dirs: string[], tabs: string[]) {
+    const d = this.dirOrder[serverId] ?? [];
+    const newDirs = dirs.filter((p) => !d.includes(p));
+    if (newDirs.length) {
+      this.dirOrder = { ...this.dirOrder, [serverId]: [...d, ...newDirs] };
+      write(K.dirOrder, this.dirOrder);
+    }
+    const t = this.tabOrder[serverId] ?? [];
+    const newTabs = tabs.filter((x) => !t.includes(x));
+    if (newTabs.length) {
+      this.tabOrder = { ...this.tabOrder, [serverId]: [...t, ...newTabs] };
+      write(K.tabOrder, this.tabOrder);
+    }
+  }
+
   /** Remember `list` (the tabs of one directory, in order) as placed by hand. */
   placeTabs(serverId: string, list: string[]) {
     const rest = (this.tabOrder[serverId] ?? []).filter((x) => !list.includes(x));

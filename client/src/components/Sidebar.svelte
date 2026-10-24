@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { untrack, type Snippet } from "svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import StatusDot from "./StatusDot.svelte";
 	import Pin from "./Pin.svelte";
@@ -93,6 +93,13 @@
 	});
 
 	const searching = $derived(query.trim().length > 0);
+	/* Freeze the order as listed (never while searching: that list is partial), so nothing jumps when tabs close or group. */
+	$effect(() => {
+		if (searching) return;
+		for (const n of nodes)
+			if (n.loaded && n.state === "online" && n.dirs.length)
+				untrack(() => app.sidebar.pin(n.server.id, n.dirs.map((d) => d.path), n.dirs.flatMap((d) => d.tabs.map((x) => x.id))));
+	});
 	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
 	/** Activity of a session on the open server (other servers report running / waiting only). */
 	const stateOf = (n: Node, x: Session): Activity => {
