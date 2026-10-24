@@ -740,6 +740,7 @@
 		gap: 12px;
 	}
 	.switchrow {
+		display: flex;
 		flex-direction: row;
 		align-items: center;
 		gap: 12px;
