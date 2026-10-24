@@ -112,14 +112,9 @@
 		scale: 1;
 	}
 	.check :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		stroke: var(--text);
-
 		stroke-width: 2.2;
-
 	}
 </style>

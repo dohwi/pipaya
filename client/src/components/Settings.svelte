@@ -149,23 +149,14 @@
 		padding: 0 22px 12px;
 	}
 	.searchbar :global(svg) {
-
 		position: absolute;
-
 		left: 34px;
-
 		top: 9px;
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke: var(--text-faint);
-
 		stroke-width: 2;
-
 		pointer-events: none;
-
 	}
 	.searchbar input {
 		width: 100%;

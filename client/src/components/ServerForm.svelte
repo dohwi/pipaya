@@ -286,13 +286,9 @@
 		color: var(--text);
 	}
 	.back :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 1.9;
-
 	}
 	header {
 		display: flex;
@@ -372,17 +368,11 @@
 		background: var(--bg-elev, transparent);
 	}
 	.wd > :global(svg) {
-
 		flex: none;
-
 		width: 17px;
-
 		height: 17px;
-
 		stroke: var(--text-dim);
-
 		stroke-width: 1.9;
-
 	}
 	.wdpath {
 		flex: 1;

@@ -131,13 +131,9 @@
 		border: 1px dashed var(--border-strong);
 	}
 	.plus :global(svg) {
-
 		width: 22px;
-
 		height: 22px;
-
 		stroke-width: 1.9;
-
 	}
 	.hint {
 		margin: 6px 4px 0;

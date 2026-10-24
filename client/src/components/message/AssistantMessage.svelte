@@ -217,17 +217,11 @@
 		overflow-wrap: anywhere;
 	}
 	.error :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		flex: none;
-
 		margin-top: 1px;
-
 		stroke-width: 1.8;
-
 	}
 
 	.foot {

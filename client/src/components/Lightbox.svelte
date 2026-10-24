@@ -288,13 +288,9 @@
 		font-size: var(--fs-xs);
 	}
 	.ctl :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 1.8;
-
 	}
 	.nav {
 		position: absolute;
@@ -313,13 +309,9 @@
 		background: rgba(255, 255, 255, 0.24);
 	}
 	.nav :global(svg) {
-
 		width: 22px;
-
 		height: 22px;
-
 		stroke-width: 2;
-
 	}
 	.prev {
 		left: 14px;

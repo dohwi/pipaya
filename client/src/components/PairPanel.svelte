@@ -180,13 +180,9 @@
 		justify-content: center;
 	}
 	.row :global(svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke-width: 1.9;
-
 	}
 	.pair :global(.btn.make) {
 		align-self: center;
@@ -205,17 +201,11 @@
 		line-height: 1.5;
 	}
 	.warn :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		flex: none;
-
 		margin-top: 1px;
-
 		stroke-width: 1.8;
-
 	}
 	.hint {
 		margin: 0;

@@ -78,13 +78,9 @@
 		color: var(--ok);
 	}
 	.mark :global(svg) {
-
 		width: 28px;
-
 		height: 28px;
-
 		stroke-width: 2;
-
 	}
 	h2 {
 		margin: 4px 0 0;

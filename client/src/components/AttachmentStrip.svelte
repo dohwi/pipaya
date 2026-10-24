@@ -72,12 +72,8 @@
 		color: var(--bg);
 	}
 	.rm :global(svg) {
-
 		width: 12px;
-
 		height: 12px;
-
 		stroke-width: 2.6;
-
 	}
 </style>

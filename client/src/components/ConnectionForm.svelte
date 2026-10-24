@@ -388,17 +388,11 @@
 		overflow-wrap: anywhere;
 	}
 	.ferr :global(svg) {
-
 		flex: none;
-
 		width: 17px;
-
 		height: 17px;
-
 		margin-top: 1px;
-
 		stroke-width: 1.8;
-
 	}
 	.fbtns {
 		align-items: center;

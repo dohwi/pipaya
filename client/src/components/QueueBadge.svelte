@@ -26,13 +26,9 @@
 		padding: 0 1px;
 	}
 	.in :global(svg) {
-
 		width: 11px;
-
 		height: 11px;
-
 		stroke-width: 2.2;
-
 	}
 	.n {
 		font-variant-numeric: tabular-nums;

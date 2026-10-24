@@ -76,13 +76,9 @@
 		border-color: var(--danger);
 	}
 	.mark :global(svg:not(.logo)) {
-
 		width: 28px;
-
 		height: 28px;
-
 		stroke-width: 2;
-
 	}
 	h2 {
 		margin: 4px 0 0;

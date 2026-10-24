@@ -77,13 +77,9 @@
 		gap: 8px;
 	}
 	.mhead :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 2;
-
 	}
 	.lockic {
 		flex: none;
@@ -123,13 +119,9 @@
 		white-space: nowrap;
 	}
 	.mitem :global(.badge svg) {
-
 		width: 12px;
-
 		height: 12px;
-
 		stroke-width: 2.2;
-
 	}
 	.mname :global(.lockic) {
 		margin-left: 6px;
@@ -157,17 +149,11 @@
 		color: var(--text-faint);
 	}
 	.mitem :global(svg:not(.model):not(.logo)) {
-
 		flex: none;
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke: var(--text-faint);
-
 		stroke-width: 1.9;
-
 	}
 	.mlogo {
 		flex: none;

@@ -45,13 +45,9 @@
 		color: var(--warn);
 	}
 	.ucmark :global(svg) {
-
 		width: 22px;
-
 		height: 22px;
-
 		stroke-width: 1.8;
-
 	}
 	h3 {
 		margin: 0;

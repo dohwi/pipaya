@@ -244,13 +244,9 @@
 		opacity: 1;
 	}
 	.kind :global(svg) {
-
 		width: 20px;
-
 		height: 20px;
-
 		stroke-width: 1.8;
-
 	}
 	.meta {
 		flex: 1;

@@ -174,13 +174,9 @@
 	.sw :global(svg),
 	.cur :global(svg),
 	.del :global(svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 2;
-
 	}
 	.sw {
 		display: flex;

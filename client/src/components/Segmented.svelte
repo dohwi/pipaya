@@ -114,12 +114,8 @@
 		border-color: var(--border);
 	}
 	.cards > button :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		stroke-width: 1.9;
-
 	}
 </style>

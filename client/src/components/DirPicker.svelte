@@ -338,17 +338,11 @@
 		box-shadow: inset 0 0 0 1.5px var(--border-strong);
 	}
 	.row :global(svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		flex: none;
-
 		stroke-width: 1.8;
-
 		color: var(--text-faint);
-
 	}
 	.row.up :global(svg) {
 		rotate: 90deg;

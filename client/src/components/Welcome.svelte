@@ -145,12 +145,8 @@
 		font-size: var(--fs-md);
 	}
 	.warn :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 1.9;
-
 	}
 </style>

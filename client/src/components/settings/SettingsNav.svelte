@@ -248,15 +248,10 @@
 		background: none;
 	}
 	.nav button :global(svg) {
-
 		flex: none;
-
 		width: 19px;
-
 		height: 19px;
-
 		stroke-width: 1.8;
-
 	}
 	.nt {
 		display: flex;

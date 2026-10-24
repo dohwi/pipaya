@@ -194,15 +194,10 @@
 		scale: 0.85;
 	}
 	.fav :global(svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke-width: 1.8;
-
 		transition: fill var(--motion-fast) var(--ease-std);
-
 	}
 	.fav.on {
 		color: var(--warn);
@@ -211,15 +206,10 @@
 		fill: currentColor;
 	}
 	.gstar :global(svg) {
-
 		width: 12px;
-
 		height: 12px;
-
 		fill: currentColor;
-
 		stroke-width: 1.8;
-
 	}
 	.sec {
 		flex: none;
@@ -282,12 +272,8 @@
 		background: var(--bg-hover);
 	}
 	.manage :global(svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 1.9;
-
 	}
 </style>

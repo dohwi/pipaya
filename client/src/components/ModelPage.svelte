@@ -138,15 +138,10 @@
 		gap: 6px;
 	}
 	.src :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		flex: none;
-
 		stroke-width: 2;
-
 	}
 	.src.off {
 		color: var(--text-faint);
@@ -204,15 +199,10 @@
 		border-color: var(--accent);
 	}
 	.iconpick :global(svg:not(.model):not(.logo)) {
-
 		width: 13px;
-
 		height: 13px;
-
 		stroke: var(--text-dim);
-
 		stroke-width: 2;
-
 	}
 	.mtext {
 		flex: 1;
@@ -226,15 +216,10 @@
 		color: var(--text-dim);
 	}
 	.mtrigger :global(svg:not(.model):not(.logo)) {
-
 		width: 15px;
-
 		height: 15px;
-
 		flex: none;
-
 		stroke-width: 2;
-
 		color: var(--text-dim);
 	}
 	:global(.btn.danger-text) {
@@ -260,13 +245,9 @@
 		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
 	}
 	.cap :global(svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke-width: 1.8;
-
 	}
 	.cap:hover {
 		background: var(--bg-hover);

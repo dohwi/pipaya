@@ -157,13 +157,9 @@
 		color: var(--text-dim);
 	}
 	.ico :global(svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke-width: 1.8;
-
 	}
 	.name {
 		font-weight: 600;
@@ -197,13 +193,9 @@
 		transform: rotate(90deg);
 	}
 	.chev :global(svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 2;
-
 	}
 	.body {
 		padding: 0 12px 12px;

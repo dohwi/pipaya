@@ -175,13 +175,9 @@
 		color: var(--bg);
 	}
 	.send :global(svg) {
-
 		width: 19px;
-
 		height: 19px;
-
 		stroke-width: 2.1;
-
 	}
 	.send.stop :global(svg) {
 		fill: currentColor;
@@ -280,13 +276,9 @@
 		color: var(--accent-fg);
 	}
 	.mode :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 2;
-
 	}
 	.steerwrap {
 		position: relative;

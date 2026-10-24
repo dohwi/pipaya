@@ -143,13 +143,9 @@
 		color: var(--text);
 	}
 	.btn-ico :global(svg) {
-
 		width: 19px;
-
 		height: 19px;
-
 		stroke-width: 1.75;
-
 	}
 	.agents {
 		position: relative;

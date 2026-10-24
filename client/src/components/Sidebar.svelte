@@ -349,13 +349,9 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.settings :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 1.9;
-
 	}
 	:global(.iconbtn.foldbtn) {
 		margin-left: auto;
@@ -371,13 +367,9 @@
 		color: var(--text-faint);
 	}
 	:global(:where(.side) .forkmark svg) {
-
 		width: 13px;
-
 		height: 13px;
-
 		stroke-width: 2;
-
 	}
 	@media (min-width: 861px) {
 		.side {
@@ -390,25 +382,15 @@
 		min-width: 0;
 	}
 	.searchwrap :global(svg) {
-
 		position: absolute;
-
 		left: 11px;
-
 		top: 50%;
-
 		translate: 0 -50%;
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke: var(--text-faint);
-
 		stroke-width: 2;
-
 		pointer-events: none;
-
 	}
 	.search {
 		width: 100%;
@@ -544,13 +526,9 @@
 	}
 	.sicon :global(svg),
 	:global(:where(.side) .dicon svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.9;
-
 	}
 	/* the status is the server icon's colour (green online, red offline, amber needs attention, blinking while checking); only a problem adds a text pill after the name */
 	.sicon.online {
@@ -686,15 +664,10 @@
 		rotate: -90deg;
 	}
 	:global(:where(.side) .chev svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke: var(--text-faint);
-
 		stroke-width: 2;
-
 	}
 	:global(:where(.side) .dname) {
 		flex: none;
@@ -788,22 +761,14 @@
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
 	:global(:where(.side) .lead > svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.9;
-
 	}
 	:global(:where(.side) .dirnew svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 2;
-
 	}
 	.nosess {
 		padding: 4px 10px 6px 44px;
@@ -948,13 +913,9 @@
 		color: var(--text);
 	}
 	:global(:where(.side) .more svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 2.6;
-
 	}
 	:global(:where(.side) .rename) {
 		flex: 1;
@@ -1070,13 +1031,9 @@
 		color: var(--text-faint);
 	}
 	:global(:where(.side) .gfold svg) {
-
 		width: 16px;
-
 		height: 16px;
-
 		stroke-width: 1.9;
-
 	}
 	:global(:where(.side) .gfold:hover) {
 		background: var(--bg-active);

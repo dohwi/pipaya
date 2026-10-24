@@ -133,13 +133,9 @@
 		color: var(--mark-header);
 	}
 	.header :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.8;
-
 	}
 	.quote {
 		margin: 0 0 6px;

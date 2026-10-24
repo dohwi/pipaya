@@ -280,13 +280,9 @@
 	.ico :global(svg),
 	.x :global(svg),
 	.add :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.9;
-
 	}
 	.x {
 		display: grid;

@@ -280,15 +280,10 @@
 		font-size: var(--fs-sm);
 	}
 	.notice :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		flex: none;
-
 		stroke-width: 1.8;
-
 	}
 	.jump {
 		position: absolute;
@@ -307,13 +302,9 @@
 		z-index: 5;
 	}
 	.jump :global(svg) {
-
 		width: 18px;
-
 		height: 18px;
-
 		stroke-width: 2;
-
 	}
 	.skeleton {
 		display: flex;
@@ -345,14 +336,9 @@
 		color: var(--text-dim);
 	}
 	.loaderr :global(svg) {
-
 		width: 28px;
-
 		height: 28px;
-
 		stroke: var(--danger);
-
 		stroke-width: 1.8;
-
 	}
 </style>

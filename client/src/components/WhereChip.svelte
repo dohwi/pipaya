@@ -35,15 +35,10 @@
 		border-color: var(--border-strong);
 	}
 	.where :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		flex: none;
-
 		stroke-width: 1.8;
-
 	}
 	.p {
 		min-width: 0;

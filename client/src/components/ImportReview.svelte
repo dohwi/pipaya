@@ -166,10 +166,7 @@
 		color: var(--text-dim);
 	}
 	.rhead :global(svg) {
-
 		flex: none;
-
 		stroke-width: 1.9;
-
 	}
 </style>

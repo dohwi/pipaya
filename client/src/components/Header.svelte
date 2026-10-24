@@ -121,13 +121,9 @@
 		color: var(--text);
 	}
 	.tool :global(svg) {
-
 		width: 19px;
-
 		height: 19px;
-
 		stroke-width: 1.75;
-
 	}
 	.menu {
 		display: none;

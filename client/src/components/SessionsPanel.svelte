@@ -259,17 +259,11 @@
 		cursor: pointer;
 	}
 	.fold :global(svg) {
-
 		flex: none;
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 1.8;
-
 		color: var(--text-dim);
-
 	}
 	.path {
 		min-width: 0;

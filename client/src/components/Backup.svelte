@@ -279,11 +279,8 @@
 	}
 	.note :global(svg),
 	.drop :global(svg) {
-
 		flex: none;
-
 		stroke-width: 1.9;
-
 	}
 	.note :global(svg) {
 		width: 15px;

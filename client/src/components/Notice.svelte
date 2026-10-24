@@ -92,15 +92,10 @@
 		font-weight: 400;
 	}
 	.notice :global(svg) {
-
 		width: 17px;
-
 		height: 17px;
-
 		flex: none;
-
 		stroke-width: 1.8;
-
 	}
 	.sm :global(svg) {
 		width: 16px;

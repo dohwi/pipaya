@@ -190,13 +190,9 @@
 		color: var(--text-dim);
 	}
 	.ticon :global(svg) {
-
 		width: 15px;
-
 		height: 15px;
-
 		stroke-width: 1.9;
-
 	}
 	.os {
 		margin-left: 7px;
@@ -312,13 +308,9 @@
 		color: var(--text);
 	}
 	.x :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.9;
-
 	}
 	.body {
 		flex: 1;

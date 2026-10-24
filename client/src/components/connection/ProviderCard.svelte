@@ -225,13 +225,9 @@
 		font-size: var(--fs-2xs);
 	}
 	.tag :global(svg) {
-
 		width: 14px;
-
 		height: 14px;
-
 		stroke-width: 1.8;
-
 	}
 	.gone {
 		margin-left: 8px;
