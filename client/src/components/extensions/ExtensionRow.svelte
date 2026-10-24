@@ -11,6 +11,7 @@
 	 *  meta     the small line next to the name
 	 *  brief    one line under the name
 	 *  busy     a task is running on it
+	 *  dim      it cannot work right now (a missing half): the name and text fade, the notices stay full strength
 	 */
 	let {
 		id,
@@ -18,6 +19,7 @@
 		meta,
 		brief,
 		busy = false,
+		dim = false,
 		onopen,
 		control,
 		notices,
@@ -27,6 +29,8 @@
 		meta?: Snippet;
 		brief?: string;
 		busy?: boolean;
+		/** The extension cannot work right now: the card reads as inactive. */
+		dim?: boolean;
 		onopen: () => void;
 		control?: Snippet;
 		notices?: Snippet;
@@ -34,7 +38,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<article class="card" {id} tabindex={id ? -1 : undefined} aria-label={name}>
+<article class="card" class:dim {id} tabindex={id ? -1 : undefined} aria-label={name}>
 	<div class="line">
 		<button type="button" class="expand" onclick={onopen}>
 			<span class="who">
@@ -54,6 +58,7 @@
 
 <style>
 	.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.card.dim .line { opacity: 0.55; }
 	.line { display: flex; align-items: center; gap: 10px; }
 	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
 	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }

@@ -57,7 +57,7 @@
 	.notice {
 		display: flex;
 		gap: 8px;
-		align-items: flex-start;
+		align-items: center;
 		padding: 10px 12px;
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -99,15 +99,12 @@
 
 		flex: none;
 
-		margin-top: 1px;
-
 		stroke-width: 1.8;
 
 	}
 	.sm :global(svg) {
 		width: 16px;
 		height: 16px;
-		margin-top: 1px;
 	}
 	.text {
 		flex: 1 1 auto;

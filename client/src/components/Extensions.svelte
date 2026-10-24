@@ -271,6 +271,14 @@
 	</div>
 {/snippet}
 
+{#snippet companionLine(id: string, disabled: boolean)}
+	<div class="updline warnline">
+		<Icon name="alert" />
+		<span class="to"><b>{t("클라이언트 확장 ‘{id}’ 필요", { id })}</b></span>
+		<Button variant="primary" size="sm" class="upd-btn" {disabled} onclick={() => installCompanion(id)}>{t("설치")}</Button>
+	</div>
+{/snippet}
+
 {#snippet installedRow(entry: InstalledExtension)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
@@ -369,14 +377,16 @@
 		{#if view === "server"}
 			{#each serverSide as ext (ext.name)}
 				{@const upd = serverUpdate(ext)}
-				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} onopen={() => (selected = srvKey(ext.name))}>
+				{@const half = missingClient(ext.companion)}
+				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
+						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
 						{#if upd}{@render updateLine(ext.version ?? "", upd, !!tasks.busy[srvKey(ext.name)])}{/if}
 					{/snippet}
 					{#snippet meta()}
 						{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
 						<span class="meta">{t("서버에서 실행")}</span>
-						{#if missingClient(ext.companion)}<span class="chip warn" title={t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}>{t("클라이언트 미설치 · 동작 안 함")}</span>{/if}
+						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
 					{/snippet}
 				</ExtensionRow>
 			{/each}
@@ -426,6 +436,7 @@
 	.chip.warn { background: var(--warn-soft); }
 	/* Update strip: a tinted band at the foot of the card, so it reads as "something to do" next to the plain cards */
 	.updline { display: flex; align-items: center; gap: 10px; margin: 2px -14px -12px; padding: 9px 14px; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); background: var(--accent-soft); }
+	.updline.warnline { background: var(--warn-soft); color: var(--warn); }
 	.updline > :global(svg) { flex: none; width: 17px; height: 17px; stroke-width: 2; }
 	.to { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: var(--fs-xs); line-height: 1.4; }
 	.to b { font-weight: 650; }
