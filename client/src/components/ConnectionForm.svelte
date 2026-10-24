@@ -1037,9 +1037,20 @@
 	.savestate.warn {
 		color: var(--warn);
 	}
+	.savestate span {
+		white-space: nowrap;
+	}
+	/* hover on the tinted bar: warn-toned instead of the neutral grey, which looks muddy on yellow */
+	.fform > footer.warn .btn.ghost:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--warn) 18%, transparent);
+	}
+	.fform > footer.warn .btn.ghost:active:not(:disabled) {
+		background: color-mix(in srgb, var(--warn) 26%, transparent);
+	}
 	.fbtns {
 		align-items: center;
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: flex-end;
 		gap: 8px;
 	}
@@ -1082,14 +1093,19 @@
 		.fsec .grid2:has(input[inputmode="numeric"]) {
 			grid-template-columns: 1fr 1fr;
 		}
-	}
-	@media (max-width: 640px) {
-		/* name/ID and model ID/display name stack; the two numbers stay side by side */
-		.grid2 {
-			grid-template-columns: 1fr;
+		/* notice gets its own row above the buttons; buttons stay right-aligned on one line */
+		.savestate {
+			flex: 1 0 100%;
+			height: auto;
+			min-height: 24px;
+			margin-right: 0;
 		}
-		.fsec .grid2:has(input[inputmode="numeric"]) {
-			grid-template-columns: 1fr 1fr;
+		.savestate span {
+			white-space: normal;
+			text-wrap: balance;
+		}
+		.fbtns {
+			row-gap: 10px;
 		}
 	}
 </style>
