@@ -1,14 +1,15 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
 	import FilterChip from "./FilterChip.svelte";
-	import { absoluteWorkdir, breadcrumbs, splitTyped, tabComplete, typedMatches } from "../lib/workdir-path";
+	import { absoluteWorkdir, breadcrumbs, splitTyped } from "../lib/workdir-path";
+	import { DirBrowser } from "../lib/dir-browser.svelte";
 	import { msg, t, tc } from "../lib/i18n";
 	import { onDestroy } from "svelte";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
-	import type { DirListing, WorkdirInfo } from "../lib/types";
+	import type { WorkdirInfo } from "../lib/types";
 
 	/**
 	 * Pick the directory a chat works in. Browses the server's folders; the choice is an absolute path.
@@ -39,24 +40,13 @@
 		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
 	};
 
-	let listing = $state<DirListing | null>(null);
-	let error = $state("");
-	let loading = $state(false);
-	let hidden = $state(false);
-	let typed = $state("");
-	let creating = $state(false);
-	let newName = $state("");
+	const browser = new DirBrowser(() => {
+		const api = client();
+		return api ? { list: (path, hidden) => api.listDirs(path, hidden), mkdir: (parent, name) => api.makeDir(parent, name), errorText } : null;
+	});
 	let saving = $state(false);
-	/** Row highlighted with the arrow keys (-1: none) */
-	let active = $state(-1);
 	let input = $state<HTMLInputElement>();
-	let fallback = false;
-	/** The folder part of what is typed does not exist (yet) */
-	let missing = $state(false);
-	/** Last directory whose listing is on screen (typing re-lists only when this changes) */
-	let seq = 0;
 
-	const asDir = (p: string) => (p.endsWith("/") ? p : `${p}/`);
 	const base = (p: string) => p.split("/").filter(Boolean).slice(-2).join("/") || "/";
 
 	/** Shortcuts: the server's workspace first, then its home, then the folders used lately */
@@ -64,7 +54,7 @@
 		const out: { path: string; label: string; title: string }[] = [];
 		const root = app.workspace?.root;
 		if (root) out.push({ path: root, label: msg("워크스페이스"), title: root });
-		const home = app.workspace?.home ?? listing?.home;
+		const home = app.workspace?.home ?? browser.listing?.home;
 		if (home && home !== root) out.push({ path: home, label: msg("홈"), title: home });
 		return out;
 	});
@@ -82,53 +72,7 @@
 		return out;
 	});
 
-	const crumbs = $derived(breadcrumbs(listing?.path ?? ""));
-
-	async function go(path?: string, live = false) {
-		const api = client();
-		if (!api) return;
-		const mine = ++seq;
-		loading = true;
-		error = "";
-		try {
-			const res = await api.listDirs(path, hidden);
-			if (mine !== seq) return; // a newer request superseded this one
-			listing = res;
-			active = -1;
-			// "/a/b/" rather than "/a/b": the text after the last slash is a filter, and a folder's own name must not be one
-			if (!live) typed = asDir(res.path);
-		} catch (e) {
-			if (mine !== seq) return;
-			if (live) {
-				// while typing, a half-written path is not an error: keep the last list and say so quietly
-				error = "";
-				missing = true;
-				return;
-			}
-			// the starting folder may be gone: open the server's home instead of a dead end
-			if (!fallback && path) {
-				fallback = true;
-				return go();
-			}
-			error = errorText(e);
-		} finally {
-			if (mine === seq) loading = false;
-		}
-	}
-
-	async function mkdir() {
-		const api = client();
-		const name = newName.trim();
-		if (!api || !listing || !name) return;
-		try {
-			const made = await api.makeDir(listing.path, name);
-			creating = false;
-			newName = "";
-			await go(made.path);
-		} catch (e) {
-			error = errorText(e);
-		}
-	}
+	const crumbs = $derived(breadcrumbs(browser.listing?.path ?? ""));
 
 	/** Save (or clear, with null) the default directory on the browsed server */
 	async function saveDefault(path: string | null): Promise<boolean> {
@@ -158,65 +102,29 @@
 		if (app.changeWorkdir(path)) onclose();
 	}
 
-	const part = $derived(splitTyped(typed.trim()).part);
-	const shown = $derived(typedMatches(listing?.entries ?? [], typed, listing?.path));
-
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	function oninput() {
-		clearTimeout(timer);
-		const v = typed.trim();
-		if (!v.startsWith("/")) return; // only absolute paths are listed live
-		const { dir } = splitTyped(v);
-		timer = setTimeout(() => {
-			missing = false;
-			if (dir !== listing?.path) void go(dir, true);
-		}, 140);
-	}
-	onDestroy(() => clearTimeout(timer));
-
 	/** Open a folder from the list or a shortcut, and keep the keyboard in the path box so typing/Tab continue from there */
 	async function enter(path: string) {
-		await go(path);
+		await browser.go(path);
 		input?.focus();
 	}
 
-	/**
-	 * Tab completes to the only (or the longest common) match, like a shell, and the folder it lands on is
-	 * listed at once so its sub-folders are already there for the next Tab. Arrows move through the list.
-	 */
-	function complete(e: KeyboardEvent) {
+	/** Arrows move through the list; Tab completes like a shell (the browser lists where it lands). */
+	function onkey(e: KeyboardEvent) {
 		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-			if (!shown.length) return;
+			if (!browser.arrow(e.key)) return;
 			e.preventDefault();
-			active = (active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
 			queueMicrotask(() => document.querySelector(".list .row.hl")?.scrollIntoView({ block: "nearest" }));
 			return;
 		}
-		if (e.key === "Backspace" && typed.endsWith("/") && typed.length > 1 && e.currentTarget instanceof HTMLInputElement && e.currentTarget.selectionStart === typed.length) {
-			active = -1;
-		}
-		if (e.key !== "Tab" || e.shiftKey || !listing || !shown.length) return;
-		e.preventDefault();
-		const done = tabComplete(splitTyped(typed.trim()).dir, shown.map((d) => d.name), active >= 0 ? shown[active]?.name : undefined);
-		typed = done.text;
-		if (done.whole) {
-			clearTimeout(timer);
-			missing = false;
-			void go(typed.trim(), true);
-		} else oninput();
+		if (e.key === "Backspace") browser.backspaced(e.currentTarget instanceof HTMLInputElement && e.currentTarget.selectionStart === browser.typed.length);
+		if (e.key !== "Tab" || e.shiftKey) return;
+		if (browser.tab()) e.preventDefault();
 	}
 
-	/** Enter: open the highlighted folder, else the exact or only match; on an already-listed "/path/" it confirms; else go to the typed path */
+	/** Enter: the browser opens a folder, or says the listed path should be confirmed. */
 	function submit() {
-		const v = typed.trim();
-		if (active >= 0 && shown[active]) return void go(shown[active].path);
-		if (part) {
-			const hit = shown.find((d) => d.name === part) ?? (shown.length === 1 ? shown[0] : undefined);
-			if (hit) return void go(hit.path);
-		}
-		// "/path/" already listed: a second Enter confirms it
-		if (v.startsWith("/") && v.endsWith("/") && !missing && listing && splitTyped(v).dir === listing.path && !saving) return void choose(listing.path);
-		void go(v);
+		const r = browser.submit(saving);
+		if (r) void choose(r.confirm);
 	}
 
 	function focus(node: HTMLInputElement) {
@@ -226,8 +134,9 @@
 
 	$effect(() => {
 		// start in the directory the next chat would use, falling back to the server default
-		void go(mode === "default" ? current?.effective : app.workdirAbs || undefined);
+		void browser.go(mode === "default" ? current?.effective : app.workdirAbs || undefined);
 	});
+	onDestroy(() => browser.dispose());
 </script>
 
 <!-- opened over the server dialog (layer 2) when it picks the default folder -->
@@ -240,7 +149,7 @@
 			submit();
 		}}
 	>
-		<input class="mono" bind:this={input} bind:value={typed} oninput={() => ((active = -1), oninput())} onkeydown={complete} spellcheck="false" autocomplete="off" aria-label={t("경로")} placeholder="/home/user/project" use:focus />
+		<input class="mono" bind:this={input} bind:value={browser.typed} oninput={() => browser.typedChanged()} onkeydown={onkey} spellcheck="false" autocomplete="off" aria-label={t("경로")} placeholder="/home/user/project" use:focus />
 		<Button size="sm" type="submit">{tc("go", "이동")}</Button>
 	</form>
 
@@ -249,7 +158,7 @@
 			<span class="label">{t("바로가기")}</span>
 			<div class="chips">
 				{#each places as p (p.path)}
-					<FilterChip size="sm" on={listing?.path === p.path} onclick={() => void enter(p.path)} title={p.title}>{t(p.label)}</FilterChip>
+					<FilterChip size="sm" on={browser.listing?.path === p.path} onclick={() => void enter(p.path)} title={p.title}>{t(p.label)}</FilterChip>
 				{/each}
 			</div>
 		</div>
@@ -272,55 +181,55 @@
 		{/each}
 	</nav>
 
-	<div class="list" class:loading>
-		{#if error}
-			<p class="err">{error}</p>
-		{:else if missing}
-			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(typed.trim()).dir })}</p>
-		{:else if listing}
-			{#if listing.parent && !part}
-				<button class="row wide up" onclick={() => void enter(listing!.parent!)}><Icon name="chevron-down" /><span class="mono">..</span><span class="grow"></span><span class="hint">{t("상위 폴더")}</span></button>
+	<div class="list" class:loading={browser.loading}>
+		{#if browser.error}
+			<p class="err">{browser.error}</p>
+		{:else if browser.missing}
+			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(browser.typed.trim()).dir })}</p>
+		{:else if browser.listing}
+			{#if browser.listing.parent && !browser.part}
+				<button class="row wide up" onclick={() => void enter(browser.listing!.parent!)}><Icon name="chevron-down" /><span class="mono">..</span><span class="grow"></span><span class="hint">{t("상위 폴더")}</span></button>
 			{/if}
-			{#each shown as d, i (d.path)}
-				<button class="row wide" class:hl={i === active} ondblclick={() => void choose(d.path)} onclick={() => void enter(d.path)} title={t("한 번 누르면 열고, 두 번 누르면 바로 선택합니다")}>
+			{#each browser.shown as d, i (d.path)}
+				<button class="row wide" class:hl={i === browser.active} ondblclick={() => void choose(d.path)} onclick={() => void enter(d.path)} title={t("한 번 누르면 열고, 두 번 누르면 바로 선택합니다")}>
 					<Icon name="folder" /><span class="mono name">{d.name}</span>
 				</button>
 			{:else}
-				<p class="empty">{part ? t('"{name}"(으)로 시작하는 폴더가 없습니다', { name: part }) : t("하위 폴더가 없습니다")}</p>
+				<p class="empty">{browser.part ? t('"{name}"(으)로 시작하는 폴더가 없습니다', { name: browser.part }) : t("하위 폴더가 없습니다")}</p>
 			{/each}
-			{#if listing.truncated}<p class="empty">{t("폴더가 너무 많아 일부만 보입니다. 위 경로 입력칸을 이용하세요.")}</p>{/if}
+			{#if browser.listing.truncated}<p class="empty">{t("폴더가 너무 많아 일부만 보입니다. 위 경로 입력칸을 이용하세요.")}</p>{/if}
 		{/if}
 	</div>
 
 	<div class="tools">
-		<label class="check"><input type="checkbox" bind:checked={hidden} onchange={() => void go(listing?.path)} /> {t("숨김 폴더")}</label>
+		<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
 		<span class="grow"></span>
-		{#if creating}
+		{#if browser.creating}
 			<form
 				class="mk"
 				onsubmit={(e) => {
 					e.preventDefault();
-					void mkdir();
+					void browser.mkdir();
 				}}
 			>
-				<input class="mono" bind:value={newName} placeholder={t("새 폴더 이름")} spellcheck="false" use:focus aria-label={t("새 폴더 이름")} />
-				<Button size="sm" type="submit" disabled={!newName.trim()}>{t("만들기")}</Button>
-				<Button variant="ghost" size="sm" onclick={() => ((creating = false), (newName = ""))}>{t("취소")}</Button>
+				<input class="mono" bind:value={browser.newName} placeholder={t("새 폴더 이름")} spellcheck="false" use:focus aria-label={t("새 폴더 이름")} />
+				<Button size="sm" type="submit" disabled={!browser.newName.trim()}>{t("만들기")}</Button>
+				<Button variant="ghost" size="sm" onclick={() => browser.cancelCreating()}>{t("취소")}</Button>
 			</form>
 		{:else}
-			<Button variant="ghost" size="sm" onclick={() => (creating = true)} disabled={!listing}><Icon name="plus" /> {t("새 폴더")}</Button>
+			<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing}><Icon name="plus" /> {t("새 폴더")}</Button>
 		{/if}
 	</div>
 
 	<footer>
 		<div class="picked">
 			<span class="label">{mode === "default" ? t("저장할 위치") : t("새 대화를 시작할 위치")}</span>
-			<span class="mono cur" title={listing?.path}>{listing?.path ?? "…"}</span>
+			<span class="mono cur" title={browser.listing?.path}>{browser.listing?.path ?? "…"}</span>
 		</div>
 		{#if mode === "default" && current?.saved}
 			<Button variant="ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</Button>
 		{/if}
-		<Button variant="primary" disabled={!listing || saving} onclick={() => listing && void choose(listing.path)}>
+		<Button variant="primary" disabled={!browser.listing || saving} onclick={() => browser.listing && void choose(browser.listing.path)}>
 			{mode === "default" ? t("기본값으로 저장") : t("여기서 시작")}
 		</Button>
 	</footer>
