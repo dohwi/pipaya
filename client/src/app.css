@@ -374,6 +374,13 @@ select:focus-visible {
 .btn.ghost:hover:not(:disabled) {
 	background: var(--bg-hover);
 }
+/* A ghost button for a destructive action: red text, red wash on hover. */
+.btn.danger-text {
+	color: var(--danger);
+}
+.btn.danger-text:hover:not(:disabled) {
+	background: var(--danger-soft);
+}
 
 .iconbtn {
 	display: inline-grid;

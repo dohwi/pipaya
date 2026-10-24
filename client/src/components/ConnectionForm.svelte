@@ -1,12 +1,5 @@
 <script lang="ts" module>
-	/** Local runtimes that speak the OpenAI-compatible API without a key. The URL is reached from the server, so localhost means the server's machine. */
-	export const localPresets = [
-		{ name: "Ollama", id: "ollama", baseUrl: "http://localhost:11434/v1" },
-		{ name: "LM Studio", id: "lm-studio", baseUrl: "http://localhost:1234/v1" },
-		{ name: "llama.cpp", id: "llama-cpp", baseUrl: "http://localhost:8080/v1" },
-		{ name: "vLLM", id: "vllm", baseUrl: "http://localhost:8000/v1" },
-	];
-	export type LocalPreset = (typeof localPresets)[number];
+	export { localPresets, type LocalPreset } from "../lib/connection-form";
 </script>
 
 <script lang="ts">
@@ -17,15 +10,18 @@
 	import { indexCatalog } from "../lib/catalog-match";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import DiscardConfirm from "./DiscardConfirm.svelte";
 	import Switch from "./Switch.svelte";
 	import Select from "./Select.svelte";
 	import Badge from "./Badge.svelte";
 	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
+	import ModelPage from "./ModelPage.svelte";
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
-	import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "../lib/types";
+	import type { ApiFormat, CatalogModel, CustomProvider } from "../lib/types";
+	import { ALL_LEVELS, applyMatch, collectModels, formFromProvider, headerError, modelMeta, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
 
 	/**
 	 * The add / edit dialog for one custom (OpenAI- or Anthropic-compatible) connection: its address and format, and
@@ -47,40 +43,6 @@
 	let busy = $state(false);
 	let formError = $state("");
 
-	interface Row {
-		id: string;
-		name: string;
-		contextWindow: string;
-		maxTokens: string;
-		reasoning: boolean;
-		vision: boolean;
-		/** Chosen brand mark; undefined = automatic (from the id) */
-		icon?: string;
-		/** Listed by the upstream itself: the id is fixed and cannot be edited */
-		fromUpstream?: boolean;
-		/** Empty = automatic (looked up by name on the server) */
-		thinkingLevels: ThinkingLevel[];
-		/** OpenRouter model this upstream model is matched to. null = manual; undefined = not chosen yet (matched by name). */
-		catalogId?: string | null;
-		/** What the server matched this model to, for display only */
-		thinkingSource?: CustomModel["thinkingSource"];
-		/** The upstream's model list no longer contains it */
-		unavailable?: boolean;
-	}
-	const allLevels: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
-	interface Form {
-		isNew: boolean;
-		id: string;
-		idTouched: boolean;
-		name: string;
-		baseUrl: string;
-		api: ApiFormat;
-		authRequired: boolean;
-		/** Typed into a new connection; sent to the server only on save (never kept in the list). */
-		apiKey: string;
-		rows: Row[];
-	}
-
 	let form = $state<Form | null>(null);
 	/** Index of the model whose details are open inside the dialog; null = the connection page. */
 	let editing = $state<number | null>(null);
@@ -97,16 +59,6 @@
 		if (editing !== null) closeModel();
 		else close();
 	}
-
-	const newRow = (): Row => ({ id: "", name: "", contextWindow: "128000", maxTokens: "8192", reasoning: false, vision: false, thinkingLevels: [] });
-	const slug = (s: string) =>
-		s
-			.toLowerCase()
-			.replace(/[^a-z0-9_-]+/g, "-")
-			.replace(/^[^a-z]+/, "")
-			.replace(/-+$/, "")
-			.slice(0, 64);
-
 
 	/* ---------- OpenRouter catalog (autocomplete + match status) ---------- */
 
@@ -157,7 +109,7 @@
 				}
 				const row: Row = { ...newRow(), id: m.id, name: m.name ?? "", fromUpstream: true };
 				const hit = matchOf(m.id);
-				if (hit) pickMatch(row, hit);
+				if (hit) applyMatch(row, hit);
 				f.rows.push(row);
 				added++;
 			}
@@ -179,70 +131,16 @@
 		if (r.catalogId !== undefined) return index.byId(r.catalogId) ?? null;
 		return matchOf(r.id) ?? null;
 	};
-	/** The upstream model id is never touched; choosing an OpenRouter match only fills limits/capabilities from it. */
-	function pickMatch(r: Row, c: CatalogModel | null) {
-		if (!c) {
-			r.catalogId = null;
-			return;
-		}
-		r.catalogId = c.id;
-		r.contextWindow = String(c.contextWindow);
-		r.maxTokens = String(Math.min(c.maxTokens, c.contextWindow));
-		r.vision = c.vision;
-		r.reasoning = c.reasoning;
-		r.thinkingLevels = [];
-	}
 	let matchFor = $state<number | null>(null);
 	let iconFor = $state<number | null>(null);
 
 
-	function startNew(preset?: LocalPreset) {
+	function begin(next: Form) {
 		void ensureCatalog();
 		formError = "";
 		discoverNote = "";
 		editing = null;
-		form = {
-			isNew: true,
-			id: preset?.id ?? "",
-			idTouched: Boolean(preset),
-			name: preset?.name ?? "",
-			baseUrl: preset?.baseUrl ?? "",
-			api: "openai-completions",
-			authRequired: false,
-			apiKey: "",
-			rows: [],
-		};
-	}
-
-	function startEdit(p: CustomProvider) {
-		void ensureCatalog();
-		formError = "";
-		discoverNote = "";
-		editing = null;
-		form = {
-			isNew: false,
-			id: p.id,
-			idTouched: true,
-			name: p.name,
-			baseUrl: p.baseUrl,
-			api: p.api,
-			authRequired: p.authRequired,
-			apiKey: "",
-			rows: p.models.map((m) => ({
-				id: m.id,
-				name: m.name ?? "",
-				contextWindow: String(m.contextWindow),
-				maxTokens: String(m.maxTokens),
-				reasoning: m.reasoning,
-				vision: m.vision,
-				icon: m.icon,
-				fromUpstream: m.fromUpstream,
-				thinkingLevels: m.thinkingLevels ?? [],
-				catalogId: m.catalogId,
-				thinkingSource: m.thinkingSource,
-				unavailable: m.unavailable,
-			})),
-		};
+		form = next;
 	}
 
 	function openModel(i: number, isFresh = false) {
@@ -271,11 +169,6 @@
 		fresh = false;
 		editing = null;
 	}
-	const modelMeta = (r: Row) => {
-		const ctx = Number(r.contextWindow);
-		return [Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "", r.reasoning ? t("추론") : "", r.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
-	};
-
 	function onName(v: string) {
 		if (!form) return;
 		form.name = v;
@@ -287,50 +180,18 @@
 		void save();
 	}
 
-	/** Validate the form and build the models payload. `strict` (explicit save) jumps to the model that needs fixing. */
-	function collect(f: Form, strict: boolean): { out: CustomModel[] } | { error: string } {
-		if (!f.name.trim()) return { error: t("이름을 입력하세요.") };
-		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return { error: t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다.") };
-		if (!f.baseUrl.trim()) return { error: t("Endpoint URL을 입력하세요.") };
-		const out: CustomModel[] = [];
-		for (const [i, r] of f.rows.entries()) {
-			if (!strict && !r.id.trim() && !r.name.trim()) continue; // a blank model still being typed
-			const ctx = Number(r.contextWindow);
-			const max = Number(r.maxTokens);
-			const bad = (problem: string) => {
-				if (strict) editing = i; // jump to the model that needs fixing
-				return { error: problem };
-			};
-			if (!r.id.trim()) return bad(t("{n}번째 모델의 ID를 입력하세요.", { n: i + 1 }));
-			if (!Number.isInteger(ctx) || ctx < 128) return bad(t("{id}: 컨텍스트 크기는 128 이상의 정수여야 합니다.", { id: r.id }));
-			if (!Number.isInteger(max) || max < 1) return bad(t("{id}: 최대 출력은 1 이상의 정수여야 합니다.", { id: r.id }));
-			if (max > ctx) return bad(t("{id}: 최대 출력은 컨텍스트 크기를 넘을 수 없습니다.", { id: r.id }));
-			const hit = matchedOf(r);
-			out.push({
-				id: r.id.trim(),
-				...(r.fromUpstream ? { fromUpstream: true } : {}),
-				...(hit ? { catalogId: hit.id } : catalogLoaded ? { catalogId: null } : {}),
-				...(r.name.trim() ? { name: r.name.trim() } : {}),
-				contextWindow: ctx,
-				maxTokens: max,
-				reasoning: r.reasoning,
-				vision: r.vision,
-				...(r.icon ? { icon: r.icon } : {}),
-				...(r.reasoning && r.thinkingLevels.length ? { thinkingLevels: allLevels.filter((l) => r.thinkingLevels.includes(l)) } : {}),
-			} as CustomModel);
-		}
-		if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };
-		return { out };
+	/** Validate the form and build the models payload. An explicit save (`strict`) jumps to the model that needs fixing. */
+	function collect(f: Form, strict: boolean) {
+		const res = collectModels(f, strict, (r) => matchedOf(r)?.id, catalogLoaded);
+		if ("error" in res && strict && res.at !== undefined) editing = res.at;
+		return res;
 	}
 
 	/* ---------- unsaved changes ---------- */
 
-	const snapshot = (f: Form) => JSON.stringify([f.name, f.id, f.baseUrl, f.api, f.authRequired, f.apiKey, f.rows]);
 	/** The form as the dialog opened it; closing with anything different asks first. */
 	let initial = "";
 	let confirmClose = $state(false);
-	/** The default answer of the confirm sheet gets focus (Modal keeps a child's own focus). */
-	const focusMe = (node: HTMLElement) => node.focus();
 	const dirty = () => !!form && snapshot(form) !== initial;
 
 	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
@@ -341,9 +202,8 @@
 		if (editing !== null) return closeModel(); // Enter inside a model page just goes back
 		formError = "";
 		confirmClose = false;
-		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
-		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
-		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
+		const invalid = headerError(f);
+		if (invalid) return void (formError = invalid);
 		// A new connection with no models yet tries to read them from its upstream; if that fails it is still saved, empty.
 		if (!f.rows.some((r) => r.id.trim())) {
 			busy = true;
@@ -379,9 +239,9 @@
 
 
 	// svelte-ignore state_referenced_locally
-	if (start.kind === "edit") startEdit(start.provider);
+	if (start.kind === "edit") begin(formFromProvider(start.provider));
 	// svelte-ignore state_referenced_locally
-	else startNew(start.preset);
+	else begin(newForm(start.preset));
 	// svelte-ignore state_referenced_locally
 	if (form) initial = snapshot(form);
 	/** Closing with unsaved edits asks first (save / discard / keep editing); `force` discards. */
@@ -420,91 +280,7 @@
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
 					{#if r}
-						{@const iconName = r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동")}
-						<section class="fsec">
-							<label>
-								<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
-								<!-- svelte-ignore a11y_autofocus -->
-								<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus={fresh && !r.fromUpstream} />
-								<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다. 바꾸려면 모델을 삭제하고 다시 불러오세요.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
-							</label>
-							{#if catalogLoaded}
-								{@const hit = matchedOf(r)}
-								<div class="matchrow">
-									<span class="mlabel">{t("OpenRouter 매칭 모델")}</span>
-									<button type="button" class="mtrigger" onclick={() => (matchFor = editing)}>
-										{#if hit}
-											<Icon name="check" />
-											<span class="mono mtext">{hit.id}</span>
-										{:else}
-											<Icon name="unlink" />
-											<span class="mtext dim">{t("수동 입력")}</span>
-										{/if}
-										<Icon name="chevron-down" />
-									</button>
-								</div>
-								{#if hit}
-									<p class="note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") || "-" })}</p>
-								{:else if r.catalogId === undefined && r.id.trim()}
-									<p class="note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
-								{/if}
-							{/if}
-							<div class="namerow">
-								<button type="button" class="iconpick" onclick={() => (iconFor = editing)} aria-label={`${t("아이콘")}: ${iconName}`} title={`${t("아이콘")}: ${iconName}`}>
-									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
-									<Icon name="chevron-down" />
-								</button>
-								<label>
-									<span>{t("표시 이름")} <em>({tc("optional", "선택")})</em></span>
-									<input class="field" bind:value={r.name} placeholder={t("ID와 같으면 비워 두세요")} autocomplete="off" />
-								</label>
-							</div>
-						</section>
-						<section class="fsec">
-							<div class="mono-label">{t("제한")}</div>
-							<div class="grid2">
-								<label>
-									<span>{t("컨텍스트 크기")}</span>
-									<input class="field mono" inputmode="numeric" bind:value={r.contextWindow} />
-								</label>
-								<label>
-									<span>{t("최대 출력")}</span>
-									<input class="field mono" inputmode="numeric" bind:value={r.maxTokens} />
-								</label>
-							</div>
-						</section>
-						<section class="fsec">
-							<div class="mono-label">{t("기능")}</div>
-							<div class="caps">
-								<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>
-								<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 입력")}</button>
-							</div>
-						</section>
-						{#if r.reasoning && !matchedOf(r)}
-							<section class="fsec">
-								<div class="mono-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
-								<div class="caps" role="group" aria-label={t("추론 강도")}>
-									{#each allLevels as l (l)}
-										<button
-											type="button"
-											class="cap"
-											aria-pressed={r.thinkingLevels.includes(l)}
-											onclick={() => (r.thinkingLevels = r.thinkingLevels.includes(l) ? r.thinkingLevels.filter((x) => x !== l) : [...r.thinkingLevels, l])}
-										>{l}</button>
-									{/each}
-								</div>
-								<p class="note">{r.thinkingLevels.length ? t("고른 강도만 이 모델에서 선택할 수 있습니다.") : t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}</p>
-								{#if r.thinkingSource}
-									{@const s = r.thinkingSource}
-									{#if s.catalogId}
-										<p class="note mono src ok"><Icon name="check" /> {t("OpenRouter {id}와 일치: {levels}", { id: s.catalogId, levels: s.levels.join(", ") })}{s.kind === "custom" ? ` (${t("직접 지정")})` : ""}</p>
-									{:else}
-										<p class="note mono src off"><Icon name="unlink" /> {t("OpenRouter 모델과 연결되지 않음: {levels}", { levels: s.levels.join(", ") })}</p>
-									{/if}
-								{/if}
-							</section>
-						{/if}
-						<button type="button" class="btn ghost danger-text" onclick={removeModel}><Icon name="trash" /> {t("이 모델 삭제")}</button>
+						<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
 					{/if}
 				{:else}
 					<section class="fsec">
@@ -595,18 +371,7 @@
 			</footer>
 		</form>
 		{#if confirmClose}
-			<Modal onclose={() => (confirmClose = false)} role="alertdialog" labelledby="unsaved-title" describedby="unsaved-desc" width="s" layer={5} portal>
-				<div class="uc">
-					<span class="ucmark"><Icon name="alert" /></span>
-					<h3 id="unsaved-title">{t("저장하지 않고 닫을까요?")}</h3>
-					<p id="unsaved-desc">{t("저장되지 않은 변경이 있습니다.")}</p>
-					<div class="ucbtns">
-						<button type="button" class="btn primary" onclick={() => { confirmClose = false; void save(); }} use:focusMe>{t("저장")}</button>
-						<button type="button" class="btn" onclick={() => (confirmClose = false)}>{t("계속 편집")}</button>
-						<button type="button" class="btn ghost danger-text" onclick={() => close(true)}>{t("저장하지 않고 닫기")}</button>
-					</div>
-				</div>
-			</Modal>
+			<DiscardConfirm onsave={() => { confirmClose = false; void save(); }} oncancel={() => (confirmClose = false)} ondiscard={() => close(true)} />
 		{/if}
 		{#if matchFor !== null && form.rows[matchFor]}
 			{@const mr = form.rows[matchFor]!}
@@ -614,7 +379,7 @@
 				{catalog}
 				value={matchedOf(mr)?.id ?? null}
 				suggested={matchOf(mr.id)}
-				onpick={(c) => { pickMatch(mr, c); matchFor = null; }}
+				onpick={(c) => { applyMatch(mr, c); matchFor = null; }}
 				onclose={() => (matchFor = null)}
 			/>
 		{/if}
@@ -639,54 +404,9 @@
 		fill: none;
 		stroke-width: 2;
 	}
-	.idlabel {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
 	.lockic {
 		flex: none;
 		display: inline-flex;
-	}
-	.mhead {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-	.mhead :global(svg) {
-		width: 14px;
-		height: 14px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2;
-	}
-	.idlabel {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.lockic {
-		flex: none;
-		display: inline-flex;
-	}
-	.src {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-	.src :global(svg) {
-		width: 14px;
-		height: 14px;
-		flex: none;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.src.off {
-		color: var(--text-faint);
 	}
 	.grid2 {
 		display: grid;
@@ -698,11 +418,6 @@
 		flex-direction: column;
 		gap: 5px;
 		min-width: 0;
-	}
-	label em {
-		font-style: normal;
-		font-weight: 400;
-		color: var(--text-faint);
 	}
 	/* ---------- edit dialog ---------- */
 	.fform {
@@ -863,129 +578,6 @@
 	.back {
 		margin-left: -8px;
 	}
-	.matchrow {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-	}
-	.mlabel {
-		font-size: var(--fs-xs);
-		font-weight: 600;
-		color: var(--text-dim);
-	}
-	.mtrigger {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		height: 42px;
-		padding: 0 12px;
-		background: var(--bg);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		color: var(--text);
-		font-size: var(--fs-md);
-		text-align: left;
-		transition: border-color var(--motion-fast) var(--ease-std);
-	}
-	.mtrigger:hover {
-		border-color: var(--accent);
-	}
-	.namerow {
-		display: flex;
-		align-items: flex-end;
-		gap: 8px;
-	}
-	.namerow label {
-		flex: 1;
-	}
-	.iconpick {
-		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		height: 42px;
-		padding: 0 10px;
-		background: var(--bg);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		color: var(--text);
-		transition: border-color var(--motion-fast) var(--ease-std);
-	}
-	.iconpick:hover {
-		border-color: var(--accent);
-	}
-	.iconpick :global(svg:not(.model):not(.logo)) {
-		width: 13px;
-		height: 13px;
-		stroke: var(--text-dim);
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.mtext {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-	}
-	.mtext.dim {
-		color: var(--text-dim);
-	}
-	.mtrigger :global(svg:not(.model):not(.logo)) {
-		width: 15px;
-		height: 15px;
-		flex: none;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-		color: var(--text-dim);
-	}
-	.danger-text {
-		align-self: flex-start;
-		color: var(--danger);
-	}
-	.caps {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-	.cap {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 32px;
-		padding: 0 12px;
-		border-radius: var(--radius-pill);
-		border: 1px solid var(--border-strong);
-		background: transparent;
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
-	}
-	.cap :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.cap:hover {
-		background: var(--bg-hover);
-	}
-	.cap[aria-pressed="true"] {
-		background: var(--accent-soft);
-		border-color: var(--text-dim);
-		color: var(--text);
-	}
 	.fform > footer {
 		display: flex;
 		flex-direction: column;
@@ -1016,58 +608,6 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.uc {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 6px;
-		padding: 24px 20px calc(16px + var(--sab));
-		text-align: center;
-	}
-	.ucmark {
-		display: grid;
-		place-items: center;
-		width: 44px;
-		height: 44px;
-		margin-bottom: 6px;
-		border-radius: 50%;
-		background: var(--warn-soft);
-		color: var(--warn);
-	}
-	.ucmark :global(svg) {
-		width: 22px;
-		height: 22px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.uc h3 {
-		margin: 0;
-		font-size: var(--fs-lg);
-	}
-	.uc p {
-		margin: 0;
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-	}
-	.ucbtns {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		align-self: stretch;
-		margin-top: 16px;
-	}
-	.ucbtns .btn {
-		width: 100%;
-	}
-	.btn.danger-text {
-		color: var(--danger);
-	}
-	.btn.danger-text:hover:not(:disabled) {
-		background: var(--danger-soft);
-	}
 	.fbtns {
 		align-items: center;
 		display: flex;
@@ -1085,22 +625,6 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.field[readonly] {
-		color: var(--text-dim);
-		background: var(--bg-elev);
-		cursor: default;
-	}
-	.field[readonly] {
-		color: var(--text-dim);
-		background: var(--bg-elev);
-		cursor: default;
-	}
-	.src.ok :global(svg) {
-		color: var(--text);
-	}
-	.src.bad {
-		color: var(--danger);
-	}
 	label > span {
 		font-size: var(--fs-xs);
 		font-weight: 600;
@@ -1110,9 +634,6 @@
 		/* name/ID and model ID/display name stack; the two numbers stay side by side */
 		.grid2 {
 			grid-template-columns: 1fr;
-		}
-		.fsec .grid2:has(input[inputmode="numeric"]) {
-			grid-template-columns: 1fr 1fr;
 		}
 	}
 </style>
