@@ -62,8 +62,17 @@
 	}
 	let touchY = 0;
 	const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
-	const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? 0; };
-	const onTouchMove = (e: TouchEvent) => { if ((e.touches[0]?.clientY ?? 0) > touchY) release(); };
+	let touching = false;
+	const onTouchStart = (e: TouchEvent) => { touching = true; touchY = e.touches[0]?.clientY ?? 0; };
+	const onTouchMove = (e: TouchEvent) => {
+		const y = e.touches[0]?.clientY ?? 0;
+		if (y > touchY + 4) release();
+		touchY = y;
+	};
+	const onTouchEnd = () => {
+		touching = false;
+		if (stuck && gap() > 1) pin();
+	};
 	const onPointerDown = (e: PointerEvent) => { if (e.target === scroller) dragging = true; };
 	const onPointerUp = () => { dragging = false; };
 	// Dragging the scrollbar upward also unpins.
@@ -117,7 +126,7 @@
 	$effect(() => {
 		if (!content || !scroller) return;
 		const ro = new ResizeObserver(() => {
-			if (stuck) pin();
+			if (stuck && !touching) pin();
 		});
 		ro.observe(content);
 		ro.observe(scroller);
@@ -170,6 +179,8 @@
 	onwheel={onWheel}
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
+	ontouchend={onTouchEnd}
+	ontouchcancel={onTouchEnd}
 	onpointerdown={onPointerDown}
 	role="presentation"
 >
