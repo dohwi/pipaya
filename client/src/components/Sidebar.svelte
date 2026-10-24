@@ -365,7 +365,7 @@
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
-			<section class="srv" class:band={nodes.length > 1} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
+			<section class="srv band" class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
 				<div class="srvhead">
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
@@ -585,6 +585,7 @@
 	}
 	.list {
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
+		--band-head: color-mix(in srgb, var(--text) 8%, var(--bg-side));
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
@@ -598,7 +599,7 @@
 	.srv:has(> .fold) {
 		padding-bottom: 8px;
 	}
-	/* the band only separates servers from each other: with a single server it would just tint the whole list */
+	/* every server sits in a band, even when it is the only one */
 	.srv.band {
 		background: var(--band);
 	}
@@ -615,11 +616,12 @@
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin-top: 4px;
-		border-radius: var(--radius-sm);
+		margin: 0 -8px 4px; /* full-bleed header strip: a darker tone marks everything below as belonging to this server */
+		padding: 0 8px;
+		background: var(--band-head);
 	}
 	.srvhead:hover {
-		background: var(--bg-hover);
+		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
 	}
 	.srvtoggle {
 		flex: 1;
