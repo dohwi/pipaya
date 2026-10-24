@@ -634,6 +634,18 @@
 	.srvhead:hover {
 		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
 	}
+	/* pressing the name or the "+" darkens the whole strip one more step; the global row tint (a lighter square inside the strip) is switched off here */
+	.srvhead:has(.srvtoggle:active),
+	.srvhead:has(.dirnew:active) {
+		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+	}
+	.srvhead .srvtoggle:active:not(:disabled) {
+		background-color: transparent;
+	}
+	.srvhead .dirnew:hover,
+	.srvhead .dirnew.on {
+		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+	}
 	.srvtoggle {
 		flex: 1;
 		min-width: 0;
