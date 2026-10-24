@@ -64,6 +64,11 @@
 	.back:hover { color: var(--text); }
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */
 	@media (min-width: 761px) { .back { display: none; } }
+	@media (max-width: 760px) {
+		.page { gap: 14px; }
+		.back { padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); }
+		.line { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--bg-elev); }
+	}
 	.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev.flip { transform: rotate(180deg); }

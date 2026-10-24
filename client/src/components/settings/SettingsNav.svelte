@@ -286,6 +286,9 @@
 			scrollbar-width: none;
 			overscroll-behavior-x: contain;
 			scroll-padding-inline: 12px;
+			gap: 4px;
+			/* fade the edges so it reads as a scrollable row */
+			mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
 		}
 		.nav::-webkit-scrollbar {
 			display: none;
@@ -297,7 +300,8 @@
 			flex: 1 0 auto;
 			justify-content: center;
 			gap: 8px;
-			padding: 9px 12px;
+			padding: 8px 14px;
+			border-radius: 999px;
 			white-space: nowrap;
 		}
 		.nav button.addsrv {

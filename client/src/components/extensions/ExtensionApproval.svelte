@@ -2,6 +2,7 @@
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
   import { closeAnimated } from "../../lib/motion";
+  import { backLayer } from "../../lib/dialog";
   let dialog: HTMLDialogElement;
   /** What the dialog shows while it plays its exit: the request is already cleared by then. */
   let shown = $state<NonNullable<typeof app.extensionApproval> | null>(null);
@@ -17,6 +18,11 @@
     } else if (dialog?.open) {
       cancelClose = closeAnimated(dialog);
     }
+  });
+  // Back button / swipe settles the request like Esc does.
+  $effect(() => {
+    if (!app.extensionApproval) return;
+    return backLayer({ onclose: () => app.resolveExtension(false) });
   });
 </script>
 <dialog bind:this={dialog} oncancel={(event) => { event.preventDefault(); app.resolveExtension(false); }} onclose={() => { shown = null; app.extensionApproval && app.resolveExtension(false); }} aria-labelledby="extension-approval-title">

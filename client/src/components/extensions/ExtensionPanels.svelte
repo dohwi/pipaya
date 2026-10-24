@@ -3,6 +3,7 @@
 	import FilterChip from "../FilterChip.svelte";
 	import { t } from "../../lib/i18n";
 	import { closeAnimated } from "../../lib/motion";
+	import { backLayer } from "../../lib/dialog";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { rovingKeys } from "../../lib/roving";
 	import { onDestroy } from "svelte";
@@ -125,6 +126,12 @@
 			cancelClose = closeAnimated(dialog);
 			launcher?.focus({ preventScroll: true });
 		}
+	});
+
+	// Back button / swipe closes the open panel like Esc does.
+	$effect(() => {
+		if (!extensions.panelOpen || !selected) return;
+		return backLayer({ onclose: () => extensions.closePanel() });
 	});
 
 	onDestroy(() => {

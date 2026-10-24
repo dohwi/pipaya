@@ -17,6 +17,8 @@
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
 	import { t } from "../lib/i18n";
+	import { backLayer } from "../lib/dialog";
+	import { viewport } from "../lib/viewport.svelte";
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
@@ -78,6 +80,12 @@
 		go(h.target.tab);
 		query = "";
 	}
+
+	/** Phone: an open extension page is one step inside the window, so back returns to the list before it closes the window. */
+	$effect(() => {
+		if (!viewport.narrow || !extId || words.length) return;
+		return backLayer({ onclose: () => (extId = null) });
+	});
 
 	const close = () => (app.settingsOpen = false);
 </script>
@@ -253,6 +261,9 @@
 		}
 		.phead {
 			display: none;
+		}
+		.pane {
+			gap: 18px;
 		}
 	}
 </style>

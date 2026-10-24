@@ -2,6 +2,7 @@
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
   import { closeAnimated } from "../../lib/motion";
+  import { backLayer } from "../../lib/dialog";
   let dialog: HTMLDialogElement;
   type Pending = NonNullable<typeof app.extensionDialog>;
   /** What the dialog shows while it plays its exit: the request is already cleared by then. */
@@ -37,6 +38,11 @@
   }
   const autofocus = (node: HTMLElement) => { queueMicrotask(() => node.focus()); };
   const focusFirst = (node: HTMLElement, first: boolean) => { if (first) autofocus(node); };
+  // Back button / swipe settles the request like Esc does.
+  $effect(() => {
+    if (!app.extensionDialog) return;
+    return backLayer({ onclose: () => cancel() });
+  });
 </script>
 
 <dialog bind:this={dialog} oncancel={(event) => { event.preventDefault(); cancel(); }} onclose={() => { shown = null; if (app.extensionDialog) cancel(); }} aria-labelledby="extension-dialog-title">
