@@ -156,6 +156,15 @@
 							</Button>
 						{/if}
 					</div>
+					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
+						{@const c = companionOf(entry)}
+						<Notice tone="warn" size="sm" role="status">
+							<div class="ask">
+								<p>{t("클라이언트 확장 ‘{name}’도 설치해야 동작합니다.", { name: c?.name ?? entry.companion })}</p>
+								{#if c}<div class="askbtns"><Button variant="primary" size="sm" disabled={!!working} onclick={async () => { error = ""; try { onpick(await fetchPackage(c), c); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); } }}>{t("클라이언트 설치")}</Button></div>{/if}
+							</div>
+						</Notice>
+					{/if}
 					{#if asking === entry.id}
 						{@const c = companionOf(entry)}
 						<Notice tone="warn" size="sm">

@@ -1354,6 +1354,8 @@ export const en: Record<string, string> = {
 	"서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.": "Server extensions run with the server's full privileges. Read the code before installing.",
 	"클라이언트 확장도 설치": "Install the client extension too",
 	"클라이언트 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.": "Install the client extension “{name}” too? It is required to use this.",
+	"클라이언트 확장 ‘{name}’도 설치해야 동작합니다.": "The client extension “{name}” must also be installed for this to work.",
+	"클라이언트 설치": "Install client",
 	"함께 설치": "Install both",
 	"서버만 설치": "Server only",
 	"이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.": "This extension only works when the client extension “{id}” is installed too.",
