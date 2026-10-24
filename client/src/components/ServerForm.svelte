@@ -10,6 +10,7 @@
 	import ModalHeader from "./ModalHeader.svelte";
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import ModelConnections from "./ModelConnections.svelte";
+	import ToolSettings from "./ToolSettings.svelte";
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
@@ -23,7 +24,7 @@
 	 * `"new"` to add, or the id of the server being edited. `embedded` draws it as a page inside the settings window
 	 * (with a back button) instead of a modal of its own; `onclose` is then how it hands control back to the list.
 	 */
-	type Section = "info" | "workdir" | "models" | "sessions" | "devices";
+	type Section = "info" | "agent" | "sessions" | "devices";
 	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
 	let { target, embedded = false, onclose, section }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section } = $props();
 
@@ -31,10 +32,10 @@
 	// svelte-ignore state_referenced_locally
 	const editing = target === "new" ? null : (app.servers.find((s) => s.id === target) ?? null);
 
-	/** Editing a server has three panes: its connection details, its default folder, and the model connections on it. */
+	/** Editing a server has four panes: its connection details, the agent (model connections and tools), its conversations (with the default folder), and its devices. */
 	// svelte-ignore state_referenced_locally
 	let tab = $state<Section>(section ?? "info");
-	const tabOrder = ["info", "workdir", "models", "sessions", "devices"] as const;
+	const tabOrder = ["info", "agent", "sessions", "devices"] as const;
 	let dir = $state(1);
 	function go(next: (typeof tabOrder)[number]) {
 		if (next === tab) return;
@@ -72,7 +73,7 @@
 	const shownWd = $derived(isOpen ? (app.workdirInfo ?? wd) : wd);
 
 	$effect(() => {
-		if (!editing || tab !== "workdir" || isOpen) return;
+		if (!editing || tab !== "sessions" || isOpen) return;
 		const s = editing;
 		wdError = "";
 		new Api({ baseUrl: s.baseUrl, token: s.token })
@@ -140,8 +141,7 @@
 			use:rovingKeys={{ item: '[role="tab"]' }}
 		>
 			<button role="tab" aria-selected={tab === "info"} tabindex={tab === "info" ? 0 : -1} class:on={tab === "info"} onclick={() => go("info")}>{t("정보")}</button>
-			<button role="tab" aria-selected={tab === "workdir"} tabindex={tab === "workdir" ? 0 : -1} class:on={tab === "workdir"} onclick={() => go("workdir")}>{t("기본 폴더")}</button>
-			<button role="tab" aria-selected={tab === "models"} tabindex={tab === "models" ? 0 : -1} class:on={tab === "models"} onclick={() => go("models")}>{t("모델 연결")}</button>
+			<button role="tab" aria-selected={tab === "agent"} tabindex={tab === "agent" ? 0 : -1} class:on={tab === "agent"} onclick={() => go("agent")}>{t("에이전트")}</button>
 			<button role="tab" aria-selected={tab === "sessions"} tabindex={tab === "sessions" ? 0 : -1} class:on={tab === "sessions"} onclick={() => go("sessions")}>{t("대화")}</button>
 			<button role="tab" aria-selected={tab === "devices"} tabindex={tab === "devices" ? 0 : -1} class:on={tab === "devices"} onclick={() => go("devices")}>{t("기기")}</button>
 		</div>
@@ -150,26 +150,26 @@
 	{#if editing && tab === "devices"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<DevicesPanel serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "sessions"}
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<SessionsPanel serverId={editing.id} />{/key}</div>
-	{:else if editing && tab === "models"}
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}><ModelConnections serverId={editing.id} /></div>
-	{:else if editing && tab === "workdir"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
-			<div class="label">{t("기본 작업 디렉터리")}</div>
-			{#if wdError && !shownWd}
-				<Notice tone="danger">{wdError}</Notice>
-			{:else}
-				<div class="wd">
-					<Icon name="folder" />
-					<span class="mono wdpath" title={shownWd?.effective}>{shownWd?.effective ?? "…"}</span>
-					<Button size="sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</Button>
-				</div>
-				<p class="hint">
-					{t("이 서버에서 새 대화가 시작되는 위치입니다.")}{shownWd?.saved ? "" : ` ${t("지금은 서버를 처음 켤 때의 설정을 쓰고 있습니다.")}`}
-					{t("변경하면 바로 저장됩니다.")}
-				</p>
-			{/if}
+				<div class="label">{t("기본 작업 디렉터리")}</div>
+		{#if wdError && !shownWd}
+			<Notice tone="danger">{wdError}</Notice>
+		{:else}
+			<div class="wd">
+				<Icon name="folder" />
+				<span class="mono wdpath" title={shownWd?.effective}>{shownWd?.effective ?? "…"}</span>
+				<Button size="sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</Button>
+			</div>
+			<p class="hint">
+				{t("이 서버에서 새 대화가 시작되는 위치입니다.")}{shownWd?.saved ? "" : ` ${t("지금은 서버를 처음 켤 때의 설정을 쓰고 있습니다.")}`}
+				{t("변경하면 바로 저장됩니다.")}
+			</p>
+		{/if}
+	
+			{#key editing.id}<SessionsPanel serverId={editing.id} />{/key}
 		</div>
+	{:else if editing && tab === "agent"}
+		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<ModelConnections serverId={editing.id} /><ToolSettings serverId={editing.id} />{/key}</div>
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">

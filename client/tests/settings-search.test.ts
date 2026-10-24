@@ -32,8 +32,8 @@ describe("settings search", () => {
 		expect(hit).toMatchObject({ combo: "Ctrl+N", target: { tab: "keys", keyFilter: "새 대화" } });
 	});
 	test("server sections are left out when there is no server", () => {
-		expect(find("모델 연결", false).some((h) => h.key === "tab:models")).toBe(false);
-		expect(find("모델 연결", true).some((h) => h.key === "tab:models")).toBe(true);
+		expect(find("에이전트", false).some((h) => h.key === "tab:agent")).toBe(false);
+		expect(find("에이전트", true).some((h) => h.key === "tab:agent")).toBe(true);
 	});
 });
 

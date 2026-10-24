@@ -13,7 +13,6 @@
 	import ServerForm from "./ServerForm.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import Pin from "./Pin.svelte";
-	import ToolSettings from "./ToolSettings.svelte";
 	import { app } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
@@ -125,8 +124,6 @@
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}
 				<GeneralPane />
-			{:else if tab === "tools" && server}
-				<ToolSettings serverId={server.id} />
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
 			{/if}

@@ -425,6 +425,8 @@ export const en: Record<string, string> = {
 	"이 모델은 추론 모드를 지원하지 않습니다.": "This model doesn't support reasoning.",
 	"연결 관리": "Manage connections",
 	"모델 연결": "Model connections",
+	"모델 연결 · 에이전트 도구": "Model connections · agent tools",
+	"기본 폴더 · 보관": "Default folder · retention",
 
 	/* ---- no server, notifications ---- */
 	"서버 추가": "Add server",
