@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { LocalizedError, getLang, msg, t } from "../lib/i18n";
+	import { LocalizedError, getLang, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
-	import Modal from "./Modal.svelte";
 	import Accordion from "./Accordion.svelte";
 	import Switch from "./Switch.svelte";
 	import { download } from "../lib/download";
@@ -11,8 +10,10 @@
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 		import { CONFIG_REQUIRED, extensions, type ExtensionScope, type InstalledExtension, type UnreadableExtension } from "../lib/extensions/host.svelte";
-	import { parsePackage, parseSettingFields, MAX_PACKAGE_BYTES, type ExtensionPackage, type Permission, type SettingField } from "../lib/extensions/schema";
+	import { parsePackage, parseSettingFields, MAX_PACKAGE_BYTES, type ExtensionPackage, type SettingField } from "../lib/extensions/schema";
 	import Marketplace from "./extensions/Marketplace.svelte";
+	import PermissionList from "./extensions/PermissionList.svelte";
+	import ImportDialogs, { type ImportResult } from "./extensions/ImportDialogs.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
 	let { scope: view, selected = $bindable(null) }: { scope: ExtensionScope; selected?: string | null } = $props();
@@ -78,44 +79,12 @@
 	let removing = $state<string | null>(null);
 	let trigger: HTMLElement | null = null;
 	/** What came of the last import, shown in a dialog of its own: the inline notice was easy to miss. */
-	type ImportResult = { tone: "ok" | "warn" | "danger"; title: string; detail: string; pkg?: ExtensionPackage; running?: boolean; replaced?: boolean };
 	let result = $state<ImportResult | null>(null);
 	const replacement = $derived.by(() => {
 		const id = preview?.manifest.id;
 		return id ? extensions.installed.find((entry) => entry.package.manifest.id === id) : undefined;
 	});
 	const willResume = $derived(preview ? extensions.canResume(preview) : false);
-		const stateTone = { active: "ok", starting: "warn", disabled: "", error: "danger" } as const;
-	const featuresOf = (pkg: ExtensionPackage) => [pkg.theme ? msg("테마") : "", pkg.commands?.length ? msg("템플릿 명령") : "", pkg.locales?.length ? msg("언어팩") : "", pkg.code?.trim() ? msg("실행 코드") : ""].filter(Boolean);
-	const permissionLabels: Record<Permission, string> = {
-		commands: msg("명령 등록: 슬래시 명령을 추가합니다."),
-		composer: msg("입력창 접근: 입력 내용을 채우거나 입력창 버튼을 추가합니다."),
-		status: msg("상태 표시: 화면에 상태 항목을 표시합니다."),
-		context: msg("대화 정보: 세션 ID, 모델, 제공자와 실행·연결 상태를 읽습니다."),
-		storage: msg("로컬 저장소: 확장 전용 데이터를 이 브라우저에 저장합니다."),
-		notifications: msg("알림: 화면에 알림을 표시합니다."),
-		locales: msg("언어팩: 이 확장이 담은 번역을 설정의 언어 목록에 추가하고, 서버에 올려 다른 기기에서도 쓸 수 있게 합니다."),
-		"system-notifications": msg("시스템 알림: OS·모바일 푸시 알림을 보내고 앱이 닫혀 있어도 작업·승인 이벤트 알림을 등록합니다. 알림 문구가 OS와 푸시 제공자에 전달됩니다."),
-		events: msg("이벤트 구독: 대화와 작업 상태 변경 이벤트를 받습니다."),
-		ui: msg("확장 화면: 패널·폼·입력창 위젯을 표시하고, 사용자가 입력한 해당 화면의 값을 받습니다."),
-		navbar: msg("내비게이션: 상단 영역에 읽기 전용 확장 항목(게이지·아이콘·텍스트)을 표시합니다."),
-		configuration: msg("설정 내보내기·가져오기: 앱 승인 후 서버 주소·확장 패키지·비민감 설정에 접근합니다. 가져온 코드는 자동 실행하지 않습니다."),
-		"configuration-background": msg("자동 설정 접근: 최초 승인 후 비민감 설정을 반복해서 읽고 일반 설정을 자동 적용합니다. 확장 코드 변경은 추가 승인이 필요합니다."),
-		"http-write": msg("HTTP JSON 읽기·쓰기: 사용자 설정의 httpOrigin으로 요청하고 선택적인 httpToken을 Bearer 인증으로 사용합니다."),
-		server: msg("서버 확장 연결: 서버에서 실행되는 확장의 메서드를 호출하고, 그 확장이 저장한 대화별 기록과 보낸 이벤트를 읽습니다."),
-		shortcuts: msg("단축키 등록: Ctrl/⌘ 또는 Alt가 들어간 키 조합을 추가합니다. 앱의 기본 단축키는 바꿀 수 없습니다."),
-		dialogs: msg("대화상자: 확인·선택·입력 창을 띄워 사용자에게 묻습니다."),
-		session: msg("대화 제어: 열려 있는 대화에 메시지를 보내거나 실행을 중지합니다. 보낸 메시지는 에이전트가 실행합니다."),
-		panes: msg("패널 제어: 열려 있는 그룹의 대화·터미널을 읽고, 메시지를 보내고, 모델·추론 강도를 바꾸고, 만들고 닫고, 배치를 바꿉니다. 보낸 메시지는 에이전트가 실행하고 터미널을 닫으면 실행 중인 작업이 끝납니다."),
-		tools: msg("도구 결과 표시: 도구 호출 결과를 확장이 만든 화면으로 대신 보여줍니다. 결과 내용을 읽습니다."),
-		messages: msg("기록 표시: 서버 확장이 대화에 남긴 기록을 대화 중간에 카드로 보여줍니다. 기록 내용을 읽습니다."),
-		slots: msg("화면 영역: 헤더 아래와 입력창 위에 읽기 전용 항목을 표시합니다."),
-		"composer-filter": msg("보내기 전 가공: 보내려는 메시지를 읽고, 바꾸거나 전송을 막을 수 있습니다. 입력한 내용이 확장 코드에 전달됩니다."),
-		"session-labels": msg("대화 라벨: 사이드바와 대화 헤더의 제목 앞에 짧은 라벨을 붙입니다. 대화 목록을 읽지는 않습니다."),
-		"composer-mentions": msg("@ 자동완성: 입력창의 @ 완성 목록과 강조를 확장이 정합니다. 입력 중인 내용은 읽지 않습니다."),
-		http: msg("HTTP 읽기: extension이 설정한 서버 주소로 GET 요청을 보내 JSON을 읽습니다 (자격 증명 미전송)."),
-	};
-
 	/** With `failTitle`, a failure is reported in the result dialog instead of the inline error. */
 	async function run(key: string, task: () => unknown | Promise<unknown>, failTitle?: string) {
 		if (busy[key]) return;
@@ -200,18 +169,6 @@
 		if (!id) return;
 		selected = id;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
-	}
-
-	/** The default action takes focus once it can: right after a file is read it is still disabled for a moment. */
-	function focusOk(node: HTMLElement) {
-		let tries = 0;
-		const go = () => {
-			const ok = node.querySelector<HTMLButtonElement>("[data-ok]");
-			if (!ok || !node.isConnected) return;
-			if (ok.disabled && tries++ < 20) return void setTimeout(go, 25);
-			ok.focus();
-		};
-		go();
 	}
 
 	function enable(id: string) {
@@ -317,20 +274,6 @@
 	}
 </script>
 
-{#snippet permissions(pkg: ExtensionPackage)}
-	{#if pkg.manifest.permissions.length}
-		<ul class="permissions">
-			{#each pkg.manifest.permissions as permission (permission)}
-				<li><Icon name="check" /><span>{t(permissionLabels[permission])}</span></li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="hint">{t("요청한 추가 권한이 없습니다.")}</p>
-	{/if}
-	<p class="hint">{t("확장은 자신의 설정을 읽을 수 있습니다. 테마는 화면 색상과 크기를 바꾸며, 템플릿 명령은 입력만 채우고 전송하지 않습니다.")}</p>
-	<Notice tone="warn" size="sm">{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</Notice>
-{/snippet}
-
 {#snippet installedRow(entry: InstalledExtension)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
@@ -409,7 +352,7 @@
 
 		<section class="block">
 			<h3 class="label">{t("권한과 실행 안내")}</h3>
-			{@render permissions(entry.package)}
+			<PermissionList pkg={entry.package} />
 		</section>
 
 		<section class="block">
@@ -590,85 +533,19 @@
 	<Marketplace scope={view} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
-{#if preview && !result}
-	{@const p = preview}
-	<Modal onclose={cancelPreview} labelledby="import-preview-title" width="l" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
-		<div class="rmodal" use:focusOk>
-			<div class="rhead">
-				<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
-				<h2 id="import-preview-title">{replacement ? t("확장 교체") : t("확장 가져오기")}</h2>
-			</div>
-			<div class="rbody">
-				<div class="rpkg">
-					<strong>{p.manifest.name}</strong>
-					<span class="meta">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
-					{#if p.manifest.description}<span class="rdesc">{p.manifest.description}</span>{/if}
-					<div class="tags" aria-label={t("포함 기능")}>
-						{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-					</div>
-				</div>
-				{#if !replacement}
-					<p class="hint">{target === "server" ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</p>
-				{/if}
-				<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
-				{@render permissions(p)}
-				{#if replacement}
-					<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
-				{/if}
-			</div>
-			<div class="rfoot">
-				<button type="button" class="btn sm" disabled={busy.$import} onclick={cancelPreview}>{t("취소")}</button>
-				<button type="button" class="btn primary sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={importPackage}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</button>
-			</div>
-		</div>
-	</Modal>
-{/if}
-
-{#if result}
-	{@const r = result}
-	<Modal onclose={closeResult} role={r.tone === "danger" ? "alertdialog" : "dialog"} labelledby="import-result-title" describedby="import-result-detail" width="s" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
-		<div class="rmodal {r.tone}" use:focusOk>
-			<div class="rhead">
-				<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
-				<h2 id="import-result-title">{r.title}</h2>
-			</div>
-			<div class="rbody">
-				{#if r.pkg}
-					<div class="rpkg">
-						<strong>{r.pkg.manifest.name}</strong>
-						<span class="meta">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
-						<div class="tags">
-							{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-							<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("비활성")}</span>
-						</div>
-					</div>
-				{/if}
-				<p id="import-result-detail" class="rdetail">{r.detail}</p>
-			</div>
-			<div class="rfoot">
-				{#if r.pkg}
-					<button type="button" class="btn primary sm" data-ok onclick={showInstalled}>{t("설치된 확장 보기")}</button>
-					<button type="button" class="btn sm" onclick={closeResult}>{t("닫기")}</button>
-				{:else}
-					<button type="button" class="btn primary sm" data-ok onclick={closeResult}>{t("확인")}</button>
-				{/if}
-			</div>
-		</div>
-	</Modal>
-{/if}
+<ImportDialogs {preview} {result} {replacement} {willResume} {filename} {target} {serverName} busy={busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />
 
 <style>
 	.extensions, section, .card { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.extensions { gap: 22px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
 	.feedback { display: flex; flex-direction: column; gap: 8px; }
 	.feedback:empty { display: none; }
-	h3, h4, h5, p { margin: 0; }
+	h3, h4, p { margin: 0; }
 	h3.label { font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.04em; color: var(--text-faint); }
 	h4 { font-size: var(--fs-base); font-weight: 600; overflow-wrap: anywhere; }
-	h5 { font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
 
 	.card { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); gap: 10px; }
-	.heading, .row, .tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.heading, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.heading { justify-content: space-between; flex-wrap: nowrap; }
 	.heading h4 { min-width: 0; }
 	.heading .chip { flex: none; }
@@ -677,21 +554,16 @@
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; }
 	.description { color: var(--text-dim); }
 	.chip { background: var(--bg-active); }
-	.chip.ok { background: var(--ok-soft); }
 	.chip.warn { background: var(--warn-soft); }
 	.chip.danger { background: var(--danger-soft); }
-	.chip.accent { background: var(--accent-soft); color: var(--text); }
 
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
-	.switch-title :global(svg), .empty :global(svg) { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+	.switch-title :global(svg) { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 	.switch-title :global(svg) { color: var(--text-dim); }
 
 
-	.permissions { list-style: none; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--radius-sm); background: var(--bg-code); font-size: var(--fs-xs); color: var(--text-dim); }
-	.permissions li { display: flex; align-items: flex-start; gap: 8px; }
-	.permissions li :global(svg) { flex: none; width: 14px; height: 14px; margin-top: 3px; stroke: var(--ok); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.btn.end { margin-left: auto; }
@@ -701,8 +573,6 @@
 	textarea { display: block; width: 100%; box-sizing: border-box; min-height: 110px; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
 	textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-	.empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 24px 16px; border: 1px dashed var(--border-strong); border-radius: var(--radius); color: var(--text-dim); text-align: center; }
-	.empty :global(svg) { width: 22px; height: 22px; margin-bottom: 4px; color: var(--text-faint); }
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }
@@ -735,24 +605,6 @@
 	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
 	.adv { display: flex; flex-direction: column; gap: 10px; }
 	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-
-	/* Import result dialog: above the settings window (z 60/61) it is opened from */
-	.rmodal { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 18px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
-	.rmark.info { background: var(--accent-soft, var(--bg-hover)); color: var(--accent, var(--text)); }
-	.rdesc { color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-	.rsub { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
-	.rhead { display: flex; align-items: center; gap: 12px; }
-	.rhead h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
-	.rmark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); }
-	.rmodal.warn .rmark { background: var(--warn-soft); color: var(--warn); }
-	.rmodal.danger .rmark { background: var(--danger-soft); color: var(--danger); }
-	.rmark :global(svg) { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-	.rbody { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-	.rpkg { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-code); min-width: 0; }
-	.rpkg strong { font-weight: 600; overflow-wrap: anywhere; }
-	.rdetail { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-	.rfoot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.rfoot .btn { min-width: 76px; }
 
 	a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 	@media (max-width: 640px) {

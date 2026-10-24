@@ -142,7 +142,7 @@ describe("modals mounted by their parent animate", () => {
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "ConnectionForm", "Extensions", "LinkCard", "UpdateBanner", "Skills", "CommandFamilies", "CloseConfirm", "PickerModal"]) {
+		for (const f of ["ServerForm", "Settings", "ModelSettings", "DirPicker", "QueueModal", "WorkBox", "ConnectionForm", "extensions/ImportDialogs", "DiscardConfirm", "LinkCard", "UpdateBanner", "Skills", "CommandFamilies", "CloseConfirm", "PickerModal"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
