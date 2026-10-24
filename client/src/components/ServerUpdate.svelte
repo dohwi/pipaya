@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { updater } from "../lib/updater.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
@@ -54,7 +55,7 @@
 			<StatusChip tone="ok">{t("최신 버전입니다")}</StatusChip>
 		{/if}
 		{#if isNew}
-			<button class="btn primary sm" disabled={busy} onclick={update}>{t("서버 업데이트")}</button>
+			<Button variant="primary" size="sm" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
 		{/if}
 	</div>
 	{#if release === "older" && !isNew && !busy}
@@ -67,6 +68,6 @@
 	.item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-height: 56px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); }
 	.meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 	.ver { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
-	.item .btn { flex: none; white-space: nowrap; }
+	.item :global(.btn) { flex: none; white-space: nowrap; }
 	.note { line-height: 1.6; margin: 10px 0 0; }
 </style>

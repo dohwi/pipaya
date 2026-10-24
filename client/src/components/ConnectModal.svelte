@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
@@ -226,8 +227,8 @@
 									{#if authUrl}
 										<span>{authUrl.instructions ?? t("로그인 페이지가 열립니다. 열리지 않으면 아래 버튼을 누르세요.")}</span>
 										<div class="row">
-											<button class="btn primary sm" onclick={() => openExternal(authUrl.url)}>{t("로그인 페이지 열기")}</button>
-											<button class="btn ghost sm" onclick={() => copyText(authUrl.url)}><Icon name="copy" /> {t("주소 복사")}</button>
+											<Button variant="primary" size="sm" onclick={() => openExternal(authUrl.url)}>{t("로그인 페이지 열기")}</Button>
+											<Button variant="ghost" size="sm" onclick={() => copyText(authUrl.url)}><Icon name="copy" /> {t("주소 복사")}</Button>
 										</div>
 									{:else}
 										<span>{t("로그인 주소를 준비하는 중…")}</span>
@@ -245,11 +246,11 @@
 								<div class="device">
 									<span>{t("아래 코드를 입력하세요.")}</span>
 									<code class="code">{e.userCode}</code>
-									<button class="btn sm" onclick={() => openExternal(e.verificationUri)}>{e.verificationUri}</button>
+									<Button size="sm" onclick={() => openExternal(e.verificationUri)}>{e.verificationUri}</Button>
 								</div>
 							{:else if e.type === "info" || e.type === "progress"}
 								<p class="msg">{e.message}</p>
-								{#if e.type === "info"}<div class="row">{#each e.links ?? [] as l}<button class="btn ghost sm" onclick={() => openExternal(l.url)}>{l.label ?? l.url}</button>{/each}</div>{/if}
+								{#if e.type === "info"}<div class="row">{#each e.links ?? [] as l}<Button variant="ghost" size="sm" onclick={() => openExternal(l.url)}>{l.label ?? l.url}</Button>{/each}</div>{/if}
 							{/if}
 						{/each}
 
@@ -259,12 +260,12 @@
 								<p class="msg">{pr.type === "manual_code" ? t("리디렉션 URL 또는 코드 붙여넣기") : pr.message}</p>
 								{#if pr.type === "manual_code" && pr.message}<p class="hint">{pr.message}</p>{/if}
 								{#if pr.type === "select"}
-									<div class="row">{#each pr.options as o (o.id)}<button class="btn sm" disabled={busy} title={o.description} onclick={() => submitAnswer(o.id)}>{o.label}</button>{/each}</div>
+									<div class="row">{#each pr.options as o (o.id)}<Button size="sm" disabled={busy} title={o.description} onclick={() => submitAnswer(o.id)}>{o.label}</Button>{/each}</div>
 								{:else}
 									<form class="row" onsubmit={(e) => { e.preventDefault(); if (answer.trim()) void submitAnswer(answer.trim()); }}>
 										<!-- svelte-ignore a11y_autofocus -->
 										<input class="field mono" type={pr.type === "secret" ? "password" : "text"} placeholder={pr.type === "manual_code" ? "http://localhost:…/callback?code=…" : (pr.placeholder ?? "")} bind:value={answer} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
-										<button class="btn primary" disabled={busy || !answer.trim()}>{t("확인")}</button>
+										<Button variant="primary" type="submit" disabled={busy || !answer.trim()}>{t("확인")}</Button>
 									</form>
 								{/if}
 							</div>
@@ -278,7 +279,7 @@
 					<p class="hint">{t("{name}의 API 키를 붙여넣으세요. 키는 서버에만 저장됩니다.", { name: keyFor.name })}</p>
 					<!-- svelte-ignore a11y_autofocus -->
 					<input class="field mono" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
-					<button class="btn primary" disabled={busy || !keyValue.trim()}>{t("저장")}</button>
+					<Button variant="primary" type="submit" disabled={busy || !keyValue.trim()}>{t("저장")}</Button>
 				</form>
 			{:else}
 				<Segmented tabs label={t("연결 방식")} value={tab} onchange={(id) => (tab = id)} options={[{ id: "oauth", label: "OAuth" }, { id: "key", label: "API KEY" }]} />

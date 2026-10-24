@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { updater } from "../lib/updater.svelte";
 	import { notificationPlatform } from "../lib/notifications";
@@ -33,7 +34,7 @@
 		</p>
 		{#if allowing}
 			<p class="note">{t("설정에서 이 앱의 설치를 허용하고 돌아오면 설치 화면이 이어서 열립니다.")}</p>
-			<div class="actions"><button class="btn" onclick={() => updater.dismiss()}>{t("나중에")}</button></div>
+			<div class="actions"><Button onclick={() => updater.dismiss()}>{t("나중에")}</Button></div>
 		{:else if downloading}
 			<progress class="bar" max="100" value={updater.progress ? percent : undefined} aria-label={t("업데이트 진행률")}></progress>
 			{#if updater.phase === "downloading" && updater.progress}<p class="pct">{percent}%</p>{/if}
@@ -48,8 +49,8 @@
 			{#if updater.serverStep === "failed" && serverUpdater.error}<p class="note warn" role="alert">{serverUpdater.error}</p>{/if}
 			<p class="note">{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}</p>
 			<div class="actions">
-				<button class="btn" onclick={() => updater.dismiss()}>{t("나중에")}</button>
-				<button class="btn primary" onclick={() => updater.install()}>{t("업데이트")}</button>
+				<Button onclick={() => updater.dismiss()}>{t("나중에")}</Button>
+				<Button variant="primary" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			</div>
 		{/if}
 	</div>

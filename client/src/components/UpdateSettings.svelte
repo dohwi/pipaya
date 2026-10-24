@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { updater } from "../lib/updater.svelte";
 	import { notificationPlatform } from "../lib/notifications";
@@ -34,7 +35,7 @@
 				<StatusChip tone="ok">{t("최신 버전입니다")}</StatusChip>
 			{/if}
 			{#if updater.phase === "available"}
-				<button class="btn primary sm" onclick={() => updater.install()}>{t("업데이트")}</button>
+				<Button variant="primary" size="sm" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			{/if}
 		</div>
 		{#if downloading}
@@ -55,7 +56,7 @@
 	.meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 	.name { font-size: var(--fs-sm); font-weight: 500; }
 	.ver { font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-	.item .btn { flex: none; white-space: nowrap; }
+	.item :global(.btn) { flex: none; white-space: nowrap; }
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
 	.note { line-height: 1.6; }

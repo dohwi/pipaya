@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { updater } from "../lib/updater.svelte";
@@ -46,13 +47,13 @@
 		{#if serverUpdater.error}<p class="text err">{serverUpdater.error}</p>{/if}
 		<div class="actions">
 			{#if kind === "update-app" && updater.supported}
-				<button class="btn primary sm" onclick={updateApp}>{t("업데이트 확인")}</button>
+				<Button variant="primary" size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
 			{:else if kind === "update-server" && serverUpdater.available}
-				<button class="btn primary sm" disabled={busy} onclick={updateServer}>
+				<Button variant="primary" size="sm" disabled={busy} onclick={updateServer}>
 					{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
-				</button>
+				</Button>
 			{/if}
-			{#if kind === "update-server"}<button class="btn sm" onclick={() => (closed = key)}>{t("나중에")}</button>{/if}
+			{#if kind === "update-server"}<Button size="sm" onclick={() => (closed = key)}>{t("나중에")}</Button>{/if}
 		</div>
 	</div>
 {/if}

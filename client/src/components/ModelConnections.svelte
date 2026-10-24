@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
@@ -213,7 +214,7 @@
 	{:else if loadError}
 		<div class="err" role="alert">
 			<span>{loadError}</span>
-			<button class="btn sm" onclick={() => load(serverId)}><Icon name="retry" /> {t("다시 시도")}</button>
+			<Button size="sm" onclick={() => load(serverId)}><Icon name="retry" /> {t("다시 시도")}</Button>
 		</div>
 	{:else if cfg}
 		<section>
@@ -269,7 +270,7 @@
 							{#if !p.models.length}
 								<div class="nomodels">
 									<span>{t("모델이 없습니다. 모델을 추가해야 이 연결을 쓸 수 있습니다.")}</span>
-									<button class="btn sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="plus" /> {t("모델 추가")}</button>
+									<Button size="sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="plus" /> {t("모델 추가")}</Button>
 								</div>
 							{:else}
 							<Accordion variant="text">
@@ -289,9 +290,9 @@
 											{#if m.vision}<span class="tag" title={t("이미지 입력")}><Icon name="image" /></span>{/if}
 											<span class="tag mono">{Math.round(m.contextWindow / 1000)}k</span>
 										</span>
-										<button class="btn ghost sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => test(p.id, m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
+										<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => test(p.id, m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 											{probe === "running" ? t("확인 중…") : t("테스트")}
-										</button>
+										</Button>
 										{#if probe && probe !== "running"}
 											<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 										{/if}
@@ -305,22 +306,22 @@
 							<div class="actions">
 								{#if p.authRequired}
 									{#if p.hasStoredKey}
-										<button class="btn ghost sm" disabled={busy} onclick={() => removeKey(p)}><Icon name="key" /> {t("키 삭제")}</button>
+										<Button variant="ghost" size="sm" disabled={busy} onclick={() => removeKey(p)}><Icon name="key" /> {t("키 삭제")}</Button>
 									{:else}
-										<button class="btn sm" onclick={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}><Icon name="key" /> {t("키 추가")}</button>
+										<Button size="sm" onclick={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}><Icon name="key" /> {t("키 추가")}</Button>
 									{/if}
 								{/if}
-								<button class="btn sm" disabled={busy || refreshingId !== null || !p.configured} onclick={() => refreshModels(p)} title={p.configured ? t("업스트림의 모델 목록을 다시 불러옵니다") : t("키를 먼저 추가하세요")}>
+								<Button size="sm" disabled={busy || refreshingId !== null || !p.configured} onclick={() => refreshModels(p)} title={p.configured ? t("업스트림의 모델 목록을 다시 불러옵니다") : t("키를 먼저 추가하세요")}>
 									<span class="spinwrap" class:spin={refreshingId === p.id}><Icon name="retry" /></span> {refreshingId === p.id ? t("불러오는 중…") : t("모델 새로고침")}
-								</button>
-								<button class="btn sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="pencil" /> {t("수정")}</button>
+								</Button>
+								<Button size="sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="pencil" /> {t("수정")}</Button>
 								<ConfirmButton size="sm" class="ghost" confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={() => remove(p)}>{t("삭제")}</ConfirmButton>
 							</div>
 							{#if keyFor === p.id}
 								<form class="keyform" in:collapseIn out:collapseOut onsubmit={(e) => { e.preventDefault(); void saveKey(p); }}>
 									<!-- svelte-ignore a11y_autofocus -->
 									<input class="field" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
-									<button class="btn primary" disabled={busy || !keyValue.trim()}>{t("저장")}</button>
+									<Button variant="primary" type="submit" disabled={busy || !keyValue.trim()}>{t("저장")}</Button>
 								</form>
 							{/if}
 						</div>
@@ -329,7 +330,7 @@
 			{/if}
 
 			{#if !form}
-				<button class="btn dashed" onclick={() => (picking = true)}><Icon name="plus" /> {t("연결 추가")}</button>
+				<Button variant="dashed" onclick={() => (picking = true)}><Icon name="plus" /> {t("연결 추가")}</Button>
 			{/if}
 		</section>
 

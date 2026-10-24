@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
@@ -123,7 +124,7 @@
 			{/if}
 		</section>
 	{/if}
-	<button type="button" class="btn ghost danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</button>
+	<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
 
 <style>
 	.idlabel {
@@ -235,9 +236,8 @@
 		stroke-width: 2;
 
 		color: var(--text-dim);
-
 	}
-	.danger-text {
+	:global(.btn.danger-text) {
 		align-self: flex-start;
 	}
 	.caps {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import ImportReview from "./ImportReview.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { localeTag, msg, t } from "../lib/i18n";
@@ -140,7 +141,7 @@
 		{/each}
 	</div>
 	<div class="actions">
-		<button type="button" class="btn primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</button>
+		<Button variant="primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</Button>
 	</div>
 	{#if exported}<Notice tone="ok" size="sm" role="status">{exported}</Notice>{/if}
 	<p class="note"><Icon name="shield" /><span>{t("비밀번호나 토큰처럼 보이는 값은 빠집니다. 다만 확장 코드나 기본값에 직접 적어 둔 비밀은 걸러내지 못하니, 파일을 다른 사람에게 보내기 전에 확인하세요.")}</span></p>
@@ -187,15 +188,15 @@
 				<span class="s">{savedAt ? `${t("{when}에 백업됨", { when: when(savedAt) })} · ` : ""}{t("이 기기에만 저장되어 있습니다")}</span>
 			</span>
 			{#if !confirmingRestore}
-				<button type="button" class="btn sm" onclick={() => (confirmingRestore = true)}>{t("되돌리기")}</button>
+				<Button size="sm" onclick={() => (confirmingRestore = true)}>{t("되돌리기")}</Button>
 			{/if}
 		</div>
 		{#if confirmingRestore}
 			<div class="confirm" in:collapseIn out:collapseOut role="group" aria-label={t("되돌리기 확인")}>
 				<p>{t("서버 목록, 이 기기의 확장, 앱 설정, 단축키를 가져오기 전으로 되돌립니다. 그 사이에 바꾼 내용은 사라지고, 확장은 모두 꺼진 상태가 됩니다.")}</p>
 				<div class="actions">
-					<button type="button" class="btn sm" onclick={() => (confirmingRestore = false)}>{t("취소")}</button>
-					<button type="button" class="btn danger sm" onclick={restore}>{t("되돌리기")}</button>
+					<Button size="sm" onclick={() => (confirmingRestore = false)}>{t("취소")}</Button>
+					<Button variant="danger" size="sm" onclick={restore}>{t("되돌리기")}</Button>
 				</div>
 			</div>
 		{/if}
@@ -265,10 +266,8 @@
 		width: 16px;
 		height: 16px;
 	}
-	.btn :global(svg) {
-
+	.actions :global(.btn svg), .restore :global(.btn svg) {
 		stroke-width: 1.9;
-
 	}
 	.note {
 		display: flex;

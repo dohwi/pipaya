@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
   import { t } from "../lib/i18n";
   import { onMount } from "svelte";
   import { collapseIn, collapseOut } from "../lib/motion";
@@ -50,7 +51,7 @@
 
 <div class="test">
 <SettingRow label={t("이 기기로 시험 알림 보내기")}>
-  <button class="btn sm" onclick={runTest} disabled={testing || !app.api}>{testing ? t("보내는 중…") : t("시험")}</button>
+  <Button size="sm" onclick={runTest} disabled={testing || !app.api}>{testing ? t("보내는 중…") : t("시험")}</Button>
 </SettingRow>
 </div>
 {#if outcome}

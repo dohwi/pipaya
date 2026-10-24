@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import Modal from "./Modal.svelte";
@@ -20,7 +21,6 @@
 	}
 	const cancel = () => !stopping && app.closeConfirm?.cancel();
 	/** The default answer gets focus (the Modal keeps a child's own focus), so Enter confirms and Esc cancels. */
-	const focusMe = (node: HTMLElement) => node.focus();
 </script>
 
 {#if app.closeConfirm}
@@ -29,8 +29,8 @@
 			<h2 id="close-confirm-title">{t("작업을 종료하고 닫을까요?")}</h2>
 			<p id="close-confirm-desc">{t("진행 중인 작업 {n}개가 종료되면서 창이 닫힙니다.", { n: (app.closeConfirm ?? last)?.count ?? 0 })}</p>
 			<div class="buttons">
-				<button type="button" class="btn" onclick={cancel} disabled={stopping}>{t("취소")}</button>
-				<button type="button" class="btn primary" onclick={ok} disabled={stopping} use:focusMe>{t("확인")}</button>
+				<Button onclick={cancel} disabled={stopping}>{t("취소")}</Button>
+				<Button variant="primary" onclick={ok} disabled={stopping} focus>{t("확인")}</Button>
 			</div>
 		</div>
 	</Modal>

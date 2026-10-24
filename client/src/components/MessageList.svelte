@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { fadeIn, fadeOut } from "../lib/motion";
 	import { tick, untrack } from "svelte";
@@ -182,7 +183,7 @@
 			<div class="loaderr">
 				<Icon name="alert" />
 				<p>{chat.loadError}</p>
-				<button class="btn" onclick={() => chat.load()}>{t("다시 시도")}</button>
+				<Button onclick={() => chat.load()}>{t("다시 시도")}</Button>
 			</div>
 		{:else}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import { Api, errorText } from "../lib/api";
@@ -98,13 +99,13 @@
 			</div>
 		</div>
 		<div class="row">
-			<button class="btn" onclick={copy}><Icon name={copied ? "check" : "copy"} /> {copied ? t("복사됨") : t("링크 복사")}</button>
-			<button class="btn ghost" onclick={create} disabled={busy}>{t("새 QR")}</button>
+			<Button onclick={copy}><Icon name={copied ? "check" : "copy"} /> {copied ? t("복사됨") : t("링크 복사")}</Button>
+			<Button variant="ghost" onclick={create} disabled={busy}>{t("새 QR")}</Button>
 		</div>
 	{:else}
-		<button class="btn primary make" onclick={create} disabled={busy || !address.trim()}>
+		<Button variant="primary" class="make" onclick={create} disabled={busy || !address.trim()}>
 			{#if busy}<span class="spinner"></span>{t("만드는 중…")}{:else}{t("QR 만들기")}{/if}
-		</button>
+		</Button>
 	{/if}
 
 	{#if error}<div class="warn" role="alert"><Icon name="alert" /><span>{error}</span></div>{/if}
@@ -187,7 +188,7 @@
 		stroke-width: 1.9;
 
 	}
-	.make {
+	.pair :global(.btn.make) {
 		align-self: center;
 		height: 44px;
 		padding: 0 28px;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { ACTIONS, formatCombo } from "../lib/keys";
 	import type { ConfigurationPlan } from "../lib/extensions/configuration";
@@ -76,9 +77,9 @@
 	{#if plan.blocked}<Notice tone="danger" size="sm" role="alert">{plan.blocked}</Notice>{/if}
 
 	<div class="actions">
-		<button type="button" class="btn" onclick={oncancel}>{t("취소")}</button>
+		<Button onclick={oncancel}>{t("취소")}</Button>
 		{#if !plan.empty}
-			<button type="button" class="btn primary" disabled={!!plan.blocked} onclick={onapply}>{t("적용하기")}</button>
+			<Button variant="primary" disabled={!!plan.blocked} onclick={onapply}>{t("적용하기")}</Button>
 		{/if}
 	</div>
 </div>

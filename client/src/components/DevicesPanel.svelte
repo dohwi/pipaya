@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import Notice from "./Notice.svelte";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import Badge from "./Badge.svelte";
@@ -167,9 +168,9 @@
 	{/if}
 
 	<div class="add">
-		<button class="btn" aria-expanded={adding} onclick={() => (adding = !adding)}>
+		<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
 			<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
-		</button>
+		</Button>
 		{#if adding}
 			<div class="addbody">{#key serverId}<PairPanel {serverId} />{/key}</div>
 		{/if}
@@ -191,7 +192,7 @@
 		gap: 12px;
 		padding-top: 4px;
 	}
-	.add > .btn {
+	.add > :global(.btn) {
 		align-self: flex-start;
 	}
 	.addbody {

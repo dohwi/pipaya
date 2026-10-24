@@ -1,4 +1,5 @@
 <script module lang="ts">
+	import Button from "../Button.svelte";
 	import type { UINode } from "../../lib/extensions/ui";
 
 	const VIEW = Symbol("extension-view");
@@ -333,7 +334,7 @@
 		{@render kids(node.children, off)}
 		{@render note(node.id, message)}
 		<div class="actions">
-			<button type="submit" class="btn primary" disabled={off}>{node.submitLabel}</button>
+			<Button variant="primary" type="submit" disabled={off}>{node.submitLabel}</Button>
 		</div>
 	</form>
 {:else if node.type === "text"}

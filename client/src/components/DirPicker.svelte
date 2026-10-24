@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import { absoluteWorkdir, breadcrumbs, splitTyped, tabComplete, typedMatches } from "../lib/workdir-path";
 	import { msg, t, tc } from "../lib/i18n";
@@ -240,7 +241,7 @@
 		}}
 	>
 		<input class="mono" bind:this={input} bind:value={typed} oninput={() => ((active = -1), oninput())} onkeydown={complete} spellcheck="false" autocomplete="off" aria-label={t("경로")} placeholder="/home/user/project" use:focus />
-		<button class="btn sm" type="submit">{tc("go", "이동")}</button>
+		<Button size="sm" type="submit">{tc("go", "이동")}</Button>
 	</form>
 
 	{#if places.length}
@@ -303,11 +304,11 @@
 				}}
 			>
 				<input class="mono" bind:value={newName} placeholder={t("새 폴더 이름")} spellcheck="false" use:focus aria-label={t("새 폴더 이름")} />
-				<button class="btn sm" type="submit" disabled={!newName.trim()}>{t("만들기")}</button>
-				<button class="btn ghost sm" type="button" onclick={() => ((creating = false), (newName = ""))}>{t("취소")}</button>
+				<Button size="sm" type="submit" disabled={!newName.trim()}>{t("만들기")}</Button>
+				<Button variant="ghost" size="sm" onclick={() => ((creating = false), (newName = ""))}>{t("취소")}</Button>
 			</form>
 		{:else}
-			<button class="btn ghost sm" onclick={() => (creating = true)} disabled={!listing}><Icon name="plus" /> {t("새 폴더")}</button>
+			<Button variant="ghost" size="sm" onclick={() => (creating = true)} disabled={!listing}><Icon name="plus" /> {t("새 폴더")}</Button>
 		{/if}
 	</div>
 
@@ -317,11 +318,11 @@
 			<span class="mono cur" title={listing?.path}>{listing?.path ?? "…"}</span>
 		</div>
 		{#if mode === "default" && current?.saved}
-			<button class="btn ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</button>
+			<Button variant="ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</Button>
 		{/if}
-		<button class="btn primary" disabled={!listing || saving} onclick={() => listing && void choose(listing.path)}>
+		<Button variant="primary" disabled={!listing || saving} onclick={() => listing && void choose(listing.path)}>
 			{mode === "default" ? t("기본값으로 저장") : t("여기서 시작")}
-		</button>
+		</Button>
 	</footer>
 </Modal>
 

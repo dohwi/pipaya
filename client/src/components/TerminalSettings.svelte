@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { DEFAULT_TERMINAL_FONT, TERMINAL_LIMITS } from "../lib/terminal-prefs";
@@ -20,7 +21,7 @@
 
 <div class="head">
 	<div class="mono-label">{t("터미널")}</div>
-	<button class="btn sm" onclick={() => app.prefs.resetTerminal()}>{t("기본값으로")}</button>
+	<Button size="sm" onclick={() => app.prefs.resetTerminal()}>{t("기본값으로")}</Button>
 </div>
 <SettingRow label={t("글꼴")} for="terminal-font">
 	<Select

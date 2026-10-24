@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
@@ -51,12 +52,12 @@
 				<li><b>{t("설정 → 폰으로 연결할 서버 이름 아래 ‘기기’ → ‘폰 추가’")}</b><span>{t("화면에 QR이 나타납니다.")}</span></li>
 				<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
 			</ol>
-			<button class="btn primary add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</button>
+			<Button variant="primary" class="add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</Button>
 			{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
-			<button class="btn ghost" onclick={() => (app.serverForm = "new")}>{t("서버 주소로 연결")}</button>
+			<Button variant="ghost" onclick={() => (app.serverForm = "new")}>{t("서버 주소로 연결")}</Button>
 		{:else}
 			<p class="sub">{t("서버에 연결하려면 주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.")}</p>
-			<button class="btn primary add" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 주소로 연결")}</button>
+			<Button variant="primary" class="add" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 주소로 연결")}</Button>
 		{/if}
 	</div>
 </div>
@@ -116,7 +117,7 @@
 		word-break: keep-all;
 		max-width: 34ch;
 	}
-	.add {
+	.card :global(.btn.add) {
 		height: 46px;
 		padding: 0 26px;
 		font-size: var(--fs-md);

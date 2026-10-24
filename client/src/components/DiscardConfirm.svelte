@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
@@ -9,7 +10,6 @@
 	 */
 	let { onsave, oncancel, ondiscard }: { onsave: () => void; oncancel: () => void; ondiscard: () => void } = $props();
 
-	const focusMe = (node: HTMLElement) => node.focus();
 </script>
 
 <Modal onclose={oncancel} role="alertdialog" labelledby="unsaved-title" describedby="unsaved-desc" width="s" layer={5} portal>
@@ -18,9 +18,9 @@
 		<h3 id="unsaved-title">{t("저장하지 않고 닫을까요?")}</h3>
 		<p id="unsaved-desc">{t("저장되지 않은 변경이 있습니다.")}</p>
 		<div class="ucbtns">
-			<button type="button" class="btn primary" onclick={onsave} use:focusMe>{t("저장")}</button>
-			<button type="button" class="btn" onclick={oncancel}>{t("계속 편집")}</button>
-			<button type="button" class="btn ghost danger-text" onclick={ondiscard}>{t("저장하지 않고 닫기")}</button>
+			<Button variant="primary" onclick={onsave} focus>{t("저장")}</Button>
+			<Button onclick={oncancel}>{t("계속 편집")}</Button>
+			<Button variant="ghost" class="danger-text" onclick={ondiscard}>{t("저장하지 않고 닫기")}</Button>
 		</div>
 	</div>
 </Modal>
@@ -69,7 +69,7 @@
 		align-self: stretch;
 		margin-top: 16px;
 	}
-	.ucbtns .btn {
+	.ucbtns :global(.btn) {
 		width: 100%;
 	}
 </style>

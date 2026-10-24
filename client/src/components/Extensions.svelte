@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { LocalizedError, getLang, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
@@ -345,7 +346,7 @@
 				<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>
 				<p class="hint">{t("JSON 객체만 저장할 수 있습니다 (최대 16KB). 켜져 있는 확장은 다시 불러와 적용하고, 꺼져 있으면 다음에 켤 때 적용합니다.")}</p>
 				<div class="row">
-					<button type="button" class="btn sm" disabled={busy[id] || entry.state === "starting"} onclick={() => saveSettings(id)}>{entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")}</button>
+					<Button size="sm" disabled={busy[id] || entry.state === "starting"} onclick={() => saveSettings(id)}>{entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장")}</Button>
 				</div>
 			{/if}
 		</section>
@@ -358,17 +359,17 @@
 		<section class="block">
 			<h3 class="label">{t("관리")}</h3>
 			<div class="row">
-				<button type="button" class="btn sm" disabled={extensions.safeMode || busy[id] || entry.state !== "active"} onclick={() => reload(id)}>{t("다시 불러오기")}</button>
-				<button type="button" class="btn sm" disabled={busy[id]} onclick={() => exportPackage(id)}>{t("내보내기")}</button>
-				<button type="button" class="btn danger sm end" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</button>
+				<Button size="sm" disabled={extensions.safeMode || busy[id] || entry.state !== "active"} onclick={() => reload(id)}>{t("다시 불러오기")}</Button>
+				<Button size="sm" disabled={busy[id]} onclick={() => exportPackage(id)}>{t("내보내기")}</Button>
+				<Button variant="danger" size="sm" class="end" disabled={busy[id]} aria-expanded={removing === id} onclick={(event) => askRemove(id, event)}>{t("삭제")}</Button>
 			</div>
 			{#if removing === id}
 				<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{id}" tabindex="-1" use:focusConfirm>
 					<p id="extension-remove-{id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
 					<div class="row">
-						<button type="button" class="btn sm" disabled={busy[id]} onclick={() => remove(id, true)}>{t("설정 유지하고 삭제")}</button>
-						<button type="button" class="btn danger sm" disabled={busy[id]} onclick={() => remove(id, false)}>{t("설정까지 삭제")}</button>
-						<button type="button" class="btn sm" data-cancel disabled={busy[id]} onclick={cancelRemove}>{t("취소")}</button>
+						<Button size="sm" disabled={busy[id]} onclick={() => remove(id, true)}>{t("설정 유지하고 삭제")}</Button>
+						<Button variant="danger" size="sm" disabled={busy[id]} onclick={() => remove(id, false)}>{t("설정까지 삭제")}</Button>
+						<Button size="sm" data-cancel disabled={busy[id]} onclick={cancelRemove}>{t("취소")}</Button>
 					</div>
 				</div>
 			{/if}
@@ -430,23 +431,23 @@
 		<Notice tone="warn" size="sm">{t("이 버전에서 지원하지 않는 형식입니다:")} {item.reason}</Notice>
 		<p class="hint">{t("원본 데이터는 그대로 보관되어, 지원하는 버전에서 다시 읽을 수 있습니다. 같은 ID의 패키지를 가져오면 이 항목을 대체합니다.")}</p>
 		<div class="row">
-			<button type="button" class="btn sm" disabled={busy[key]} onclick={() => exportRaw(index)}>{t("원본 내보내기")}</button>
-			<button type="button" class="btn danger sm end" disabled={busy[key]} aria-expanded={removing === key} onclick={(event) => askRemove(key, event)}>{t("삭제")}</button>
+			<Button size="sm" disabled={busy[key]} onclick={() => exportRaw(index)}>{t("원본 내보내기")}</Button>
+			<Button variant="danger" size="sm" class="end" disabled={busy[key]} aria-expanded={removing === key} onclick={(event) => askRemove(key, event)}>{t("삭제")}</Button>
 		</div>
 		{#if removing === key}
 			<div class="confirm" in:collapseIn out:collapseOut role="group" aria-labelledby="extension-remove-{key}" tabindex="-1" use:focusConfirm>
 				{#if item.id}
 					<p id="extension-remove-{key}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
 					<div class="row">
-						<button type="button" class="btn sm" disabled={busy[key]} onclick={() => removeUnreadable(index, true)}>{t("설정 유지하고 삭제")}</button>
-						<button type="button" class="btn danger sm" disabled={busy[key]} onclick={() => removeUnreadable(index, false)}>{t("설정까지 삭제")}</button>
-						<button type="button" class="btn sm" data-cancel disabled={busy[key]} onclick={cancelRemove}>{t("취소")}</button>
+						<Button size="sm" disabled={busy[key]} onclick={() => removeUnreadable(index, true)}>{t("설정 유지하고 삭제")}</Button>
+						<Button variant="danger" size="sm" disabled={busy[key]} onclick={() => removeUnreadable(index, false)}>{t("설정까지 삭제")}</Button>
+						<Button size="sm" data-cancel disabled={busy[key]} onclick={cancelRemove}>{t("취소")}</Button>
 					</div>
 				{:else}
 					<p id="extension-remove-{key}">{t("이 항목을 삭제합니다. 되돌릴 수 없습니다.")}</p>
 					<div class="row">
-						<button type="button" class="btn danger sm" disabled={busy[key]} onclick={() => removeUnreadable(index, false)}>{t("삭제")}</button>
-						<button type="button" class="btn sm" data-cancel disabled={busy[key]} onclick={cancelRemove}>{t("취소")}</button>
+						<Button variant="danger" size="sm" disabled={busy[key]} onclick={() => removeUnreadable(index, false)}>{t("삭제")}</Button>
+						<Button size="sm" data-cancel disabled={busy[key]} onclick={cancelRemove}>{t("취소")}</Button>
 					</div>
 				{/if}
 			</div>
@@ -470,7 +471,7 @@
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
-			<button type="button" class="btn sm add" disabled={busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</button>
+			<Button size="sm" class="add" disabled={busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn sm add" class:disabled={busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={busy.$import} onchange={selectFile} />
 				<Icon name="plus" /> {t("확장 추가")}
@@ -565,8 +566,8 @@
 
 
 
-	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
-	.btn.end { margin-left: auto; }
+	.extensions :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
+	.extensions :global(.btn.end) { margin-left: auto; }
 	.confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--danger-soft); font-size: var(--fs-sm); }
 
 	.settings-label { font-size: var(--fs-xs); font-weight: 550; }
@@ -576,10 +577,10 @@
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }
-	.add { position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-	.add.disabled { opacity: 0.5; cursor: default; }
-	.add input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
-	.add :global(svg) { width: 16px; height: 16px; }
+	.extensions .bar > :global(.add) { position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+	.extensions .bar > :global(.add.disabled) { opacity: 0.5; cursor: default; }
+	.extensions .bar > :global(.add input) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+	.extensions .bar > :global(.add svg) { width: 16px; height: 16px; }
 	.line { display: flex; align-items: center; gap: 10px; }
 	.expand .who { flex: 1; }
 	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
@@ -609,8 +610,8 @@
 	a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 	@media (max-width: 640px) {
 		.card { padding: 12px 14px; }
-		.row > .btn { flex: 1 1 auto; }
-		.btn.end { margin-left: 0; }
+		.row > :global(.btn) { flex: 1 1 auto; }
+		.extensions :global(.btn.end) { margin-left: 0; }
 	}
 	.none {
 		margin: 2px 0 6px;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
 	import Notice from "../Notice.svelte";
@@ -114,7 +115,7 @@
 	<div class="market">
 		<div class="mhead">
 			<h2 id="market-title">{t("마켓플레이스")}</h2>
-			<button type="button" class="btn sm" onclick={onclose}>{t("닫기")}</button>
+			<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
 		</div>
 		<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
 		<label class="search">
@@ -146,14 +147,14 @@
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
 						</p>
 						{#if entry.kind === "client"}
-							<button type="button" class="btn sm primary" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
+							<Button variant="primary" size="sm" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
-							</button>
+							</Button>
 						{:else}
 							{@const sHave = !!serverHave[entry.id]}
-							<button type="button" class="btn sm primary" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => startServer(entry)}>
+							<Button variant="primary" size="sm" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => startServer(entry)}>
 								{working === entry.id ? t("설치하는 중…") : sHave ? t("설치됨") : t("설치하기")}
-							</button>
+							</Button>
 						{/if}
 					</div>
 					{#if asking === entry.id}
@@ -162,9 +163,9 @@
 							<div class="ask" role="group" aria-label={t("클라이언트 확장도 설치")}>
 								<p>{t("클라이언트 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: c?.name ?? entry.companion ?? "" })}</p>
 								<div class="askbtns">
-									<button type="button" class="btn sm primary" onclick={() => installServer(entry, true)}>{t("함께 설치")}</button>
-									<button type="button" class="btn sm" onclick={() => installServer(entry, false)}>{t("서버만 설치")}</button>
-									<button type="button" class="btn sm" onclick={() => (asking = "")}>{t("취소")}</button>
+									<Button variant="primary" size="sm" onclick={() => installServer(entry, true)}>{t("함께 설치")}</Button>
+									<Button size="sm" onclick={() => installServer(entry, false)}>{t("서버만 설치")}</Button>
+									<Button size="sm" onclick={() => (asking = "")}>{t("취소")}</Button>
 								</div>
 							</div>
 						</Notice>
@@ -181,8 +182,8 @@
 			<summary>{t("카탈로그 주소")}</summary>
 			<div class="urlrow">
 				<input type="url" spellcheck="false" aria-label={t("카탈로그 주소")} bind:value={url} onkeydown={(e) => { if (e.key === "Enter") void load(); }} />
-				<button type="button" class="btn sm" disabled={loading} onclick={load}>{t("불러오기")}</button>
-				<button type="button" class="btn sm" onclick={() => { url = DEFAULT_MARKETPLACE_URL; void load(); }}>{t("기본값")}</button>
+				<Button size="sm" disabled={loading} onclick={load}>{t("불러오기")}</Button>
+				<Button size="sm" onclick={() => { url = DEFAULT_MARKETPLACE_URL; void load(); }}>{t("기본값")}</Button>
 			</div>
 		</details>
 	</div>
@@ -206,12 +207,12 @@
 	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 3px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.btn :global(svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
+	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.chip { font-size: var(--fs-2xs); padding: 1px 8px; border-radius: 999px; background: var(--bg-active); }
 	.chip.ok { background: var(--ok-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
-	.foot .btn { flex: none; }
+	.foot :global(.btn) { flex: none; }
 	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 7px 0 5px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-2xs); font-weight: 600; line-height: 1.6; }
 	.official :global(svg) { width: 10px; height: 10px; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "../Button.svelte";
 	import { t } from "../../lib/i18n";
 	import { untrack } from "svelte";
 	import Accordion from "../Accordion.svelte";
@@ -107,7 +108,7 @@
 	{/each}
 	<p class="hint">{t("저장 위치는 확장의 settingsScope를 따릅니다. 활성 확장은 다시 불러와 적용하고, 비활성 확장은 다음 활성화 때 적용합니다.")}</p>
 	<div class="row">
-		<button type="submit" class="btn sm" disabled={disabled || !resolved.ok}>{saveLabel}</button>
+		<Button size="sm" type="submit" disabled={disabled || !resolved.ok}>{saveLabel}</Button>
 		{#if !resolved.ok}<span class="hint" role="status">{t("입력값을 확인하세요.")}</span>{/if}
 	</div>
 </form>
@@ -121,7 +122,7 @@
 		{#if jsonProblem}<p class="hint danger" id="{fieldId("$json")}-error">{jsonProblem}</p>{/if}
 		<p class="hint">{t("같은 스키마로 검증하며, 선언되지 않은 키는 저장되지 않습니다 (최대 16KB).")}</p>
 		<div class="row">
-			<button type="button" class="btn sm" disabled={disabled || jsonDraft === null || !!jsonProblem} onclick={saveJson}>{t("JSON 저장")}</button>
+			<Button size="sm" disabled={disabled || jsonDraft === null || !!jsonProblem} onclick={saveJson}>{t("JSON 저장")}</Button>
 		</div>
 	</div>
 </Accordion>
@@ -147,10 +148,10 @@
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
 	input:disabled, textarea:disabled { opacity: 0.6; }
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-	.btn.sm { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
+	.settings :global(.btn.sm), .advanced :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.advanced { margin-top: 4px; }
 	.body { gap: 10px; }
 	@media (max-width: 640px) {
-		.row > .btn { flex: 1 1 auto; }
+		.row > :global(.btn) { flex: 1 1 auto; }
 	}
 </style>

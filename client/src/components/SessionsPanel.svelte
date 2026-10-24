@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { onMount } from "svelte";
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import { t } from "../lib/i18n";
@@ -133,7 +134,7 @@
 			<div class="grow">
 				<div id="list-h" class="label">{t("대화 목록")}{#if sessions} <span class="n">{sessions.length}</span>{/if}</div>
 			</div>
-			<button class="btn sm" onclick={() => void load()} disabled={busy}>{t("새로고침")}</button>
+			<Button size="sm" onclick={() => void load()} disabled={busy}>{t("새로고침")}</Button>
 		</div>
 
 		{#if !sessions && !error}
@@ -180,7 +181,7 @@
 	{#if nChosen}
 		<div class="bar" in:collapseIn out:collapseOut>
 			<span>{t("{n}개 선택됨", { n: nChosen })}</span>
-			<button class="btn sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</button>
+			<Button size="sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</Button>
 			<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nChosen })} onconfirm={() => void remove()} disabled={busy}><Icon name="trash" /> {t("삭제")}</ConfirmButton>
 		</div>
 	{/if}

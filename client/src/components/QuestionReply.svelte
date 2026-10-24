@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import Icon from "./Icon.svelte";
@@ -70,9 +71,9 @@
 				bind:value={typed}
 				onkeydown={(e) => e.key === "Enter" && !e.isComposing && reply(typed)}
 			/>
-			<button class="btn primary" disabled={!typed.trim()} onclick={() => reply(typed)}>
+			<Button variant="primary" disabled={!typed.trim()} onclick={() => reply(typed)}>
 				{#if items}{t("저장")}{:else}<Icon name="send" /> {t("보내기")}{/if}
-			</button>
+			</Button>
 		</div>
 	{/if}
 	{#if items}
@@ -136,7 +137,7 @@
 		min-width: 0;
 		height: 38px;
 	}
-	.free .btn {
+	.free :global(.btn) {
 		flex: none;
 		height: 38px;
 		min-width: 76px;

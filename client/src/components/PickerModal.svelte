@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import type { Snippet } from "svelte";
 	import { t } from "../lib/i18n";
 	import { isPhone } from "../lib/motion";
@@ -83,7 +84,7 @@
 	<footer class="pk-foot">
 		{@render footerStart?.()}
 		<span class="grow"></span>
-		<button type="button" class="btn sm" onclick={onclose}>{t("닫기")}</button>
+		<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
 	</footer>
 </Modal>
 

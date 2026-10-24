@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
@@ -329,9 +330,9 @@
 					<section class="fsec">
 						<div class="mhead">
 							<div class="mono-label">{t("모델 ({n})", { n: form.rows.length })}</div>
-							<button type="button" class="btn sm" disabled={discovering || busy} onclick={discover}>
+							<Button size="sm" disabled={discovering || busy} onclick={discover}>
 								<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
-							</button>
+							</Button>
 						</div>
 						{#if discoverNote}<p class="hint note" role="status" in:collapseIn out:collapseOut>{discoverNote}</p>{/if}
 						<div class="mpick">
@@ -351,7 +352,7 @@
 								</button>
 							{/each}
 						</div>
-						<button type="button" class="btn dashed" onclick={addModel}><Icon name="plus" /> {t("모델 추가")}</button>
+						<Button variant="dashed" onclick={addModel}><Icon name="plus" /> {t("모델 추가")}</Button>
 					</section>
 				{/if}
 			</div>
@@ -360,10 +361,10 @@
 				{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
 				<div class="fbtns">
 					{#if editing !== null}
-						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
+						<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
 					{:else}
-						<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
-						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
+						<Button variant="ghost" onclick={() => close()} disabled={busy}>{t("취소")}</Button>
+						<Button variant="primary" type="submit" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</Button>
 					{/if}
 				</div>
 			</footer>

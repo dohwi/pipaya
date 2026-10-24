@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { isPlainHttpOnOpenNetwork } from "../lib/pairing";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
@@ -36,12 +37,12 @@
 			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<p class="warn">{t("암호화되지 않은 http 주소입니다. 인터넷을 거치면 토큰이 그대로 노출될 수 있습니다. Tailscale 주소를 쓰거나 https로 연결하세요.")}</p>{/if}
 			<p class="warn">{t("링크를 보낸 사람이 믿을 수 있는지, 위 주소가 내 서버가 맞는지 확인하세요. 연결하면 이 서버가 목록에 추가됩니다.")}</p>
 			<div class="actions">
-				<button class="btn" onclick={() => app.closeLinking()}>{t("취소")}</button>
-				<button class="btn primary" onclick={() => void app.confirmLinking()}>{t("연결")}</button>
+				<Button onclick={() => app.closeLinking()}>{t("취소")}</Button>
+				<Button variant="primary" onclick={() => void app.confirmLinking()}>{t("연결")}</Button>
 			</div>
 		{:else if link.state === "failed"}
 			<p class="why" role="alert">{link.error}</p>
-			<button class="btn primary" onclick={() => app.closeLinking()}>{t("닫기")}</button>
+			<Button variant="primary" onclick={() => app.closeLinking()}>{t("닫기")}</Button>
 		{/if}
 	</div>
 	</Modal>

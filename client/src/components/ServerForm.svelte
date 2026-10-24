@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import Notice from "./Notice.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { paneIn } from "../lib/motion";
@@ -161,7 +162,7 @@
 				<div class="wd">
 					<Icon name="folder" />
 					<span class="mono wdpath" title={shownWd?.effective}>{shownWd?.effective ?? "…"}</span>
-					<button class="btn sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</button>
+					<Button size="sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</Button>
 				</div>
 				<p class="hint">
 					{t("이 서버에서 새 대화가 시작되는 위치입니다.")}{shownWd?.saved ? "" : ` ${t("지금은 서버를 처음 켤 때의 설정을 쓰고 있습니다.")}`}
@@ -200,9 +201,9 @@
 							autocomplete="off"
 							spellcheck="false"
 						/>
-						<button type="button" class="btn ghost eye" onclick={() => (showToken = !showToken)} aria-pressed={showToken}>
+						<Button variant="ghost" class="eye" onclick={() => (showToken = !showToken)} aria-pressed={showToken}>
 							{showToken ? t("숨기기") : t("보기")}
-						</button>
+						</Button>
 					</div>
 				</label>
 
@@ -217,10 +218,10 @@
 					<ConfirmButton danger confirmLabel={t("정말 삭제")} onconfirm={remove}>{t("삭제")}</ConfirmButton>
 				{/if}
 				<span class="grow"></span>
-				<button type="button" class="btn ghost" onclick={close}>{t("취소")}</button>
-				<button class="btn primary" disabled={busy}>
+				<Button variant="ghost" onclick={close}>{t("취소")}</Button>
+				<Button variant="primary" type="submit" disabled={busy}>
 					{#if busy}<span class="spinner"></span>{t("확인 중…")}{:else}{editing ? t("저장") : t("추가")}{/if}
-				</button>
+				</Button>
 			</footer>
 		</form>
 	{/if}
@@ -411,7 +412,7 @@
 		display: flex;
 		gap: 6px;
 	}
-	.eye {
+	.tokenrow :global(.btn.eye) {
 		flex: none;
 		height: 42px;
 		padding: 0 12px;

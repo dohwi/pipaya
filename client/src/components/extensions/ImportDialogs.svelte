@@ -5,6 +5,7 @@
 </script>
 
 <script lang="ts">
+	import Button from "../Button.svelte";
 	import { t } from "../../lib/i18n";
 	import { featuresOf } from "../../lib/extensions/labels";
 	import { extensions, type InstalledExtension } from "../../lib/extensions/host.svelte";
@@ -87,8 +88,8 @@
 				{/if}
 			</div>
 			<div class="rfoot">
-				<button type="button" class="btn sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</button>
-				<button type="button" class="btn primary sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</button>
+				<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
+				<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</Button>
 			</div>
 		</div>
 	</Modal>
@@ -117,10 +118,10 @@
 			</div>
 			<div class="rfoot">
 				{#if r.pkg}
-					<button type="button" class="btn primary sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</button>
-					<button type="button" class="btn sm" onclick={onclose}>{t("닫기")}</button>
+					<Button variant="primary" size="sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</Button>
+					<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
 				{:else}
-					<button type="button" class="btn primary sm" data-ok onclick={onclose}>{t("확인")}</button>
+					<Button variant="primary" size="sm" data-ok onclick={onclose}>{t("확인")}</Button>
 				{/if}
 			</div>
 		</div>
@@ -144,7 +145,7 @@
 	.rpkg strong { font-weight: 600; overflow-wrap: anywhere; }
 	.rdetail { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.rfoot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.rfoot .btn { min-width: 76px; }
+	.rfoot :global(.btn) { min-width: 76px; }
 
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }

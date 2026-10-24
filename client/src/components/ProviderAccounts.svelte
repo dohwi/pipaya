@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
@@ -68,7 +69,7 @@
 				<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
 				<Badge variant="outline" size="sm" mono>{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</Badge>
 				{#if p.configured}<Badge tone="ok" size="sm"><Icon name="check" /> {t("사용 가능")}</Badge>{/if}
-				<button class="btn ghost sm" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</button>
+				<Button variant="ghost" size="sm" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</Button>
 			</li>
 		{/each}
 	</ul>

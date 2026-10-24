@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
@@ -50,7 +51,7 @@
 		<div class="warn">
 			<Icon name="key" />
 			<span>{t("사용할 수 있는 모델이 아직 없습니다.")}</span>
-			<button class="btn sm" onclick={() => (app.connectionsOpen = true)}>{t("모델 연결")}</button>
+			<Button size="sm" onclick={() => (app.connectionsOpen = true)}>{t("모델 연결")}</Button>
 		</div>
 	{/if}
 </div>
