@@ -723,6 +723,7 @@ class AppStore {
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal asked for on another server opens once that server is connected (see sync).
       this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
+      this.pendingChat = !to.session && !to.terminal;
       if (to.workdir !== undefined)
         write(`${K.workdir}.${serverId}`, to.workdir);
       if (to.session) write(`${K.active}.${serverId}`, to.session);
@@ -745,6 +746,9 @@ class AppStore {
 
   /** Working directory of a terminal to open as soon as the server being switched to is connected */
   private pendingTerminal: string | null = null;
+
+  /** A new chat to start as soon as the server being switched to is connected */
+  private pendingChat = false;
 
   private get activeKey(): string {
     return `${K.active}.${this.serverId}`;
@@ -839,6 +843,10 @@ class AppStore {
         const dir = this.pendingTerminal;
         this.pendingTerminal = null;
         void this.openTerminal(dir);
+      }
+      if (this.pendingChat) {
+        this.pendingChat = false;
+        void this.startChat();
       }
       // Panes of the open group missed events while we were away: reload them too.
       for (const id of this.visibleIds)
