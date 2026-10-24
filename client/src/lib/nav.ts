@@ -32,10 +32,13 @@ export interface BlockOpts {
 	dirOrder?: readonly string[];
 	/** tabs (group / session / terminal ids) placed by hand, across all directories */
 	tabOrder?: readonly string[];
+	/** the folder each group was first listed under (group id -> cwd); kept while one of its panes still works there */
+	groupDir?: Readonly<Record<string, string>>;
 }
 
 /** The folder a group belongs to: the one most of its panes work in (ties: the first pane's). */
-function dirOf(members: Member[]): string {
+function dirOf(members: Member[], pinned?: string): string {
+	if (pinned && members.some((m) => m.cwd === pinned)) return pinned;
 	const n = new Map<string, number>();
 	for (const m of members) n.set(m.cwd, (n.get(m.cwd) ?? 0) + 1);
 	let best = members[0]!.cwd;
@@ -65,7 +68,7 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 		members.forEach((m) => grouped.add(m.id));
 		const shown = matchGroup(g) ? members : members.filter(matches);
 		if (!shown.length) continue;
-		all.push({ cwd: dirOf(members), tab: { kind: "group", id: g.id, group: g, members: shown }, created: g.createdAt ?? 0 });
+		all.push({ cwd: dirOf(members, o.groupDir?.[g.id]), tab: { kind: "group", id: g.id, group: g, members: shown }, created: g.createdAt ?? 0 });
 	}
 	for (const s of sessions) {
 		if (grouped.has(s.id) || !match(s)) continue;

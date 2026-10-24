@@ -27,7 +27,7 @@
 			const sessions = current ? app.sessions : (ov?.sessions ?? []);
 			const terminals = current ? app.terminals : (ov?.terminals ?? []);
 			if (!sessions.length && !terminals.length) return [];
-			const dirs = sidebarDirs(sessions, current ? app.groups : (ov?.groups ?? []), terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id] });
+			const dirs = sidebarDirs(sessions, current ? app.groups : (ov?.groups ?? []), terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] });
 			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
 			const state: Record<string, Activity> = {};
 			for (const x of sessions) state[x.id] = activityOf(view, x.id);

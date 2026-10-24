@@ -68,6 +68,17 @@ describe("sessionOrder / stepFrom", () => {
 		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], ["z", "x"])).toEqual(["z", "x", "y", "g1", "g2", "h1", "h2"]);
 	});
 
+	test("a group stays in the folder it was first listed under while a pane still works there", () => {
+		const ss = [sess("a", "/p/one", 1), sess("b", "/p/two", 2), sess("c", "/p/two", 3)];
+		const g = [grp("G", pair("a", "b"))];
+		const dirsOf = (gd?: Record<string, string>) => sidebarDirs(ss, g, [], { groupDir: gd }).map((d) => [d.path, d.tabs.map((t) => t.id)]);
+		expect(dirsOf()).toEqual([["/p/one", ["G"]], ["/p/two", ["c"]]]);
+		// by tie the first pane (/p/one) wins; pinned to /p/two it stays there
+		expect(sidebarDirs(ss, g, [], { groupDir: { G: "/p/two" } }).map((d) => d.path)).toEqual(["/p/two"]);
+		// the pinned folder is gone from the group: falls back to the majority
+		expect(sidebarDirs(ss, g, [], { groupDir: { G: "/p/gone" } }).map((d) => d.path)).toEqual(["/p/one", "/p/two"]);
+	});
+
 	test("a pane whose session is gone is skipped", () => {
 		expect(sessionOrder(sessions.filter((s) => s.id !== "g2"), groups)).toEqual(["g1", "x", "z", "y"]);
 	});

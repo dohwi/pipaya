@@ -27,6 +27,9 @@ export class SidebarState {
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
   tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
 
+  /** Folder each group is listed under, per server: fixed when first seen so adding or closing panes cannot move the group. */
+  groupDir = $state<Record<string, Record<string, string>>>(read<Record<string, Record<string, string>>>(K.groupDir, {}));
+
   /** `save` false while dragging the edge: persist once, at the end. */
   setWidth(px: number, save = true) {
     this.width = clamp(px);
@@ -64,7 +67,13 @@ export class SidebarState {
    * Freeze what is listed now: directories and tabs not placed yet are appended in their current order, so closing,
    * grouping or searching later can never make them jump. Already placed entries (even gone ones) keep their rank.
    */
-  pin(serverId: string, dirs: string[], tabs: string[]) {
+  pin(serverId: string, dirs: string[], tabs: string[], groups: Record<string, string> = {}) {
+    const g = this.groupDir[serverId] ?? {};
+    const changed = Object.entries(groups).filter(([id, cwd]) => g[id] !== cwd);
+    if (changed.length) {
+      this.groupDir = { ...this.groupDir, [serverId]: { ...g, ...Object.fromEntries(changed) } };
+      write(K.groupDir, this.groupDir);
+    }
     const d = this.dirOrder[serverId] ?? [];
     const newDirs = dirs.filter((p) => !d.includes(p));
     if (newDirs.length) {

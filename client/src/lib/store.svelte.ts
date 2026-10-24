@@ -1331,7 +1331,7 @@ class AppStore {
 
   /** The open server's working directories and their tabs, in sidebar order. */
   get dirs(): DirBlock[] {
-    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder });
+    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined });
   }
 
   /** The tab the focused pane is in, and its directory. */
@@ -1366,7 +1366,7 @@ class AppStore {
   openDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.overview[serverId];
     const dirs = ov
-      ? sidebarDirs(ov.sessions ?? [], ov.groups ?? [], ov.terminals ?? [], { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId] })
+      ? sidebarDirs(ov.sessions ?? [], ov.groups ?? [], ov.terminals ?? [], { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId] })
       : this.dirs;
     const dir = dirs.find((d) => d.path === path);
     if (!dir) return;

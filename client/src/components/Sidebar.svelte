@@ -47,13 +47,14 @@
 	}
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs"> {
 		const dirs = sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || x.title.toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
 			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
 			dirOrder: order,
 			tabOrder: torder,
+			groupDir: gdir,
 		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		return { root: ws?.root, total, dirs };
@@ -87,7 +88,7 @@
 							: "offline"
 				: ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], current ? app.terminals : (ov?.terminals ?? []));
+			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], current ? app.terminals : (ov?.terminals ?? []));
 			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
 		});
 	});
@@ -98,7 +99,7 @@
 		if (searching) return;
 		for (const n of nodes)
 			if (n.loaded && n.state === "online" && n.dirs.length)
-				untrack(() => app.sidebar.pin(n.server.id, n.dirs.map((d) => d.path), n.dirs.flatMap((d) => d.tabs.map((x) => x.id))));
+				untrack(() => app.sidebar.pin(n.server.id, n.dirs.map((d) => d.path), n.dirs.flatMap((d) => d.tabs.map((x) => x.id)), Object.fromEntries(n.dirs.flatMap((d) => d.tabs.filter((x) => x.kind === "group").map((x) => [x.id, d.path])))));
 	});
 	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
 	/** Activity of a session on the open server (other servers report running / waiting only). */
