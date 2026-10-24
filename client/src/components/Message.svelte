@@ -12,7 +12,9 @@
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { splitQuote } from "../lib/quote";
-	import type { AssistantBlock, AssistantItem, Step, UserItem } from "../lib/types";
+	import { plainTextOf, segmentsOf } from "../lib/reply-blocks";
+	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../lib/swipe-reply";
+	import type { AssistantItem, UserItem } from "../lib/types";
 
 	/**
 	 * `turn`: for an assistant row, every consecutive assistant message answering one prompt (one LLM call each);
@@ -41,62 +43,50 @@
 		app.replyTo = { text: item.kind === "user" ? (peer ? peer.body : item.text) : plainText, who: peer ? peer.from : undefined };
 	}
 
-	/** Mobile: drag an answer right -> left to reply to it. */
-	const SWIPE_TRIGGER = 64;
-	const SWIPE_MAX = 96;
+	/**
+	 * Mobile: drag an answer right -> left to reply to it. The gesture is lib/swipe-reply (plain TS); the two numbers the
+	 * template needs are mirrored into runes after every touch event.
+	 */
+	const gesture = new SwipeReply();
 	let swipeX = $state(0);
 	let swiping = $state(false);
+	const sync = () => {
+		swipeX = gesture.x;
+		swiping = gesture.swiping;
+	};
 
 	function swipeable(node: HTMLElement) {
-		let x0 = 0;
-		let y0 = 0;
-		let mode: "idle" | "pending" | "swipe" | "scroll" = "idle";
-		let armed = false;
 		const canReply = () => item.kind === "assistant" && !live && !!plainText;
-		const reset = () => {
-			mode = "idle";
-			armed = false;
-			swiping = false;
-			swipeX = 0;
-		};
-		function start(e: TouchEvent) {
+		const start = (e: TouchEvent) => {
 			// Horizontally scrollable content (code, tables, formulas) and form fields keep their own gestures.
-			const el = e.target as Element | null;
-			if (e.touches.length !== 1 || !canReply() || el?.closest("pre, table, .katex-display, input, textarea, [contenteditable]")) return void (mode = "scroll");
-			x0 = e.touches[0].clientX;
-			y0 = e.touches[0].clientY;
-			mode = "pending";
-		}
-		function move(e: TouchEvent) {
-			if (mode === "idle" || mode === "scroll") return;
-			const dx = e.touches[0].clientX - x0;
-			const dy = e.touches[0].clientY - y0;
-			if (mode === "pending") {
-				if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-				if (Math.abs(dy) > Math.abs(dx) || dx > 0) return void (mode = "scroll");
-				mode = "swipe";
-				swiping = true;
-			}
+			const blocked = (e.target as Element | null)?.closest(SWIPE_BLOCKERS);
+			gesture.start(e.touches.length, e.touches[0]?.clientX ?? 0, e.touches[0]?.clientY ?? 0, canReply() && !blocked);
+		};
+		const move = (e: TouchEvent) => {
+			const m = gesture.move(e.touches[0]!.clientX, e.touches[0]!.clientY);
+			if (!m.handled) return;
 			e.preventDefault();
-			swipeX = Math.max(-SWIPE_MAX, dx * 0.7);
-			const hit = -swipeX >= SWIPE_TRIGGER;
-			if (hit && !armed) navigator.vibrate?.(10);
-			armed = hit;
-		}
-		function end() {
-			if (mode === "swipe" && armed) reply();
-			reset();
-		}
+			if (m.justArmed) navigator.vibrate?.(10);
+			sync();
+		};
+		const end = () => {
+			if (gesture.end()) reply();
+			sync();
+		};
+		const cancel = () => {
+			gesture.reset();
+			sync();
+		};
 		node.addEventListener("touchstart", start, { passive: true });
 		node.addEventListener("touchmove", move, { passive: false });
 		node.addEventListener("touchend", end);
-		node.addEventListener("touchcancel", reset);
+		node.addEventListener("touchcancel", cancel);
 		return {
 			destroy() {
 				node.removeEventListener("touchstart", start);
 				node.removeEventListener("touchmove", move);
 				node.removeEventListener("touchend", end);
-				node.removeEventListener("touchcancel", reset);
+				node.removeEventListener("touchcancel", cancel);
 			},
 		};
 	}
@@ -104,15 +94,7 @@
 	let copied = $state(false);
 	let expanded = $state(false);
 
-	const plainText = $derived(
-		item.kind === "user"
-			? item.text
-			: parts
-					.flatMap((p) => p.blocks)
-					.filter((b) => b.type === "text")
-					.map((b) => (b as { text: string }).text)
-					.join("\n\n"),
-	);
+	const plainText = $derived(item.kind === "user" ? item.text : plainTextOf(parts.flatMap((p) => p.blocks)));
 
 	async function copy() {
 		if (await copyText(plainText)) {
@@ -121,22 +103,8 @@
 		}
 	}
 
-	type Seg = { kind: "text"; text: string; i: number } | { kind: "work"; steps: Step[]; i: number };
 	/** Thoughts and tool calls between two pieces of text share one work box; text keeps its place around it. */
-	const segments = $derived.by<Seg[]>(() => {
-		if (item.kind !== "assistant") return [];
-		const out: Seg[] = [];
-		parts.flatMap((p) => p.blocks).forEach((block, i) => {
-			if (block.type === "text") return void out.push({ kind: "text", text: block.text, i });
-			const step: Step = block.type === "thinking" ? { kind: "think", text: block.text, done: block.done } : { kind: "tool", id: block.id, name: block.name, args: block.args };
-			const prev = out[out.length - 1];
-			if (prev?.kind === "work") prev.steps.push(step);
-			else out.push({ kind: "work", steps: [step], i });
-		});
-		// Streaming but nothing has arrived yet: an empty work box stands in for "the agent is thinking".
-		if (live && !out.length) out.push({ kind: "work", steps: [], i: -1 });
-		return out;
-	});
+	const segments = $derived(item.kind === "assistant" ? segmentsOf(parts.flatMap((p) => p.blocks), live) : []);
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
 	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
