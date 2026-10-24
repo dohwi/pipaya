@@ -418,6 +418,7 @@
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
 					{#if r}
+						{@const iconName = r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동")}
 						<section class="fsec">
 							<label>
 								<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
@@ -446,18 +447,16 @@
 									<p class="note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
 								{/if}
 							{/if}
-							<label>
-								<span>{t("표시 이름")} <em>({tc("optional", "선택")})</em></span>
-								<input class="field" bind:value={r.name} placeholder={t("ID와 같으면 비워 두세요")} autocomplete="off" />
-							</label>
-						</section>
-						<section class="fsec">
-							<div class="mono-label">{t("아이콘")}</div>
-							<button type="button" class="mtrigger" onclick={() => (iconFor = editing)}>
-								<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
-								<span class="mtext">{r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동")}</span>
-								<Icon name="chevron-down" />
-							</button>
+							<div class="namerow">
+								<button type="button" class="iconpick" onclick={() => (iconFor = editing)} aria-label={`${t("아이콘")}: ${iconName}`} title={`${t("아이콘")}: ${iconName}`}>
+									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={20} colored={Boolean(r.icon)} /></span>
+									<Icon name="chevron-down" />
+								</button>
+								<label>
+									<span>{t("표시 이름")} <em>({tc("optional", "선택")})</em></span>
+									<input class="field" bind:value={r.name} placeholder={t("ID와 같으면 비워 두세요")} autocomplete="off" />
+								</label>
+							</div>
 						</section>
 						<section class="fsec">
 							<div class="mono-label">{t("제한")}</div>
@@ -881,6 +880,39 @@
 	}
 	.mtrigger:hover {
 		border-color: var(--accent);
+	}
+	.namerow {
+		display: flex;
+		align-items: flex-end;
+		gap: 8px;
+	}
+	.namerow label {
+		flex: 1;
+	}
+	.iconpick {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 42px;
+		padding: 0 10px;
+		background: var(--bg);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		color: var(--text);
+		transition: border-color var(--motion-fast) var(--ease-std);
+	}
+	.iconpick:hover {
+		border-color: var(--accent);
+	}
+	.iconpick :global(svg:not(.model):not(.logo)) {
+		width: 13px;
+		height: 13px;
+		stroke: var(--text-dim);
+		fill: none;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.mtext {
 		flex: 1;
