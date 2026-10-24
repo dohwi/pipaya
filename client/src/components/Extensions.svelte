@@ -69,10 +69,6 @@
 	};
 	const clientUpdate = (entry: InstalledExtension) => newerEntry(entry.package.manifest.id, "client", entry.package.manifest.version);
 	const serverUpdate = (ext: ServerExt) => { const e = newerEntry(ext.name, "server", ext.version); return e?.source.type === "git" ? e : undefined; };
-	const updatable = $derived([
-		...list.map((e) => clientUpdate(e)).filter((e): e is MarketEntry => !!e),
-		...(view === "server" ? serverSide.map((e) => serverUpdate(e)).filter((e): e is MarketEntry => !!e) : []),
-	]);
 	/** Client: download, then the usual preview (permissions) before replacing. Server: reinstall at the catalog's commit. */
 	function update(entry: MarketEntry) {
 		void run(entry.kind === "server" ? srvKey(entry.id) : entry.id, async () => {
@@ -267,6 +263,12 @@
 	}
 </script>
 
+{#snippet updateButton(upd: MarketEntry, disabled: boolean)}
+	<Button variant="primary" size="sm" class="upd-btn" {disabled} title={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>
+		<Icon name="download" /> <span>{t("업데이트")}</span> <b>v{upd.version}</b>
+	</Button>
+{/snippet}
+
 {#snippet installedRow(entry: InstalledExtension)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
@@ -275,9 +277,9 @@
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} onopen={() => (selected = id)}>
-		{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if upd}<span class="chip accent">v{upd.version}</span>{/if}{/snippet}
+		{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 		{#snippet control()}
-			{#if upd}<Button variant="primary" size="sm" disabled={tasks.busy[id] || tasks.busy.$import} onclick={() => update(upd)}>{t("업데이트")}</Button>{/if}
+			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
 			<Switch
 				checked={on}
 				label={t("{name} 사용", { name: entry.package.manifest.name })}
@@ -337,13 +339,6 @@
 			</label>
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
-		{#if updatable.length}
-			<Notice tone="ok" size="sm" role="status">
-				<div class="upd">
-					<span>{t("업데이트할 수 있는 확장 {n}개. 각 항목의 업데이트 버튼을 누르세요.", { n: updatable.length })}</span>
-				</div>
-			</Notice>
-		{/if}
 		{#if extensions.safeMode}
 			<Notice tone="warn" size="sm" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “고급”에서 해제할 수 있습니다.")}</Notice>
 		{/if}
@@ -374,11 +369,10 @@
 				{@const upd = serverUpdate(ext)}
 				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet control()}
-						{#if upd}<Button variant="primary" size="sm" disabled={!!tasks.busy[srvKey(ext.name)]} onclick={() => update(upd)}>{t("업데이트")}</Button>{/if}
+						{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)])}{/if}
 					{/snippet}
 					{#snippet meta()}
 						{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
-						{#if upd}<span class="chip accent">v{upd.version}</span>{/if}
 						<span class="meta">{t("서버에서 실행")}</span>
 						{#if missingClient(ext.companion)}<span class="chip warn" title={t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}>{t("클라이언트 미설치 · 동작 안 함")}</span>{/if}
 					{/snippet}
@@ -428,8 +422,13 @@
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.chip { background: var(--bg-active); }
 	.chip.warn { background: var(--warn-soft); }
-	.chip.accent { background: var(--accent-soft); color: var(--text); font-size: var(--fs-2xs); padding: 0 7px; border-radius: 999px; line-height: 1.6; font-family: var(--mono); }
-	.upd { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+	.extensions :global(.btn.upd-btn) { display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; padding: 6px 12px; }
+	.extensions :global(.btn.upd-btn svg) { width: 15px; height: 15px; stroke-width: 2; }
+	@media (max-width: 640px) {
+		.extensions :global(.btn.upd-btn) { gap: 4px; padding: 5px 9px; }
+		.extensions :global(.btn.upd-btn svg) { display: none; }
+	}
+	.extensions :global(.btn.upd-btn b) { font: 500 var(--fs-2xs)/1 var(--mono); padding: 3px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.2); }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }

@@ -1215,7 +1215,7 @@ export const en: Record<string, string> = {
 	"업데이트": "Update",
 	"업데이트하지 못했습니다": "Could not update",
 	"{name}을(를) v{version}(으)로 업데이트했습니다.": "Updated {name} to v{version}.",
-	"업데이트할 수 있는 확장 {n}개. 각 항목의 업데이트 버튼을 누르세요.": "{n} extension(s) can be updated. Press Update on each one.",
+	"v{version}으로 업데이트": "Update to v{version}",
 	"나중에": "Later",
 	"앱 업데이트": "App updates",
 	"시작할 때 새 버전 확인": "Check for updates on launch",
