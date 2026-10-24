@@ -12,6 +12,7 @@
 	import { parsePackage, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
 	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
+	import { fetchCompanion } from "../lib/extensions/marketplace";
 	import ImportDialogs from "./extensions/ImportDialogs.svelte";
 	import InstalledDetail from "./extensions/InstalledDetail.svelte";
 	import ServerDetail from "./extensions/ServerDetail.svelte";
@@ -57,6 +58,10 @@
 		market = false;
 		preview = pkg;
 		filename = `${entry.id}.json`;
+	}
+	/** The client half of a server extension: fetched from the catalog, then through the usual preview. */
+	async function installCompanion(id: string) {
+		await tasks.run("$import", async () => pickFromMarket(await fetchCompanion(id), { id }));
 	}
 	const tasks = new ExtensionTasks();
 	let drafts = $state<Record<string, string>>({});
@@ -280,6 +285,7 @@
 			busy={!!tasks.busy[srvKey(openServer.name)]}
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
+			oninstallclient={installCompanion}
 		/>
 	{:else}
 	<section aria-labelledby="extensions-installed">

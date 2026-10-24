@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "../Button.svelte";
 	import Notice from "../Notice.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { flagVariable, serverFields, serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
@@ -16,6 +17,7 @@
 		busy,
 		onback,
 		onsave,
+		oninstallclient,
 	}: {
 		ext: ServerExt;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
@@ -23,6 +25,8 @@
 		busy: boolean;
 		onback: () => void;
 		onsave: (settings: Record<string, unknown>) => void;
+		/** Download the client half and open its install preview. */
+		oninstallclient: (id: string) => void;
 	} = $props();
 
 	const form = $derived(serverFields(ext));
@@ -39,7 +43,12 @@
 
 	{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
 	{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
-	{#if missingClient}<Notice tone="warn" size="sm" role="status">{t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}</Notice>{/if}
+	{#if missingClient}
+		<Notice tone="warn" size="sm" role="status">
+			<p class="warnline">{t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}</p>
+			<Button variant="primary" size="sm" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("클라이언트 설치")}</Button>
+		</Notice>
+	{/if}
 
 	<section class="block">
 		<h3 class="label">{t("확장 설정")}</h3>
@@ -67,6 +76,7 @@
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	p { margin: 0; }
+	.warnline { margin-bottom: 8px; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }

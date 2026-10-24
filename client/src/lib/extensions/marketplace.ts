@@ -176,3 +176,12 @@ export function fetchStars(repo: string): Promise<number | undefined> {
 }
 
 export const formatStars = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n);
+
+/** Finds the client extension `id` in the catalog the user browses and downloads it, so a server extension can offer "install the client half". */
+export async function fetchCompanion(id: string, signal?: AbortSignal): Promise<ExtensionPackage> {
+  let url = DEFAULT_MARKETPLACE_URL;
+  try { url = localStorage.getItem("pipaya.marketplace.url") || url; } catch { /* default catalog */ }
+  const entry = (await fetchCatalog(url, signal)).extensions.find((e) => e.id === id && e.kind === "client");
+  if (!entry) throw new LocalizedError(t("마켓플레이스에서 클라이언트 확장 ‘{id}’을 찾을 수 없습니다.", { id }));
+  return fetchPackage(entry, signal);
+}
