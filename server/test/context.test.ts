@@ -177,6 +177,12 @@ describe("context API and application", () => {
 			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "skills", "skillsPrompt", "readFiles"].sort());
 			expect(preview).toMatchObject({ cwd: f.cwd, state: "preview", capturedAt: null, systemPrompt: "Base", tools: ["read"], readFiles: [] });
 			expect(preview.instructions.at(-1)).toEqual({ path: join(f.cwd, "AGENTS.md"), scope: "cwd", content: "Preview version", bytes: 15 });
+			// Before any session exists: the same preview for a new chat in that folder.
+			expect((await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`, undefined, false)).status).toBe(401);
+			const fresh = (await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`)).json;
+			expect(fresh).toMatchObject({ cwd: f.cwd, state: "preview", capturedAt: null, readFiles: [] });
+			expect(fresh.instructions.at(-1)).toEqual(preview.instructions.at(-1));
+			expect(fresh.effectiveSystemPrompt).toContain("Preview version");
 			for (const mode of ["steer", "follow_up"]) {
 				expect((await api("POST", `/sessions/${id}/messages`, { text: "invalid", mode })).status).toBe(409);
 			}

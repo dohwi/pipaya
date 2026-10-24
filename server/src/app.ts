@@ -427,6 +427,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { params: S.IdParams, response: { 200: S.SessionContext, ...S.errors(401, 404) } },
 		handler: async (req) => sessions.context(req.params.id),
 	});
+	app.get("/context", {
+		schema: { querystring: Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096 })) }), response: { 200: S.SessionContext, ...S.errors(400, 401) } },
+		handler: async (req) => sessions.previewContext(req.query.cwd),
+	});
 	app.patch("/sessions/:id", {
 		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409) } },
 		handler: async (req) => sessions.update(req.params.id, req.body),

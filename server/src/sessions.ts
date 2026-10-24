@@ -153,6 +153,22 @@ export class SessionManager {
 		};
 	}
 
+	/** What a new conversation in `cwd` would start with, before any session exists (the composer of a new chat). */
+	previewContext(cwdInput?: string): SessionContext {
+		const cwd = this.skills?.resolveCwd(cwdInput) ?? resolve(this.defaultWorkdir(), cwdInput?.trim() || ".");
+		const tools = this.ext?.defaultTools() ?? DEFAULT_TOOLS;
+		const base = previewContext({ cwd, tools, systemPrompt: DEFAULT_SYSTEM_PROMPT } as SessionRecord, this.skills?.active(cwd), undefined);
+		const skills = base.skills ?? [];
+		return {
+			...base,
+			skillsPrompt: skills.length ? skillsPrompt(skills) : "",
+			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
+			state: "preview",
+			capturedAt: null,
+			readFiles: [],
+		};
+	}
+
 	status(id: string): SessionStatus {
 		this.get(id);
 		const live = this.live.get(id);
