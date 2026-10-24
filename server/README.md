@@ -132,7 +132,7 @@ On/off state is stored in SQLite (`settings.skills`), not in the skill folders: 
 keyed by the git root. Effective state = project override, else global default. Everything is enabled by default.
 
 Enabled skills are added to the system prompt as an `<available_skills>` block (name, description, path); the model loads a skill by reading its `SKILL.md`.
-Unlike `AGENTS.md` (frozen in the first-run **context snapshot**), skills always follow the *current* settings: toggling applies to running sessions
+Like `AGENTS.md` files (re-read from disk each run; the first-run **context snapshot** keeps only the base prompt, tools and cwd), skills always follow the *current* settings: toggling applies to running sessions
 from their next message (`GET /sessions/:id/context` → `skills` / `effectiveSystemPrompt` show the live set). The leading system message is only rewritten
 when the enabled set really changed, so the provider prompt cache stays warm otherwise. Without the `read` tool nothing is advertised. The `read` tool
 may open files inside the currently enabled skill folders even though they are outside the working directory; nothing else outside it is readable. Changes emit `skills_updated`.

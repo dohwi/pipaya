@@ -102,7 +102,7 @@ export const SessionContext = Type.Object({
 	state: Type.Union([Type.Literal("preview"), Type.Literal("applied")]),
 	capturedAt: Nullable(Type.Integer()),
 	systemPrompt: Type.String({ description: "Base session prompt" }),
-	effectiveSystemPrompt: Type.String({ description: "Base prompt plus ordered AGENTS.md instructions; immutable once applied" }),
+	effectiveSystemPrompt: Type.String({ description: "Base prompt plus ordered AGENTS.md instructions, re-read from disk (edits apply from the next run)" }),
 	instructions: Type.Array(Type.Object({
 		path: Type.String(),
 		scope: Type.Union([Type.Literal("global"), Type.Literal("ancestor"), Type.Literal("cwd")]),

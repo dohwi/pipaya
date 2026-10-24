@@ -199,7 +199,17 @@ describe("context API and application", () => {
 			expect(applied.readFiles).toMatchObject([{ path: join(f.cwd, "sample.txt"), reads: 1, ranges: [{ from: 2, to: 3 }] }]);
 			await run(id, '!read {"path":"missing.txt"}');
 			expect((await api("GET", `/sessions/${id}/context`)).json.readFiles).toEqual(applied.readFiles);
-			writeFileSync(join(f.cwd, "AGENTS.md"), "Must never replace applied instructions");
+			// AGENTS.md follows the disk like skills: an edit shows at once and reaches the model on the next run.
+			writeFileSync(join(f.cwd, "AGENTS.md"), "Edited version");
+			const edited = (await api("GET", `/sessions/${id}/context`)).json;
+			expect(edited).toMatchObject({ state: "applied", capturedAt: applied.capturedAt, systemPrompt: "Updated base" });
+			expect(edited.instructions.at(-1)).toMatchObject({ path: join(f.cwd, "AGENTS.md"), content: "Edited version" });
+			expect(edited.effectiveSystemPrompt).toContain("Edited version");
+			await run(id, "after edit");
+			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(edited.effectiveSystemPrompt);
+			writeFileSync(join(f.cwd, "AGENTS.md"), "Applied version");
+			await run(id, "after revert");
+			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
 			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
 
 			// Idle-agent eviction/reload without changing persistence.

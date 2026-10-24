@@ -61,7 +61,7 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		updated_at INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS groups_created ON groups(created_at);`,
-	// v6: immutable instructions applied at the first model run.
+	// v6: base prompt, tools and cwd captured at the first model run (AGENTS.md is re-read live).
 	`CREATE TABLE IF NOT EXISTS session_contexts (
 		session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
 		data TEXT NOT NULL

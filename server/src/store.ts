@@ -180,7 +180,7 @@ export class SessionStore {
 		return row ? JSON.parse(row.data) : undefined;
 	}
 
-	/** First writer wins: applied context cannot be changed by later runs or reloads. */
+	/** First writer wins: the captured base prompt, tools and cwd cannot be changed by later runs or reloads (AGENTS.md and skills are re-read live). */
 	captureContext(id: string, snapshot: ContextSnapshot): ContextSnapshot {
 		this.db.query("INSERT OR IGNORE INTO session_contexts (session_id, data) VALUES ($id, $data)")
 			.run({ id, data: JSON.stringify(snapshot) });

@@ -48,8 +48,8 @@ export interface Live {
 	runStartedAt: number;
 	lastActive: number;
 	unsubscribe: () => void;
-	/** Fingerprint of the skills currently written into the system prompt. */
-	skillsKey: string;
+	/** Fingerprint of the skills and AGENTS.md files currently written into the system prompt. */
+	promptKey: string;
 	/** Directories the read tool may open besides the cwd; mutated in place when skills change. */
 	readRoots: string[];
 	/** Set while a compaction runs; aborting it cancels the summary call. */
@@ -75,6 +75,6 @@ export const MAX_RUN_TURNS = Number(process.env.PIPAYA_MAX_RUN_TURNS) > 0 ? Numb
 /** The same tool call (same name + arguments) this many turns in a row counts as a stuck loop. */
 export const MAX_REPEATED_CALLS = 6;
 
-export const skillsKey = (skills: SkillRef[]) =>
-	JSON.stringify(skills.map((k) => [k.name, k.description, k.path]));
+export const promptKey = (skills: SkillRef[], instructions: { path: string; content: string }[]) =>
+	JSON.stringify([skills.map((k) => [k.name, k.description, k.path]), instructions.map((i) => [i.path, i.content])]);
 

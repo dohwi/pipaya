@@ -16,6 +16,7 @@ export interface ContextSnapshot {
 	capturedAt: number;
 	systemPrompt: string;
 	effectiveSystemPrompt: string;
+	/** Instructions seen at capture time (informational: the live set is re-read from disk each run). */
 	instructions: Instruction[];
 	warnings: { path: string; message: string }[];
 	tools: string[];
@@ -114,7 +115,7 @@ export function discoverInstructions(cwd: string, opts: { home?: string; maxFile
 /** Skills are loaded through `read`, so they are pointless (and not advertised) without that tool. */
 export const advertisedSkills = (tools: string[], skills: SkillRef[]): SkillRef[] => (tools.includes("read") ? skills : []);
 
-/** The model's system prompt: base + frozen AGENTS.md + the skills that are currently enabled. */
+/** The model's system prompt: base + current AGENTS.md + the skills that are currently enabled. */
 export function buildSystemPrompt(base: string, instructions: Instruction[], skills: SkillRef[]): string {
 	const parts = [base];
 	if (instructions.length) parts.push(`# Project instructions\n\n${instructions.map((i) => `## ${i.path}\n\n${i.content}`).join("\n\n")}`);

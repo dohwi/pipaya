@@ -6,7 +6,7 @@ Two ways to tell the agent how to work:
 |---|---|---|
 | What | Rules that always apply | A folder with `SKILL.md`, read on demand |
 | Model sees | The **full text** in the system prompt | Only name, description, path; it opens the file with `read` when needed |
-| Changes apply | **Frozen at the session's first run** | From the **next message** |
+| Changes apply | From the **next message** | From the **next message** |
 
 ## AGENTS.md
 
@@ -20,7 +20,7 @@ Rules: the same real file (symlinks resolved) is included once; empty/whitespace
 
 Behaviour to tell the user:
 
-- Before a session's first message the client shows a **preview**. At the first run a snapshot is stored and never changes. To pick up an edit, **start a new session**. Editing the file mid-session does nothing.
+- Before a session's first message the client shows a **preview**. At the first run the base prompt, tools and cwd are stored and never change; AGENTS.md files are re-read from disk, so an edit applies from the **next message** (the prompt cache is only reset when the files really changed).
 - To verify: open the chat header's **session context** (file icon). It lists the applied files, scope, byte sizes, warnings, the full system prompt, active tools and files already read.
 
 Writing the global file:
