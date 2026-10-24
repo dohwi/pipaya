@@ -98,4 +98,13 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	/* phones: the title lines up with the 16px gutter every dialog body uses there */
+	@media (max-width: 640px) {
+		.mh {
+			padding: 12px 8px 8px 16px;
+		}
+		.mh.compact {
+			padding: 10px 6px 4px 16px;
+		}
+	}
 </style>

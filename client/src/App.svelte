@@ -583,7 +583,7 @@
 			left: 0;
 			top: 0;
 			bottom: 0;
-			width: min(max(320px, 80vw), 90vw); /* four fifths of the screen, never narrower than 320px */
+			width: min(max(320px, 80vw), 90vw, 400px); /* four fifths of a phone, never narrower than 320px nor a tablet-wide sheet */
 			translate: -102% 0;
 			transition: translate var(--motion-normal) var(--ease);
 			box-shadow: none;

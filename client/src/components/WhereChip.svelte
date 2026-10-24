@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import { tilde } from "../lib/format";
+	import { app } from "../lib/store.svelte";
 
 	/** Pill above the composer showing the folder a new chat will work in; a press opens the folder picker. */
 	let { path, onclick }: { path: string; onclick: () => void } = $props();
+	/** The home folder reads as `~`, like the sidebar, so the part that matters survives a narrow screen. */
+	const shown = $derived(tilde(path, app.workspace?.home));
 </script>
 
 <button class="where mono" {onclick} title={t("새 대화가 작업할 디렉터리 (눌러서 바꾸기)")} aria-label={t("작업 디렉터리: {path}", { path })}>
 	<Icon name="folder" />
-	<span class="p">{path || t("서버 기본 디렉터리")}</span>
+	<span class="p" title={path}>{shown || t("서버 기본 디렉터리")}</span>
 	<span class="chg">{t("변경")}</span>
 </button>
 
