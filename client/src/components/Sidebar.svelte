@@ -582,21 +582,31 @@
 		position: relative;
 		padding: 0 8px 4px;
 	}
-	.srv.carried {
+	/* a block being dragged fades */
+	.srv.carried,
+	.dirblock.carried {
 		opacity: 0.45;
 	}
-	/* where a carried server would land: a line in the gap beside its card */
+	/* the line where a carried server, folder or tab would land: its own rules below only place it */
 	.srv.before::before,
-	.srv.after::after {
+	.srv.after::after,
+	.dirblock.before::before,
+	.dirblock.after::after,
+	.item.before::before,
+	.item.after::after {
 		content: "";
 		position: absolute;
-		left: 0;
-		right: 0;
 		height: 2px;
 		border-radius: 1px;
 		background: var(--accent);
 		z-index: 1;
 		pointer-events: none;
+	}
+	/* where a carried server would land: a line in the gap beside its card */
+	.srv.before::before,
+	.srv.after::after {
+		left: 0;
+		right: 0;
 	}
 	.srv.before::before {
 		top: -5px;
@@ -677,7 +687,8 @@
 		height: 14px;
 		color: var(--text-faint);
 	}
-	.sicon :global(svg) {
+	.sicon :global(svg),
+	.dicon :global(svg) {
 		width: 14px;
 		height: 14px;
 		stroke: currentColor;
@@ -750,20 +761,10 @@
 	.dirblock {
 		position: relative;
 	}
-	.dirblock.carried {
-		opacity: 0.45;
-	}
 	.dirblock.before::before,
 	.dirblock.after::after {
-		content: "";
-		position: absolute;
 		left: 0;
 		right: 0;
-		height: 2px;
-		border-radius: 1px;
-		background: var(--accent);
-		z-index: 1;
-		pointer-events: none;
 	}
 	.dirblock.before::before {
 		top: -1px;
@@ -793,15 +794,6 @@
 		flex: none;
 		width: 14px;
 		color: var(--text-faint);
-	}
-	.dicon :global(svg) {
-		width: 14px;
-		height: 14px;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	/* name and parent path share one baseline; the pair is centred on the icons (line-height 1 drops the uneven leading) */
 	.dlabel {
@@ -1235,15 +1227,8 @@
 	/* the line where a carried session would land among its siblings */
 	.item.before::before,
 	.item.after::after {
-		content: "";
-		position: absolute;
 		left: 8px;
 		right: 8px;
-		height: 2px;
-		border-radius: 1px;
-		background: var(--accent);
-		z-index: 1;
-		pointer-events: none;
 	}
 	.item.before::before {
 		top: -1px;
