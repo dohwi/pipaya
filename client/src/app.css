@@ -149,6 +149,7 @@
 	--mark-mention: #7dd3fc;
 	--info: #5aa9ff;
 	--ok: #3ecf8e;
+	--ok-fg: #052e1b; /* text on a solid --ok fill */
 	--warn: #f5a524;
 	--danger: #f4616c;
 	--info-soft: rgba(90, 169, 255, 0.16);
@@ -194,6 +195,7 @@
 	--mark-mention: #0284c7;
 	--info: #1d6fe0;
 	--ok: #12a36a;
+	--ok-fg: #ffffff;
 	--warn: #b86e00;
 	--danger: #d6303d;
 	--info-soft: rgba(29, 111, 224, 0.1);
@@ -351,6 +353,15 @@ select:focus-visible {
 }
 .btn.primary:hover:not(:disabled) {
 	background: var(--accent-hover);
+}
+/* An update to take: green like the "new version" chip next to it (the one colour for updates across the app) */
+.btn.update {
+	background: var(--ok);
+	border-color: var(--ok);
+	color: var(--ok-fg);
+}
+.btn.update:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--ok) 85%, #000);
 }
 .btn.danger {
 	color: var(--danger);

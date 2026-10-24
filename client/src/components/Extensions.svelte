@@ -266,8 +266,8 @@
 
 {#snippet updateLine(upd: MarketEntry, disabled: boolean)}
 	<div class="updline">
-		<StatusChip tone="warn">{t("새 버전 v{version}", { version: upd.version })}</StatusChip>
-		<Button variant="primary" size="sm" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
+		<StatusChip tone="ok">{t("새 버전 v{version}", { version: upd.version })}</StatusChip>
+		<Button size="sm" class="update" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
 	</div>
 {/snippet}
 

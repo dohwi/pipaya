@@ -48,14 +48,14 @@
 		{:else if serverUpdater.phase === "restarting"}
 			<StatusChip tone="warn">{t("서버가 다시 시작되기를 기다리는 중…")}</StatusChip>
 		{:else if isNew}
-			<StatusChip tone="warn">{t("서버에 새 버전이 있습니다")}</StatusChip>
+			<StatusChip tone="ok">{t("서버에 새 버전이 있습니다")}</StatusChip>
 		{:else if release === "older"}
 			<StatusChip tone="warn">{t("앱보다 오래된 버전입니다")}</StatusChip>
 		{:else if status || release === "current"}
-			<StatusChip tone="ok">{t("최신 버전입니다")}</StatusChip>
+			<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
 		{/if}
 		{#if isNew}
-			<Button variant="primary" size="sm" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
+			<Button size="sm" class="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
 		{/if}
 	</div>
 	{#if release === "older" && !isNew && !busy}

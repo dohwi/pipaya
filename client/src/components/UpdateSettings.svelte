@@ -30,12 +30,12 @@
 				{#if updater.current}<span class="ver">{updater.current}</span>{/if}
 			</div>
 			{#if appNew}
-				<StatusChip tone="warn">{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</StatusChip>
+				<StatusChip tone="ok">{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</StatusChip>
 			{:else if updater.phase === "idle" && updater.current}
-				<StatusChip tone="ok">{t("최신 버전입니다")}</StatusChip>
+				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
 			{/if}
 			{#if updater.phase === "available"}
-				<Button variant="primary" size="sm" onclick={() => updater.install()}>{t("업데이트")}</Button>
+				<Button size="sm" class="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			{/if}
 		</div>
 		{#if downloading}

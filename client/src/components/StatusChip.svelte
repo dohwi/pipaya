@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 
-	/** Small pill with a leading dot: `ok` (green) for "up to date", `warn` (amber) for "something to do / wait for". */
-	let { tone, children }: { tone: "ok" | "warn"; children: Snippet } = $props();
+	/** Small pill with a leading dot: `ok` (green) for "new, available to take", `warn` (amber) for "in progress / take care", `neutral` (grey) for "nothing to do". */
+	let { tone, children }: { tone: "ok" | "warn" | "neutral"; children: Snippet } = $props();
 </script>
 
 <span class="chip {tone}"><i></i>{@render children()}</span>
@@ -12,4 +12,5 @@
 	i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 	.ok { background: var(--ok-soft); color: var(--ok); }
 	.warn { background: var(--warn-soft); color: var(--warn); }
+	.neutral { background: var(--bg-active); color: var(--text-dim); }
 </style>

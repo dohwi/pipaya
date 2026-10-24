@@ -144,7 +144,7 @@
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
 						{#if isOfficial(entry)}<span class="official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
-						{#if newer}<StatusChip tone="warn">{t("새 버전")}</StatusChip>{/if}
+						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{/if}
 						<span class="ver">v{entry.version}</span>
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}
@@ -155,7 +155,7 @@
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
 						</p>
 						{#if entry.kind === "client"}
-							<Button variant="primary" size="sm" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
+							<Button variant={newer ? "default" : "primary"} class={[newer && "update"]} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
 							</Button>
 						{:else}
