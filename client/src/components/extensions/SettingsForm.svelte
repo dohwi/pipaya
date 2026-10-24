@@ -102,7 +102,7 @@
 				{/if}
 			{/if}
 			{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
-			{#if error}<p class="error" id={errorId(field.key)}>{error}</p>{/if}
+			{#if error}<p class="hint danger" id={errorId(field.key)}>{error}</p>{/if}
 		</div>
 	{/each}
 	<p class="hint">{t("저장 위치는 확장의 settingsScope를 따릅니다. 활성 확장은 다시 불러와 적용하고, 비활성 확장은 다음 활성화 때 적용합니다.")}</p>
@@ -118,7 +118,7 @@
 	<div class="body">
 		<label class="name" for={fieldId("$json")}>{t("설정 JSON 객체")}</label>
 		<textarea id={fieldId("$json")} rows="6" spellcheck="false" value={jsonText} {disabled} aria-invalid={jsonProblem ? "true" : undefined} aria-describedby={jsonProblem ? `${fieldId("$json")}-error` : undefined} oninput={(event) => { jsonDraft = event.currentTarget.value; }}></textarea>
-		{#if jsonProblem}<p class="error" id="{fieldId("$json")}-error">{jsonProblem}</p>{/if}
+		{#if jsonProblem}<p class="hint danger" id="{fieldId("$json")}-error">{jsonProblem}</p>{/if}
 		<p class="hint">{t("같은 스키마로 검증하며, 선언되지 않은 키는 저장되지 않습니다 (최대 16KB).")}</p>
 		<div class="row">
 			<button type="button" class="btn sm" disabled={disabled || jsonDraft === null || !!jsonProblem} onclick={saveJson}>{t("JSON 저장")}</button>
@@ -134,7 +134,6 @@
 	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
 	.hint { margin: 0; overflow-wrap: anywhere; }
-	.error { margin: 0; font-size: var(--fs-xs); color: var(--danger); overflow-wrap: anywhere; }
 	.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }
 	input[type="text"], input[type="password"], input[type="number"], textarea {

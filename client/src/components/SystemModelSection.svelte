@@ -77,7 +77,7 @@
 			label={t("시스템 모델")}
 			onpick={(c) => void save({ model: c })}
 		/>
-		<p class="note">
+		<p class="hint note">
 			{#if !s.model}
 				{t("세션 이름은 첫 메시지를 줄여 쓰고, 역할은 비워 둡니다.")}
 			{:else if info && !info.configured}
@@ -86,7 +86,7 @@
 				{t("세션 이름과 역할을 이 모델이 요약해 붙입니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
-		{#if error}<p class="note" role="alert">{error}</p>{/if}
+		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
 	</section>
 {/if}
 
@@ -98,7 +98,5 @@
 	}
 	.note {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 </style>

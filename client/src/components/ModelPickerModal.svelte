@@ -153,7 +153,7 @@
 					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!reasoning || !sel} onclick={() => strength(l)}>{l}</button>
 				{/each}
 			</div>
-			{#if info && !info.reasoning}<div class="note" in:collapseIn out:collapseOut>{t("이 모델은 추론 모드를 지원하지 않습니다.")}</div>{/if}
+			{#if info && !info.reasoning}<div class="hint" in:collapseIn out:collapseOut>{t("이 모델은 추론 모드를 지원하지 않습니다.")}</div>{/if}
 		</div>
 	{/snippet}
 
@@ -258,10 +258,6 @@
 	}
 	.seg.off :global(.slide-ind) {
 		opacity: 0.35;
-	}
-	.note {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	.manage {
 		display: inline-flex;

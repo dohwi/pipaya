@@ -325,7 +325,7 @@
 								<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
 							</label>
 						{/if}
-						{#if form.isNew}<p class="note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
+						{#if form.isNew}<p class="hint note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
 					</section>
 
 					<section class="fsec">
@@ -335,7 +335,7 @@
 								<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
 							</button>
 						</div>
-						{#if discoverNote}<p class="note" role="status" in:collapseIn out:collapseOut>{discoverNote}</p>{/if}
+						{#if discoverNote}<p class="hint note" role="status" in:collapseIn out:collapseOut>{discoverNote}</p>{/if}
 						<div class="mpick">
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
@@ -622,8 +622,6 @@
 	}
 	.note {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	label > span {
 		font-size: var(--fs-xs);

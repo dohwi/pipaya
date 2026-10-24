@@ -217,7 +217,7 @@
 
 <div class="mc">
 	{#if loading && !cfg}
-		<p class="note">{t("불러오는 중…")}</p>
+		<p class="hint note">{t("불러오는 중…")}</p>
 	{:else if loadError}
 		<div class="err" role="alert">
 			<span>{loadError}</span>
@@ -241,7 +241,7 @@
 				label={t("기본 모델")}
 				onpick={pickDefault}
 			/>
-			<p class="note">
+			<p class="hint note">
 				{#if !saved}
 					{t("지정하지 않아 서버 기본값을 씁니다.")}{#if cfg.effectiveDefaults} ({cfg.effectiveDefaults.provider}/{cfg.effectiveDefaults.model}){/if}
 				{:else if shownInfo && !shownInfo.reasoning}
@@ -533,8 +533,6 @@
 	}
 	.note {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	.res.ok {
 		color: var(--ok);

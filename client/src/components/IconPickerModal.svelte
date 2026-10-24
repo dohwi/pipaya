@@ -84,7 +84,7 @@
 		{#if api && !q}
 			<input bind:this={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onchange={upload} />
 			<p class="hint">{t("PNG·JPEG·WebP, 정사각형에 가까울수록 좋습니다. 서버에 저장되어 모든 기기에서 보입니다.")}</p>
-			{#if error}<p class="err" role="alert">{error}</p>{/if}
+			{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
 		{/if}
 		{#if !showAuto && !hits.length}<p class="none">{t("일치하는 항목이 없습니다")}</p>{/if}
 	{/snippet}
@@ -138,12 +138,8 @@
 		stroke-width: 1.9;
 		stroke-linecap: round;
 	}
-	.hint,
-	.err {
+	.hint {
 		margin: 6px 4px 0;
-	}
-	.err {
-		color: var(--danger);
 	}
 	.none {
 		margin: 16px 0;

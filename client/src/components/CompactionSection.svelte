@@ -88,7 +88,7 @@
 				<span>{t("자동 압축")}</span>
 			</label>
 		</div>
-		<p class="note">
+		<p class="hint note">
 			{#if !s.model}
 				{t("압축 요약도 대화에서 쓰는 모델이 작성합니다.")}
 			{:else if info && !info.configured}
@@ -112,8 +112,8 @@
 			/>
 			<strong>{pct ?? s.thresholdPercent}%</strong>
 		</label>
-		<p class="note">{t("컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
-		{#if error}<p class="note" role="alert">{error}</p>{/if}
+		<p class="hint note">{t("컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
+		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
 	</section>
 {/if}
 
@@ -158,7 +158,5 @@
 	}
 	.note {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 </style>

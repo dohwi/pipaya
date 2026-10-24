@@ -592,6 +592,13 @@ input[type="checkbox"]:disabled {
 .hint.danger {
 	color: var(--danger);
 }
+/* Small bold heading of a settings block ("Export", "System notifications"). */
+.section-title {
+	margin: 0;
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	color: var(--text-dim);
+}
 .eyebrow {
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);

@@ -52,7 +52,7 @@
 				<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
 			</ol>
 			<button class="btn primary add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</button>
-			{#if error}<p class="hint err" role="alert">{error}</p>{/if}
+			{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
 			<button class="btn ghost" onclick={() => (app.serverForm = "new")}>{t("서버 주소로 연결")}</button>
 		{:else}
 			<p class="sub">{t("서버에 연결하려면 주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.")}</p>
@@ -62,9 +62,6 @@
 </div>
 
 <style>
-	.err {
-		color: var(--danger, #d33);
-	}
 	.screen {
 		height: 100%;
 		display: grid;
