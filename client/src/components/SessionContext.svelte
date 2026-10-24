@@ -26,6 +26,8 @@
 	// Cleanup aborts obsolete requests on refresh, server/session switch, or dialog close.
 	$effect(() => {
 		refresh;
+		// AGENTS.md / skills edited on disk arrive as skills_updated (AgentsWatcher).
+		app.skillsTick;
 		const chat = app.chatOf(sessionId);
 		chat?.items.length;
 		chat?.running;
