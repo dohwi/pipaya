@@ -8,7 +8,9 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { panesOf } from "../lib/layout";
-	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
+	import { newHistory, stepHistory } from "../lib/prompt-history";
+	import { fileRows, folderRows, memberRows, optionRows, slashRows } from "../lib/slash-menu";
+	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import Icon from "./Icon.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
 	import SendControls from "./SendControls.svelte";
@@ -263,22 +265,17 @@
 	});
 
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
-	const menuItems = $derived(cdArg !== null
-		? cdRows.map((d) => ({ id: d.path, text: cdValue(d.name), desc: "", group: msg("폴더") }))
-		: mention
-		? [
-			...imageMatches.map((a) => ({ id: `image${a.n}`, text: `#image${a.n}`, desc: a.name, group: msg("이미지") })),
-			...mentionFiles.map((f) => ({ id: f.path, text: `#${f.path}`, desc: f.dir ? msg("폴더") : "", group: msg("파일") })),
-		]
-		: memberMention
-			? memberMatches.map((m) => ({ id: m.insert, text: m.insert, desc: m.desc, group: m.group }))
-		: argSuggestions
-			? argSuggestions.options.map((option) => ({ id: option.value, text: option.value, desc: option.desc, current: option.current }))
-			: slashList.map((it) => "skill" in it
-				? { id: `skill:${it.skill.name}`, text: `/${SKILL_PREFIX}${it.skill.name}`, desc: it.skill.description, tag: msg("스킬"), group: msg("스킬") }
-				: "family" in it
-				? { id: `${it.family.prefix}:${it.family.name}`, text: `/${it.family.prefix}:${it.family.name}`, args: it.family.args, desc: it.family.description, tag: it.family.label, group: it.family.label }
-				: { id: it.name, text: commandText(it), args: it.args, desc: it.desc, group: msg("명령") }));
+	const menuItems = $derived(
+		cdArg !== null
+			? folderRows(cdRows, cdValue)
+			: mention
+				? fileRows(imageMatches, mentionFiles)
+				: memberMention
+					? memberRows(memberMatches)
+					: argSuggestions
+						? optionRows(argSuggestions.options)
+						: slashRows(slashList.map((it) => ("skill" in it || "family" in it ? it : { command: it }))),
+	);
 	const slashOpen = $derived(cdArg !== null ? cdOpen && !slashDismissed : mention !== null ? !slashDismissed && (mentionLoaded || mentionFiles.length > 0 || imageMatches.length > 0) : memberMention !== null ? !slashDismissed && memberMatches.length > 0 : (slashQuery !== null || argSuggestions !== null) && !slashDismissed && attachments.length === 0);
 
 	function syncCaret() {
@@ -411,18 +408,27 @@
 		for (const f of list) if (f.preview) URL.revokeObjectURL(f.preview);
 	}
 
+	/**
+	 * Turn the input into what goes to the server, or handle it here: a slash command runs, an unknown one is refused,
+	 * and an extension may veto or rewrite the text. Returns null when there is nothing to send.
+	 */
+	async function prepare() {
+		const parsed = parseSlash(text);
+		if (parsed) return void runSlash(parsed.cmd, parsed.arg), null;
+		if (rejectUnknownCommand()) return null;
+		const filtered = await extensions.filterComposer(text);
+		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id), null;
+		return {
+			key: pane.id,
+			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
+			images: attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+		};
+	}
+
 	async function submit() {
 		if (!canSend) return;
-		const parsed = parseSlash(text);
-		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
-		if (rejectUnknownCommand()) return;
-		const filtered = await extensions.filterComposer(text);
-		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
-		const body = (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text;
-		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
-		const key = pane.id;
-		const ok = await app.send(body, imgs, pane.id, files);
-		if (ok) clearSent(key);
+		const out = await prepare();
+		if (out && (await app.send(out.body, out.images, pane.id, files))) clearSent(out.key);
 	}
 
 	const hasInput = $derived(text.trim().length > 0 || attachments.length > 0 || files.length > 0);
@@ -430,16 +436,10 @@
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
 		if (!hasInput || app.net !== "online") return;
-		const parsed = parseSlash(text);
-		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
-		if (rejectUnknownCommand()) return;
-		const filtered = await extensions.filterComposer(text);
-		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id);
-		const imgs = attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
-		const key = pane.id;
-		const body = (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text;
-		const ok = await (kind === "steer" ? app.steer(body, imgs, pane.id, files) : app.queue(body, imgs, pane.id, files));
-		if (ok) clearSent(key);
+		const out = await prepare();
+		if (!out) return;
+		const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, files) : app.queue(out.body, out.images, pane.id, files));
+		if (ok) clearSent(out.key);
 	}
 
 	let lastQueueTick = app.queueSendTick;
@@ -458,38 +458,18 @@
 		for (const it of chat?.items ?? []) if (it.kind === "user" && it.text.trim() && out[out.length - 1] !== it.text) out.push(it.text);
 		return out;
 	});
-	let histIndex = -1; // index into sentPrompts, -1 = not browsing
-	let histShown = "";
-	let histDraft = "";
-	function showHistory(value: string) {
-		histShown = value;
-		text = value;
-		queueMicrotask(() => { ta?.setSelectionRange(value.length, value.length); syncCaret(); });
-	}
+	const history = newHistory();
 	/** Returns true when the key was used to move through the history. */
 	function browseHistory(e: KeyboardEvent): boolean {
 		if (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || composing || e.isComposing || !ta) return false;
-		if (ta.selectionStart !== ta.selectionEnd) return false;
-		if (histIndex >= 0 && text !== histShown) histIndex = -1; // edited since: start over from the newest
-		if (e.key === "ArrowUp") {
-			if (text.slice(0, ta.selectionStart).includes("\n")) return false; // still lines above the caret
-			const next = histIndex < 0 ? sentPrompts.length - 1 : histIndex - 1;
-			if (next < 0) return histIndex >= 0; // already at the oldest
-			if (histIndex < 0) histDraft = text;
-			histIndex = next;
-			showHistory(sentPrompts[next]!);
-			return true;
+		if (ta.selectionStart !== ta.selectionEnd || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return false;
+		const step = stepHistory(history, e.key, text, text.slice(0, ta.selectionStart), text.slice(ta.selectionEnd), sentPrompts);
+		if (step.used && step.text !== undefined) {
+			const value = step.text;
+			text = value;
+			queueMicrotask(() => { ta?.setSelectionRange(value.length, value.length); syncCaret(); });
 		}
-		if (e.key === "ArrowDown" && histIndex >= 0) {
-			if (text.slice(ta.selectionEnd).includes("\n")) return false;
-			histIndex++;
-			if (histIndex >= sentPrompts.length) {
-				histIndex = -1;
-				showHistory(histDraft);
-			} else showHistory(sentPrompts[histIndex]!);
-			return true;
-		}
-		return false;
+		return step.used;
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -546,8 +526,6 @@
 		else void submit();
 	}
 
-	/** `#image1`-style reserved words refer to attachments by position (1-based). */
-	const IMG_TOKEN = /#image(\d+)\b/g;
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
 	const highlighted = $derived(mirrorHtml(text, { commands: familyList.map((f) => `${f.prefix}:${f.name}`), skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attachments.length, paths: pickedPaths }));
@@ -562,9 +540,7 @@
 		const i = attachments.findIndex((x) => x.id === id);
 		if (i < 0) return;
 		const gone = i + 1;
-		text = text
-			.replace(new RegExp(`[ \\t]?#image${gone}\\b`, "g"), "")
-			.replace(IMG_TOKEN, (m, n) => (Number(n) > gone ? `#image${Number(n) - 1}` : m));
+		text = dropImageToken(text, gone);
 		attachments = attachments.filter((x) => x.id !== id);
 	}
 

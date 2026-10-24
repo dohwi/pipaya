@@ -104,3 +104,11 @@ export function mirrorHtml(text: string, known: Known): string {
 		}) + "\n"
 	);
 }
+
+/** `#image1`-style reserved words refer to attachments by position (1-based). */
+const IMG_TOKEN = /#image(\d+)\b/g;
+
+/** The image at 1-based position `gone` was removed: drop its token (and the space before it) and renumber the later ones. */
+export function dropImageToken(text: string, gone: number): string {
+	return text.replace(new RegExp(`[ \\t]?#image${gone}\\b`, "g"), "").replace(IMG_TOKEN, (m, n) => (Number(n) > gone ? `#image${Number(n) - 1}` : m));
+}

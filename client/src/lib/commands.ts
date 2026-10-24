@@ -4,6 +4,7 @@ import { copyText } from "./clipboard";
 import { clip } from "./format";
 import type { AssistantItem, Session, UserItem } from "./types";
 import { localeTag, msg, t } from "./i18n";
+import { SKILL_PREFIX } from "./slash-menu";
 
 export interface CommandArgument {
 	value: string;
@@ -32,7 +33,7 @@ export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.
 /** `/prefix:name args` belongs to a server extension's command family (`pi.registerCommands`): the server runs it. */
 export const isFamilyCall = (text: string) => /^\/[a-z][a-z0-9-]*:/.test(text.trimStart()) && !isSkillCall(text);
 /** `/skill:name` is not a client command: the server turns it into a manual skill call. */
-export const SKILL_PREFIX = "skill:";
+export { SKILL_PREFIX };
 export const isSkillCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${SKILL_PREFIX}`);
 export const commandQuery = (text: string): string | null => /^\/([a-z][a-z0-9-]*(?::[A-Za-z0-9_.-]*)?|)$/i.exec(text)?.[1] ?? null;
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
+import { dropImageToken, insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -74,4 +74,18 @@ describe("mirrorHtml mentions", () => {
 		expect(mirrorHtml("@nobody", known)).not.toContain("<mark");
 	});
 
+});
+
+describe("dropImageToken", () => {
+	test("removes the token with the space before it and renumbers the later ones", () => {
+		expect(dropImageToken("compare #image1 #image2 #image3", 2)).toBe("compare #image1 #image2");
+		expect(dropImageToken("see #image1", 1)).toBe("see");
+	});
+	test("leaves earlier tokens and unrelated text alone", () => {
+		expect(dropImageToken("#image1 and #image2", 2)).toBe("#image1 and");
+		expect(dropImageToken("no tokens, #image10x", 1)).toBe("no tokens, #image10x");
+	});
+	test("a token with a longer number is not mistaken for the removed one", () => {
+		expect(dropImageToken("a #image1 #image10", 1)).toBe("a #image9");
+	});
 });
