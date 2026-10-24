@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import type { ClassValue } from "svelte/elements";
 	import type { HTMLButtonAttributes } from "svelte/elements";
 
 	/**
@@ -25,7 +26,7 @@
 		variant?: "default" | "primary" | "danger" | "ghost" | "dashed";
 		size?: "md" | "sm";
 		type?: "button" | "submit";
-		class?: string;
+		class?: ClassValue;
 		focus?: boolean;
 		children: Snippet;
 	} & Omit<HTMLButtonAttributes, "type" | "class" | "children"> = $props();

@@ -55,11 +55,11 @@
 	{#if cur.options?.length}
 		<div class="opts">
 			{#each cur.options as o, n (o)}
-				<button class="btn opt" class:picked={items && answers[tab] === o} class:rec={cur.recommended === o} onclick={() => reply(o)}>
+				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
 					<span class="num">{n + 1}.</span>
 					<span>{o}</span>
 					{#if cur.recommended === o}<span class="badge">({t("추천")})</span>{/if}
-				</button>
+				</Button>
 			{/each}
 		</div>
 	{/if}
@@ -104,7 +104,7 @@
 	}
 	/* An answer can be a whole sentence. The shared pill is one fixed line high and clips what does not fit, so an option
 	   grows with its text and uses a corner radius that a second line still sits inside. */
-	.opt {
+	.opts :global(.btn.opt) {
 		height: auto;
 		min-height: 38px;
 		max-width: 100%;
@@ -116,7 +116,7 @@
 		white-space: normal;
 		overflow-wrap: anywhere;
 	}
-	.opt.rec {
+	.opts :global(.btn.opt.rec) {
 		border: 2px solid var(--warn);
 		font-weight: 600;
 	}
@@ -125,7 +125,7 @@
 		opacity: 0.7;
 		font-variant-numeric: tabular-nums;
 	}
-	.opt.picked {
+	.opts :global(.btn.opt.picked) {
 		outline: 2px solid currentColor;
 	}
 	.free {
