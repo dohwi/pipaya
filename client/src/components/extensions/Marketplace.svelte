@@ -4,6 +4,7 @@
 	import Icon from "../Icon.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
+	import StatusChip from "../StatusChip.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { DEFAULT_MARKETPLACE_URL, MARKETPLACE_URL_KEY, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
@@ -143,7 +144,7 @@
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
 						{#if isOfficial(entry)}<span class="official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
-						{#if newer}<span class="chip accent">{t("업데이트")}</span>{/if}
+						{#if newer}<StatusChip tone="warn">{t("새 버전")}</StatusChip>{/if}
 						<span class="ver">v{entry.version}</span>
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}
@@ -222,8 +223,6 @@
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
 	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
-	.chip { flex: none; font-size: var(--fs-2xs); padding: 0 7px; border-radius: 999px; background: var(--bg-active); line-height: 1.6; border: 1px solid transparent; }
-	.chip.accent { background: var(--accent-soft); color: var(--text); }
 	.foot :global(.btn) { flex: none; }
 	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 7px 0 5px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-2xs); font-weight: 600; line-height: 1.6; }
 	.official :global(svg) { width: 10px; height: 10px; stroke-width: 3; }

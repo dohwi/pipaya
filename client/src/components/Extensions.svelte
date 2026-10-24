@@ -5,6 +5,7 @@
 	import Notice from "./Notice.svelte";
 	import Accordion from "./Accordion.svelte";
 	import Switch from "./Switch.svelte";
+	import StatusChip from "./StatusChip.svelte";
 	import { download } from "../lib/download";
 	import { tick } from "svelte";
 	import { app } from "../lib/store.svelte";
@@ -263,11 +264,10 @@
 	}
 </script>
 
-{#snippet updateLine(have: string, upd: MarketEntry, disabled: boolean)}
+{#snippet updateLine(upd: MarketEntry, disabled: boolean)}
 	<div class="updline">
-		<Icon name="download" />
-		<span class="to"><b>{t("새 버전이 있습니다")}</b> <span class="vers">v{have} → v{upd.version}</span></span>
-		<Button variant="primary" size="sm" class="upd-btn" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
+		<StatusChip tone="warn">{t("새 버전 v{version}", { version: upd.version })}</StatusChip>
+		<Button variant="primary" size="sm" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
 	</div>
 {/snippet}
 
@@ -298,7 +298,7 @@
 			/>
 		{/snippet}
 		{#snippet notices()}
-			{#if upd}{@render updateLine(entry.package.manifest.version, upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
+			{#if upd}{@render updateLine(upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
 			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 		{/snippet}
@@ -381,7 +381,7 @@
 				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
 						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
-						{#if upd}{@render updateLine(ext.version ?? "", upd, !!tasks.busy[srvKey(ext.name)])}{/if}
+						{#if upd}{@render updateLine(upd, !!tasks.busy[srvKey(ext.name)])}{/if}
 					{/snippet}
 					{#snippet meta()}
 						{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
@@ -434,14 +434,8 @@
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.chip { background: var(--bg-active); }
 	.chip.warn { background: var(--warn-soft); }
-	/* Update strip: a tinted band at the foot of the card, so it reads as "something to do" next to the plain cards */
-	.updline { display: flex; align-items: center; gap: 10px; margin: 2px -14px -12px; padding: 9px 14px; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); background: var(--accent-soft); }
-	.updline.warnline { background: var(--warn-soft); color: var(--warn); }
-	.updline > :global(svg) { flex: none; width: 17px; height: 17px; stroke-width: 2; }
-	.to { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: var(--fs-xs); line-height: 1.4; }
-	.to b { font-weight: 650; }
-	.vers { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-dim); }
-	.extensions :global(.btn.sm.upd-btn) { flex: none; white-space: nowrap; min-height: 30px; padding: 4px 14px; }
+	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
+	.updline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
