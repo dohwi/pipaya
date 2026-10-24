@@ -536,6 +536,9 @@
 		color: var(--danger);
 		overflow-wrap: anywhere;
 	}
+	.err > :global(.btn) {
+		flex: none;
+	}
 	section {
 		display: flex;
 		flex-direction: column;

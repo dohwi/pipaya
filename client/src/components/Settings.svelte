@@ -721,12 +721,26 @@
 			border-bottom: 1px solid var(--border);
 			overflow-x: auto;
 			overflow-y: hidden;
+			scrollbar-width: none;
+			overscroll-behavior-x: contain;
+			scroll-padding-inline: 12px;
+		}
+		.nav::-webkit-scrollbar {
+			display: none;
+		}
+		.nav .row {
+			flex: 1 0 auto;
 		}
 		.nav button {
 			flex: 1 0 auto;
 			justify-content: center;
 			gap: 8px;
 			padding: 9px 12px;
+			white-space: nowrap;
+		}
+		.nav button.addsrv {
+			padding: 9px 12px;
+			font-size: var(--fs-md);
 		}
 		.ns {
 			display: none;

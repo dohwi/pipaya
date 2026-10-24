@@ -325,6 +325,7 @@ select:focus-visible {
 		transform var(--motion-fast) var(--ease),
 		border-color var(--motion-fast) var(--ease-std);
 	user-select: none;
+	white-space: nowrap;
 }
 .btn:hover:not(:disabled) {
 	background: var(--bg-hover);
