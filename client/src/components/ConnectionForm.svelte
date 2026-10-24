@@ -589,7 +589,7 @@
 						{#if confirmClose}
 							<span class="savestate warn" role="alert"><Icon name="alert" /><span>{t("저장되지 않은 변경이 있습니다.")}</span></span>
 							<button type="button" class="btn ghost" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
-							<button type="button" class="btn ghost" onclick={() => close(true)} disabled={busy}>{t("버리고 닫기")}</button>
+							<button type="button" class="btn ghost" onclick={() => close(true)} disabled={busy}>{t("저장하지 않고 닫기")}</button>
 						{:else}
 							<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
 						{/if}
