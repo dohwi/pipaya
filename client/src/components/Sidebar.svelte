@@ -255,6 +255,81 @@
 	<button class="dirnew" class:on={menuId === newKey(key)} data-menu-button onpointerenter={(e) => hoverNew(e, n, workdir, key)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, workdir, key)} aria-label={t("{name}에서 새로 만들기", { name })} aria-haspopup="menu" title={tip}><Icon name="plus" /></button>
 {/snippet}
 
+{#snippet groupBlock(n: Node, tab: Extract<Tab, { kind: "group" }>, drop: DropOpts)}
+	{@const g = tab.group}
+	{@const gfold = isFolded(groupKey(g.id))}
+			<div class="grp" class:over={marks.over(g.id)}>
+				<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
+				<div
+					class="item nested grprow"
+					class:grabbable={n.current && !groupRename.is(g.id)}
+					class:cur={n.current && g.id === app.activeGroup?.id}
+					class:menuopen={menuId === g.id}
+					class:before={marks.tabLine(g.id) === "before"}
+					class:after={marks.tabLine(g.id) === "after"}
+					use:dragSource={{ id: g.id, disabled: !n.current || groupRename.is(g.id) }}
+					use:dropTarget={drop}
+				>
+					{#if n.current && groupRename.is(g.id)}
+						{@render renameInput(groupRename.draft, commitGroupRename, () => groupRename.cancel(), (v) => (groupRename.draft = v), 100)}
+					{:else}
+						<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
+							<Icon name={gfold ? "group" : "group-open"} />
+						</button>
+						<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
+							{@render title(g.name)}
+							{#if gfold}<span class="cbadge" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>{/if}
+						</button>
+						{@render moreButton(n.current ? g.id : null, { kind: "group", g })}
+					{/if}
+				</div>
+				{#if !gfold}
+					<div class="members fold" in:collapseIn out:collapseOut>
+						{#each tab.members as m (m.id)}
+							{#if isTerminalId(m.id)}{@render termRow(n, m as TerminalInfo, memberTarget(n, m), true)}{:else}{@render row(n, m as Session, memberTarget(n, m), true)}{/if}
+						{/each}
+					</div>
+				{/if}
+			</div>
+{/snippet}
+
+{#snippet dirBlock(n: Node, d: DirBlock)}
+	{@const dfold = isFolded(dirKey(n.server.id, d.path))}
+	{@const dirMark = marks.blockMark(bid("dir", d.path))}
+	{@const label = shortLabel(n, d.path)}
+	{@const parent = pretty(n, d.path)}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirMark.carried} class:before={dirMark.before} class:after={dirMark.after}>
+	<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={marks.over(dirKey(n.server.id, d.path))} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
+		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
+			<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
+			<span class="dicon"><Icon name="folder" /></span>
+			<span class="dlabel">
+				<span class="dname">{label}</span>
+				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
+			</span>
+			{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
+		</button>
+		{@render newButton(n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path), pretty(n, d.path), t("이 디렉터리에서 새 대화 또는 터미널"))}
+	</div>
+	{#if !dfold}
+		<div class="fold" in:collapseIn out:collapseOut>
+			{#each d.tabs as tab (tab.id)}
+				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: tabHover(d, tab), drop: tabDropAt(n, d, tab) }}
+				{#if tab.kind === "session"}
+					{@render row(n, tab.session, drop)}
+				{:else if tab.kind === "terminal"}
+					{@render termRow(n, tab.terminal, drop)}
+				{:else}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					{@render groupBlock(n, tab, drop)}
+				{/if}
+			{/each}
+		</div>
+	{/if}
+	</div>
+{/snippet}
+
 <!-- A session or terminal row. `body` fills the open button (icon, label, title), `tip` is its tooltip. -->
 {#snippet tabRow(n: Node, x: { id: string; title: string }, target: MenuTarget, tip: string, body: Snippet, drop: DropOpts, member: boolean)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -346,74 +421,7 @@
 					{/if}
 
 					{#each n.dirs as d (d.path)}
-						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
-						{@const dirMark = marks.blockMark(bid("dir", d.path))}
-						{@const label = shortLabel(n, d.path)}
-						{@const parent = pretty(n, d.path)}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirMark.carried} class:before={dirMark.before} class:after={dirMark.after}>
-						<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={marks.over(dirKey(n.server.id, d.path))} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
-							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
-								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
-								<span class="dicon"><Icon name="folder" /></span>
-								<span class="dlabel">
-									<span class="dname">{label}</span>
-									{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
-								</span>
-								{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
-							</button>
-							{@render newButton(n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path), pretty(n, d.path), t("이 디렉터리에서 새 대화 또는 터미널"))}
-						</div>
-						{#if !dfold}
-							<div class="fold" in:collapseIn out:collapseOut>
-								{#each d.tabs as tab (tab.id)}
-									{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: tabHover(d, tab), drop: tabDropAt(n, d, tab) }}
-									{#if tab.kind === "session"}
-										{@render row(n, tab.session, drop)}
-									{:else if tab.kind === "terminal"}
-										{@render termRow(n, tab.terminal, drop)}
-									{:else}
-										{@const g = tab.group}
-										{@const gfold = isFolded(groupKey(g.id))}
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div class="grp" class:over={marks.over(g.id)}>
-											<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
-											<div
-												class="item nested grprow"
-												class:grabbable={n.current && !groupRename.is(g.id)}
-												class:cur={n.current && g.id === app.activeGroup?.id}
-												class:menuopen={menuId === g.id}
-												class:before={marks.tabLine(g.id) === "before"}
-												class:after={marks.tabLine(g.id) === "after"}
-												use:dragSource={{ id: g.id, disabled: !n.current || groupRename.is(g.id) }}
-												use:dropTarget={drop}
-											>
-												{#if n.current && groupRename.is(g.id)}
-													{@render renameInput(groupRename.draft, commitGroupRename, () => groupRename.cancel(), (v) => (groupRename.draft = v), 100)}
-												{:else}
-													<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
-														<Icon name={gfold ? "group" : "group-open"} />
-													</button>
-													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-														{@render title(g.name)}
-														{#if gfold}<span class="cbadge" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>{/if}
-													</button>
-													{@render moreButton(n.current ? g.id : null, { kind: "group", g })}
-												{/if}
-											</div>
-											{#if !gfold}
-												<div class="members fold" in:collapseIn out:collapseOut>
-													{#each tab.members as m (m.id)}
-														{#if isTerminalId(m.id)}{@render termRow(n, m as TerminalInfo, memberTarget(n, m), true)}{:else}{@render row(n, m as Session, memberTarget(n, m), true)}{/if}
-													{/each}
-												</div>
-											{/if}
-										</div>
-									{/if}
-								{/each}
-							</div>
-						{/if}
-						</div>
+						{@render dirBlock(n, d)}
 					{/each}
 				</div>
 				{/if}
