@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
 	import { t } from "../lib/i18n";
@@ -22,13 +23,12 @@
 		// Files added or edited on disk arrive as skills_updated; a reloaded extension as extensions_updated.
 		app.skillsTick;
 		app.serverExtensionsTick;
-		const controller = new AbortController();
 		error = "";
-		api.commandFamilies(target.cwd, controller.signal)
-			.then((list) => { if (!controller.signal.aborted) data = list; })
-			.catch((e) => { if (!controller.signal.aborted) error = errorText(e); })
-			.finally(() => { if (!controller.signal.aborted) loading = false; });
-		return () => controller.abort();
+		return abortable((signal) => api.commandFamilies(target.cwd, signal), {
+			ok: (list) => (data = list),
+			fail: (e) => (error = errorText(e)),
+			done: () => (loading = false),
+		});
 	});
 
 	const total = $derived(data?.families.reduce((n, f) => n + f.entries.length, 0) ?? 0);

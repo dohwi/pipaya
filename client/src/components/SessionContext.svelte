@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { collapseIn, collapseOut, holdClosing } from "../lib/motion";
@@ -27,18 +28,15 @@
 		const chat = app.chatOf(sessionId);
 		chat?.items.length;
 		chat?.running;
-		const controller = new AbortController();
 		untrack(() => { loading = true; error = ""; });
-		void api.sessionContext(sessionId, controller.signal).then(result => {
-			if (!controller.signal.aborted) data = result;
-		}).catch(e => {
-			if (controller.signal.aborted) return;
+		return abortable((signal) => api.sessionContext(sessionId, signal), {
+			ok: (result) => (data = result),
 			// Duck-typed: don't depend on class identity (HMR/duplicated module instances break instanceof).
-			error = (e as ApiError)?.status === 404 && /route/i.test((e as Error).message)
+			fail: (e) => (error = (e as ApiError)?.status === 404 && /route/i.test((e as Error).message)
 				? t("서버가 이 기능을 지원하지 않습니다. 서버를 최신 버전으로 재시작한 뒤 다시 시도하세요.")
-				: errorText(e);
-		}).finally(() => { if (!controller.signal.aborted) loading = false; });
-		return () => controller.abort();
+				: errorText(e)),
+			done: () => (loading = false),
+		});
 	});
 
 </script>

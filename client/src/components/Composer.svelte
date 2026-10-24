@@ -8,6 +8,7 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { panesOf } from "../lib/layout";
+	import { abortable } from "../lib/abortable";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
 	import { fileRows, folderRows, memberRows, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
@@ -170,22 +171,20 @@
 		app.skillsTick;
 		app.serverExtensionsTick;
 		if (!(slashQuery !== null || /(^|\s)\/[a-z][a-z0-9-]*:/.test(text)) || !api || app.net !== "online") return;
-		const controller = new AbortController();
-		api.commandFamilies(cwd, controller.signal)
-			.then((r) => { if (!controller.signal.aborted) familyList = r.families.flatMap((f) => f.entries.map((e) => ({ prefix: f.prefix, label: f.label ?? f.prefix, name: e.name, description: e.description ?? "", ...(e.args ? { args: e.args } : {}) }))); })
-			.catch(() => { if (!controller.signal.aborted) familyList = []; });
-		return () => controller.abort();
+		return abortable((signal) => api.commandFamilies(cwd, signal), {
+			ok: (r) => (familyList = r.families.flatMap((f) => f.entries.map((e) => ({ prefix: f.prefix, label: f.label ?? f.prefix, name: e.name, description: e.description ?? "", ...(e.args ? { args: e.args } : {}) })))),
+			fail: () => (familyList = []),
+		});
 	});
 	$effect(() => {
 		const api = app.api;
 		const cwd = skillsCwd;
 		app.skillsTick;
 		if (!skillsWanted || !api || app.net !== "online") return;
-		const controller = new AbortController();
-		api.skills(cwd, controller.signal, pane.id)
-			.then((r) => { if (!controller.signal.aborted) skillList = r.skills.filter((k) => k.enabled).map((k) => ({ name: k.name, description: k.description })); })
-			.catch(() => { if (!controller.signal.aborted) skillList = []; });
-		return () => controller.abort();
+		return abortable((signal) => api.skills(cwd, signal, pane.id), {
+			ok: (r) => (skillList = r.skills.filter((k) => k.enabled).map((k) => ({ name: k.name, description: k.description }))),
+			fail: () => (skillList = []),
+		});
 	});
 	const argSuggestions = $derived(argumentSuggestions(text));
 
@@ -211,16 +210,11 @@
 			cdFor = null;
 			return;
 		}
-		const controller = new AbortController();
-		const timer = setTimeout(() => {
-			api.listDirs(dir, hidden)
-				.then((r) => { if (!controller.signal.aborted) { cdDirs = r.entries; cdFor = dir; } })
-				.catch(() => { if (!controller.signal.aborted) { cdDirs = []; cdFor = dir; } });
-		}, 80);
-		return () => {
-			clearTimeout(timer);
-			controller.abort();
-		};
+		return abortable((signal) => api.listDirs(dir, hidden, signal), {
+			ok: (r) => { cdDirs = r.entries; cdFor = dir; },
+			fail: () => { cdDirs = []; cdFor = dir; },
+			delay: 80,
+		});
 	});
 	// The list of another folder is stale while the new one loads: show nothing rather than wrong rows.
 	const cdRows = $derived(cdTarget && cdFor === cdTarget.dir ? filterDirs(cdDirs, cdTarget.filter).slice(0, 100) : []);
@@ -252,16 +246,11 @@
 			mentionLoaded = false;
 			return;
 		}
-		const controller = new AbortController();
-		const timer = setTimeout(() => {
-			api.listFiles(cwd, q, controller.signal)
-				.then((r) => { mentionFiles = r.entries; mentionLoaded = true; })
-				.catch(() => { if (!controller.signal.aborted) { mentionFiles = []; mentionLoaded = true; } });
-		}, 80);
-		return () => {
-			clearTimeout(timer);
-			controller.abort();
-		};
+		return abortable((signal) => api.listFiles(cwd, q, signal), {
+			ok: (r) => { mentionFiles = r.entries; mentionLoaded = true; },
+			fail: () => { mentionFiles = []; mentionLoaded = true; },
+			delay: 80,
+		});
 	});
 
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */

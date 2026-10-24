@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
 	import Switch from "./Switch.svelte";
@@ -27,23 +28,21 @@
 	$effect(() => {
 		refresh;
 		app.skillsTick;
-		const controller = new AbortController();
 		const { cwd, sessionId } = target;
 		untrack(() => { if (!data) loading = true; error = ""; });
-		void Promise.all([
-			api.skills(cwd, controller.signal, sessionId),
-			sessionId ? api.sessionContext(sessionId, controller.signal).catch(() => null) : null,
-		]).then(([list, ctx]) => {
-			if (controller.signal.aborted) return;
-			data = list;
-			session = ctx;
-		}).catch(e => {
-			if (controller.signal.aborted) return;
-			error = (e as ApiError)?.status === 404 && /route/i.test((e as Error).message)
+		return abortable((signal) => Promise.all([
+			api.skills(cwd, signal, sessionId),
+			sessionId ? api.sessionContext(sessionId, signal).catch(() => null) : null,
+		]), {
+			ok: ([list, ctx]) => {
+				data = list;
+				session = ctx;
+			},
+			fail: (e) => (error = (e as ApiError)?.status === 404 && /route/i.test((e as Error).message)
 				? t("서버가 스킬 기능을 지원하지 않습니다. 서버를 최신 버전으로 재시작한 뒤 다시 시도하세요.")
-				: errorText(e);
-		}).finally(() => { if (!controller.signal.aborted) loading = false; });
-		return () => controller.abort();
+				: errorText(e)),
+			done: () => (loading = false),
+		});
 	});
 
 	const shown = $derived(

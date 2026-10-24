@@ -227,8 +227,8 @@ export class Api {
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
 	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
-	listDirs = (path?: string, hidden = false) =>
-		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`);
+	listDirs = (path?: string, hidden = false, signal?: AbortSignal) =>
+		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`, undefined, signal);
 	listFiles = (cwd: string, q: string, signal?: AbortSignal) =>
 		this.req<{ entries: { path: string; dir: boolean }[] }>("GET", `/fs/files?${new URLSearchParams({ cwd, q })}`, undefined, signal);
 	makeDir = (parent: string, name: string) => this.req<{ path: string }>("POST", "/fs/dirs", { parent, name });

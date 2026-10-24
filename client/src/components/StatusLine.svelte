@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { abortable } from "../lib/abortable";
 	import { localeTag, t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -36,11 +37,10 @@
 		chat?.running;
 		app.skillsTick;
 		if (!id || !key || !api) return;
-		const controller = new AbortController();
-		api.sessionContext(id, controller.signal)
-			.then(r => { if (!controller.signal.aborted) loaded = { key, files: r.instructions.map(i => i.path), skills: r.skills.map(k => k.name) }; })
-			.catch(() => { if (!controller.signal.aborted && loaded?.key === key) loaded = null; });
-		return () => controller.abort();
+		return abortable((signal) => api.sessionContext(id, signal), {
+			ok: (r) => (loaded = { key, files: r.instructions.map(i => i.path), skills: r.skills.map(k => k.name) }),
+			fail: () => { if (loaded?.key === key) loaded = null; },
+		});
 	});
 	$effect(() => { if (openKey !== ctxKey) openKey = null; });
 
@@ -53,11 +53,10 @@
 		const api = app.api;
 		app.skillsTick;
 		if (!key || !api) return;
-		const controller = new AbortController();
-		api.skills(app.workdirAbs, controller.signal)
-			.then(r => { if (!controller.signal.aborted) fresh = { key, names: r.skills.filter(k => k.enabled && k.modelInvocable).map(k => k.name) }; })
-			.catch(() => { if (!controller.signal.aborted && fresh?.key === key) fresh = null; });
-		return () => controller.abort();
+		return abortable((signal) => api.skills(app.workdirAbs, signal), {
+			ok: (r) => (fresh = { key, names: r.skills.filter(k => k.enabled && k.modelInvocable).map(k => k.name) }),
+			fail: () => { if (fresh?.key === key) fresh = null; },
+		});
 	});
 	// Commands server extensions offer as /prefix:name in the chosen directory (the open chat's, else the new-chat one).
 	let tpl = $state<{ key: string; names: string[] } | null>(null);
@@ -71,12 +70,11 @@
 		app.serverExtensionsTick;
 		chat?.items.length;
 		if (!api) return;
-		const controller = new AbortController();
-		api.commandFamilies(cwd, controller.signal)
+		return abortable((signal) => api.commandFamilies(cwd, signal), {
 			// No extension offers such commands: the item stays hidden.
-			.then(r => { if (!controller.signal.aborted) tpl = r.families.length ? { key, names: r.families.flatMap(f => f.entries.map(e => `/${f.prefix}:${e.name}`)) } : null; })
-			.catch(() => { if (!controller.signal.aborted && tpl?.key === key) tpl = null; });
-		return () => controller.abort();
+			ok: (r) => (tpl = r.families.length ? { key, names: r.families.flatMap(f => f.entries.map(e => `/${f.prefix}:${e.name}`)) } : null),
+			fail: () => { if (tpl?.key === key) tpl = null; },
+		});
 	});
 	const tplNames = $derived(tpl && tpl.key === tplKey ? tpl.names : null);
 	const list = (items: string[], max = 8) => items.slice(0, max).join(", ") + (items.length > max ? ` ${t("외 {n}개", { n: items.length - max })}` : "");
