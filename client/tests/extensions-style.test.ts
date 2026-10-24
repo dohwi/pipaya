@@ -20,6 +20,12 @@ describe("raiseSpecificity", () => {
 		expect(body.selectorText).toBe("body.x");
 		expect(inner.selectorText).toContain(":is(.a, .b)");
 	});
+	test("an engine that refuses to edit a rule leaves the stylesheet as written", () => {
+		const locked = new Rule(".a");
+		Object.defineProperty(locked, "selectorText", { get: () => ".a", set: () => { throw new Error("read-only"); } });
+		// the host wraps the call in try/catch; the function itself surfaces the engine's error so that wrapper has something to catch
+		expect(() => raiseSpecificity(sheet([locked]))).toThrow("read-only");
+	});
 	test("a missing sheet is fine", () => {
 		expect(() => raiseSpecificity(null)).not.toThrow();
 	});

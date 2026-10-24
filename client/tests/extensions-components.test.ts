@@ -97,3 +97,35 @@ describe("registry consistency", () => {
 		for (const list of [UI_SLOTS, UI_PARTS, STYLE_PARTS]) expect(new Set(list).size).toBe(list.length);
 	});
 });
+
+describe("loadComponents", () => {
+	const { loadComponents } = require("../src/lib/extensions/components") as typeof import("../src/lib/extensions/components");
+	const load = (components: Record<string, string>, kit: Record<string, unknown> = {}) =>
+		loadComponents(parsePackage(pkg({ components })) as never, kit);
+
+	test("links the kit, svelte and sibling components in any order", () => {
+		const out = load({
+			Outer: `<script>import Inner from "./Inner.svelte"; import { Icon, ext } from "pipaya"; import { onMount } from "svelte";</script><Inner /><Icon name="x" />{ext.id}`,
+			Inner: `<script>import { fade } from "svelte/transition";</script><p transition:fade>hi</p>`,
+		}, { Icon: () => {}, ext: { id: "skin" } });
+		expect(Object.keys(out).sort()).toEqual(["Inner", "Outer"]);
+		expect(typeof out.Outer).toBe("function");
+	});
+	test("a circular sibling import does not hang", () => {
+		const out = load({ A: `<script>import B from "./B.svelte";</script><B />`, B: `<script>import A from "./A.svelte";</script><p>b</p>` });
+		expect(typeof out.A).toBe("function");
+	});
+	test("refuses modules outside the allowed list, naming the component", () => {
+		expect(() => load({ Bad: `<script>import fs from "node:fs";</script><p/>` })).toThrow(/Bad\.svelte.*cannot import "node:fs"/);
+		expect(() => load({ Bad: `<script>import x from "svelte/internal/client";</script><p/>` })).toThrow(/svelte\/internal/);
+		expect(() => load({ Bad: `<script>import X from "./Missing.svelte";</script><p/>` })).toThrow(/Missing/);
+	});
+	test("a compile error names the component", () => {
+		expect(() => load({ Oops: "<div>{#if}</div>" })).toThrow(/^Oops\.svelte/);
+	});
+	test("the stylesheet is injected by the component and scoped to the extension", () => {
+		const js = compileComponent("skin", "S", "<p class='a'>x</p><style>.a{color:red}</style>");
+		expect(js).toContain("append_styles");
+		expect(js).toMatch(/x-[a-z0-9]+/);
+	});
+});
