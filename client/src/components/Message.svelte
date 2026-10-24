@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Markdown from "./Markdown.svelte";
@@ -149,14 +150,12 @@
 			{/if}
 		</div>
 		<div class="actions">
-			<button class="iconbtn sm" onclick={copy} aria-label={t("메시지 복사")}><Icon name={copied ? "check" : "copy"} /></button>
+			<IconButton icon={copied ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={copy} />
 			{#if peer}
-				<button class="iconbtn sm" onclick={reply} aria-label={t("답장")} title={t("답장")}><Icon name="reply" /></button>
+				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} />
 			{/if}
 			{#if item.seq !== null && session && item.text}
-				<button class="iconbtn sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} aria-label={t("여기서 분기해 다시 쓰기")} title={t("여기서 분기해 다시 쓰기")}>
-					<Icon name="fork" />
-				</button>
+				<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 			{/if}
 		</div>
 	</div>
@@ -185,15 +184,13 @@
 
 			{#if tail && !live}
 				<div class="foot">
-					<button class="iconbtn sm" onclick={copy} aria-label={t("답변 복사")} disabled={!plainText}><Icon name={copied ? "check" : "copy"} /></button>
-					<button class="iconbtn sm" onclick={reply} aria-label={t("답장")} title={t("답장")} disabled={!plainText}><Icon name="reply" /></button>
+					<IconButton icon={copied ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={copy} disabled={!plainText} />
+					<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
 					{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
-						<button class="iconbtn sm" onclick={() => app.fork(session.id, tail.seq!)} aria-label={t("여기서 분기")} title={t("여기서 분기")}>
-							<Icon name="fork" />
-						</button>
+						<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
 					{/if}
 					{#if canRetry}
-						<button class="iconbtn sm" onclick={() => app.retry(pane.id)} aria-label={t("다시 시도")} title={t("다시 시도")}><Icon name="retry" /></button>
+						<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(pane.id)} />
 					{/if}
 					<span class="stats">
 						{#if tail.model}<span class="slogo"><ModelLogo icon={app.models.find((m) => m.provider === tail.provider && m.id === tail.model)?.icon} provider={tail.provider} model={tail.model} size={13} /></span>{tail.model}{/if}
@@ -334,7 +331,7 @@
 		display: flex;
 		align-items: flex-start;
 	}
-	.actions .iconbtn {
+	.actions :global(.iconbtn) {
 		height: 28px;
 		width: 28px;
 	}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import { msg, t } from "../lib/i18n";
@@ -52,8 +53,8 @@
 				{/if}
 			</div>
 			<div class="actions">
-				<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
-				<button class="iconbtn" onclick={onclose} aria-label={t("닫기")}><Icon name="x" /></button>
+				<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
+				<IconButton icon="x" label={t("닫기")} onclick={onclose} />
 			</div>
 		</header>
 		<div class="body" aria-busy={loading}>

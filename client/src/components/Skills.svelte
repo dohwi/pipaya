@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
@@ -9,7 +10,6 @@
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext, SkillInfo, SkillList } from "../lib/types";
-	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
 	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null }; api: Api; onclose: () => void } = $props();
@@ -137,7 +137,7 @@
 
 <Modal {onclose} title={t("스킬")} sub={data ? `${t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · ${home(data.project)}` : null} width="xl" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
-		<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
+		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
 
 	{#if (data?.skills.length ?? 0) > 6}

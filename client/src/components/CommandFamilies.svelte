@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
@@ -6,7 +7,6 @@
 	import { app } from "../lib/store.svelte";
 	import { errorText, type Api } from "../lib/api";
 	import type { CommandFamily } from "../lib/types";
-	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
 	/** Every `/prefix:name` command the server's extensions offer for one folder (`pi.registerCommands`), e.g. prompt files. */
@@ -43,7 +43,7 @@
 
 <Modal {onclose} title={t("확장 명령")} sub={data ? `${t("{n}개", { n: total })} · ${home(data.cwd)}` : null} width="680px" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
-		<button class="iconbtn" onclick={() => refresh++} disabled={loading} aria-label={t("새로고침")} title={t("새로고침")}><Icon name="retry" /></button>
+		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
 	{#if total > 6}
 		<div class="tools"><input class="search" type="search" placeholder={t("명령 검색")} bind:value={query} aria-label={t("명령 검색")} /></div>

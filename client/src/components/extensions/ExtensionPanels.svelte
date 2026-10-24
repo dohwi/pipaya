@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "../IconButton.svelte";
 	import FilterChip from "../FilterChip.svelte";
 	import { t } from "../../lib/i18n";
 	import { closeAnimated } from "../../lib/motion";
@@ -174,14 +175,14 @@
 					<h2 id={titleId}>{t("확장 화면")}{selected ? ` · ${ownerName(selected.owner)}` : ""}</h2>
 					<p>{t("확장에서 제공하는 별도 화면입니다.")}</p>
 				</div>
-				<button class="iconbtn close" type="button" aria-label={t("확장 화면 닫기")} onclick={() => extensions.closePanel()}><Icon name="x" /></button>
+				<IconButton icon="x" label={t("확장 화면 닫기")} class="close" onclick={() => extensions.closePanel()} />
 			</header>
 			<div class="workspace">
 				{#if available.length}
 					<nav class="tabbar" aria-label={t("확장 화면 선택")}>
 						<span class="total" aria-hidden="true">{available.length}</span>
 						<div class="railwrap">
-						<button class="iconbtn step prev" type="button" tabindex="-1" aria-label={t("이전 화면 보기")} class:idle={!canPrev} disabled={!canPrev} onclick={() => page(-1)}><Icon name="chevron-left" /></button>
+						<IconButton icon="chevron-left" label={t("이전 화면 보기")} class={["step prev", { idle: !canPrev }]} tabindex={-1} disabled={!canPrev} onclick={() => page(-1)} />
 						<div
 							class="rail"
 							class:fade-l={canPrev}
@@ -199,7 +200,7 @@
 								</FilterChip>
 							{/each}
 						</div>
-						<button class="iconbtn step next" type="button" tabindex="-1" aria-label={t("다음 화면 보기")} class:idle={!canNext} disabled={!canNext} onclick={() => page(1)}><Icon name="chevron-right" /></button>
+						<IconButton icon="chevron-right" label={t("다음 화면 보기")} class={["step next", { idle: !canNext }]} tabindex={-1} disabled={!canNext} onclick={() => page(1)} />
 						</div>
 					</nav>
 				{/if}
@@ -245,7 +246,7 @@
 	.heading { min-width: 0; }
 	h2 { margin: 0; font-size: var(--fs-base); font-weight: 650; overflow-wrap: anywhere; }
 	.heading p { margin: 5px 0 0; font-size: var(--fs-2xs); color: var(--text-faint); }
-	.close { flex-shrink: 0; }
+	:global(.iconbtn.close) { flex-shrink: 0; }
 	.workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 	.tabbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 14px 10px 20px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
 	.total { display: grid; place-items: center; flex: none; min-width: 22px; height: 22px; padding: 0 6px; margin-right: 4px; border-radius: var(--radius-pill); background: var(--bg-active); color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-2xs); }
@@ -256,12 +257,12 @@
 	.rail.fade-l { mask-image: linear-gradient(to right, transparent, #000 28px); }
 	.rail.fade-r { mask-image: linear-gradient(to left, transparent, #000 28px); }
 	.rail.fade-l.fade-r { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-	.step { position: absolute; top: 50%; z-index: 2; width: 28px; height: 28px; margin-top: -14px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
-	.step.prev { left: 0; }
-	.step.next { right: 0; }
-	.step :global(svg) { width: 15px; height: 15px; }
+	:global(.iconbtn.step) { position: absolute; top: 50%; z-index: 2; width: 28px; height: 28px; margin-top: -14px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
+	:global(.iconbtn.step.prev) { left: 0; }
+	:global(.iconbtn.step.next) { right: 0; }
+	:global(.iconbtn.step svg) { width: 15px; height: 15px; }
 	/* only the arrow that can scroll is shown */
-	.step.idle { opacity: 0; pointer-events: none; }
+	:global(.iconbtn.step.idle) { opacity: 0; pointer-events: none; }
 	.nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; }
 	.owner { font-size: 10px; color: var(--text-faint); overflow-wrap: anywhere; }
 	.railowner { flex: none; max-width: 90px; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid var(--border); }
@@ -280,7 +281,7 @@
 	@media (max-width: 640px) {
 		header { padding: 16px; }
 		.tabbar { padding: 8px 12px; }
-		.step { display: none; }
+		:global(.iconbtn.step) { display: none; }
 		.panel-body { flex: 1; padding: 20px 16px; }
 		.surface-heading { margin-bottom: 20px; }
 	}

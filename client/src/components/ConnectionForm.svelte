@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import Button from "./Button.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
@@ -261,7 +262,7 @@
 			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
-					<button type="button" class="iconbtn back" onclick={closeModel} aria-label={t("연결로 돌아가기")}><Icon name="chevron-left" /></button>
+					<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
 					<div class="ftitle">
 						<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
 						<span class="fsub">{t("모델 설정")}</span>
@@ -272,7 +273,7 @@
 						{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
 					</div>
 				{/if}
-				<button type="button" class="iconbtn" onclick={() => close()} aria-label={t("닫기")} disabled={busy}><Icon name="x" /></button>
+				<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
 			</header>
 
 			<div class="fbody">
@@ -582,7 +583,7 @@
 		width: 18px;
 		height: 18px;
 	}
-	.back {
+	:global(.iconbtn.back) {
 		margin-left: -8px;
 	}
 	.fform > footer {

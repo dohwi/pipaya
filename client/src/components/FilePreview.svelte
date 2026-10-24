@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
@@ -6,7 +7,6 @@
 	import { copyText } from "../lib/clipboard";
 	import { parseTable, previewKind, sizeLabel } from "../lib/files";
 	import Markdown from "./Markdown.svelte";
-	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
@@ -89,12 +89,12 @@
 	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="85vh" layer={2} portal>
 		{#snippet headerActions()}
 			{#if kind === "html"}
-				<button type="button" class="iconbtn" class:on={source} onclick={() => (source = !source)} aria-pressed={source} aria-label={t("소스 보기")} title={t("소스 보기")}><Icon name="terminal" /></button>
+				<IconButton icon="terminal" label={t("소스 보기")} tip class={{ on: source }} onclick={() => (source = !source)} aria-pressed={source} />
 			{/if}
 			{#if text !== null}
-				<button type="button" class="iconbtn" onclick={copy} aria-label={t("복사")} title={t("복사")}><Icon name={copied ? "check" : "copy"} /></button>
+				<IconButton icon={copied ? "check" : "copy"} label={t("복사")} tip onclick={copy} />
 			{/if}
-			<button type="button" class="iconbtn" onclick={save} disabled={!url} aria-label={t("저장")} title={t("저장")}><Icon name="download" /></button>
+			<IconButton icon="download" label={t("저장")} tip onclick={save} disabled={!url} />
 		{/snippet}
 		<div class="body">
 			{#if loading}
@@ -175,7 +175,7 @@
 		border-radius: var(--radius);
 		background: #fff;
 	}
-	.iconbtn.on {
+	:global(.iconbtn.on) {
 		color: var(--accent, inherit);
 	}
 	.media {

@@ -1,8 +1,8 @@
 <script lang="ts">
+	import IconButton from "./IconButton.svelte";
 	import type { Snippet } from "svelte";
 	import { t } from "../lib/i18n";
 	import { sheetPull } from "../lib/sheet";
-	import Icon from "./Icon.svelte";
 
 	/**
 	 * The one dialog header: optional back button, title (+ a muted subtitle), extra actions, close button.
@@ -47,13 +47,13 @@
 </script>
 
 <header class="mh" class:divider class:compact use:sheetPull={{ onclose: () => onclose?.(), disabled: !pull || !onclose || closeDisabled }}>
-	{#if onback}<button type="button" class="iconbtn" onclick={onback} aria-label={t("뒤로")}><Icon name="chevron-left" /></button>{/if}
+	{#if onback}<IconButton icon="chevron-left" label={t("뒤로")} onclick={onback} />{/if}
 	<div class="mh-title">
 		<h2 {id}>{title}{@render titleExtra?.()}</h2>
 		{#if sub}<span class="mh-sub" class:mono={subMono}>{sub}</span>{/if}
 	</div>
 	{@render actions?.()}
-	{#if onclose}<button type="button" class="iconbtn" onclick={onclose} disabled={closeDisabled} aria-label={t("닫기")}><Icon name="x" /></button>{/if}
+	{#if onclose}<IconButton icon="x" label={t("닫기")} onclick={onclose} disabled={closeDisabled} />{/if}
 </header>
 
 <style>
@@ -64,7 +64,7 @@
 		gap: 6px;
 		padding: 14px 14px 10px 22px;
 	}
-	.mh:has(> .iconbtn:first-child) {
+	.mh:has(> :global(.iconbtn:first-child)) {
 		padding-left: 12px;
 	}
 	.mh.divider {
