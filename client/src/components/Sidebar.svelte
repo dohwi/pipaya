@@ -585,6 +585,7 @@
 	}
 	.list {
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
+		--band-head: color-mix(in srgb, var(--text) 8%, var(--bg-side));
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
@@ -615,11 +616,12 @@
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin-top: 4px;
-		border-radius: var(--radius-sm);
+		margin: 0 -8px 4px; /* full-bleed header strip: a darker tone marks everything below as belonging to this server */
+		padding: 0 8px;
+		background: var(--band-head);
 	}
 	.srvhead:hover {
-		background: var(--bg-hover);
+		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
 	}
 	.srvtoggle {
 		flex: 1;
