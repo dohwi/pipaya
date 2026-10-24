@@ -18,7 +18,7 @@ export const NAVBAR_LIMITS = Object.freeze({
 
 /** Only passive display nodes; buttons, forms, inputs, tabs, tables, lists, code and alerts are rejected. */
 export const NAVBAR_NODE_TYPES = Object.freeze([
-  "stack", "grid", "text", "badge", "divider", "progress", "stat", "gauge", "icon",
+  "stack", "grid", "text", "badge", "divider", "progress", "stat", "icon",
 ] as const);
 
 export function navbarId(input: unknown): string {

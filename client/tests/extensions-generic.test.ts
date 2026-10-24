@@ -7,7 +7,7 @@ import { SANDBOX_HTML } from "../src/lib/extensions/runtime";
 import { parseView, type UINode } from "../src/lib/extensions/ui";
 
 const icon = { viewBox: "0 0 24 24", paths: [{ d: "M0 0L24 0 24 24Z", fill: "#10a37f", fillRule: "evenodd" }] };
-const gauge = (extra: Record<string, unknown> = {}) => ({ type: "gauge", id: "g", label: "Usage", rings: [{ value: 10 }], ...extra });
+const meter = (extra: Record<string, unknown> = {}) => ({ type: "progress", id: "g", label: "Usage", value: 10, ...extra });
 const bad = (node: unknown, message?: string) => expect(() => parseView(node)).toThrow(message);
 
 describe("icon node", () => {
@@ -49,54 +49,8 @@ describe("icon node", () => {
 	});
 });
 
-describe("gauge node", () => {
-	test("null is preserved and never treated as 0", () => {
-		const unknown = parseView(gauge({ rings: [{ value: null }] })) as any;
-		expect(unknown.rings[0].value).toBeNull();
-		const zero = parseView(gauge({ rings: [{ value: 0 }] })) as any;
-		expect(zero.rings[0].value).toBe(0);
-		bad(gauge({ rings: [{}] }), "value");
-		bad(gauge({ rings: [{ value: undefined }] }));
-		bad(gauge({ rings: [{ value: "5" }] }));
-	});
-	test("value range, max, NaN and infinity", () => {
-		for (const value of [-1, 101, NaN, Infinity, -Infinity]) bad(gauge({ rings: [{ value }] }));
-		parseView(gauge({ rings: [{ value: 100 }] }));
-		parseView(gauge({ rings: [{ value: 250, max: 500 }] }));
-		bad(gauge({ rings: [{ value: 501, max: 500 }] }));
-		for (const max of [0, -5, NaN, Infinity, "100", 1e10]) bad(gauge({ rings: [{ value: 1, max }] }));
-	});
-	test("1..3 rings and field limits", () => {
-		bad(gauge({ rings: [] }));
-		bad(gauge({ rings: [{ value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }] }));
-		expect((parseView(gauge({ rings: [{ value: 1 }, { value: null }, { value: 3 }] })) as any).rings).toHaveLength(3);
-		parseView(gauge({ display: "x".repeat(16) }));
-		bad(gauge({ display: "x".repeat(17) }), "16");
-		parseView(gauge({ hint: "h".repeat(500) }));
-		bad(gauge({ hint: "h".repeat(501) }), "500");
-		bad(gauge({ label: "" }));
-		bad(gauge({ size: "large" }));
-		bad(gauge({ stale: "yes" }));
-		parseView(gauge({ stale: true, size: "medium", icon }));
-	});
-	test("colors: palette names or #rrggbb only; unknown fields rejected", () => {
-		for (const color of ["accent", "ok", "warn", "danger", "#aabbcc", "#AABBCC"]) parseView(gauge({ rings: [{ value: 1, color }] }));
-		for (const color of ["red", "#abc", "#aabbccdd", "url(#x)", "var(--accent)", "currentColor", 5]) bad(gauge({ rings: [{ value: 1, color }] }));
-		bad(gauge({ rings: [{ value: 1, glow: true }] }), "unknown field");
-		bad(gauge({ brand: "x" }), "unknown field");
-		bad(gauge({ icon: { ...icon, paths: [{ d: "<svg>" }] } }));
-	});
-	test("rejects accessor and symbol smuggling", () => {
-		const accessor = gauge();
-		Object.defineProperty(accessor, "label", { get: () => "x", enumerable: true });
-		bad(accessor, "enumerable data field");
-		bad({ ...gauge(), [Symbol("x")]: 1 });
-		bad(gauge({ rings: new Array(1) }));
-	});
-});
-
 describe("navbar item validation", () => {
-	const view = { type: "stack", id: "root", direction: "horizontal", children: [gauge(), { type: "icon", id: "i", icon }, { type: "text", id: "t", text: "x" }, { type: "badge", id: "b", text: "x" }, { type: "divider", id: "d" }, { type: "progress", id: "p", label: "p", value: 1 }, { type: "stat", id: "s", label: "s", value: "1" }, { type: "grid", id: "gr", children: [] }] };
+	const view = { type: "stack", id: "root", direction: "horizontal", children: [meter(), { type: "icon", id: "i", icon }, { type: "text", id: "t", text: "x" }, { type: "badge", id: "b", text: "x" }, { type: "divider", id: "d" }, { type: "progress", id: "p", label: "p", value: 1 }, { type: "stat", id: "s", label: "s", value: "1" }, { type: "grid", id: "gr", children: [] }] };
 	test("accepts non-interactive nodes and returns a fresh copy", () => {
 		const out = parseNavbarItem({ label: "Usage", view });
 		expect(out).toEqual({ label: "Usage", view });
@@ -258,102 +212,13 @@ describe("HttpReader", () => {
 	});
 });
 
-describe("gauge details", () => {
-	const row = (extra: Record<string, unknown> = {}) => ({ label: "Row", value: 10, ...extra });
-	const details = (rows: unknown[], extra: Record<string, unknown> = {}) => gauge({ details: { rows, ...extra } });
-	test("accepts rows, returns a fresh copy and preserves null (never 0)", () => {
-		const input = details([row({ value: null }), row({ value: 0, max: 5, color: "#aabbcc", caption: "resets soon", group: "A" }), row({ color: "warn" })], { title: "Detail" });
-		const out = parseView(input) as any;
-		expect(out.details).toEqual((input as any).details);
-		expect(out.details).not.toBe((input as any).details);
-		expect(out.details.rows[0].value).toBeNull();
-		expect(out.details.rows[1].value).toBe(0);
-		expect(parseView(gauge()) as any).not.toHaveProperty("details");
-		expect(parseView(gauge({ display: "42%" }))).toHaveProperty("display", "42%");
-	});
-	test("row count is 1..12 and details need rows", () => {
-		bad(details([]));
-		bad(gauge({ details: {} }), "rows");
-		bad(details(Array.from({ length: 13 }, () => row())), "12");
-		expect((parseView(details(Array.from({ length: 12 }, () => row()))) as any).details.rows).toHaveLength(12);
-		parseView(details([row()]));
-	});
-	test("color follows the ring rule", () => {
-		for (const color of ["accent", "ok", "warn", "danger", "#aabbcc", "#AABBCC"]) parseView(details([row({ color })]));
-		for (const color of ["red", "#abc", "#aabbccdd", "url(#x)", "var(--accent)", "currentColor", 5, null]) bad(details([row({ color })]));
-	});
-	test("value and max are validated; null is allowed", () => {
-		for (const value of [-1, 101, NaN, Infinity, "5", undefined]) bad(details([row({ value })]));
-		bad(details([{ label: "x" }]), "value");
-		for (const max of [0, -5, NaN, Infinity, "100", 1e10]) bad(details([row({ max })]));
-		bad(details([row({ value: 6, max: 5 })]));
-		parseView(details([row({ value: 5, max: 5 })]));
-	});
-	test("text length limits: title 40, label 48, caption 80, group 40", () => {
-		parseView(details([row({ label: "x".repeat(48) })], { title: "t".repeat(40) }));
-		bad(details([row({ label: "x".repeat(49) })]), "48");
-		bad(details([row({ label: "" })]));
-		bad(details([row({ label: 5 })]));
-		bad(details([row({ caption: "c".repeat(81) })]), "80");
-		parseView(details([row({ caption: "c".repeat(80) })]));
-		bad(details([row({ group: "g".repeat(41) })]), "40");
-		parseView(details([row({ group: "g".repeat(40) })]));
-		bad(details([row({ group: "" })]));
-		bad(details([row()], { title: "t".repeat(41) }), "40");
-		bad(details([row()], { title: "" }));
-	});
-	test("updatedAt is an optional epoch-ms integer", () => {
-		expect((parseView(details([row()], { updatedAt: 1_700_000_000_000 })) as any).details.updatedAt).toBe(1_700_000_000_000);
-		expect((parseView(details([row()])) as any).details).not.toHaveProperty("updatedAt");
-		parseView(details([row()], { updatedAt: 0 }));
-		for (const updatedAt of [-1, 1.5, NaN, Infinity, "1", null, 9e15]) bad(details([row()], { updatedAt }), "updatedAt");
-	});
-	test("renderer shows a live age footer instead of the stale banner when updatedAt is set", async () => {
-		const source = await Bun.file("src/components/extensions/ExtensionGauge.svelte").text();
-		expect(() => compile(source, { filename: "ExtensionGauge.svelte", generate: "client" })).not.toThrow();
-		expect(source).toContain("업데이트됨");
-		expect(source).toContain("setInterval");
-		expect(source).toContain("node.stale && updatedAt === undefined");
-	});
-	test("unknown fields and non-plain data are rejected", () => {
-		bad(details([row({ icon: "x" })]), "unknown field");
-		bad(details([row()], { subtitle: "x" }), "unknown field");
-		bad(gauge({ details: [] }));
-		bad(gauge({ details: null }));
-		bad(details([null]));
-		bad(details(new Array(1)));
-		const accessor: any = { label: "a" };
-		Object.defineProperty(accessor, "value", { enumerable: true, get: () => 1 });
-		bad(details([accessor]));
-		bad(details([{ ...row(), [Symbol("x")]: 1 }]));
-	});
-	test("rows count toward the node limit and the byte limit", () => {
-		const view = (n: number) => ({ type: "stack", id: "root", direction: "horizontal", children: Array.from({ length: n }, (_, i) => gauge({ id: `g${i}`, details: { rows: Array.from({ length: 12 }, () => row()) } })) });
-		expect(() => parseView(view(4), { maxNodes: 60 })).not.toThrow();
-		expect(() => parseView(view(5), { maxNodes: 60 })).toThrow("60 nodes");
-		expect(() => parseView(details([row({ caption: "c".repeat(80) })]), { maxBytes: 100 })).toThrow();
-	});
-	test("renderer is data-driven: popover tooltip, null text, no native title with details", async () => {
-		const source = await Bun.file("src/components/extensions/ExtensionGauge.svelte").text();
-		expect(() => compile(source, { filename: "ExtensionGauge.svelte", generate: "client" })).not.toThrow();
-		expect(source).toContain('role="tooltip"');
-		expect(source).toContain("확인 불가");
-		expect(source).toContain("details ? undefined");
-		expect(source).toContain("prefers-reduced-motion");
-		expect(source).toContain("position: fixed");
-	});
-});
-
 describe("renderers, SDK surface and brand neutrality", () => {
 	test("trusted components compile and never inject HTML, images, URLs or gradients", async () => {
-		for (const name of ["ExtensionIcon", "ExtensionGauge", "NavbarUsage", "ExtensionView"]) {
+		for (const name of ["ExtensionIcon", "NavbarUsage", "ExtensionView"]) {
 			const source = await Bun.file(`src/components/extensions/${name}.svelte`).text();
 			expect(() => compile(source, { filename: `${name}.svelte`, generate: "client" })).not.toThrow();
 			expect(source).not.toMatch(/@html|<img|<image|<use|linearGradient|https?:\/\//);
 		}
-		const gaugeSource = await Bun.file("src/components/extensions/ExtensionGauge.svelte").text();
-		expect(gaugeSource).toContain('role="progressbar"');
-		expect(gaugeSource).toContain("aria-valuenow={ring.known ? ring.value : undefined}");
 		const navbar = await Bun.file("src/components/extensions/NavbarUsage.svelte").text();
 		expect(navbar).toContain("min-width: 0");
 		expect(navbar).toContain("overflow-x: auto");
@@ -374,6 +239,16 @@ describe("renderers, SDK surface and brand neutrality", () => {
 			if (pattern.test(await Bun.file(`src/${file}`).text())) hits.push(file);
 		}
 		expect(hits).toEqual([]);
+	});
+	test("no UI node or component exists for the look of one particular extension", async () => {
+		// A look this specific (rings, popovers of usage rows, ...) belongs in the extension that wants it, drawn with
+		// `ui-components` (docs/trusted-ui.md). The core only offers generic nodes: adding a node per extension is what this stops.
+		const { parseView } = await import("../src/lib/extensions/ui");
+		expect(() => parseView({ type: "gauge", id: "g", label: "x", rings: [{ value: 1 }] })).toThrow();
+		const files: string[] = [];
+		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) files.push(file);
+		expect(files.filter((f) => /gauge|quota|usage/i.test(f.split("/").pop()!) && !/^components\/(?:Pin|Sidebar)/.test(f))).toEqual(["components/extensions/NavbarUsage.svelte"]);
+		expect(await Bun.file("src/lib/extensions/ui.ts").text()).not.toMatch(/gauge|\brings?\b/i);
 	});
 	test("no leftover previous-brand names in src/ or tests/", async () => {
 		const REPO_SLUG = ["doh" + "wi", "pipaya"].join("/");

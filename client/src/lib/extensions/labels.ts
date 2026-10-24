@@ -16,7 +16,7 @@ export const permissionLabels: Record<Permission, string> = {
 		"system-notifications": msg("시스템 알림: OS·모바일 푸시 알림을 보내고 앱이 닫혀 있어도 작업·승인 이벤트 알림을 등록합니다. 알림 문구가 OS와 푸시 제공자에 전달됩니다."),
 		events: msg("이벤트 구독: 대화와 작업 상태 변경 이벤트를 받습니다."),
 		ui: msg("확장 화면: 패널·폼·입력창 위젯을 표시하고, 사용자가 입력한 해당 화면의 값을 받습니다."),
-		navbar: msg("내비게이션: 상단 영역에 읽기 전용 확장 항목(게이지·아이콘·텍스트)을 표시합니다."),
+		navbar: msg("내비게이션: 상단 영역에 읽기 전용 확장 항목(아이콘·텍스트·진행률)을 표시합니다."),
 		configuration: msg("설정 내보내기·가져오기: 앱 승인 후 서버 주소·확장 패키지·비민감 설정에 접근합니다. 가져온 코드는 자동 실행하지 않습니다."),
 		"configuration-background": msg("자동 설정 접근: 최초 승인 후 비민감 설정을 반복해서 읽고 일반 설정을 자동 적용합니다. 확장 코드 변경은 추가 승인이 필요합니다."),
 		"http-write": msg("HTTP JSON 읽기·쓰기: 사용자 설정의 httpOrigin으로 요청하고 선택적인 httpToken을 Bearer 인증으로 사용합니다."),

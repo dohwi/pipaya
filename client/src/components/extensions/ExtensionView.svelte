@@ -27,7 +27,6 @@
 	import { getContext, setContext, tick } from "svelte";
 	import Select from "../Select.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
-	import ExtensionGauge from "./ExtensionGauge.svelte";
 	import ExtensionIcon from "./ExtensionIcon.svelte";
 	import { fieldsIn, validateUIEvent, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";
 
@@ -370,8 +369,6 @@
 	</div>
 {:else if node.type === "icon"}
 	<ExtensionIcon icon={node.icon} size={node.size} label={node.label} />
-{:else if node.type === "gauge"}
-	<ExtensionGauge {node} />
 {:else if node.type === "stat"}
 	<dl class="stat">
 		<dt>{node.label}</dt>

@@ -51,19 +51,9 @@ export interface IconPath { d: string; fill?: string; fillRule?: "nonzero" | "ev
 /** Data-only vector icon: a viewBox plus a few filled path outlines. Never raw SVG/HTML/URLs. */
 export interface IconSpec { viewBox: string; paths: IconPath[] }
 export interface UIIconNode { type: "icon"; id: string; icon: IconSpec; size?: "small" | "medium" | "large"; label?: string }
-export type GaugeColor = "accent" | "ok" | "warn" | "danger" | (string & {});
-export interface UIGaugeRing { value: number | null; max?: number; color?: GaugeColor; label?: string }
-/** One labelled bar in a gauge's hover/focus detail popover. `value: null` means unknown (never 0). */
-export interface UIGaugeRow { label: string; value: number | null; max?: number; color?: GaugeColor; caption?: string; group?: string }
-/** `updatedAt` is epoch milliseconds of the data shown; the host renders a live "N초 전 업데이트됨" footer from it. */
-export interface UIGaugeDetails { title?: string; rows: UIGaugeRow[]; updatedAt?: number }
-export interface UIGaugeNode {
-	type: "gauge"; id: string; label: string; rings: UIGaugeRing[]; display?: string; icon?: IconSpec;
-	hint?: string; stale?: boolean; size?: "small" | "medium"; details?: UIGaugeDetails;
-}
 
 export type UINode =
-	| UIIconNode | UIGaugeNode | UIStackNode | UIGridNode | UICardNode | UITabsNode | UIFormNode | UITextNode | UIBadgeNode
+	| UIIconNode | UIStackNode | UIGridNode | UICardNode | UITabsNode | UIFormNode | UITextNode | UIBadgeNode
 	| UIDividerNode | UICodeNode | UIAlertNode | UIProgressNode | UIStatNode | UITableNode | UIListNode
 	| UIButtonNode | UIInputNode | UITextareaNode | UISelectNode | UICheckboxNode;
 
@@ -102,17 +92,9 @@ export const UI_LIMITS = Object.freeze({
 	fieldValue: 16000,
 	optionValue: 200,
 	maxMaxValue: 1e9,
-	maxEpochMs: 8.64e15,
 	iconPaths: 8,
 	iconPathData: 8192,
 	iconViewBoxMax: 512,
-	gaugeRings: 3,
-	gaugeDisplay: 16,
-	gaugeDetailsRows: 12,
-	gaugeDetailsTitle: 40,
-	gaugeRowLabel: 48,
-	gaugeRowCaption: 80,
-	gaugeRowGroup: 40,
 	rowsMin: 2,
 	rowsMax: 12,
 });
@@ -145,12 +127,10 @@ const NODE_KEYS: Readonly<Record<UINode["type"], readonly string[]>> = {
 	select: ["type", "id", "label", "value", "options", "required", "disabled", "error"],
 	checkbox: ["type", "id", "label", "checked", "required", "disabled", "error"],
 	icon: ["type", "id", "icon", "size", "label"],
-	gauge: ["type", "id", "label", "rings", "display", "icon", "hint", "stale", "size", "details"],
 };
 
 const PATH_DATA = /^[MmLlHhVvCcSsQqTtAaZz0-9eE+\-., \t\n\r]+$/;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const GAUGE_COLORS = ["accent", "ok", "warn", "danger"] as const;
 
 /** Options that tighten how a view is parsed (used by restricted surfaces such as the navbar). */
 export interface ViewOptions {
@@ -325,60 +305,6 @@ function parseIcon(input: unknown, path: string): IconSpec {
 		return out;
 	});
 	return { viewBox, paths };
-}
-
-/** Shared value/max/color parsing for gauge rings and detail rows. null stays null. */
-function parseMeter(ring: Record<string, unknown>, path: string): { value: number | null; max?: number; color?: string } {
-	const out: { value: number | null; max?: number; color?: string } = { value: null };
-	let max = 100;
-	if (Object.hasOwn(ring, "max")) {
-		const v = ring.max;
-		if (typeof v !== "number" || !Number.isFinite(v)) fail(`${path}.max`, "expected a finite number");
-		if (v <= 0 || v > UI_LIMITS.maxMaxValue) fail(`${path}.max`, `must be greater than 0 and at most ${UI_LIMITS.maxMaxValue}`);
-		max = v;
-		out.max = v;
-	}
-	// null means "unknown" and is preserved; it is never coerced to 0.
-	const value = required(ring, path, "value");
-	if (value !== null) {
-		if (typeof value !== "number" || !Number.isFinite(value)) fail(`${path}.value`, "expected a finite number or null");
-		if (value < 0 || value > max) fail(`${path}.value`, `must be between 0 and ${max}`);
-		out.value = value + 0;
-	}
-	if (Object.hasOwn(ring, "color")) {
-		const v = ring.color;
-		out.color = typeof v === "string" && matches(HEX_COLOR, v) ? v : oneOf(v, `${path}.color`, GAUGE_COLORS);
-	}
-	return out;
-}
-
-function parseRing(raw: unknown, path: string): UIGaugeRing {
-	const ring = object(raw, path, ["value", "max", "color", "label"]);
-	const out: UIGaugeRing = parseMeter(ring, path);
-	if (Object.hasOwn(ring, "label")) out.label = text(ring.label, `${path}.label`, UI_LIMITS.label);
-	return out;
-}
-
-function parseRow(raw: unknown, path: string): UIGaugeRow {
-	const row = object(raw, path, ["label", "value", "max", "color", "caption", "group"]);
-	const label = text(required(row, path, "label"), `${path}.label`, UI_LIMITS.gaugeRowLabel);
-	const out: UIGaugeRow = { label, ...parseMeter(row, path) };
-	if (Object.hasOwn(row, "caption")) out.caption = text(row.caption, `${path}.caption`, UI_LIMITS.gaugeRowCaption, false);
-	if (Object.hasOwn(row, "group")) out.group = text(row.group, `${path}.group`, UI_LIMITS.gaugeRowGroup);
-	return out;
-}
-
-function parseDetails(raw: unknown, path: string, ctx: ParseContext): UIGaugeDetails {
-	const details = object(raw, path, ["title", "rows", "updatedAt"]);
-	const out: UIGaugeDetails = { rows: [] };
-	if (Object.hasOwn(details, "title")) out.title = text(details.title, `${path}.title`, UI_LIMITS.gaugeDetailsTitle);
-	if (Object.hasOwn(details, "updatedAt")) out.updatedAt = integer(details.updatedAt, `${path}.updatedAt`, 0, UI_LIMITS.maxEpochMs);
-	const rows = array(required(details, path, "rows"), `${path}.rows`, UI_LIMITS.gaugeDetailsRows, 1);
-	// Each row counts toward the node limit so details cannot sidestep it.
-	ctx.count += rows.length;
-	if (ctx.count > ctx.maxNodes) fail(`${path}.rows`, `view must contain at most ${ctx.maxNodes} nodes`);
-	out.rows = rows.map((r, i) => parseRow(r, `${path}.rows[${i}]`));
-	return out;
 }
 
 function parseNode(input: unknown, path: string, ctx: ParseContext, depth: number, inForm: boolean): UINode {
@@ -574,17 +500,6 @@ function parseNode(input: unknown, path: string, ctx: ParseContext, depth: numbe
 				out.icon = parseIcon(required(source, path, "icon"), `${path}.icon`);
 				copy(out, source, path, "size", (v, p) => oneOf(v, p, ["small", "medium", "large"] as const));
 				copy(out, source, path, "label", label);
-				break;
-			case "gauge":
-				out.label = label(required(source, path, "label"), `${path}.label`);
-				out.rings = array(required(source, path, "rings"), `${path}.rings`, UI_LIMITS.gaugeRings, 1)
-					.map((raw, index) => parseRing(raw, `${path}.rings[${index}]`));
-				copy(out, source, path, "display", (v, p) => text(v, p, UI_LIMITS.gaugeDisplay));
-				copy(out, source, path, "icon", parseIcon);
-				copy(out, source, path, "hint", optionalText(UI_LIMITS.description));
-				copy(out, source, path, "stale", flag);
-				copy(out, source, path, "size", (v, p) => oneOf(v, p, ["small", "medium"] as const));
-				copy(out, source, path, "details", (v, p) => parseDetails(v, p, ctx));
 				break;
 		}
 	} finally {

@@ -3,7 +3,7 @@ import type { NotificationSpec, NotificationResult, NotificationRule, Notificati
 export type { NotificationSpec, NotificationResult, NotificationRule, NotificationStatus, NotificationKind } from "../notification-contract";
 export type { NavbarItemSpec } from "./navbar";
 import type { UIPanelSpec, UINode, UIEvent, UITone } from "./ui";
-export type { UIPanelSpec, UINode, UIEvent, UIFieldValue, UITone, IconSpec, IconPath, UIIconNode, UIGaugeNode, UIGaugeRing, UIGaugeRow, UIGaugeDetails } from "./ui";
+export type { UIPanelSpec, UINode, UIEvent, UIFieldValue, UITone, IconSpec, IconPath, UIIconNode } from "./ui";
 
 /** Public SDK v1 types for extension authors. Runtime APIs are provided as the
  * `sdk` argument inside a package's async code body, not imported from the app. */

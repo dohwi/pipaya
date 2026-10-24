@@ -748,7 +748,7 @@ describe("logs", () => {
 
 describe("navbar and http capabilities", () => {
 	const view = (n = 1) => ({ type: "stack", id: "root", direction: "horizontal", children: Array.from({ length: n }, (_, i) => ({
-		type: "gauge", id: `g${i}`, label: `Gauge ${i}`, rings: [{ value: null }],
+		type: "progress", id: `g${i}`, label: `Item ${i}`, value: 0,
 	})) });
 	const spec = { label: "Usage", view: view() };
 	test("permissions are independent and http.getJson takes exactly one argument and has no default origin", async () => {
@@ -793,7 +793,7 @@ describe("navbar and http capabilities", () => {
 		const input = { label: "copy", view: view() };
 		a.runtime.callbacks.request("navbar.set", ["copy", input]);
 		(input.view.children[0] as any).label = "changed";
-		expect((host.navbar.find(i => i.id === "copy")!.view as any).children[0].label).toBe("Gauge 0");
+		expect((host.navbar.find(i => i.id === "copy")!.view as any).children[0].label).toBe("Item 0");
 	});
 
 	test("navbar items vanish on disable, reload, failure, safe mode and uninstall", async () => {

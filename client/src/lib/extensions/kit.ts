@@ -13,7 +13,6 @@ import Badge from "../../components/Badge.svelte";
 import Switch from "../../components/Switch.svelte";
 import Pin from "../../components/Pin.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
-import ExtensionGauge from "../../components/extensions/ExtensionGauge.svelte";
 
 /** `ext.data` / `ext.settings` are getters: read them inside the component (markup, $derived, $effect) to stay reactive. */
 export function kit(id: string, data: () => unknown, settings: () => Record<string, unknown>): Record<string, unknown> {
@@ -24,5 +23,5 @@ export function kit(id: string, data: () => unknown, settings: () => Record<stri
 		get language() { return getLang(); },
 		get dark() { return app.prefs.resolvedDark; },
 	};
-	return { ext, app, extensions, t, tc, getPane, Icon, Button, IconButton, Badge, Switch, Pin, StatusDot, Gauge: ExtensionGauge };
+	return { ext, app, extensions, t, tc, getPane, Icon, Button, IconButton, Badge, Switch, Pin, StatusDot };
 }
