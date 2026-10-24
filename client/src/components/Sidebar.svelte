@@ -298,7 +298,7 @@
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionMount slot="sidebar.bottom" />
 		<button class="settings wide" onclick={() => app.openSettings()}>
-			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert}<Pin tone="warn" label={app.net !== "online" ? t("연결 안 됨") : settingsAlert} />{/if}</span> {t("설정")}
+			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert}<Pin tone="warn" label={app.net !== "online" ? t("연결 안 됨") : undefined} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone="warn" size="sm">{settingsAlert}</Badge></span>{/if}
 		</button>
 	</div>

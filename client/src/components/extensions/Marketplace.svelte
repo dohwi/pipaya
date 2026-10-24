@@ -224,6 +224,7 @@
 	.official :global(svg) { width: 10px; height: 10px; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.ask p { margin: 0 0 8px; }
+	.ask p:last-child { margin-bottom: 0; }
 	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }
 	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
 	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
