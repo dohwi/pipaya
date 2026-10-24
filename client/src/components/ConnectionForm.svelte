@@ -37,11 +37,14 @@
 		start,
 		onclose,
 		onsaved,
+		onchange,
 	}: {
 		api: () => Api | null;
 		start: { kind: "new"; preset?: LocalPreset } | { kind: "edit"; provider: CustomProvider };
 		onclose: () => void;
 		onsaved: () => void;
+		/** An existing connection was auto-saved; the caller reloads but the dialog stays open. */
+		onchange: () => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -287,31 +290,19 @@
 		void save();
 	}
 
-	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
-	async function save() {
-		const a = api();
-		const f = form;
-		if (!a || !f) return;
-		if (editing !== null) return closeModel(); // Enter inside a model page just goes back
-		formError = "";
-		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
-		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
-		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
-		// A new connection with no models yet tries to read them from its upstream; if that fails it is still saved, empty.
-		if (f.isNew && !f.rows.some((r) => r.id.trim())) {
-			busy = true;
-			await discover();
-			busy = false;
-			formError = "";
-		}
-		f.rows = f.rows.filter((r) => r.id.trim() || r.name.trim());
-		const out = [];
+	/** Validate the form and build the models payload. `strict` (explicit save) jumps to the model that needs fixing. */
+	function collect(f: Form, strict: boolean): { out: CustomModel[] } | { error: string } {
+		if (!f.name.trim()) return { error: t("이름을 입력하세요.") };
+		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return { error: t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다.") };
+		if (!f.baseUrl.trim()) return { error: t("Endpoint URL을 입력하세요.") };
+		const out: CustomModel[] = [];
 		for (const [i, r] of f.rows.entries()) {
+			if (!strict && !r.id.trim() && !r.name.trim()) continue; // a blank model still being typed
 			const ctx = Number(r.contextWindow);
 			const max = Number(r.maxTokens);
 			const bad = (problem: string) => {
-				editing = i; // jump to the model that needs fixing
-				formError = problem;
+				if (strict) editing = i; // jump to the model that needs fixing
+				return { error: problem };
 			};
 			if (!r.id.trim()) return bad(t("{n}번째 모델의 ID를 입력하세요.", { n: i + 1 }));
 			if (!Number.isInteger(ctx) || ctx < 128) return bad(t("{id}: 컨텍스트 크기는 128 이상의 정수여야 합니다.", { id: r.id }));
@@ -329,9 +320,90 @@
 				vision: r.vision,
 				...(r.icon ? { icon: r.icon } : {}),
 				...(r.reasoning && r.thinkingLevels.length ? { thinkingLevels: allLevels.filter((l) => r.thinkingLevels.includes(l)) } : {}),
-			});
+			} as CustomModel);
 		}
-		if (new Set(out.map((m) => m.id)).size !== out.length) return void (formError = t("모델 ID가 중복되었습니다."));
+		if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };
+		return { out };
+	}
+
+	/* ---------- auto-save (existing connections) ---------- */
+
+	let saveState = $state<"idle" | "saving" | "saved">("idle");
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let inflight: Promise<void> | null = null;
+	let lastSaved = "";
+	let changed = false;
+	const snapshot = (f: Form) => JSON.stringify([f.name, f.baseUrl, f.api, f.authRequired, f.rows]);
+
+	async function autosave() {
+		const a = api();
+		const f = form;
+		if (!a || !f || f.isNew) return;
+		if (inflight) await inflight;
+		const snap = snapshot(f);
+		if (snap === lastSaved) return;
+		const res = collect(f, false);
+		if ("error" in res) {
+			formError = res.error;
+			saveState = "idle";
+			return;
+		}
+		formError = "";
+		saveState = "saving";
+		inflight = a
+			.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: res.out })
+			.then(() => {
+				lastSaved = snap;
+				changed = true;
+				saveState = "saved";
+			})
+			.catch((err) => {
+				formError = errorText(err);
+				saveState = "idle";
+			})
+			.finally(() => {
+				inflight = null;
+			});
+		await inflight;
+		if (form && snapshot(form) !== lastSaved && !formError) void autosave();
+	}
+
+	$effect(() => {
+		const f = form;
+		if (!f || f.isNew) return;
+		const snap = snapshot(f);
+		if (!lastSaved) {
+			lastSaved = snap; // the state the dialog opened with
+			return;
+		}
+		if (snap === lastSaved) return;
+		clearTimeout(timer);
+		timer = setTimeout(() => void autosave(), 700);
+		return () => clearTimeout(timer);
+	});
+
+	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
+	async function save() {
+		const a = api();
+		const f = form;
+		if (!a || !f) return;
+		if (editing !== null) return closeModel(); // Enter inside a model page just goes back
+		if (!f.isNew) return close(); // existing connections save themselves
+		formError = "";
+		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
+		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
+		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
+		// A new connection with no models yet tries to read them from its upstream; if that fails it is still saved, empty.
+		if (!f.rows.some((r) => r.id.trim())) {
+			busy = true;
+			await discover();
+			busy = false;
+			formError = "";
+		}
+		f.rows = f.rows.filter((r) => r.id.trim() || r.name.trim());
+		const res = collect(f, true);
+		if ("error" in res) return void (formError = res.error);
+		const out = res.out;
 		busy = true;
 		try {
 			await a.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: out });
@@ -359,9 +431,13 @@
 	if (start.kind === "edit") startEdit(start.provider);
 	// svelte-ignore state_referenced_locally
 	else startNew(start.preset);
-	const close = () => {
+	const close = async () => {
+		clearTimeout(timer);
+		if (form && !form.isNew && snapshot(form) !== lastSaved) await autosave();
+		const dirty = changed;
 		form = null;
 		onclose();
+		if (dirty) onchange();
 	};
 </script>
 
@@ -562,8 +638,13 @@
 					{#if editing !== null}
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
-						<button type="button" class="btn ghost" onclick={close} disabled={busy}>{t("취소")}</button>
-						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
+						{#if form.isNew}
+							<button type="button" class="btn ghost" onclick={close} disabled={busy}>{t("취소")}</button>
+							<button class="btn primary" disabled={busy}>{busy ? t("확인 중…") : t("추가")}</button>
+						{:else}
+							<span class="savestate" role="status">{saveState === "saving" ? t("저장 중…") : saveState === "saved" ? t("자동 저장됨") : ""}</span>
+							<button type="button" class="btn primary" onclick={close}>{t("완료")}</button>
+						{/if}
 					{/if}
 				</div>
 			</footer>
@@ -921,6 +1002,12 @@
 		stroke-width: 1.8;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.savestate {
+		margin-right: auto;
+		align-self: center;
+		font-size: 12px;
+		color: var(--text-dim, currentColor);
 	}
 	.fbtns {
 		display: flex;

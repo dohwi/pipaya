@@ -354,7 +354,7 @@
 
 		{#if form}
 			<!-- nested inside another (transformed) modal, so it lifts itself to <body> -->
-			<ConnectionForm {api} start={form} onclose={() => (form = null)} onsaved={() => { form = null; void reload(); }} />
+			<ConnectionForm {api} start={form} onclose={() => (form = null)} onsaved={() => { form = null; void reload(); }} onchange={() => void reload()} />
 		{/if}
 	{/if}
 </div>

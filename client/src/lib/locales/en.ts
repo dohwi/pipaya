@@ -139,6 +139,7 @@ export const en: Record<string, string> = {
 	"대화": "Chat",
 	"실패": "Failed",
 	"완료": "Done",
+	"자동 저장됨": "Auto-saved",
 	"알림 닫기": "Dismiss notification",
 	"왼쪽에 놓기": "Drop on the left",
 	"오른쪽에 놓기": "Drop on the right",
