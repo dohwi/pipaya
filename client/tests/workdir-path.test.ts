@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cdArgOf, cdHint, commonPrefix, expandHome, filterDirs } from "../src/lib/workdir-path";
+import { absoluteWorkdir, breadcrumbs, cdArgOf, cdHint, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
 
 const ctx = { root: "/home/u/workspace", home: "/home/u" };
 
@@ -56,5 +56,46 @@ describe("filterDirs / commonPrefix", () => {
 	test("common prefix", () => {
 		expect(commonPrefix(["pipaya", "pipaya-wiki"])).toBe("pipaya");
 		expect(commonPrefix([])).toBe("");
+	});
+});
+
+describe("typing a path", () => {
+	test("the directory to list and the part to filter by", () => {
+		expect(splitTyped("/a/b/par")).toEqual({ dir: "/a/b", part: "par" });
+		expect(splitTyped("/a/b/")).toEqual({ dir: "/a/b", part: "" });
+		expect(splitTyped("/par")).toEqual({ dir: "/", part: "par" });
+		expect(splitTyped("par")).toEqual({ dir: "", part: "par" });
+	});
+	test("breadcrumbs climb from the root", () => {
+		expect(breadcrumbs("/")).toEqual([{ name: "/", path: "/" }]);
+		expect(breadcrumbs("/a/b")).toEqual([{ name: "/", path: "/" }, { name: "a", path: "/a" }, { name: "b", path: "/a/b" }]);
+		expect(breadcrumbs("")).toEqual([{ name: "/", path: "/" }]);
+	});
+	test("workspace entries become absolute", () => {
+		expect(absoluteWorkdir("/x", "/w")).toBe("/x");
+		expect(absoluteWorkdir(".", "/w")).toBe("/w");
+		expect(absoluteWorkdir("a/b", "/w")).toBe("/w/a/b");
+		expect(absoluteWorkdir(".", undefined)).toBe("");
+	});
+	test("matches only filter once the list belongs to the folder being typed", () => {
+		const list = [{ name: "src" }, { name: "Spec" }, { name: "docs" }];
+		expect(typedMatches(list, "/w/s", "/w").map((d) => d.name)).toEqual(["src", "Spec"]);
+		expect(typedMatches(list, "/w/s", "/other").length).toBe(3);
+		expect(typedMatches(list, "/w/", "/w").length).toBe(3);
+	});
+});
+
+describe("Tab completion", () => {
+	test("the only match is finished with a slash", () => {
+		expect(tabComplete("/w", ["src"], undefined)).toEqual({ text: "/w/src/", whole: true });
+	});
+	test("several matches complete to their shared start and stay open", () => {
+		expect(tabComplete("/w", ["src", "srv"], undefined)).toEqual({ text: "/w/sr", whole: false });
+	});
+	test("a highlighted folder wins and is finished", () => {
+		expect(tabComplete("/w", ["src", "srv"], "srv")).toEqual({ text: "/w/srv/", whole: true });
+	});
+	test("at the root there is no doubled slash", () => {
+		expect(tabComplete("/", ["etc"], undefined)).toEqual({ text: "/etc/", whole: true });
 	});
 });

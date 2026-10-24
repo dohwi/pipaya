@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FilterChip from "./FilterChip.svelte";
+	import { absoluteWorkdir, breadcrumbs, splitTyped, tabComplete, typedMatches } from "../lib/workdir-path";
 	import { msg, t, tc } from "../lib/i18n";
 	import { onDestroy } from "svelte";
 	import Icon from "./Icon.svelte";
@@ -71,7 +72,7 @@
 		const seen = new Set<string>();
 		const out: { path: string; sub: string }[] = [];
 		for (const w of app.workspace?.workdirs ?? []) {
-			const abs = w.path.startsWith("/") ? w.path : w.path === "." ? (app.workspace?.root ?? "") : `${app.workspace?.root}/${w.path}`;
+			const abs = absoluteWorkdir(w.path, app.workspace?.root);
 			if (!abs || seen.has(abs)) continue;
 			seen.add(abs);
 			out.push({ path: abs, sub: t("활성 {active} · 닫힘 {closed}", { active: w.active, closed: w.closed }) });
@@ -80,11 +81,7 @@
 		return out;
 	});
 
-	const crumbs = $derived.by(() => {
-		const p = listing?.path ?? "";
-		const parts = p.split("/").filter(Boolean);
-		return [{ name: "/", path: "/" }, ...parts.map((name, i) => ({ name, path: `/${parts.slice(0, i + 1).join("/")}` }))];
-	});
+	const crumbs = $derived(breadcrumbs(listing?.path ?? ""));
 
 	async function go(path?: string, live = false) {
 		const api = client();
@@ -160,26 +157,15 @@
 		if (app.changeWorkdir(path)) onclose();
 	}
 
-	/** `/a/b/par` -> list `/a/b`, filter by `par`. `/a/b/` lists `/a/b`. */
-	const split = (v: string) => {
-		const i = v.lastIndexOf("/");
-		return i < 0 ? { dir: "", part: v } : { dir: v.slice(0, i) || "/", part: v.slice(i + 1) };
-	};
-	const part = $derived(split(typed.trim()).part);
-	const shown = $derived.by(() => {
-		const all = listing?.entries ?? [];
-		// filter only once the list belongs to the folder being typed (a re-list is on its way otherwise)
-		if (!part || split(typed.trim()).dir !== listing?.path) return all;
-		const q = part.toLowerCase();
-		return all.filter((d) => d.name.toLowerCase().startsWith(q));
-	});
+	const part = $derived(splitTyped(typed.trim()).part);
+	const shown = $derived(typedMatches(listing?.entries ?? [], typed, listing?.path));
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	function oninput() {
 		clearTimeout(timer);
 		const v = typed.trim();
 		if (!v.startsWith("/")) return; // only absolute paths are listed live
-		const { dir } = split(v);
+		const { dir } = splitTyped(v);
 		timer = setTimeout(() => {
 			missing = false;
 			if (dir !== listing?.path) void go(dir, true);
@@ -210,13 +196,9 @@
 		}
 		if (e.key !== "Tab" || e.shiftKey || !listing || !shown.length) return;
 		e.preventDefault();
-		const pick = active >= 0 ? shown[active] : undefined;
-		let pre = pick?.name ?? shown[0].name;
-		if (!pick) for (const d of shown) while (!d.name.startsWith(pre)) pre = pre.slice(0, -1);
-		const dir = split(typed.trim()).dir;
-		const whole = !!pick || shown.length === 1;
-		typed = `${dir === "/" ? "" : dir}/${pre}${whole ? "/" : ""}`;
-		if (whole) {
+		const done = tabComplete(splitTyped(typed.trim()).dir, shown.map((d) => d.name), active >= 0 ? shown[active]?.name : undefined);
+		typed = done.text;
+		if (done.whole) {
 			clearTimeout(timer);
 			missing = false;
 			void go(typed.trim(), true);
@@ -232,7 +214,7 @@
 			if (hit) return void go(hit.path);
 		}
 		// "/path/" already listed: a second Enter confirms it
-		if (v.startsWith("/") && v.endsWith("/") && !missing && listing && split(v).dir === listing.path && !saving) return void choose(listing.path);
+		if (v.startsWith("/") && v.endsWith("/") && !missing && listing && splitTyped(v).dir === listing.path && !saving) return void choose(listing.path);
 		void go(v);
 	}
 
@@ -293,7 +275,7 @@
 		{#if error}
 			<p class="err">{error}</p>
 		{:else if missing}
-			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: split(typed.trim()).dir })}</p>
+			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(typed.trim()).dir })}</p>
 		{:else if listing}
 			{#if listing.parent && !part}
 				<button class="row wide up" onclick={() => void enter(listing!.parent!)}><Icon name="chevron-down" /><span class="mono">..</span><span class="grow"></span><span class="hint">{t("상위 폴더")}</span></button>
