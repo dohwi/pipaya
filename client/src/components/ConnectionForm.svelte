@@ -563,15 +563,13 @@
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
 									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
-									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}</span>
+									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
 									{#if r.unavailable}
 										<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
 									{:else if !r.id.trim()}
 										<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
-									{:else if matchedOf(r)}
-										<span class="mmatch" title={matchedOf(r)?.id}><Icon name="check" />{matchedOf(r)?.id}</span>
-									{:else if catalogLoaded}
+									{:else if catalogLoaded && !matchedOf(r)}
 										<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
 									{/if}
 									<Icon name="chevron-right" />
@@ -814,22 +812,14 @@
 		height: 13px;
 		opacity: 0.7;
 	}
-	.mmatch {
-		flex: none;
+	.mname :global(.mchk) {
+		margin-left: 4px;
+		vertical-align: -2px;
 		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		max-width: 220px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-family: var(--font-mono, monospace);
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
-	.mitem .mmatch :global(svg) {
-		width: 12px;
-		height: 12px;
+	.mname :global(.mchk svg) {
+		width: 13px;
+		height: 13px;
 		stroke: var(--ok);
 		stroke-width: 2.4;
 	}
