@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const MIGRATIONS: (string | ((db: Database) => void))[] = [
+export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
 	`
 	CREATE TABLE sessions (
@@ -123,14 +123,14 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// saved default stuck on read-only would have no way back out of it, so both fold into `ask`.
 	`UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly';
 	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
-	// v18: each session in a group gets a name (JSON { sessionId: name }), so members can be addressed as @name.
+	// v18: a name per session in a group (JSON { sessionId: name }). Unused since v22; dropped in v23.
 	(db) => { if (!(db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups ADD COLUMN names TEXT NOT NULL DEFAULT '{}'"); },
 	// v19: a name for each session (since moved out of core, see v22): the column is added; older databases already had names given here.
 	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''"); },
-	// v20: what a session's agent works on (written by the system model), shown beside its @name.
+	// v20: what a session's agent works on (written by the system model). Any client or extension may read it.
 	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "purpose")) db.exec("ALTER TABLE sessions ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"); },
-	// v21: a group's tag (its name with dashes, any case) must differ from every other group's and every active session's @name.
-	// Older duplicates keep the first (by creation) and get " 2", " 3", ... appended.
+	// v21: a group's tag (its name with dashes, any case) must differ from every other group's and from the names extensions
+	// gave sessions at the time. Older duplicates keep the first (by creation) and get " 2", " 3", ... appended.
 	(db) => {
 		const handle = (n: string) => n.trim().replace(/\s+/g, "-").toLowerCase();
 		const taken = new Set((db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
@@ -162,6 +162,8 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			SELECT id, 'peer-tools', 'name', json_quote(name) FROM sessions WHERE name != '' AND closed = 0;
 			ALTER TABLE sessions DROP COLUMN name;`);
 	},
+	// v23: nothing reads groups.names any more (the names it held moved with v22). Drop the column.
+	(db) => { if ((db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups DROP COLUMN names"); },
 ];
 
 export function openDb(path: string): Database {

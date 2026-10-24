@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb } from "../src/db.ts";
+import { MIGRATIONS, openDb } from "../src/db.ts";
 import { SessionStore, THINKING_LEVELS, type SessionRecord } from "../src/store.ts";
 
 describe("thinking levels", () => {
@@ -30,7 +30,7 @@ describe("thinking levels", () => {
 			const migrated = new SessionStore(db);
 			expect(migrated.get("legacy-off")).toEqual(record);
 			expect(migrated.get("existing-high")?.thinkingLevel).toBe("high");
-			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 25 });
+			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: MIGRATIONS.length });
 			db.close();
 			db = openDb(path);
 			expect(new SessionStore(db).get("legacy-off")?.thinkingLevel).toBe("medium");
