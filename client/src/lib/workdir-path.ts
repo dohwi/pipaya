@@ -102,3 +102,28 @@ export function typedMatches<T extends { name: string }>(entries: readonly T[], 
 	const q = part.toLowerCase();
 	return entries.filter((d) => d.name.toLowerCase().startsWith(q));
 }
+
+/** The most folders the `/cd` menu lists */
+export const CD_ROWS_MAX = 100;
+
+/**
+ * The rows of the `/cd` menu: the listing's folders that match what is typed. The listing of another folder is stale
+ * while the new one loads, so until `listedFor` is the folder being asked about nothing shows rather than wrong rows.
+ */
+export function cdRowsOf<T extends { name: string }>(target: CdHint | null, listed: readonly T[], listedFor: string | null): T[] {
+	return target && listedFor === target.dir ? filterDirs([...listed], target.filter).slice(0, CD_ROWS_MAX) : [];
+}
+
+/** What `/cd ` is completed to for a folder name: the typed prefix (`~/work/`), the name, and a slash to go deeper. */
+export const cdCompletion = (target: Pick<CdHint, "prefix"> | null, name: string): string => `${target?.prefix ?? ""}${name}/`;
+
+/**
+ * Tab in the `/cd` menu: the highlighted folder when the arrows chose one (or the only match), else like a shell the
+ * longest common start of the matches. `row` = complete that row's folder; `text` = type this argument; `none` = nothing to add.
+ */
+export function cdTab(target: CdHint | null, names: readonly string[], arrowed: boolean): { do: "row" } | { do: "text"; text: string } | { do: "none" } {
+	if (!target) return { do: "none" };
+	if (arrowed || names.length === 1) return { do: "row" };
+	const pre = commonPrefix([...names]);
+	return pre.length > target.filter.length ? { do: "text", text: `${target.prefix}${pre}` } : { do: "row" };
+}

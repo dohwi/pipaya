@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { absoluteWorkdir, breadcrumbs, cdArgOf, cdHint, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
+import { absoluteWorkdir, breadcrumbs, cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
 
 const ctx = { root: "/home/u/workspace", home: "/home/u" };
 
@@ -97,5 +97,37 @@ describe("Tab completion", () => {
 	});
 	test("at the root there is no doubled slash", () => {
 		expect(tabComplete("/", ["etc"], undefined)).toEqual({ text: "/etc/", whole: true });
+	});
+});
+
+describe("the /cd menu", () => {
+	const target = { dir: "/w", prefix: "~/w/", filter: "s" };
+	const listed = [{ name: "src" }, { name: "docs" }, { name: "scripts" }, { name: ".git" }];
+	test("rows are the listing filtered by what is typed", () => {
+		expect(cdRowsOf(target, listed, "/w").map((d) => d.name)).toEqual(["src", "scripts", "docs"]);
+	});
+	test("a listing of another folder shows nothing, and so does no target", () => {
+		expect(cdRowsOf(target, listed, "/other")).toEqual([]);
+		expect(cdRowsOf(target, listed, null)).toEqual([]);
+		expect(cdRowsOf(null, listed, "/w")).toEqual([]);
+	});
+	test("at most a hundred rows", () => {
+		const many = Array.from({ length: 150 }, (_, i) => ({ name: `d${i}` }));
+		expect(cdRowsOf({ dir: "/w", prefix: "", filter: "" }, many, "/w")).toHaveLength(100);
+	});
+	test("completing a folder keeps the typed prefix and ends with a slash", () => {
+		expect(cdCompletion(target, "src")).toBe("~/w/src/");
+		expect(cdCompletion(null, "src")).toBe("src/");
+	});
+	test("Tab: arrows or a single match complete that row", () => {
+		expect(cdTab(target, ["src", "scripts"], true)).toEqual({ do: "row" });
+		expect(cdTab(target, ["src"], false)).toEqual({ do: "row" });
+	});
+	test("Tab: several matches extend to their shared start, else complete the row", () => {
+		expect(cdTab({ ...target, filter: "" }, ["src", "srv"], false)).toEqual({ do: "text", text: "~/w/sr" });
+		expect(cdTab({ ...target, filter: "sr" }, ["src", "srv"], false)).toEqual({ do: "row" });
+	});
+	test("Tab with no target does nothing", () => {
+		expect(cdTab(null, ["a"], false)).toEqual({ do: "none" });
 	});
 });

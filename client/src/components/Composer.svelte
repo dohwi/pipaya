@@ -8,6 +8,7 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { abortable } from "../lib/abortable";
+	import { DebouncedList } from "../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
 	import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
@@ -19,7 +20,7 @@
 	import StatusLine from "./StatusLine.svelte";
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
-	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
+	import { cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab } from "../lib/workdir-path";
 	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, parseSlash, SKILL_PREFIX, type SlashCommand } from "../lib/commands";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
@@ -188,35 +189,28 @@
 
 	// ── #file mentions (and #imageN): the token right before the caret, e.g. "look at #src/comp" ──
 	let caret = $state(0);
-	let mentionFiles = $state<{ path: string; dir: boolean }[]>([]);
-	let mentionLoaded = $state(false);
+	/** Files under the folder for the `#` token being typed, listed after a short pause */
+	const fileList = new DebouncedList<{ cwd: string; q: string }, { path: string; dir: boolean }>();
+	const mentionFiles = $derived(fileList.rows);
+	const mentionLoaded = $derived(fileList.loaded);
 	// ── /cd <path>: folders of the typed path are suggested above the input (`~`, absolute and workspace-relative) ──
 	const cdArg = $derived(slashQuery === null ? cdArgOf(text) : null);
 	const cdTarget = $derived(cdArg === null ? null : cdHint(cdArg, { root: app.workspace?.root, home: app.workspace?.home }));
-	const cdDir = $derived(cdTarget?.dir ?? null);
-	const cdHidden = $derived(!!cdTarget?.filter.startsWith("."));
-	let cdDirs = $state<{ name: string; path: string }[]>([]);
-	let cdFor = $state<string | null>(null);
+	/** Folders of the typed `/cd` path, listed after a short pause; `for` is the folder they belong to. */
+	const cdList = new DebouncedList<{ dir: string; hidden: boolean }, { name: string; path: string }>();
 	/** The arrow keys moved the highlight: Enter then goes to that folder instead of the typed path */
 	let cdNav = $state(false);
+	// Only the folder and whether dot-folders are wanted start a new listing: typing a name just filters the rows.
+	const cdDir = $derived(cdTarget?.dir ?? null);
+	const cdHidden = $derived(!!cdTarget?.filter.startsWith("."));
 	$effect(() => {
 		const dir = cdDir;
 		const hidden = cdHidden;
 		const api = app.api;
-		if (dir === null || !api || app.net !== "online") {
-			cdDirs = [];
-			cdFor = null;
-			return;
-		}
-		return abortable((signal) => api.listDirs(dir, hidden, signal), {
-			ok: (r) => { cdDirs = r.entries; cdFor = dir; },
-			fail: () => { cdDirs = []; cdFor = dir; },
-			delay: 80,
-		});
+		return cdList.follow(dir === null ? null : { dir, hidden }, api && app.net === "online" ? async (q, signal) => (await api.listDirs(q.dir, q.hidden, signal)).entries : null);
 	});
-	// The list of another folder is stale while the new one loads: show nothing rather than wrong rows.
-	const cdRows = $derived(cdTarget && cdFor === cdTarget.dir ? filterDirs(cdDirs, cdTarget.filter).slice(0, 100) : []);
-	const cdValue = (name: string) => `${cdTarget?.prefix ?? ""}${name}/`;
+	const cdRows = $derived(cdRowsOf(cdTarget, cdList.rows, cdList.for?.dir ?? null));
+	const cdValue = (name: string) => cdCompletion(cdTarget, name);
 	const mention = $derived(slashQuery !== null || argSuggestions || cdArg !== null ? null : mentionAt("file", text, caret));
 	// Attached images share the `#` menu, above the files: "compare #image1 and #image2". A fully typed token is done, so Enter stays free to send.
 	const imageMatches = $derived(
@@ -238,16 +232,7 @@
 		const q = mention?.query;
 		const cwd = mentionCwd;
 		const api = app.api;
-		if (q === undefined || !api || app.net !== "online") {
-			mentionFiles = [];
-			mentionLoaded = false;
-			return;
-		}
-		return abortable((signal) => api.listFiles(cwd, q, signal), {
-			ok: (r) => { mentionFiles = r.entries; mentionLoaded = true; },
-			fail: () => { mentionFiles = []; mentionLoaded = true; },
-			delay: 80,
-		});
+		return fileList.follow(q === undefined ? null : { cwd, q }, api && app.net === "online" ? async (k, signal) => (await api.listFiles(k.cwd, k.q, signal)).entries : null);
 	});
 
 	/** Which of the four kinds of typing owns the menu, and whether it shows (see lib/slash-menu). */
@@ -335,11 +320,9 @@
 
 	/** Tab: the highlighted folder, else like a shell: the only match, or the longest common start of them. */
 	function tabCd() {
-		if (!cdTarget) return;
-		if (cdNav || cdRows.length === 1) return completeCd(slashIndex);
-		const pre = commonPrefix(cdRows.map((d) => d.name));
-		if (pre.length > cdTarget.filter.length) setText(`/cd ${cdTarget.prefix}${pre}`);
-		else completeCd(slashIndex);
+		const step = cdTab(cdTarget, cdRows.map((d) => d.name), cdNav);
+		if (step.do === "text") setText(`/cd ${step.text}`);
+		else if (step.do === "row") completeCd(slashIndex);
 	}
 
 	/** Enter: go to the folder picked with the arrows. Otherwise the typed path is used as written (it may be a new folder). */
