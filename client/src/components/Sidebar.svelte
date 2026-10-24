@@ -17,6 +17,7 @@
 	import { hostOf, tilde } from "../lib/format";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
+	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
 	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, shortName, unreachable } from "../lib/sidebar-model";
@@ -25,12 +26,9 @@
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
-	/** id of the session being renamed */
-	let editing = $state<string | null>(null);
-	let draft = $state("");
-	/** id of the group being renamed */
-	let editingGroup = $state<string | null>(null);
-	let groupDraft = $state("");
+	/** The conversation or terminal being renamed in place, and the split tab (group) being renamed. */
+	const rename = new InlineRename();
+	const groupRename = new InlineRename();
 	/** what a dragged session is hovering over: a group (join it) or another session (group with it) */
 	let dropOn = $state<string | null>(null);
 
@@ -111,25 +109,19 @@
 		};
 	});
 
-	function startRename(id: string, title: string) {
-		editing = id;
-		draft = title;
-	}
+	const startRename = (id: string, title: string) => rename.start(id, title);
 	function commitRename() {
-		if (editing && draft.trim()) void (app.terminal(editing) ? app.renameTerminal(editing, draft) : app.rename(editing, draft));
-		editing = null;
+		const done = rename.commit();
+		if (done) void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
 	}
 	function focusSelect(node: HTMLInputElement) {
 		node.focus();
 		node.select();
 	}
-	function startGroupRename(g: Group) {
-		editingGroup = g.id;
-		groupDraft = g.name;
-	}
+	const startGroupRename = (g: Group) => groupRename.start(g.id, g.name);
 	function commitGroupRename() {
-		if (editingGroup && groupDraft.trim()) void app.renameGroup(editingGroup, groupDraft);
-		editingGroup = null;
+		const done = groupRename.commit();
+		if (done) void app.renameGroup(done.id, done.name);
 	}
 	/** Touch has no drag and drop: pick the conversation to pull this one together with. */
 	function chooseGroup(x: { id: string; title: string }) {
@@ -301,14 +293,14 @@
 		class:over={dropOn === x.id}
 		class:before={tabDrop?.id === x.id && !tabDrop.after}
 		class:after={tabDrop?.id === x.id && tabDrop.after}
-		class:grabbable={n.current && editing !== x.id}
+		class:grabbable={n.current && !rename.is(x.id)}
 		class:menuopen={menuId === x.id}
-		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
+		use:dragSource={{ id: x.id, disabled: !n.current || rename.is(x.id) }}
 		use:dropTarget={drop}
 	>
 		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-		{#if n.current && editing === x.id}
-			{@render renameInput(draft, commitRename, () => (editing = null), (v) => (draft = v))}
+		{#if n.current && rename.is(x.id)}
+			{@render renameInput(rename.draft, commitRename, () => rename.cancel(), (v) => (rename.draft = v))}
 		{:else}
 			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={tip}>
 				{@render body()}
@@ -413,16 +405,16 @@
 											<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
 											<div
 												class="item nested grprow"
-												class:grabbable={n.current && editingGroup !== g.id}
+												class:grabbable={n.current && !groupRename.is(g.id)}
 												class:cur={n.current && g.id === app.activeGroup?.id}
 												class:menuopen={menuId === g.id}
 												class:before={tabDrop?.id === g.id && !tabDrop.after}
 												class:after={tabDrop?.id === g.id && tabDrop.after}
-												use:dragSource={{ id: g.id, disabled: !n.current || editingGroup === g.id }}
+												use:dragSource={{ id: g.id, disabled: !n.current || groupRename.is(g.id) }}
 												use:dropTarget={drop}
 											>
-												{#if n.current && editingGroup === g.id}
-													{@render renameInput(groupDraft, commitGroupRename, () => (editingGroup = null), (v) => (groupDraft = v), 100)}
+												{#if n.current && groupRename.is(g.id)}
+													{@render renameInput(groupRename.draft, commitGroupRename, () => groupRename.cancel(), (v) => (groupRename.draft = v), 100)}
 												{:else}
 													<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
 														<Icon name={gfold ? "group" : "group-open"} />
