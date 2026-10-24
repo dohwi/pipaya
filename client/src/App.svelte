@@ -57,7 +57,6 @@
 	// Dialogs and settings panels load on first open, keeping them (and ModelConnections, Extensions, Backup…) out of the start-up chunk.
 	const load = {
 		settings: () => import("./components/Settings.svelte"),
-		modelSettings: () => import("./components/ModelSettings.svelte"),
 		skills: () => import("./components/Skills.svelte"),
 		commands: () => import("./components/CommandFamilies.svelte"),
 		lightbox: () => import("./components/Lightbox.svelte"),
@@ -356,7 +355,6 @@
 			</div>
 		</main>
 
-		{#if app.connectionsOpen}<Lazy load={load.modelSettings} />{/if}
 	</div>
 {/if}
 

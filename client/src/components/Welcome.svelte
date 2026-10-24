@@ -51,7 +51,7 @@
 		<div class="warn">
 			<Icon name="key" />
 			<span>{t("사용할 수 있는 모델이 아직 없습니다.")}</span>
-			<Button size="sm" onclick={() => (app.connectionsOpen = true)}>{t("모델 연결")}</Button>
+			<Button size="sm" onclick={() => (app.openSettings("agent"))}>{t("모델 연결")}</Button>
 		</div>
 	{/if}
 </div>

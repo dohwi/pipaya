@@ -190,13 +190,11 @@ class AppStore {
     if (!this.api) return;
     this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
-  /** Model connections / API keys of the open server, opened from the model picker */
-  connectionsOpen = $state(false);
-  settingsTab = $state<"general" | "servers" | "keys" | "extensions" | "backup">("general");
+  settingsTab = $state<"general" | "servers" | "keys" | "extensions" | "backup" | "agent">("general");
   /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
   settingsServer = $state<string | "new" | null>(null);
   openSettings(
-    tab: "general" | "servers" | "keys" | "extensions" | "backup" = "general",
+    tab: "general" | "servers" | "keys" | "extensions" | "backup" | "agent" = "general",
     server: string | "new" | null = null,
   ) {
     this.settingsTab = tab;

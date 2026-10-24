@@ -36,6 +36,6 @@
 	favs={app.favModels}
 	label={t("모델 설정")}
 	onfav={(p, id) => app.toggleFavModel(p, id)}
-	onmanage={() => (app.connectionsOpen = true)}
+	onmanage={() => (app.openSettings("agent"))}
 	onpick={pick}
 />
