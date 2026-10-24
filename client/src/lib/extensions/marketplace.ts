@@ -4,6 +4,12 @@ import { MAX_PACKAGE_BYTES, parsePackage, type ExtensionPackage } from "./schema
 /** The default public catalog. Another catalog can be typed in by the user. */
 export const DEFAULT_MARKETPLACE_URL = "https://raw.githubusercontent.com/dohwi/pipaya-marketplace/main/index.json";
 export const MAX_CATALOG_BYTES = 512 * 1024;
+export const MARKETPLACE_URL_KEY = "pipaya.marketplace.url";
+
+/** The catalog the user last used (or the default), so update checks look where the marketplace does. */
+export function savedMarketplaceUrl(): string {
+  try { return localStorage.getItem(MARKETPLACE_URL_KEY) || DEFAULT_MARKETPLACE_URL; } catch { return DEFAULT_MARKETPLACE_URL; }
+}
 
 export type MarketSource =
   | { type: "path"; path: string }

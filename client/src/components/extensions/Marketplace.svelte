@@ -6,12 +6,12 @@
 	import Modal from "../Modal.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { DEFAULT_MARKETPLACE_URL, MARKETPLACE_URL_KEY, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { scope, onclose, onpick }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
 
-	const KEY = "pipaya.marketplace.url";
+	const KEY = MARKETPLACE_URL_KEY;
 	const saved = (() => { try { return localStorage.getItem(KEY) || DEFAULT_MARKETPLACE_URL; } catch { return DEFAULT_MARKETPLACE_URL; } })();
 	let url = $state(saved);
 	let catalog = $state<MarketCatalog | null>(null);
