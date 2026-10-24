@@ -286,6 +286,10 @@
 	<span class="title" use:marquee={text}><span class="track"><span class="mq">{text}</span><span class="dup" aria-hidden="true">{text}</span></span></span>
 {/snippet}
 
+{#snippet newButton(n: Node, workdir: string, key: string, name: string, tip: string)}
+	<button class="dirnew" class:on={menuId === newKey(key)} data-menu-button onpointerenter={(e) => hoverNew(e, n, workdir, key)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, workdir, key)} aria-label={t("{name}에서 새로 만들기", { name })} aria-haspopup="menu" title={tip}><Icon name="plus" /></button>
+{/snippet}
+
 <!-- A session or terminal row. `body` fills the open button (icon, label, title), `tip` is its tooltip. -->
 {#snippet tabRow(n: Node, x: { id: string; title: string }, target: MenuTarget, tip: string, body: Snippet, drop: DropOpts, member: boolean)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -359,7 +363,7 @@
 						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
-					<button class="dirnew" class:on={menuId === newKey(n.server.id)} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+					{@render newButton(n, ".", n.server.id, app.serverLabel(n.server), t("이 서버에서 새 대화 또는 터미널"))}
 				</div>
 
 				{#if !sfold}
@@ -391,7 +395,7 @@
 								</span>
 								{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
 							</button>
-							<button class="dirnew" class:on={menuId === newKey(dirKey(n.server.id, d.path))} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+							{@render newButton(n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path), pretty(n, d.path), t("이 디렉터리에서 새 대화 또는 터미널"))}
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
