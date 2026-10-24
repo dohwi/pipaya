@@ -37,7 +37,7 @@
 
 {#snippet opt(c: CatalogModel, recommended: boolean)}
 	<PickerOption selected={value === c.id} onclick={() => onpick(c)}>
-		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended} <span class="rec">{t("추천")}</span>{/if}{/snippet}
+		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended}<span class="rec">{t("추천")}</span>{/if}{/snippet}
 		{#snippet meta()}<span class="mono">{c.id}</span> · {metaOf(c)}{/snippet}
 	</PickerOption>
 {/snippet}
@@ -64,6 +64,11 @@
 
 <style>
 	.rec {
+		margin-left: 8px;
+		padding: 1px 6px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--ok) 14%, transparent);
+		vertical-align: 1px;
 		font-size: var(--fs-2xs);
 		color: var(--ok);
 	}

@@ -611,15 +611,14 @@
 							{#each form.rows as r, i (i)}
 								<button type="button" class="mitem" onclick={() => openModel(i)}>
 									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
-									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}</span>
+									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}</span>
 									<span class="mmeta">{modelMeta(r)}</span>
-									{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="shield" /></span>{/if}
 									{#if r.unavailable}
 										<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
 									{:else if !r.id.trim()}
 										<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
 									{:else if matchedOf(r)}
-										<Badge tone="ok" size="sm" mono><Icon name="check" />{matchedOf(r)?.id}</Badge>
+										<span class="mmatch" title={matchedOf(r)?.id}><Icon name="check" />{matchedOf(r)?.id}</span>
 									{:else if catalogLoaded}
 										<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
 									{/if}
@@ -852,6 +851,34 @@
 		height: 12px;
 		stroke: currentColor;
 		stroke-width: 2.2;
+	}
+	.mname :global(.lockic) {
+		margin-left: 6px;
+		vertical-align: -2px;
+	}
+	.mname :global(.lockic svg) {
+		width: 13px;
+		height: 13px;
+		opacity: 0.7;
+	}
+	.mmatch {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 220px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
+	}
+	.mitem .mmatch :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke: var(--ok);
+		stroke-width: 2.4;
 	}
 	.mmeta {
 		flex: none;
