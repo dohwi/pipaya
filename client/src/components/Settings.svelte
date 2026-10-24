@@ -546,7 +546,7 @@
 		place-items: center;
 		min-width: 18px;
 		height: 18px;
-		padding: 0 5px;
+		padding: 0 5px 2px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
 		box-sizing: border-box;
 		border-radius: 9px;
 		background: var(--bg-active);
