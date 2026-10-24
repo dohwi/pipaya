@@ -372,7 +372,7 @@
 						<span class="sicon"><Icon name="server" /></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
 						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
-						{#if sfold}<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>{/if}
+						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
 					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
@@ -404,7 +404,7 @@
 									<span class="dname">{label}</span>
 									{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 								</span>
-								{#if dfold}<span class="dcount mono">{d.tabs.length}</span>{/if}
+								{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
 							</button>
 							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
@@ -440,7 +440,7 @@
 													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
 														{@render title(g.name)}
-														<span class="gcount mono" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>
+														{#if gfold}<span class="cbadge" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>{/if}
 													</button>
 													{@render moreButton(n.current ? g.id : null, { kind: "group", g })}
 												{/if}
@@ -815,9 +815,23 @@
 		font-size: var(--fs-sm);
 		font-weight: 600;
 	}
-	.dcount,
-	.dcount:empty {
-		display: none;
+	/* a folded row's count: a small round badge pushed to the right edge */
+	.cbadge {
+		display: grid;
+		place-items: center;
+		flex: none;
+		min-width: 18px;
+		height: 18px;
+		margin-left: auto;
+		padding: 0 5px;
+		box-sizing: border-box;
+		border-radius: 9px;
+		background: var(--bg-active);
+		color: var(--text-faint);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
 	}
 	.dirnew {
 		display: grid;
