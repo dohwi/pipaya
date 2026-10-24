@@ -580,7 +580,7 @@
 				{/if}
 			</div>
 
-			<footer>
+			<footer class:warn={confirmClose && editing === null}>
 				{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
 				<div class="fbtns">
 					{#if editing !== null}
@@ -1006,14 +1006,22 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
+	.fform > footer {
+		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
+	}
+	.fform > footer.warn {
+		background: var(--warn-soft);
+		border-top-color: color-mix(in srgb, var(--warn) 40%, transparent);
+	}
 	.savestate {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
+		height: 38px;
 		margin-right: auto;
 		font-size: var(--fs-sm);
 		font-weight: 500;
-		line-height: 1.3;
+		line-height: 1;
 		color: var(--text-dim, currentColor);
 	}
 	.savestate :global(svg) {
@@ -1027,9 +1035,6 @@
 		stroke-linejoin: round;
 	}
 	.savestate.warn {
-		padding: 6px 10px;
-		border-radius: var(--radius);
-		background: var(--warn-soft);
 		color: var(--warn);
 	}
 	.fbtns {
