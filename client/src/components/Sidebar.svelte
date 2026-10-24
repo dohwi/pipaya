@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { untrack, type Snippet } from "svelte";
-	import { extensions } from "../lib/extensions/host.svelte";
+	import { untrack } from "svelte";
 	import Pin from "./Pin.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
@@ -8,22 +7,23 @@
 	import Icon from "./Icon.svelte";
 	import IconButton from "./IconButton.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
-	import { marquee, tail } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Wordmark from "./Wordmark.svelte";
-	import AgentBadge from "./AgentBadge.svelte";
-	import { ACTIVITY_LABEL, activityOf, type Activity } from "../lib/activity";
-	import { app, type Server } from "../lib/store.svelte";
+	import { activityOf, type Activity } from "../lib/activity";
+	import { app } from "../lib/store.svelte";
 	import { tilde } from "../lib/format";
-	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
+	import { drag } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { connectionState, edgeOf, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
-	import { isTerminalId, platformName, type TerminalInfo } from "../lib/terminal";
+	import { platformName, type TerminalInfo } from "../lib/terminal";
+	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
+	import DirBlockView from "./sidebar/DirBlock.svelte";
+	import NewButton from "./sidebar/NewButton.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -33,18 +33,7 @@
 	/** What the sidebar draws while something is dragged (the row pulled onto, the drop lines, the carried block). */
 	const marks = new DragMarks();
 
-	interface Node {
-		server: Server;
-		current: boolean;
-		state: "online" | "offline" | "unauthorized" | "incompatible" | "checking";
-		loaded: boolean;
-		root: string | undefined;
-		home: string | undefined;
-		total: number;
-		dirs: DirBlock[];
-		/** What the server runs (linux, darwin, win32), when it says so */
-		platform: string | undefined;
-	}
+	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
 	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs"> {
@@ -114,10 +103,6 @@
 	function commitRename() {
 		const done = rename.commit();
 		if (done) void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
-	}
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
 	}
 	const startGroupRename = (g: Group) => groupRename.start(g.id, g.name);
 	function commitGroupRename() {
@@ -197,7 +182,6 @@
 	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 
-	type MenuTarget = { kind: "session"; x: Session } | { kind: "group"; g: Group } | { kind: "terminal"; x: TerminalInfo };
 	/** What the entries of a row's "more" menu do (the entries themselves are lib/sidebar-model `rowMenuEntries`). */
 	const rowActions: RowActions = {
 		renameTab: startRename,
@@ -214,160 +198,39 @@
 	const hoverMenu = (e: PointerEvent, target: MenuTarget) => rowMenu?.hover(e, targetId(target), menuItems(target));
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
 	const clickMenu = (e: MouseEvent, target: MenuTarget) => rowMenu?.click(e, targetId(target), menuItems(target));
+	// What the rows below share, handed down once instead of through a dozen props each.
+	setSidebarCtx({
+		marks,
+		rename,
+		groupRename,
+		get menuId() {
+			return menuId;
+		},
+		get searching() {
+			return searching;
+		},
+		isFolded,
+		stateOf,
+		hoverMenu,
+		clickMenu,
+		leaveMenu,
+		hoverNew,
+		clickNew,
+		startRename,
+		commitRename,
+		startGroupRename,
+		commitGroupRename,
+		memberTarget,
+		tabHover,
+		tabDropAt,
+		hover,
+		dropOnDir,
+		dirSource,
+		pretty,
+		shortLabel,
+	});
 </script>
 
-
-{#snippet renameInput(value: string, commit: () => void, cancel: () => void, setValue: (v: string) => void, maxlength?: number)}
-	<input
-		class="rename"
-		{value}
-		oninput={(e) => setValue(e.currentTarget.value)}
-		use:focusSelect
-		{maxlength}
-		onblur={commit}
-		onkeydown={(e) => {
-			if (e.key === "Enter") commit();
-			if (e.key === "Escape") cancel();
-		}}
-	/>
-{/snippet}
-
-{#snippet moreButton(id: string | null, target: MenuTarget)}
-	<div class="acts">
-		{#if id}<button class="more" class:on={menuId === id} onpointerenter={(e) => hoverMenu(e, target)} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, target)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === id}><Icon name="more" /></button>{/if}
-	</div>
-{/snippet}
-
-{#snippet title(text: string)}
-	<span class="title" use:marquee={text}><span class="track"><span class="mq">{text}</span><span class="dup" aria-hidden="true">{text}</span></span></span>
-{/snippet}
-
-{#snippet newButton(n: Node, workdir: string, key: string, name: string, tip: string)}
-	<button class="dirnew" class:on={menuId === newKey(key)} data-menu-button onpointerenter={(e) => hoverNew(e, n, workdir, key)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, workdir, key)} aria-label={t("{name}에서 새로 만들기", { name })} aria-haspopup="menu" title={tip}><Icon name="plus" /></button>
-{/snippet}
-
-{#snippet groupBlock(n: Node, tab: Extract<Tab, { kind: "group" }>, drop: DropOpts)}
-	{@const g = tab.group}
-	{@const gfold = isFolded(groupKey(g.id))}
-			<div class="grp" class:over={marks.over(g.id)}>
-				<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
-				<div
-					class="item nested grprow"
-					class:grabbable={n.current && !groupRename.is(g.id)}
-					class:cur={n.current && g.id === app.activeGroup?.id}
-					class:menuopen={menuId === g.id}
-					class:before={marks.tabLine(g.id) === "before"}
-					class:after={marks.tabLine(g.id) === "after"}
-					use:dragSource={{ id: g.id, disabled: !n.current || groupRename.is(g.id) }}
-					use:dropTarget={drop}
-				>
-					{#if n.current && groupRename.is(g.id)}
-						{@render renameInput(groupRename.draft, commitGroupRename, () => groupRename.cancel(), (v) => (groupRename.draft = v), 100)}
-					{:else}
-						<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
-							<Icon name={gfold ? "group" : "group-open"} />
-						</button>
-						<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-							{@render title(g.name)}
-							{#if gfold}<span class="cbadge" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>{/if}
-						</button>
-						{@render moreButton(n.current ? g.id : null, { kind: "group", g })}
-					{/if}
-				</div>
-				{#if !gfold}
-					<div class="members fold" in:collapseIn out:collapseOut>
-						{#each tab.members as m (m.id)}
-							{#if isTerminalId(m.id)}{@render termRow(n, m as TerminalInfo, memberTarget(n, m), true)}{:else}{@render row(n, m as Session, memberTarget(n, m), true)}{/if}
-						{/each}
-					</div>
-				{/if}
-			</div>
-{/snippet}
-
-{#snippet dirBlock(n: Node, d: DirBlock)}
-	{@const dfold = isFolded(dirKey(n.server.id, d.path))}
-	{@const dirMark = marks.blockMark(bid("dir", d.path))}
-	{@const label = shortLabel(n, d.path)}
-	{@const parent = pretty(n, d.path)}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirMark.carried} class:before={dirMark.before} class:after={dirMark.after}>
-	<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={marks.over(dirKey(n.server.id, d.path))} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
-		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
-			<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
-			<span class="dicon"><Icon name="folder" /></span>
-			<span class="dlabel">
-				<span class="dname">{label}</span>
-				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
-			</span>
-			{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
-		</button>
-		{@render newButton(n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path), pretty(n, d.path), t("이 디렉터리에서 새 대화 또는 터미널"))}
-	</div>
-	{#if !dfold}
-		<div class="fold" in:collapseIn out:collapseOut>
-			{#each d.tabs as tab (tab.id)}
-				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: tabHover(d, tab), drop: tabDropAt(n, d, tab) }}
-				{#if tab.kind === "session"}
-					{@render row(n, tab.session, drop)}
-				{:else if tab.kind === "terminal"}
-					{@render termRow(n, tab.terminal, drop)}
-				{:else}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					{@render groupBlock(n, tab, drop)}
-				{/if}
-			{/each}
-		</div>
-	{/if}
-	</div>
-{/snippet}
-
-<!-- A session or terminal row. `body` fills the open button (icon, label, title), `tip` is its tooltip. -->
-{#snippet tabRow(n: Node, x: { id: string; title: string }, target: MenuTarget, tip: string, body: Snippet, drop: DropOpts, member: boolean)}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="item nested"
-		class:term={target.kind === "terminal"}
-		class:member
-		class:active={n.current && x.id === app.activeId}
-		class:over={marks.over(x.id)}
-		class:before={marks.tabLine(x.id) === "before"}
-		class:after={marks.tabLine(x.id) === "after"}
-		class:grabbable={n.current && !rename.is(x.id)}
-		class:menuopen={menuId === x.id}
-		use:dragSource={{ id: x.id, disabled: !n.current || rename.is(x.id) }}
-		use:dropTarget={drop}
-	>
-		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-		{#if n.current && rename.is(x.id)}
-			{@render renameInput(rename.draft, commitRename, () => rename.cancel(), (v) => (rename.draft = v))}
-		{:else}
-			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={tip}>
-				{@render body()}
-			</button>
-			{@render moreButton(n.current ? x.id : null, target)}
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet row(n: Node, x: Session, drop: DropOpts, member = false)}
-	{@const st = stateOf(n, x)}
-	{@const tip = [extensions.labelOf(x.id)?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}
-	{#snippet body()}
-		<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
-		<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
-		{#if extensions.labelOf(x.id)}<span class="who mono {st}">{extensions.labelOf(x.id)?.text}</span>{/if}
-		{@render title(x.title)}
-	{/snippet}
-	{@render tabRow(n, x, { kind: "session", x }, tip, body, drop, member)}
-{/snippet}
-
-{#snippet termRow(n: Node, x: TerminalInfo, drop: DropOpts, member = false)}
-	{#snippet body()}
-		<span class="lead"><Icon name="terminal" /></span>
-		{@render title(x.title)}
-	{/snippet}
-	{@render tabRow(n, x, { kind: "terminal", x }, `${x.shell}\n${x.cwd}`, body, drop, member)}
-{/snippet}
 
 <aside class="side">
 	<div class="brandrow">
@@ -395,7 +258,7 @@
 						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
-					{@render newButton(n, ".", n.server.id, app.serverLabel(n.server), t("이 서버에서 새 대화 또는 터미널"))}
+					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
 				</div>
 
 				{#if !sfold}
@@ -412,7 +275,7 @@
 					{/if}
 
 					{#each n.dirs as d (d.path)}
-						{@render dirBlock(n, d)}
+						<DirBlockView {n} {d} {searching} />
 					{/each}
 				</div>
 				{/if}
@@ -433,16 +296,16 @@
 
 <style>
 	/* @name of a pane in a split tab: how the other panes call it, so it stays in view there */
-	.who {
+	:global(:where(.side) .who) {
 		flex: none;
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
 	}
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
+	:global(:where(.side) .who.working) { color: var(--info); }
+	:global(:where(.side) .who.asking) { color: var(--warn); }
+	:global(:where(.side) .who.done) { color: var(--ok); }
+	:global(:where(.side) .who.failed) { color: var(--danger); }
 	.side {
 		display: flex;
 		flex-direction: column;
@@ -488,12 +351,12 @@
 	:global(.iconbtn.foldbtn:focus-visible) {
 		outline-offset: -2px;
 	}
-	.forkmark {
+	:global(:where(.side) .forkmark) {
 		display: grid;
 		flex: none;
 		color: var(--text-faint);
 	}
-	.forkmark :global(svg) {
+	:global(:where(.side) .forkmark svg) {
 
 		width: 13px;
 
@@ -561,17 +424,17 @@
 		padding: 0 8px 4px;
 	}
 	/* a block being dragged fades */
-	.srv.carried,
-	.dirblock.carried {
+	:global(:where(.side) .srv.carried),
+	:global(:where(.side) .dirblock.carried) {
 		opacity: 0.45;
 	}
 	/* the line where a carried server, folder or tab would land: its own rules below only place it */
-	.srv.before::before,
-	.srv.after::after,
-	.dirblock.before::before,
-	.dirblock.after::after,
-	.item.before::before,
-	.item.after::after {
+	:global(:where(.side) .srv.before::before),
+	:global(:where(.side) .srv.after::after),
+	:global(:where(.side) .dirblock.before::before),
+	:global(:where(.side) .dirblock.after::after),
+	:global(:where(.side) .item.before::before),
+	:global(:where(.side) .item.after::after) {
 		content: "";
 		position: absolute;
 		height: 2px;
@@ -581,18 +444,18 @@
 		pointer-events: none;
 	}
 	/* where a carried server would land: a line in the gap beside its card */
-	.srv.before::before,
-	.srv.after::after {
+	:global(:where(.side) .srv.before::before),
+	:global(:where(.side) .srv.after::after) {
 		left: 0;
 		right: 0;
 	}
-	.srv.before::before {
+	:global(:where(.side) .srv.before::before) {
 		top: -5px;
 	}
-	.srv.after::after {
+	:global(:where(.side) .srv.after::after) {
 		bottom: -5px;
 	}
-	.srv:has(> .fold) {
+	:global(:where(.side) .srv:has(> .fold)) {
 		padding-bottom: 8px;
 	}
 	/* every server sits in a band, even when it is the only one */
@@ -605,11 +468,11 @@
 	.srv.band + .srv.band {
 		margin-top: 8px;
 	}
-	.srv.off .fold {
+	:global(:where(.side) .srv.off .fold) {
 		opacity: 0.45;
 	}
 	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
-	.srv > .fold {
+	:global(:where(.side) .srv > .fold) {
 		padding-left: 6px;
 	}
 	.srvhead {
@@ -632,14 +495,14 @@
 	}
 	/* pressing the name or the "+" darkens the whole strip one more step; the global row tint (a lighter square inside the strip) is switched off here */
 	.srvhead:has(.srvtoggle:active),
-	.srvhead:has(.dirnew:active) {
+	:global(:where(.side) .srvhead:has(.dirnew:active)) {
 		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
 	}
 	.srvhead .srvtoggle:active:not(:disabled) {
 		background-color: transparent;
 	}
-	.srvhead .dirnew:hover,
-	.srvhead .dirnew.on {
+	:global(:where(.side) .srvhead .dirnew:hover),
+	:global(:where(.side) .srvhead .dirnew.on) {
 		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
 	}
 	.srvtoggle {
@@ -653,7 +516,7 @@
 		text-align: left;
 		color: var(--text-dim);
 	}
-	.srv.cur .srvtoggle {
+	:global(:where(.side) .srv.cur .srvtoggle) {
 		color: var(--text);
 	}
 	/* the status is a badge on the server icon; the icon takes the folder-icon column, so the name lines up with the directory names */
@@ -666,7 +529,7 @@
 		color: var(--text-faint);
 	}
 	.sicon :global(svg),
-	.dicon :global(svg) {
+	:global(:where(.side) .dicon svg) {
 
 		width: 14px;
 
@@ -693,12 +556,12 @@
 		height: 6px;
 	}
 	/* a ring, not a fill, so "not connected" reads without colour */
-	.spill .sdot.offline {
+	:global(:where(.side) .spill .sdot.offline) {
 		background: transparent;
 		box-shadow: inset 0 0 0 1.5px var(--text-faint);
 	}
-	.spill.unauthorized,
-	.spill.incompatible {
+	:global(:where(.side) .spill.unauthorized),
+	:global(:where(.side) .spill.incompatible) {
 		border-color: color-mix(in srgb, var(--warn) 35%, transparent);
 		background: color-mix(in srgb, var(--warn) 12%, transparent);
 		color: var(--warn);
@@ -720,37 +583,37 @@
 	.warnline {
 		color: var(--warn);
 	}
-	.dir {
+	:global(:where(.side) .dir) {
 		display: flex;
 		align-items: center;
 		margin-top: 12px;
 		border-radius: var(--radius-sm);
 	}
-	.dirblock:first-child > .dir {
+	:global(:where(.side) .dirblock:first-child > .dir) {
 		margin-top: 4px;
 	}
-	.dir.grabbable,
-	.srvhead.grabbable {
+	:global(:where(.side) .dir.grabbable),
+	:global(:where(.side) .srvhead.grabbable) {
 		cursor: grab;
 		-webkit-user-select: none;
 		user-select: none;
 		-webkit-touch-callout: none;
 	}
-	.dirblock {
+	:global(:where(.side) .dirblock) {
 		position: relative;
 	}
-	.dirblock.before::before,
-	.dirblock.after::after {
+	:global(:where(.side) .dirblock.before::before),
+	:global(:where(.side) .dirblock.after::after) {
 		left: 0;
 		right: 0;
 	}
-	.dirblock.before::before {
+	:global(:where(.side) .dirblock.before::before) {
 		top: -1px;
 	}
-	.dirblock.after::after {
+	:global(:where(.side) .dirblock.after::after) {
 		bottom: -1px;
 	}
-	.dirtoggle {
+	:global(:where(.side) .dirtoggle) {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -763,18 +626,18 @@
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
 	}
-	.dir:hover .dirtoggle,
-	.dir.cur .dirtoggle {
+	:global(:where(.side) .dir:hover .dirtoggle),
+	:global(:where(.side) .dir.cur .dirtoggle) {
 		color: var(--text);
 	}
-	.dicon {
+	:global(:where(.side) .dicon) {
 		display: grid;
 		flex: none;
 		width: 14px;
 		color: var(--text-faint);
 	}
 	/* name and parent path share one baseline; the pair is centred on the icons (line-height 1 drops the uneven leading) */
-	.dlabel {
+	:global(:where(.side) .dlabel) {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -784,7 +647,7 @@
 		padding-bottom: 1px; /* lowercase sits low in its box: lift it onto the icons' centre */
 	}
 	/* where the folder sits, dim after its name; the full path is the tooltip */
-	.dparent {
+	:global(:where(.side) .dparent) {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -793,15 +656,15 @@
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 	}
-	.chev {
+	:global(:where(.side) .chev) {
 		display: grid;
 		flex: none;
 		transition: rotate var(--motion-fast) var(--ease);
 	}
-	.chev.folded {
+	:global(:where(.side) .chev.folded) {
 		rotate: -90deg;
 	}
-	.chev :global(svg) {
+	:global(:where(.side) .chev svg) {
 
 		width: 14px;
 
@@ -812,7 +675,7 @@
 		stroke-width: 2;
 
 	}
-	.dname {
+	:global(:where(.side) .dname) {
 		flex: none;
 		max-width: 70%;
 		overflow: hidden;
@@ -822,7 +685,7 @@
 		font-weight: 600;
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
-	.cbadge {
+	:global(:where(.side) .cbadge) {
 		display: grid;
 		place-items: center;
 		flex: none;
@@ -839,7 +702,7 @@
 		font-variant-numeric: tabular-nums;
 		line-height: 1;
 	}
-	.dirnew {
+	:global(:where(.side) .dirnew) {
 		display: grid;
 		place-items: center;
 		flex: none;
@@ -850,51 +713,51 @@
 		color: var(--text-faint);
 		opacity: 0;
 	}
-	.dir:hover .dirnew,
-	.srvhead:hover .dirnew,
-	.dirnew:focus-visible {
+	:global(:where(.side) .dir:hover .dirnew),
+	:global(:where(.side) .srvhead:hover .dirnew),
+	:global(:where(.side) .dirnew:focus-visible) {
 		opacity: 1;
 	}
 	@media (pointer: coarse) {
-		.dirnew {
+		:global(:where(.side) .dirnew) {
 			opacity: 1;
 		}
 	}
 	/* folded rows: on hover the count gives way to the "+", which takes its place instead of sitting beside it */
 	@media (hover: hover) {
-		.dir.folded,
-		.srvhead.folded {
+		:global(:where(.side) .dir.folded),
+	:global(:where(.side) .srvhead.folded) {
 			position: relative;
 		}
-		.dir.folded .dirnew,
-		.srvhead.folded .dirnew {
+		:global(:where(.side) .dir.folded .dirnew),
+	:global(:where(.side) .srvhead.folded .dirnew) {
 			position: absolute;
 			top: 50%;
 			translate: 0 -50%;
 		}
-		.dir.folded .dirnew {
+		:global(:where(.side) .dir.folded .dirnew) {
 			right: 2px;
 		}
-		.srvhead.folded .dirnew {
+		:global(:where(.side) .srvhead.folded .dirnew) {
 			right: 10px;
 		}
-		.dir.folded .cbadge,
-		.srvhead.folded .cbadge {
+		:global(:where(.side) .dir.folded .cbadge),
+	:global(:where(.side) .srvhead.folded .cbadge) {
 			transition: opacity var(--motion-fast) var(--ease-std);
 		}
-		.dir.folded:hover .cbadge,
-		.srvhead.folded:hover .cbadge {
+		:global(:where(.side) .dir.folded:hover .cbadge),
+	:global(:where(.side) .srvhead.folded:hover .cbadge) {
 			opacity: 0;
 		}
 	}
-	.dirnew:hover,
-	.dirnew.on {
+	:global(:where(.side) .dirnew:hover),
+	:global(:where(.side) .dirnew.on) {
 		background: var(--bg-active);
 		color: var(--text);
 		opacity: 1;
 	}
 	/* one lead column: the model's logo, or the terminal / split icon */
-	.lead {
+	:global(:where(.side) .lead) {
 		display: grid;
 		place-items: center;
 		flex: none;
@@ -903,7 +766,7 @@
 		color: var(--text-faint);
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
-	.lead > :global(svg) {
+	:global(:where(.side) .lead > svg) {
 
 		width: 14px;
 
@@ -912,7 +775,7 @@
 		stroke-width: 1.9;
 
 	}
-	.dirnew :global(svg) {
+	:global(:where(.side) .dirnew svg) {
 
 		width: 15px;
 
@@ -926,7 +789,7 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.item {
+	:global(:where(.side) .item) {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -934,23 +797,23 @@
 		margin: 0;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.item.nested .open {
+	:global(:where(.side) .item.nested .open) {
 		padding-left: 43px; /* one step in: the tab's icon sits under the folder's name */
 	}
-	.item:hover {
+	:global(:where(.side) .item:hover) {
 		background: var(--bg-hover);
 	}
-	.item.active {
+	:global(:where(.side) .item.active) {
 		background: var(--bg-active);
 	}
 	/* the sliding marker draws the selection; the row itself stays clear so the two never double up */
-	.list:global([data-indicator-ready]) .item.active {
+	:global(:where(.side) .list[data-indicator-ready] .item.active) {
 		background: transparent;
 	}
-	.item.active .title {
+	:global(:where(.side) .item.active .title) {
 		font-weight: 600;
 	}
-	.open {
+	:global(:where(.side) .open) {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -961,7 +824,7 @@
 		text-align: left;
 		outline-offset: -1px;
 	}
-	.title {
+	:global(:where(.side) .title) {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -970,29 +833,29 @@
 		font-size: var(--fs-sm);
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
-	.title .track {
+	:global(:where(.side) .title .track) {
 		display: inline;
 	}
-	.title .dup {
+	:global(:where(.side) .title .dup) {
 		display: none;
 	}
 	@media (hover: hover) {
-		.item:hover .title:global([data-over]),
-		.item:focus-within .title:global([data-over]) {
+		:global(:where(.side) .item:hover .title[data-over]),
+	:global(:where(.side) .item:focus-within .title[data-over]) {
 			text-overflow: clip;
 			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 		}
-		.item:hover .title:global([data-over]) .track,
-		.item:focus-within .title:global([data-over]) .track {
+		:global(:where(.side) .item:hover .title[data-over] .track),
+	:global(:where(.side) .item:focus-within .title[data-over] .track) {
 			display: flex;
 			width: max-content;
 			animation: mq var(--mq-d, 8s) linear infinite;
 		}
-		.item:hover .title:global([data-over]) .mq,
-		.item:focus-within .title:global([data-over]) .mq,
-		.item:hover .title:global([data-over]) .dup,
-		.item:focus-within .title:global([data-over]) .dup {
+		:global(:where(.side) .item:hover .title[data-over] .mq),
+	:global(:where(.side) .item:focus-within .title[data-over] .mq),
+	:global(:where(.side) .item:hover .title[data-over] .dup),
+	:global(:where(.side) .item:focus-within .title[data-over] .dup) {
 			display: block;
 			flex: none;
 			padding-right: 32px;
@@ -1000,24 +863,24 @@
 	}
 	/* touch has no hover, so the open session's long title flows by on its own; on desktop only hover/focus (above) does */
 	@media (hover: none) {
-		.item.active .title:global([data-over]) {
+		:global(:where(.side) .item.active .title[data-over]) {
 			text-overflow: clip;
 			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 		}
-		.item.active .title:global([data-over]) .track {
+		:global(:where(.side) .item.active .title[data-over] .track) {
 			display: flex;
 			width: max-content;
 			animation: mq var(--mq-d, 8s) linear infinite;
 		}
-		.item.active .title:global([data-over]) .mq,
-		.item.active .title:global([data-over]) .dup {
+		:global(:where(.side) .item.active .title[data-over] .mq),
+	:global(:where(.side) .item.active .title[data-over] .dup) {
 			display: block;
 			flex: none;
 			padding-right: 32px;
 		}
 	}
-	@keyframes mq {
+	@keyframes -global-mq {
 		from {
 			translate: 0;
 		}
@@ -1026,28 +889,28 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.item .title:global([data-over]) .track {
+		:global(:where(.side) .item .title[data-over] .track) {
 			animation: none !important;
 		}
 	}
-	.acts {
+	:global(:where(.side) .acts) {
 		display: none;
 	}
-	.item:hover .acts,
-	.item:focus-within .acts,
-	.item.menuopen .acts {
+	:global(:where(.side) .item:hover .acts),
+	:global(:where(.side) .item:focus-within .acts),
+	:global(:where(.side) .item.menuopen .acts) {
 		display: flex;
 	}
 	@media (pointer: coarse) {
-		.acts {
+		:global(:where(.side) .acts) {
 			display: flex;
 		}
-		.item:not(.active):not(.cur):not(.menuopen) .acts {
+		:global(:where(.side) .item:not(.active):not(.cur):not(.menuopen) .acts) {
 			display: none;
 		}
 	}
 	/* the three dots: same box and right edge as the + on the directory row above */
-	.more {
+	:global(:where(.side) .more) {
 		display: grid;
 		place-items: center;
 		flex: none;
@@ -1057,13 +920,13 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
-	.more:hover,
-	.more.on,
-	.more:focus-visible {
+	:global(:where(.side) .more:hover),
+	:global(:where(.side) .more.on),
+	:global(:where(.side) .more:focus-visible) {
 		background: var(--bg-active);
 		color: var(--text);
 	}
-	.more :global(svg) {
+	:global(:where(.side) .more svg) {
 
 		width: 15px;
 
@@ -1072,7 +935,7 @@
 		stroke-width: 2.6;
 
 	}
-	.rename {
+	:global(:where(.side) .rename) {
 		flex: 1;
 		margin: 4px;
 		height: 34px;
@@ -1083,11 +946,6 @@
 		outline: 0;
 		font-size: var(--fs-lg);
 		min-width: 0;
-	}
-	@keyframes blink {
-		50% {
-			opacity: 0.25;
-		}
 	}
 	.empty {
 		padding: 28px 10px;
@@ -1125,25 +983,25 @@
 	/* hairline between workspaces / groups */
 
 	/* A split tab and its panes read as one tree: the book row on top, its panes hanging off a line under the book. */
-	.grp {
+	:global(:where(.side) .grp) {
 		margin: 2px 0; /* full width like the other tabs, so the book sits where their icons do */
 		border-radius: var(--radius-sm);
 	}
-	.grp .item.nested .open {
+	:global(:where(.side) .grp .item.nested .open) {
 		padding-left: 6px;
 	}
-	.grp .item.member .open {
+	:global(:where(.side) .grp .item.member .open) {
 		padding-left: 70px; /* the pane's icon, just past the elbow */
 		min-height: 30px;
 	}
-	.grp .item.member .title {
+	:global(:where(.side) .grp .item.member .title) {
 		color: var(--text-dim);
 	}
-	.grp .item.member.active .title {
+	:global(:where(.side) .grp .item.member.active .title) {
 		color: var(--text);
 	}
 	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
-	.branch {
+	:global(:where(.side) .branch) {
 		position: absolute;
 		left: 50px; /* the book's centre */
 		top: 0;
@@ -1151,7 +1009,7 @@
 		width: 12px;
 		pointer-events: none;
 	}
-	.branch::before {
+	:global(:where(.side) .branch::before) {
 		content: "";
 		position: absolute;
 		left: 0;
@@ -1159,7 +1017,7 @@
 		bottom: 0;
 		border-left: 1.5px solid var(--border-strong, var(--border));
 	}
-	.branch::after {
+	:global(:where(.side) .branch::after) {
 		content: "";
 		position: absolute;
 		left: 0;
@@ -1170,13 +1028,13 @@
 		border-bottom: 1.5px solid var(--border-strong, var(--border));
 		border-bottom-left-radius: 8px;
 	}
-	.members .item:last-child .branch::before {
+	:global(:where(.side) .members .item:last-child .branch::before) {
 		bottom: calc(50% + 8px);
 	}
-	.grprow.cur .title {
+	:global(:where(.side) .grprow.cur .title) {
 		font-weight: 600;
 	}
-	.gfold {
+	:global(:where(.side) .gfold) {
 		flex: none;
 		display: grid;
 		place-items: center;
@@ -1186,7 +1044,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
-	.gfold :global(svg) {
+	:global(:where(.side) .gfold svg) {
 
 		width: 16px;
 
@@ -1195,35 +1053,35 @@
 		stroke-width: 1.9;
 
 	}
-	.gfold:hover {
+	:global(:where(.side) .gfold:hover) {
 		background: var(--bg-active);
 		color: var(--text);
 	}
-	.grp.over {
+	:global(:where(.side) .grp.over) {
 		background: var(--accent-soft);
 	}
-	.dir.over {
+	:global(:where(.side) .dir.over) {
 		border-color: var(--accent);
 		background: var(--accent-soft);
 	}
 	/* the line where a carried session would land among its siblings */
-	.item.before::before,
-	.item.after::after {
+	:global(:where(.side) .item.before::before),
+	:global(:where(.side) .item.after::after) {
 		left: 8px;
 		right: 8px;
 	}
-	.item.before::before {
+	:global(:where(.side) .item.before::before) {
 		top: -1px;
 	}
-	.item.after::after {
+	:global(:where(.side) .item.after::after) {
 		bottom: -1px;
 	}
 	/* the row being pulled onto: pairs up with whatever is dropped */
-	.item.over {
+	:global(:where(.side) .item.over) {
 		background: var(--accent-soft);
 		box-shadow: inset 0 0 0 1.5px var(--accent);
 	}
-	.item.grabbable {
+	:global(:where(.side) .item.grabbable) {
 		cursor: grab;
 		-webkit-tap-highlight-color: transparent;
 	}
