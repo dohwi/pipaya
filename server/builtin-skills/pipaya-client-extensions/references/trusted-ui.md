@@ -17,7 +17,7 @@ Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sideba
   "replaces": { "composer.send": "Send" } }
 ```
 - Imports allowed: `svelte`, `svelte/{transition,animate,easing,motion,store,reactivity,events,attachments}`, `./Name.svelte` (sibling component), and `pipaya`.
-- `pipaya` exports (`kit.ts`): `ext` (`id`, `data`, `settings`, `language`, `dark`; getters, read inside the component), `app`, `extensions`, `t`, `tc`, `getPane`, and `Icon Button IconButton Badge Switch Pin StatusDot Gauge`.
+- `pipaya` exports (`kit.ts`): `ext` (`id`, `data`, `settings`, `language`, `dark`; getters, read inside the component), `app`, `extensions`, `t`, `tc`, `getPane`, and `Icon Button IconButton Badge Switch Pin StatusDot`.
 - `sdk.components.setData(json)` (≤64KB) from the extension's Worker code becomes `ext.data`. Keep fetching and secrets in the Worker (`code`); components draw.
 - **Slots** (`UI_SLOTS`): `app.overlay header.start header.end header.below sidebar.top sidebar.bottom pane.top pane.bottom composer.top composer.toolbar composer.bottom message.user.after message.assistant.after`. Pane, message and composer slots receive `paneId` (messages also `item`, assistant `turn last live`).
 - **Replaceable parts** (`UI_PARTS`): `header.title sidebar.brand pane.empty pane.welcome composer.send statusline message.user message.assistant`. The component gets the part's props plus `fallback`, a snippet drawing the original (`{@render fallback()}`). The first installed extension wins.
@@ -34,5 +34,5 @@ Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sideba
 ## When to use which
 - **Declarative nodes** (`ui.md`): the default. Sandboxed, validated, consistent. Use them for panels, forms and simple read-only items.
 - **`ui-style`**: re-skin the existing app.
-- **`ui-components`**: a look or behaviour the nodes cannot express (custom gauges, a replaced send button, new toolbar controls). The cost is that it runs unsandboxed and needs the danger consent. A real example is `quota-monitor` 0.5: its worker polls with the sandboxed `http-write` and sends plain data through `sdk.components.setData`; `Gauge.svelte` and `Ring.svelte` only draw it.
+- **`ui-components`**: a look or behaviour the nodes cannot express (rings and popovers, a replaced send button, new toolbar controls). The cost is that it runs unsandboxed and needs the danger consent. A real example is `quota-monitor` 0.5: its worker polls with the sandboxed `http-write` and sends plain data through `sdk.components.setData`; `Gauge.svelte` and `Ring.svelte` only draw it.
 - Keep secrets, polling and network in the Worker. Components should do no I/O, so one that only draws can be reviewed at a glance.

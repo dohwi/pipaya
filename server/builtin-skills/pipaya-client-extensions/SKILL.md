@@ -1,6 +1,6 @@
 ---
 name: pipaya-client-extensions
-description: Read before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - SDK methods, permissions, manifest and package fields, declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens and their design, system notifications - or when writing a client extension package. Not for extensions that run inside the server (agent tools, hooks, model providers); use pipaya-server-extensions.
+description: Read before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - SDK methods, permissions, manifest and package fields, declarative UI nodes (panels, forms, navbar items, composer widgets), the extension screens and their design, system notifications - or when writing a client extension package. Not for extensions that run inside the server (agent tools, hooks, model providers); use pipaya-server-extensions.
 ---
 
 # Pipaya client extensions
@@ -28,7 +28,8 @@ The docs are in `references/` next to this file. Source paths in them (`src/lib/
 6. **Keep recovery paths**: safe mode, `?extensions=off`, boot-interruption detection, unreadable-entry cards.
 7. **Show the source**: the app labels which extension a screen comes from.
 8. **Design tokens only** (`src/app.css`). UI copy is Korean source strings through `t()`/`msg()` with English in `src/lib/locales/en.ts`.
-9. **Modal `<dialog>` content is in the top layer**: popovers over it attach inside the open dialog, not `<body>`.
+9. **No node or component for one extension's look.** The core offers generic nodes, `ui-style` hooks and `ui-components` slots. A rings gauge, a usage popover, a branded card belongs in the extension that wants it. A test (`extensions-generic`) enforces it.
+10. **Modal `<dialog>` content is in the top layer**: popovers over it attach inside the open dialog, not `<body>`.
 
 ## Finish every change with
 

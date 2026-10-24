@@ -57,8 +57,7 @@ await sdk.ui.open('counter');
 | `progress` | `label`, `value`, `max?` (100) | known-length work only |
 | `code` | `text`, `language?` | escaped, no highlighting; ≤16,000 chars; scrolls |
 | `divider` | none | sparingly |
-| `icon` | `icon: {viewBox, paths}`, `size?`, `label?` | see [sdk.md](sdk.md#gauge-and-icon) |
-| `gauge` | `label`, `rings` (1–3, `value: number\|null`), `display?`, `icon?`, `hint?`, `stale?`, `size?`, `details?` | usage/limits; unknown is `null`, never 0. Kept for sandboxed extensions; the official quota-monitor now draws its own gauge with `ui-components` ([trusted-ui.md](trusted-ui.md)). Do not add more gauge options here: a look this specific belongs in the extension |
+| `icon` | `icon: {viewBox, paths}`, `size?`, `label?` | see [sdk.md](sdk.md#icon) |
 | `table` | `columns: {id,label}[]`, `rows: {id,cells}[]`, `caption?` | comparison; ≤8 columns, short cells |
 | `list` | `items: {id,title,description?,badge?}[]`, `emptyText?` | items are not clickable |
 | `button` | `label`, `variant?: primary/secondary/danger`, `disabled?` | one `primary` per screen |
@@ -69,7 +68,7 @@ await sdk.ui.open('counter');
 
 Inputs also take `required?`, `disabled?`, `error?` (Worker-side validation message); input/textarea take `minLength?`, `maxLength?`. `tone`: `neutral/info/success/warning/danger`. No CSS props of any kind.
 
-Navbar, slots, tool and entry renderers accept read-only nodes only: `stack`, `grid`, `text`, `badge`, `divider`, `progress`, `stat`, `gauge`, `icon`.
+Navbar, slots, tool and entry renderers accept read-only nodes only: `stack`, `grid`, `text`, `badge`, `divider`, `progress`, `stat`, `icon`.
 
 ## Events
 
@@ -97,9 +96,9 @@ The host owns the look: when an extension looks wrong, fix the renderer (`Extens
 5. **Motion only with meaning**: tokens `--motion-fast` 180 / `--motion-normal` 360 / `--motion-slow` 460 ms, eases `--ease`, `--ease-exit`, `--ease-std`; off under `prefers-reduced-motion`.
 6. **No repetition**: show the source once, clearly.
 7. **Tokens only** (`src/app.css` `:root`): surfaces `--bg`, `--bg-side`, `--bg-elev`, `--bg-hover`, `--bg-active`, `--bg-code` (by depth); `--border`, `--border-strong`; `--text`, `--text-dim`, `--text-faint`; `--ok`, `--warn`, `--danger` + `*-soft`, `--lv-low` (info); radii `--radius` 12 (cards), `--radius-panel` 16 (modals), `--radius-sm` 8 (controls), `--radius-pill` (buttons, chips); `--font`, `--mono` (code, IDs, numbers); `--shadow`, `--scrim`; safe areas `--sat/--sab/--sal/--sar`.
-8. **Modal `<dialog>` content is in the top layer**: popovers and tooltips that float over it must be attached inside the open dialog, not `<body>` (as `ExtensionGauge` does).
+8. **Modal `<dialog>` content is in the top layer**: popovers and tooltips that float over it must be attached inside the open dialog, not `<body>` (a `ui-components` popover does the same).
 
-Accessibility the host already provides: real labels, native controls, table semantics, tab keyboard, `aria-live`/`aria-invalid`/`aria-describedby` errors, modal focus trap with focus returned to the launcher, focusable scroll areas, gauge `progressbar`. Targets for changes: text contrast ≥4.5:1, touch targets ≥40 px on mobile, no text under 11 px. Inputs use 16 px text (prevents iOS zoom).
+Accessibility the host already provides: real labels, native controls, table semantics, tab keyboard, `aria-live`/`aria-invalid`/`aria-describedby` errors, modal focus trap with focus returned to the launcher, focusable scroll areas. Targets for changes: text contrast ≥4.5:1, touch targets ≥40 px on mobile, no text under 11 px. Inputs use 16 px text (prevents iOS zoom).
 
 Known gaps (fix when touching these): in the light theme, tone text on its own tint is below 4.5:1 (info, success, warning, danger); permission lists use a green check for every permission, including risky ones; panel height is fixed, so short panels leave a large empty modal; on ≤640 px the panel is a floating card, not a bottom sheet like Settings.
 
@@ -107,7 +106,7 @@ Known gaps (fix when touching these): in the light theme, tone text on its own t
 
 - **Dashboard**: `stack(large)` → `alert` (one-line status) → `grid(3)` of 3–4 `stat` → `tabs` (summary/detail) → `table`. Keep node IDs stable across updates.
 - **Form**: `form` inside a `card(title, description)`; required fields first; `submitLabel` names the result; after submit show an `alert` and keep the values.
-- **Always-on metric**: 1–3 `gauge(size: small)` in the navbar; details in `details` (≤12 rows, `updatedAt`, `null` when unknown).
+- **Always-on metric**: a `progress` or `stat` in the navbar. Need a custom look (rings, popovers)? Draw it yourself with `ui-components` ([trusted-ui.md](trusted-ui.md)); the core has no node for it on purpose.
 - Panel title differs from the extension name; description is one sentence.
 - Aim for ≤80 nodes per screen; the 200 / 100-row limits are ceilings, not targets.
 - Treat form values as sensitive; do not log them.

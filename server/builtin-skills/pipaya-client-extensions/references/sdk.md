@@ -194,27 +194,20 @@ await sdk.events.on(async (e) => { if (e.type === 'run_finished') await sdk.stat
 ```js
 await sdk.navbar.set('usage', { label: 'Usage', view: {
   type: 'stack', id: 'root', direction: 'horizontal', children: [
-    { type: 'gauge', id: 'main', label: 'Usage', rings: [{ value: 42 }], display: '42%', size: 'small' }] } });
+    { type: 'progress', id: 'main', label: 'Usage', value: 42 }] } });
 ```
 
-ID: like panel IDs (`[a-z][a-z0-9-]`, ≤40); `label` ≤40 is the accessible name; ≤3 per extension, same ID replaces. Only read-only nodes: `stack`, `grid`, `text`, `badge`, `divider`, `progress`, `stat`, `gauge`, `icon`; 60 nodes, depth 4, 32 KiB. The slot is capped at `min(40%, 160px)` (narrow: `min(36%, 132px)`) so the title wins, and scrolls sideways.
+ID: like panel IDs (`[a-z][a-z0-9-]`, ≤40); `label` ≤40 is the accessible name; ≤3 per extension, same ID replaces. Only read-only nodes: `stack`, `grid`, `text`, `badge`, `divider`, `progress`, `stat`, `icon`; 60 nodes, depth 4, 32 KiB. The slot is capped at `min(40%, 160px)` (narrow: `min(36%, 132px)`) so the title wins, and scrolls sideways.
 
-### `gauge` and `icon`
+### `icon`
 
 ```js
 const icon = { viewBox: '0 0 24 24', paths: [{ d: 'M12 2 L22 22 H2 Z', fill: 'currentColor', fillRule: 'evenodd' }] };
 { type: 'icon', id: 'logo', icon, size: 'medium', label: 'Logo' }
-{ type: 'gauge', id: 'g', label: 'Usage', hint: '5h window', size: 'small', display: '42%', icon,
-  rings: [{ value: 42, color: 'accent' }, { value: null, max: 200, color: '#10a37f', label: 'Secondary' }] }
 ```
 
 - **IconSpec** `{viewBox, paths}`: `viewBox` is four finite numbers, w and h 1–512. 1–8 paths `{d ≤8192 chars of SVG path syntax, fill?: '#rrggbb'|'currentColor', fillRule?: 'nonzero'|'evenodd'}`. The host builds the `<svg>`; no raw SVG, URLs, gradients or CSS.
 - **icon**: `{icon, size?: small|medium|large, label?}`; without `label` it is `aria-hidden`.
-- **gauge**: `{label, rings, display?, icon?, hint?, stale?, size?, details?}`.
-  - `rings`: 1–3, outermost first, `{value: number|null, max? >0 (100), color?: '#rrggbb'|'accent'|'ok'|'warn'|'danger', label?}`. `null` means unknown (dashed track, `—`), **never 0**.
-  - `display` ≤16, `hint` ≤500 (tooltip and description), `stale` dims it, `size` `small` (~26 px) or `medium` (48 px).
-  - `details?: {title? ≤40, rows: 1–12 of {label ≤48, value: number|null, max?, color?, caption? ≤80, group? ≤40}, updatedAt?: epoch ms}`: popover on hover, focus or tap (fixed position, clamped to the viewport, closes on Esc/scroll/resize, one at a time, attached inside an open `<dialog>`). Consecutive rows with the same `group` share a heading. `updatedAt` shows "updated N s ago" (live) instead of the stale line. With `details` there is no native `title`; the summary goes to `aria-description`.
-  - Each ring is a `progressbar`, with `aria-valuenow` only when known.
 
 ### HTTP
 

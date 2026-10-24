@@ -69,7 +69,7 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `marketplace.ts` | catalog parsing and install (`DEFAULT_MARKETPLACE_URL`) |
 | `panes.ts` | `paneAdapter` for `sdk.panes` |
 
-`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionGauge`, `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarUsage`.
+`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarUsage`.
 
 Wiring: `App.svelte` (`extensions.init(adapter)`), `Header.svelte`, `Composer.svelte`, `StatusLine.svelte`, `lib/commands.ts`, `lib/store.svelte.ts` (`extensions.emit`, `applyThemes`, `confirmExtension`), `Settings.svelte`, `Backup.svelte`, `lib/api.ts`.
 
