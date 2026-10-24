@@ -1,12 +1,12 @@
 /**
- * Reordering sidebar blocks (a directory, a group) by dragging their header, for mouse and touch alike:
+ * Reordering sidebar blocks (a directory, a group, a server) by dragging their header, for mouse and touch alike:
  * mouse drags after a few pixels, touch after a long press (so a swipe still scrolls the list); Esc cancels.
  * The drop slot is the block of the same kind under the pointer (`[data-block="<kind>:<key>"]` on the same server),
  * before or after it by which half the pointer is in. Near the list's edges the list scrolls.
  * The component draws the state it is given through `set` and applies the move in `move`.
  */
 export interface DirSrc {
-	kind: "dir" | "group";
+	kind: "dir" | "group" | "server";
 	serverId: string;
 	path: string;
 	paths: string[];
@@ -16,7 +16,7 @@ export interface BlockDragHost {
 	/** what is being carried (`kind:key`) and where it would land; both null when nothing is */
 	set(drag: string | null, drop: { id: string; after: boolean } | null): void;
 	get(): { id: string; after: boolean } | null;
-	key(kind: "dir" | "group", key: string): string;
+	key(kind: "dir" | "group" | "server", key: string): string;
 	move(o: DirSrc, target: string, after: boolean): void;
 }
 
@@ -26,8 +26,8 @@ export function blockDrag(h: BlockDragHost) {
 		let st: { pid: number; touch: boolean; x: number; y: number; timer: number } | null = null;
 		let active = false;
 		const at = (x: number, y: number) => {
-			const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-block]");
-			if (!el || el.dataset.server !== o.serverId || !el.dataset.block!.startsWith(`${o.kind}:`)) return null;
+			const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(`[data-block^="${o.kind}:"]`);
+			if (!el || el.dataset.server !== o.serverId) return null; // a server block carries no server of its own: serverId is ""
 			const r = el.getBoundingClientRect();
 			return { id: el.dataset.block!, after: y > r.top + r.height / 2 };
 		};

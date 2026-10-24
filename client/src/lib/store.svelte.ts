@@ -28,7 +28,7 @@ import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
-import { SidebarState } from "./sidebar.svelte";
+import { SidebarState, reorder } from "./sidebar.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -559,6 +559,14 @@ class AppStore {
       next.baseUrl !== cur.baseUrl || next.token !== cur.token;
     if (id === this.serverId && connChanged) this.openServer(id, true);
     if (connChanged) delete this.status[id];
+  }
+
+  /** Put server `id` before/after `target` in the list (the order the sidebar and the rail show) and remember it. */
+  moveServer(id: string, target: string, after: boolean) {
+    const ids = reorder(this.servers.map((s) => s.id), id, target, after);
+    if (!ids) return;
+    this.servers = ids.map((i) => this.servers.find((s) => s.id === i)!);
+    this.saveServers();
   }
 
   removeServer(id: string) {

@@ -206,7 +206,7 @@
 	/** the block being carried (`dir:path`), and the one it would land next to */
 	let dirDrag = $state<string | null>(null);
 	let dirDrop = $state<{ id: string; after: boolean } | null>(null);
-	const bid = (kind: "dir" | "group", key: string) => `${kind}:${key}`;
+	const bid = (kind: "dir" | "group" | "server", key: string) => `${kind}:${key}`;
 	/** `use:dirSource`: drag a directory header to reorder it (lib/block-drag.ts), drawn through dirDrag/dirDrop. */
 	const dirSource = blockDrag({
 		set: (drag, drop) => {
@@ -215,7 +215,7 @@
 		},
 		get: () => dirDrop,
 		key: bid,
-		move: (o, target, after) => app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after),
+		move: (o, target, after) => (o.kind === "server" ? app.moveServer(o.path, target, after) : app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after)),
 	});
 	/** Let go on a folder: the pane steps out of its group, as a tab of its own. */
 	const dropOnDir = (id: string) => void app.leaveGroup(id);
@@ -365,8 +365,8 @@
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
-			<section class="srv band" class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
-				<div class="srvhead" class:folded={sfold}>
+			<section class="srv band" data-block={bid("server", n.server.id)} data-server="" class:carried={dirDrag === bid("server", n.server.id)} class:before={dirDrop?.id === bid("server", n.server.id) && !dirDrop.after && dirDrag !== bid("server", n.server.id)} class:after={dirDrop?.id === bid("server", n.server.id) && dirDrop.after && dirDrag !== bid("server", n.server.id)} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
+				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2 }}>
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 						<span class="sicon"><Icon name="server" /></span>
@@ -594,7 +594,30 @@
 	}
 	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
+		position: relative;
 		padding: 0 8px 4px;
+	}
+	.srv.carried {
+		opacity: 0.45;
+	}
+	/* where a carried server would land: a line in the gap beside its card */
+	.srv.before::before,
+	.srv.after::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+		z-index: 1;
+		pointer-events: none;
+	}
+	.srv.before::before {
+		top: -5px;
+	}
+	.srv.after::after {
+		bottom: -5px;
 	}
 	.srv:has(> .fold) {
 		padding-bottom: 8px;
@@ -732,7 +755,8 @@
 	.dirblock:first-child > .dir {
 		margin-top: 4px;
 	}
-	.dir.grabbable {
+	.dir.grabbable,
+	.srvhead.grabbable {
 		cursor: grab;
 		-webkit-user-select: none;
 		user-select: none;
