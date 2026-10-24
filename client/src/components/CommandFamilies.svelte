@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from "./SearchField.svelte";
 	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
@@ -46,7 +47,7 @@
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
 	{#if total > 6}
-		<div class="tools"><input class="search" type="search" placeholder={t("명령 검색")} bind:value={query} aria-label={t("명령 검색")} /></div>
+		<div class="tools"><SearchField label={t("명령 검색")} bind:value={query} /></div>
 	{/if}
 	<p class="hint">{t("서버 확장이 이 폴더에서 제공하는 명령입니다. 입력창에 /접두어:이름 [내용]을 쓰면 서버가 실행합니다.")}</p>
 
@@ -76,7 +77,6 @@
 
 <style>
 	.tools { display: flex; padding: 0 24px; flex: none; }
-	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 	.hint { margin: 8px 24px 12px; flex: none; }
 	.body { overflow-y: auto; padding: 14px 24px 24px; min-height: 80px; border-top: 1px solid var(--border); }
 	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }

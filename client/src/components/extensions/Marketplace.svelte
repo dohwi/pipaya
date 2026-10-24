@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from "../SearchField.svelte";
 	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
@@ -127,10 +128,7 @@
 			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
 			{#if scope === "server"}<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>{/if}
 		</div>
-		<label class="search">
-			<Icon name="search" />
-			<input type="search" placeholder={t("확장 검색")} aria-label={t("확장 검색")} bind:value={query} />
-		</label>
+		<SearchField label={t("확장 검색")} bind:value={query} />
 		{#if error}<Notice tone="danger" size="sm" role="alert">{error}</Notice>{/if}
 		{#if loading && !catalog}<p class="hint" role="status">{t("목록을 불러오는 중…")}</p>{/if}
 		<ul class="list">
@@ -209,9 +207,6 @@
 	.hints .hint { margin: 0; }
 	.hint, .meta { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
-	.search :global(svg) { width: 16px; height: 16px; flex: none; stroke: var(--text-faint); stroke-width: 2; }
-	.search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 9px 0; color: inherit; outline: none; }
 	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 	.item { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from "./SearchField.svelte";
 	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
@@ -142,7 +143,7 @@
 
 	{#if (data?.skills.length ?? 0) > 6}
 		<div class="tools">
-			<input class="search" type="search" placeholder={t("스킬 검색")} bind:value={query} aria-label={t("스킬 검색")} />
+			<SearchField label={t("스킬 검색")} bind:value={query} />
 		</div>
 	{/if}
 
@@ -180,7 +181,6 @@
 <style>
 	.tools { display: flex; padding: 0 24px 12px; flex: none; }
 	.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 	.hint { margin: 2px 0 10px; }
 	.section + .section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 	h3 { margin: 0; font-size: var(--fs-md, 1rem); font-weight: 600; }

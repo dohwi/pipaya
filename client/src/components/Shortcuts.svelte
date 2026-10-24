@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from "./SearchField.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { onDestroy } from "svelte";
 	import { app } from "../lib/store.svelte";
@@ -102,7 +103,7 @@
 		{t("항목을 누른 뒤 원하는 키를 차례로 누르면 하나씩 쌓입니다. Ctrl·Alt·Shift에 더해 일반 키를 최대 3개까지 지정할 수 있고, 확인(✓) 버튼을 눌러야 저장됩니다.")} <kbd>Esc</kbd> {t("취소")} · <kbd>Backspace</kbd> {t("마지막 키 지우기 (비었을 때는 해제)")}. {t("모델과 추론 단계는 지금 열려 있는 대화에만 적용됩니다.")}
 	</span>
 
-	<input class="search" type="search" placeholder={t("단축키 검색")} aria-label={t("단축키 검색")} bind:value={filter} />
+	<SearchField label={t("단축키 검색")} bind:value={filter} />
 	{#if !visible.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
 
 	{#each GROUPS.filter((g) => visible.some((x) => x.group === g.id)) as g (g.id)}
@@ -148,17 +149,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-	}
-	.search {
-		width: 100%;
-		height: 34px;
-		padding: 0 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		color: var(--text);
-		font: inherit;
-		font-size: var(--fs-md);
 	}
 	.group {
 		margin-top: 14px;
@@ -315,5 +305,18 @@
 	}
 	.all:disabled {
 		opacity: 0.4;
+	}
+	/* phones: the description gets the full width and the key controls sit on their own line under it */
+	@media (max-width: 480px) {
+		li {
+			flex-wrap: wrap;
+			row-gap: 8px;
+		}
+		.what {
+			flex-basis: 100%;
+		}
+		.key {
+			flex: 1;
+		}
 	}
 </style>

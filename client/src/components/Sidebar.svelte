@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from "./SearchField.svelte";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
@@ -251,10 +252,7 @@
 	</div>
 	<ExtensionMount slot="sidebar.top" />
 	<div class="tools">
-		<div class="searchwrap">
-			<Icon name="search" />
-			<input class="search" data-sidebar-search placeholder={t("대화 검색")} bind:value={query} />
-		</div>
+		<SearchField label={t("대화 검색")} data-sidebar-search bind:value={query} />
 	</div>
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
@@ -375,35 +373,6 @@
 		.side {
 			width: var(--sidebar-w); /* the wrapper animates its width; the content must not reflow */
 		}
-	}
-	.searchwrap {
-		position: relative;
-		flex: 1;
-		min-width: 0;
-	}
-	.searchwrap :global(svg) {
-		position: absolute;
-		left: 11px;
-		top: 50%;
-		translate: 0 -50%;
-		width: 16px;
-		height: 16px;
-		stroke: var(--text-faint);
-		stroke-width: 2;
-		pointer-events: none;
-	}
-	.search {
-		width: 100%;
-		height: 34px;
-		padding: 0 10px 0 32px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border);
-		background: transparent;
-		outline: 0;
-		font-size: var(--fs-lg);
-	}
-	.search:focus {
-		border-color: var(--accent);
 	}
 	.list {
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));

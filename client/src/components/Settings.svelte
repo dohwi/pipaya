@@ -1,7 +1,7 @@
 <script lang="ts">
+	import SearchField from "./SearchField.svelte";
 	import { fadeIn, paneIn } from "../lib/motion";
 	import { ACTIONS, formatCombo } from "../lib/keys";
-	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import GeneralPane from "./settings/GeneralPane.svelte";
 	import SearchHits from "./settings/SearchHits.svelte";
@@ -103,8 +103,7 @@
 	</div>
 
 	<div class="searchbar">
-		<Icon name="search" />
-		<input type="search" placeholder={t("설정·단축키 검색")} aria-label={t("설정·단축키 검색")} bind:value={query} onkeydown={(e) => { if (e.key === "Escape" && query) { e.stopPropagation(); query = ""; } else if (e.key === "Enter" && hits[0]) pick(hits[0]); }} />
+		<SearchField label={t("설정·단축키 검색")} bind:value={query} onkeydown={(e) => { if (e.key === "Enter" && hits[0]) pick(hits[0]); }} />
 	</div>
 
 	<div class="layout">
@@ -148,34 +147,13 @@
 		position: relative;
 		padding: 0 22px 12px;
 	}
-	.searchbar :global(svg) {
-		position: absolute;
-		left: 34px;
-		top: 9px;
-		width: 16px;
-		height: 16px;
-		stroke: var(--text-faint);
-		stroke-width: 2;
-		pointer-events: none;
-	}
-	.searchbar input {
-		width: 100%;
-		height: 34px;
-		padding: 0 12px 0 34px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		color: var(--text);
-		font: inherit;
-		font-size: var(--fs-md);
-	}
 	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
 	.srvbar {
 		flex: none;
 		display: flex;
 		gap: 6px;
 		margin-top: -6px;
-		padding: 8px 24px 14px;
+		padding: 8px 22px 12px;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -233,14 +211,11 @@
 	@media (max-width: 760px) {
 
 		.searchbar {
-			padding: 0 14px 10px;
-		}
-		.searchbar :global(svg) {
-			left: 26px;
+			padding: 0 16px 10px;
 		}
 
 		.srvbar {
-			padding: 8px 16px 12px;
+			padding: 8px 16px 10px;
 		}
 
 		.layout {
