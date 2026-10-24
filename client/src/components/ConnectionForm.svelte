@@ -5,23 +5,21 @@
 <script lang="ts">
 	import IconButton from "./IconButton.svelte";
 	import Button from "./Button.svelte";
-	import { msg, t } from "../lib/i18n";
+	import { t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import { errorText, type Api } from "../lib/api";
 	import { indexCatalog } from "../lib/catalog-match";
 	import Icon from "./Icon.svelte";
+	import ConnectionFields from "./connection/ConnectionFields.svelte";
+	import ModelList from "./connection/ModelList.svelte";
 	import Modal from "./Modal.svelte";
 	import DiscardConfirm from "./DiscardConfirm.svelte";
-	import Switch from "./Switch.svelte";
-	import Select from "./Select.svelte";
-	import Badge from "./Badge.svelte";
 	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
-	import ModelLogo from "./ModelLogo.svelte";
 	import ModelPage from "./ModelPage.svelte";
-	import type { ApiFormat, CatalogModel, CustomProvider } from "../lib/types";
-	import { applyMatch, collectModels, formFromProvider, headerError, modelMeta, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
+	import type { CatalogModel, CustomProvider } from "../lib/types";
+	import { applyMatch, collectModels, formFromProvider, headerError, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
 
 	/**
 	 * The add / edit dialog for one custom (OpenAI- or Anthropic-compatible) connection: its address and format, and
@@ -47,12 +45,6 @@
 	/** Index of the model whose details are open inside the dialog; null = the connection page. */
 	let editing = $state<number | null>(null);
 	let fresh = $state(false);
-
-	const formats: { id: ApiFormat; label: string }[] = [
-		{ id: "openai-completions", label: msg("OpenAI 호환 (Chat Completions)") },
-		{ id: "openai-responses", label: "OpenAI Responses" },
-		{ id: "anthropic-messages", label: "Anthropic Messages" },
-	];
 
 	/** Esc steps back from a model's page to the connection first; a second Esc closes the dialog. */
 	function escape() {
@@ -283,78 +275,19 @@
 						<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
 					{/if}
 				{:else}
-					<section class="fsec">
-						<div class="mono-label">{t("연결 정보")}</div>
-						<div class="grid2">
-							<label>
-								<span>{t("이름")}</span>
-								<input class="field" value={form.name} oninput={(e) => onName(e.currentTarget.value)} placeholder={t("예: 내 프록시")} autocomplete="off" />
-							</label>
-							<label>
-								<span>ID</span>
-								<input
-									class="field mono"
-									value={form.id}
-									oninput={(e) => { form!.id = e.currentTarget.value; form!.idTouched = true; }}
-									disabled={!form.isNew}
-									placeholder="my-proxy"
-									autocomplete="off"
-									autocapitalize="off"
-									spellcheck="false"
-								/>
-							</label>
-						</div>
-						<label>
-							<span>Endpoint (Base URL)</span>
-							<input class="field mono" bind:value={form.baseUrl} placeholder="https://host.example/v1" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" />
-						</label>
-						<label>
-							<span>{t("API 형식")}</span>
-							<Select value={form.api} onchange={(api) => { if (form) form.api = api; }} options={formats.map((f) => ({ value: f.id, label: t(f.label) }))} />
-						</label>
-						<div class="switchrow">
-							<span class="swtext">
-								<b id="auth-req-l">{t("API 키 필요")}</b>
-								<small id="auth-req-d">{t("켜면 저장된 키가 있어야 이 연결의 모델을 쓸 수 있습니다")}</small>
-							</span>
-							<Switch checked={form.authRequired} label={t("API 키 필요")} describedby="auth-req-d" onchange={(on) => { if (form) form.authRequired = on; }} />
-						</div>
-						{#if form.isNew && form.authRequired}
-							<label in:collapseIn out:collapseOut>
-								<span>{t("API 키")}</span>
-								<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
-							</label>
-						{/if}
-						{#if form.isNew}<p class="hint note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
-					</section>
-
-					<section class="fsec">
-						<div class="mhead">
-							<div class="mono-label">{t("모델 ({n})", { n: form.rows.length })}</div>
-							<Button size="sm" disabled={discovering || busy} onclick={discover}>
-								<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
-							</Button>
-						</div>
-						{#if discoverNote}<p class="hint note" role="status" in:collapseIn out:collapseOut>{discoverNote}</p>{/if}
-						<div class="mpick">
-							{#each form.rows as r, i (i)}
-								<button type="button" class="mitem" onclick={() => openModel(i)}>
-									<span class="mlogo"><ModelLogo conn={api()?.connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
-									<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
-									<span class="mmeta">{modelMeta(r)}</span>
-									{#if r.unavailable}
-										<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
-									{:else if !r.id.trim()}
-										<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
-									{:else if catalogLoaded && !matchedOf(r)}
-										<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
-									{/if}
-									<Icon name="chevron-right" />
-								</button>
-							{/each}
-						</div>
-						<Button variant="dashed" onclick={addModel}><Icon name="plus" /> {t("모델 추가")}</Button>
-					</section>
+					<ConnectionFields {form} onname={onName} />
+					<ModelList
+						{form}
+						connection={api()?.connection}
+						{busy}
+						{discovering}
+						note={discoverNote}
+						{catalogLoaded}
+						{matchedOf}
+						onopen={openModel}
+						onadd={addModel}
+						ondiscover={discover}
+					/>
 				{/if}
 			</div>
 
@@ -391,36 +324,6 @@
 {/if}
 
 <style>
-	.mhead {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-	.mhead :global(svg) {
-
-		width: 14px;
-
-		height: 14px;
-
-		stroke-width: 2;
-
-	}
-	.lockic {
-		flex: none;
-		display: inline-flex;
-	}
-	.grid2 {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 10px;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		min-width: 0;
-	}
 	/* ---------- edit dialog ---------- */
 	.fform {
 		display: flex;
@@ -461,127 +364,6 @@
 		padding: 18px 22px 20px;
 		overflow-y: auto;
 		min-height: 0;
-	}
-	.fsec {
-		gap: 12px;
-	}
-	.switchrow {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 12px;
-		padding: 10px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		justify-content: space-between;
-	}
-	.swtext {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
-	}
-	.swtext b {
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		color: var(--text);
-	}
-	.swtext small {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
-	.mpick {
-		display: flex;
-		flex-direction: column;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		overflow: hidden;
-	}
-	.mitem {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		min-height: 46px;
-		padding: 0 12px 0 14px;
-		background: var(--bg-elev);
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-		transition: background var(--motion-fast) var(--ease-std);
-	}
-	.mitem:last-child {
-		border-bottom: 0;
-	}
-	.mitem:hover {
-		background: var(--bg-hover);
-	}
-	.mname {
-		flex: 1;
-		min-width: 0;
-		font-size: var(--fs-md);
-		font-weight: 550;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.mitem :global(.badge svg) {
-
-		width: 12px;
-
-		height: 12px;
-
-		stroke-width: 2.2;
-
-	}
-	.mname :global(.lockic) {
-		margin-left: 6px;
-		vertical-align: -2px;
-	}
-	.mname :global(.lockic svg) {
-		width: 13px;
-		height: 13px;
-		opacity: 0.7;
-	}
-	.mname :global(.mchk) {
-		margin-left: 4px;
-		vertical-align: -2px;
-		display: inline-flex;
-	}
-	.mname :global(.mchk svg) {
-		width: 13px;
-		height: 13px;
-		stroke: var(--ok);
-		stroke-width: 2.4;
-	}
-	.mmeta {
-		flex: none;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
-	.mitem :global(svg:not(.model):not(.logo)) {
-
-		flex: none;
-
-		width: 16px;
-
-		height: 16px;
-
-		stroke: var(--text-faint);
-
-		stroke-width: 1.9;
-
-	}
-	.mlogo {
-		flex: none;
-		display: grid;
-		place-items: center;
-		color: var(--text-dim);
-	}
-	.mitem :global(svg.model) {
-		stroke: none;
-		fill: currentColor;
-		width: 18px;
-		height: 18px;
 	}
 	:global(.iconbtn.back) {
 		margin-left: -8px;
@@ -625,23 +407,5 @@
 		justify-content: flex-end;
 		gap: 8px;
 	}
-	section {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-	.note {
-		margin: 0;
-	}
-	label > span {
-		font-size: var(--fs-xs);
-		font-weight: 600;
-		color: var(--text-dim);
-	}
-	@media (max-width: 640px) {
-		/* name/ID and model ID/display name stack; the two numbers stay side by side */
-		.grid2 {
-			grid-template-columns: 1fr;
-		}
-	}
+
 </style>
