@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import StatusDot from "./StatusDot.svelte";
 	import Pin from "./Pin.svelte";
@@ -275,10 +276,37 @@
 </script>
 
 
-{#snippet row(n: Node, x: Session, drop: DropOpts, member = false)}
+{#snippet renameInput(value: string, commit: () => void, cancel: () => void, setValue: (v: string) => void, maxlength?: number)}
+	<input
+		class="rename"
+		{value}
+		oninput={(e) => setValue(e.currentTarget.value)}
+		use:focusSelect
+		{maxlength}
+		onblur={commit}
+		onkeydown={(e) => {
+			if (e.key === "Enter") commit();
+			if (e.key === "Escape") cancel();
+		}}
+	/>
+{/snippet}
+
+{#snippet moreButton(id: string | null, target: MenuTarget)}
+	<div class="acts">
+		{#if id}<button class="more" class:on={menuId === id} onpointerenter={(e) => hoverMenu(e, target)} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, target)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === id}><Icon name="more" /></button>{/if}
+	</div>
+{/snippet}
+
+{#snippet title(text: string)}
+	<span class="title" use:marquee={text}><span class="track"><span class="mq">{text}</span><span class="dup" aria-hidden="true">{text}</span></span></span>
+{/snippet}
+
+<!-- A session or terminal row. `body` fills the open button (icon, label, title), `tip` is its tooltip. -->
+{#snippet tabRow(n: Node, x: { id: string; title: string }, target: MenuTarget, tip: string, body: Snippet, drop: DropOpts, member: boolean)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="item nested"
+		class:term={target.kind === "terminal"}
 		class:member
 		class:active={n.current && x.id === app.activeId}
 		class:over={dropOn === x.id}
@@ -291,71 +319,34 @@
 	>
 		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 		{#if n.current && editing === x.id}
-			<input
-				class="rename"
-				bind:value={draft}
-				use:focusSelect
-				onblur={commitRename}
-				onkeydown={(e) => {
-					if (e.key === "Enter") commitRename();
-					if (e.key === "Escape") editing = null;
-				}}
-			/>
+			{@render renameInput(draft, commitRename, () => (editing = null), (v) => (draft = v))}
 		{:else}
-			{@const st = stateOf(n, x)}
-			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={[extensions.labelOf(x.id)?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}>
-				<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
-				<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
-				{#if extensions.labelOf(x.id)}<span class="who mono {st}">{extensions.labelOf(x.id)?.text}</span>{/if}
-				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
+			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={tip}>
+				{@render body()}
 			</button>
-			<div class="acts">
-				{#if n.current}
-					<button class="more" class:on={menuId === x.id} onpointerenter={(e) => hoverMenu(e, { kind: "session", x })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "session", x })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === x.id}><Icon name="more" /></button>
-				{/if}
-			</div>
+			{@render moreButton(n.current ? x.id : null, target)}
 		{/if}
 	</div>
 {/snippet}
 
+{#snippet row(n: Node, x: Session, drop: DropOpts, member = false)}
+	{@const st = stateOf(n, x)}
+	{@const tip = [extensions.labelOf(x.id)?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · ")}
+	{#snippet body()}
+		<!-- the model's logo; it takes the state colour and a dot while working, asking, done or failed -->
+		<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
+		{#if extensions.labelOf(x.id)}<span class="who mono {st}">{extensions.labelOf(x.id)?.text}</span>{/if}
+		{@render title(x.title)}
+	{/snippet}
+	{@render tabRow(n, x, { kind: "session", x }, tip, body, drop, member)}
+{/snippet}
+
 {#snippet termRow(n: Node, x: TerminalInfo, drop: DropOpts, member = false)}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="item nested term"
-		class:member
-		class:active={n.current && x.id === app.activeId}
-		class:over={dropOn === x.id}
-		class:before={tabDrop?.id === x.id && !tabDrop.after}
-		class:after={tabDrop?.id === x.id && tabDrop.after}
-		class:grabbable={n.current && editing !== x.id}
-		class:menuopen={menuId === x.id}
-		use:dragSource={{ id: x.id, disabled: !n.current || editing === x.id }}
-		use:dropTarget={drop}
-	>
-		{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-		{#if n.current && editing === x.id}
-			<input
-				class="rename"
-				bind:value={draft}
-				use:focusSelect
-				onblur={commitRename}
-				onkeydown={(e) => {
-					if (e.key === "Enter") commitRename();
-					if (e.key === "Escape") editing = null;
-				}}
-			/>
-		{:else}
-			<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && startRename(x.id, x.title)} title={`${x.shell}\n${x.cwd}`}>
-				<span class="lead"><Icon name="terminal" /></span>
-				<span class="title" use:marquee={x.title}><span class="track"><span class="mq">{x.title}</span><span class="dup" aria-hidden="true">{x.title}</span></span></span>
-			</button>
-			<div class="acts">
-				{#if n.current}
-					<button class="more" class:on={menuId === x.id} onpointerenter={(e) => hoverMenu(e, { kind: "terminal", x })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "terminal", x })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === x.id}><Icon name="more" /></button>
-				{/if}
-			</div>
-		{/if}
-	</div>
+	{#snippet body()}
+		<span class="lead"><Icon name="terminal" /></span>
+		{@render title(x.title)}
+	{/snippet}
+	{@render tabRow(n, x, { kind: "terminal", x }, `${x.shell}\n${x.cwd}`, body, drop, member)}
 {/snippet}
 
 <aside class="side">
@@ -441,30 +432,16 @@
 												use:dropTarget={drop}
 											>
 												{#if n.current && editingGroup === g.id}
-													<input
-														class="rename"
-														bind:value={groupDraft}
-														use:focusSelect
-														maxlength="100"
-														onblur={commitGroupRename}
-														onkeydown={(e) => {
-															if (e.key === "Enter") commitGroupRename();
-															if (e.key === "Escape") editingGroup = null;
-														}}
-													/>
+													{@render renameInput(groupDraft, commitGroupRename, () => (editingGroup = null), (v) => (groupDraft = v), 100)}
 												{:else}
 													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
 														<Icon name={gfold ? "group" : "group-open"} />
 													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-														<span class="title" use:marquee={g.name}><span class="track"><span class="mq">{g.name}</span><span class="dup" aria-hidden="true">{g.name}</span></span></span>
+														{@render title(g.name)}
 														<span class="gcount mono" title={t("{n}개", { n: tab.members.length })}>{tab.members.length}</span>
 													</button>
-													<div class="acts">
-														{#if n.current}
-															<button class="more" class:on={menuId === g.id} onpointerenter={(e) => hoverMenu(e, { kind: "group", g })} onpointerleave={leaveMenu} onclick={(e) => clickMenu(e, { kind: "group", g })} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={menuId === g.id}><Icon name="more" /></button>
-														{/if}
-													</div>
+													{@render moreButton(n.current ? g.id : null, { kind: "group", g })}
 												{/if}
 											</div>
 											{#if !gfold}
