@@ -96,7 +96,7 @@
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
 </script>
 
-<div class="row assistant" class:fresh={parts[0]?.fresh} use:swipeable>
+<div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} use:swipeable>
 	<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
 	<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
 		{#each segments as seg, n (seg.i)}

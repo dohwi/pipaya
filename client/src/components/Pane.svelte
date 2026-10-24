@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
@@ -54,7 +56,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<section class="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
+<section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
 	{#if grouped && id}
 		<header
 			class="bar"
@@ -98,11 +100,12 @@
 	<DropLayer target={id!} />
 	{:else}
 
+	<ExtensionMount slot="pane.top" props={{ paneId: id }} />
 	<div class="body">
 		{#if id}<SessionToasts {id} />{/if}
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
-			<EmptyHero />
+			<ExtensionPart part="pane.empty" props={{ paneId: id }}><EmptyHero /></ExtensionPart>
 		{/if}
 		{#if chat}
 			{#key chat.id}
@@ -111,12 +114,13 @@
 			<FindBar paneId={id} {focused} />
 		{:else if !id}
 			<div class="empty">
-				<Welcome />
+				<ExtensionPart part="pane.welcome"><Welcome /></ExtensionPart>
 			</div>
 		{/if}
 	</div>
 
 	<ExtensionSlot slot="footer" />
+	<ExtensionMount slot="pane.bottom" props={{ paneId: id }} />
 	<Composer />
 	<!-- covers the input and the stats line too, so a drop zone reaches the bottom edge of the pane -->
 	{#if id}<DropLayer target={id} />{/if}

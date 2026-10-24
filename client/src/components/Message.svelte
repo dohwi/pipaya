@@ -3,6 +3,8 @@
 	import { getPane } from "../lib/pane";
 	import UserMessage from "./message/UserMessage.svelte";
 	import AssistantMessage from "./message/AssistantMessage.svelte";
+	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import type { AssistantItem, UserItem } from "../lib/types";
 
 	/**
@@ -25,7 +27,13 @@
 </script>
 
 {#if item.kind === "user"}
-	<UserMessage {item} {session} {working} {level} onreply={(text, who) => (app.replyTo = { text, who })} />
+	<ExtensionPart part="message.user" props={{ item, working, paneId: pane.id }}>
+		<UserMessage {item} {session} {working} {level} onreply={(text, who) => (app.replyTo = { text, who })} />
+	</ExtensionPart>
+	<ExtensionMount slot="message.user.after" props={{ item, paneId: pane.id }} />
 {:else}
-	<AssistantMessage {item} {turn} {last} {live} {session} paneId={pane.id} onreply={(text) => (app.replyTo = { text })} />
+	<ExtensionPart part="message.assistant" props={{ item, turn, last, live, paneId: pane.id }}>
+		<AssistantMessage {item} {turn} {last} {live} {session} paneId={pane.id} onreply={(text) => (app.replyTo = { text })} />
+	</ExtensionPart>
+	<ExtensionMount slot="message.assistant.after" props={{ item, turn, last, live, paneId: pane.id }} />
 {/if}

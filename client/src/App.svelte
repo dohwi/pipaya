@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ExtensionMount from "./components/extensions/ExtensionMount.svelte";
 	import { onMount, untrack } from "svelte";
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { fadeIn, fadeOut } from "./lib/motion";
@@ -292,7 +293,7 @@
 		<NoServer />
 	{/if}
 {:else}
-	<div class="app">
+	<div class="app" data-part="app">
 		<div class="side" bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
@@ -395,6 +396,7 @@
 <UpdateBanner />
 <VersionNotice />
 <ChordStrip />
+<ExtensionMount slot="app.overlay" />
 <ExtensionApproval />
 <ExtensionDialog />
 <CloseConfirm />

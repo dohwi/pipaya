@@ -164,6 +164,7 @@
 
 <div
 	class="scroller"
+	data-part="messages"
 	bind:this={scroller}
 	onscroll={() => { onDragScroll(); onScroll(); }}
 	onwheel={onWheel}

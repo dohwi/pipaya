@@ -169,7 +169,7 @@
 </script>
 
 <!-- Reserve room before the first reply; allow narrow screens to wrap without clipping. -->
-<div class="statusline mono" aria-label={t("세션 통계")}>
+<div class="statusline mono" data-part="statusline" aria-label={t("세션 통계")}>
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
 		<span class="b" title={item.owner}>{item.text}</span>
 	{/each}

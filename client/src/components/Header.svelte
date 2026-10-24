@@ -4,6 +4,8 @@
 	import Icon from "./Icon.svelte";
 	import NavbarUsage from "./extensions/NavbarUsage.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
+	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
@@ -13,15 +15,23 @@
 	const term = $derived(app.terminal(app.activeId));
 	// Wide screens show the whole group at once, so the header names the group rather than one session.
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
+	/** What the title shows, also handed to an extension that replaces it. */
+	const heading = $derived(
+		group ? { title: group.name, sub: t("대화 {n}개", { n: panesOf(group.layout).length }) }
+		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
+		: { title: s?.title ?? t("새 대화"), sub: s ? s.cwd.split("/").slice(-2).join("/") : "" },
+	);
 </script>
 
-<header class:group={!!group}>
+<header class:group={!!group} data-part="header">
 	<div class="capsule">
+		<ExtensionMount slot="header.start" />
 		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} title={t("사이드바 열기") + hint}>
 			<Icon name="sidebar" />
 		</button>
 
-		<div class="title">
+		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
+		<div class="title" data-part="header.title">
 			{#if group}
 				<span class="t">{group.name}</span>
 				<span class="sub mono">{t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
@@ -34,10 +44,14 @@
 			{/if}
 		</div>
 
+		</ExtensionPart>
+
 		<NavbarUsage />
+		<ExtensionMount slot="header.end" />
 
 	</div>
 </header>
+<ExtensionMount slot="header.below" />
 <ExtensionSlot slot="header" />
 
 

@@ -6,6 +6,8 @@
 </script>
 
 <script lang="ts">
+	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
 	import { abortable } from "../lib/abortable";
 	import { DebouncedList } from "../lib/debounced-list.svelte";
@@ -539,12 +541,13 @@
 
 {#if dragging}<DropOverlay />{/if}
 
-<div class="wrap" bind:this={wrapEl}>
+<div class="wrap" bind:this={wrapEl} data-part="composer">
+	<ExtensionMount slot="composer.top" />
 	{#if whereShown && app.net === "online"}
 		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
-	<div class="box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
+	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "member" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
@@ -589,13 +592,15 @@
 		></textarea>
 </div>
 
-		<div class="bar">
+		<div class="bar" data-part="composer.bar">
 			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
 			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void attached.add(picked); }} />
 
 			<ModelPicker />
+			<ExtensionMount slot="composer.toolbar" />
 			<span class="grow"></span>
 
+			<ExtensionPart part="composer.send" props={{ canSend, hasInput, running, compacting, send: submit, stop: () => app.abort(pane.id) }}>
 			<SendControls
 				{compacting}
 				{running}
@@ -609,6 +614,7 @@
 				onsteer={() => during("steer")}
 				onstop={() => app.abort(pane.id)}
 			/>
+			</ExtensionPart>
 		</div>
 	</div>
 	{#if extensions.actions.length}
@@ -618,7 +624,8 @@
 			{/each}
 		</div>
 	{/if}
-	<StatusLine />
+	<ExtensionPart part="statusline"><StatusLine /></ExtensionPart>
+	<ExtensionMount slot="composer.bottom" />
 </div>
 
 <style>

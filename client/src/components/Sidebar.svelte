@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
 	import Pin from "./Pin.svelte";
 	import { msg, t } from "../lib/i18n";
@@ -232,12 +234,15 @@
 </script>
 
 
-<aside class="side">
-	<div class="brandrow">
+<aside class="side" data-part="sidebar">
+	<div class="brandrow" data-part="sidebar.brand">
+		<ExtensionPart part="sidebar.brand">
 		<PipayaMark color size={26} />
 		<Wordmark size={16} />
+		</ExtensionPart>
 		<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
 	</div>
+	<ExtensionMount slot="sidebar.top" />
 	<div class="tools">
 		<div class="searchwrap">
 			<Icon name="search" />
@@ -285,7 +290,8 @@
 		{#if nothingFound}<div class="empty">{t("검색 결과가 없습니다")}</div>{/if}
 	</nav>
 
-	<div class="bottom">
+	<div class="bottom" data-part="sidebar.bottom">
+		<ExtensionMount slot="sidebar.bottom" />
 		<button class="settings wide" onclick={() => app.openSettings()}>
 			<span class="sico"><Icon name="settings" />{#if app.net !== "online"}<Pin tone="warn" label={t("연결 안 됨")} />{/if}</span> {t("설정")}
 		</button>

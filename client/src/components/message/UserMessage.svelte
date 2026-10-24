@@ -33,7 +33,7 @@
 	let expanded = $state(false);
 </script>
 
-<div class="row user" class:peer={!!peer} class:fresh={item.fresh}>
+<div class="row user" data-part="message.user" class:peer={!!peer} class:fresh={item.fresh}>
 	<div class="bubble" class:peerbubble={!!peer} class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
