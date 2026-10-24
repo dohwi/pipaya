@@ -17,6 +17,12 @@ const Info = Type.Object({
 	flags: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), type: Type.String(), value: Type.Optional(Type.Union([Type.Boolean(), Type.String()])) })),
 	events: Type.Array(Type.String()),
 	companion: Type.Optional(Type.String()),
+	title: Type.Optional(Type.String()),
+	version: Type.Optional(Type.String()),
+	description: Type.Optional(Type.String()),
+	descriptions: Type.Optional(Type.Record(Type.String(), Type.String())),
+	settings: Type.Optional(Type.Array(Type.Unknown(), { description: "Fields of the settings form (`pipaya.settings` in package.json), same shape as a client manifest's `settings`" })),
+	settingsId: Type.String({ description: "Id of the shared settings object behind the form (`GET/PUT /extensions/:id/settings`)" }),
 	error: Type.Optional(Type.String()),
 });
 

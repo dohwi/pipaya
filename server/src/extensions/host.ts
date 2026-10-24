@@ -56,8 +56,20 @@ export interface ExtensionInfo {
 	events: string[];
 	/** Id of the client extension this one needs on the device (`pipaya.companion` in its package.json). */
 	companion?: string;
+	/** From the package.json of a folder extension: shown on the settings page. */
+	title?: string;
+	version?: string;
+	description?: string;
+	/** `pipaya.descriptions` (language tag -> text). */
+	descriptions?: Record<string, string>;
+	/** `pipaya.settings`: the fields of the form the settings page shows (same shape as a client manifest's `settings`; the client validates them). */
+	settings?: unknown[];
+	/** Id of the shared settings object (`GET/PUT /extensions/:id/settings`) behind `settings`. */
+	settingsId: string;
 	error?: string;
 }
+
+type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "settings">;
 
 interface Loaded extends ExtensionInfo {
 	handlers: Map<EventName, EventHandler<any>[]>;
@@ -75,6 +87,26 @@ const SCRIPT_EXT = new Set([".ts", ".js", ".mjs"]);
 const MAX_ERRORS = 100;
 const FAMILY_NAME = /^[A-Za-z0-9_.-]{1,80}$/;
 const MAX_FAMILY_ENTRIES = 500;
+
+const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.trim() && v.length <= max ? v : undefined);
+
+/** What a folder extension's package.json tells the settings page (all optional, none of it trusted). */
+function packageMeta(json: any): PackageMeta {
+	const meta = json?.pipaya;
+	const out: PackageMeta = {};
+	const c = meta?.companion;
+	if (typeof c === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(c) && c.length <= 80) out.companion = c;
+	const title = str(meta?.title, 80); if (title) out.title = title;
+	const version = str(json?.version, 40); if (version) out.version = version;
+	const description = str(json?.description, 500); if (description) out.description = description;
+	if (meta?.descriptions && typeof meta.descriptions === "object" && !Array.isArray(meta.descriptions)) {
+		const d: Record<string, string> = {};
+		for (const [k, v] of Object.entries(meta.descriptions).slice(0, 10)) { const t = str(v, 500); if (t && k.length <= 35) d[k] = t; }
+		if (Object.keys(d).length) out.descriptions = d;
+	}
+	if (Array.isArray(meta?.settings) && meta.settings.length <= 20) out.settings = meta.settings;
+	return out;
+}
 
 export class ExtensionHost {
 	private loaded: Loaded[] = [];
@@ -99,18 +131,18 @@ export class ExtensionHost {
 
 	// ── loading ─────────────────────────────────────────────────────────────
 
-	private discover(): { name: string; entry: string; companion?: string }[] {
-		const out: { name: string; entry: string; companion?: string }[] = [];
+	private discover(): { name: string; entry: string; meta: PackageMeta }[] {
+		const out: { name: string; entry: string; meta: PackageMeta }[] = [];
 		const seen = new Set<string>();
-		const add = (name: string, entry: string, companion?: string) => { if (!seen.has(entry)) { seen.add(entry); out.push({ name, entry, ...(companion ? { companion } : {}) }); } };
+		const add = (name: string, entry: string, meta: PackageMeta = {}) => { if (!seen.has(entry)) { seen.add(entry); out.push({ name, entry, meta }); } };
 		const fromDir = (dir: string, name: string) => {
 			const pkg = join(dir, "package.json");
-			let companion: string | undefined;
+			let companion: PackageMeta = {};
 			if (existsSync(pkg)) {
 				try {
-					const meta = JSON.parse(readFileSync(pkg, "utf8"))?.pipaya;
-					const c = meta?.companion;
-					companion = typeof c === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(c) && c.length <= 80 ? c : undefined;
+					const json = JSON.parse(readFileSync(pkg, "utf8"));
+					const meta = json?.pipaya;
+					companion = packageMeta(json);
 					const listed = meta?.extensions;
 					if (Array.isArray(listed)) {
 						for (const rel of listed) if (typeof rel === "string") add(`${name}/${basename(rel, extname(rel))}`, resolve(dir, rel), companion);
@@ -139,9 +171,9 @@ export class ExtensionHost {
 	async load(): Promise<ExtensionInfo[]> {
 		await this.unloadAll();
 		const v = ++this.version;
-		for (const { name, entry, companion } of this.discover()) {
+		for (const { name, entry, meta } of this.discover()) {
 			const ext = this.blank(name, entry);
-			if (companion) ext.companion = companion;
+			Object.assign(ext, meta);
 			this.loaded.push(ext);
 			try {
 				const mod = await import(`${entry}?v=${v}`);
@@ -165,7 +197,7 @@ export class ExtensionHost {
 
 	private blank(name: string, path: string): Loaded {
 		return {
-			name, path, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], flags: [], events: [],
+			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], flags: [], events: [],
 			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(),
 			providerIds: new Set(), flagDefs: new Map(), busOff: [],
 		};
@@ -197,8 +229,9 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, error }) => ({
-			name, path, tools, commands, commandFamilies, methods, providers, ...(companion ? { companion } : {}),
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, settings, settingsId, error }) => ({
+			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}),
+			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(settings ? { settings } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
 	}

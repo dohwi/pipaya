@@ -65,13 +65,13 @@
 	let collapsed = $state<Record<string, boolean>>({});
 	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
 	/** Extensions running inside the chosen server (read-only); the sidebar lists them under "서버 확장" like installed ones. */
-	let serverSide = $state<{ id: string; names: string[] } | null>(null);
+	let serverSide = $state<{ id: string; names: { name: string; title?: string }[] } | null>(null);
 	$effect(() => {
 		void app.configTick;
 		const id = server?.id;
 		if (!id) { serverSide = null; return; }
 		let live = true;
-		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => x.name) }; }).catch(() => { if (live) serverSide = null; });
+		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
 	type Kid = { id: string; name: string; live: boolean; builtin: boolean };
@@ -79,7 +79,7 @@
 		const sc = extScope(id);
 		if (!sc) return [];
 		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false }));
-		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n}`, name: n, live: true, builtin: true })) : [];
+		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, name: n.title ?? n.name, live: true, builtin: false })) : [];
 		return [...own, ...side];
 	};
 	function openExt(tabId: TabId, id: string) {

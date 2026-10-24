@@ -291,6 +291,12 @@ export function describeSettingErrors(fields: readonly SettingField[], errors: R
 }
 
 /** Validate portable JSON data and return a fresh package with no input object references. */
+/** Validates the `settings` fields a server extension declares in its package.json (same rules as a client manifest's). Throws on a bad field. */
+export function parseSettingFields(input: unknown): SettingField[] {
+	const keys = new Set<string>();
+	return array(input, "settings", MAX_SETTING_FIELDS).map((value, index) => settingField(value, `settings[${index}]`, keys));
+}
+
 export function parsePackage(input: unknown): ExtensionPackage {
 	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "code"]);
 	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "permissions", "settings", "settingsScope"]);

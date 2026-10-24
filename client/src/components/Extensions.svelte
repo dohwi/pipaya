@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LocalizedError, msg, t } from "../lib/i18n";
+	import { LocalizedError, getLang, msg, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
 	import Accordion from "./Accordion.svelte";
@@ -10,7 +10,7 @@
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";
 		import { CONFIG_REQUIRED, extensions, type ExtensionScope, type InstalledExtension, type UnreadableExtension } from "../lib/extensions/host.svelte";
-	import { parsePackage, MAX_PACKAGE_BYTES, type ExtensionPackage, type Permission } from "../lib/extensions/schema";
+	import { parsePackage, parseSettingFields, MAX_PACKAGE_BYTES, type ExtensionPackage, type Permission, type SettingField } from "../lib/extensions/schema";
 	import Marketplace from "./extensions/Marketplace.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
@@ -25,13 +25,33 @@
 	let filename = $state("");
 	let market = $state(false);
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
-	let serverSide = $state<{ name: string; tools: string[]; commands: { name: string }[]; companion?: string; error?: string }[]>([]);
+	type ServerExt = Awaited<ReturnType<NonNullable<typeof app.api>["serverExtensions"]>>["extensions"][number];
+	let serverSide = $state<ServerExt[]>([]);
+	/** Saved settings of the server extensions, by settings id (`GET /extensions/settings`). */
+	let serverSettings = $state<Record<string, Record<string, unknown>>>({});
+	const srvKey = (name: string) => `srv:${name}`;
+	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
+	/** The declared form of a server extension, or why it cannot be shown. */
+	function serverFields(ext: ServerExt): { fields?: SettingField[]; problem?: string } {
+		if (!ext.settings) return {};
+		try { return { fields: parseSettingFields(ext.settings) }; } catch (cause) { return { problem: cause instanceof Error ? cause.message : String(cause) }; }
+	}
+	const serverText = (ext: ServerExt) => ext.descriptions?.[getLang()] ?? ext.description ?? "";
 	/** A server extension that needs a client extension this device does not have runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !extensions.installed.some((e) => e.package.manifest.id === companion);
 	async function loadServerSide() {
 		const api = app.api;
 		if (!api || view !== "server") { serverSide = []; return; }
 		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
+		try { serverSettings = (await api.extensionSettings()).settings; } catch { /* the forms start from their defaults */ }
+	}
+	function saveServerSettings(ext: ServerExt, settings: Record<string, unknown>) {
+		void run(srvKey(ext.name), async () => {
+			const api = app.api;
+			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
+			serverSettings[ext.settingsId] = (await api.saveExtensionSettings(ext.settingsId, settings)).settings;
+			notice = t("설정을 저장했습니다.");
+		});
 	}
 	$effect(() => { void app.api; void market; void loadServerSide(); });
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
@@ -46,7 +66,7 @@
 	let drafts = $state<Record<string, string>>({});
 	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
 	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
-	$effect(() => { if (selected && !openEntry) selected = null; });
+	$effect(() => { if (selected && !openEntry && !(selected.startsWith("srv:") && (!serverSide.length || openServer))) selected = null; });
 	function closeDetail() {
 		const id = selected;
 		selected = null;
@@ -412,6 +432,49 @@
 	</div>
 {/snippet}
 
+{#snippet serverDetail(ext: ServerExt)}
+	{@const form = serverFields(ext)}
+	{@const key = srvKey(ext.name)}
+	<div class="page" id="extension-{key}" tabindex="-1">
+		<button type="button" class="back" onclick={() => (selected = null)}><span class="chev flip"><Icon name="chevron-right" /></span>{t("목록")}</button>
+		<div class="line">
+			<div class="who">
+				<span class="top">
+					<h4 class="ename">{ext.title ?? ext.name}</h4>
+					{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
+					<span class="meta">{t("서버에서 실행")}</span>
+				</span>
+				<span class="meta">{ext.name}</span>
+			</div>
+			{#if busy[key]}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
+		</div>
+		{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
+		{#if ext.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{ext.error}</span></p>{/if}
+		{#if missingClient(ext.companion)}<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}</span></p>{/if}
+
+		<section class="block">
+			<h3 class="label">{t("확장 설정")}</h3>
+			{#if form.fields}
+				<SettingsForm id={ext.settingsId} fields={form.fields} value={serverSettings[ext.settingsId] ?? {}} disabled={busy[key]} saveLabel={t("설정 저장")} onsave={(settings) => saveServerSettings(ext, settings)} />
+			{:else if form.problem}
+				<p class="callout warn" role="status"><Icon name="alert" /><span>{form.problem}</span></p>
+			{:else}
+				<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
+			{/if}
+		</section>
+
+		{#if ext.tools.length || ext.commands.length || ext.flags.length}
+			<section class="block">
+				<h3 class="label">{t("제공 기능")}</h3>
+				{#if ext.commands.length || ext.tools.length}<p class="brief">{[...ext.commands.map((c) => `/${c.name}`), ...ext.tools].join(", ")}</p>{/if}
+				{#each ext.flags as flag (flag.name)}
+					<p class="hint"><code>PIPAYA_FLAG_{flag.name.toUpperCase().replace(/[^A-Z0-9]/g, "_")}</code>{flag.description ? ` — ${flag.description}` : ""}{flag.value !== undefined ? ` (${t("현재 값")}: ${String(flag.value)})` : ""}</p>
+				{/each}
+			</section>
+		{/if}
+	</div>
+{/snippet}
+
 {#snippet unreadableCard(item: UnreadableExtension, index: number)}
 	{@const key = `unreadable:${index}`}
 	<article class="card" aria-label={item.name || item.id || t("알 수 없는 확장")}>
@@ -457,6 +520,8 @@
 
 	{#if openEntry}
 		{@render installedDetail(openEntry)}
+	{:else if openServer}
+		{@render serverDetail(openServer)}
 	{:else}
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
@@ -483,10 +548,17 @@
 		{#each unreadable as { item, index } (index)}{@render unreadableCard(item, index)}{/each}
 		{#if view === "server"}
 			{#each serverSide as ext (ext.name)}
-				<article class="card" aria-label={ext.name}>
-					<span class="top"><span class="ename">{ext.name}</span><span class="meta">{t("서버에서 실행")}</span>{#if missingClient(ext.companion)}<span class="chip warn" title={t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}>{t("클라이언트 미설치 · 동작 안 함")}</span>{/if}</span>
-					{#if ext.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{ext.error}</span></p>
-					{:else if ext.tools.length || ext.commands.length}<span class="brief">{[...ext.commands.map((c) => `/${c.name}`), ...ext.tools].join(", ")}</span>{/if}
+				<article class="card" aria-label={ext.title ?? ext.name}>
+					<div class="line">
+						<button type="button" class="expand" onclick={() => (selected = srvKey(ext.name))}>
+							<span class="who">
+								<span class="top"><span class="ename">{ext.title ?? ext.name}</span>{#if ext.version}<span class="meta">v{ext.version}</span>{/if}<span class="meta">{t("서버에서 실행")}</span>{#if missingClient(ext.companion)}<span class="chip warn" title={t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}>{t("클라이언트 미설치 · 동작 안 함")}</span>{/if}</span>
+								{#if ext.error}<span class="brief">{ext.error}</span>
+								{:else if ext.tools.length || ext.commands.length}<span class="brief">{[...ext.commands.map((c) => `/${c.name}`), ...ext.tools].join(", ")}</span>{/if}
+							</span>
+							<span class="chev"><Icon name="chevron-right" /></span>
+						</button>
+					</div>
 				</article>
 			{/each}
 		{/if}

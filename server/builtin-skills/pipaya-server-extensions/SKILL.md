@@ -7,6 +7,8 @@ description: Read this when the user wants to write, install, debug or change a 
 
 A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `package.json` with `"pipaya": { "extensions": ["./a.ts"] }`) that default-exports `(pi) => { ... }`. It runs **inside the server process with the server's full privileges**: it can read any file the server can, run commands and see every credential. Only install code you trust. That is why `POST /server-extensions/reload` needs the admin token, and why a paired phone can call extension methods but never reload or install anything.
 
+A folder extension can describe itself in `package.json` so Settings shows a page like a client extension's: `version`, `description`, and under `"pipaya"`: `title`, `descriptions` (`{ "en": "...", "ko": "..." }`) and `settings`, a list of fields (`key`, `type` string/number/boolean/select, `label`, `description`, `default`, `required`, `secret`, `options`, max 20; same shape as a client manifest's `settings`). The form edits the object behind `pi.settings`.
+
 Where they are read from (each entry is a file or a folder; names starting with `.` and `node_modules` are skipped):
 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
@@ -73,6 +75,7 @@ export default (pi) => {
 | `pi.subscribe(handler, {sessionId?, types?})` | every server event (the `/events` stream) as it happens; returns the unsubscribe. Removed on reload |
 | `pi.notify({title, body?, sessionId?, key?, kind?})` | OS / push notification to the user's devices, under this extension's name (5 per 10 s) |
 | `pi.settings` | `get()`, `set(obj)`, `onChange(fn)`: the object behind `/extensions/:id/settings` for this extension's id, shared with a client extension that has the same id and `settingsScope: "server"` |
+
 | `pi.home`, `pi.defaultCwd()` | the user's home and the server's default working directory |
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |

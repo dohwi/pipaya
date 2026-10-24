@@ -172,6 +172,21 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		await api("POST", "/server-extensions/reload");
 	});
 
+	test("package.json title, version, description and settings fields are reported for the settings page", async () => {
+		const pkgDir = join(extDir, "described");
+		mkdirSync(pkgDir, { recursive: true });
+		const fields = [{ key: "language", type: "string", label: "Language" }];
+		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ version: "1.2.3", description: "d", pipaya: { title: "Described", descriptions: { ko: "설명", en: 5 }, settings: fields } }));
+		writeFileSync(join(pkgDir, "index.js"), "export default () => {};");
+		await api("POST", "/server-extensions/reload");
+		const list = (await api("GET", "/server-extensions")).json.extensions as any[];
+		const e = list.find((x) => x.name === "described");
+		expect(e).toMatchObject({ title: "Described", version: "1.2.3", description: "d", descriptions: { ko: "설명" }, settings: fields, settingsId: "described" });
+		expect(list.find((x) => x.name === "demo")?.settings).toBeUndefined();
+		rmSync(pkgDir, { recursive: true });
+		await api("POST", "/server-extensions/reload");
+	});
+
 	test("methods are callable by clients and reload keeps working", async () => {
 		expect((await api("POST", "/server-extensions/demo/methods/sum", { a: 2, b: 3 })).json.result).toBe(5);
 		expect((await api("POST", "/server-extensions/demo/methods/nope", {})).status).toBe(404);
