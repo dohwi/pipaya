@@ -166,6 +166,8 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `session-labels` | `sdk.sessionLabels.set({[sessionId]: {text, title?}})` | short label (≤40) before chat titles; replaces all of this extension's labels; ≤1000 |
 | `composer-mentions` | `sdk.mentions.set([{insert, desc?, group?, keywords?, except?}])` | `@` completion; replaces the list; ≤500 |
 | `slots` | `sdk.slots.set('header'\|'footer', id, {label, view})`, `remove(slot, id)` | read-only area under the header / above the composer; navbar rules, 2 per extension |
+| `ui-style` | package `styles` | app-wide CSS on `[data-part]` hooks; see [trusted-ui.md](trusted-ui.md) |
+| `ui-components` | package `components`, `mounts`, `replaces`; `sdk.components.setData(json)` | Svelte components run **in the app**, unsandboxed (danger notice); see [trusted-ui.md](trusted-ui.md) |
 | `composer-filter` | `sdk.composerFilter.set(fn)`, `clear()` | rewrite or block text before send (`string`, `{text}`, `{cancel: reason}`, `null` = unchanged); 2 s; on error/timeout the original is sent; slash commands skip it |
 | `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus`, `send(id,text,mode?)`, `abort`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave`, `close`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?})`, `compact(id,instructions?)` | read (text only) and drive the open group's chats and terminals by ID; `split` keeps focus unless `focus: true`; 30 changes per 10 s; `configure` changes only that chat (model needs `provider`, thinking level must be supported) |
 | none | `sdk.settings.get()`, `sdk.log(text)` | own settings, extension log |

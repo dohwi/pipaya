@@ -49,6 +49,8 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 
 Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char settings JSON, 32,000-char storage, 100 log lines.
 
+> Trusted UI (`ui-style`, `ui-components`) is the one place extension code runs in the app realm: `lib/extensions/{components,kit,style}.ts`, `extensions/ExtensionMount|ExtensionPart.svelte`, `host.installUi/mountsIn/replacementFor`. Details: [trusted-ui.md](trusted-ui.md). Cleanup by owner covers its styles, mounts, replacements and data.
+
 ## Code map
 
 `src/lib/extensions/`
