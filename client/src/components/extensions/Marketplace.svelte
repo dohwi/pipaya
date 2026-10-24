@@ -122,7 +122,10 @@
 			<h2 id="market-title">{t("마켓플레이스")}</h2>
 			<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
 		</div>
-		<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
+		<div class="hints">
+			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
+			{#if scope === "server"}<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>{/if}
+		</div>
 		<label class="search">
 			<Icon name="search" />
 			<input type="search" placeholder={t("확장 검색")} aria-label={t("확장 검색")} bind:value={query} />
@@ -163,7 +166,7 @@
 					</div>
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
-						<Notice tone="warn" size="sm" role="status">
+						<Notice tone="warn" size="sm" role="status" icon={false}>
 							{t("클라이언트 확장 ‘{name}’ 필요", { name: c?.name ?? entry.companion })}
 							{#snippet action()}{#if c}<button type="button" disabled={!!working} onclick={() => installClient(c)}>{t("설치")}</button>{/if}{/snippet}
 						</Notice>
@@ -186,9 +189,6 @@
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
 			{/each}
 		</ul>
-		{#if scope === "server"}
-			<Notice tone="warn" size="sm">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</Notice>
-		{/if}
 		<details class="adv">
 			<summary>{t("카탈로그 주소")}</summary>
 			<div class="urlrow">
@@ -204,6 +204,8 @@
 	.market { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px 18px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
 	.mhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 	.mhead h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
+	.hints { display: flex; flex-direction: column; gap: 2px; }
+	.hints .hint { margin: 0; }
 	.hint, .meta { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
