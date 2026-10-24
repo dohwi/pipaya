@@ -23,6 +23,12 @@ export const clip = (s: string, n: number): string =>
 
 export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";
 
+/** `20261024-1530`: a local date and time that sorts as text, for file names. */
+export function fileStamp(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
 export function timeLabel(ts: number): string {
   return new Date(ts).toLocaleTimeString(localeTag(), {
     hour: "2-digit",
