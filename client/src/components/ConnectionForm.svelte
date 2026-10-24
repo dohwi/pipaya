@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-	import { msg, t, tc } from "../lib/i18n";
+	import { msg, t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
 	import { errorText, type Api } from "../lib/api";
@@ -18,10 +18,8 @@
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
 	import ModelPage from "./ModelPage.svelte";
-	import { ICON_LABEL } from "../lib/brand";
-	import { isImageIcon } from "../lib/model-icon-image";
 	import type { ApiFormat, CatalogModel, CustomProvider } from "../lib/types";
-	import { ALL_LEVELS, applyMatch, collectModels, formFromProvider, headerError, modelMeta, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
+	import { applyMatch, collectModels, formFromProvider, headerError, modelMeta, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
 
 	/**
 	 * The add / edit dialog for one custom (OpenAI- or Anthropic-compatible) connection: its address and format, and

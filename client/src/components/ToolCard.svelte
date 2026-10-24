@@ -6,7 +6,7 @@
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { clip, duration } from "../lib/format";
-	import { badgeStyle, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
+	import { toolIcon, toolSummary } from "../lib/tools";
 	import type { ToolRun } from "../lib/types";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import ExtensionView from "./extensions/ExtensionView.svelte";
@@ -20,7 +20,6 @@
 
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
-	const kind = $derived(toolKind(name, args));
 
 	// An extension may draw the finished call (`sdk.tools.registerRenderer`). Whatever it returns is validated data shown
 	// in a read-only view; on any failure the card keeps its usual look.

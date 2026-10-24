@@ -10,7 +10,6 @@
 	import Composer from "./Composer.svelte";
 	import DropLayer from "./DropLayer.svelte";
 	import SessionToasts from "./SessionToasts.svelte";
-	import PipayaMark from "./PipayaMark.svelte";
 	import { activityOf } from "../lib/activity";
 	import { dragSource } from "../lib/dnd.svelte";
 	import { marquee } from "../lib/fit-text";
@@ -48,25 +47,6 @@
 	const state = $derived(id && !isTerm ? activityOf(app, id) : "idle");
 	/** A label an extension put on this session. */
 	const tag = $derived(id ? extensions.labelOf(id) : undefined);
-
-	/**
-	 * Marks a clipped title: sets `--shift` (how far the text overflows) and `.over` so CSS can scroll it into view.
-	 * Re-measured when the text or the bar width changes.
-	 */
-	function overflow(node: HTMLElement, _text?: string) {
-		const measure = () => {
-			const inner = node.firstElementChild as HTMLElement | null;
-			const d = inner ? inner.scrollWidth - node.clientWidth : 0;
-			node.classList.toggle("over", d > 1);
-			node.style.setProperty("--shift", `${-Math.max(d, 0)}px`);
-			node.style.setProperty("--dur", `${Math.max(d / 40, 2) + 2}s`);
-		};
-		const ro = new ResizeObserver(measure);
-		ro.observe(node);
-		if (node.firstElementChild) ro.observe(node.firstElementChild);
-		measure();
-		return { update: measure, destroy: () => ro.disconnect() };
-	}
 
 	function focus() {
 		if (grouped && id && id !== app.activeId) void app.openSession(id);

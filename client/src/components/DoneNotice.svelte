@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import AgentBadge from "./AgentBadge.svelte";
-	import Icon from "./Icon.svelte";
 	import CountdownClose from "./CountdownClose.svelte";
 	import { reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import { app } from "../lib/store.svelte";

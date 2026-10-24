@@ -8,7 +8,6 @@
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
 	import { compact, duration } from "../lib/format";
-	import { splitImageTokens } from "../lib/composer-text";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { splitQuote } from "../lib/quote";

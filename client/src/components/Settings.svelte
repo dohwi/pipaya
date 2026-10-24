@@ -24,7 +24,7 @@
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { Api } from "../lib/api";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
-	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t, tc } from "../lib/i18n";
+	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t } from "../lib/i18n";
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally

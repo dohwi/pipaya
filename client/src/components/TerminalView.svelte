@@ -101,7 +101,6 @@
 			// Paste: leave the browser's own paste alone; xterm receives it as a paste event (works on plain http too).
 			return false;
 		});
-		const decoder = new TextDecoder();
 		let ws: WebSocket | null = null;
 		let retry: ReturnType<typeof setTimeout> | undefined;
 		let delay = 500;

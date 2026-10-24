@@ -7,7 +7,6 @@
 
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { panesOf } from "../lib/layout";
 	import { abortable } from "../lib/abortable";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
 	import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
@@ -22,7 +21,6 @@
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdHint, commonPrefix, filterDirs } from "../lib/workdir-path";
 	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, parseSlash, SKILL_PREFIX, type SlashCommand } from "../lib/commands";
-	import { activityOf } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -218,7 +216,6 @@
 	});
 	// The list of another folder is stale while the new one loads: show nothing rather than wrong rows.
 	const cdRows = $derived(cdTarget && cdFor === cdTarget.dir ? filterDirs(cdDirs, cdTarget.filter).slice(0, 100) : []);
-	const cdOpen = $derived(cdRows.length > 0);
 	const cdValue = (name: string) => `${cdTarget?.prefix ?? ""}${name}/`;
 	const mention = $derived(slashQuery !== null || argSuggestions || cdArg !== null ? null : mentionAt("file", text, caret));
 	// Attached images share the `#` menu, above the files: "compare #image1 and #image2". A fully typed token is done, so Enter stays free to send.

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { untrack, type Snippet } from "svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
-	import StatusDot from "./StatusDot.svelte";
 	import Pin from "./Pin.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
@@ -14,7 +13,7 @@
 	import AgentBadge from "./AgentBadge.svelte";
 	import { ACTIVITY_LABEL, activityOf, type Activity } from "../lib/activity";
 	import { app, type Server } from "../lib/store.svelte";
-	import { hostOf, tilde } from "../lib/format";
+	import { tilde } from "../lib/format";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { InlineRename } from "../lib/inline-rename.svelte";

@@ -1,6 +1,5 @@
 /** Plain types and helpers for the app store: no reactive state, so they can be read (and tested) on their own. */
-import { uid } from "./format";
-import { K, read, write } from "./persist";
+import { K, read } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
 import type { DefaultModelSelection, ThinkingLevel } from "./types";
 

@@ -5,7 +5,6 @@
 	import Icon from "./Icon.svelte";
 	import Message from "./Message.svelte";
 	import WorkBox from "./WorkBox.svelte";
-	import { app } from "../lib/store.svelte";
 	import type { ChatState } from "../lib/chat.svelte";
 	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../lib/types";
 	import EntryCard from "./extensions/EntryCard.svelte";
@@ -64,9 +63,6 @@
 	const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
 	const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? 0; };
 	const onTouchMove = (e: TouchEvent) => { if ((e.touches[0]?.clientY ?? 0) > touchY) release(); };
-	const onKey = (e: KeyboardEvent) => {
-		if (["ArrowUp", "PageUp", "Home"].includes(e.key) || (e.key === " " && e.shiftKey)) release();
-	};
 	const onPointerDown = (e: PointerEvent) => { if (e.target === scroller) dragging = true; };
 	const onPointerUp = () => { dragging = false; };
 	// Dragging the scrollbar upward also unpins.

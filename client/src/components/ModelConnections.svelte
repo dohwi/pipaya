@@ -1,12 +1,9 @@
 <script lang="ts">
-	import { msg, t, tc } from "../lib/i18n";
+	import { t } from "../lib/i18n";
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
 	import Icon from "./Icon.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
-	import Modal from "./Modal.svelte";
-	import Switch from "./Switch.svelte";
 	import Accordion from "./Accordion.svelte";
 	import ModelField from "./ModelField.svelte";
 	import { app } from "../lib/store.svelte";
@@ -17,17 +14,12 @@
 	import SystemModelSection from "./SystemModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "./ConnectModal.svelte";
-	import { indexCatalog } from "../lib/catalog-match";
 	import type {
-		ApiFormat,
-		CatalogModel,
 		ConfigurationInfo,
 		ConnectionResult,
-		CustomModel,
 		CustomProvider,
 		DefaultModelSelection,
 		ModelInfo,
-		ModelSelection,
 		ProviderInfo,
 		ThinkingLevel,
 	} from "../lib/types";

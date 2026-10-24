@@ -2,7 +2,6 @@
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { chord } from "../lib/chord.svelte";
-	import { cancelChord } from "../lib/actions";
 	import { ACTIONS, chordNext, recordingCombo, recordingLabel } from "../lib/keys";
 	import { fadeIn, fadeOut } from "../lib/motion";
 

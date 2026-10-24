@@ -12,16 +12,13 @@
 	let {
 		provider,
 		model,
-		id,
 		icon,
 		conn,
 		size = 20,
 		colored = false,
-		bare = false,
 	}: {
 		provider?: string | null;
 		model?: string | null;
-		id?: string | null;
 		/** A brand chosen by the owner; wins over the guess from provider/model. */
 		icon?: string | null;
 		/** The server that holds an uploaded icon image; the open server when left out. */
@@ -29,8 +26,6 @@
 		size?: number;
 		/** Paint the mark in the provider's own colour instead of currentColor. */
 		colored?: boolean;
-		/** Render nothing (rather than the pipaya mark) when the provider has no known mark. */
-		bare?: boolean;
 	} = $props();
 
 	let imageUrl = $state<string | null>(null);

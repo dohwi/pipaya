@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { t } from "../lib/i18n";
 	import Badge from "./Badge.svelte";
 	import Icon from "./Icon.svelte";
 	import { queuedLabel, queuedTone, type QueuedView } from "../lib/queue";

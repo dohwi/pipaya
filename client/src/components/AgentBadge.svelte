@@ -23,7 +23,7 @@
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<span class="logo" use:syncAnim={state}><ModelLogo {id} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
+	<span class="logo" use:syncAnim={state}><ModelLogo provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
 </span>
 
 <style>

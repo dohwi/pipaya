@@ -19,7 +19,7 @@ import {
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
 import type { ThinkingLevel } from "./types";
-import { msg, t, tc } from "./i18n";
+import { t } from "./i18n";
 
 
 const LEVELS: ThinkingLevel[] = [
