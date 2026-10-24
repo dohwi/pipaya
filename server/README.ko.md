@@ -44,7 +44,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
 | `PIPAYA_MAX_SESSIONS` | `200` | 동시에 활성인(닫히지 않은) 세션의 최대 수. 넘으면 생성·재개가 409로 거절됨. `0`이면 제한 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?token=`으로 전달된 토큰은 요청 로그에서 가려집니다 |
-| `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. client/docs/notifications.md 참고 |
+| `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. `server/builtin-skills/pipaya-client-extensions/references/notifications.md` 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
 | `PIPAYA_TERMINAL` | `1` | `0`이면 터미널(클라이언트가 이 서버에서 여는 대화형 셸. Linux/macOS는 사용자 셸, Windows는 PowerShell)을 끕니다 |
 

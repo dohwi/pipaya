@@ -1,43 +1,37 @@
 ---
 name: pipaya-client-extensions
-description: Read this before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - the extension SDK (permissions, sdk methods, manifest, packages), declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens (extension panel dialog, Settings > Extensions manager, import and approval modals) and their visual design - or when writing an extension package for the client. Not for extensions that run inside the server (agent tools, hooks, model providers), which are covered by pipaya-server-extensions.
+description: Read before adding or changing anything in the pipaya client app (Svelte 5 + Tauri) that touches its extension system - SDK methods, permissions, manifest and package fields, declarative UI nodes (panels, forms, gauges, navbar items, composer widgets), the extension screens and their design, system notifications - or when writing a client extension package. Not for extensions that run inside the server (agent tools, hooks, model providers); use pipaya-server-extensions.
 ---
 
 # Pipaya client extensions
 
-The pipaya client has its own extension system (SDK v1). Extension code runs in a sandboxed Worker and can only send **validated data**; the host renders everything. It is separate from the extensions that run inside the server (see the `pipaya-server-extensions` skill); the `server` permission is the bridge between the two.
+Client extensions (SDK v1) run in a sandboxed Worker and can only send **validated data**; the host renders everything. Server extensions are separate (`pipaya-server-extensions`); the `server` permission bridges the two.
 
-The docs below are bundled with this skill, in `references/` next to this file. Read them with the `read` tool before you edit. Source paths inside them (`src/lib/extensions/...`, `src/components/...`, `tests/...`, `examples/extensions/...`) are relative to the client project root, the directory that contains `src/lib/extensions/` (normally `<repo>/client`). If you cannot find it from the working directory, ask the user where the client source is instead of guessing.
+The docs are in `references/` next to this file. Source paths in them (`src/lib/extensions/...`, `src/components/...`, `tests/...`, `examples/extensions/...`) are relative to the client root, the directory containing `src/lib/extensions/` (normally `<repo>/client`). If you cannot find it, ask the user instead of guessing.
 
-## Read first (always)
-
-- `references/extension-architecture.md` - code map, lifecycle, extension points, **change checklists (section 6)**, invariants, known issues.
-
-## Then what the task needs
-
-| Task | Also read |
+| Task | Read |
 |---|---|
-| OS/mobile push notifications, presence policy, durable event notification rules | `references/notifications.md` |
-| New or changed SDK method, permission, manifest or package field | `references/extensions.md` |
-| New or changed UI node, panel, form, event | `references/extension-ui.md` |
-| Anything the user sees: extension panel, composer widget, navbar item, Settings > Extensions, import/approval modals | `references/extension-screen-design.md` (principles, tokens, per-node specs, screen recipes, checklist) |
-| Writing an extension package only (no app change) | `references/extensions.md`, `references/extension-ui.md`, `references/extension-screen-design.md` section 7, and the client's `examples/extensions/` |
+| Any change to the app (always first) | `references/architecture.md` (code map, lifecycle, change checklists, invariants) |
+| SDK method, permission, manifest or package field, settings, themes, language packs, HTTP | `references/sdk.md` |
+| UI node, panel, form, event, or anything the user sees | `references/ui.md` |
+| OS / mobile push, presence, durable notification rules | `references/notifications.md` |
+| Writing a package only (no app change) | `references/sdk.md`, `references/ui.md`, and `examples/extensions/` |
 
 ## Rules that are easy to break
 
-1. **Data only.** Never accept HTML, CSS, URLs, class names, functions or event attributes from an extension. A new look means a new node or enum value, not a style hook.
-2. **Validate on the host.** New fields go through the strict parsers (`schema.ts`, `ui.ts`, `navbar.ts`): reject unknown keys, cap lengths and counts, return fresh copies. Check permissions in `host.svelte.ts` `request()` first, never in the Worker.
-3. **Never widen a permission silently.** A new capability needs a new permission, a user-facing label in `Extensions.svelte` `permissionLabels`, tests and docs.
-4. **Clean up by owner.** Local registrations must be removed in `ExtensionHost.cleanup()`. Durable notification rules deliberately survive ordinary app teardown; revoke them on disable, replace, failure, safe mode and delete (see `references/notifications.md`).
+1. **Data only.** Never accept HTML, CSS, URLs, class names, functions or event attributes from an extension. A new look is a new node or enum value.
+2. **Validate on the host.** Strict parsers (`schema.ts`, `ui.ts`, `navbar.ts`): reject unknown keys, cap lengths and counts, return fresh copies. Check permissions first in `host.svelte.ts` `request()`, never in the Worker.
+3. **Never widen a permission.** A new capability needs a new permission, a consent label in `labels.ts` `permissionLabels`, tests and docs.
+4. **Clean up by owner** in `ExtensionHost.cleanup()`. Durable notification rules survive app teardown; revoke them on disable, replace, failure, safe mode and delete.
 5. **Never touch other extensions** when one is imported, replaced or fails.
-6. **Keep recovery paths reachable:** safe mode, `?extensions=off`, boot-interruption detection, unreadable-entry cards.
-7. **Show the source.** The app labels who provides an extension screen; keep that when polishing the UI.
-8. **Use design tokens** from `src/app.css` (`--bg*`, `--text*`, `--radius*`, `--motion-*`, `--ease*`). No hard-coded colors, radii or durations. User-facing copy is Korean.
-9. **Modal `<dialog>` content is in the top layer.** Anything that must float above it (popovers, tooltips) must be attached inside the open dialog, not `<body>`.
+6. **Keep recovery paths**: safe mode, `?extensions=off`, boot-interruption detection, unreadable-entry cards.
+7. **Show the source**: the app labels which extension a screen comes from.
+8. **Design tokens only** (`src/app.css`). UI copy is Korean source strings through `t()`/`msg()` with English in `src/lib/locales/en.ts`.
+9. **Modal `<dialog>` content is in the top layer**: popovers over it attach inside the open dialog, not `<body>`.
 
 ## Finish every change with
 
-1. Tests next to the change: `tests/extensions-*.test.ts` (client) and `test/extension-settings.test.ts` (server) as relevant.
-2. Docs updated in the same change: the matching table in the extension docs. Doc numbers come from code; if you change a limit, change the doc. The docs live in this skill's `references/`.
-3. From the client root: `bun run check`, `bun test tests`, `bun run build`.
-4. For visible changes, look at it: `bun run dev` (binds `0.0.0.0:1420`), Playwright screenshots at 1280 and 390 px, dark and light. State which surfaces you could not check.
+1. Tests next to the change: `tests/extensions-*.test.ts` (client), `test/extension-settings.test.ts` (server).
+2. The matching table in `references/` updated in the same change; numbers come from code.
+3. From the client root: `bun run check && bun run test && bun run build`.
+4. Visible changes: `bun run dev` (`0.0.0.0:1420`), screenshots at 1280 and 390 px, dark and light. Say which surfaces you could not check.

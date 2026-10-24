@@ -40,14 +40,14 @@ Follows the [Agent Skills](https://agentskills.io/specification) layout: `<name>
 |---|---|
 | Global | `~/.agents/skills/` of the server's user |
 | Project | `.pi/skills/` and `.agents/skills/` from the working directory up to the git root (up to `/` without a repo) |
-| Built-in | `server/builtin-skills/` (shipped with the server; on by default; currently `pipaya-client-extensions`, `pipaya-usage`) |
+| Built-in | `server/builtin-skills/` (shipped with the server; on by default; currently `pipaya-client-extensions`, `pipaya-server-extensions`, `pipaya-usage`) |
 
 - Name clash: nearer folder > project > global > built-in. Shadowing a built-in with the same name gives no warning.
 - Unreadable skills are skipped and listed in `GET /skills` `warnings` (also on top of the skills window).
 - `disable-model-invocation: true` = listed but manual-only; cannot be toggled.
 - **On/off is stored on the server**, not in the folder: a global default plus per-project overrides (project = git root). Effective = project value if set, else global. Default is on. `PUT /skills/:name` sets it; `enabled: null` clears a project override. All clients on the server share it.
 - Turning a skill off removes it from the list **and blocks reading its folder**. Content already read stays in the history.
-- **Manual call**: writing `/skill:name` in a message (shown in the `/` menu with a `스킬`/Skill tag) makes the server attach that skill's full `SKILL.md` as a hidden hint to the message. Works for enabled skills, including manual-only ones; unknown or switched-off names are plain text.
+- **Manual call**: writing `/skill:name` in a message (shown in the `/` menu with a Skill tag) makes the server attach that skill's full `SKILL.md` as a hidden hint to the message. Works for enabled skills, including manual-only ones; unknown or switched-off names are plain text.
 - Sessions without the `read` tool are not told about skills.
 - The system message is rewritten only when the enabled set really changed, so the provider's prompt cache survives other edits.
 

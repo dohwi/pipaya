@@ -480,9 +480,9 @@ describe("built-in skills", () => {
 			await send(id, "hi");
 			expect(JSON.stringify((await api("GET", `/sessions/${id}/context`)).json.effectiveSystemPrompt)).toContain(`- ${BUILTIN}: `);
 
-			const file = join(BUILTIN_SKILLS_DIR, BUILTIN, "references", "extension-architecture.md");
+			const file = join(BUILTIN_SKILLS_DIR, BUILTIN, "references", "architecture.md");
 			await send(id, `!read ${JSON.stringify({ path: file })}`);
-			expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("확장 구조와 변경 가이드");
+			expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("Architecture and change guide");
 
 			await api("PUT", `/skills/${BUILTIN}`, { scope: "global", enabled: false, cwd: f.cwd });
 			expect((await api("GET", `/sessions/${id}/context`)).json.skills).toEqual([expect.objectContaining({ name: "pipaya-server-extensions" }), expect.objectContaining({ name: "pipaya-usage" })]);

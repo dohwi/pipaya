@@ -44,7 +44,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
-| `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see client/docs/notifications.md |
+| `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see `server/builtin-skills/pipaya-client-extensions/references/notifications.md` |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
 | `PIPAYA_TERMINAL` | `1` | `0` turns off terminals: interactive shells clients open on this server (the user's shell on Linux/macOS, PowerShell on Windows) |
 

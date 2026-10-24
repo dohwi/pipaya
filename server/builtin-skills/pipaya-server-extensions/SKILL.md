@@ -75,7 +75,6 @@ export default (pi) => {
 | `pi.subscribe(handler, {sessionId?, types?})` | every server event (the `/events` stream) as it happens; returns the unsubscribe. Removed on reload |
 | `pi.notify({title, body?, sessionId?, key?, kind?})` | OS / push notification to the user's devices, under this extension's name (5 per 10 s) |
 | `pi.settings` | `get()`, `set(obj)`, `onChange(fn)`: the object behind `/extensions/:id/settings` for this extension's id, shared with a client extension that has the same id and `settingsScope: "server"` |
-
 | `pi.home`, `pi.defaultCwd()` | the user's home and the server's default working directory |
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
