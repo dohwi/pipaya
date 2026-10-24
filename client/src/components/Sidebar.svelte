@@ -365,13 +365,13 @@
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
-			<section class="srv" class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
+			<section class="srv" class:band={nodes.length > 1} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
 				<div class="srvhead">
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
-						<span class="sicon"><Icon name="server" /><span class="sdot {n.state}"></span></span>
+						<span class="sicon"><Icon name="server" /></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
-						{#if n.state !== "online"}<span class="sstate" class:warn={n.state !== "checking"}>{t(statusText[n.state])}</span>{/if}
+						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
 						{#if sfold}<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>{/if}
 					</button>
 					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
@@ -584,6 +584,7 @@
 		border-color: var(--accent);
 	}
 	.list {
+		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
@@ -593,12 +594,15 @@
 	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
 		padding: 0 8px 4px;
-		background: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
 	}
 	.srv:has(> .fold) {
 		padding-bottom: 8px;
 	}
-	.srv + .srv {
+	/* the band only separates servers from each other: with a single server it would just tint the whole list */
+	.srv.band {
+		background: var(--band);
+	}
+	.srv.band + .srv.band {
 		margin-top: 6px;
 	}
 	.srv.off .fold {
@@ -624,7 +628,7 @@
 		align-items: center;
 		gap: 6px;
 		height: 32px;
-		padding: 0 6px 0 8px;
+		padding: 0 6px 0 10px; /* chevron and icon sit in the folder rows' columns */
 		text-align: left;
 		color: var(--text-dim);
 	}
@@ -638,7 +642,6 @@
 		flex: none;
 		width: 14px;
 		height: 14px;
-		margin-right: 2px; /* server name starts at x=58, the same column as directory names */
 		color: var(--text-faint);
 	}
 	.sicon :global(svg) {
@@ -650,26 +653,38 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.sicon .sdot {
-		position: absolute;
-		right: -4px;
-		bottom: -4px;
-		width: 8px;
-		height: 8px;
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
-	}
-	/* a ring, not a fill, so "not connected" reads without colour */
-	.sicon .sdot.offline {
-		background: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
-		border: 2px solid var(--text-faint);
-	}
-	.sstate {
+	/* the status lives in a small pill after the name, so it never touches the icon or the name: a dot alone when online, dot + text otherwise */
+	.spill {
+		display: inline-flex;
+		align-items: center;
 		flex: none;
-		font-size: var(--fs-2xs);
+		gap: 5px;
+		height: 18px;
+		padding: 0 7px;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--border);
+		background: color-mix(in srgb, var(--text) 4%, transparent);
 		color: var(--text-faint);
 	}
-	.sstate.warn {
+	.spill .sdot {
+		width: 6px;
+		height: 6px;
+	}
+	/* a ring, not a fill, so "not connected" reads without colour */
+	.spill .sdot.offline {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--text-faint);
+	}
+	.spill.unauthorized,
+	.spill.incompatible {
+		border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+		background: color-mix(in srgb, var(--warn) 12%, transparent);
 		color: var(--warn);
+	}
+	.spilltext {
+		font-size: var(--fs-2xs);
+		line-height: 1;
+		white-space: nowrap;
 	}
 	.sname {
 		flex: 0 1 auto;
