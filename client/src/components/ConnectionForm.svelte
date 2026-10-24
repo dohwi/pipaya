@@ -588,12 +588,12 @@
 					{:else}
 						{#if confirmClose}
 							<span class="savestate warn" role="alert"><Icon name="alert" /><span>{t("저장되지 않은 변경이 있습니다.")}</span></span>
-							<button type="button" class="btn ghost" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
-							<button type="button" class="btn ghost" onclick={() => close(true)} disabled={busy}>{t("저장하지 않고 닫기")}</button>
+							<button type="button" class="btn keep" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
+							<button type="button" class="btn discard" onclick={() => close(true)} disabled={busy}>{t("저장하지 않고 닫기")}</button>
 						{:else}
 							<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
 						{/if}
-						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
+						<button class="btn primary save" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
 					{/if}
 				</div>
 			</footer>
@@ -1040,12 +1040,33 @@
 	.savestate span {
 		white-space: nowrap;
 	}
-	/* hover on the tinted bar: warn-toned instead of the neutral grey, which looks muddy on yellow */
-	.fform > footer.warn .btn.ghost:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--warn) 18%, transparent);
+	/* confirm bar: the danger action is quiet red text, "keep editing" an outline, save stays the one filled button */
+	.fform > footer.warn .btn.keep {
+		background: transparent;
+		border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
 	}
-	.fform > footer.warn .btn.ghost:active:not(:disabled) {
-		background: color-mix(in srgb, var(--warn) 26%, transparent);
+	.fform > footer.warn .btn.keep:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--warn) 16%, transparent);
+	}
+	.btn.discard {
+		background: transparent;
+		border-color: transparent;
+		color: var(--danger);
+	}
+	.btn.discard:hover:not(:disabled) {
+		background: var(--danger-soft);
+	}
+	.fform > footer.warn .savestate {
+		order: -1;
+	}
+	.fform > footer.warn .btn.discard {
+		order: 1;
+	}
+	.fform > footer.warn .btn.keep {
+		order: 2;
+	}
+	.fform > footer.warn .btn.save {
+		order: 3;
 	}
 	.fbtns {
 		align-items: center;
@@ -1093,27 +1114,31 @@
 		.fsec .grid2:has(input[inputmode="numeric"]) {
 			grid-template-columns: 1fr 1fr;
 		}
-		/* notice gets its own row above the buttons; buttons stay right-aligned on one line */
+		/* confirm bar stacks: notice, then save (full width), keep editing, and the destructive one last as plain text */
+		.fform > footer.warn .fbtns {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 8px;
+		}
 		.savestate {
-			flex: 1 0 100%;
 			justify-content: center;
 			height: auto;
-			min-height: 24px;
-			margin-right: 0;
+			margin: 0 0 4px;
 			text-align: center;
 		}
 		.savestate span {
 			white-space: normal;
 			text-wrap: balance;
 		}
-		.fbtns {
-			row-gap: 10px;
+		.fform > footer.warn .btn.save {
+			order: 1;
 		}
-		/* confirm row: buttons share the width equally so they line up under the centered notice */
-		.fform > footer.warn .fbtns .btn {
-			flex: 1 1 0;
-			min-width: 0;
-			padding: 0 8px;
+		.fform > footer.warn .btn.keep {
+			order: 2;
+		}
+		.fform > footer.warn .btn.discard {
+			order: 3;
+			height: 40px;
 		}
 	}
 </style>
