@@ -20,7 +20,7 @@
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, shortName, unreachable } from "../lib/sidebar-model";
+	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { isTerminalId, platformName, type TerminalInfo } from "../lib/terminal";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -207,34 +207,19 @@
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 
 	type MenuTarget = { kind: "session"; x: Session } | { kind: "group"; g: Group } | { kind: "terminal"; x: TerminalInfo };
-	/** Items of a row's "more" menu. */
-	function menuItems(target: MenuTarget): RowMenuItem[] {
-		if (target.kind === "group") {
-			const g = target.g;
-			return [
-				{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => startGroupRename(g) },
-				{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => void app.deleteGroup(g.id) },
-			];
-		}
-		if (target.kind === "terminal") {
-			const x = target.x;
-			return [
-				{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => chooseGroup(x) },
-				{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => startRename(x.id, x.title) },
-				{ icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(x.id) },
-			];
-		}
-		const x = target.x;
-		return [
-			{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => chooseGroup(x) },
-			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => startRename(x.id, x.title) },
-			{ icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(x.id) },
-		];
-	}
+	/** What the entries of a row's "more" menu do (the entries themselves are lib/sidebar-model `rowMenuEntries`). */
+	const rowActions: RowActions = {
+		renameTab: startRename,
+		renameGroup: startGroupRename,
+		groupWith: chooseGroup,
+		closeSession: (id) => void app.close(id),
+		closeTerminal: (id) => void app.closeTerminal(id),
+		dissolveGroup: (id) => void app.deleteGroup(id),
+	};
+	const menuItems = (target: MenuTarget): RowMenuItem[] => rowMenuEntries(target, rowActions);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	/** Id of the session or group whose menu is open (its button stays highlighted). */
 	let menuId = $state<string | null>(null);
-	const targetId = (target: MenuTarget) => (target.kind === "group" ? target.g.id : target.x.id);
 	const hoverMenu = (e: PointerEvent, target: MenuTarget) => rowMenu?.hover(e, targetId(target), menuItems(target));
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
 	const clickMenu = (e: MouseEvent, target: MenuTarget) => rowMenu?.click(e, targetId(target), menuItems(target));

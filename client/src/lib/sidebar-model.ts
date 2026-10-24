@@ -46,3 +46,54 @@ const SEP = "\u0000";
 export const dirKey = (serverId: string, path: string) => `${serverId}${SEP}${path}`;
 export const groupKey = (id: string) => `group${SEP}${id}`;
 export const newKey = (key: string) => `new${SEP}${key}`;
+
+import { t } from "./i18n";
+
+/** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink";
+
+/** One entry of a row's "more" menu. */
+export interface MenuEntry {
+	icon: MenuIcon;
+	label: string;
+	/** Tooltip; "" for none */
+	title: string;
+	run: () => void;
+}
+
+/** What a row's menu can act on: a conversation, a terminal, or a split tab (group). */
+export type RowTarget = { kind: "session"; x: { id: string; title: string } } | { kind: "terminal"; x: { id: string; title: string } } | { kind: "group"; g: { id: string; name: string } };
+
+/** What the menu entries do; the sidebar supplies these, so the entries themselves are plain data. */
+export interface RowActions {
+	renameTab(id: string, title: string): void;
+	renameGroup(group: { id: string; name: string }): void;
+	groupWith(tab: { id: string; title: string }): void;
+	closeSession(id: string): void;
+	closeTerminal(id: string): void;
+	dissolveGroup(id: string): void;
+}
+
+/** The id the menu is open for, so the row's "more" button can stay highlighted. */
+export const targetId = (target: RowTarget) => (target.kind === "group" ? target.g.id : target.x.id);
+
+/** The entries of a row's "more" menu: a split tab can be renamed or dissolved; a conversation or terminal can be grouped, renamed and closed. */
+export function rowMenuEntries(target: RowTarget, act: RowActions): MenuEntry[] {
+	if (target.kind === "group") {
+		const g = target.g;
+		return [
+			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => act.renameGroup(g) },
+			{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => act.dissolveGroup(g.id) },
+		];
+	}
+	const x = target.x;
+	const close: MenuEntry =
+		target.kind === "terminal"
+			? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => act.closeTerminal(x.id) }
+			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
+	return [
+		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
+		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
+		close,
+	];
+}
