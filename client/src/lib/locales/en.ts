@@ -139,7 +139,6 @@ export const en: Record<string, string> = {
 	"대화": "Chat",
 	"실패": "Failed",
 	"완료": "Done",
-	"자동 저장됨": "Auto-saved",
 	"저장되지 않은 변경이 있습니다.": "You have unsaved changes.",
 	"계속 편집": "Keep editing",
 	"버리고 닫기": "Discard and close",

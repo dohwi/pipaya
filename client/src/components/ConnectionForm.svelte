@@ -37,14 +37,11 @@
 		start,
 		onclose,
 		onsaved,
-		onchange,
 	}: {
 		api: () => Api | null;
 		start: { kind: "new"; preset?: LocalPreset } | { kind: "edit"; provider: CustomProvider };
 		onclose: () => void;
 		onsaved: () => void;
-		/** An existing connection was auto-saved; the caller reloads but the dialog stays open. */
-		onchange: () => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -98,7 +95,7 @@
 	/** Esc steps back from a model's page to the connection first; a second Esc closes the dialog. */
 	function escape() {
 		if (editing !== null) closeModel();
-		else void close();
+		else close();
 	}
 
 	const newRow = (): Row => ({ id: "", name: "", contextWindow: "128000", maxTokens: "8192", reasoning: false, vision: false, thinkingLevels: [] });
@@ -326,68 +323,13 @@
 		return { out };
 	}
 
-	/* ---------- auto-save (existing connections) ---------- */
+	/* ---------- unsaved changes ---------- */
 
-	let saveState = $state<"idle" | "saving" | "saved">("idle");
-	let formEl = $state<HTMLFormElement>();
-	/** Closing with changes that could not be saved asks first; set while that question is showing. */
-	let discardAsk = $state(false);
-	/** A text box is being typed in: its edit is committed when it loses focus (or Enter), not on every key. */
-	const typing = () => {
-		const ae = document.activeElement;
-		return !!formEl && formEl.contains(ae) && (ae instanceof HTMLTextAreaElement || (ae instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(ae.type)));
-	};
-	let inflight: Promise<void> | null = null;
-	let lastSaved = "";
-	let changed = false;
-	const snapshot = (f: Form) => JSON.stringify([f.name, f.baseUrl, f.api, f.authRequired, f.rows]);
-
-	async function autosave() {
-		const a = api();
-		const f = form;
-		if (!a || !f || f.isNew) return;
-		if (inflight) await inflight;
-		const snap = snapshot(f);
-		if (snap === lastSaved) return;
-		const res = collect(f, false);
-		if ("error" in res) {
-			formError = res.error;
-			saveState = "idle";
-			return;
-		}
-		formError = "";
-		saveState = "saving";
-		inflight = a
-			.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: res.out })
-			.then(() => {
-				lastSaved = snap;
-				discardAsk = false;
-				changed = true;
-				saveState = "saved";
-			})
-			.catch((err) => {
-				formError = errorText(err);
-				saveState = "idle";
-			})
-			.finally(() => {
-				inflight = null;
-			});
-		await inflight;
-		if (form && snapshot(form) !== lastSaved && !formError) void autosave();
-	}
-
-	$effect(() => {
-		const f = form;
-		if (!f || f.isNew) return;
-		const snap = snapshot(f);
-		if (!lastSaved) {
-			lastSaved = snap; // the state the dialog opened with
-			return;
-		}
-		if (snap === lastSaved) return;
-		// Switches, choices, deletions and pickers apply the moment they change; typed text waits for focus-out.
-		if (!typing()) void autosave();
-	});
+	const snapshot = (f: Form) => JSON.stringify([f.name, f.id, f.baseUrl, f.api, f.authRequired, f.apiKey, f.rows]);
+	/** The form as the dialog opened it; closing with anything different asks first. */
+	let initial = "";
+	let confirmClose = $state(false);
+	const dirty = () => !!form && snapshot(form) !== initial;
 
 	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
 	async function save() {
@@ -395,8 +337,8 @@
 		const f = form;
 		if (!a || !f) return;
 		if (editing !== null) return closeModel(); // Enter inside a model page just goes back
-		if (!f.isNew) return void autosave(); // Enter commits the typed text; existing connections save themselves
 		formError = "";
+		confirmClose = false;
 		if (!f.name.trim()) return void (formError = t("이름을 입력하세요."));
 		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(f.id)) return void (formError = t("ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다."));
 		if (!f.baseUrl.trim()) return void (formError = t("Endpoint URL을 입력하세요."));
@@ -438,27 +380,24 @@
 	if (start.kind === "edit") startEdit(start.provider);
 	// svelte-ignore state_referenced_locally
 	else startNew(start.preset);
-	const close = async (force = false) => {
-		if (form && !form.isNew && snapshot(form) !== lastSaved) {
-			await autosave();
-			// Still not saved (invalid or rejected): ask whether to throw those edits away.
-			if (!force && form && snapshot(form) !== lastSaved) {
-				discardAsk = true;
-				return;
-			}
+	// svelte-ignore state_referenced_locally
+	if (form) initial = snapshot(form);
+	/** Closing with unsaved edits asks first (save / discard / keep editing); `force` discards. */
+	const close = (force = false) => {
+		if (!force && !busy && dirty()) {
+			confirmClose = true;
+			return;
 		}
-		const dirty = changed;
 		form = null;
 		onclose();
-		if (dirty) onchange();
 	};
 </script>
 
 {#if form}
 	<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
 	<Modal onclose={() => close()} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
-		<form class="fform" bind:this={formEl} onsubmit={submit} onfocusout={() => { if (form && !form.isNew) void autosave(); }}>
-			<header use:sheetPull={{ onclose: () => !busy && void close(), disabled: busy }}>
+		<form class="fform" onsubmit={submit}>
+			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
 					<button type="button" class="iconbtn back" onclick={closeModel} aria-label={t("연결로 돌아가기")}><Icon name="chevron-left" /></button>
@@ -650,19 +589,14 @@
 					{#if editing !== null}
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
-						{#if form.isNew}
-							<button type="button" class="btn ghost" onclick={() => void close()} disabled={busy}>{t("취소")}</button>
-							<button class="btn primary" disabled={busy}>{busy ? t("확인 중…") : t("추가")}</button>
+						{#if confirmClose}
+							<span class="savestate warn" role="alert">{t("저장되지 않은 변경이 있습니다.")}</span>
+							<button type="button" class="btn ghost" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
+							<button type="button" class="btn ghost" onclick={() => close(true)} disabled={busy}>{t("버리고 닫기")}</button>
 						{:else}
-							<span class="savestate" role="status">{saveState === "saving" ? t("저장 중…") : saveState === "saved" ? t("자동 저장됨") : ""}</span>
-							{#if discardAsk}
-								<span class="savestate warn" role="alert">{t("저장되지 않은 변경이 있습니다.")}</span>
-								<button type="button" class="btn ghost" onclick={() => (discardAsk = false)}>{t("계속 편집")}</button>
-								<button type="button" class="btn primary" onclick={() => void close(true)}>{t("버리고 닫기")}</button>
-							{:else}
-								<button type="button" class="btn primary" onclick={() => void close()}>{t("완료")}</button>
-							{/if}
+							<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
 						{/if}
+						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
 					{/if}
 				</div>
 			</footer>
