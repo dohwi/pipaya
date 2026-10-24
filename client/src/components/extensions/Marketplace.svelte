@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
+	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -120,7 +121,7 @@
 			<Icon name="search" />
 			<input type="search" placeholder={t("확장 검색")} aria-label={t("확장 검색")} bind:value={query} />
 		</label>
-		{#if error}<p class="callout danger" role="alert"><Icon name="alert" /><span>{error}</span></p>{/if}
+		{#if error}<Notice tone="danger" size="sm" role="alert">{error}</Notice>{/if}
 		{#if loading && !catalog}<p class="hint" role="status">{t("목록을 불러오는 중…")}</p>{/if}
 		<ul class="list">
 			{#each shown as entry (entry.id)}
@@ -157,9 +158,8 @@
 					</div>
 					{#if asking === entry.id}
 						{@const c = companionOf(entry)}
-						<div class="callout warn ask" role="group" aria-label={t("클라이언트 확장도 설치")}>
-							<Icon name="alert" />
-							<div>
+						<Notice tone="warn" size="sm">
+							<div class="ask" role="group" aria-label={t("클라이언트 확장도 설치")}>
 								<p>{t("클라이언트 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: c?.name ?? entry.companion ?? "" })}</p>
 								<div class="askbtns">
 									<button type="button" class="btn sm primary" onclick={() => installServer(entry, true)}>{t("함께 설치")}</button>
@@ -167,7 +167,7 @@
 									<button type="button" class="btn sm" onclick={() => (asking = "")}>{t("취소")}</button>
 								</div>
 							</div>
-						</div>
+						</Notice>
 					{/if}
 				</li>
 			{:else}
@@ -175,7 +175,7 @@
 			{/each}
 		</ul>
 		{#if scope === "server"}
-			<p class="callout warn"><Icon name="alert" /><span>{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</span></p>
+			<Notice tone="warn" size="sm">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</Notice>
 		{/if}
 		<details class="adv">
 			<summary>{t("카탈로그 주소")}</summary>
@@ -215,12 +215,8 @@
 	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 7px 0 5px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-2xs); font-weight: 600; line-height: 1.6; }
 	.official :global(svg) { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
-	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; margin: 0; }
-	.callout :global(svg) { width: 16px; height: 16px; flex: none; margin-top: 2px; }
-	.callout.warn { background: var(--warn-soft); }
 	.ask p { margin: 0 0 8px; }
 	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }
-	.callout.danger { background: var(--danger-soft); }
 	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
 	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 	.urlrow input { flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); color: inherit; }

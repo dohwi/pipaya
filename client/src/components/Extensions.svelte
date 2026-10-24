@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { LocalizedError, getLang, msg, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import Notice from "./Notice.svelte";
 	import Modal from "./Modal.svelte";
 	import Accordion from "./Accordion.svelte";
 	import Switch from "./Switch.svelte";
@@ -327,7 +328,7 @@
 		<p class="hint">{t("요청한 추가 권한이 없습니다.")}</p>
 	{/if}
 	<p class="hint">{t("확장은 자신의 설정을 읽을 수 있습니다. 테마는 화면 색상과 크기를 바꾸며, 템플릿 명령은 입력만 채우고 전송하지 않습니다.")}</p>
-	<p class="callout warn"><Icon name="alert" /><span>{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</span></p>
+	<Notice tone="warn" size="sm">{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</Notice>
 {/snippet}
 
 {#snippet installedRow(entry: InstalledExtension)}
@@ -357,8 +358,8 @@
 				onchange={(next) => (next ? enable(id) : disable(id))}
 			/>
 		</div>
-		{#if entry.error}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
-		{#if problem}<p in:collapseIn out:collapseOut class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
+		{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
+		{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 	</article>
 {/snippet}
 
@@ -388,8 +389,8 @@
 			/>
 		</div>
 		{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
-		{#if entry.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{entry.error}</span></p>{/if}
-		{#if problem}<p class="callout warn" id="extension-blocked-{id}"><Icon name="alert" /><span>{t("켤 수 없습니다.")} {problem}</span></p>{/if}
+		{#if entry.error}<Notice tone="danger" size="sm" role="status">{entry.error}</Notice>{/if}
+		{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 
 		<section class="block">
 			<h3 class="label">{t("확장 설정")}</h3>
@@ -449,15 +450,15 @@
 			{#if busy[key]}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
 		</div>
 		{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
-		{#if ext.error}<p class="callout danger" role="status"><Icon name="alert" /><span>{ext.error}</span></p>{/if}
-		{#if missingClient(ext.companion)}<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}</span></p>{/if}
+		{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
+		{#if missingClient(ext.companion)}<Notice tone="warn" size="sm" role="status">{t("이 확장은 클라이언트 확장 ‘{id}’도 설치되어 있어야 동작합니다.", { id: ext.companion ?? "" })}</Notice>{/if}
 
 		<section class="block">
 			<h3 class="label">{t("확장 설정")}</h3>
 			{#if form.fields}
 				<SettingsForm id={ext.settingsId} fields={form.fields} value={serverSettings[ext.settingsId] ?? {}} disabled={busy[key]} saveLabel={t("설정 저장")} onsave={(settings) => saveServerSettings(ext, settings)} />
 			{:else if form.problem}
-				<p class="callout warn" role="status"><Icon name="alert" /><span>{form.problem}</span></p>
+				<Notice tone="warn" size="sm" role="status">{form.problem}</Notice>
 			{:else}
 				<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
 			{/if}
@@ -483,7 +484,7 @@
 			<span class="state chip danger">{t("읽을 수 없음")}</span>
 		</div>
 		{#if item.id}<p class="meta">{item.id}</p>{/if}
-		<p class="callout warn"><Icon name="alert" /><span>{t("이 버전에서 지원하지 않는 형식입니다:")} {item.reason}</span></p>
+		<Notice tone="warn" size="sm">{t("이 버전에서 지원하지 않는 형식입니다:")} {item.reason}</Notice>
 		<p class="hint">{t("원본 데이터는 그대로 보관되어, 지원하는 버전에서 다시 읽을 수 있습니다. 같은 ID의 패키지를 가져오면 이 항목을 대체합니다.")}</p>
 		<div class="row">
 			<button type="button" class="btn sm" disabled={busy[key]} onclick={() => exportRaw(index)}>{t("원본 내보내기")}</button>
@@ -512,11 +513,11 @@
 
 <div class="extensions">
 	<div class="feedback" aria-live="polite" aria-atomic="true">
-		{#if error}<p in:collapseIn out:collapseOut class="callout danger"><Icon name="alert" /><span>{error}</span></p>{/if}
-		{#if notice}<p in:collapseIn out:collapseOut class="callout ok"><Icon name="check" /><span>{notice}</span></p>{/if}
+		{#if error}<Notice tone="danger" size="sm" animated>{error}</Notice>{/if}
+		{#if notice}<Notice tone="ok" size="sm" animated>{notice}</Notice>{/if}
 	</div>
-	{#if extensions.syncNotice}<p in:collapseIn out:collapseOut class="callout warn" role="status"><Icon name="alert" /><span>{extensions.syncNotice}</span></p>{/if}
-	{#if extensions.loadError}<p in:collapseIn out:collapseOut class="callout danger" role="status"><Icon name="alert" /><span>{extensions.loadError}</span></p>{/if}
+	{#if extensions.syncNotice}<Notice tone="warn" size="sm" animated role="status">{extensions.syncNotice}</Notice>{/if}
+	{#if extensions.loadError}<Notice tone="danger" size="sm" animated role="status">{extensions.loadError}</Notice>{/if}
 
 	{#if openEntry}
 		{@render installedDetail(openEntry)}
@@ -534,10 +535,10 @@
 		</div>
 		{#if busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
 		{#if extensions.safeMode}
-			<p class="callout warn" role="status"><Icon name="shield" /><span>{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “고급”에서 해제할 수 있습니다.")}</span></p>
+			<Notice tone="warn" size="sm" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “고급”에서 해제할 수 있습니다.")}</Notice>
 		{/if}
 		{#if unreadable.length}
-			<p class="callout warn" role="status"><Icon name="alert" /><span>{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</span></p>
+			<Notice tone="warn" size="sm" role="status">{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</Notice>
 		{/if}
 		{#if view === "server"}
 			<p class="hint">{t("{name}에 설치되어 이 서버에 접속한 모든 기기가 함께 씁니다. 켜고 끄는 상태도 서버에 저장되어 모든 기기가 따라갑니다.", { name: serverName })}</p>
@@ -612,7 +613,7 @@
 				<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
 				{@render permissions(p)}
 				{#if replacement}
-					<p class="callout warn"><Icon name="alert" /><span>{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</span></p>
+					<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
 				{/if}
 			</div>
 			<div class="rfoot">
@@ -681,12 +682,6 @@
 	.chip.danger { background: var(--danger-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
 
-	.callout { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; }
-	.callout :global(svg) { flex: none; width: 16px; height: 16px; margin-top: 2px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-	.callout span { min-width: 0; }
-	.callout.warn { background: var(--warn-soft); color: var(--warn); }
-	.callout.danger { background: var(--danger-soft); color: var(--danger); }
-	.callout.ok { background: var(--ok-soft); color: var(--ok); }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }

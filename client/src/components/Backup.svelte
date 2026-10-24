@@ -3,6 +3,7 @@
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { localeTag, msg, t, tc } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import Notice from "./Notice.svelte";
 	import Switch from "./Switch.svelte";
 	import { app } from "../lib/store.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -147,7 +148,7 @@
 	<div class="actions">
 		<button type="button" class="btn primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</button>
 	</div>
-	{#if exported}<p class="callout ok" role="status"><Icon name="check" /><span>{exported}</span></p>{/if}
+	{#if exported}<Notice tone="ok" size="sm" role="status">{exported}</Notice>{/if}
 	<p class="note"><Icon name="shield" /><span>{t("비밀번호나 토큰처럼 보이는 값은 빠집니다. 다만 확장 코드나 기본값에 직접 적어 둔 비밀은 걸러내지 못하니, 파일을 다른 사람에게 보내기 전에 확인하세요.")}</span></p>
 </section>
 
@@ -169,7 +170,7 @@
 			<span class="dt">{reading ? t("파일을 읽는 중…") : t("설정 파일을 끌어다 놓거나 눌러서 고르세요")}</span>
 			<span class="ds">{t("pipaya에서 내보낸 JSON · 최대 4MiB")}</span>
 		</label>
-		{#if loadError}<p class="callout danger" role="alert"><Icon name="alert" /><span>{loadError}</span></p>{/if}
+		{#if loadError}<Notice tone="danger" size="sm" role="alert">{loadError}</Notice>{/if}
 	{:else}
 		{@const plan = loaded.plan}
 		<div class="review">
@@ -180,7 +181,7 @@
 			</div>
 
 			{#if plan.empty}
-				<p class="callout ok"><Icon name="check" /><span>{t("이 파일의 내용은 지금 설정과 같습니다. 바꿀 것이 없습니다.")}</span></p>
+				<Notice tone="ok" size="sm">{t("이 파일의 내용은 지금 설정과 같습니다. 바꿀 것이 없습니다.")}</Notice>
 			{:else}
 				<div class="changes">
 					{#if plan.servers.add.length || plan.servers.rename.length}
@@ -232,7 +233,7 @@
 				</ul>
 			{/if}
 
-			{#if plan.blocked}<p class="callout danger" role="alert"><Icon name="alert" /><span>{plan.blocked}</span></p>{/if}
+			{#if plan.blocked}<Notice tone="danger" size="sm" role="alert">{plan.blocked}</Notice>{/if}
 
 			<div class="actions">
 				<button type="button" class="btn" onclick={() => (loaded = null)}>{t("취소")}</button>
@@ -244,15 +245,12 @@
 	{/if}
 
 	{#if applied}
-		<div class="callout ok" role="status">
-			<Icon name="check" />
-			<span>
-				<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
-				{#if appliedExtensions}{t("확장은 꺼진 상태입니다.")} <button type="button" class="link" onclick={() => app.openSettings("extensions")}>{t("확장 탭에서 켜기")}</button>{/if}
-			</span>
-		</div>
+		<Notice tone="ok" size="sm">
+			<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
+			{#if appliedExtensions}{t("확장은 꺼진 상태입니다.")} <button type="button" class="link" onclick={() => app.openSettings("extensions")}>{t("확장 탭에서 켜기")}</button>{/if}
+		</Notice>
 	{/if}
-	{#if restoredNote}<p class="callout ok" role="status"><Icon name="check" /><span>{restoredNote}</span></p>{/if}
+	{#if restoredNote}<Notice tone="ok" size="sm" role="status">{restoredNote}</Notice>{/if}
 </section>
 
 <section aria-labelledby="bk-restore">
@@ -366,7 +364,6 @@
 		color: var(--text-faint);
 	}
 	.note :global(svg),
-	.callout :global(svg),
 	.drop :global(svg),
 	.rhead :global(svg) {
 		flex: none;
@@ -512,41 +509,6 @@
 		font-size: var(--fs-xs);
 		line-height: 1.5;
 		color: var(--text-dim);
-	}
-
-	.callout {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		margin: 0;
-		padding: 9px 12px;
-		border-radius: var(--radius-sm);
-		font-size: var(--fs-xs);
-		line-height: 1.5;
-		overflow-wrap: anywhere;
-	}
-	.callout :global(svg) {
-		width: 16px;
-		height: 16px;
-		margin-top: 2px;
-	}
-	.callout span {
-		min-width: 0;
-	}
-	.callout.ok {
-		background: var(--ok-soft);
-		color: var(--ok);
-	}
-	.callout.ok span,
-	.callout.ok .link {
-		color: var(--text);
-	}
-	.callout.danger {
-		background: var(--danger-soft);
-		color: var(--danger);
-	}
-	.callout.danger span {
-		color: var(--text);
 	}
 
 	.restore {
