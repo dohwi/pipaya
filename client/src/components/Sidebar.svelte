@@ -3,6 +3,9 @@
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
 	import Pin from "./Pin.svelte";
+	import Badge from "./Badge.svelte";
+	import { updater } from "../lib/updater.svelte";
+	import { serverUpdater } from "../lib/server-update.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
@@ -231,6 +234,8 @@
 		pretty,
 		shortLabel,
 	});
+	/** Something in settings needs the user: a newer app or server build, or the two out of step. */
+	const settingsAlert = $derived(updater.visible || serverUpdater.available || app.compat !== "ok" ? t("업데이트 필요") : "");
 </script>
 
 
@@ -293,7 +298,8 @@
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionMount slot="sidebar.bottom" />
 		<button class="settings wide" onclick={() => app.openSettings()}>
-			<span class="sico"><Icon name="settings" />{#if app.net !== "online"}<Pin tone="warn" label={t("연결 안 됨")} />{/if}</span> {t("설정")}
+			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert}<Pin tone="warn" label={app.net !== "online" ? t("연결 안 됨") : settingsAlert} />{/if}</span> {t("설정")}
+			{#if settingsAlert}<span class="salert"><Badge tone="warn" size="sm">{settingsAlert}</Badge></span>{/if}
 		</button>
 	</div>
 </aside>
@@ -988,6 +994,10 @@
 	.settings:hover {
 		background: var(--bg-hover);
 		color: var(--text);
+	}
+	.salert {
+		margin-left: auto;
+		display: inline-flex;
 	}
 	.sico {
 		position: relative;
