@@ -166,7 +166,7 @@
 					</div>
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
-						<Notice tone="warn" size="sm" role="status" icon={false}>
+						<Notice tone="warn" size="sm" role="status">
 							{t("클라이언트 확장 ‘{name}’ 필요", { name: c?.name ?? entry.companion })}
 							{#snippet action()}{#if c}<button type="button" disabled={!!working} onclick={() => installClient(c)}>{t("설치")}</button>{/if}{/snippet}
 						</Notice>
