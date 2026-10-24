@@ -30,3 +30,9 @@ Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sideba
 
 ## Tests
 `tests/extensions-components.test.ts` (compiler, schema), `extensions-style.test.ts`, `extensions-host.test.ts` ("trusted UI"). Check in a browser: import a package through Settings → Extensions, enable it, confirm mounts, replacement, style and clean removal on disable.
+
+## When to use which
+- **Declarative nodes** (`ui.md`): the default. Sandboxed, validated, consistent. Use them for panels, forms and simple read-only items.
+- **`ui-style`**: re-skin the existing app.
+- **`ui-components`**: a look or behaviour the nodes cannot express (custom gauges, a replaced send button, new toolbar controls). The cost is that it runs unsandboxed and needs the danger consent. A real example is `quota-monitor` 0.5: its worker polls with the sandboxed `http-write` and sends plain data through `sdk.components.setData`; `Gauge.svelte` and `Ring.svelte` only draw it.
+- Keep secrets, polling and network in the Worker. Components should do no I/O, so one that only draws can be reviewed at a glance.

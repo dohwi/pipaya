@@ -58,7 +58,7 @@ await sdk.ui.open('counter');
 | `code` | `text`, `language?` | escaped, no highlighting; ≤16,000 chars; scrolls |
 | `divider` | none | sparingly |
 | `icon` | `icon: {viewBox, paths}`, `size?`, `label?` | see [sdk.md](sdk.md#gauge-and-icon) |
-| `gauge` | `label`, `rings` (1–3, `value: number\|null`), `display?`, `icon?`, `hint?`, `stale?`, `size?`, `details?` | usage/limits; unknown is `null`, never 0 |
+| `gauge` | `label`, `rings` (1–3, `value: number\|null`), `display?`, `icon?`, `hint?`, `stale?`, `size?`, `details?` | usage/limits; unknown is `null`, never 0. Kept for sandboxed extensions; the official quota-monitor now draws its own gauge with `ui-components` ([trusted-ui.md](trusted-ui.md)). Do not add more gauge options here: a look this specific belongs in the extension |
 | `table` | `columns: {id,label}[]`, `rows: {id,cells}[]`, `caption?` | comparison; ≤8 columns, short cells |
 | `list` | `items: {id,title,description?,badge?}[]`, `emptyText?` | items are not clickable |
 | `button` | `label`, `variant?: primary/secondary/danger`, `disabled?` | one `primary` per screen |
