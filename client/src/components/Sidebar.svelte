@@ -19,6 +19,7 @@
 	import { blockDrag } from "../lib/block-drag";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
+	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, shortName, unreachable } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { isTerminalId, platformName, type TerminalInfo } from "../lib/terminal";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -61,32 +62,15 @@
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
-	const segs = (n: Node, path: string) => pretty(n, path).split("/").filter(Boolean);
-	/** A folder's label: its own name, with as many parent names as it takes to tell it from the other folders. */
-	function shortName(n: Node, path: string): string {
-		const mine = segs(n, path);
-		const others = n.dirs.filter((d) => d.path !== path).map((d) => segs(n, d.path));
-		for (let k = 1; k < mine.length; k++) {
-			const tail = mine.slice(-k).join("/");
-			if (!others.some((o) => o.slice(-k).join("/") === tail)) return tail;
-		}
-		return mine.join("/") || pretty(n, path);
-	}
+	/** A folder's label on server `n` (see sidebar-model). */
+	const shortLabel = (n: Node, path: string) => shortName(path, n.dirs, n.home);
 
 	const nodes = $derived.by<Node[]>(() => {
 		const q = query.trim().toLowerCase();
 		return app.servers.map((server) => {
 			const current = server.id === app.serverId;
 			const ov = app.overview[server.id];
-			const state = current
-				? app.net === "online"
-					? "online"
-					: app.net === "unauthorized" || app.net === "incompatible"
-						? app.net
-						: app.net === "connecting"
-							? "checking"
-							: "offline"
-				: ((app.status[server.id] ?? "checking") as Node["state"]);
+			const state = current ? connectionState(app.net) : ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
 			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], current ? app.terminals : (ov?.terminals ?? []));
 			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
@@ -111,7 +95,6 @@
 
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 
-	const dirKey = (id: string, path: string) => `${id}\u0000${path}`;
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
 
 	/* The other servers are read from the servers themselves, and kept fresh while the sidebar is in use. */
@@ -175,11 +158,7 @@
 	 */
 	function edgeAt(pt: { x: number; y: number }, whole: boolean): "before" | "after" | null {
 		const r = document.elementFromPoint(pt.x, pt.y)?.closest<HTMLElement>(".item")?.getBoundingClientRect();
-		if (!r) return null;
-		const f = whole ? 0.5 : 0.28;
-		if (pt.y < r.top + r.height * f) return "before";
-		if (pt.y > r.bottom - r.height * f) return "after";
-		return null;
+		return r ? edgeOf(pt.y, r, whole) : null;
 	}
 	/** Can the carried thing become a tab of directory `d` beside its others: one of its tabs, or a pane of one of its groups. */
 	const ofDir = (d: DirBlock, id: string) => d.tabs.some((x) => x.id === id || (x.kind === "group" && x.members.some((m) => m.id === id)));
@@ -243,11 +222,9 @@
 			},
 		];
 	}
-	const newId = (key: string) => `new\u0000${key}`;
-	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newId(key), newItems(n, path));
-	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newId(key), newItems(n, path));
+		const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
+	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
-	const asWorkdir = (n: Node, path: string) => (path === n.root ? "." : path);
 
 	type MenuTarget = { kind: "session"; x: Session } | { kind: "group"; g: Group } | { kind: "terminal"; x: TerminalInfo };
 	/** Items of a row's "more" menu. */
@@ -382,25 +359,25 @@
 						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
-					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+					<button class="dirnew" class:on={menuId === newKey(n.server.id)} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 				</div>
 
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
-					{#if n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}
+					{#if unreachable(n.state)}
 						{#if n.loaded}<div class="nosess warnline">{t("마지막으로 확인된 목록")}</div>{/if}
 					{/if}
-					{#if !n.loaded && n.state !== "offline" && n.state !== "unauthorized" && n.state !== "incompatible"}
+					{#if !n.loaded && !unreachable(n.state)}
 						<div class="sk skeleton-bar"></div>
 					{:else if n.total === 0}
-						{#if !(n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible") || n.loaded}
+						{#if !unreachable(n.state) || n.loaded}
 							<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
 						{/if}
 					{/if}
 
 					{#each n.dirs as d (d.path)}
 						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
-						{@const label = shortName(n, d.path)}
+						{@const label = shortLabel(n, d.path)}
 						{@const parent = pretty(n, d.path)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
@@ -414,7 +391,7 @@
 								</span>
 								{#if dfold}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
 							</button>
-							<button class="dirnew" class:on={menuId === `new\u0000${dirKey(n.server.id, d.path)}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(n, d.path), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+							<button class="dirnew" class:on={menuId === newKey(dirKey(n.server.id, d.path))} data-menu-button onpointerenter={(e) => hoverNew(e, n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path))} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, asWorkdir(d.path, n.root), dirKey(n.server.id, d.path))} aria-label={t("{name}에서 새로 만들기", { name: pretty(n, d.path) })} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 						</div>
 						{#if !dfold}
 							<div class="fold" in:collapseIn out:collapseOut>
@@ -426,7 +403,7 @@
 										{@render termRow(n, tab.terminal, drop)}
 									{:else}
 										{@const g = tab.group}
-										{@const gfold = isFolded(`group\u0000${g.id}`)}
+										{@const gfold = isFolded(groupKey(g.id))}
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div class="grp" class:over={dropOn === g.id}>
 											<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
@@ -443,7 +420,7 @@
 												{#if n.current && editingGroup === g.id}
 													{@render renameInput(groupDraft, commitGroupRename, () => (editingGroup = null), (v) => (groupDraft = v), 100)}
 												{:else}
-													<button class="gfold" onclick={() => app.sidebar.toggleFolded(`group\u0000${g.id}`)} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
+													<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!gfold} aria-label={gfold ? t("펼치기") : t("접기")} title={gfold ? t("펼치기") : t("접기")}>
 														<Icon name={gfold ? "group" : "group-open"} />
 													</button>
 													<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: tab.members[0]!.id }))} ondblclick={() => n.current && startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
