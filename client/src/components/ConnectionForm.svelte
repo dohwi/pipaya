@@ -420,7 +420,7 @@
 					{#if r}
 						<section class="fsec">
 							<label>
-								<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="shield" />{t("업스트림 제공")}</Badge>{/if}</span>
+								<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
 								<!-- svelte-ignore a11y_autofocus -->
 								<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus={fresh && !r.fromUpstream} />
 								<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다. 바꾸려면 모델을 삭제하고 다시 불러오세요.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
