@@ -362,7 +362,8 @@
 	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.extensions { gap: 22px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
 	.feedback { display: flex; flex-direction: column; gap: 8px; }
-	.feedback:empty { display: none; }
+	/* The live region stays mounted, but while it holds no element (only Svelte's {#if} anchor comments, so :empty never matches) it must not take a flex gap */
+	.feedback:not(:has(*)) { position: absolute; }
 	h3,
 	p { margin: 0; }
 	h3.label { font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.04em; color: var(--text-faint); }
