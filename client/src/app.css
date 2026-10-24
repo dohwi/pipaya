@@ -575,6 +575,14 @@ input[type="checkbox"]:disabled {
 	letter-spacing: 0.04em;
 	color: var(--text-faint);
 }
+/* Secondary helper text under a control or section. Components add their own margin / line-height on top. */
+.hint {
+	font-size: var(--fs-xs);
+	color: var(--text-faint);
+}
+.hint.danger {
+	color: var(--danger);
+}
 .eyebrow {
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);
@@ -610,6 +618,15 @@ input[type="checkbox"]:disabled {
 @keyframes spin {
 	to {
 		transform: rotate(360deg);
+	}
+}
+/* Spin an icon in place (e.g. the refresh arrow while checking). */
+.spin {
+	animation: spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	.spin {
+		animation: none;
 	}
 }
 .spinner {

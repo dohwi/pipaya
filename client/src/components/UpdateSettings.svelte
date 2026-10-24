@@ -4,6 +4,8 @@
 	import { notificationPlatform } from "../lib/notifications";
 	import Switch from "./Switch.svelte";
 	import SettingRow from "./SettingRow.svelte";
+	import UpdateHeader from "./UpdateHeader.svelte";
+	import StatusChip from "./StatusChip.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 
 	const android = notificationPlatform() === "android";
@@ -16,13 +18,7 @@
 
 {#if updater.supported}
 	{@const appNew = updater.phase === "available" || downloading}
-	<div class="head">
-		<div class="label">{t("앱 업데이트")}</div>
-		<button class="btn sm" disabled={checking || downloading} onclick={checkAll}>
-			<svg class:spin={checking} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 3v6h-6" /></svg>
-			{checking ? t("확인하는 중…") : t("업데이트 확인")}
-		</button>
-	</div>
+	<UpdateHeader label={t("앱 업데이트")} {checking} disabled={checking || downloading} onclick={checkAll} />
 	<SettingRow label={t("시작할 때 새 버전 확인")}>
 		<Switch checked={updater.auto} label={t("시작할 때 새 버전 확인")} onchange={(on) => updater.setAuto(on)} />
 	</SettingRow>
@@ -33,9 +29,9 @@
 				{#if updater.current}<span class="ver">{updater.current}</span>{/if}
 			</div>
 			{#if appNew}
-				<span class="chip new"><i></i>{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</span>
+				<StatusChip tone="warn">{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</StatusChip>
 			{:else if updater.phase === "idle" && updater.current}
-				<span class="chip ok"><i></i>{t("최신 버전입니다")}</span>
+				<StatusChip tone="ok">{t("최신 버전입니다")}</StatusChip>
 			{/if}
 			{#if updater.phase === "available"}
 				<button class="btn primary sm" onclick={() => updater.install()}>{t("업데이트")}</button>
@@ -47,32 +43,21 @@
 			</div>
 		{/if}
 	</div>
-	{#if updater.error}<p class="error" role="alert" in:collapseIn out:collapseOut>{updater.error}</p>{/if}
-	<p class="hint">
+	{#if updater.error}<p class="hint danger err" role="alert" in:collapseIn out:collapseOut>{updater.error}</p>{/if}
+	<p class="hint note">
 		{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}
 	</p>
 {/if}
 
 <style>
-	.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-	.label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
-	.head .btn { flex: none; white-space: nowrap; }
-	.head .btn svg { width: 14px; height: 14px; }
-	.spin { animation: spin 0.9s linear infinite; }
-	@keyframes spin { to { transform: rotate(360deg); } }
-	@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 	.card { margin-top: 12px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-height: 56px; }
 	.meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 	.name { font-size: var(--fs-sm); font-weight: 500; }
 	.ver { font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-	.chip { flex: 0 1 auto; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: var(--fs-xs); line-height: 1.5; text-align: right; }
-	.chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
-	.chip.ok { background: var(--ok-soft); color: var(--ok); }
-	.chip.new { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
 	.item .btn { flex: none; white-space: nowrap; }
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
-	.hint { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.6; margin: 10px 0 0; }
-	.error { color: var(--danger); font-size: var(--fs-xs); margin: 10px 0 0; }
+	.note { line-height: 1.6; }
+	.note, .err { margin: 10px 0 0; }
 </style>

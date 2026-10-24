@@ -182,7 +182,7 @@
 	.tools { display: flex; padding: 0 24px 12px; flex: none; }
 	.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
-	.hint { margin: 2px 0 10px; font-size: var(--fs-xs); color: var(--text-faint); }
+	.hint { margin: 2px 0 10px; }
 	.section + .section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 	h3 { margin: 0; font-size: var(--fs-md, 1rem); font-weight: 600; }
 	.body { overflow-y: auto; padding: 0 24px 24px; min-height: 80px; border-top: 1px solid var(--border); padding-top: 14px; }

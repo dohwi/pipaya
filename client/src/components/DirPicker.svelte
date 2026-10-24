@@ -467,10 +467,6 @@
 	.grow {
 		flex: 1;
 	}
-	.hint {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 	.empty,
 	.err {
 		margin: 18px 10px;

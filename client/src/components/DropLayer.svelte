@@ -29,7 +29,7 @@
 {#if drag.id && drag.id !== target && app.shows(drag.id)}
 	<div class="drop" bind:this={el} role="presentation" use:dropTarget={target_}>
 		{#if zone}
-			<div class="hint {zone}"><span>{t(LABEL[zone])}</span></div>
+			<div class="zone {zone}"><span>{t(LABEL[zone])}</span></div>
 		{/if}
 	</div>
 {/if}
@@ -40,7 +40,7 @@
 		inset: 0;
 		z-index: 30;
 	}
-	.hint {
+	.zone {
 		position: absolute;
 		display: grid;
 		place-items: center;
@@ -50,7 +50,7 @@
 		pointer-events: none;
 		transition: inset var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
 	}
-	.hint span {
+	.zone span {
 		padding: 3px 10px;
 		border-radius: var(--radius-pill);
 		background: var(--bg);

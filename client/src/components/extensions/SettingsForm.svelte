@@ -133,7 +133,7 @@
 	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
-	.hint { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
+	.hint { margin: 0; overflow-wrap: anywhere; }
 	.error { margin: 0; font-size: var(--fs-xs); color: var(--danger); overflow-wrap: anywhere; }
 	.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }

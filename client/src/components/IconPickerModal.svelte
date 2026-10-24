@@ -141,8 +141,6 @@
 	.hint,
 	.err {
 		margin: 6px 4px 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	.err {
 		color: var(--danger);

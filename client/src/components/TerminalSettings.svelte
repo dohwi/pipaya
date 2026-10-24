@@ -83,8 +83,4 @@
 		border-color: var(--accent);
 		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
-	.hint {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 </style>

@@ -802,10 +802,6 @@
 	.back {
 		margin-left: -8px;
 	}
-	.hint {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 	.matchrow {
 		display: flex;
 		flex-direction: column;

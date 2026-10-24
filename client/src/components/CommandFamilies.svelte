@@ -77,7 +77,7 @@
 <style>
 	.tools { display: flex; padding: 0 24px; flex: none; }
 	.search { flex: 1; min-width: 140px; padding: 7px 10px; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
-	.hint { margin: 8px 24px 12px; font-size: var(--fs-xs); color: var(--text-faint); flex: none; }
+	.hint { margin: 8px 24px 12px; flex: none; }
 	.body { overflow-y: auto; padding: 14px 24px 24px; min-height: 80px; border-top: 1px solid var(--border); }
 	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }
 	.fam:not(:first-child) { margin-top: 16px; }

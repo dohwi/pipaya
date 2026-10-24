@@ -293,8 +293,6 @@
 	}
 	.hint {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 		line-height: 1.5;
 	}
 	.list {

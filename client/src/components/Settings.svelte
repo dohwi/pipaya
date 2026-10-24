@@ -480,13 +480,6 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--text-dim);
 	}
-	.hint {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
-	.hint.danger {
-		color: var(--danger);
-	}
 	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
 	.srvbar {
 		flex: none;

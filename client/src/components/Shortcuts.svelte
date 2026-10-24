@@ -166,8 +166,6 @@
 		font-weight: 600;
 	}
 	.hint {
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 		line-height: 1.5;
 	}
 	.hint kbd {

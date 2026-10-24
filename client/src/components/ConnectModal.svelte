@@ -347,7 +347,7 @@
 <style>
 	.cm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 	.body { display: flex; flex-direction: column; gap: 12px; padding: 16px 22px 20px; overflow-y: auto; min-height: 0; }
-	.hint { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.55; word-break: keep-all; }
+	.hint { margin: 0; line-height: 1.55; word-break: keep-all; }
 	.hint.lead { margin-top: -4px; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.search { position: relative; display: flex; align-items: center; }

@@ -319,7 +319,7 @@
 									{/if}
 								{/if}
 								<button class="btn sm" disabled={busy || refreshingId !== null || !p.configured} onclick={() => refreshModels(p)} title={p.configured ? t("업스트림의 모델 목록을 다시 불러옵니다") : t("키를 먼저 추가하세요")}>
-									<span class="spin" class:on={refreshingId === p.id}><Icon name="retry" /></span> {refreshingId === p.id ? t("불러오는 중…") : t("모델 새로고침")}
+									<span class="spinwrap" class:spin={refreshingId === p.id}><Icon name="retry" /></span> {refreshingId === p.id ? t("불러오는 중…") : t("모델 새로고침")}
 								</button>
 								<button class="btn sm" disabled={busy} onclick={() => (form = { kind: "edit", provider: p })}><Icon name="pencil" /> {t("수정")}</button>
 								<ConfirmButton size="sm" class="ghost" confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={() => remove(p)}>{t("삭제")}</ConfirmButton>
@@ -494,21 +494,8 @@
 	.mlist li.unavail .minfo {
 		opacity: 0.6;
 	}
-	.spin {
+	.spinwrap {
 		display: inline-flex;
-	}
-	.spin.on {
-		animation: mc-spin 0.9s linear infinite;
-	}
-	@keyframes mc-spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.spin.on {
-			animation: none;
-		}
 	}
 	.res {
 		flex-basis: 100%;

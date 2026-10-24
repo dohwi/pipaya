@@ -68,7 +68,7 @@
 <style>
   .label { font-size: var(--fs-xs); font-weight: 600; margin-bottom: 12px; color: var(--text-dim); }
   .label.gap { margin-top: 22px; }
-  .hint { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.6; margin: 10px 0 0; word-break: keep-all; }
+  .hint { line-height: 1.6; margin: 10px 0 0; word-break: keep-all; }
   .test { margin-top: 14px; }
   .result { font-size: var(--fs-xs); line-height: 1.6; margin: 10px 0 0; color: var(--danger); word-break: keep-all; }
   .result.ok { color: var(--text-dim); }

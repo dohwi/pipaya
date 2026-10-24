@@ -207,9 +207,7 @@
 	}
 	.hint {
 		margin: 4px 0 0;
-		font-size: var(--fs-xs);
 		line-height: 1.5;
-		color: var(--text-faint);
 	}
 	.n {
 		margin-left: 4px;

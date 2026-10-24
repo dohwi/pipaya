@@ -212,8 +212,6 @@
 	}
 	.hint {
 		margin: 0;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	ul {
 		list-style: none;
