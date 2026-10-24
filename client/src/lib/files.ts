@@ -123,3 +123,21 @@ export function parseTable(src: string, delimiter: string, maxRows = 1000): { ro
 	if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
 	return { rows, more };
 }
+
+/** Images one message can carry (vision models only; everything else is a file). */
+export const MAX_IMAGES = 8;
+
+/** Whether a picked file goes in as a downscaled image (the model can see it) rather than as a plain file. */
+export const isInlineImage = (file: { type: string }, vision: boolean): boolean =>
+	vision && file.type.startsWith("image/") && file.type !== "image/svg+xml";
+
+/**
+ * Why `file` cannot join the files already waiting, or null when it fits. `stop` means no further file can fit either,
+ * so the caller should skip the rest of the batch instead of reporting every one.
+ */
+export function fileRejection(file: { size: number; name: string }, existing: readonly { size: number }[]): { reason: "count" | "size" | "total"; stop: boolean } | null {
+	if (existing.length >= MAX_FILES) return { reason: "count", stop: true };
+	if (file.size > MAX_FILE_BYTES) return { reason: "size", stop: false };
+	if (existing.reduce((n, x) => n + x.size, file.size) > MAX_FILES_TOTAL) return { reason: "total", stop: false };
+	return null;
+}

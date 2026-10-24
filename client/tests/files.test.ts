@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
+import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
 describe("working-directory links", () => {
 	test("only relative paths inside the directory count", () => {
@@ -53,5 +53,28 @@ describe("previews", () => {
 	test("image links are recognised by extension", () => {
 		for (const ok of ["out/a.PNG", "/x/b.jpeg", "c.webp?raw=1", "d.svg#v"]) expect(isImagePath(ok), ok).toBe(true);
 		for (const no of ["out/a.pdf", "a.png.zip", "README.md"]) expect(isImagePath(no), no).toBe(false);
+	});
+});
+
+describe("attaching files to a message", () => {
+	test("only pictures a vision model can see go in as images", () => {
+		expect(isInlineImage({ type: "image/png" }, true)).toBe(true);
+		expect(isInlineImage({ type: "image/png" }, false)).toBe(false);
+		expect(isInlineImage({ type: "image/svg+xml" }, true)).toBe(false);
+		expect(isInlineImage({ type: "application/pdf" }, true)).toBe(false);
+	});
+	test("a file that fits is accepted", () => {
+		expect(fileRejection({ name: "a", size: 10 }, [{ size: 5 }])).toBeNull();
+	});
+	test("too many files stops the batch", () => {
+		const full = Array.from({ length: MAX_FILES }, () => ({ size: 1 }));
+		expect(fileRejection({ name: "a", size: 1 }, full)).toEqual({ reason: "count", stop: true });
+	});
+	test("an oversized file is skipped on its own", () => {
+		expect(fileRejection({ name: "a", size: MAX_FILE_BYTES + 1 }, [])).toEqual({ reason: "size", stop: false });
+	});
+	test("the combined size is capped", () => {
+		const big = [{ size: MAX_FILES_TOTAL - 5 }];
+		expect(fileRejection({ name: "a", size: 10 }, big)).toEqual({ reason: "total", stop: false });
 	});
 });

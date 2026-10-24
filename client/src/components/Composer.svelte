@@ -9,7 +9,6 @@
 	import { untrack } from "svelte";
 	import { panesOf } from "../lib/layout";
 	import { insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
-	import { chipIn, chipOut, fadeIn, fadeOut, reflow, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
 	import SendControls from "./SendControls.svelte";
@@ -26,8 +25,11 @@
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { fileToAttachment, type Attachment } from "../lib/images";
 	import { makeQuote } from "../lib/quote";
-	import { fileToDraft, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL } from "../lib/files";
-	import FileChip from "./FileChip.svelte";
+	import { fileRejection, fileToDraft, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES } from "../lib/files";
+	import DropOverlay from "./DropOverlay.svelte";
+	import WhereChip from "./WhereChip.svelte";
+	import ReplyBadge from "./ReplyBadge.svelte";
+	import FileStrip from "./FileStrip.svelte";
 	import { isTouch } from "../lib/format";
 	import { buildCombo, formatCombo, keyName } from "../lib/keys";
 	import { msg, t } from "../lib/i18n";
@@ -566,11 +568,19 @@
 		attachments = attachments.filter((x) => x.id !== id);
 	}
 
+	const rejectionText = (r: "count" | "size" | "total", name: string) =>
+		r === "count"
+			? t("파일은 최대 {n}개까지 첨부할 수 있습니다", { n: MAX_FILES })
+			: r === "size"
+				? t("{name}: 파일은 {n}MB까지 첨부할 수 있습니다", { name, n: MAX_FILE_BYTES / 1024 / 1024 })
+				: t("한 메시지에 첨부할 수 있는 파일은 모두 합쳐 {n}MB까지입니다", { n: MAX_FILES_TOTAL / 1024 / 1024 });
+
 	/** Pictures the model can see go in as images (downscaled); everything else is attached as a file. */
 	async function addFiles(picked: Iterable<File>) {
+		const fail = (name: string, fallback: string) => app.toast(t("{name}을(를) 읽지 못했습니다", { name: name || fallback }), "error", pane.id);
 		for (const f of picked) {
-			if (f.type.startsWith("image/") && f.type !== "image/svg+xml" && vision) {
-				if (attachments.length >= 8) {
+			if (isInlineImage(f, vision)) {
+				if (attachments.length >= MAX_IMAGES) {
 					app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
 					continue;
 				}
@@ -578,26 +588,20 @@
 					attachments.push(await fileToAttachment(f));
 					insertImageToken(attachments.length);
 				} catch {
-					app.toast(t("{name}을(를) 읽지 못했습니다", { name: f.name || t("이미지") }), "error", pane.id);
+					fail(f.name, t("이미지"));
 				}
 				continue;
 			}
-			if (files.length >= MAX_FILES) {
-				app.toast(t("파일은 최대 {n}개까지 첨부할 수 있습니다", { n: MAX_FILES }), "error", pane.id);
-				break;
-			}
-			if (f.size > MAX_FILE_BYTES) {
-				app.toast(t("{name}: 파일은 {n}MB까지 첨부할 수 있습니다", { name: f.name, n: MAX_FILE_BYTES / 1024 / 1024 }), "error", pane.id);
-				continue;
-			}
-			if (files.reduce((n, x) => n + x.size, f.size) > MAX_FILES_TOTAL) {
-				app.toast(t("한 메시지에 첨부할 수 있는 파일은 모두 합쳐 {n}MB까지입니다", { n: MAX_FILES_TOTAL / 1024 / 1024 }), "error", pane.id);
+			const rejected = fileRejection(f, files);
+			if (rejected) {
+				app.toast(rejectionText(rejected.reason, f.name), "error", pane.id);
+				if (rejected.stop) break;
 				continue;
 			}
 			try {
 				files.push(await fileToDraft(f));
 			} catch {
-				app.toast(t("{name}을(를) 읽지 못했습니다", { name: f.name || t("파일") }), "error", pane.id);
+				fail(f.name, t("파일"));
 			}
 		}
 	}
@@ -637,17 +641,11 @@
 	ondrop={onDrop}
 />
 
-{#if dragging}
-	<div class="drop" in:fadeIn out:fadeOut>{t("파일을 놓아서 첨부")}</div>
-{/if}
+{#if dragging}<DropOverlay />{/if}
 
 <div class="wrap" bind:this={wrapEl}>
 	{#if whereShown && app.net === "online"}
-		<button class="where mono" onclick={() => (app.dirPicker = true)} title={t("새 대화가 작업할 디렉터리 (눌러서 바꾸기)")} aria-label={t("작업 디렉터리: {path}", { path: wherePath })}>
-			<Icon name="folder" />
-			<span class="p">{wherePath || t("서버 기본 디렉터리")}</span>
-			<span class="chg">{t("변경")}</span>
-		</button>
+		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
@@ -655,22 +653,13 @@
 			<SlashMenu items={menuItems} index={slashIndex} label={cdArg !== null ? msg("폴더") : mention ? msg("파일") : memberMention ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={cdArg !== null ? msg("일치하는 폴더가 없습니다") : mention ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if reply}
-			<div class="reply-badge" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>
-				<Icon name="reply" />
-				<span class="rwho">{reply.who ?? t("답장")}</span>
-				<span class="rtext">{replyPreview}</span>
-				<button class="rx" onclick={() => (reply = null)} aria-label={t("답장 취소")} title={t("답장 취소")}>×</button>
-			</div>
+			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />
 		{/if}
 		{#if attachments.length}
 			<AttachmentStrip {attachments} onremove={removeAttachment} />
 		{/if}
 		{#if files.length}
-			<div class="files" in:surfaceIn|global={{ y: 8 }} out:surfaceOut|global={{ y: 8 }}>
-				{#each files as f (f.id)}
-					<div class="fchip-slot" animate:reflow in:chipIn out:chipOut><FileChip name={f.name} size={f.size} preview={f.preview} onremove={() => removeFile(f.id)} /></div>
-				{/each}
-			</div>
+			<FileStrip {files} onremove={removeFile} />
 		{/if}
 
 		{#if chat?.waiting.length}
@@ -748,48 +737,6 @@
 		max-width: calc(var(--content-w) + 32px);
 		width: 100%;
 		margin: 0 auto;
-	}
-	.where {
-		display: flex;
-		align-items: center;
-		gap: 7px;
-		max-width: 100%;
-		height: 28px;
-		margin: 0 0 8px 2px;
-		padding: 0 10px 0 8px;
-		font-size: var(--fs-xs);
-		color: var(--text-dim);
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-pill);
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std);
-	}
-	.where:hover {
-		color: var(--text);
-		border-color: var(--border-strong);
-	}
-	.where :global(svg) {
-		width: 14px;
-		height: 14px;
-		flex: none;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	.where .p {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		text-align: left;
-	}
-	.where .chg {
-		flex: none;
-		color: var(--text-faint);
 	}
 	.box {
 		position: relative;
@@ -943,45 +890,5 @@
 				font-size: var(--fs-md);
 			}
 		}
-	}
-	/* bottom padding: the scroller clips vertically too, and the chips' border and focus ring end there */
-	.reply-badge {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 10px 14px 0;
-		padding: 5px 6px 5px 10px;
-		max-width: max-content;
-		min-width: 0;
-		border-radius: var(--radius-pill);
-		background: var(--accent-soft);
-		border-left: 3px solid var(--border-strong);
-		font-size: var(--fs-xs);
-		color: var(--text-dim);
-	}
-	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; }
-	.rwho { font-weight: 600; color: var(--text); flex: none; }
-	.rtext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.rx { flex: none; width: 18px; height: 18px; line-height: 16px; border-radius: 50%; padding: 0; color: inherit; }
-	.rx:hover { background: var(--accent-soft); color: var(--text); }
-	.files {
-		display: flex;
-		gap: 10px;
-		padding: 12px 14px 4px;
-		overflow-x: auto;
-		scrollbar-width: thin;
-	}
-	.drop {
-		position: fixed;
-		inset: 0;
-		z-index: var(--z-dropzone);
-		display: grid;
-		place-items: center;
-		background: var(--scrim);
-		color: #fff; /* sits on the dark scrim in both themes */
-		font-size: var(--fs-2xl);
-		font-weight: 600;
-		border: 3px dashed var(--text-faint);
-		pointer-events: none;
 	}
 </style>
