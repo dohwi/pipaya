@@ -263,10 +263,11 @@
 	}
 </script>
 
-{#snippet updateButton(upd: MarketEntry, disabled: boolean)}
-	<Button variant="primary" size="sm" class="upd-btn" {disabled} title={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>
-		<Icon name="download" /> <span>{t("업데이트")}</span> <b>v{upd.version}</b>
-	</Button>
+{#snippet updateLine(upd: MarketEntry, disabled: boolean)}
+	<div class="updline">
+		<span class="to">{t("새 버전 v{version} 사용 가능", { version: upd.version })}</span>
+		<Button size="sm" class="upd-btn" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
+	</div>
 {/snippet}
 
 {#snippet installedRow(entry: InstalledExtension)}
@@ -279,7 +280,6 @@
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} onopen={() => (selected = id)}>
 		{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 		{#snippet control()}
-			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
 			<Switch
 				checked={on}
 				label={t("{name} 사용", { name: entry.package.manifest.name })}
@@ -289,6 +289,7 @@
 			/>
 		{/snippet}
 		{#snippet notices()}
+			{#if upd}{@render updateLine(upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
 			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 		{/snippet}
@@ -368,8 +369,8 @@
 			{#each serverSide as ext (ext.name)}
 				{@const upd = serverUpdate(ext)}
 				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} onopen={() => (selected = srvKey(ext.name))}>
-					{#snippet control()}
-						{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)])}{/if}
+					{#snippet notices()}
+						{#if upd}{@render updateLine(upd, !!tasks.busy[srvKey(ext.name)])}{/if}
 					{/snippet}
 					{#snippet meta()}
 						{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
@@ -422,13 +423,11 @@
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.chip { background: var(--bg-active); }
 	.chip.warn { background: var(--warn-soft); }
-	.extensions :global(.btn.upd-btn) { display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; padding: 6px 12px; }
-	.extensions :global(.btn.upd-btn svg) { width: 15px; height: 15px; stroke-width: 2; }
-	@media (max-width: 640px) {
-		.extensions :global(.btn.upd-btn) { gap: 4px; padding: 5px 9px; }
-		.extensions :global(.btn.upd-btn svg) { display: none; }
-	}
-	.extensions :global(.btn.upd-btn b) { font: 500 var(--fs-2xs)/1 var(--mono); padding: 3px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.2); }
+	/* A quiet outlined button: the new version is already in the line under the name, so the button only says what it does. */
+	.extensions :global(.btn.sm.upd-btn) { flex: none; white-space: nowrap; min-height: 28px; padding: 3px 11px; font-size: var(--fs-xs); border-color: var(--accent); color: var(--text); background: transparent; }
+	.extensions :global(.btn.sm.upd-btn:hover:not(:disabled)) { background: var(--accent-soft); }
+	.updline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+	.to { font-size: var(--fs-xs); font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
