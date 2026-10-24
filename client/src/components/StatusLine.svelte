@@ -24,7 +24,8 @@
 	type Loaded = { key: string; files: string[]; skills: string[] | null };
 	let loaded = $state<Loaded | null>(null);
 	let openKey = $state<string | null>(null);
-	const ctxKey = $derived(pane.id ? `${app.serverId}:${pane.id}` : null);
+	// A conversation reads its own context; a new chat previews what the chosen directory will get.
+	const ctxKey = $derived(pane.id ? `${app.serverId}:${pane.id}` : `${app.serverId}:new:${app.workdirAbs}`);
 	const here = $derived(loaded && loaded.key === ctxKey ? loaded : null);
 	// Applied AGENTS.md files; the system prompt is always there and is shown inside the panel.
 	const ctxFiles = $derived(here ? here.files.length : null);
@@ -36,8 +37,9 @@
 		chat?.items.length;
 		chat?.running;
 		app.skillsTick;
-		if (!id || !key || !api) return;
-		return abortable((signal) => api.sessionContext(id, signal), {
+		const cwd = app.workdirAbs;
+		if (!api) return;
+		return abortable((signal) => (id ? api.sessionContext(id, signal) : api.previewContext(cwd, signal)), {
 			ok: (r) => (loaded = { key, files: r.instructions.map(i => i.path), skills: r.skills.map(k => k.name) }),
 			fail: () => { if (loaded?.key === key) loaded = null; },
 		});
@@ -71,8 +73,8 @@
 		chat?.items.length;
 		if (!api) return;
 		return abortable((signal) => api.commandFamilies(cwd, signal), {
-			// No extension offers such commands: the item stays hidden.
-			ok: (r) => (tpl = r.families.length ? { key, names: r.families.flatMap(f => f.entries.map(e => `/${f.prefix}:${e.name}`)) } : null),
+			// Shown even when empty (dimmed), like the other items, so the line keeps its shape.
+			ok: (r) => (tpl = { key, names: r.families.flatMap(f => f.entries.map(e => `/${f.prefix}:${e.name}`)) }),
 			fail: () => { if (tpl?.key === key) tpl = null; },
 		});
 	});
@@ -158,10 +160,10 @@
 	);
 	const hitTip = $derived(
 		hit === null
-			? ""
+			? t("캐시 적중률 · 응답 후 표시됩니다")
 			: [t("캐시 적중률 {n}%", { n: pct(hit) }), t("프롬프트 {prompt} 토큰 중 {read} 토큰을 캐시에서 읽었습니다", { prompt: prompt.toLocaleString(localeTag()), read: totals.cacheRead.toLocaleString(localeTag()) })].join("\n"),
 	);
-	const tpsTip = $derived(tps === null ? "" : t("출력 속도 {n} 토큰/초 (마지막 응답)", { n: tps.toFixed(1) }));
+	const tpsTip = $derived(tps === null ? t("출력 속도 · 응답 후 표시됩니다") : t("출력 속도 {n} 토큰/초 (마지막 응답)", { n: tps.toFixed(1) }));
 	const costTip = $derived(
 		[t("이 대화 누적 비용 · 모델 호출 {n}회", { n: calls.length }), t("입력 {input} · 출력 {output} 토큰", { input: prompt.toLocaleString(localeTag()), output: totals.output.toLocaleString(localeTag()) })].join("\n"),
 	);
@@ -191,38 +193,31 @@
 			<span class="v">{t("{n}개", { n: tplNames.length })}</span>
 		</button>
 	{/if}
-	{#if calls.length || context !== undefined}
-		<span class="b ctx {level}" title={ctxTip}>
+	<!-- Always shown, so the line does not jump when the first reply arrives; "—" until there is a figure. -->
+	<span class="b ctx {level}" class:empty={ctx === null} title={ctxTip}>
 			<svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
 				<circle cx="9" cy="9" r="7" class="track" />
 				<circle cx="9" cy="9" r="7" class="fill" stroke-dasharray={ring} stroke-dashoffset={ring * (1 - Math.min(100, ctxPct) / 100)} />
 			</svg>
 			<span class="v">{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}</span>
-		</span>
-		{#if hit !== null}
-			<span class="b hit {hitLevel}" title={hitTip}>
-				<Icon name="cache" />
-				<span class="v">{pct(hit)}%</span>
-			</span>
-		{/if}
-		{#if tps !== null}
-			<span class="b tps {tpsLevel}" title={tpsTip}>
-				<Icon name="gauge" />
-				<span class="v">{speed(tps)}</span><span class="unit wide">tps</span>
-			</span>
-		{/if}
-		{#if totals.cost > 0}
-			<span class="b cost {costState}" title={costTip}>
-				<Icon name="coin" />
-				<span class="v">{money(totals.cost).replace("$", "")}</span>
-			</span>
-		{/if}
-	{/if}
+	</span>
+	<span class="b hit {hitLevel}" class:empty={hit === null} title={hitTip}>
+		<Icon name="cache" />
+		<span class="v">{hit === null ? "—" : `${pct(hit)}%`}</span>
+	</span>
+	<span class="b tps {tpsLevel}" class:empty={tps === null} title={tpsTip}>
+		<Icon name="gauge" />
+		<span class="v">{tps === null ? "—" : speed(tps)}</span><span class="unit wide">tps</span>
+	</span>
+	<span class="b cost {costState}" class:empty={totals.cost <= 0} title={costTip}>
+		<Icon name="coin" />
+		<span class="v">{totals.cost > 0 ? money(totals.cost).replace("$", "") : "—"}</span>
+	</span>
 </div>
 
-{#if openKey && openKey === ctxKey && pane.id && app.api}
+{#if openKey && openKey === ctxKey && app.api}
 	{#key openKey}
-		<SessionContext sessionId={pane.id} api={app.api} onclose={() => (openKey = null)} />
+		<SessionContext sessionId={pane.id} cwd={app.workdirAbs} api={app.api} onclose={() => (openKey = null)} />
 	{/key}
 {/if}
 

@@ -253,6 +253,9 @@ export class Api {
 	getSession = (id: string) => this.req<SessionDetail>("GET", `/sessions/${id}`);
 	sessionContext = (id: string, signal?: AbortSignal) =>
 		this.req<SessionContext>("GET", `/sessions/${encodeURIComponent(id)}/context`, undefined, signal);
+	/** What a new conversation in `cwd` would start with (no session yet). */
+	previewContext = (cwd?: string, signal?: AbortSignal) =>
+		this.req<SessionContext>("GET", `/context${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
 	skills = (cwd?: string, signal?: AbortSignal, sessionId?: string | null) => {
 		const q = new URLSearchParams();
 		if (cwd) q.set("cwd", cwd);

@@ -12,7 +12,8 @@
 	import Icon from "./Icon.svelte";
 	import { nativeModal } from "../lib/dialog";
 
-	let { sessionId, api, onclose }: { sessionId: string; api: Api; onclose: () => void } = $props();
+	/** sessionId null: preview of a new conversation in `cwd`. */
+	let { sessionId, cwd = "", api, onclose }: { sessionId: string | null; cwd?: string; api: Api; onclose: () => void } = $props();
 	let data = $state<SessionContext | null>(null);
 	let loading = $state(true);
 	let error = $state("");
@@ -28,11 +29,13 @@
 		refresh;
 		// AGENTS.md / skills edited on disk arrive as skills_updated (AgentsWatcher).
 		app.skillsTick;
-		const chat = app.chatOf(sessionId);
+		const chat = sessionId ? app.chatOf(sessionId) : null;
 		chat?.items.length;
 		chat?.running;
+		const id = sessionId;
+		const dir = cwd;
 		untrack(() => { loading = true; error = ""; });
-		return abortable((signal) => api.sessionContext(sessionId, signal), {
+		return abortable((signal) => (id ? api.sessionContext(id, signal) : api.previewContext(dir, signal)), {
 			ok: (result) => (data = result),
 			// Duck-typed: don't depend on class identity (HMR/duplicated module instances break instanceof).
 			fail: (e) => (error = (e as ApiError)?.status === 404 && /route/i.test((e as Error).message)
@@ -51,7 +54,7 @@
 			<div>
 				<h2 id="session-context-title">{t("적용된 컨텍스트")}</h2>
 				{#if data}
-					<p class="state">{data.state === "applied" ? t("이 세션에 적용 중") : t("아직 적용 전 · 다음 메시지부터 적용됩니다")}</p>
+					<p class="state">{data.state === "applied" ? t("이 세션에 적용 중") : sessionId ? t("아직 적용 전 · 다음 메시지부터 적용됩니다") : t("새 대화에 적용될 내용")}</p>
 				{/if}
 			</div>
 			<div class="actions">
@@ -73,7 +76,7 @@
 					<h3>{t("기본 프롬프트")}</h3>
 					<div class="source">
 						<button class="fold" onclick={() => (opened.system = !opened.system)} aria-expanded={!!opened.system}>
-							<span class="label"><span class="source-name">{t("시스템")}</span><span class="meta">{t("이 세션 기본")} · {bytes(new TextEncoder().encode(data.systemPrompt).length)}</span></span>
+							<span class="label"><span class="source-name">{t("시스템")}</span><span class="meta">{sessionId ? t("이 세션 기본") : t("새 대화 기본")} · {bytes(new TextEncoder().encode(data.systemPrompt).length)}</span></span>
 							<span class="chev" class:open={opened.system}><Icon name="chevron-right" /></span>
 						</button>
 						{#if opened.system}<pre in:collapseIn out:collapseOut>{data.systemPrompt}</pre>{/if}
