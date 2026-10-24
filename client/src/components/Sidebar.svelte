@@ -601,10 +601,13 @@
 	}
 	/* every server sits in a band, even when it is the only one */
 	.srv.band {
+		margin: 0 8px;
 		background: var(--band);
+		border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+		border-radius: var(--radius);
 	}
 	.srv.band + .srv.band {
-		margin-top: 6px;
+		margin-top: 8px;
 	}
 	.srv.off .fold {
 		opacity: 0.45;
@@ -616,9 +619,14 @@
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin: 0 -8px 4px; /* full-bleed header strip: a darker tone marks everything below as belonging to this server */
+		margin: 0 -8px 4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
 		padding: 0 8px;
 		background: var(--band-head);
+		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
+	}
+	.srvhead:last-child {
+		border-radius: 11px;
+		margin-bottom: 0;
 	}
 	.srvhead:hover {
 		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
