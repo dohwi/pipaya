@@ -127,10 +127,9 @@
 		display: flex;
 		align-items: stretch;
 		gap: 10px;
-		flex-wrap: wrap;
 	}
 	.cfield {
-		flex: 1 1 260px;
+		flex: 1 1 0;
 		min-width: 0;
 	}
 	.autoc {
@@ -145,6 +144,7 @@
 		font-size: var(--fs-sm);
 		white-space: nowrap;
 		cursor: pointer;
+		flex: none;
 	}
 	.thr {
 		display: flex;
