@@ -16,6 +16,15 @@ export const en: Record<string, string> = {
 	"지금 재시도": "Retry now",
 	"설정 · 확장": "Settings · Extensions",
 
+	/* ---- trusted extension UI ---- */
+	"components.setData는 값 하나가 필요합니다": "components.setData takes exactly one value",
+	"컴포넌트 데이터는 최대 64KB입니다": "Component data is limited to 64KB",
+	"이 확장은 격리되지 않고 앱 안에서 직접 실행됩니다. 대화 내용, 서버 연결 정보와 토큰을 포함한 앱의 모든 데이터에 접근할 수 있으므로 신뢰하는 개발자의 패키지만 활성화하세요.": "This extension is not isolated: it runs directly inside the app and can reach everything the app holds, including conversations, server connections and tokens. Only enable packages from developers you trust.",
+	"앱 스타일": "App styles",
+	"앱 컴포넌트": "App components",
+	"앱 전체 스타일: 앱 화면 전체에 CSS를 적용해 기존 디자인을 바꿉니다. 화면을 가리거나 다른 화면처럼 꾸밀 수 있습니다.": "App-wide styles: applies CSS to the whole app to change the existing design. It can hide parts of the screen or make it look like something else.",
+	"앱 안에서 컴포넌트 실행(고위험): 확장의 Svelte 코드가 격리 없이 앱 안에서 실행되어 화면을 원하는 위치에 그리거나 기존 화면을 교체합니다. 대화 내용, 서버 연결 정보와 토큰 등 앱의 모든 데이터에 접근할 수 있습니다. 신뢰하는 개발자의 확장만 허용하세요.": "Run components inside the app (high risk): the extension's Svelte code runs in the app without isolation, drawing anywhere on screen or replacing existing parts. It can reach everything the app holds, including conversations, server connections and tokens. Only allow extensions from developers you trust.",
+
 	/* ---- backup ---- */
 	"서버 연결": "Server connections",
 	"이름과 주소만. 토큰은 들어가지 않습니다": "Names and addresses only. Tokens are not included",

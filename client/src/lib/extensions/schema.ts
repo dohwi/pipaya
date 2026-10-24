@@ -6,8 +6,32 @@ export const MAX_PACKAGE_BYTES = 256 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
 	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions",
+	"ui-style", "ui-components",
 ] as const);
 export type Permission = (typeof PERMISSIONS)[number];
+
+/**
+ * Where a trusted extension component (`ui-components`) can be mounted. Each name is a stable place in the app; adding
+ * one means placing `<ExtensionMount slot="...">` there.
+ */
+export const UI_SLOTS = Object.freeze([
+	"app.overlay", "header.start", "header.end", "header.below", "sidebar.top", "sidebar.bottom",
+	"pane.top", "pane.bottom", "composer.top", "composer.toolbar", "composer.bottom",
+	"message.user.after", "message.assistant.after",
+] as const);
+export type UISlot = (typeof UI_SLOTS)[number];
+/** Built-in pieces a trusted extension component may replace. The original is passed as the `fallback` snippet. */
+export const UI_PARTS = Object.freeze([
+	"header.title", "sidebar.brand", "pane.empty", "pane.welcome", "composer.send", "statusline", "message.user", "message.assistant",
+] as const);
+export type UIPart = (typeof UI_PARTS)[number];
+/** `data-part` names the app puts on its main elements: the stable selectors for `ui-style` CSS. */
+export const STYLE_PARTS = Object.freeze([
+	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
+	"composer", "composer.box", "composer.bar", "statusline",
+] as const);
+export const COMPONENT_LIMITS = Object.freeze({ components: 20, source: 64 * 1024, mounts: 20, styles: 64 * 1024 });
+export interface ComponentMount { slot: UISlot; component: string; order?: number }
 
 export const THEME_TOKENS = Object.freeze([
 	"--bg", "--bg-side", "--bg-elev", "--bg-hover", "--bg-active", "--bg-code",
@@ -52,6 +76,12 @@ export interface ExtensionPackage {
 	commands?: { name: string; description: string; template: string }[];
 	/** UI language packs (needs the `locales` permission). Korean source string -> translation, same as the built-in English. */
 	locales?: LocalePackage[];
+	/** App-wide CSS (needs `ui-style`). Target `[data-part="..."]` (see STYLE_PARTS). */
+	styles?: string;
+	/** Svelte 5 component sources by name (needs `ui-components`). They run in the app itself, with its full access. */
+	components?: Record<string, string>;
+	mounts?: ComponentMount[];
+	replaces?: Partial<Record<UIPart, string>>;
 	code?: string;
 }
 export interface LocalePackage { tag: string; name: string; messages: Record<string, string> }
@@ -297,8 +327,53 @@ export function parseSettingFields(input: unknown): SettingField[] {
 	return array(input, "settings", MAX_SETTING_FIELDS).map((value, index) => settingField(value, `settings[${index}]`, keys));
 }
 
+const COMPONENT_NAME = /^[A-Z][A-Za-z0-9]{0,39}$/;
+
+function parseComponents(source: Record<string, unknown>, result: ExtensionPackage, permissions: Permission[]) {
+	const has = ["components", "mounts", "replaces"].filter(key => Object.hasOwn(source, key));
+	if (!has.length) return;
+	if (!permissions.includes("ui-components")) fail("manifest.permissions", `${has.join(", ")} require the ui-components permission`);
+	if (!Object.hasOwn(source, "components")) fail("components", "mounts and replaces need components");
+	const raw = object(source.components, "components", Object.keys(source.components && typeof source.components === "object" ? source.components : {}));
+	const names = Object.keys(raw);
+	if (!names.length) fail("components", "must not be empty");
+	if (names.length > COMPONENT_LIMITS.components) fail("components", `must contain at most ${COMPONENT_LIMITS.components} components`);
+	const components: Record<string, string> = {};
+	for (const name of names) {
+		if (!matches(COMPONENT_NAME, name)) fail(`components.${name}`, "expected a PascalCase name (max 40)");
+		const code = text(raw[name], `components.${name}`, COMPONENT_LIMITS.source);
+		if (encoder.encode(code).byteLength > COMPONENT_LIMITS.source) fail(`components.${name}`, `must be at most ${COMPONENT_LIMITS.source} UTF-8 bytes`);
+		components[name] = code;
+	}
+	result.components = components;
+	const known = (value: unknown, path: string) => {
+		const name = text(value, path, 40);
+		if (!Object.hasOwn(components, name)) fail(path, `unknown component ${name}`);
+		return name;
+	};
+	if (Object.hasOwn(source, "mounts")) {
+		result.mounts = array(source.mounts, "mounts", COMPONENT_LIMITS.mounts).map((value, index) => {
+			const path = `mounts[${index}]`;
+			const mount = object(value, path, ["slot", "component", "order"]);
+			if (typeof mount.slot !== "string" || !UI_SLOTS.includes(mount.slot as UISlot)) fail(`${path}.slot`, `expected one of ${UI_SLOTS.join(", ")}`);
+			const out: ComponentMount = { slot: mount.slot as UISlot, component: known(mount.component, `${path}.component`) };
+			if (Object.hasOwn(mount, "order")) {
+				const order = finite(mount, "order", path)!;
+				if (!Number.isInteger(order) || Math.abs(order) > 1000) fail(`${path}.order`, "expected an integer between -1000 and 1000");
+				out.order = order;
+			}
+			return out;
+		});
+	}
+	if (Object.hasOwn(source, "replaces")) {
+		const replaces = object(source.replaces, "replaces", UI_PARTS);
+		result.replaces = {};
+		for (const part of UI_PARTS) if (Object.hasOwn(replaces, part)) result.replaces[part] = known(replaces[part], `replaces.${part}`);
+	}
+}
+
 export function parsePackage(input: unknown): ExtensionPackage {
-	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "code"]);
+	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "styles", "components", "mounts", "replaces", "code"]);
 	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "permissions", "settings", "settingsScope"]);
 	const id = text(manifest.id, "manifest.id", 80);
 	if (!matches(ID, id) || ["constructor", "prototype"].includes(id)) fail("manifest.id", "expected a safe lowercase extension ID");
@@ -377,8 +452,15 @@ export function parsePackage(input: unknown): ExtensionPackage {
 		result.code = text(source.code, "code", MAX_CODE_BYTES, false);
 		if (encoder.encode(result.code).byteLength > MAX_CODE_BYTES) fail("code", `must be at most ${MAX_CODE_BYTES} UTF-8 bytes`);
 	}
-	if (!result.theme && !result.commands?.length && !result.locales?.length && !result.code?.trim()) {
-		fail("package", "must contain a theme, nonempty commands, language packs, or nonempty code");
+	if (Object.hasOwn(source, "styles")) {
+		if (!permissions.includes("ui-style")) fail("manifest.permissions", "styles require the ui-style permission");
+		result.styles = text(source.styles, "styles", COMPONENT_LIMITS.styles);
+		// The stylesheet is app-wide: it may not end its own <style> element or pull in other sheets.
+		if (/<\/?style|@import/i.test(result.styles)) fail("styles", "must not contain </style> or @import");
+	}
+	parseComponents(source, result, permissions);
+	if (!result.theme && !result.commands?.length && !result.locales?.length && !result.code?.trim() && !result.styles && !result.components) {
+		fail("package", "must contain a theme, nonempty commands, language packs, styles, components, or nonempty code");
 	}
 	// All input fields are validated JSON data before serialization; no toJSON hooks are allowed.
 	if (encoder.encode(JSON.stringify(source)).byteLength > MAX_PACKAGE_BYTES) {

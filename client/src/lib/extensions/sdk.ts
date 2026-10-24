@@ -56,6 +56,8 @@ export interface ExtensionSDK {
     close(id: string): Promise<void>;
     remove(id: string): Promise<void>;
   };
+  /** Needs `ui-components`: the value (JSON, ≤64KB) is read by this package's components as `ext.data` (from "pipaya"). */
+  readonly components: { setData(value: unknown): Promise<void> };
   readonly navbar: { set(id: string, spec: NavbarItemSpec): Promise<void>; remove(id: string): Promise<void> };
   readonly http: {
     getJson(path: string): Promise<unknown>;

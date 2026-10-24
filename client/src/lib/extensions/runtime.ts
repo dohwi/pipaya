@@ -66,6 +66,7 @@ const sdk = Object.freeze({
   messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType), setHeader: pattern => rpc('messages.setHeader', pattern), clearHeader: () => rpc('messages.clearHeader') }),
   sessionLabels: Object.freeze({ set: labels => rpc('sessionLabels.set', labels) }),
   mentions: Object.freeze({ set: items => rpc('mentions.set', items) }),
+  components: Object.freeze({ setData: value => rpc('components.setData', value === undefined ? null : value) }),
   slots: Object.freeze({ set: (slot, id, spec) => rpc('slots.set', slot, id, spec), remove: (slot, id) => rpc('slots.remove', slot, id) }),
   composerFilter: Object.freeze({ set: fn => register('composerFilter.set', 'filter', fn), clear: () => rpc('composerFilter.clear') }),
   status: Object.freeze({ set: (id, text) => rpc('status.set', id, text), remove: id => rpc('status.remove', id) }),

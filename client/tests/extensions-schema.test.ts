@@ -31,7 +31,7 @@ describe("portable extension package schema", () => {
 	test("exports the SDK, byte cap, and immutable permission/token whitelists", () => {
 		expect(SDK_VERSION).toBe(1);
 		expect(MAX_PACKAGE_BYTES).toBe(256 * 1024);
-		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions"]);
+		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions", "ui-style", "ui-components"]);
 		expect(Object.isFrozen(PERMISSIONS)).toBe(true);
 		expect(Object.isFrozen(THEME_TOKENS)).toBe(true);
 		expect(new Set(THEME_TOKENS).size).toBe(23);

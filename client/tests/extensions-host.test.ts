@@ -49,7 +49,10 @@ defineGlobal("localStorage", {
 	clear: () => storage.clear(),
 });
 defineGlobal("location", loc);
+const styleEls: { dataset: Record<string, string>; textContent: string; removed: boolean }[] = [];
 defineGlobal("document", {
+	createElement: () => { const el = { dataset: {} as Record<string, string>, textContent: "", removed: false, remove() { el.removed = true; } }; return el; },
+	head: { append: (el: (typeof styleEls)[number]) => { styleEls.push(el); } },
 	documentElement: { style: {
 		setProperty: (k: string, v: string) => { styles.set(k, v); },
 		removeProperty: (k: string) => { const old = styles.get(k) ?? ""; styles.delete(k); return old; },
@@ -62,10 +65,17 @@ beforeAll(async () => {
 	dir = await mkdtemp(join(tmpdir(), "pipaya-extensions-host-"));
 	const fakeFile = join(dir, "fake-runtime.js");
 	await writeFile(fakeFile, FAKE_RUNTIME);
+	// Compiling real Svelte and linking the app kit is covered by extensions-components.test.ts; the host only needs the result.
+	const componentsFile = join(dir, "fake-components.js");
+	await writeFile(componentsFile, `export function loadComponents(pkg) { if (globalThis.__componentsError) throw new Error(globalThis.__componentsError); return Object.fromEntries(Object.keys(pkg.components).map(n => [n, { name: n }])); }`);
+	const kitFile = join(dir, "fake-kit.js");
+	await writeFile(kitFile, `export function kit(id, data) { return { id, data }; }`);
 	const build = await Bun.build({
 		entrypoints: [resolve("src/lib/extensions/host.svelte.ts")], target: "bun",
 		plugins: [{ name: "runes", setup(builder) {
 			builder.onResolve({ filter: /^\.\/runtime$/ }, () => ({ path: fakeFile }));
+			builder.onResolve({ filter: /^\.\/components$/ }, () => ({ path: componentsFile }));
+			builder.onResolve({ filter: /^\.\/kit$/ }, () => ({ path: kitFile }));
 			builder.onLoad({ filter: /\.svelte\.ts$/ }, async ({ path }) => {
 				const source = ts.transpileModule(await Bun.file(path).text(), {
 					compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
@@ -85,6 +95,8 @@ beforeEach(() => {
 	storage.clear(); styles.clear(); loc.search = "";
 	runtimes().length = 0;
 	delete (globalThis as any).__fakeRuntimeStart;
+	delete (globalThis as any).__componentsError;
+	styleEls.length = 0;
 });
 
 // ---- helpers ----
@@ -1238,5 +1250,78 @@ describe("panes", () => {
 		const { id } = await activate(host, code("example.nopanes", ["panes"]));
 		expect(() => call(host, id, "panes.list")).toThrow();
 		host.stop();
+	});
+});
+
+describe("trusted UI (ui-style / ui-components)", () => {
+	const ui = (id: string, extra: Record<string, unknown> = {}, permissions = ["ui-components", "ui-style"]) =>
+		pkg(id, permissions, { components: { Chip: "<p/>", Send: "<p/>" }, mounts: [{ slot: "header.end", component: "Chip" }, { slot: "header.end", component: "Chip", order: -1 }], replaces: { "composer.send": "Send" }, styles: "[data-part='header']{height:60px}", ...extra });
+
+	test("nothing is mounted or injected until the extension is enabled", () => {
+		const { host } = newHost();
+		host.install(ui("example.skin"));
+		expect(host.mountsIn("header.end")).toEqual([]);
+		expect(host.replacementFor("composer.send")).toBeUndefined();
+		expect(styleEls).toHaveLength(0);
+	});
+	test("enable mounts in order, replaces the part and injects the stylesheet", async () => {
+		const { host } = newHost();
+		const { id } = await activate(host, ui("example.skin"));
+		expect(host.mountsIn("header.end").map(m => m.order)).toEqual([-1, 0]);
+		expect(host.mountsIn("header.start")).toEqual([]);
+		expect(host.replacementFor("composer.send")?.owner).toBe(id);
+		expect(styleEls).toHaveLength(1);
+		expect(styleEls[0]!.dataset.extension).toBe(id);
+		expect(styleEls[0]!.textContent).toContain("height:60px");
+	});
+	test("disable removes everything the extension added, and leaves other extensions alone", async () => {
+		const { host } = newHost();
+		const a = await activate(host, ui("example.skin"));
+		const { styles: _s, ...noStyles } = ui("example.other", {}, ["ui-components"]) as Record<string, unknown>;
+		const b = await activate(host, noStyles as never);
+		expect(host.mountsIn("header.end")).toHaveLength(4);
+		host.disable(a.id);
+		expect(styleEls[0]!.removed).toBe(true);
+		expect(host.mountsIn("header.end").map(m => m.owner)).toEqual([b.id, b.id]);
+		expect(host.replacementFor("composer.send")?.owner).toBe(b.id);
+	});
+	test("safe mode shows none of it", async () => {
+		const { host } = newHost();
+		await activate(host, ui("example.skin"));
+		host.setSafeMode(true);
+		expect(host.mountsIn("header.end")).toEqual([]);
+		expect(host.replacementFor("composer.send")).toBeUndefined();
+		expect(styleEls[0]!.removed).toBe(true);
+	});
+	test("a component that fails to compile stops the extension and cleans up", async () => {
+		const { host } = newHost();
+		(globalThis as any).__componentsError = "Chip.svelte: boom";
+		const id = host.install(ui("example.skin"));
+		await expect(host.enable(id)).rejects.toThrow("boom");
+		expect(host.find(id).state).toBe("error");
+		expect(host.mountsIn("header.end")).toEqual([]);
+		expect(styleEls.every(e => e.removed)).toBe(true);
+	});
+	test("without the permission the package cannot even be installed", () => {
+		const { host } = newHost();
+		expect(() => host.install(ui("example.skin", {}, ["ui-style"]))).toThrow(/ui-components/);
+		expect(() => host.install(ui("example.skin", {}, ["ui-components"]))).toThrow(/ui-style/);
+	});
+	test("components.setData needs ui-components, is bounded and is dropped with the extension", async () => {
+		const { host } = newHost();
+		const plain = await activate(host, code("example.plain", ["ui"]));
+		expect(() => call(host, plain.id, "components.setData", [1])).toThrow(/권한|permission/i);
+		const { id } = await activate(host, ui("example.skin", { code: "/* fake */" }));
+		call(host, id, "components.setData", [{ n: 1 }]);
+		expect(host.componentData[id]).toEqual({ n: 1 });
+		expect(() => call(host, id, "components.setData", ["x".repeat(65000)])).toThrow();
+		expect(() => call(host, id, "components.setData", [])).toThrow();
+		host.disable(id);
+		expect(host.componentData[id]).toBeUndefined();
+	});
+	test("an upgrade that asks for ui-components needs consent again", async () => {
+		const { host } = newHost();
+		await activate(host, code("example.skin", ["ui"]));
+		expect(host.canResume(ui("example.skin") as never)).toBe(false);
 	});
 });

@@ -19,7 +19,11 @@
 	<p class="hint">{t("요청한 추가 권한이 없습니다.")}</p>
 {/if}
 <p class="hint">{t("확장은 자신의 설정을 읽을 수 있습니다. 테마는 화면 색상과 크기를 바꾸며, 템플릿 명령은 입력만 채우고 전송하지 않습니다.")}</p>
-<Notice tone="warn" size="sm">{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</Notice>
+{#if pkg.manifest.permissions.includes("ui-components")}
+	<Notice tone="danger" size="sm">{t("이 확장은 격리되지 않고 앱 안에서 직접 실행됩니다. 대화 내용, 서버 연결 정보와 토큰을 포함한 앱의 모든 데이터에 접근할 수 있으므로 신뢰하는 개발자의 패키지만 활성화하세요.")}</Notice>
+{:else}
+	<Notice tone="warn" size="sm">{t("확장 코드는 격리된 환경에서 실행되지만 안전성을 보증하지 않습니다. CPU·메모리 등 자원 사용 제한도 보장되지 않으므로 신뢰하는 패키지만 활성화하세요.")}</Notice>
+{/if}
 
 <style>
 	.hint { overflow-wrap: anywhere; }

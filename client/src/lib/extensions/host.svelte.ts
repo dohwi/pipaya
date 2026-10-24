@@ -9,7 +9,9 @@ import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
 import { JsonTransport } from "./transport";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
-import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission } from "./schema";
+import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
+import type { Component } from "svelte";
+import { raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
 import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
@@ -102,6 +104,8 @@ export interface ExtensionPanel extends Omit<UIPanelSpec, "view"> {
   revision: number;
   run(event: UIEvent): Promise<void>;
 }
+/** A component of a `ui-components` package mounted in an app slot. `data` is what the extension code last passed to `components.setData`. */
+export interface MountedComponent { owner: string; slot: UISlot; order: number; key: string; component: Component<any> }
 export interface ExtensionLog { owner: string; text: string; at: number }
 const KEY = "pipaya.extensions.v1";
 const SAFE = "pipaya.extensions.safe";
@@ -176,6 +180,12 @@ export class ExtensionHost {
   shortcuts = $state.raw<ExtensionShortcut[]>([]);
   toolRenderers = $state.raw<ToolRenderer[]>([]);
   slots = $state.raw<SlotItem[]>([]);
+  /** Trusted components (`ui-components`) of the active extensions, and the parts they replace. */
+  mounted = $state.raw<MountedComponent[]>([]);
+  private replacements = $state.raw<{ owner: string; part: UIPart; component: Component<any> }[]>([]);
+  /** What each extension's code passed to `components.setData` (plain JSON, handed to its components as `data`). */
+  componentData = $state.raw<Record<string, unknown>>({});
+  private styleEls = new Map<string, HTMLStyleElement>();
   messageRenderers = $state.raw<MessageRenderer[]>([]);
   private composerFilters = new Map<string, ComposerFilter>();
   private labelSets = $state.raw<{ owner: string; labels: Record<string, SessionLabel> }[]>([]);
@@ -609,6 +619,8 @@ export class ExtensionHost {
         await runtime.start(pkg);
       }
       if (!current()) return;
+      await this.installUi(id, pkg, current);
+      if (!current()) return;
       entry.state = "active";
       const openId = this.pendingPanelOpens.get(id);
       this.pendingPanelOpens.delete(id);
@@ -620,6 +632,34 @@ export class ExtensionHost {
       if (current()) this.failure(id, e instanceof Error ? e.message : String(e));
       throw e;
     }
+  }
+  /**
+   * Styles and trusted components of a package. Both run in the app itself, so they only start for an enabled extension
+   * (the user consented on this device) and never in safe mode. The compiler is loaded on demand.
+   */
+  private async installUi(id: string, pkg: ExtensionPackage, current: () => boolean) {
+    if (pkg.styles && pkg.manifest.permissions.includes("ui-style") && typeof document !== "undefined") {
+      const el = document.createElement("style");
+      el.dataset.extension = id; el.textContent = pkg.styles;
+      document.head.append(el); this.styleEls.set(id, el);
+      try { raiseSpecificity(el.sheet); } catch { /* an engine without CSSOM rule editing: the sheet still works, at its written specificity */ }
+    }
+    if (!pkg.components || !pkg.manifest.permissions.includes("ui-components")) return;
+    const [{ loadComponents }, { kit }] = await Promise.all([import("./components"), import("./kit")]);
+    if (!current()) return;
+    const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id)));
+    this.mounted = [...this.mounted, ...(pkg.mounts ?? []).map((m, i) => ({ owner: id, slot: m.slot, order: m.order ?? 0, key: `${id}:${i}`, component: loaded[m.component]! }))];
+    this.replacements = [...this.replacements, ...Object.entries(pkg.replaces ?? {}).map(([part, name]) => ({ owner: id, part: part as UIPart, component: loaded[name]! }))];
+  }
+  /** Components mounted in a slot, by order then install order. Only active extensions count; safe mode shows none. */
+  mountsIn(slot: UISlot): MountedComponent[] {
+    if (this.safeMode) return [];
+    return this.mounted.filter(m => m.slot === slot && this.activeOwner(m.owner)).sort((a, b) => a.order - b.order);
+  }
+  /** The component an active extension substitutes for a built-in part (the first installed wins). */
+  replacementFor(part: UIPart): { owner: string; component: Component<any> } | undefined {
+    if (this.safeMode) return undefined;
+    return this.replacements.find(r => r.part === part && this.activeOwner(r.owner));
   }
   private failure(id: string, error: string) {
     this.revokeNotifications(id);
@@ -658,6 +698,10 @@ export class ExtensionHost {
     this.shortcuts = this.shortcuts.filter(s => s.owner !== id);
     this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id);
     this.slots = this.slots.filter(s => s.owner !== id);
+    this.styleEls.get(id)?.remove(); this.styleEls.delete(id);
+    this.mounted = this.mounted.filter(m => m.owner !== id);
+    this.replacements = this.replacements.filter(r => r.owner !== id);
+    if (Object.hasOwn(this.componentData, id)) { const { [id]: _drop, ...rest } = this.componentData; this.componentData = rest; }
     this.messageRenderers = this.messageRenderers.filter(r => r.owner !== id);
     this.composerFilters.delete(id);
     this.labelSets = this.labelSets.filter(x => x.owner !== id);
@@ -1190,6 +1234,13 @@ export class ExtensionHost {
         this.require(id, "slots");
         const slot = args[0], itemId = navbarId(args[1]);
         this.slots = this.slots.filter(s => s.owner !== id || s.slot !== slot || s.id !== itemId); return;
+      }
+      case "components.setData": {
+        this.require(id, "ui-components");
+        if (args.length !== 1) throw new LocalizedError(t("components.setData는 값 하나가 필요합니다"));
+        const json = JSON.stringify(args[0] ?? null);
+        if (json.length > 64000) throw new LocalizedError(t("컴포넌트 데이터는 최대 64KB입니다"));
+        this.componentData = { ...this.componentData, [id]: JSON.parse(json) }; return;
       }
       case "composerFilter.set": {
         this.require(id, "composer-filter"); const token = string(args[1], 40);

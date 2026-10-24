@@ -2,7 +2,7 @@ import { msg } from "../i18n";
 import type { ExtensionPackage, Permission } from "./schema";
 
 /** What an extension package brings, as labels for its card (Korean source strings, translated where shown). */
-export const featuresOf = (pkg: ExtensionPackage): string[] => [pkg.theme ? msg("테마") : "", pkg.commands?.length ? msg("템플릿 명령") : "", pkg.locales?.length ? msg("언어팩") : "", pkg.code?.trim() ? msg("실행 코드") : ""].filter(Boolean);
+export const featuresOf = (pkg: ExtensionPackage): string[] => [pkg.theme ? msg("테마") : "", pkg.commands?.length ? msg("템플릿 명령") : "", pkg.locales?.length ? msg("언어팩") : "", pkg.code?.trim() ? msg("실행 코드") : "", pkg.styles ? msg("앱 스타일") : "", pkg.components ? msg("앱 컴포넌트") : ""].filter(Boolean);
 
 /** What each permission lets an extension do, as the sentence shown in the consent dialog. Every permission needs one. */
 export const permissionLabels: Record<Permission, string> = {
@@ -31,5 +31,7 @@ export const permissionLabels: Record<Permission, string> = {
 		"composer-filter": msg("보내기 전 가공: 보내려는 메시지를 읽고, 바꾸거나 전송을 막을 수 있습니다. 입력한 내용이 확장 코드에 전달됩니다."),
 		"session-labels": msg("대화 라벨: 사이드바와 대화 헤더의 제목 앞에 짧은 라벨을 붙입니다. 대화 목록을 읽지는 않습니다."),
 		"composer-mentions": msg("@ 자동완성: 입력창의 @ 완성 목록과 강조를 확장이 정합니다. 입력 중인 내용은 읽지 않습니다."),
+		"ui-style": msg("앱 전체 스타일: 앱 화면 전체에 CSS를 적용해 기존 디자인을 바꿉니다. 화면을 가리거나 다른 화면처럼 꾸밀 수 있습니다."),
+		"ui-components": msg("앱 안에서 컴포넌트 실행(고위험): 확장의 Svelte 코드가 격리 없이 앱 안에서 실행되어 화면을 원하는 위치에 그리거나 기존 화면을 교체합니다. 대화 내용, 서버 연결 정보와 토큰 등 앱의 모든 데이터에 접근할 수 있습니다. 신뢰하는 개발자의 확장만 허용하세요."),
 		http: msg("HTTP 읽기: extension이 설정한 서버 주소로 GET 요청을 보내 JSON을 읽습니다 (자격 증명 미전송)."),
 	};
