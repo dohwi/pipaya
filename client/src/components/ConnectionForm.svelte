@@ -587,7 +587,7 @@
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
 						{#if confirmClose}
-							<span class="savestate warn" role="alert">{t("저장되지 않은 변경이 있습니다.")}</span>
+							<span class="savestate warn" role="alert"><Icon name="alert" /><span>{t("저장되지 않은 변경이 있습니다.")}</span></span>
 							<button type="button" class="btn ghost" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
 							<button type="button" class="btn ghost" onclick={() => close(true)} disabled={busy}>{t("버리고 닫기")}</button>
 						{:else}
@@ -1007,15 +1007,33 @@
 		stroke-linejoin: round;
 	}
 	.savestate {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		margin-right: auto;
-		align-self: center;
-		font-size: 12px;
+		font-size: var(--fs-sm);
+		font-weight: 500;
+		line-height: 1.3;
 		color: var(--text-dim, currentColor);
 	}
+	.savestate :global(svg) {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
 	.savestate.warn {
-		color: var(--danger, currentColor);
+		padding: 6px 10px;
+		border-radius: var(--radius);
+		background: var(--warn-soft);
+		color: var(--warn);
 	}
 	.fbtns {
+		align-items: center;
 		display: flex;
 		justify-content: flex-end;
 		gap: 8px;
