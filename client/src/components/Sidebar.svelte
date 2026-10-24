@@ -366,7 +366,7 @@
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
 			<section class="srv band" class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
-				<div class="srvhead">
+				<div class="srvhead" class:folded={sfold}>
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 						<span class="sicon"><Icon name="server" /></span>
@@ -396,7 +396,7 @@
 						{@const parent = pretty(n, d.path)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
-						<div class="dir grabbable" class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
+						<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
 								<span class="dicon"><Icon name="folder" /></span>
@@ -627,6 +627,9 @@
 	.srvhead:last-child {
 		border-radius: 11px;
 		margin-bottom: 0;
+	}
+	.srv:has(> .srvhead:last-child) {
+		padding-bottom: 0; /* folded: the header is the whole card, no band strip under it */
 	}
 	.srvhead:hover {
 		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
@@ -862,6 +865,33 @@
 	@media (pointer: coarse) {
 		.dirnew {
 			opacity: 1;
+		}
+	}
+	/* folded rows: on hover the count gives way to the "+", which takes its place instead of sitting beside it */
+	@media (hover: hover) {
+		.dir.folded,
+		.srvhead.folded {
+			position: relative;
+		}
+		.dir.folded .dirnew,
+		.srvhead.folded .dirnew {
+			position: absolute;
+			top: 50%;
+			translate: 0 -50%;
+		}
+		.dir.folded .dirnew {
+			right: 2px;
+		}
+		.srvhead.folded .dirnew {
+			right: 10px;
+		}
+		.dir.folded .cbadge,
+		.srvhead.folded .cbadge {
+			transition: opacity var(--motion-fast) var(--ease-std);
+		}
+		.dir.folded:hover .cbadge,
+		.srvhead.folded:hover .cbadge {
+			opacity: 0;
 		}
 	}
 	.dirnew:hover,
