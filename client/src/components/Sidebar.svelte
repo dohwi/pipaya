@@ -258,9 +258,9 @@
 				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2 }}>
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
-						<span class="sicon"><Icon name="server" /></span>
+						<span class="sicon {n.state}"><Icon name="server" /></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
-						<span class="spill {n.state}"><span class="sdot {n.state}"></span>{#if n.state !== "online"}<span class="spilltext">{t(statusText[n.state])}</span>{/if}</span>
+						{#if n.state !== "online"}<span class="spill {n.state}"><span class="spilltext">{t(statusText[n.state])}</span></span>{/if}
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
 					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
@@ -525,7 +525,7 @@
 	:global(:where(.side) .srv.cur .srvtoggle) {
 		color: var(--text);
 	}
-	/* the status is a badge on the server icon; the icon takes the folder-icon column, so the name lines up with the directory names */
+	/* the icon takes the folder-icon column, so the name lines up with the directory names */
 	.sicon {
 		position: relative;
 		display: grid;
@@ -544,12 +544,24 @@
 		stroke-width: 1.9;
 
 	}
-	/* the status lives in a small pill after the name, so it never touches the icon or the name: a dot alone when online, dot + text otherwise */
+	/* the status is the server icon's colour (green online, red offline, amber needs attention, blinking while checking); only a problem adds a text pill after the name */
+	.sicon.online {
+		color: var(--ok);
+	}
+	.sicon.offline {
+		color: var(--danger);
+	}
+	.sicon.unauthorized,
+	.sicon.incompatible {
+		color: var(--warn);
+	}
+	.sicon.checking {
+		animation: blink-cursor 1s ease-in-out infinite;
+	}
 	.spill {
 		display: inline-flex;
 		align-items: center;
 		flex: none;
-		gap: 5px;
 		height: 18px;
 		padding: 0 7px;
 		border-radius: var(--radius-pill);
@@ -557,14 +569,9 @@
 		background: color-mix(in srgb, var(--text) 4%, transparent);
 		color: var(--text-faint);
 	}
-	.spill .sdot {
-		width: 6px;
-		height: 6px;
-	}
-	/* a ring, not a fill, so "not connected" reads without colour */
-	:global(:where(.side) .spill .sdot.offline) {
-		background: transparent;
-		box-shadow: inset 0 0 0 1.5px var(--text-faint);
+	:global(:where(.side) .spill.offline) {
+		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+		color: var(--danger);
 	}
 	:global(:where(.side) .spill.unauthorized),
 	:global(:where(.side) .spill.incompatible) {
