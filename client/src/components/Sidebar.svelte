@@ -18,6 +18,7 @@
 	import { drag, dragSource, dropTarget, type DropOpts } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
 	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, shortName, unreachable } from "../lib/sidebar-model";
@@ -29,8 +30,8 @@
 	/** The conversation or terminal being renamed in place, and the split tab (group) being renamed. */
 	const rename = new InlineRename();
 	const groupRename = new InlineRename();
-	/** what a dragged session is hovering over: a group (join it) or another session (group with it) */
-	let dropOn = $state<string | null>(null);
+	/** What the sidebar draws while something is dragged (the row pulled onto, the drop lines, the carried block). */
+	const marks = new DragMarks();
 
 	interface Node {
 		server: Server;
@@ -136,14 +137,9 @@
 		};
 	}
 	/** What a dragged session hovering over `key` highlights (and clears again when it leaves). */
-	const hover = (key: string) => (pt: unknown) => {
-		if (pt) dropOn = key;
-		else if (dropOn === key) dropOn = null;
-	};
+	const hover = (key: string) => (pt: unknown) => marks.hover(key, !!pt);
 	const isGroupId = (id: string | null) => !!id && app.groups.some((g) => g.id === id);
 	/* ---- reordering the tabs of a directory by dragging them next to each other ---- */
-	/** the tab row a carried tab would land before / after */
-	let tabDrop = $state<{ id: string; after: boolean } | null>(null);
 	/**
 	 * Over the top / bottom of a row = put it there; over the middle = put the two together (a group never goes into
 	 * another group, so a carried group only ever reorders).
@@ -159,14 +155,13 @@
 		!searching && drag.id && drag.id !== x && ofDir(d, drag.id) ? edgeAt(pt, isGroupId(drag.id)) : null;
 	const tabHover = (d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
 		const edge = pt ? reorderEdge(d, x.id, pt) : null;
-		tabDrop = edge ? { id: x.id, after: edge === "after" } : tabDrop?.id === x.id ? null : tabDrop;
+		marks.setTab(x.id, edge);
 		const pairs = !!pt && !edge && !isGroupId(drag.id) && !(x.kind === "group" && x.members.some((m) => m.id === drag.id));
-		if (pairs) dropOn = x.id;
-		else if (dropOn === x.id) dropOn = null;
+		marks.hover(x.id, pairs);
 	};
 	const tabDropAt = (n: Node, d: DirBlock, x: Tab) => async (id: string, pt: { x: number; y: number }) => {
 		const edge = reorderEdge(d, x.id, pt);
-		tabDrop = null;
+		marks.tab = null;
 		if (edge) {
 			if (!d.tabs.some((t) => t.id === id)) await app.leaveGroup(id); // a pane steps out of its group into a tab
 			const now = app.dirs.find((y) => y.path === d.path)?.tabs.map((t) => t.id) ?? d.tabs.map((t) => t.id);
@@ -182,17 +177,11 @@
 		drop: (id: string) => void app.groupWith(id, m.id),
 	});
 	/* ---- reordering directories by dragging their header ---- */
-	/** the block being carried (`dir:path`), and the one it would land next to */
-	let dirDrag = $state<string | null>(null);
-	let dirDrop = $state<{ id: string; after: boolean } | null>(null);
 	const bid = (kind: "dir" | "group" | "server", key: string) => `${kind}:${key}`;
-	/** `use:dirSource`: drag a directory header to reorder it (lib/block-drag.ts), drawn through dirDrag/dirDrop. */
+	/** `use:dirSource`: drag a directory header to reorder it (lib/block-drag.ts), drawn through `marks`. */
 	const dirSource = blockDrag({
-		set: (drag, drop) => {
-			dirDrag = drag;
-			dirDrop = drop;
-		},
-		get: () => dirDrop,
+		set: (drag, drop) => marks.setBlock(drag, drop),
+		get: () => marks.block,
 		key: bid,
 		move: (o, target, after) => (o.kind === "server" ? app.moveServer(o.path, target, after) : app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after)),
 	});
@@ -290,9 +279,9 @@
 		class:term={target.kind === "terminal"}
 		class:member
 		class:active={n.current && x.id === app.activeId}
-		class:over={dropOn === x.id}
-		class:before={tabDrop?.id === x.id && !tabDrop.after}
-		class:after={tabDrop?.id === x.id && tabDrop.after}
+		class:over={marks.over(x.id)}
+		class:before={marks.tabLine(x.id) === "before"}
+		class:after={marks.tabLine(x.id) === "after"}
 		class:grabbable={n.current && !rename.is(x.id)}
 		class:menuopen={menuId === x.id}
 		use:dragSource={{ id: x.id, disabled: !n.current || rename.is(x.id) }}
@@ -346,7 +335,8 @@
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
-			<section class="srv band" data-block={bid("server", n.server.id)} data-server="" class:carried={dirDrag === bid("server", n.server.id)} class:before={dirDrop?.id === bid("server", n.server.id) && !dirDrop.after && dirDrag !== bid("server", n.server.id)} class:after={dirDrop?.id === bid("server", n.server.id) && dirDrop.after && dirDrag !== bid("server", n.server.id)} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
+			{@const srvMark = marks.blockMark(bid("server", n.server.id))}
+			<section class="srv band" data-block={bid("server", n.server.id)} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
 				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2 }}>
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
@@ -373,11 +363,12 @@
 
 					{#each n.dirs as d (d.path)}
 						{@const dfold = isFolded(dirKey(n.server.id, d.path))}
+						{@const dirMark = marks.blockMark(bid("dir", d.path))}
 						{@const label = shortLabel(n, d.path)}
 						{@const parent = pretty(n, d.path)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirDrag === bid("dir", d.path)} class:before={dirDrop?.id === bid("dir", d.path) && !dirDrop.after && dirDrag !== bid("dir", d.path)} class:after={dirDrop?.id === bid("dir", d.path) && dirDrop.after && dirDrag !== bid("dir", d.path)}>
-						<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={dropOn === dirKey(n.server.id, d.path)} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
+						<div class="dirblock" data-block={bid("dir", d.path)} data-server={n.server.id} class:carried={dirMark.carried} class:before={dirMark.before} class:after={dirMark.after}>
+						<div class="dir grabbable" class:folded={dfold} class:cur={n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)} class:over={marks.over(dirKey(n.server.id, d.path))} use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: hover(dirKey(n.server.id, d.path)), drop: dropOnDir }} use:dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2 }}>
 							<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(dirKey(n.server.id, d.path))} aria-expanded={!dfold} title={pretty(n, d.path)}>
 								<span class="chev" class:folded={dfold}><Icon name="chevron-down" /></span>
 								<span class="dicon"><Icon name="folder" /></span>
@@ -401,15 +392,15 @@
 										{@const g = tab.group}
 										{@const gfold = isFolded(groupKey(g.id))}
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div class="grp" class:over={dropOn === g.id}>
+										<div class="grp" class:over={marks.over(g.id)}>
 											<!-- a split tab is a tab row like the others (book that opens/closes, name, then the menu); the panes hang under it on a tree line -->
 											<div
 												class="item nested grprow"
 												class:grabbable={n.current && !groupRename.is(g.id)}
 												class:cur={n.current && g.id === app.activeGroup?.id}
 												class:menuopen={menuId === g.id}
-												class:before={tabDrop?.id === g.id && !tabDrop.after}
-												class:after={tabDrop?.id === g.id && tabDrop.after}
+												class:before={marks.tabLine(g.id) === "before"}
+												class:after={marks.tabLine(g.id) === "after"}
 												use:dragSource={{ id: g.id, disabled: !n.current || groupRename.is(g.id) }}
 												use:dropTarget={drop}
 											>
