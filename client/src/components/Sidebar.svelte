@@ -365,12 +365,13 @@
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			{@const sfold = isFolded(n.server.id)}
-			<section class="srv" class:cur={n.current}>
+			<section class="srv" class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
 				<div class="srvhead">
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
-						<span class="sdot {n.state}"></span>
+						<span class="sicon"><Icon name="server" /><span class="sdot {n.state}"></span></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
+						{#if n.state !== "online"}<span class="sstate" class:warn={n.state !== "checking"}>{t(statusText[n.state])}</span>{/if}
 						{#if sfold}<span class="dcount mono">{n.state === "online" || n.loaded ? n.total : ""}</span>{/if}
 					</button>
 					<button class="dirnew" class:on={menuId === `new\u0000${n.server.id}`} data-menu-button onpointerenter={(e) => hoverNew(e, n, ".", n.server.id)} onpointerleave={leaveMenu} onclick={(e) => clickNew(e, n, ".", n.server.id)} aria-label={t("{name}에서 새로 만들기", { name: app.serverLabel(n.server) })} aria-haspopup="menu" title={t("이 서버에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
@@ -379,7 +380,7 @@
 				{#if !sfold}
 				<div class="fold" in:collapseIn out:collapseOut>
 					{#if n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}
-						<div class="nosess warnline">{t(statusText[n.state])}{n.loaded ? ` · ${t("마지막으로 확인된 목록")}` : ""}</div>
+						{#if n.loaded}<div class="nosess warnline">{t("마지막으로 확인된 목록")}</div>{/if}
 					{/if}
 					{#if !n.loaded && n.state !== "offline" && n.state !== "unauthorized" && n.state !== "incompatible"}
 						<div class="sk skeleton-bar"></div>
@@ -586,16 +587,22 @@
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
-		padding: 4px 8px 12px;
+		padding: 4px 0 12px;
 		overscroll-behavior: contain;
 	}
+	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
+		padding: 0 8px 4px;
+		background: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
+	}
+	.srv:has(> .fold) {
 		padding-bottom: 8px;
 	}
 	.srv + .srv {
-		margin-top: 4px;
-		padding-top: 4px;
-		border-top: 1px solid var(--border);
+		margin-top: 6px;
+	}
+	.srv.off .fold {
+		opacity: 0.45;
 	}
 	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
 	.srv > .fold {
@@ -615,7 +622,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		height: 32px;
 		padding: 0 6px 0 8px;
 		text-align: left;
@@ -624,11 +631,48 @@
 	.srv.cur .srvtoggle {
 		color: var(--text);
 	}
-	.srvtoggle .sdot {
-		margin-right: 4px; /* server name starts at x=58, the same column as directory names */
+	/* the status is a badge on the server icon; the icon takes the folder-icon column, so the name lines up with the directory names */
+	.sicon {
+		position: relative;
+		display: grid;
+		flex: none;
+		width: 14px;
+		height: 14px;
+		margin-right: 2px; /* server name starts at x=58, the same column as directory names */
+		color: var(--text-faint);
+	}
+	.sicon :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke: currentColor;
+		fill: none;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.sicon .sdot {
+		position: absolute;
+		right: -4px;
+		bottom: -4px;
+		width: 8px;
+		height: 8px;
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
+	}
+	/* a ring, not a fill, so "not connected" reads without colour */
+	.sicon .sdot.offline {
+		background: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
+		border: 2px solid var(--text-faint);
+	}
+	.sstate {
+		flex: none;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+	}
+	.sstate.warn {
+		color: var(--warn);
 	}
 	.sname {
-		flex: 1;
+		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
