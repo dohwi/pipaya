@@ -329,6 +329,8 @@
 	/** The form as the dialog opened it; closing with anything different asks first. */
 	let initial = "";
 	let confirmClose = $state(false);
+	/** The default answer of the confirm sheet gets focus (Modal keeps a child's own focus). */
+	const focusMe = (node: HTMLElement) => node.focus();
 	const dirty = () => !!form && snapshot(form) !== initial;
 
 	/** A connection can be saved without models; a new one with none listed tries the upstream's list but never depends on it. */
@@ -580,24 +582,32 @@
 				{/if}
 			</div>
 
-			<footer class:warn={confirmClose && editing === null}>
+			<footer>
 				{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
 				<div class="fbtns">
 					{#if editing !== null}
 						<button type="button" class="btn primary" onclick={closeModel}>{t("완료")}</button>
 					{:else}
-						{#if confirmClose}
-							<span class="savestate warn" role="alert"><Icon name="alert" /><span>{t("저장되지 않은 변경이 있습니다.")}</span></span>
-							<button type="button" class="btn keep" onclick={() => (confirmClose = false)} disabled={busy}>{t("계속 편집")}</button>
-							<button type="button" class="btn discard" onclick={() => close(true)} disabled={busy}>{t("저장하지 않고 닫기")}</button>
-						{:else}
-							<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
-						{/if}
-						<button class="btn primary save" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
+						<button type="button" class="btn ghost" onclick={() => close()} disabled={busy}>{t("취소")}</button>
+						<button class="btn primary" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</button>
 					{/if}
 				</div>
 			</footer>
 		</form>
+		{#if confirmClose}
+			<Modal onclose={() => (confirmClose = false)} role="alertdialog" labelledby="unsaved-title" describedby="unsaved-desc" width="s" layer={5} portal>
+				<div class="uc">
+					<span class="ucmark"><Icon name="alert" /></span>
+					<h3 id="unsaved-title">{t("저장하지 않고 닫을까요?")}</h3>
+					<p id="unsaved-desc">{t("저장되지 않은 변경이 있습니다.")}</p>
+					<div class="ucbtns">
+						<button type="button" class="btn primary" onclick={() => { confirmClose = false; void save(); }} use:focusMe>{t("저장")}</button>
+						<button type="button" class="btn" onclick={() => (confirmClose = false)}>{t("계속 편집")}</button>
+						<button type="button" class="btn ghost danger-text" onclick={() => close(true)}>{t("저장하지 않고 닫기")}</button>
+					</div>
+				</div>
+			</Modal>
+		{/if}
 		{#if matchFor !== null && form.rows[matchFor]}
 			{@const mr = form.rows[matchFor]!}
 			<CatalogPickerModal
@@ -1006,67 +1016,57 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.fform > footer {
-		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
-	}
-	.fform > footer.warn {
-		background: var(--warn-soft);
-		border-top-color: color-mix(in srgb, var(--warn) 40%, transparent);
-	}
-	.savestate {
-		display: inline-flex;
+	.uc {
+		display: flex;
+		flex-direction: column;
 		align-items: center;
 		gap: 6px;
-		height: 38px;
-		margin-right: auto;
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		line-height: 1;
-		color: var(--text-dim, currentColor);
+		padding: 24px 20px calc(16px + var(--sab));
+		text-align: center;
 	}
-	.savestate :global(svg) {
-		flex: none;
-		width: 16px;
-		height: 16px;
+	.ucmark {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		margin-bottom: 6px;
+		border-radius: 50%;
+		background: var(--warn-soft);
+		color: var(--warn);
+	}
+	.ucmark :global(svg) {
+		width: 22px;
+		height: 22px;
 		stroke: currentColor;
 		fill: none;
 		stroke-width: 1.8;
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.savestate.warn {
-		color: var(--warn);
+	.uc h3 {
+		margin: 0;
+		font-size: var(--fs-lg);
 	}
-	.savestate span {
-		white-space: nowrap;
+	.uc p {
+		margin: 0;
+		color: var(--text-dim);
+		font-size: var(--fs-sm);
 	}
-	/* confirm bar: the danger action is quiet red text, "keep editing" an outline, save stays the one filled button */
-	.fform > footer.warn .btn.keep {
-		background: transparent;
-		border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+	.ucbtns {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		align-self: stretch;
+		margin-top: 16px;
 	}
-	.fform > footer.warn .btn.keep:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--warn) 16%, transparent);
+	.ucbtns .btn {
+		width: 100%;
 	}
-	.btn.discard {
-		background: transparent;
-		border-color: transparent;
+	.btn.danger-text {
 		color: var(--danger);
 	}
-	.btn.discard:hover:not(:disabled) {
+	.btn.danger-text:hover:not(:disabled) {
 		background: var(--danger-soft);
-	}
-	.fform > footer.warn .savestate {
-		order: -1;
-	}
-	.fform > footer.warn .btn.discard {
-		order: 1;
-	}
-	.fform > footer.warn .btn.keep {
-		order: 2;
-	}
-	.fform > footer.warn .btn.save {
-		order: 3;
 	}
 	.fbtns {
 		align-items: center;
@@ -1113,32 +1113,6 @@
 		}
 		.fsec .grid2:has(input[inputmode="numeric"]) {
 			grid-template-columns: 1fr 1fr;
-		}
-		/* confirm bar stacks: notice, then save (full width), keep editing, and the destructive one last as plain text */
-		.fform > footer.warn .fbtns {
-			flex-direction: column;
-			align-items: stretch;
-			gap: 8px;
-		}
-		.savestate {
-			justify-content: center;
-			height: auto;
-			margin: 0 0 4px;
-			text-align: center;
-		}
-		.savestate span {
-			white-space: normal;
-			text-wrap: balance;
-		}
-		.fform > footer.warn .btn.save {
-			order: 1;
-		}
-		.fform > footer.warn .btn.keep {
-			order: 2;
-		}
-		.fform > footer.warn .btn.discard {
-			order: 3;
-			height: 40px;
 		}
 	}
 </style>

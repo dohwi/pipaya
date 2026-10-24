@@ -142,6 +142,7 @@ export const en: Record<string, string> = {
 	"저장되지 않은 변경이 있습니다.": "You have unsaved changes.",
 	"계속 편집": "Keep editing",
 	"저장하지 않고 닫기": "Close without saving",
+	"저장하지 않고 닫을까요?": "Close without saving?",
 	"알림 닫기": "Dismiss notification",
 	"왼쪽에 놓기": "Drop on the left",
 	"오른쪽에 놓기": "Drop on the right",

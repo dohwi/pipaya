@@ -57,7 +57,7 @@
 		maxHeight?: string;
 		gutter?: string;
 		/** 1 for a modal over the page, +1 for each modal opened from another */
-		layer?: 1 | 2 | 3 | 4;
+		layer?: 1 | 2 | 3 | 4 | 5;
 		/** a raised surface, for pickers that open over another modal */
 		elevated?: boolean;
 		/** false: stays a centred card on phones instead of becoming a bottom sheet */

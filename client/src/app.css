@@ -87,6 +87,8 @@
 	--z-modal-3: 81;
 	--z-scrim-4: 90;
 	--z-modal-4: 91;
+	--z-scrim-5: 95; /* a confirmation over a layer-4 dialog (unsaved changes in the connection form) */
+	--z-modal-5: 96;
 	--z-notice: 40; /* toast strips: above the page, behind every dialog and its scrim */
 	--z-dropzone: 55; /* "drop files here" over the page: above the strips, below any dialog */
 	--z-toast: 100;
