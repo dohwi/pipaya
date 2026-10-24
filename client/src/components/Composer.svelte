@@ -25,9 +25,8 @@
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { extensions } from "../lib/extensions/host.svelte";
-	import { fileToAttachment, type Attachment } from "../lib/images";
 	import { makeQuote } from "../lib/quote";
-	import { fileRejection, fileToDraft, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES } from "../lib/files";
+	import { Attachments } from "../lib/attachments.svelte";
 	import DropOverlay from "./DropOverlay.svelte";
 	import WhereChip from "./WhereChip.svelte";
 	import ReplyBadge from "./ReplyBadge.svelte";
@@ -49,9 +48,11 @@
 	let mirror: HTMLDivElement | undefined = $state();
 	let fileInput: HTMLInputElement | undefined = $state();
 	let wrapEl: HTMLDivElement | undefined = $state();
-	let attachments = $state<Attachment[]>([]);
-	/** Non-image files (and images a text-only model cannot see): sent as-is, saved in the working directory */
-	let files = $state<FileDraft[]>([]);
+	const attached = new Attachments({
+		vision: () => vision,
+		error: (m) => app.toast(m, "error", pane.id),
+		imageAdded: (n) => insertImageToken(n),
+	});
 	/** Message being answered: shown as a badge above the input, quoted into the prompt on send (never pasted into the text). */
 	let reply = $state<{ text: string; who?: string } | null>(null);
 	const replyPreview = $derived(reply ? reply.text.replace(/\s+/g, " ").trim() : "");
@@ -72,7 +73,7 @@
 	});
 	const promptHint = $derived(!compacting && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
-	const canSend = $derived((text.trim().length > 0 || attachments.length > 0 || files.length > 0) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
+	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
 
 	export function focus() {
 		ta?.focus();
@@ -108,7 +109,7 @@
 	function stash() {
 		if (draftKey === undefined) return;
 		const k = draftKey ?? "";
-		if (text || attachments.length || files.length || reply) drafts.set(k, { text, attachments, files, reply });
+		if (text || attached.any || reply) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply });
 		else drafts.delete(k);
 	}
 	$effect(() => {
@@ -118,8 +119,7 @@
 			draftKey = id;
 			const d = drafts.get(id ?? "");
 			text = d?.text ?? "";
-			attachments = d?.attachments ?? [];
-			files = d?.files ?? [];
+			attached.load(d?.attachments ?? [], d?.files ?? []);
 			reply = d?.reply ?? null;
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => ta?.focus());
@@ -215,7 +215,7 @@
 	// Attached images share the `#` menu, above the files: "compare #image1 and #image2". A fully typed token is done, so Enter stays free to send.
 	const imageMatches = $derived(
 		mention
-			? attachments.map((a, i) => ({ n: i + 1, name: a.name })).filter((a) => `image${a.n}`.startsWith(mention.query.toLowerCase()) && `image${a.n}` !== mention.query)
+			? attached.images.map((a, i) => ({ n: i + 1, name: a.name })).filter((a) => `image${a.n}`.startsWith(mention.query.toLowerCase()) && `image${a.n}` !== mention.query)
 			: [],
 	);
 
@@ -237,7 +237,7 @@
 
 	/** Which of the four kinds of typing owns the menu, and whether it shows (see lib/slash-menu). */
 	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, memberMention: memberMention !== null }));
-	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, members: memberMatches.length, attachments: attachments.length }));
+	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, members: memberMatches.length, attachments: attached.images.length }));
 
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
 	const menuItems = $derived(
@@ -370,14 +370,8 @@
 		drafts.delete(key ?? "");
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
-		attachments = [];
 		reply = null;
-		releaseFiles(files);
-		files = [];
-	}
-
-	function releaseFiles(list: FileDraft[]) {
-		for (const f of list) if (f.preview) URL.revokeObjectURL(f.preview);
+		attached.clear();
 	}
 
 	/**
@@ -393,24 +387,24 @@
 		return {
 			key: pane.id,
 			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
-			images: attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+			images: attached.images.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
 		};
 	}
 
 	async function submit() {
 		if (!canSend) return;
 		const out = await prepare();
-		if (out && (await app.send(out.body, out.images, pane.id, files))) clearSent(out.key);
+		if (out && (await app.send(out.body, out.images, pane.id, attached.files))) clearSent(out.key);
 	}
 
-	const hasInput = $derived(text.trim().length > 0 || attachments.length > 0 || files.length > 0);
+	const hasInput = $derived(text.trim().length > 0 || attached.any);
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
 		if (!hasInput || app.net !== "online") return;
 		const out = await prepare();
 		if (!out) return;
-		const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, files) : app.queue(out.body, out.images, pane.id, files));
+		const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, attached.files) : app.queue(out.body, out.images, pane.id, attached.files));
 		if (ok) clearSent(out.key);
 	}
 
@@ -501,7 +495,7 @@
 
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { commands: familyList.map((f) => `${f.prefix}:${f.name}`), skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attachments.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { commands: familyList.map((f) => `${f.prefix}:${f.name}`), skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);
@@ -510,62 +504,15 @@
 	}
 
 	function removeAttachment(id: string) {
-		const i = attachments.findIndex((x) => x.id === id);
-		if (i < 0) return;
-		const gone = i + 1;
-		text = dropImageToken(text, gone);
-		attachments = attachments.filter((x) => x.id !== id);
-	}
-
-	const rejectionText = (r: "count" | "size" | "total", name: string) =>
-		r === "count"
-			? t("파일은 최대 {n}개까지 첨부할 수 있습니다", { n: MAX_FILES })
-			: r === "size"
-				? t("{name}: 파일은 {n}MB까지 첨부할 수 있습니다", { name, n: MAX_FILE_BYTES / 1024 / 1024 })
-				: t("한 메시지에 첨부할 수 있는 파일은 모두 합쳐 {n}MB까지입니다", { n: MAX_FILES_TOTAL / 1024 / 1024 });
-
-	/** Pictures the model can see go in as images (downscaled); everything else is attached as a file. */
-	async function addFiles(picked: Iterable<File>) {
-		const fail = (name: string, fallback: string) => app.toast(t("{name}을(를) 읽지 못했습니다", { name: name || fallback }), "error", pane.id);
-		for (const f of picked) {
-			if (isInlineImage(f, vision)) {
-				if (attachments.length >= MAX_IMAGES) {
-					app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
-					continue;
-				}
-				try {
-					attachments.push(await fileToAttachment(f));
-					insertImageToken(attachments.length);
-				} catch {
-					fail(f.name, t("이미지"));
-				}
-				continue;
-			}
-			const rejected = fileRejection(f, files);
-			if (rejected) {
-				app.toast(rejectionText(rejected.reason, f.name), "error", pane.id);
-				if (rejected.stop) break;
-				continue;
-			}
-			try {
-				files.push(await fileToDraft(f));
-			} catch {
-				fail(f.name, t("파일"));
-			}
-		}
-	}
-
-	function removeFile(id: string) {
-		const f = files.find((x) => x.id === id);
-		if (f) releaseFiles([f]);
-		files = files.filter((x) => x.id !== id);
+		const gone = attached.removeImage(id);
+		if (gone !== null) text = dropImageToken(text, gone);
 	}
 
 	function onPaste(e: ClipboardEvent) {
 		const pasted = [...(e.clipboardData?.files ?? [])];
 		if (pasted.length) {
 			e.preventDefault();
-			void addFiles(pasted);
+			void attached.add(pasted);
 		}
 	}
 
@@ -573,7 +520,7 @@
 		if (!pane.focused) return;
 		e.preventDefault();
 		dragging = false;
-		if (e.dataTransfer?.files) void addFiles(e.dataTransfer.files);
+		if (e.dataTransfer?.files) void attached.add(e.dataTransfer.files);
 	}
 </script>
 
@@ -604,11 +551,11 @@
 		{#if reply}
 			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />
 		{/if}
-		{#if attachments.length}
-			<AttachmentStrip {attachments} onremove={removeAttachment} />
+		{#if attached.images.length}
+			<AttachmentStrip attachments={attached.images} onremove={removeAttachment} />
 		{/if}
-		{#if files.length}
-			<FileStrip {files} onremove={removeFile} />
+		{#if attached.files.length}
+			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
 		{#if chat?.waiting.length}
@@ -644,7 +591,7 @@
 
 		<div class="bar">
 			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
-			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void addFiles(picked); }} />
+			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void attached.add(picked); }} />
 
 			<ModelPicker />
 			<span class="grow"></span>
