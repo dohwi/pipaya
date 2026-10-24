@@ -215,7 +215,7 @@
 		</div>
 	{:else if cfg}
 		<section>
-			<div class="mono-label">{t("새 대화 기본 모델")}</div>
+			<div class="section-label">{t("새 대화 기본 모델")}</div>
 			<ModelField
 				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
 				{models}
@@ -249,7 +249,7 @@
 		<SystemModelSection {serverId} {models} providers={providerList} />
 
 		<section>
-			<div class="mono-label">{t("연결")}</div>
+			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
 			{#if cfg.providers.length}
 				<div class="plist">

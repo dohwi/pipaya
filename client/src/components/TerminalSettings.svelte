@@ -20,7 +20,7 @@
 </script>
 
 <div class="head">
-	<div class="mono-label">{t("터미널")}</div>
+	<div class="section-label">{t("터미널")}</div>
 	<Button size="sm" onclick={() => app.prefs.resetTerminal()}>{t("기본값으로")}</Button>
 </div>
 <SettingRow label={t("글꼴")} for="terminal-font">

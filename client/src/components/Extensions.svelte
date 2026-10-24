@@ -341,7 +341,7 @@
 	{:else}
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
-			<h3 id="extensions-installed" class="label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
+			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
 			<Button size="sm" class="add" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn sm add" class:disabled={tasks.busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
@@ -429,7 +429,6 @@
 	.feedback:not(:has(*)) { position: absolute; }
 	h3,
 	p { margin: 0; }
-	h3.label { font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.04em; color: var(--text-faint); }
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.chip { background: var(--bg-active); }

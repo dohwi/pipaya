@@ -69,7 +69,7 @@
 	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 
 	<section class="block">
-		<h3 class="label">{t("확장 설정")}</h3>
+		<h3 class="section-label">{t("확장 설정")}</h3>
 		{#if fields}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
 			<SettingsForm {id} {fields} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} />
@@ -84,12 +84,12 @@
 	</section>
 
 	<section class="block">
-		<h3 class="label">{t("권한과 실행 안내")}</h3>
+		<h3 class="section-label">{t("권한과 실행 안내")}</h3>
 		<PermissionList pkg={entry.package} />
 	</section>
 
 	<section class="block">
-		<h3 class="label">{t("관리")}</h3>
+		<h3 class="section-label">{t("관리")}</h3>
 		<div class="row">
 			<Button size="sm" disabled={extensions.safeMode || tasks.busy[id] || entry.state !== "active"} onclick={onreload}>{t("다시 불러오기")}</Button>
 			<Button size="sm" disabled={tasks.busy[id]} onclick={onexport}>{t("내보내기")}</Button>
@@ -115,7 +115,6 @@
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
-	h3.label { margin: 0; font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.04em; color: var(--text-faint); }
 	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.settings-label { font-size: var(--fs-xs); font-weight: 550; }
 	textarea { display: block; width: 100%; box-sizing: border-box; min-height: 110px; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }

@@ -20,7 +20,7 @@
 </script>
 
 <section class="fsec">
-	<div class="mono-label">{t("연결 정보")}</div>
+	<div class="section-label">{t("연결 정보")}</div>
 	<div class="grid2">
 		<label>
 			<span>{t("이름")}</span>

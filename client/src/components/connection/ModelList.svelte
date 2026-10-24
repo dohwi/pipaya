@@ -40,7 +40,7 @@
 
 <section class="fsec">
 	<div class="mhead">
-		<div class="mono-label">{t("모델 ({n})", { n: form.rows.length })}</div>
+		<div class="section-label">{t("모델 ({n})", { n: form.rows.length })}</div>
 		<Button size="sm" disabled={discovering || busy} onclick={ondiscover}>
 			<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
 		</Button>

@@ -50,7 +50,7 @@
 	{/if}
 
 	<section class="block">
-		<h3 class="label">{t("확장 설정")}</h3>
+		<h3 class="section-label">{t("확장 설정")}</h3>
 		{#if form.fields}
 			<SettingsForm id={ext.settingsId} fields={form.fields} value={settings ?? {}} disabled={busy} saveLabel={t("설정 저장")} {onsave} />
 		{:else if form.problem}
@@ -62,7 +62,7 @@
 
 	{#if ext.tools.length || ext.commands.length || ext.flags.length}
 		<section class="block">
-			<h3 class="label">{t("제공 기능")}</h3>
+			<h3 class="section-label">{t("제공 기능")}</h3>
 			{#if provides.length}<p class="brief">{provides.join(", ")}</p>{/if}
 			{#each ext.flags as flag (flag.name)}
 				<p class="hint"><code>{flagVariable(flag.name)}</code>{flag.description ? ` — ${flag.description}` : ""}{flag.value !== undefined ? ` (${t("현재 값")}: ${String(flag.value)})` : ""}</p>
@@ -79,5 +79,4 @@
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
-	h3.label { margin: 0; font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.04em; color: var(--text-faint); }
 </style>

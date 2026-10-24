@@ -42,7 +42,7 @@
   };
   const label = (m: number) => (m === 0 ? t("보내지 않음") : m < 60 ? t("{n}분", { n: m }) : t("{n}시간", { n: m / 60 }));
 </script>
-<div class="section-title">{t("시스템 알림")}</div>
+<div class="section-label">{t("시스템 알림")}</div>
 <SettingRow label={t("작업 완료 · 실패 · 승인 필요 · 사용자 요청")}><Switch checked={enabled} label={t("시스템 알림")} onchange={toggle} /></SettingRow>
 <p class="hint">{t("앱 창을 보고 있으면 OS 알림을 보내지 않습니다. PC에서 보고 있거나 PC가 알림을 수신하면 모바일 푸시를 억제합니다.")}</p>
 <p class="hint">{background ? t("앱이 닫혀 있어도 모바일 푸시를 받을 수 있습니다.") : t("종료 상태 모바일 푸시는 아직 연결되지 않았습니다. 네이티브 푸시 등록과 서버 FCM/APNs 설정이 필요합니다.")}</p>
@@ -61,14 +61,14 @@
   {/if}
 {/if}
 
-<div class="section-title gap">{t("PC에서 읽지 않으면 폰으로")}</div>
+<div class="section-label gap">{t("PC에서 읽지 않으면 폰으로")}</div>
 <SettingRow label={t("PC 알림을 확인하지 않은 채 지나면 모바일로도 보냄")} for="escalate">
   <Select id="escalate" size="sm" width="auto" value={app.escalateMinutes} disabled={!app.api} onchange={(m) => app.setEscalateMinutes(m)} options={ESCALATE_CHOICES.map((m) => ({ value: m, label: label(m) }))} />
 </SettingRow>
 <p class="hint">{t("PC로 알림이 갔는데 이 시간 동안 어느 기기에서도 앱을 열어 보지 않으면 폰으로 푸시합니다. 이 서버에 연결한 모든 기기에 같이 적용됩니다.")}</p>
 <style>
-  .section-title { margin-bottom: 12px; }
-  .section-title.gap { margin-top: 22px; }
+  .section-label { margin-bottom: 12px; }
+  .section-label.gap { margin-top: 22px; }
   .hint { line-height: 1.6; margin: 10px 0 0; word-break: keep-all; }
   .test { margin-top: 14px; }
   .result { font-size: var(--fs-xs); line-height: 1.6; margin: 10px 0 0; color: var(--danger); word-break: keep-all; }

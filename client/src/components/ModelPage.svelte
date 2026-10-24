@@ -81,7 +81,7 @@
 		</div>
 	</section>
 	<section class="fsec">
-		<div class="mono-label">{t("제한")}</div>
+		<div class="section-label">{t("제한")}</div>
 		<div class="grid2">
 			<label>
 				<span>{t("컨텍스트 크기")}</span>
@@ -94,7 +94,7 @@
 		</div>
 	</section>
 	<section class="fsec">
-		<div class="mono-label">{t("기능")}</div>
+		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
 			<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>
 			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 입력")}</button>
@@ -102,7 +102,7 @@
 	</section>
 	{#if r.reasoning && !matched}
 		<section class="fsec">
-			<div class="mono-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
+			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 			<div class="caps" role="group" aria-label={t("추론 강도")}>
 				{#each ALL_LEVELS as l (l)}
 					<button

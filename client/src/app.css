@@ -483,6 +483,14 @@ select.field {
 	background-image: var(--chevron);
 }
 
+/* sliders: the accent, never the browser blue */
+input[type="range"] {
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+input[type="range"]:disabled {
+	cursor: default;
+}
 /* checkbox: monochrome, filled with the accent when checked (task-list boxes) */
 input[type="checkbox"] {
 	appearance: none;
@@ -586,14 +594,13 @@ input[type="checkbox"]:disabled {
 	font-feature-settings: "calt" 0, "liga" 0;
 }
 
-/* section labels are mono, like metadata */
-/* the small mono label above a setting or a group ("model", "추론 강도"); `.eyebrow` is its uppercase sibling */
-.mono-label {
-	font-family: var(--mono);
-	font-size: var(--fs-2xs);
-	font-weight: 500;
-	letter-spacing: 0.04em;
-	color: var(--text-faint);
+/* Heading of a settings block ("Language", "Export", "Default model"): one style for every section label. */
+.section-label {
+	margin: 0;
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--text-dim);
 }
 /* Secondary helper text under a control or section. Components add their own margin / line-height on top. */
 .hint {
@@ -602,13 +609,6 @@ input[type="checkbox"]:disabled {
 }
 .hint.danger {
 	color: var(--danger);
-}
-/* Small bold heading of a settings block ("Export", "System notifications"). */
-.section-title {
-	margin: 0;
-	font-size: var(--fs-xs);
-	font-weight: 600;
-	color: var(--text-dim);
 }
 .eyebrow {
 	font-family: var(--mono);

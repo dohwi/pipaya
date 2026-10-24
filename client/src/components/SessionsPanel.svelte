@@ -132,7 +132,7 @@
 	<section class="list" aria-labelledby="list-h">
 		<div class="row head">
 			<div class="grow">
-				<div id="list-h" class="label">{t("대화 목록")}{#if sessions} <span class="n">{sessions.length}</span>{/if}</div>
+				<div id="list-h" class="section-label">{t("대화 목록")}{#if sessions} <span class="n">{sessions.length}</span>{/if}</div>
 			</div>
 			<Button size="sm" onclick={() => void load()} disabled={busy}>{t("새로고침")}</Button>
 		</div>
@@ -201,10 +201,6 @@
 	.grow {
 		flex: 1;
 		min-width: 0;
-	}
-	.label {
-		font-size: var(--fs-sm);
-		font-weight: 650;
 	}
 	.hint {
 		margin: 4px 0 0;

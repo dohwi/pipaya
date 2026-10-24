@@ -49,7 +49,7 @@
 </script>
 
 <section>
-	<div class="mono-label">{t("에이전트 도구")}</div>
+	<div class="section-label">{t("에이전트 도구")}</div>
 	{#if shown?.tools}
 		{@const info = shown.tools}
 		{#each info.toggleable as name (name)}

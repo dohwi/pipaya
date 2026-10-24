@@ -150,7 +150,7 @@
 
 	{#if paired && paired.length}
 		<div class="paired">
-			<h4 class="eyebrow">{t("QR로 연결한 기기")}</h4>
+			<h4 class="section-label">{t("QR로 연결한 기기")}</h4>
 			<p class="hint">{t("기기마다 따로 발급된 접속 권한입니다. 취소하면 그 기기만 즉시 접속이 끊기고, 다른 기기와 서버 토큰은 그대로입니다.")}</p>
 			<ul>
 				{#each paired as p (p.id)}

@@ -127,7 +127,7 @@
 </script>
 
 <section aria-labelledby="bk-export">
-	<h3 id="bk-export" class="section-title">{t("내보내기")}</h3>
+	<h3 id="bk-export" class="section-label">{t("내보내기")}</h3>
 	<p class="hint">{t("고른 항목을 JSON 파일 하나로 저장합니다. 다른 기기나 새로 설치한 앱에서 가져올 수 있습니다.")}</p>
 	<div class="list">
 		{#each rows as r (r.key)}
@@ -148,7 +148,7 @@
 </section>
 
 <section aria-labelledby="bk-import">
-	<h3 id="bk-import" class="section-title">{t("가져오기")}</h3>
+	<h3 id="bk-import" class="section-label">{t("가져오기")}</h3>
 
 	{#if !loaded}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -180,7 +180,7 @@
 </section>
 
 <section aria-labelledby="bk-restore">
-	<h3 id="bk-restore" class="section-title">{t("되돌리기")}</h3>
+	<h3 id="bk-restore" class="section-label">{t("되돌리기")}</h3>
 	{#if canRestore}
 		<div class="restore">
 			<span class="txt">

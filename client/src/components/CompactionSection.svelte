@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RangeField from "./RangeField.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
@@ -64,7 +65,7 @@
 {#if settings}
 	{@const s = settings}
 	<section>
-		<div class="mono-label">{t("컨텍스트 압축 모델")}</div>
+		<div class="section-label">{t("컨텍스트 압축 모델")}</div>
 		<div class="crow">
 			<div class="cfield">
 				<ModelField
@@ -97,21 +98,16 @@
 				{t("압축 요약은 이 모델이 작성합니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
-		<label class="thr">
-			<span>{t("자동 압축 기준")}</span>
-			<input
-				type="range"
-				min="30"
-				max="95"
-				step="5"
-				value={pct ?? s.thresholdPercent}
-				disabled={busy || !s.auto}
-				aria-label={t("자동 압축 기준")}
-				oninput={(e) => (pct = e.currentTarget.valueAsNumber)}
-				onchange={(e) => { const v = e.currentTarget.valueAsNumber; pct = null; void save({ ...s, thresholdPercent: v }); }}
-			/>
-			<strong>{pct ?? s.thresholdPercent}%</strong>
-		</label>
+		<RangeField
+			label={t("자동 압축 기준")}
+			min={30}
+			max={95}
+			step={5}
+			value={pct ?? s.thresholdPercent}
+			disabled={busy || !s.auto}
+			oninput={(v) => (pct = v)}
+			onchange={(v) => { pct = null; void save({ ...s, thresholdPercent: v }); }}
+		/>
 		<p class="hint note">{t("컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
 		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
 	</section>
@@ -138,23 +134,13 @@
 		justify-content: flex-start;
 		gap: 8px;
 		padding: 0 14px;
-		min-height: 44px;
+		min-height: 42px; /* the height of the model field beside it */
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		font-size: var(--fs-sm);
 		white-space: nowrap;
 		cursor: pointer;
 		flex: none;
-	}
-	.thr {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		font-size: var(--fs-sm);
-	}
-	.thr input {
-		flex: 1;
-		min-width: 0;
 	}
 	.note {
 		margin: 0;

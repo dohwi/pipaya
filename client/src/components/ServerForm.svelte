@@ -151,7 +151,7 @@
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<DevicesPanel serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "sessions"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
-				<div class="label">{t("기본 작업 디렉터리")}</div>
+				<div class="section-label">{t("기본 작업 디렉터리")}</div>
 		{#if wdError && !shownWd}
 			<Notice tone="danger">{wdError}</Notice>
 		{:else}
@@ -265,7 +265,7 @@
 	.embedded .body,
 	.embedded .body.pane {
 		margin: 0 -4px;
-		padding: 18px 4px 8px;
+		padding: 0 4px 8px; /* the settings pane already spaces its title from the content */
 	}
 	.embedded footer {
 		padding: 12px 0 0;
@@ -352,11 +352,6 @@
 	}
 	.body.pane {
 		padding: 18px 22px 22px;
-	}
-	.label {
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		color: var(--text-dim);
 	}
 	.wd {
 		display: flex;
