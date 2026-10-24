@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../src/lib/slash-menu";
+import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../src/lib/slash-menu";
 
 describe("recommendation menu rows", () => {
 	test("commands, skills and extension commands each get their own heading and text", () => {
@@ -25,38 +25,38 @@ describe("recommendation menu rows", () => {
 	test("folders insert the typed prefix plus the name", () => {
 		expect(folderRows([{ name: "docs", path: "/w/docs" }], (n) => `~/${n}/`)).toEqual([{ id: "/w/docs", text: "~/docs/", desc: "", group: "폴더" }]);
 	});
-	test("argument options and members keep their own fields", () => {
+	test("argument options and mentions keep their own fields", () => {
 		expect(optionRows([{ value: "high", desc: "d", current: true }])).toEqual([{ id: "high", text: "high", desc: "d", current: true }]);
-		expect(memberRows([{ insert: "@a", desc: "d", group: "g" }])).toEqual([{ id: "@a", text: "@a", desc: "d", group: "g" }]);
+		expect(mentionRows([{ insert: "@a", desc: "d", group: "g" }])).toEqual([{ id: "@a", text: "@a", desc: "d", group: "g" }]);
 	});
 });
 
 describe("which menu the typing asks for", () => {
-	const base = { slashQuery: null, hasArgSuggestions: false, cdArg: null, fileMention: false, memberMention: false };
+	const base = { slashQuery: null, hasArgSuggestions: false, cdArg: null, fileMention: false, atMention: false };
 	test("nothing special means no menu", () => {
 		expect(menuKindOf(base)).toBe("none");
 	});
 	test("each kind is recognised", () => {
 		expect(menuKindOf({ ...base, cdArg: "~/w" })).toBe("cd");
 		expect(menuKindOf({ ...base, fileMention: true })).toBe("file");
-		expect(menuKindOf({ ...base, memberMention: true })).toBe("member");
+		expect(menuKindOf({ ...base, atMention: true })).toBe("mention");
 		expect(menuKindOf({ ...base, slashQuery: "mo" })).toBe("slash");
 		expect(menuKindOf({ ...base, hasArgSuggestions: true })).toBe("slash");
 	});
 	test("an empty /cd argument still counts (it lists the folders)", () => {
 		expect(menuKindOf({ ...base, cdArg: "" })).toBe("cd");
 	});
-	test("when several apply the order is cd, file, member, slash", () => {
-		const all = { slashQuery: "", hasArgSuggestions: true, cdArg: "x", fileMention: true, memberMention: true };
+	test("when several apply the order is cd, file, mention, slash", () => {
+		const all = { slashQuery: "", hasArgSuggestions: true, cdArg: "x", fileMention: true, atMention: true };
 		expect(menuKindOf(all)).toBe("cd");
 		expect(menuKindOf({ ...all, cdArg: null })).toBe("file");
-		expect(menuKindOf({ ...all, cdArg: null, fileMention: false })).toBe("member");
-		expect(menuKindOf({ ...all, cdArg: null, fileMention: false, memberMention: false })).toBe("slash");
+		expect(menuKindOf({ ...all, cdArg: null, fileMention: false })).toBe("mention");
+		expect(menuKindOf({ ...all, cdArg: null, fileMention: false, atMention: false })).toBe("slash");
 	});
 });
 
 describe("whether the menu shows", () => {
-	const s = { dismissed: false, cdRows: 0, fileLoaded: false, files: 0, images: 0, members: 0, attachments: 0 };
+	const s = { dismissed: false, cdRows: 0, fileLoaded: false, files: 0, images: 0, mentions: 0, attachments: 0 };
 	test("no kind, no menu", () => {
 		expect(menuOpen("none", s)).toBe(false);
 	});
@@ -70,9 +70,9 @@ describe("whether the menu shows", () => {
 		expect(menuOpen("file", { ...s, files: 1 })).toBe(true);
 		expect(menuOpen("file", { ...s, images: 1 })).toBe(true);
 	});
-	test("members show only when something matches", () => {
-		expect(menuOpen("member", s)).toBe(false);
-		expect(menuOpen("member", { ...s, members: 1 })).toBe(true);
+	test("mentions show only when something matches", () => {
+		expect(menuOpen("mention", s)).toBe(false);
+		expect(menuOpen("mention", { ...s, mentions: 1 })).toBe(true);
 	});
 	test("a /command menu steps aside once images are attached", () => {
 		expect(menuOpen("slash", s)).toBe(true);
@@ -82,7 +82,7 @@ describe("whether the menu shows", () => {
 		expect(menuOpen("slash", { ...s, dismissed: true })).toBe(false);
 		expect(menuOpen("cd", { ...s, cdRows: 3, dismissed: true })).toBe(false);
 		expect(menuOpen("file", { ...s, files: 3, dismissed: true })).toBe(false);
-		expect(menuOpen("member", { ...s, members: 3, dismissed: true })).toBe(false);
+		expect(menuOpen("mention", { ...s, mentions: 3, dismissed: true })).toBe(false);
 	});
 });
 

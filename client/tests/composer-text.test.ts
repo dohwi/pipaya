@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { dropImageToken, insertToken, memberOf, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
+import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
 		expect(mentionAt("file", "look at #src/comp", 17)).toEqual({ query: "src/comp", start: 8 });
-		expect(mentionAt("member", "@mi", 3)).toEqual({ query: "mi", start: 0 });
-		expect(mentionAt("member", "ask @미나", 7)).toEqual({ query: "미나", start: 4 });
+		expect(mentionAt("at", "@mi", 3)).toEqual({ query: "mi", start: 0 });
+		expect(mentionAt("at", "ask @미나", 7)).toEqual({ query: "미나", start: 4 });
 	});
 	test("needs a space (or the start) before the sigil, and nothing after it before the caret", () => {
 		expect(mentionAt("file", "a#b", 3)).toBeNull();
 		expect(mentionAt("file", "#src done", 9)).toBeNull();
-		expect(mentionAt("member", "mail@host", 9)).toBeNull();
+		expect(mentionAt("at", "mail@host", 9)).toBeNull();
 	});
 	test("reads only up to the caret", () => {
 		expect(mentionAt("file", "#abc rest", 2)).toEqual({ query: "a", start: 0 });
@@ -37,12 +37,12 @@ describe("insertToken", () => {
 	});
 });
 
-describe("memberOf", () => {
+describe("knownMention", () => {
 	test("takes the longest name and lets a Korean particle follow", () => {
-		expect(memberOf("미나랑", ["철수", "미나"])).toBe("미나");
-		expect(memberOf("미나2랑", ["미나", "미나2"])).toBe("미나2");
-		expect(memberOf("bobby", ["bob"])).toBeNull();
-		expect(memberOf("Bob", ["bob"])).toBe("bob");
+		expect(knownMention("미나랑", ["철수", "미나"])).toBe("미나");
+		expect(knownMention("미나2랑", ["미나", "미나2"])).toBe("미나2");
+		expect(knownMention("bobby", ["bob"])).toBeNull();
+		expect(knownMention("Bob", ["bob"])).toBe("bob");
 	});
 });
 
@@ -56,7 +56,7 @@ describe("mirrorHtml", () => {
 		expect(html).not.toContain("$explore</mark>");
 		expect(html).toContain('<mark class="img">#image1</mark>');
 		expect(html).not.toContain("#image2</mark>");
-		expect(html).toContain('<mark class="member">@미나</mark>랑');
+		expect(html).toContain('<mark class="mention">@미나</mark>랑');
 		expect(html).not.toContain("@철수</mark>");
 		expect(html).toContain('<mark class="skill">/skill:review</mark>');
 		expect(html).toContain('<mark class="skill">/prompt:fix</mark>');
@@ -69,8 +69,8 @@ describe("mirrorHtml", () => {
 describe("mirrorHtml mentions", () => {
 	const known = { commands: [], skills: [], mentions: ["미나", "결제-개편"], images: 0, paths: [] };
 	test("marks an extension mention, particle left outside", () => {
-		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="member">@결제-개편</mark>에');
-		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="member">@미나</mark>');
+		expect(mirrorHtml("@결제-개편에 PR 해", known)).toContain('<mark class="mention">@결제-개편</mark>에');
+		expect(mirrorHtml("@미나 와 @nobody", known)).toContain('<mark class="mention">@미나</mark>');
 		expect(mirrorHtml("@nobody", known)).not.toContain("<mark");
 	});
 

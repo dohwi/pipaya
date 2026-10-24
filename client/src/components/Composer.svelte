@@ -12,7 +12,7 @@
 	import { abortable } from "../lib/abortable";
 	import { DebouncedList } from "../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
-	import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
+	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import IconButton from "./IconButton.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
@@ -223,9 +223,9 @@
 
 	// ── @mentions: the list comes from extensions (`sdk.mentions.set`); the core knows no names ──
 	const mentionItems = $derived(extensions.mentions().filter((m) => !m.except || m.except !== pane.id));
-	const memberMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("member", text, caret));
-	const memberMatches = $derived(memberMention ? mentionItems.filter((m) => {
-		const q = memberMention.query.toLowerCase();
+	const atMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("at", text, caret));
+	const atMatches = $derived(atMention ? mentionItems.filter((m) => {
+		const q = atMention.query.toLowerCase();
 		return m.insert.slice(1).toLowerCase().startsWith(q) || m.keywords.toLowerCase().includes(q);
 	}) : []);
 
@@ -238,8 +238,8 @@
 	});
 
 	/** Which of the four kinds of typing owns the menu, and whether it shows (see lib/slash-menu). */
-	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, memberMention: memberMention !== null }));
-	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, members: memberMatches.length, attachments: attached.images.length }));
+	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, atMention: atMention !== null }));
+	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, mentions: atMatches.length, attachments: attached.images.length }));
 
 	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
 	const menuItems = $derived(
@@ -247,8 +247,8 @@
 			? folderRows(cdRows, cdValue)
 			: menuKind === "file"
 				? fileRows(imageMatches, mentionFiles)
-				: menuKind === "member"
-					? memberRows(memberMatches)
+				: menuKind === "mention"
+					? mentionRows(atMatches)
 					: argSuggestions
 						? optionRows(argSuggestions.options)
 						: slashRows(slashList.map((it) => ("skill" in it || "family" in it ? it : { command: it }))),
@@ -278,9 +278,9 @@
 		applyMention(mention, `#${file.path}${file.dir ? "" : " "}`, file.dir);
 	}
 	/** Replace the @token with the chosen group member. */
-	function pickMember(index: number) {
-		const m = memberMatches[index];
-		if (m && memberMention) applyMention(memberMention, `${m.insert} `);
+	function pickAt(index: number) {
+		const m = atMatches[index];
+		if (m && atMention) applyMention(atMention, `${m.insert} `);
 	}
 	// Esc hides the menu only for the text it was pressed on; any further typing brings it back.
 	$effect(() => {
@@ -338,7 +338,7 @@
 	function pickRecommendation(index: number, completeOnly = false) {
 		if (cdArg !== null) return completeCd(index);
 		if (mention) return pickMention(index);
-		if (memberMention) return pickMember(index);
+		if (atMention) return pickAt(index);
 		if (argSuggestions) {
 			const option = argSuggestions.options[index];
 			if (!option) return;
@@ -549,7 +549,7 @@
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "member" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if reply}
 			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />
@@ -696,7 +696,7 @@
 		color: transparent;
 		pointer-events: none;
 	}
-	/* mention tags: #imageN violet, #files mint, @members sky; the hues come from the theme (app.css) */
+	/* mention tags: #imageN violet, #files mint, @mentions sky; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;
 		-webkit-box-decoration-break: clone;
@@ -715,9 +715,9 @@
 		background: color-mix(in srgb, var(--accent) 22%, transparent);
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
 	}
-	.mirror :global(mark.member) {
-		background: color-mix(in srgb, var(--mark-member) 30%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-member) 55%, transparent);
+	.mirror :global(mark.mention) {
+		background: color-mix(in srgb, var(--mark-mention) 30%, transparent);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-mention) 55%, transparent);
 	}
 	textarea::placeholder {
 		color: var(--text-faint);

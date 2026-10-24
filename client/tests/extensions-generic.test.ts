@@ -250,6 +250,17 @@ describe("renderers, SDK surface and brand neutrality", () => {
 		expect(files.filter((f) => /gauge|quota|usage/i.test(f.split("/").pop()!) && !/^components\/(?:Pin|Sidebar)/.test(f))).toEqual(["components/extensions/NavbarUsage.svelte"]);
 		expect(await Bun.file("src/lib/extensions/ui.ts").text()).not.toMatch(/gauge|\brings?\b/i);
 	});
+	test("the core never names an extension or its feature (ids, tools, @name vocabulary)", async () => {
+		// What an extension owns stays out of the core: its id, its tool names and the words of its feature. The core offers
+		// neutral hooks (labels, mentions, message headers) that any extension can fill with its own meaning.
+		const pattern = /peer-tools|peer-names|peer_send|peer_read|ask-user|ask_user|prompt-templates|session-retention|quota-monitor|\bmark-(?:agent|member)\b|\bpeerbubble\b/i;
+		const hits: string[] = [];
+		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) {
+			if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file) || file === "lib/locales/en.ts") continue;
+			if (pattern.test(await Bun.file(`src/${file}`).text())) hits.push(file);
+		}
+		expect(hits).toEqual([]);
+	});
 	test("no leftover previous-brand names in src/ or tests/", async () => {
 		const REPO_SLUG = ["doh" + "wi", "pipaya"].join("/");
 		const pattern = new RegExp(["doo" + "hi", "doh" + "wi", "har" + "ness", "\uB3C4\uD718"].join("|"), "i");

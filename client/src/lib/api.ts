@@ -250,7 +250,6 @@ export class Api {
 		this.req<{ sessions: Session[]; nextBefore: number | null }>("GET", `/sessions?limit=${limit}${before === undefined ? "" : `&before=${before}`}`);
 	workspace = () => this.req<WorkspaceInfo>("GET", "/workspace");
 	createSession = (input: CreateSessionInput = {}) => this.req<Session>("POST", "/sessions", input);
-	/** The UI language changed: every session's @name becomes its twin in that language (민수 <-> Minsu). */
 	getSession = (id: string) => this.req<SessionDetail>("GET", `/sessions/${id}`);
 	sessionContext = (id: string, signal?: AbortSignal) =>
 		this.req<SessionContext>("GET", `/sessions/${encodeURIComponent(id)}/context`, undefined, signal);

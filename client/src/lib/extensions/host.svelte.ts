@@ -84,7 +84,7 @@ export interface SlotItem extends NavbarItemSpec { owner: string; id: string; sl
 export interface MessageRenderer { owner: string; entryType: string; render(entry: EntryInput): Promise<UINode | null> }
 export interface EntryInput { id: number; extension: string; type: string; data: unknown; createdAt: number }
 export interface ComposerFilter { owner: string; run(text: string): Promise<string | { text: string } | { cancel: string } | null> }
-/** A short label a extension puts on a session in the sidebar and the pane header (e.g. `@name`). */
+/** A short label an extension puts on a session in the sidebar and the pane header. */
 export interface SessionLabel { text: string; title?: string }
 /** One `@` completion an extension offers in the composer; `insert` is what lands in the text and what is highlighted. */
 export interface MentionItem { insert: string; desc: string; group: string; keywords: string; except: string }

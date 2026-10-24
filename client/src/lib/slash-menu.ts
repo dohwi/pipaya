@@ -33,8 +33,8 @@ export function fileRows(images: readonly { n: number; name: string }[], files: 
 	];
 }
 
-export function memberRows(members: readonly { insert: string; desc: string; group: string }[]): MenuRow[] {
-	return members.map((m) => ({ id: m.insert, text: m.insert, desc: m.desc, group: m.group }));
+export function mentionRows(items: readonly { insert: string; desc: string; group: string }[]): MenuRow[] {
+	return items.map((m) => ({ id: m.insert, text: m.insert, desc: m.desc, group: m.group }));
 }
 
 export function optionRows(options: readonly { value: string; desc: string; current?: boolean }[]): MenuRow[] {
@@ -52,17 +52,17 @@ export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 	});
 }
 
-/** What the input is asking the menu for: nothing, a /command (or its argument), a folder for /cd, a #file or an @member. */
-export type MenuKind = "none" | "slash" | "cd" | "file" | "member";
+/** What the input is asking the menu for: nothing, a /command (or its argument), a folder for /cd, a #file or an @mention. */
+export type MenuKind = "none" | "slash" | "cd" | "file" | "mention";
 
 /**
  * The menu above the input is one slot that four kinds of typing share. They are tried in this order, and the first one
- * that applies wins: `/cd path` (folders), a `#token` (files), an `@token` (members), then a `/command` or its argument.
+ * that applies wins: `/cd path` (folders), a `#token` (files), an `@token` (mentions), then a `/command` or its argument.
  */
-export function menuKindOf(s: { slashQuery: string | null; hasArgSuggestions: boolean; cdArg: string | null; fileMention: boolean; memberMention: boolean }): MenuKind {
+export function menuKindOf(s: { slashQuery: string | null; hasArgSuggestions: boolean; cdArg: string | null; fileMention: boolean; atMention: boolean }): MenuKind {
 	if (s.cdArg !== null) return "cd";
 	if (s.fileMention) return "file";
-	if (s.memberMention) return "member";
+	if (s.atMention) return "mention";
 	if (s.slashQuery !== null || s.hasArgSuggestions) return "slash";
 	return "none";
 }
@@ -71,11 +71,11 @@ export function menuKindOf(s: { slashQuery: string | null; hasArgSuggestions: bo
  * Whether the menu is showing. Esc dismisses it for the text it was pressed on. A `/command` menu stays out of the way
  * once images are attached, because Enter then sends. A `#` menu waits for its first answer so it does not flash empty.
  */
-export function menuOpen(kind: MenuKind, s: { dismissed: boolean; cdRows: number; fileLoaded: boolean; files: number; images: number; members: number; attachments: number }): boolean {
+export function menuOpen(kind: MenuKind, s: { dismissed: boolean; cdRows: number; fileLoaded: boolean; files: number; images: number; mentions: number; attachments: number }): boolean {
 	switch (kind) {
 		case "cd": return s.cdRows > 0 && !s.dismissed;
 		case "file": return !s.dismissed && (s.fileLoaded || s.files > 0 || s.images > 0);
-		case "member": return !s.dismissed && s.members > 0;
+		case "mention": return !s.dismissed && s.mentions > 0;
 		case "slash": return !s.dismissed && s.attachments === 0;
 		case "none": return false;
 	}

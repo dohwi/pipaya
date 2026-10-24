@@ -301,7 +301,7 @@
 <RowMenu bind:this={rowMenu} bind:open={menuId} />
 
 <style>
-	/* @name of a pane in a split tab: how the other panes call it, so it stays in view there */
+	/* label of a pane in a split tab: kept in view while the pane scrolls */
 	:global(:where(.side) .who) {
 		flex: none;
 		font-size: var(--fs-2xs);

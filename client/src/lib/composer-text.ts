@@ -1,6 +1,6 @@
 /**
  * Text logic of the composer, kept free of components so it can be unit-tested: which mention the caret is in
- * (#file or #imageN, @member), replacing that token with a pick, and the highlight layer drawn under the textarea.
+ * (#file or #imageN, @mention), replacing that token with a pick, and the highlight layer drawn under the textarea.
  */
 
 export interface Mention {
@@ -12,7 +12,7 @@ export interface Mention {
 
 const PATTERNS = {
 	file: /(?:^|\s)#([^\s#]*)$/,
-	member: /(?:^|\s)@([^\s@]*)$/,
+	at: /(?:^|\s)@([^\s@]*)$/,
 	image: /(?:^|\s)#([a-z0-9]*)$/,
 } as const;
 export type MentionKind = keyof typeof PATTERNS;
@@ -60,8 +60,8 @@ export function splitImageTokens(text: string, images: number): { text: string; 
 
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** The group member a `@name` token starts with: the longest name, not cut out of a longer ASCII word (`@미나랑` is `@미나` plus a particle). */
-export function memberOf(token: string, names: readonly string[]): string | null {
+/** The known `@name` a token starts with: the longest name, not cut out of a longer ASCII word (`@미나랑` is `@미나` plus a particle). */
+export function knownMention(token: string, names: readonly string[]): string | null {
 	const low = token.toLowerCase();
 	let best: string | null = null;
 	for (const n of names) {
@@ -96,8 +96,8 @@ export function mirrorHtml(text: string, known: Known): string {
 			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);
-				const hit = memberOf(rest, known.mentions.map(esc));
-				return hit ? `${lead}<mark class="member">@${hit}</mark>${rest.slice(hit.length)}` : m;
+				const hit = knownMention(rest, known.mentions.map(esc));
+				return hit ? `${lead}<mark class="mention">@${hit}</mark>${rest.slice(hit.length)}` : m;
 			}
 			if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) return `${lead}<mark class="img">${tok}</mark>`;
 			return known.paths.some((p) => esc(`#${p}`) === tok) ? `${lead}<mark class="file">${tok}</mark>` : m;

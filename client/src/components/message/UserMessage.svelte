@@ -25,16 +25,16 @@
 		onreply,
 	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; onreply: (text: string, who?: string) => void } = $props();
 
-	/** Set when an extension recognises the message as sent by another session (`sdk.messages.setHeader`). */
-	const peer = $derived(extensions.headerOf(item.text));
-	const shown = $derived(splitQuote(peer ? peer.body : item.text));
+	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
+	const header = $derived(extensions.headerOf(item.text));
+	const shown = $derived(splitQuote(header ? header.body : item.text));
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
 	let expanded = $state(false);
 </script>
 
-<div class="row user" data-part="message.user" class:peer={!!peer} class:fresh={item.fresh}>
-	<div class="bubble" class:peerbubble={!!peer} class:glow-working={working} data-level={working ? level : undefined}>
+<div class="row user" data-part="message.user" class:headed={!!header} class:fresh={item.fresh}>
+	<div class="bubble" class:headedbubble={!!header} class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
 				{#each item.images as img, i}
@@ -51,8 +51,8 @@
 				{/each}
 			</div>
 		{/if}
-		{#if peer}
-			<div class="from"><Icon name="chat" /> <span>{peer.from}</span></div>
+		{#if header}
+			<div class="header"><Icon name="chat" /> <span>{header.from}</span></div>
 		{/if}
 		{#if shown.quote}
 			<blockquote class="quote">{shown.quote}</blockquote>
@@ -71,8 +71,8 @@
 	</div>
 	<div class="actions">
 		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text)} />
-		{#if peer}
-			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(peer ? peer.body : item.text, peer ? peer.from : undefined)} />
+		{#if header}
+			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
 		{/if}
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
@@ -115,24 +115,24 @@
 		border: 1px solid var(--border);
 		overflow-wrap: anywhere;
 	}
-	.row.user.peer {
+	.row.user.headed {
 		align-items: flex-start;
 	}
-	.peerbubble {
-		background: color-mix(in srgb, var(--mark-agent) 9%, var(--user-bg));
-		border-color: color-mix(in srgb, var(--mark-agent) 35%, var(--border));
+	.headedbubble {
+		background: color-mix(in srgb, var(--mark-header) 9%, var(--user-bg));
+		border-color: color-mix(in srgb, var(--mark-header) 35%, var(--border));
 		border-top-left-radius: 4px;
 	}
-	.from {
+	.header {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		margin-bottom: 4px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
-		color: var(--mark-agent);
+		color: var(--mark-header);
 	}
-	.from :global(svg) {
+	.header :global(svg) {
 
 		width: 14px;
 
