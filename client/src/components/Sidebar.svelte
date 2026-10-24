@@ -6,6 +6,7 @@
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
+	import IconButton from "./IconButton.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { marquee, tail } from "../lib/fit-text";
 	import PipayaMark from "./PipayaMark.svelte";
@@ -372,7 +373,7 @@
 	<div class="brandrow">
 		<PipayaMark color size={26} />
 		<Wordmark size={16} />
-		<button class="iconbtn foldbtn" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 접기")} title={t("사이드바 접기") + hint}><Icon name="sidebar" /></button>
+		<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
 	</div>
 	<div class="tools">
 		<div class="searchwrap">
@@ -479,12 +480,12 @@
 		stroke-width: 1.9;
 
 	}
-	.foldbtn {
+	:global(.iconbtn.foldbtn) {
 		margin-left: auto;
 		margin-right: -9.5px; /* the 19px icon's right edge sits on the 16px gutter, like the server chevron below */
 	}
 	/* 38px in a 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
-	.foldbtn:focus-visible {
+	:global(.iconbtn.foldbtn:focus-visible) {
 		outline-offset: -2px;
 	}
 	.forkmark {
@@ -1227,7 +1228,7 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 	@media (max-width: 860px) {
-		.foldbtn {
+		:global(.iconbtn.foldbtn) {
 			display: none;
 		}
 	}

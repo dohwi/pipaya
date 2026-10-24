@@ -12,7 +12,7 @@
 	import { newHistory, stepHistory } from "../lib/prompt-history";
 	import { fileRows, folderRows, memberRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
-	import Icon from "./Icon.svelte";
+	import IconButton from "./IconButton.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
 	import SendControls from "./SendControls.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
@@ -643,9 +643,7 @@
 </div>
 
 		<div class="bar">
-			<button class="iconbtn" onclick={() => fileInput?.click()} aria-label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")}>
-				<Icon name="attach" />
-			</button>
+			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
 			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void addFiles(picked); }} />
 
 			<ModelPicker />
