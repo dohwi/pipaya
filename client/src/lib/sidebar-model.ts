@@ -50,7 +50,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -95,5 +95,24 @@ export function rowMenuEntries(target: RowTarget, act: RowActions): MenuEntry[] 
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		close,
+	];
+}
+
+/** What the "+" of a server or folder does: start a conversation or a terminal, both in that place on that server. */
+export interface NewActions {
+	chat(): void;
+	terminal(): void;
+}
+
+/** The "+" menu: a new conversation, and a new terminal named for the server's OS when it says what it runs. */
+export function newMenuEntries(os: string | undefined, act: NewActions): MenuEntry[] {
+	return [
+		{ icon: "chat", label: t("새 대화"), title: "", run: act.chat },
+		{
+			icon: "terminal",
+			label: os ? t("새 터미널 ({os})", { os }) : t("새 터미널"),
+			title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
+			run: act.terminal,
+		},
 	];
 }

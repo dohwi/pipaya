@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../src/lib/sidebar-model";
+import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../src/lib/sidebar-model";
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {
@@ -84,5 +84,21 @@ describe("row menu", () => {
 		expect(targetId({ kind: "group", g: { id: "g1", name: "" } })).toBe("g1");
 		expect(targetId({ kind: "session", x: { id: "s1", title: "" } })).toBe("s1");
 		expect(targetId({ kind: "terminal", x: { id: "t1", title: "" } })).toBe("t1");
+	});
+});
+
+describe("the + menu", () => {
+	const calls: string[] = [];
+	const act = { chat: () => calls.push("chat"), terminal: () => calls.push("terminal") };
+	test("a conversation and a terminal, in that order", () => {
+		calls.length = 0;
+		const entries = newMenuEntries(undefined, act);
+		expect(entries.map((e) => e.icon)).toEqual(["chat", "terminal"]);
+		entries.forEach((e) => e.run());
+		expect(calls).toEqual(["chat", "terminal"]);
+	});
+	test("the terminal names the server's OS when it is known", () => {
+		expect(newMenuEntries("Linux", act)[1]!.label).toContain("Linux");
+		expect(newMenuEntries(undefined, act)[1]!.label).not.toContain("(");
 	});
 });

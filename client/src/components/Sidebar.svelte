@@ -20,7 +20,7 @@
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { isTerminalId, platformName, type TerminalInfo } from "../lib/terminal";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -186,23 +186,13 @@
 	});
 	/** Let go on a folder: the pane steps out of its group, as a tab of its own. */
 	const dropOnDir = (id: string) => void app.leaveGroup(id);
-	function newIn(n: Node, path: string) {
-		app.openIn(n.server.id, { workdir: path });
-	}
 	/** The "+" of a server or directory: a conversation or a terminal, both starting in that place. */
-	function newItems(n: Node, path: string): RowMenuItem[] {
-		const os = platformName(n.platform);
-		return [
-			{ icon: "chat", label: t("새 대화"), title: "", run: () => newIn(n, path) },
-			{
-				icon: "terminal",
-				label: os ? t("새 터미널 ({os})", { os }) : t("새 터미널"),
-				title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
-				run: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
-			},
-		];
-	}
-		const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
+	const newItems = (n: Node, path: string): RowMenuItem[] =>
+		newMenuEntries(platformName(n.platform), {
+			chat: () => app.openIn(n.server.id, { workdir: path }),
+			terminal: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
+		});
+	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
 	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 

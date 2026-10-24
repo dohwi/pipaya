@@ -4,6 +4,7 @@
 	import AgentBadge from "./AgentBadge.svelte";
 	import Pin from "./Pin.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
+	import { newMenuEntries } from "../lib/sidebar-model";
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
 	import { dragScroll } from "../lib/drag-scroll";
@@ -84,13 +85,11 @@
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
 	let menuId = $state<string | null>(null);
 	const workdir = $derived(path === app.workspace?.root ? "." : path);
-	function newItems(): RowMenuItem[] {
-		const os = platformName(app.terminalSupport?.platform);
-		return [
-			{ icon: "chat", label: t("새 대화"), title: "", run: () => app.serverId && app.openIn(app.serverId, { workdir }) },
-			{ icon: "terminal", label: os ? t("새 터미널 ({os})", { os }) : t("새 터미널"), title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"), run: () => app.serverId && app.openIn(app.serverId, { workdir, terminal: true }) },
-		];
-	}
+	const newItems = (): RowMenuItem[] =>
+		newMenuEntries(platformName(app.terminalSupport?.platform), {
+			chat: () => void (app.serverId && app.openIn(app.serverId, { workdir })),
+			terminal: () => void (app.serverId && app.openIn(app.serverId, { workdir, terminal: true })),
+		});
 
 	let strip: HTMLElement | undefined = $state();
 	$effect(() => {
