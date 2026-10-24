@@ -71,7 +71,7 @@
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev.open { transform: rotate(180deg); transition: transform var(--motion-normal) var(--ease); }
 	/* Icon.svelte only supplies the path; how it is painted is the caller's job. Without these the arrow is a filled black shape (invisible on a dark background). */
-	.chev :global(svg) { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 
 	/* the height animates on .body (sliding); the spacing lives on .inner so it grows with it and does not jump */
 	/* overflow must clip for the slide, but it would also cut focus rings of fields in the body: pad it and pull the margin back */

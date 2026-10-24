@@ -288,13 +288,13 @@
 		font-size: var(--fs-xs);
 	}
 	.ctl :global(svg) {
+
 		width: 18px;
+
 		height: 18px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.nav {
 		position: absolute;
@@ -313,13 +313,13 @@
 		background: rgba(255, 255, 255, 0.24);
 	}
 	.nav :global(svg) {
+
 		width: 22px;
+
 		height: 22px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.prev {
 		left: 14px;

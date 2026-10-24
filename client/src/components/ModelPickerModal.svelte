@@ -194,13 +194,15 @@
 		scale: 0.85;
 	}
 	.fav :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linejoin: round;
+
 		transition: fill var(--motion-fast) var(--ease-std);
+
 	}
 	.fav.on {
 		color: var(--warn);
@@ -209,12 +211,15 @@
 		fill: currentColor;
 	}
 	.gstar :global(svg) {
+
 		width: 12px;
+
 		height: 12px;
-		stroke: currentColor;
+
 		fill: currentColor;
+
 		stroke-width: 1.8;
-		stroke-linejoin: round;
+
 	}
 	.sec {
 		flex: none;
@@ -277,12 +282,12 @@
 		background: var(--bg-hover);
 	}
 	.manage :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

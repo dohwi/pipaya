@@ -179,13 +179,13 @@
 		rotate: 180deg;
 	}
 	.chev :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.field .chev {
 		color: var(--text-dim);

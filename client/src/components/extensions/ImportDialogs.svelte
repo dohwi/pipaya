@@ -138,7 +138,7 @@
 	.rmark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); }
 	.rmodal.warn .rmark { background: var(--warn-soft); color: var(--warn); }
 	.rmodal.danger .rmark { background: var(--danger-soft); color: var(--danger); }
-	.rmark :global(svg) { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+	.rmark :global(svg) { width: 18px; height: 18px; stroke-width: 2.2; }
 	.rbody { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.rpkg { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-code); min-width: 0; }
 	.rpkg strong { font-weight: 600; overflow-wrap: anywhere; }

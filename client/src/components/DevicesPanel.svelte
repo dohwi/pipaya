@@ -243,13 +243,13 @@
 		opacity: 1;
 	}
 	.kind :global(svg) {
+
 		width: 20px;
+
 		height: 20px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.meta {
 		flex: 1;

@@ -287,17 +287,23 @@
 		padding: 0 22px 12px;
 	}
 	.searchbar :global(svg) {
+
 		position: absolute;
+
 		left: 34px;
+
 		top: 9px;
+
 		width: 16px;
+
 		height: 16px;
+
 		stroke: var(--text-faint);
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 		pointer-events: none;
+
 	}
 	.searchbar input {
 		width: 100%;
@@ -569,14 +575,15 @@
 		background: none;
 	}
 	.nav button :global(svg) {
+
 		flex: none;
+
 		width: 19px;
+
 		height: 19px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.nt {
 		display: flex;

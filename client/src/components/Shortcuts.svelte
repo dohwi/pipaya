@@ -273,13 +273,13 @@
 		opacity: 0.3;
 	}
 	.step :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2.2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.reset {
 		display: grid;
@@ -291,13 +291,13 @@
 		color: var(--text-dim);
 	}
 	.reset :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2.2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.reset:hover:not(:disabled) {
 		background: var(--bg-hover);

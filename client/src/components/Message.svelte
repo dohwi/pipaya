@@ -255,11 +255,13 @@
 		color: var(--mark-agent);
 	}
 	.from :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
+
 	}
 	.quote {
 		margin: 0 0 6px;
@@ -402,15 +404,17 @@
 		overflow-wrap: anywhere;
 	}
 	.error :global(svg) {
+
 		width: 17px;
+
 		height: 17px;
+
 		flex: none;
+
 		margin-top: 1px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 
 	.foot {

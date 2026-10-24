@@ -165,11 +165,10 @@
 		color: var(--text-dim);
 	}
 	.rhead :global(svg) {
+
 		flex: none;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

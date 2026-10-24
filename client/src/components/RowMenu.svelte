@@ -146,13 +146,16 @@
 		background: var(--bg-hover);
 	}
 	.mi :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
+
 		flex: none;
+
 		stroke: var(--text-dim);
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

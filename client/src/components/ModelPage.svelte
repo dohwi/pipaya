@@ -137,14 +137,15 @@
 		gap: 6px;
 	}
 	.src :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
+
 		flex: none;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.src.off {
 		color: var(--text-faint);
@@ -202,13 +203,15 @@
 		border-color: var(--accent);
 	}
 	.iconpick :global(svg:not(.model):not(.logo)) {
+
 		width: 13px;
+
 		height: 13px;
+
 		stroke: var(--text-dim);
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.mtext {
 		flex: 1;
@@ -222,15 +225,17 @@
 		color: var(--text-dim);
 	}
 	.mtrigger :global(svg:not(.model):not(.logo)) {
+
 		width: 15px;
+
 		height: 15px;
+
 		flex: none;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 		color: var(--text-dim);
+
 	}
 	.danger-text {
 		align-self: flex-start;
@@ -255,13 +260,13 @@
 		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
 	}
 	.cap :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.cap:hover {
 		background: var(--bg-hover);

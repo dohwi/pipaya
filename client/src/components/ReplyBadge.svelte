@@ -30,7 +30,7 @@
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}
-	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; }
+	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke-width: 1.8; }
 	.rwho { font-weight: 600; color: var(--text); flex: none; }
 	.rtext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.rx { flex: none; width: 18px; height: 18px; line-height: 16px; border-radius: 50%; padding: 0; color: inherit; }

@@ -25,5 +25,5 @@
 	.hint { overflow-wrap: anywhere; }
 	.permissions { list-style: none; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--radius-sm); background: var(--bg-code); font-size: var(--fs-xs); color: var(--text-dim); }
 	.permissions li { display: flex; align-items: flex-start; gap: 8px; }
-	.permissions li :global(svg) { flex: none; width: 14px; height: 14px; margin-top: 3px; stroke: var(--ok); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+	.permissions li :global(svg) { flex: none; width: 14px; height: 14px; margin-top: 3px; stroke: var(--ok); stroke-width: 2.2; }
 </style>

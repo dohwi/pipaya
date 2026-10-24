@@ -230,7 +230,7 @@
 	.launcher { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-xs); }
 	.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
 	.launcher:disabled { opacity: 0.55; cursor: not-allowed; }
-	.launcher :global(svg), .empty :global(svg) { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+	.launcher :global(svg), .empty :global(svg) { stroke-width: 1.8; }
 	.launcher :global(svg) { flex: none; width: 15px; height: 15px; }
 	.count { display: grid; place-items: center; min-width: 20px; padding: 1px 5px; border-radius: var(--radius-pill); background: var(--bg-active); font-family: var(--mono); font-size: 10px; }
 	.launcher.danger { color: var(--danger); border-color: var(--danger); }

@@ -366,13 +366,13 @@
 		transform: rotate(180deg);
 	}
 	.chev :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.list {
 		position: fixed;
@@ -431,12 +431,14 @@
 		height: 16px;
 	}
 	.ck :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
+
 		stroke: var(--text);
-		fill: none;
+
 		stroke-width: 2.2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

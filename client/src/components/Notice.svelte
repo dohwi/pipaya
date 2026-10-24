@@ -92,15 +92,17 @@
 		font-weight: 400;
 	}
 	.notice :global(svg) {
+
 		width: 17px;
+
 		height: 17px;
+
 		flex: none;
+
 		margin-top: 1px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.sm :global(svg) {
 		width: 16px;

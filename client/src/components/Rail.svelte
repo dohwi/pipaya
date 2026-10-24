@@ -143,13 +143,13 @@
 		color: var(--text);
 	}
 	.btn-ico :global(svg) {
+
 		width: 19px;
+
 		height: 19px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.75;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.agents {
 		position: relative;

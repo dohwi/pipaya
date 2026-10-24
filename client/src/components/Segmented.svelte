@@ -114,12 +114,12 @@
 		border-color: var(--border);
 	}
 	.cards > button :global(svg) {
+
 		width: 17px;
+
 		height: 17px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

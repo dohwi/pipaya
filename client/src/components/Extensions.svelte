@@ -560,7 +560,7 @@
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
-	.switch-title :global(svg) { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+	.switch-title :global(svg) { width: 17px; height: 17px; stroke-width: 1.9; }
 	.switch-title :global(svg) { color: var(--text-dim); }
 
 
@@ -586,7 +586,7 @@
 	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
-	.chev :global(svg) { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

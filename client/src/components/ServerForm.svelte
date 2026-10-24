@@ -285,13 +285,13 @@
 		color: var(--text);
 	}
 	.back :global(svg) {
+
 		width: 18px;
+
 		height: 18px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	header {
 		display: flex;
@@ -371,14 +371,17 @@
 		background: var(--bg-elev, transparent);
 	}
 	.wd > :global(svg) {
+
 		flex: none;
+
 		width: 17px;
+
 		height: 17px;
+
 		stroke: var(--text-dim);
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.wdpath {
 		flex: 1;

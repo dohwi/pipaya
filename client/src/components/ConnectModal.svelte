@@ -351,7 +351,7 @@
 	.hint.lead { margin-top: -4px; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.search { position: relative; display: flex; align-items: center; }
-	.search :global(svg) { position: absolute; left: 11px; width: 15px; height: 15px; stroke: var(--text-faint); fill: none; stroke-width: 2; pointer-events: none; }
+	.search :global(svg) { position: absolute; left: 11px; width: 15px; height: 15px; stroke: var(--text-faint); stroke-width: 2; pointer-events: none; }
 	.search .field { width: 100%; padding-left: 34px; }
 	.group { margin-top: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -359,7 +359,7 @@
 	.item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, var(--bg)); color: var(--text); }
 	.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
 	.item:disabled { opacity: 0.55; cursor: default; }
-	.item :global(svg) { flex: none; width: 15px; height: 15px; stroke: var(--text-faint); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+	.item :global(svg) { flex: none; width: 15px; height: 15px; stroke: var(--text-faint); stroke-width: 2; }
 	.pname { flex: 1; min-width: 0; font-size: var(--fs-sm); }
 	.sub { font-size: var(--fs-xs); color: var(--text-faint); }
 	.empty { padding: 14px; text-align: center; font-size: var(--fs-sm); color: var(--text-faint); }
@@ -372,11 +372,11 @@
 	.steps b { color: var(--text); font-size: var(--fs-md); }
 	.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 	.row .field { flex: 1; min-width: 0; }
-	.row :global(svg) { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+	.row :global(svg) { width: 14px; height: 14px; stroke-width: 2; }
 	.ask { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--bg); }
 	.msg { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.device { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); }
 	.code { font-size: 1.4em; font-weight: 700; letter-spacing: 0.1em; user-select: all; }
 	.done { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 22px 0; color: var(--ok, #2a9d4b); }
-	.done :global(svg) { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+	.done :global(svg) { width: 20px; height: 20px; stroke-width: 2.4; }
 </style>

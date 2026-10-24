@@ -75,13 +75,13 @@
 		border-color: var(--danger);
 	}
 	.mark :global(svg:not(.logo)) {
+
 		width: 28px;
+
 		height: 28px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	h2 {
 		margin: 4px 0 0;

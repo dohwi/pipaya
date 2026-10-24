@@ -179,13 +179,13 @@
 		justify-content: center;
 	}
 	.row :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.make {
 		align-self: center;
@@ -204,15 +204,17 @@
 		line-height: 1.5;
 	}
 	.warn :global(svg) {
+
 		width: 17px;
+
 		height: 17px;
+
 		flex: none;
+
 		margin-top: 1px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.hint {
 		margin: 0;

@@ -267,14 +267,15 @@
 		font-size: var(--fs-sm);
 	}
 	.notice :global(svg) {
+
 		width: 17px;
+
 		height: 17px;
+
 		flex: none;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.jump {
 		position: absolute;
@@ -293,13 +294,13 @@
 		z-index: 5;
 	}
 	.jump :global(svg) {
+
 		width: 18px;
+
 		height: 18px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.skeleton {
 		display: flex;
@@ -331,12 +332,14 @@
 		color: var(--text-dim);
 	}
 	.loaderr :global(svg) {
+
 		width: 28px;
+
 		height: 28px;
+
 		stroke: var(--danger);
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

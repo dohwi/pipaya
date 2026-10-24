@@ -52,12 +52,13 @@
 		background: var(--bg-hover);
 	}
 	.qx :global(svg) {
+
 		width: 13px;
+
 		height: 13px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
+
 	}
 	.qt {
 		overflow: hidden;

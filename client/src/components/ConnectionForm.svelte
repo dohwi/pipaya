@@ -396,11 +396,13 @@
 		gap: 8px;
 	}
 	.mhead :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
+
 	}
 	.lockic {
 		flex: none;
@@ -521,10 +523,13 @@
 		white-space: nowrap;
 	}
 	.mitem :global(.badge svg) {
+
 		width: 12px;
+
 		height: 12px;
-		stroke: currentColor;
+
 		stroke-width: 2.2;
+
 	}
 	.mname :global(.lockic) {
 		margin-left: 6px;
@@ -552,14 +557,17 @@
 		color: var(--text-faint);
 	}
 	.mitem :global(svg:not(.model):not(.logo)) {
+
 		flex: none;
+
 		width: 16px;
+
 		height: 16px;
+
 		stroke: var(--text-faint);
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.mlogo {
 		flex: none;
@@ -596,15 +604,17 @@
 		overflow-wrap: anywhere;
 	}
 	.ferr :global(svg) {
+
 		flex: none;
+
 		width: 17px;
+
 		height: 17px;
+
 		margin-top: 1px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.fbtns {
 		align-items: center;

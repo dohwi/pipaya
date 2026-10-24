@@ -92,23 +92,25 @@
 		color: var(--text);
 	}
 	.back :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.tico {
 		display: inline-grid;
 	}
 	.tico :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
+
 	}
 	.chip {
 		position: relative;

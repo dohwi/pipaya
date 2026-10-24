@@ -174,13 +174,13 @@
 	.sw :global(svg),
 	.cur :global(svg),
 	.del :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.sw {
 		display: flex;

@@ -195,7 +195,7 @@
 	.hint, .meta { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
-	.search :global(svg) { width: 16px; height: 16px; flex: none; stroke: var(--text-faint); fill: none; stroke-width: 2; }
+	.search :global(svg) { width: 16px; height: 16px; flex: none; stroke: var(--text-faint); stroke-width: 2; }
 	.search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 9px 0; color: inherit; outline: none; }
 	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 	.item { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
@@ -206,14 +206,14 @@
 	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 3px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.btn :global(svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke: currentColor; fill: none; stroke-width: 2; }
+	.btn :global(svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.chip { font-size: var(--fs-2xs); padding: 1px 8px; border-radius: 999px; background: var(--bg-active); }
 	.chip.ok { background: var(--ok-soft); }
 	.chip.accent { background: var(--accent-soft); color: var(--text); }
 	.foot .btn { flex: none; }
 	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 7px 0 5px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-2xs); font-weight: 600; line-height: 1.6; }
-	.official :global(svg) { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 3; }
+	.official :global(svg) { width: 10px; height: 10px; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.ask p { margin: 0 0 8px; }
 	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -266,11 +266,9 @@
 		height: 16px;
 	}
 	.btn :global(svg) {
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.note {
 		display: flex;
@@ -282,12 +280,11 @@
 	}
 	.note :global(svg),
 	.drop :global(svg) {
+
 		flex: none;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.note :global(svg) {
 		width: 15px;

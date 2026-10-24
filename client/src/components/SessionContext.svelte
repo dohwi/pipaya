@@ -131,7 +131,7 @@
 	.chev { flex: none; display: grid; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev.open { transition: transform var(--motion-normal) var(--ease); }
 	.chev.open { transform: rotate(90deg); }
-	.chev :global(svg) { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 	.source-name { font-size: var(--fs-xs); }
 	.meta { display: block; margin-top: 5px; color: var(--text-faint); font-size: var(--fs-2xs); }
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 14px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }

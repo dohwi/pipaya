@@ -186,13 +186,13 @@
 		color: var(--text-dim);
 	}
 	.ticon :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.os {
 		margin-left: 7px;
@@ -308,13 +308,13 @@
 		color: var(--text);
 	}
 	.x :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.body {
 		flex: 1;

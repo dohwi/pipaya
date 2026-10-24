@@ -144,12 +144,12 @@
 		font-size: var(--fs-md);
 	}
 	.warn :global(svg) {
+
 		width: 18px;
+
 		height: 18px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 </style>

@@ -72,11 +72,12 @@
 		color: var(--bg);
 	}
 	.rm :global(svg) {
+
 		width: 12px;
+
 		height: 12px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2.6;
-		stroke-linecap: round;
+
 	}
 </style>

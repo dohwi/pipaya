@@ -471,13 +471,13 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.settings :global(svg) {
+
 		width: 18px;
+
 		height: 18px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.foldbtn {
 		margin-left: auto;
@@ -493,13 +493,13 @@
 		color: var(--text-faint);
 	}
 	.forkmark :global(svg) {
+
 		width: 13px;
+
 		height: 13px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	@media (min-width: 861px) {
 		.side {
@@ -512,17 +512,25 @@
 		min-width: 0;
 	}
 	.searchwrap :global(svg) {
+
 		position: absolute;
+
 		left: 11px;
+
 		top: 50%;
+
 		translate: 0 -50%;
+
 		width: 16px;
+
 		height: 16px;
+
 		stroke: var(--text-faint);
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
+
 		pointer-events: none;
+
 	}
 	.search {
 		width: 100%;
@@ -658,13 +666,13 @@
 	}
 	.sicon :global(svg),
 	.dicon :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	/* the status lives in a small pill after the name, so it never touches the icon or the name: a dot alone when online, dot + text otherwise */
 	.spill {
@@ -793,13 +801,15 @@
 		rotate: -90deg;
 	}
 	.chev :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
+
 		stroke: var(--text-faint);
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.dname {
 		flex: none;
@@ -893,21 +903,22 @@
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
 	.lead > :global(svg) {
+
 		width: 14px;
+
 		height: 14px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.dirnew :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2;
-		stroke-linecap: round;
+
 	}
 	.nosess {
 		padding: 4px 10px 6px 44px;
@@ -1052,12 +1063,13 @@
 		color: var(--text);
 	}
 	.more :global(svg) {
+
 		width: 15px;
+
 		height: 15px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2.6;
-		stroke-linecap: round;
+
 	}
 	.rename {
 		flex: 1;
@@ -1174,13 +1186,13 @@
 		color: var(--text-faint);
 	}
 	.gfold :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.gfold:hover {
 		background: var(--bg-active);

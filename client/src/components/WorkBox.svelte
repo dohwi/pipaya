@@ -202,13 +202,13 @@
 	}
 	.ico :global(svg),
 	.open :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.roll {
 		position: relative;
@@ -319,13 +319,13 @@
 		color: var(--text-dim);
 	}
 	.thead :global(svg) {
+
 		width: 16px;
+
 		height: 16px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.tbody {
 		margin-top: 6px;

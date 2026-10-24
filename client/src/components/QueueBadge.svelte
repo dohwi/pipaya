@@ -26,13 +26,13 @@
 		padding: 0 1px;
 	}
 	.in :global(svg) {
+
 		width: 11px;
+
 		height: 11px;
-		stroke: currentColor;
-		fill: none;
+
 		stroke-width: 2.2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+
 	}
 	.n {
 		font-variant-numeric: tabular-nums;
