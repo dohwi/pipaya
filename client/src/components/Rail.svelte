@@ -2,11 +2,11 @@
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
-	import Icon from "./Icon.svelte";
+	import IconButton from "./IconButton.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Pin from "./Pin.svelte";
 	import { app } from "../lib/store.svelte";
-		import { tilde } from "../lib/format";
+	import { tilde } from "../lib/format";
 	import { sidebarDirs, tabPanes, type DirBlock } from "../lib/nav";
 	import type { Server } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
@@ -78,8 +78,8 @@
 <aside class="rail" aria-label={t("작업 폴더")}>
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
-		<button class="btn-ico" onclick={() => app.sidebar.toggleCollapsed()} aria-label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint}><Icon name="sidebar" /></button>
-		<button class="btn-ico" onclick={() => void app.startChat()} aria-label={t("새 대화")} title={t("새 대화")}><Icon name="plus" /></button>
+		<IconButton icon="sidebar" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />
+		<IconButton icon="plus" label={t("새 대화")} tip onclick={() => void app.startChat()} />
 	</div>
 
 	<ul
@@ -95,7 +95,7 @@
 	</ul>
 
 	<div class="bottom">
-		<button class="btn-ico" onclick={() => app.openSettings()} aria-label={t("설정")} title={t("설정")}><Icon name="settings" /></button>
+		<IconButton icon="settings" label={t("설정")} tip onclick={() => app.openSettings()} />
 	</div>
 </aside>
 
@@ -129,23 +129,6 @@
 		align-items: center;
 		padding: 10px 0;
 		border-bottom: 1px solid var(--border);
-	}
-	.btn-ico {
-		display: grid;
-		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-	}
-	.btn-ico:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.btn-ico :global(svg) {
-		width: 19px;
-		height: 19px;
-		stroke-width: 1.75;
 	}
 	.agents {
 		position: relative;

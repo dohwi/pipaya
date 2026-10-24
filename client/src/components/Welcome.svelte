@@ -1,7 +1,6 @@
 <script lang="ts">
-	import Button from "./Button.svelte";
+	import Notice from "./Notice.svelte";
 	import { t } from "../lib/i18n";
-	import Icon from "./Icon.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Backdrop, { arrival, type Burst } from "./Backdrop.svelte";
 	import { app } from "../lib/store.svelte";
@@ -49,9 +48,10 @@
 
 	{#if noModel && app.sessionsLoaded}
 		<div class="warn">
-			<Icon name="key" />
-			<span>{t("사용할 수 있는 모델이 아직 없습니다.")}</span>
-			<Button size="sm" onclick={() => (app.openSettings("agent"))}>{t("모델 연결")}</Button>
+			<Notice tone="warn" icon="key">
+				{t("사용할 수 있는 모델이 아직 없습니다.")}
+				{#snippet action()}<button type="button" onclick={() => app.openSettings("agent")}>{t("모델 연결")}</button>{/snippet}
+			</Notice>
 		</div>
 	{/if}
 </div>
@@ -130,23 +130,11 @@
 		color: var(--text-dim);
 		text-wrap: balance;
 	}
+	/* the notice keeps its own left-aligned layout inside the centred hero */
 	.warn {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		flex-wrap: wrap;
-		justify-content: center;
 		position: relative;
 		margin-top: 16px;
-		padding: 10px 14px;
-		border-radius: var(--radius);
-		background: var(--warn-soft);
-		color: var(--warn);
-		font-size: var(--fs-md);
-	}
-	.warn :global(svg) {
-		width: 18px;
-		height: 18px;
-		stroke-width: 1.9;
+		max-width: 100%;
+		text-align: left;
 	}
 </style>
