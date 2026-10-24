@@ -498,6 +498,8 @@
 		flex: none;
 		display: inline-flex;
 		--pin-ring: var(--bg-elev);
+		/* the chip is a pill, so its corner is empty: pull the dot in onto the curve */
+		--pin-inset: 2px;
 	}
 	.srvname {
 		min-width: 0;
