@@ -93,15 +93,16 @@
 	.danger {
 		--pin-bg: var(--danger);
 	}
+	/* the same slow breath as the agent logos (AgentBadge: 1.8s, dims to half), so pins and logos side by side stay calm and in step */
 	.pulse {
-		animation: pin-pulse 1.2s ease-in-out infinite;
+		animation: pin-pulse 1.8s ease-in-out infinite;
 	}
 	.ping {
 		animation: pin-ping 1.2s ease-in-out infinite;
 	}
 	@keyframes pin-pulse {
 		50% {
-			opacity: 0.4;
+			opacity: 0.5;
 		}
 	}
 	@keyframes pin-ping {
