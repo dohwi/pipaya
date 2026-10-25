@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyMatch, collectModels, formFromProvider, headerError, modelMeta, newForm, newRow, slug, snapshot, type Form } from "../src/lib/connection-form";
+import { applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, slug, snapshot, type Form } from "../src/lib/connection-form";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
@@ -76,8 +76,8 @@ describe("catalog match and editing", () => {
 		expect(snapshot(f)).not.toBe(before);
 	});
 	test("model meta summarises context and capabilities", () => {
-		expect(modelMeta(row({ contextWindow: "128000", reasoning: true }))).toBe("128k · 추론");
-		expect(modelMeta(row({ contextWindow: "abc" }))).toBe("");
+		expect(ctxLabel(row({ contextWindow: "128000", reasoning: true }))).toBe("128k");
+		expect(ctxLabel(row({ contextWindow: "abc" }))).toBe("");
 	});
 });
 
@@ -99,12 +99,5 @@ describe("image generation models", () => {
 	test("a text model's payload has no flag", () => {
 		const out = collectModels(filled({ rows: [row()] }), true, none, true);
 		expect("out" in out && "imageGeneration" in out.out[0]!).toBe(false);
-	});
-});
-
-describe("image model summary line", () => {
-	test("an image model shows no context size, a text model does", () => {
-		expect(modelMeta(row({ imageGeneration: true, vision: true, contextWindow: "65536" }))).toBe("이미지 생성 · 이미지");
-		expect(modelMeta(row({ reasoning: true, vision: true, contextWindow: "128000" }))).toBe("128k · 추론 · 이미지");
 	});
 });

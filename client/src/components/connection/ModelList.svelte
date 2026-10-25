@@ -5,7 +5,8 @@
 	import ModelLogo from "../ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
-	import { modelMeta, type Form, type Row } from "../../lib/connection-form";
+	import { ctxLabel, type Form, type Row } from "../../lib/connection-form";
+	import CapTags from "../CapTags.svelte";
 	import type { CatalogModel } from "../../lib/types";
 
 	/**
@@ -51,7 +52,7 @@
 			<button type="button" class="mitem" onclick={() => onopen(i)}>
 				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 				<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
-				<span class="mmeta">{modelMeta(r)}</span>
+				<span class="mmeta">{#if !r.imageGeneration}<span class="mctx">{ctxLabel(r)}</span>{/if}<CapTags model={r} /></span>
 				{#if r.unavailable}
 					<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
 				{:else if !r.id.trim()}
@@ -140,8 +141,14 @@
 	}
 	.mmeta {
 		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
+	}
+	.mctx {
+		font-family: var(--mono);
 	}
 	.mitem :global(svg:not(.model):not(.logo)) {
 		flex: none;
