@@ -731,22 +731,12 @@
 		font-weight: 700;
 		color: var(--text);
 	}
-	/* the open tab: a tinted fill, a hairline and an accent bar on the left, so it reads at a glance among hovered rows */
+	/* the open tab: a soft wash that fades out to the right, a faint hairline and a lifted title; no bar, so it stays quiet */
 	:global(:where(.side) .list .slide-ind) {
 		border-radius: 10px !important;
-		z-index: 1; /* above the server band's own background, which would otherwise hide it; the tint is translucent */
-		background: color-mix(in srgb, var(--text) 11%, transparent);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
-	}
-	:global(:where(.side) .list .slide-ind::before) {
-		content: "";
-		position: absolute;
-		left: 4px;
-		top: 9px;
-		bottom: 9px;
-		width: 3px;
-		border-radius: 2px;
-		background: var(--accent);
+		z-index: 1; /* above the server band's own background, which would otherwise hide it; the wash is translucent */
+		background: linear-gradient(90deg, color-mix(in srgb, var(--text) 13%, transparent), color-mix(in srgb, var(--text) 5%, transparent));
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
 	}
 	:global(:where(.side) .item.active .lead > svg) {
 		color: var(--text);
