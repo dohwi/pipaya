@@ -75,7 +75,7 @@
 {/snippet}
 
 <!-- The folded sidebar: a narrow rail with one button per working folder; its tabs are in the tab bar. -->
-<aside class="rail" aria-label={t("작업 폴더")}>
+<aside class="rail" data-part="rail" aria-label={t("작업 폴더")}>
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
 		<IconButton icon="sidebar" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />

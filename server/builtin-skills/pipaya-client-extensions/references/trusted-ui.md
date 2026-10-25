@@ -6,9 +6,18 @@ Two opt-in permissions let a package change the app itself. Both run **in the ap
 |---|---|---|
 | `ui-style` | `styles` (CSS, ≤64KB) | App-wide stylesheet. No `</style>`, no `@import`. |
 | `ui-components` | `components` (name → Svelte 5 source, ≤20, ≤64KB each), `mounts`, `replaces` | Compiled by the app (`lib/extensions/components.ts`) and mounted like built-in components. |
+| either | `assets` (file name → base64 `data:` URL, ≤40 files, ≤768KB total) | Design files: `image/png jpeg webp gif avif svg+xml`, `font/woff2 woff ttf otf`. |
+
+A whole package is at most 1 MiB. A design pack is one package: `theme` for the tokens, `styles` for the rest, `assets` for its images and fonts, `components` for anything new.
 
 ## Styles
-Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sidebar.brand, sidebar.bottom, header, header.title, pane, messages, message.user, message.assistant, composer, composer.box, composer.bar, statusline`. Internal class names are not a contract. The host raises each rule's specificity (`style.ts`), so a plain `[data-part="header"] { ... }` beats the app's scoped rules without `!important`. Override design tokens with `:root { --accent: ... }` (not raised).
+Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sidebar.brand, sidebar.bottom, rail, header, header.title, tabbar, pane, messages, message.user, message.assistant, tool, welcome, sessions, composer, composer.box, composer.bar, statusline, toasts, palette, modal`. Internal class names are not a contract. The host raises each rule's specificity (`style.ts`), so a plain `[data-part="header"] { ... }` beats the app's scoped rules without `!important`. Override design tokens with `:root { --accent: ... }` (not raised). Files from `assets` are referenced as `asset("name")`, which becomes `url("data:...")`; naming a file the package does not carry is refused at install:
+
+```css
+@font-face { font-family: "Brand"; src: asset("brand.woff2") format("woff2"); }
+:root { --font: "Brand", sans-serif; }
+[data-part="sidebar.brand"] { background: asset("logo.svg") no-repeat left center / auto 20px; }
+```
 
 ## Components
 ```json
@@ -17,14 +26,14 @@ Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sideba
   "replaces": { "composer.send": "Send" } }
 ```
 - Imports allowed: `svelte`, `svelte/{transition,animate,easing,motion,store,reactivity,events,attachments}`, `./Name.svelte` (sibling component), and `pipaya`.
-- `pipaya` exports (`kit.ts`): `ext` (`id`, `data`, `settings`, `language`, `dark`; getters, read inside the component), `app`, `extensions`, `t`, `tc`, `getPane`, and `Icon Button IconButton Badge Switch Pin StatusDot`.
+- `pipaya` exports (`kit.ts`): `ext` (`id`, `data`, `settings`, `language`, `dark`, `assets`; getters, read inside the component), `app`, `extensions`, `t`, `tc`, `getPane`; components `Icon Button IconButton Badge Switch Pin StatusDot Modal ModalHeader Select Segmented Accordion Notice Markdown SearchField`; `ExtensionView` (draws declarative nodes); `motion` (`fadeIn fadeOut surfaceIn surfaceOut collapseIn collapseOut reduced`, the app's transitions).
 - `sdk.components.setData(json)` (≤64KB) from the extension's Worker code becomes `ext.data`. Keep fetching and secrets in the Worker (`code`); components draw.
 - **Slots** (`UI_SLOTS`): `app.overlay header.start header.end header.below sidebar.top sidebar.bottom pane.top pane.bottom composer.top composer.toolbar composer.bottom message.user.after message.assistant.after`. Pane, message and composer slots receive `paneId` (messages also `item`, assistant `turn last live`).
 - **Replaceable parts** (`UI_PARTS`): `header.title sidebar.brand pane.empty pane.welcome composer.send statusline message.user message.assistant`. The component gets the part's props plus `fallback`, a snippet drawing the original (`{@render fallback()}`). The first installed extension wins.
 - A component that throws is logged to the extension's log and dropped (mounts) or replaced by the original (parts); the app keeps running. It is not protection against hostile code.
 
 ## Adding a slot or part
-1. Add the name to `UI_SLOTS` / `UI_PARTS` / `STYLE_PARTS` in `schema.ts`.
+1. Add the name to `UI_SLOTS` / `UI_PARTS` / `STYLE_PARTS` in `schema.ts` (`extensions-design.test.ts` checks that `STYLE_PARTS` and the app's `data-part` attributes match).
 2. Place `<ExtensionMount slot="...">` or wrap the markup in `<ExtensionPart part="...">` (and a `data-part` attribute for CSS).
 3. Document it here; names are a public contract, so never rename one.
 

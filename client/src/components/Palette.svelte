@@ -70,7 +70,7 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="scrim" onclick={close} in:fadeIn out:fadeOut></div>
 	<!-- Esc, Tab kept inside, focus back to the opener, app shortcuts muted: the same layer every modal uses -->
-	<div class="pal" role="dialog" aria-modal="true" aria-label={spec.title} use:modalLayer={{ onclose: close }} in:surfaceIn={{ y: -12 }} out:surfaceOut={{ y: -12 }}>
+	<div class="pal" data-part="palette" role="dialog" aria-modal="true" aria-label={spec.title} use:modalLayer={{ onclose: close }} in:surfaceIn={{ y: -12 }} out:surfaceOut={{ y: -12 }}>
 		<div class="head">
 			<span class="ttl">{spec.title}</span>
 			<button class="x" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>

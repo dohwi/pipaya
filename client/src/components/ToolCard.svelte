@@ -70,7 +70,7 @@
 
 </script>
 
-<div class="card" class:awaiting data-state={run.state}>
+<div class="card" data-part="tool" class:awaiting data-state={run.state}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="ico"><Icon name={toolIcon(name)} /></span>
 		<span class="name">{name}</span>

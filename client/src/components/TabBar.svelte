@@ -105,7 +105,7 @@
 </script>
 
 {#if app.serverId && app.net !== "idle" && !viewport.inGroup(app.activeGroup?.id)}
-	<div class="bar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
+	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}

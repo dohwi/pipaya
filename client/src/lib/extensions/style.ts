@@ -1,3 +1,4 @@
+import { ASSET_REF } from "./schema";
 /**
  * An extension stylesheet has to beat the app's own: Svelte scopes every built-in rule (`header.svelte-x`,
  * `.a.svelte-x .b.svelte-x`), which outranks a plain `[data-part="header"]`. So each style rule's selector is placed
@@ -19,4 +20,15 @@ export function raiseSpecificity(sheet: CSSStyleSheet | null | undefined): void 
 		}
 	};
 	walk(sheet.cssRules);
+}
+
+/**
+ * Put a package's design files into its stylesheet: every `asset("name")` becomes `url("data:...")`. The schema already
+ * refused a reference to a file the package does not carry; one that slips through anyway becomes `none`.
+ */
+export function inlineAssets(css: string, assets: Readonly<Record<string, string>> | undefined): string {
+	return css.replace(ASSET_REF, (_m, a?: string, b?: string, c?: string) => {
+		const name = a ?? b ?? c ?? "";
+		return assets && Object.hasOwn(assets, name) ? `url("${assets[name]}")` : "none";
+	});
 }

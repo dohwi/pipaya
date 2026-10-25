@@ -45,6 +45,7 @@
 
 <div
 	class="toasts"
+	data-part="toasts"
 	class:anchored={!!box}
 	style:left={box ? `${box.left}px` : null}
 	style:width={box ? `${box.width}px` : null}

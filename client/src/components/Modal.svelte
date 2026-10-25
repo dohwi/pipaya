@@ -96,6 +96,7 @@
 	<div class="scrim" style:z-index="var(--z-scrim-{layer})" onclick={dismiss} in:fadeIn|global out:fadeOut|global></div>
 	<div
 		class="modal {cls}"
+		data-part="modal"
 		class:elevated
 		class:sheet
 		class:safe={safeArea}

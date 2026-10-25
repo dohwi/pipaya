@@ -8,8 +8,11 @@ import { HttpError, badRequest } from "./errors.ts";
  */
 export const SERVER_SCOPED_KEYS = ["favModels", "extensions", "extensionStates", "notificationPolicy"] as const;
 export type ClientSettingKey = (typeof SERVER_SCOPED_KEYS)[number];
-/** Per-key cap in characters of JSON. Extensions carry code: 50 packages of up to 256 KiB each (client MAX_PACKAGE_BYTES). */
-export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, extensions: 13_500_000, extensionStates: 20_000, notificationPolicy: 1_000 };
+/**
+ * Per-key cap in characters of JSON. Extensions carry code and design files (a package is at most 1 MiB, client
+ * MAX_PACKAGE_BYTES): the list as a whole stays under the request body limit.
+ */
+export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, extensions: 15_000_000, extensionStates: 20_000, notificationPolicy: 1_000 };
 
 /** Minutes a notification shown on a PC may stay unread before it is also pushed to the phone; 0 = never. */
 export const ESCALATE_MINUTES = [0, 1, 2, 3, 5, 10, 15, 30, 60] as const;

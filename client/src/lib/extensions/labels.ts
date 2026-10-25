@@ -2,7 +2,7 @@ import { msg } from "../i18n";
 import type { ExtensionPackage, Permission } from "./schema";
 
 /** What an extension package brings, as labels for its card (Korean source strings, translated where shown). */
-export const featuresOf = (pkg: ExtensionPackage): string[] => [pkg.theme ? msg("테마") : "", pkg.commands?.length ? msg("템플릿 명령") : "", pkg.locales?.length ? msg("언어팩") : "", pkg.code?.trim() ? msg("실행 코드") : "", pkg.styles ? msg("앱 스타일") : "", pkg.components ? msg("앱 컴포넌트") : ""].filter(Boolean);
+export const featuresOf = (pkg: ExtensionPackage): string[] => [pkg.theme ? msg("테마") : "", pkg.commands?.length ? msg("템플릿 명령") : "", pkg.locales?.length ? msg("언어팩") : "", pkg.code?.trim() ? msg("실행 코드") : "", pkg.styles ? msg("앱 스타일") : "", pkg.components ? msg("앱 컴포넌트") : "", pkg.assets ? msg("디자인 파일") : ""].filter(Boolean);
 
 /** What each permission lets an extension do, as the sentence shown in the consent dialog. Every permission needs one. */
 export const permissionLabels: Record<Permission, string> = {

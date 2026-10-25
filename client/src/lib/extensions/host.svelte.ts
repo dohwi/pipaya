@@ -11,7 +11,7 @@ import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type Navba
 import { Api, normalizeUrl, type Connection } from "../api";
 import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
 import type { Component } from "svelte";
-import { raiseSpecificity } from "./style";
+import { inlineAssets, raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
 import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
@@ -117,6 +117,7 @@ const CORRUPT = "pipaya.extensions.v1.corrupt";
 const DEVICE_KEY = "pipaya.extensions.device.v1";
 const DEVICE_CORRUPT = "pipaya.extensions.device.v1.corrupt";
 const MAX_ENTRIES = 50;
+const NONE: MountedComponent[] = [];
 const STORE = "pipaya.extension.storage.";
 const SYNC_FETCH_MS = 3000;
 const SYNC_PUT_MS = 10000;
@@ -640,25 +641,32 @@ export class ExtensionHost {
   private async installUi(id: string, pkg: ExtensionPackage, current: () => boolean) {
     if (pkg.styles && pkg.manifest.permissions.includes("ui-style") && typeof document !== "undefined") {
       const el = document.createElement("style");
-      el.dataset.extension = id; el.textContent = pkg.styles;
+      el.dataset.extension = id; el.textContent = inlineAssets(pkg.styles, pkg.assets);
       document.head.append(el); this.styleEls.set(id, el);
       try { raiseSpecificity(el.sheet); } catch { /* an engine without CSSOM rule editing: the sheet still works, at its written specificity */ }
     }
     if (!pkg.components || !pkg.manifest.permissions.includes("ui-components")) return;
     const [{ loadComponents }, { kit }] = await Promise.all([import("./components"), import("./kit")]);
     if (!current()) return;
-    const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id)));
+    const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id), pkg.assets ?? {}));
     this.mounted = [...this.mounted, ...(pkg.mounts ?? []).map((m, i) => ({ owner: id, slot: m.slot, order: m.order ?? 0, key: `${id}:${i}`, component: loaded[m.component]! }))];
     this.replacements = [...this.replacements, ...Object.entries(pkg.replaces ?? {}).map(([part, name]) => ({ owner: id, part: part as UIPart, component: loaded[name]! }))];
   }
   /** Components mounted in a slot, by order then install order. Only active extensions count; safe mode shows none. */
   mountsIn(slot: UISlot): MountedComponent[] {
-    if (this.safeMode) return [];
-    return this.mounted.filter(m => m.slot === slot && this.activeOwner(m.owner)).sort((a, b) => a.order - b.order);
+    return this.mountsBySlot.get(slot) ?? NONE;
   }
+  /** Ids of the extensions that are running now (none in safe mode). Read by every slot, label and renderer lookup. */
+  private activeIds = $derived(new Set(this.safeMode ? [] : this.installed.filter(e => e.state === "active").map(e => e.package.manifest.id)));
+  /** Mounts grouped by slot and sorted once, instead of filtering the whole list for every message on screen. */
+  private mountsBySlot = $derived.by(() => {
+    const out = new Map<UISlot, MountedComponent[]>();
+    for (const m of this.mounted) if (this.activeIds.has(m.owner)) { const list = out.get(m.slot); if (list) list.push(m); else out.set(m.slot, [m]); }
+    for (const list of out.values()) list.sort((a, b) => a.order - b.order);
+    return out;
+  });
   /** The component an active extension substitutes for a built-in part (the first installed wins). */
   replacementFor(part: UIPart): { owner: string; component: Component<any> } | undefined {
-    if (this.safeMode) return undefined;
     return this.replacements.find(r => r.part === part && this.activeOwner(r.owner));
   }
   private failure(id: string, error: string) {
@@ -1350,7 +1358,7 @@ export class ExtensionHost {
   /** The shortcut an extension registered for this key combo, if any. Only active extensions count. */
   shortcutFor(combo: string): ExtensionShortcut | undefined {
     if (this.safeMode) return undefined;
-    return this.shortcuts.find(s => s.combo === combo && this.installed.some(e => e.package.manifest.id === s.owner && e.state === "active"));
+    return this.shortcuts.find(s => s.combo === combo && this.activeOwner(s.owner));
   }
   /**
    * Runs the active extensions' composer filters in install order on a message about to be sent. A filter that fails or
@@ -1371,7 +1379,7 @@ export class ExtensionHost {
     return { text: current };
   }
   private activeOwner(owner: string): boolean {
-    return !this.safeMode && this.installed.some(e => e.package.manifest.id === owner && e.state === "active");
+    return this.activeIds.has(owner);
   }
   /** The label an active extension put on a session, if any. */
   labelOf(sessionId: string): SessionLabel | undefined {
@@ -1396,12 +1404,12 @@ export class ExtensionHost {
   }
   messageRendererFor(entryType: string): MessageRenderer | undefined {
     if (this.safeMode) return undefined;
-    return this.messageRenderers.find(r => r.entryType === entryType && this.installed.some(e => e.package.manifest.id === r.owner && e.state === "active"));
+    return this.messageRenderers.find(r => r.entryType === entryType && this.activeOwner(r.owner));
   }
   /** The renderer an extension registered for a tool, if any. */
   rendererFor(toolName: string): ToolRenderer | undefined {
     if (this.safeMode) return undefined;
-    return this.toolRenderers.find(r => r.toolName === toolName && this.installed.some(e => e.package.manifest.id === r.owner && e.state === "active"));
+    return this.toolRenderers.find(r => r.toolName === toolName && this.activeOwner(r.owner));
   }
   emit(event: ExtensionEvent) {
     if (this.safeMode) return;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-	MAX_PACKAGE_BYTES, PERMISSIONS, SDK_VERSION, THEME_TOKENS, parsePackage,
+	MAX_PACKAGE_BYTES, PERMISSIONS, SDK_VERSION, SIZE_TOKENS, THEME_TOKENS, parsePackage,
 	type ExtensionPackage,
 } from "../src/lib/extensions/schema";
 
@@ -30,11 +30,14 @@ function rejects(input: unknown, message?: string) {
 describe("portable extension package schema", () => {
 	test("exports the SDK, byte cap, and immutable permission/token whitelists", () => {
 		expect(SDK_VERSION).toBe(1);
-		expect(MAX_PACKAGE_BYTES).toBe(256 * 1024);
+		expect(MAX_PACKAGE_BYTES).toBe(1024 * 1024);
 		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions", "ui-style", "ui-components"]);
 		expect(Object.isFrozen(PERMISSIONS)).toBe(true);
 		expect(Object.isFrozen(THEME_TOKENS)).toBe(true);
-		expect(new Set(THEME_TOKENS).size).toBe(23);
+		expect(new Set(THEME_TOKENS).size).toBe(THEME_TOKENS.length);
+		// every token a theme may set is one the app actually defines in app.css
+		const css = require("node:fs").readFileSync("src/app.css", "utf8") as string;
+		for (const token of THEME_TOKENS) expect(css).toContain(`${token}:`);
 	});
 
 	test("accepts and reconstructs a complete portable package without transforming strings", () => {
@@ -147,7 +150,7 @@ describe("portable extension package schema", () => {
 	});
 
 	test("accepts every whitelisted color token and all four hex forms", () => {
-		const dark = Object.fromEntries(THEME_TOKENS.map((token) => [token, token === "--content-w" ? "480px" : token.startsWith("--radius") ? "0px" : "#AbC"]));
+		const dark = Object.fromEntries(THEME_TOKENS.map((token) => [token, Object.hasOwn(SIZE_TOKENS, token) ? `${SIZE_TOKENS[token]![0]}px` : token === "--font" || token === "--mono" ? "Inter, sans-serif" : "#AbC"]));
 		for (const color of ["#abc", "#AbCd", "#123456", "#12aBcD78"]) {
 			dark["--bg"] = color;
 			expect(parsePackage({ manifest: codePackage().manifest, theme: { dark, light: { "--bg": color } } }).theme!.dark).toEqual(dark);
@@ -155,10 +158,10 @@ describe("portable extension package schema", () => {
 	});
 
 	test("rejects malicious CSS, named colors, functions, fonts, and malformed hex", () => {
-		for (const value of ["url(https://evil.test)", "var(--secret)", "rgb(0,0,0)", "hsl(0 0% 0%)", "expression(1)", "red", "transparent", "inherit", "Arial", "#12", "#12345", "#1234567", "#ggg", "#abc;", "#abc\n", " #abc", "#abc !important", "#abc;--x:1"]) {
+		for (const value of ["url(https://evil.test)", "var(--secret)", "rgb(0,0,0,0,0)", "rgb(256,0,0)", "rgb(0 0 0)", "rgb(1,2,3);x:1", "hsl(0 0% 0%)", "expression(1)", "red", "transparent", "inherit", "Arial", "#12", "#12345", "#1234567", "#ggg", "#abc;", "#abc\n", " #abc", "#abc !important", "#abc;--x:1"]) {
 			rejects({ manifest: codePackage().manifest, theme: { dark: { "--bg": value } } }, "theme.dark.--bg");
 		}
-		for (const token of ["--font", "--font-family", "--background-image", "--unknown", "color", "__proto__"]) {
+		for (const token of ["--font-family", "--background-image", "--z-modal-1", "--motion-fast", "--unknown", "color", "__proto__"]) {
 			rejects({ manifest: codePackage().manifest, theme: { light: { [token]: "#abc" } } }, "unknown field");
 		}
 	});
@@ -183,23 +186,25 @@ describe("portable extension package schema", () => {
 	});
 
 	test("enforces the inclusive total JSON UTF-8 byte limit", () => {
-		const input = fixture();
+		const input: ExtensionPackage = { ...fixture(), manifest: { ...fixture().manifest, permissions: ["commands", "composer", "ui-style"] } };
 		input.code = "x".repeat(120000);
-		input.commands = Array.from({ length: 9 }, (_, i) => ({ name: `command-${i}`, description: "Prefill", template: i === 8 ? "" : "t".repeat(16000) }));
+		input.commands = Array.from({ length: 20 }, (_, i) => ({ name: `command-${i}`, description: "Prefill", template: "t".repeat(16000) }));
+		const prefix = "data:image/png;base64,";
+		input.assets = { "fill.png": prefix };
 		const remaining = MAX_PACKAGE_BYTES - bytes(input);
 		expect(remaining).toBeGreaterThan(0);
-		expect(remaining).toBeLessThanOrEqual(16000);
-		input.commands[8]!.template = "t".repeat(remaining);
+		expect(remaining).toBeLessThanOrEqual(768 * 1024 - prefix.length);
+		input.assets["fill.png"] = prefix + "A".repeat(remaining);
 		expect(bytes(input)).toBe(MAX_PACKAGE_BYTES);
 		expect(parsePackage(input)).toEqual(input);
-		input.commands[8]!.template += "t";
+		input.assets["fill.png"] += "A";
 		rejects(input, "package: must be at most");
-		const multibyte = { ...fixture(), code: "", commands: Array.from({ length: 9 }, (_, i) => ({ name: `unicode-${i}`, description: "Prefill", template: "界".repeat(10000) })) };
+		const multibyte = { ...fixture(), code: "界".repeat(40000), commands: Array.from({ length: 20 }, (_, i) => ({ name: `unicode-${i}`, description: "Prefill", template: "界".repeat(16000) })) };
 		expect(JSON.stringify(multibyte).length).toBeLessThan(MAX_PACKAGE_BYTES);
 		expect(bytes(multibyte)).toBeGreaterThan(MAX_PACKAGE_BYTES);
 		rejects(multibyte, "package: must be at most");
 		// JSON escaping contributes to bytes as well as the raw string contents.
-		const escaped = { ...fixture(), code: "", commands: Array.from({ length: 3 }, (_, i) => ({ name: `escape-${i}`, description: "Prefill", template: "\u0000".repeat(16000) })) };
+		const escaped = { ...fixture(), code: "", commands: Array.from({ length: 12 }, (_, i) => ({ name: `escape-${i}`, description: "Prefill", template: "\u0000".repeat(16000) })) };
 		rejects(escaped, "package: must be at most");
 	});
 

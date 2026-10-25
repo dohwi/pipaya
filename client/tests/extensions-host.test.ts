@@ -1285,6 +1285,20 @@ describe("trusted UI (ui-style / ui-components)", () => {
 		expect(host.mountsIn("header.end").map(m => m.owner)).toEqual([b.id, b.id]);
 		expect(host.replacementFor("composer.send")?.owner).toBe(b.id);
 	});
+	test("the stylesheet gets the package's design files inlined; components get them as ext.assets", async () => {
+		const png = "data:image/png;base64,iVBORw0KGgo=";
+		const { host } = newHost();
+		await activate(host, ui("example.skin", { assets: { "logo.png": png }, styles: `[data-part='sidebar.brand']{background:asset("logo.png")}` }));
+		expect(styleEls[0]!.textContent).toBe(`[data-part='sidebar.brand']{background:url("${png}")}`);
+	});
+	test("mounts are grouped per slot and follow the extension's state", async () => {
+		const { host } = newHost();
+		const { id } = await activate(host, ui("example.skin"));
+		const first = host.mountsIn("header.end");
+		expect(host.mountsIn("header.end")).toBe(first); // same list while nothing changed: slots do not re-render
+		host.disable(id);
+		expect(host.mountsIn("header.end")).toEqual([]);
+	});
 	test("safe mode shows none of it", async () => {
 		const { host } = newHost();
 		await activate(host, ui("example.skin"));

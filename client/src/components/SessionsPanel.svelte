@@ -125,7 +125,7 @@
 
 </script>
 
-<div class="sessions">
+<div class="sessions" data-part="sessions">
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if note}<Notice tone="info">{note}</Notice>{/if}
 

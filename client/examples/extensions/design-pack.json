@@ -1,0 +1,46 @@
+{
+  "manifest": {
+    "id": "example.sunset",
+    "name": "Sunset design pack",
+    "version": "1.0.0",
+    "sdkVersion": 1,
+    "description": "A whole look in one package: tokens, a stylesheet and its own logo file.",
+    "permissions": [
+      "ui-style"
+    ]
+  },
+  "theme": {
+    "dark": {
+      "--bg": "#1b1420",
+      "--bg-side": "#211826",
+      "--bg-elev": "#2a1f30",
+      "--bg-hover": "#33263a",
+      "--border": "#3d2d44",
+      "--text": "#fbe9e2",
+      "--text-dim": "#cfb2b8",
+      "--accent": "#ff7a59",
+      "--accent-hover": "#ff9677",
+      "--accent-fg": "#1b1420",
+      "--accent-soft": "rgba(255, 122, 89, 0.16)",
+      "--user-bg": "#3a2533",
+      "--radius-control": "18px",
+      "--radius": "16px",
+      "--font": "Georgia, \"Times New Roman\", serif"
+    },
+    "light": {
+      "--bg": "#fff7f2",
+      "--bg-side": "#ffefe6",
+      "--accent": "#e8553a",
+      "--accent-fg": "#ffffff",
+      "--accent-soft": "rgba(232, 85, 58, 0.12)",
+      "--user-bg": "#ffe4d6",
+      "--radius-control": "18px",
+      "--radius": "16px",
+      "--font": "Georgia, \"Times New Roman\", serif"
+    }
+  },
+  "assets": {
+    "logo.svg": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjAgMjQiPjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjYiIGZpbGw9IiNmZjdhNTkiLz48dGV4dCB4PSIzMiIgeT0iMTgiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjE3IiBmaWxsPSIjZmY3YTU5Ij5TdW5zZXQ8L3RleHQ+PC9zdmc+"
+  },
+  "styles": "[data-part=\"sidebar.brand\"] { background: asset(\"logo.svg\") no-repeat 16px center / auto 22px; }\n[data-part=\"sidebar.brand\"] > :not(button) { visibility: hidden; }\n[data-part=\"header\"] { background: linear-gradient(90deg, var(--accent-soft), transparent 60%); }\n[data-part=\"composer.box\"] { border-color: var(--accent); }\n"
+}

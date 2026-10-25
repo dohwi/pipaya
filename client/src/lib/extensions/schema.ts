@@ -2,7 +2,8 @@ import { httpOrigin } from "./http";
 import { t } from "../i18n";
 
 export const SDK_VERSION = 1;
-export const MAX_PACKAGE_BYTES = 256 * 1024;
+/** Whole package as JSON. Big enough for a design pack (fonts, icons, images) in `assets`. */
+export const MAX_PACKAGE_BYTES = 1024 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
 	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions",
@@ -29,16 +30,43 @@ export type UIPart = (typeof UI_PARTS)[number];
 export const STYLE_PARTS = Object.freeze([
 	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
 	"composer", "composer.box", "composer.bar", "statusline",
+	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal",
 ] as const);
 export const COMPONENT_LIMITS = Object.freeze({ components: 20, source: 64 * 1024, mounts: 20, styles: 64 * 1024 });
+/**
+ * Design files a package carries (`assets`, needs `ui-style` or `ui-components`): base64 `data:` URLs of images and fonts.
+ * Styles reach one as `asset("name")` (replaced by `url("data:...")`), components as `ext.assets.name`.
+ */
+export const ASSET_LIMITS = Object.freeze({ count: 40, bytes: 768 * 1024, name: 64 });
+export const ASSET_TYPES = Object.freeze([
+	"image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "image/svg+xml",
+	"font/woff2", "font/woff", "font/ttf", "font/otf",
+] as const);
+const ASSET_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const ASSET_URL = /^data:([a-z0-9.+/-]+);base64,[A-Za-z0-9+/]*={0,2}$/;
+/** `asset("name")` / `asset('name')` / `asset(name)` in a stylesheet. */
+export const ASSET_REF = /asset\(\s*(?:"([^"]*)"|'([^']*)'|([^\s"')]*))\s*\)/g;
 export interface ComponentMount { slot: UISlot; component: string; order?: number }
 
-export const THEME_TOKENS = Object.freeze([
-	"--bg", "--bg-side", "--bg-elev", "--bg-hover", "--bg-active", "--bg-code",
+/** Color tokens: a hex color or a numeric `rgb()/rgba()`. */
+const COLOR_TOKENS = [
+	"--bg", "--bg-side", "--bg-group", "--bg-elev", "--bg-hover", "--bg-active", "--bg-code",
 	"--border", "--border-strong", "--text", "--text-dim", "--text-faint", "--user-bg",
-	"--accent", "--accent-hover", "--accent-fg", "--accent-soft", "--ok", "--warn",
-	"--danger", "--radius", "--radius-panel", "--radius-sm", "--content-w",
-] as const);
+	"--accent", "--accent-hover", "--accent-fg", "--accent-soft",
+	"--info", "--ok", "--ok-fg", "--warn", "--danger", "--info-soft", "--ok-soft", "--warn-soft", "--danger-soft", "--scrim",
+	"--lv-minimal", "--lv-low", "--lv-medium", "--lv-high", "--lv-xhigh", "--lv-max",
+	"--mark-img", "--mark-file", "--mark-header", "--mark-mention",
+] as const;
+/** Size tokens: integer px within [min, max]. */
+export const SIZE_TOKENS: Readonly<Record<string, readonly [number, number]>> = Object.freeze({
+	"--radius": [0, 32], "--radius-panel": [0, 32], "--radius-sm": [0, 32], "--radius-control": [0, 32], "--radius-xs": [0, 32], "--radius-pill": [0, 999],
+	"--control-h": [24, 64], "--control-h-sm": [20, 56], "--content-w": [480, 1200], "--sidebar-w": [200, 480],
+	"--fs-2xs": [8, 40], "--fs-xs": [8, 40], "--fs-sm": [8, 40], "--fs-md": [8, 40], "--fs-base": [8, 40], "--fs-lg": [8, 40], "--fs-xl": [8, 40], "--fs-2xl": [8, 48],
+});
+/** Font tokens: a font-family list (names, quotes, commas; no functions). A package's `assets` can supply the faces. */
+const FONT_TOKENS = ["--font", "--mono"] as const;
+/** Every design token a theme may set. Anything else (layout, z-index, motion) is for `ui-style`. */
+export const THEME_TOKENS: readonly string[] = Object.freeze([...COLOR_TOKENS, ...Object.keys(SIZE_TOKENS), ...FONT_TOKENS]);
 
 export const SETTING_TYPES = Object.freeze(["string", "number", "boolean", "select"] as const);
 export type SettingType = (typeof SETTING_TYPES)[number];
@@ -78,6 +106,8 @@ export interface ExtensionPackage {
 	locales?: LocalePackage[];
 	/** App-wide CSS (needs `ui-style`). Target `[data-part="..."]` (see STYLE_PARTS). */
 	styles?: string;
+	/** Images and fonts as base64 `data:` URLs by name (needs `ui-style` or `ui-components`); see ASSET_LIMITS. */
+	assets?: Record<string, string>;
 	/** Svelte 5 component sources by name (needs `ui-components`). They run in the app itself, with its full access. */
 	components?: Record<string, string>;
 	mounts?: ComponentMount[];
@@ -97,6 +127,10 @@ const NUMERIC_VERSION = "(?:0|[1-9][0-9]*)";
 const PRERELEASE = "(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)";
 const VERSION = new RegExp(`^${NUMERIC_VERSION}\\.${NUMERIC_VERSION}\\.${NUMERIC_VERSION}(?:-${PRERELEASE}(?:\\.${PRERELEASE})*)?$`);
 const COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const BYTE = "(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])";
+const ALPHA = "(?:0|1|0?\\.[0-9]{1,4}|1\\.0{1,4})";
+const RGB = new RegExp(`^rgba?\\(\\s?${BYTE}\\s?,\\s?${BYTE}\\s?,\\s?${BYTE}\\s?(?:,\\s?${ALPHA}\\s?)?\\)$`);
+const FONT_LIST = /^[A-Za-z0-9 ,"'_-]{1,200}$/;
 const SETTING_KEY = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/;
 const MAX_SETTING_STRING = 2000;
 const DIMENSION = /^(?:0|[1-9][0-9]*)px$/;
@@ -150,15 +184,18 @@ function palette(input: unknown, path: string): Record<string, string> {
 	const result: Record<string, string> = {};
 	for (const token of THEME_TOKENS) {
 		if (!Object.hasOwn(source, token)) continue;
-		const value = text(source[token], `${path}.${token}`, 16);
-		if (token === "--content-w" || token.startsWith("--radius")) {
-			const min = token === "--content-w" ? 480 : 0;
-			const max = token === "--content-w" ? 1200 : 32;
+		const size = Object.hasOwn(SIZE_TOKENS, token) ? SIZE_TOKENS[token] : undefined;
+		const font = (FONT_TOKENS as readonly string[]).includes(token);
+		const value = text(source[token], `${path}.${token}`, font ? 200 : 40);
+		if (size) {
+			const [min, max] = size;
 			if (!matches(DIMENSION, value) || Number(value.slice(0, -2)) < min || Number(value.slice(0, -2)) > max) {
 				fail(`${path}.${token}`, `expected integer px between ${min} and ${max}`);
 			}
-		} else if (!matches(COLOR, value)) {
-			fail(`${path}.${token}`, "expected a hex color (#rgb, #rgba, #rrggbb, or #rrggbbaa)");
+		} else if (font) {
+			if (!matches(FONT_LIST, value)) fail(`${path}.${token}`, "expected a font-family list (letters, digits, spaces, quotes, commas, - and _)");
+		} else if (!matches(COLOR, value) && !matches(RGB, value)) {
+			fail(`${path}.${token}`, "expected a hex color (#rgb, #rgba, #rrggbb, #rrggbbaa) or rgb()/rgba() with numbers");
 		}
 		// Only the fixed token whitelist reaches this assignment.
 		result[token] = value;
@@ -372,8 +409,28 @@ function parseComponents(source: Record<string, unknown>, result: ExtensionPacka
 	}
 }
 
+function parseAssets(input: unknown, result: ExtensionPackage, permissions: Permission[]) {
+	if (!permissions.includes("ui-style") && !permissions.includes("ui-components")) fail("manifest.permissions", "assets require the ui-style or ui-components permission");
+	const raw = object(input, "assets", Object.keys(input && typeof input === "object" ? input : {}));
+	const names = Object.keys(raw);
+	if (!names.length) fail("assets", "must not be empty");
+	if (names.length > ASSET_LIMITS.count) fail("assets", `must contain at most ${ASSET_LIMITS.count} files`);
+	const assets: Record<string, string> = {};
+	let total = 0;
+	for (const name of names) {
+		if (!matches(ASSET_NAME, name)) fail(`assets.${name.slice(0, 64)}`, "expected a lowercase file name (letters, digits, . _ -; max 64)");
+		const value = text(raw[name], `assets.${name}`, ASSET_LIMITS.bytes + 64);
+		const type = matches(ASSET_URL, value) ? ASSET_URL.exec(value)![1]! : "";
+		if (!(ASSET_TYPES as readonly string[]).includes(type)) fail(`assets.${name}`, `expected a base64 data: URL of ${ASSET_TYPES.join(", ")}`);
+		total += value.length;
+		assets[name] = value;
+	}
+	if (total > ASSET_LIMITS.bytes) fail("assets", `must be at most ${ASSET_LIMITS.bytes} bytes in total`);
+	result.assets = assets;
+}
+
 export function parsePackage(input: unknown): ExtensionPackage {
-	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "styles", "components", "mounts", "replaces", "code"]);
+	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "styles", "assets", "components", "mounts", "replaces", "code"]);
 	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "permissions", "settings", "settingsScope"]);
 	const id = text(manifest.id, "manifest.id", 80);
 	if (!matches(ID, id) || ["constructor", "prototype"].includes(id)) fail("manifest.id", "expected a safe lowercase extension ID");
@@ -452,11 +509,16 @@ export function parsePackage(input: unknown): ExtensionPackage {
 		result.code = text(source.code, "code", MAX_CODE_BYTES, false);
 		if (encoder.encode(result.code).byteLength > MAX_CODE_BYTES) fail("code", `must be at most ${MAX_CODE_BYTES} UTF-8 bytes`);
 	}
+	if (Object.hasOwn(source, "assets")) parseAssets(source.assets, result, permissions);
 	if (Object.hasOwn(source, "styles")) {
 		if (!permissions.includes("ui-style")) fail("manifest.permissions", "styles require the ui-style permission");
 		result.styles = text(source.styles, "styles", COMPONENT_LIMITS.styles);
 		// The stylesheet is app-wide: it may not end its own <style> element or pull in other sheets.
 		if (/<\/?style|@import/i.test(result.styles)) fail("styles", "must not contain </style> or @import");
+		for (const m of result.styles.matchAll(ASSET_REF)) {
+			const name = m[1] ?? m[2] ?? m[3] ?? "";
+			if (!result.assets || !Object.hasOwn(result.assets, name)) fail("styles", `asset("${name.slice(0, 64)}") is not in assets`);
+		}
 	}
 	parseComponents(source, result, permissions);
 	if (!result.theme && !result.commands?.length && !result.locales?.length && !result.code?.trim() && !result.styles && !result.components) {

@@ -34,7 +34,7 @@
 </script>
 
 <Backdrop bind:bursts />
-<div class="welcome">
+<div class="welcome" data-part="welcome">
 	<div class="face" aria-hidden="true" bind:this={face}>
 		<div class="base"><PipayaMark size={72} /></div>
 		{#each glows as g (g.id)}
