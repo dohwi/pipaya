@@ -39,7 +39,7 @@
 {#snippet opt(c: CatalogModel, recommended: boolean)}
 	<PickerOption selected={value === c.id} onclick={() => onpick(c)}>
 		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended}<span class="rec"><Badge tone="ok" size="sm">{t("추천")}</Badge></span>{/if}{/snippet}
-		{#snippet meta()}<span class="mono">{c.id}</span> · <CapTags model={{ reasoning: c.reasoning, vision: c.vision, imageGeneration: c.image }} ctx={c.image ? "" : compact(c.contextWindow)} />{/snippet}
+		{#snippet meta()}<span class="mono">{c.id}</span> · <CapTags model={{ reasoning: c.reasoning, vision: c.vision, imageGeneration: c.image }} ctx={c.image ? undefined : compact(c.contextWindow)} />{/snippet}
 	</PickerOption>
 {/snippet}
 
