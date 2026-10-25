@@ -135,11 +135,12 @@ export interface ExtensionSessionData {
 	list(key: string): Record<string, unknown>;
 }
 
-/** A group: a named split-window layout. `sessionIds` are its session panes (terminal panes are left out). */
+/** A group: a named split-window layout. `sessionIds` are its session panes, `terminalIds` its terminal panes. */
 export interface GroupInfo {
 	id: string;
 	name: string;
 	sessionIds: string[];
+	terminalIds: string[];
 	/** The full layout tree: `{ type: "pane", sessionId }` | `{ type: "split", dir: "row"|"col", ratio, a, b }`. */
 	layout: unknown;
 	createdAt: number;
@@ -153,6 +154,33 @@ export interface ExtensionGroups {
 	create(opts: { name?: string; layout: unknown }): GroupInfo;
 	update(id: string, changes: { name?: string; layout?: unknown }): GroupInfo;
 	delete(id: string): boolean;
+}
+
+/** A shell running on the server (the same terminals clients show as panes). Ids start with `term_`. */
+export interface TerminalInfo {
+	id: string;
+	title: string;
+	cwd: string;
+	/** Executable path of the shell. */
+	shell: string;
+	pty: boolean;
+	pid: number;
+	createdAt: number;
+}
+
+export interface ExtensionTerminals {
+	/** Oldest first. Empty when terminals are turned off on this server. */
+	list(): TerminalInfo[];
+	get(id: string): TerminalInfo | undefined;
+	/** A new shell. `cwd` is absolute or relative to the default working directory; `shell` one of `GET /terminals/info`. */
+	create(opts?: { cwd?: string; shell?: string; title?: string; cols?: number; rows?: number }): TerminalInfo;
+	rename(id: string, title: string): TerminalInfo;
+	/** Type into it (as if the user did): `"ls\r"` runs `ls`. At most 64 KB per call. */
+	write(id: string, data: string): void;
+	/** Columns 2-1000, rows 1-500. Clients resize it back to their own size when they show it. */
+	resize(id: string, cols: number, rows: number): void;
+	/** End the shell for good. False when there is no such terminal. */
+	close(id: string): boolean;
 }
 
 /** A model the server can use. */
@@ -328,7 +356,7 @@ export interface ExtensionAPI {
 	name: string;
 	on<E extends EventName>(event: E, handler: EventHandler<E>): void;
 	registerTool(tool: ExtensionTool): void;
-	/** A `/name args` message typed by the user. */
+	/** A `/name args` message typed by the user. The app's built-in names (`new`, `compact`, …) are refused. */
 	registerCommand(name: string, command: ExtensionCommand): void;
 	/** A family of `/prefix:name args` commands found at run time (see `ExtensionCommandFamily`). */
 	registerCommands(prefix: string, family: ExtensionCommandFamily): void;
@@ -353,6 +381,8 @@ export interface ExtensionAPI {
 	sessions: ExtensionSessions & { data: ExtensionSessionData };
 	/** Session groups (split-window layouts): list, create, change, delete. */
 	groups: ExtensionGroups;
+	/** The server's terminals: list, open, type into, resize, rename, close. */
+	terminals: ExtensionTerminals;
 	/** The models the server can use, and one-shot completions on them. */
 	models: ExtensionModels;
 	/** Every server event (the same stream clients get from `/events`); `types` narrows it. Returns the unsubscribe. */

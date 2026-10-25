@@ -346,6 +346,22 @@ export default (pi) => {
 		run: (name, args) => ({ prompt: "SNIPPET " + name + " " + args, note: { text: "snippet: " + name, collapse: true, data: { name } }, title: name }),
 	});
 	pi.on("input", (e) => (e.text === "noted" ? { note: { text: "a note" } } : undefined));
+	let reserved = "";
+	try { pi.registerCommand("compact", { handler: () => "mine" }); } catch (e) { reserved = e.message; }
+	pi.registerMethod("reserved", () => reserved);
+	pi.registerMethod("term", async (p) => {
+		const t = pi.terminals.create({ cwd: p.cwd, title: "ext shell" });
+		const listed = pi.terminals.list().some((x) => x.id === t.id);
+		const renamed = pi.terminals.rename(t.id, "renamed").title;
+		pi.terminals.write(t.id, "echo hi\\r");
+		pi.terminals.resize(t.id, 100, 30);
+		let badResize = "";
+		try { pi.terminals.resize(t.id, 1, 1); } catch (e) { badResize = e.message; }
+		const s = await pi.sessions.create({ cwd: p.cwd });
+		const group = pi.groups.create({ layout: { type: "split", dir: "col", ratio: 0.5, a: { type: "pane", sessionId: s.id }, b: { type: "pane", sessionId: t.id } } });
+		const closed = pi.terminals.close(t.id);
+		return { id: t.id, listed, renamed, badResize, sessionIds: group.sessionIds, terminalIds: group.terminalIds, sid: s.id, closed, again: pi.terminals.close("term_nope"), missing: pi.terminals.get("term_nope") ?? null };
+	});
 };`;
 	let other: App;
 	const call = async (method: any, url: string, payload?: unknown) => {
@@ -408,6 +424,19 @@ export default (pi) => {
 		await call("PUT", "/extensions/gen/settings", { settings: { level: 3 } });
 		expect((await method("settings", null)).result).toEqual({ level: 3 });
 		expect((await method("changed")).result).toBe(2);
+	});
+
+	test("built-in command names cannot be registered by an extension", async () => {
+		expect((await method("reserved")).result).toContain("built into the app");
+		expect((await call("GET", "/server-extensions")).json.commands.map((c: any) => c.name)).not.toContain("compact");
+	});
+
+	test("terminals can be opened, typed into, resized, grouped and closed", async () => {
+		const r = (await method("term", { cwd: ws })).result;
+		expect(r).toMatchObject({ listed: true, renamed: "renamed", closed: true, again: false, missing: null });
+		expect(r.badResize).toContain("cols");
+		expect(r.sessionIds).toEqual([r.sid]);
+		expect(r.terminalIds).toEqual([r.id]);
 	});
 
 	test("a command family lists entries per folder and runs /prefix:name with a note the model never sees", async () => {

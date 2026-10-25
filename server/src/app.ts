@@ -130,7 +130,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		id: r.id, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
 		tools: r.tools, closed: r.closed, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
-	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
+	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
 	const thinking = (v: string | undefined) => {
 		if (v !== undefined && !(THINKING_LEVELS as readonly string[]).includes(v)) throw badRequest(`unknown thinking level "${v}"`);
 		return v as ThinkingLevel | undefined;
@@ -152,6 +152,31 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			complete: async ({ signal, ...input }) => {
 				const r = await llm.complete(input, signal);
 				return { text: r.text, provider: r.provider, model: r.model, usage: { input: r.usage.input, output: r.usage.output, totalTokens: r.usage.totalTokens, cost: r.usage.cost } };
+			},
+		},
+		// `terminals` is made below; extensions only reach it once loaded, after construction.
+		terminals: {
+			list: () => terminals.list(),
+			get: (id) => (terminals.has(id) ? terminals.get(id) : undefined),
+			create: (o = {}) => terminals.create(o),
+			rename: (id, title) => {
+				if (typeof title !== "string" || !title.trim() || title.length > 100) throw badRequest("title must be 1-100 characters");
+				return terminals.rename(id, title);
+			},
+			write: (id, data) => {
+				if (!terminals.has(id)) throw notFound("terminal");
+				if (typeof data !== "string" || data.length > 64 * 1024) throw badRequest("data must be a string of at most 64 KB");
+				terminals.write(id, data);
+			},
+			resize: (id, cols, rows) => {
+				if (!terminals.has(id)) throw notFound("terminal");
+				if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 1 || cols > 1000 || rows > 500) throw badRequest("cols 2-1000 and rows 1-500");
+				terminals.resize(id, cols, rows);
+			},
+			close: (id) => {
+				if (!terminals.has(id)) return false;
+				terminals.kill(id);
+				return true;
 			},
 		},
 		notify: (source, n) => { notifications.send(source, { title: n.title.slice(0, 183), ...(n.body ? { body: n.body.slice(0, 300) } : {}), ...(n.kind ? { kind: n.kind } : {}), ...(n.sessionId ? { sessionId: n.sessionId } : {}), ...(n.key ? { key: n.key.slice(0, 160) } : {}) }); },
