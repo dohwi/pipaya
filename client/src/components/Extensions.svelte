@@ -28,7 +28,9 @@
 	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
 	let preview = $state<ExtensionPackage | null>(null);
 	/** Where the package being imported will be installed: the scope of the tab it is imported from. */
-	const target = $derived(view);
+	/** A package from the marketplace is a client extension: it goes to this device (the client extensions tab), even when picked from the server tab as the client half of a pair. */
+	let fromMarket = $state(false);
+	const target = $derived<ExtensionScope>(fromMarket ? "device" : view);
 	const serverName = $derived(app.servers.find((s) => s.id === app.serverId)?.name ?? "");
 	const list = $derived(extensions.installed.filter((e) => e.scope === view));
 	const indexed = $derived(extensions.unreadable.map((item, index) => ({ item, index })));
@@ -131,6 +133,7 @@
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
 	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
 		market = false;
+		fromMarket = true;
 		preview = pkg;
 		filename = `${entry.id}.json`;
 	}
@@ -177,6 +180,7 @@
 		void run("$import", async () => {
 			preview = null;
 			filename = "";
+			fromMarket = false;
 			if (file.size > MAX_PACKAGE_BYTES) throw new LocalizedError(t("패키지는 최대 {n}KB까지 가져올 수 있습니다.", { n: MAX_PACKAGE_BYTES / 1024 }));
 			const pkg = parsePackage(JSON.parse(await file.text()));
 			preview = pkg;

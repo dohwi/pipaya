@@ -57,12 +57,14 @@
 		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id), half: !!extensionUpdates.missingServerFor(e.package.manifest.id), halfLabel: t("서버 확장 필요") }));
 		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, companion: n.companion, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), halfLabel: t("클라이언트 확장 필요"), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
 		const owned = (id: string) => side.some((n) => n.companion === id);
+		// the open server's extensions, whichever tab is listed: a client extension on this device is paired with its server half
+		const serverNow = serverSide && serverSide.id === server?.id ? serverSide.names : [];
 		const free = own.filter((e) => !owned(e.id));
 		// a pair stays flat: the client half sits right after its server extension, both marked with a clip
-		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); return { ...e, paired: !!m, partner: m?.name }; })];
+		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); const here = serverNow.find((n) => n.companion === e.id); return { ...e, paired: !!m || !!here, partner: m?.name ?? here?.title ?? here?.name }; })];
 		for (const n of side) {
 			const mate = own.find((e) => e.id === n.companion);
-			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined) });
+			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined) });
 			if (mate) rows.push({ ...mate, paired: true, partner: n.name });
 		}
 		return rows.map((e, i) => ({ ...e, end: i === rows.length - 1 }));
