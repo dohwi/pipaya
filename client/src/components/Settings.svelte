@@ -15,7 +15,6 @@
 	import Pin from "./Pin.svelte";
 	import { app } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
-	import { extensionUpdates } from "../lib/extension-updates.svelte";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
 	import { t } from "../lib/i18n";
 	import { backLayer } from "../lib/dialog";
@@ -54,7 +53,7 @@
 		if (!current.server) go("info");
 	}
 	/** Update state is only known for the open server: a newer server build, or server and app out of step. */
-	const needsUpdate = (id: string) => id === app.serverId && (serverUpdater.available || extensionUpdates.serverCount > 0 || app.compat !== "ok");
+	const needsUpdate = (id: string) => id === app.serverId && (serverUpdater.available || app.compat !== "ok");
 	const server = $derived(app.servers.find((s) => s.id === sid) ?? app.servers.find((s) => s.id === app.serverId) ?? null);
 	// without a server there is nothing server-specific left to show
 	$effect(() => {

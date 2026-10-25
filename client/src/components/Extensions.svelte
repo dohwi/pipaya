@@ -87,6 +87,45 @@
 			tasks.notice = t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version });
 		}, t("업데이트하지 못했습니다"));
 	}
+	/** Every extension of this tab that has a newer catalog entry. */
+	const pending = $derived<MarketEntry[]>([
+		...list.map(clientUpdate),
+		...(view === "server" ? serverSide.map(serverUpdate) : []),
+	].filter((e): e is MarketEntry => !!e));
+	/**
+	 * Update everything at once. A client extension whose new version asks for no permission it did not already have is
+	 * replaced in place (and restarted if it was running); one that asks for more is left for its own preview, where the
+	 * user consents to the new permissions.
+	 */
+	function updateAll() {
+		void run("$all", async () => {
+			let done = 0, needsConsent = 0, failed = 0;
+			for (const entry of pending) {
+				try {
+					if (entry.kind === "client") {
+						const old = extensions.installed.find((e) => e.package.manifest.id === entry.id);
+						const pkg = await fetchPackage(entry);
+						if (!old || !pkg.manifest.permissions.every((p) => old.package.manifest.permissions.includes(p))) { needsConsent++; continue; }
+						const resume = extensions.canResume(pkg);
+						extensions.install(pkg, old.scope);
+						if (resume) await extensions.enable(entry.id);
+					} else {
+						const api = app.api;
+						if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
+						const { repo, dir, ref, commit } = entry.source;
+						await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
+					}
+					done++;
+				} catch { failed++; }
+			}
+			await Promise.all([loadServerSide(), app.refreshServerExtensions()]);
+			tasks.notice = [
+				t("{n}개를 업데이트했습니다.", { n: done }),
+				needsConsent ? t("새 권한이 필요한 {n}개는 각각 확인해 주세요.", { n: needsConsent }) : "",
+				failed ? t("{n}개는 실패했습니다.", { n: failed }) : "",
+			].filter(Boolean).join(" ");
+		}, t("업데이트하지 못했습니다"));
+	}
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
 	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
 		market = false;
@@ -353,6 +392,7 @@
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
+			{#if pending.length > 1}<Button size="sm" variant="primary" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
 			<Button size="sm" class="add" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn sm add" class:disabled={tasks.busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
