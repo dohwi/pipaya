@@ -11,14 +11,12 @@
 		<span class="sheen"></span>
 		<span class="mark"><PipayaMark size={56} /></span>
 	</div>
-	<span class="shimmer cap">{t("이미지를 만드는 중…")}</span>
 </div>
 
 <style>
 	.painting {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
 		width: min(100%, 360px);
 		animation: appear var(--motion-normal) var(--ease) both;
 	}
@@ -69,10 +67,6 @@
 		opacity: 0.7;
 		will-change: transform, opacity;
 		animation: mark 4.8s ease-in-out infinite;
-	}
-	.cap {
-		font-size: var(--fs-xs);
-		align-self: flex-start;
 	}
 	@keyframes fade {
 		50% {
