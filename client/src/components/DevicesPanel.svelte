@@ -121,7 +121,7 @@
 </script>
 
 <div class="devices">
-	<p class="lead">{t("이 서버의 토큰으로 접속한 기기입니다. 해지하면 목록에서 지워지고 모바일 푸시도 더 이상 가지 않습니다. 기기가 다시 접속하면 목록에 다시 나타납니다. 완전히 차단하려면 서버 토큰을 바꾸세요.")}</p>
+	<p class="lead">{t("이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")}</p>
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if devices === null && !error}
 		<p class="hint">{t("불러오는 중…")}</p>

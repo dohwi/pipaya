@@ -31,6 +31,7 @@
 		size="sm"
 		width="min(320px, calc(100% - 6em))"
 		label={t("터미널 글꼴")}
+		placeholder={t("설치된 글꼴 이름")}
 		value={p.fontFamily}
 		onchange={(fontFamily) => app.prefs.setTerminal({ fontFamily })}
 		options={presets}
@@ -48,15 +49,9 @@
 <SettingRow label={t("커서 깜빡임")}>
 	<Switch checked={p.cursorBlink} label={t("커서 깜빡임")} onchange={(on) => app.prefs.setTerminal({ cursorBlink: on })} />
 </SettingRow>
-<SettingRow label={t("앱 단축키 우선")}>
+<SettingRow label={t("앱 단축키 우선")} hint={t("터미널 안에서도 앱 단축키가 셸보다 먼저 동작합니다")}>
 	<Switch checked={p.appKeysFirst} label={t("앱 단축키 우선")} onchange={(on) => app.prefs.setTerminal({ appKeysFirst: on })} />
 </SettingRow>
-<span class="hint">
-	{t("켜면 터미널에서도 설정한 앱 단축키(Ctrl/⌘/Alt 조합)가 셸보다 먼저 동작합니다. 끄면 Ctrl/⌘+Shift·Alt 조합과 F키만 앱으로 넘어갑니다.")}
-</span>
-<span class="hint">
-	{t("기본 글꼴은 Maple Mono NGS NF입니다. 이 기기에 설치된 글꼴 이름도 쓸 수 있고, 목록은 쉼표로 이어 씁니다. 바로 적용되며 이 기기에만 저장됩니다.")}
-</span>
 
 <style>
 	.head {

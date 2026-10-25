@@ -42,16 +42,15 @@
 	<RangeField label={t("배율")} ariaLabel={t("화면 배율")} min={50} max={200} step={10} value={app.prefs.uiScale} oninput={(v) => app.prefs.setUiScale(v)}>
 		{#snippet trailing()}<Button size="sm" variant="ghost" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
 	</RangeField>
-	<span class="hint">{t("앱 전체 크기를 조절합니다. 단축키: Ctrl/⌘ + / − / 0 (설정에서 바꿀 수 있습니다)")}</span>
+	<span class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</span>
 </section>
 
 <section>
 	<div class="section-label">{t("알림음")}</div>
-	<SettingRow label={t("작업 완료 · 확인 필요 · 실패 때 소리 재생")}>
+	<SettingRow label={t("소리 재생")} hint={t("작업 완료 · 확인 필요 · 실패 때. 보고 있는 대화는 승인 요청만 울립니다")}>
 		<Switch checked={app.prefs.soundOn} label={t("알림음")} onchange={(on) => app.prefs.setSound(on)} />
 	</SettingRow>
 	<RangeField label={t("크기")} ariaLabel={t("알림음 크기")} min={0} max={200} step={5} value={app.prefs.soundVolume} disabled={!app.prefs.soundOn} oninput={(v) => app.prefs.setSoundVolume(v)} onchange={() => app.prefs.previewSound()} />
-	<span class="hint">{t("보고 있는 대화가 끝날 때는 울리지 않습니다. 승인 요청은 보고 있어도 울립니다.")}</span>
 </section>
 <section><NotificationSettings /></section>
 <section><TerminalSettings /></section>

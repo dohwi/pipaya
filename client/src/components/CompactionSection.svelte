@@ -91,11 +91,11 @@
 		</div>
 		<p class="hint note">
 			{#if !s.model}
-				{t("압축 요약도 대화에서 쓰는 모델이 작성합니다.")}
+				{t("대화에서 쓰는 모델이 요약합니다.")}
 			{:else if info && !info.configured}
 				{t("이 모델의 연결에 키가 없어 압축이 실패합니다. 키를 설정하거나 다른 모델을 고르세요.")}
 			{:else}
-				{t("압축 요약은 이 모델이 작성합니다. 가볍고 저렴한 모델을 권장합니다.")}
+				{t("이 모델이 요약합니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
 		<RangeField
@@ -108,7 +108,7 @@
 			oninput={(v) => (pct = v)}
 			onchange={(v) => { pct = null; void save({ ...s, thresholdPercent: v }); }}
 		/>
-		<p class="hint note">{t("컨텍스트가 모델 창의 {percent}%를 넘으면 다음 메시지를 보내기 전에 자동으로 압축합니다. 기본값은 {default}%입니다.", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
+		<p class="hint note">{t("컨텍스트가 {percent}%를 넘으면 다음 메시지 전에 압축합니다 (기본 {default}%)", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
 		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
 	</section>
 {/if}

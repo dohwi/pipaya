@@ -160,10 +160,7 @@
 				<span class="mono wdpath" title={shownWd?.effective}>{shownWd?.effective ?? "…"}</span>
 				<Button size="sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</Button>
 			</div>
-			<p class="hint">
-				{t("이 서버에서 새 대화가 시작되는 위치입니다.")}{shownWd?.saved ? "" : ` ${t("지금은 서버를 처음 켤 때의 설정을 쓰고 있습니다.")}`}
-				{t("변경하면 바로 저장됩니다.")}
-			</p>
+			<p class="hint">{t("새 대화가 시작되는 폴더입니다. 바꾸면 바로 저장됩니다.")}</p>
 		{/if}
 	
 			{#key editing.id}<SessionsPanel serverId={editing.id} />{/key}
@@ -209,7 +206,7 @@
 
 				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. 인터넷을 거치면 토큰이 그대로 노출될 수 있습니다. Tailscale 주소를 쓰거나 https로 연결하세요.")}</Notice>{/if}
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
-				<p class="hint">{t("저장하기 전에 연결을 확인합니다. 토큰은 이 기기에만 저장됩니다.")}</p>
+				<p class="hint">{t("토큰은 이 기기에만 저장됩니다.")}</p>
 				{#if editing && isOpen}<ServerUpdate />{/if}
 			</div>
 

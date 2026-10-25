@@ -64,7 +64,7 @@
 		{/each}
 	{/if}
 	{#if error}<span class="hint danger">{error}</span>{/if}
-	<span class="hint">{t("끄면 해당 도구를 에이전트에게 주지 않습니다. 서버에 저장되어 모든 대화에 적용됩니다. 잠긴 도구는 끌 수 없습니다.")}</span>
+	<span class="hint">{t("끈 도구는 이 서버의 모든 대화에서 쓰지 않습니다")}{#if shown?.tools?.locked.length} · {t("흐린 도구는 끌 수 없습니다")}{/if}</span>
 </section>
 
 <style>

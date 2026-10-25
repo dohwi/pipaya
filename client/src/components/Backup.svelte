@@ -32,7 +32,7 @@
 
 	const rows = [
 		{ key: "servers", title: msg("서버 연결"), sub: msg("이름과 주소만. 토큰은 들어가지 않습니다") },
-		{ key: "extensions", title: msg("이 기기의 확장"), sub: msg("이 기기에만 설치한 확장의 패키지와 비민감 설정. 서버 확장은 서버가 갖고 있어 제외됩니다") },
+		{ key: "extensions", title: msg("이 기기의 확장"), sub: msg("이 기기에 설치한 확장과 설정 (서버 확장 제외)") },
 		{ key: "preferences", title: msg("앱 설정"), sub: msg("테마, 알림음 사용 여부와 크기") },
 		{ key: "keybindings", title: msg("단축키"), sub: msg("기본값에서 바꾼 것만 담깁니다") },
 	] as const;
@@ -128,7 +128,7 @@
 
 <section aria-labelledby="bk-export">
 	<h3 id="bk-export" class="section-label">{t("내보내기")}</h3>
-	<p class="hint">{t("고른 항목을 JSON 파일 하나로 저장합니다. 다른 기기나 새로 설치한 앱에서 가져올 수 있습니다.")}</p>
+	<p class="hint">{t("고른 항목을 파일 하나로 저장해 다른 기기에서 가져올 수 있습니다.")}</p>
 	<div class="list">
 		{#each rows as r (r.key)}
 			<div class="item" class:off={!parts[r.key]}>
@@ -144,7 +144,7 @@
 		<Button variant="primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</Button>
 	</div>
 	{#if exported}<Notice tone="ok" size="sm" role="status">{exported}</Notice>{/if}
-	<p class="note"><Icon name="shield" /><span>{t("비밀번호나 토큰처럼 보이는 값은 빠집니다. 다만 확장 코드나 기본값에 직접 적어 둔 비밀은 걸러내지 못하니, 파일을 다른 사람에게 보내기 전에 확인하세요.")}</span></p>
+	<p class="note"><Icon name="shield" /><span>{t("토큰·비밀번호는 빠지지만, 공유하기 전에 한 번 확인하세요.")}</span></p>
 </section>
 
 <section aria-labelledby="bk-import">
@@ -193,7 +193,7 @@
 		</div>
 		{#if confirmingRestore}
 			<div class="confirm" in:collapseIn out:collapseOut role="group" aria-label={t("되돌리기 확인")}>
-				<p>{t("서버 목록, 이 기기의 확장, 앱 설정, 단축키를 가져오기 전으로 되돌립니다. 그 사이에 바꾼 내용은 사라지고, 확장은 모두 꺼진 상태가 됩니다.")}</p>
+				<p>{t("가져오기 전 상태로 되돌립니다. 그 뒤에 바꾼 내용은 사라지고 확장은 모두 꺼집니다.")}</p>
 				<div class="actions">
 					<Button size="sm" onclick={() => (confirmingRestore = false)}>{t("취소")}</Button>
 					<Button variant="danger" size="sm" onclick={restore}>{t("되돌리기")}</Button>
@@ -201,7 +201,7 @@
 			</div>
 		{/if}
 	{:else}
-		<p class="hint">{t("아직 되돌릴 백업이 없습니다. 설정을 가져오면 그 직전 상태가 자동으로 저장됩니다.")}</p>
+		<p class="hint">{t("가져오기를 하면 직전 상태가 자동으로 백업됩니다.")}</p>
 	{/if}
 </section>
 

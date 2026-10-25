@@ -100,7 +100,7 @@
 
 <section>
 	<span class="hint">
-		{t("항목을 누른 뒤 원하는 키를 차례로 누르면 하나씩 쌓입니다. Ctrl·Alt·Shift에 더해 일반 키를 최대 3개까지 지정할 수 있고, 확인(✓) 버튼을 눌러야 저장됩니다.")} <kbd>Esc</kbd> {t("취소")} · <kbd>Backspace</kbd> {t("마지막 키 지우기 (비었을 때는 해제)")}. {t("모델과 추론 단계는 지금 열려 있는 대화에만 적용됩니다.")}
+		{t("키 버튼을 누르고 새 조합을 입력한 뒤 ✓로 저장합니다.")} <kbd>Esc</kbd> {t("취소")} · <kbd>Backspace</kbd> {t("한 키 지우기")}
 	</span>
 
 	<SearchField label={t("단축키 검색")} bind:value={filter} />

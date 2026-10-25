@@ -84,61 +84,61 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "newChat",
     label: msg("새 대화"),
-    hint: msg("빈 화면으로 이동합니다. 그룹 안이면 선택한 창만 새 대화로 바뀌고 나머지 창은 그대로입니다"),
+    hint: msg("빈 새 대화를 엽니다. 그룹에서는 선택한 창만 바뀝니다"),
     default: "Alt+N",
   },
   {
     id: "closeSession",
     label: msg("현재 대화 닫기"),
-    hint: msg("활성 대화를 사이드바에서 치웁니다. 기록은 남고 대화 열기로 다시 열 수 있습니다. 그룹 안이면 다음 창으로 포커스가 넘어갑니다"),
+    hint: msg("사이드바에서 치웁니다. 기록은 남아 다시 열 수 있습니다"),
     default: "Alt+W",
   },
   {
     id: "prevSession",
     label: msg("이전 대화로 이동"),
-    hint: msg("사이드바 목록에서 한 칸 위 대화로 포커스를 옮깁니다. 맨 위에서는 맨 아래로 돌아갑니다"),
+    hint: msg("사이드바에서 한 칸 위 대화로"),
     default: "",
   },
   {
     id: "nextSession",
     label: msg("다음 대화로 이동"),
-    hint: msg("사이드바 목록에서 한 칸 아래 대화로 포커스를 옮깁니다. 맨 아래에서는 맨 위로 돌아갑니다"),
+    hint: msg("사이드바에서 한 칸 아래 대화로"),
     default: "",
   },
   {
     id: "prevWorkspace",
     label: msg("이전 워크스페이스로 이동"),
-    hint: msg("사이드바에서 한 칸 위 폴더(워크스페이스)의 첫 탭으로 이동합니다. 맨 위에서는 맨 아래로 돌아갑니다"),
+    hint: msg("한 칸 위 폴더의 첫 탭으로"),
     default: "Alt+Shift+ArrowUp",
   },
   {
     id: "nextWorkspace",
     label: msg("다음 워크스페이스로 이동"),
-    hint: msg("사이드바에서 한 칸 아래 폴더(워크스페이스)의 첫 탭으로 이동합니다. 맨 아래에서는 맨 위로 돌아갑니다"),
+    hint: msg("한 칸 아래 폴더의 첫 탭으로"),
     default: "Alt+Shift+ArrowDown",
   },
   {
     id: "prevTab",
     label: msg("이전 탭으로 이동"),
-    hint: msg("탭 바에서 바로 왼쪽 탭으로 이동합니다. 맨 왼쪽에서는 맨 오른쪽으로 돌아갑니다"),
+    hint: msg("탭 바에서 왼쪽 탭으로"),
     default: "Alt+Shift+ArrowLeft",
   },
   {
     id: "nextTab",
     label: msg("다음 탭으로 이동"),
-    hint: msg("탭 바에서 바로 오른쪽 탭으로 이동합니다. 맨 오른쪽에서는 맨 왼쪽으로 돌아갑니다"),
+    hint: msg("탭 바에서 오른쪽 탭으로"),
     default: "Alt+Shift+ArrowRight",
   },
   {
     id: "lastSession",
     label: msg("직전에 보던 대화로 돌아가기"),
-    hint: msg("두 대화를 오가며 볼 때 씁니다. 새 대화 화면에서도 돌아올 수 있습니다"),
+    hint: msg("두 대화를 오갈 때 씁니다"),
     default: "",
   },
   {
     id: "nextFinished",
     label: msg("작업이 끝난 대화로 이동"),
-    hint: msg("끝났지만 아직 보지 않은 대화(실패 포함)로 이동합니다. 사이드바 위에서부터 차례로 열리며, 여러 번 누르면 다음 대화로 넘어갑니다"),
+    hint: msg("끝났지만 아직 보지 않은 대화를 차례로 엽니다"),
     default: "Alt+U",
   },
   {
@@ -150,7 +150,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "findInChat",
     label: msg("대화 안에서 찾기"),
-    hint: msg("지금 선택한 창의 대화에서 글자를 찾아 표시합니다. Enter는 다음, Shift+Enter는 이전 결과입니다"),
+    hint: msg("Enter 다음 · Shift+Enter 이전"),
     default: "Mod+F",
   },
   {
@@ -204,13 +204,13 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "scrollTop",
     label: msg("대화 맨 위로"),
-    hint: msg("지금 선택한 창의 대화를 처음으로 스크롤합니다"),
+    hint: msg("대화의 처음으로 스크롤합니다"),
     default: "",
   },
   {
     id: "scrollBottom",
     label: msg("대화 맨 아래로"),
-    hint: msg("지금 선택한 창의 대화를 끝으로 스크롤하고 자동 따라가기를 다시 켭니다"),
+    hint: msg("끝으로 스크롤하고 자동 따라가기를 켭니다"),
     default: "",
   },
   {
@@ -223,14 +223,14 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "steer",
     label: msg("끼워 넣기 (작업 중 메시지 보내기)"),
-    hint: msg("작업 중에 입력창에서 보내면 진행 중인 작업에 바로 끼워 넣습니다"),
+    hint: msg("진행 중인 작업에 바로 전달합니다"),
     default: "Enter",
     fixed: true,
   },
   {
     id: "queueMessage",
     label: msg("대기열에 추가 (작업 중 메시지 보내기)"),
-    hint: msg("작업 중에 입력창의 메시지를 현재 작업이 모두 끝난 뒤 실행되도록 대기열에 넣습니다"),
+    hint: msg("작업이 끝난 뒤 보내도록 대기열에 넣습니다"),
     default: "Alt+Enter",
   },
   {
@@ -242,31 +242,31 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "splitRight",
     label: msg("오른쪽으로 분할 (좌우)"),
-    hint: msg("지금 선택한 창 오른쪽에 새 대화를 만들어 그룹으로 묶습니다. 새 대화는 이 창의 작업 폴더에서 시작합니다"),
+    hint: msg("선택한 창 오른쪽에 새 대화를 엽니다"),
     default: "Mod+Backslash",
   },
   {
     id: "newTerminal",
     label: msg("새 터미널"),
-    hint: msg("서버의 셸(Linux·macOS는 기본 셸, Windows는 PowerShell)을 지금 작업 폴더에서 엽니다"),
+    hint: msg("지금 작업 폴더에서 서버의 셸을 엽니다"),
     default: "Mod+Shift+Backquote",
   },
   {
     id: "splitTerminal",
     label: msg("아래에 터미널 열기"),
-    hint: msg("지금 선택한 창 아래에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다"),
+    hint: msg("선택한 창 아래에 터미널을 엽니다"),
     default: "Mod+Alt+Backquote",
   },
   {
     id: "splitTerminalRight",
     label: msg("오른쪽에 터미널 열기"),
-    hint: msg("지금 선택한 창 오른쪽에 터미널을 열어 그룹으로 묶습니다. 터미널은 이 창의 작업 폴더에서 시작합니다"),
+    hint: msg("선택한 창 오른쪽에 터미널을 엽니다"),
     default: "Mod+Alt+Shift+Backquote",
   },
   {
     id: "splitDown",
     label: msg("아래로 분할 (상하)"),
-    hint: msg("지금 선택한 창 아래에 새 대화를 만들어 그룹으로 묶습니다"),
+    hint: msg("선택한 창 아래에 새 대화를 엽니다"),
     default: "Mod+Shift+Backslash",
   },
   {
@@ -320,19 +320,19 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "zoomPane",
     label: msg("현재 창 크게 / 작게 보기"),
-    hint: msg("선택한 창을 그룹 전체 크기로 키우거나 되돌립니다. 그룹 안에서만 동작합니다"),
+    hint: msg("선택한 창을 그룹 전체 크기로 키우거나 되돌립니다"),
     default: "",
   },
   {
     id: "restorePane",
     label: msg("창 크기 원래대로"),
-    hint: msg("크게 본 창과 그룹의 전체 보기를 모두 풀어 분할 화면으로 되돌립니다"),
+    hint: msg("분할 화면으로 되돌립니다"),
     default: "",
   },
   {
     id: "toggleFull",
     label: msg("그룹 전체 보기 전환"),
-    hint: msg("한 창만 가득 채우고 위의 띠로 창을 고르는 모드를 켜거나 끕니다. 이 기기에 저장됩니다"),
+    hint: msg("한 창을 가득 채우고 위 띠로 창을 고릅니다"),
     default: "",
   },
   {
@@ -350,7 +350,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "cycleServer",
     label: msg("다음 서버로 전환"),
-    hint: msg("등록한 서버를 순서대로 넘깁니다. 서버가 하나면 동작하지 않습니다"),
+    hint: msg("등록한 서버를 차례로 넘깁니다"),
     default: "",
   },
   { id: "toggleSound", label: msg("알림음 켜기 / 끄기"), hint: "", default: "" },
