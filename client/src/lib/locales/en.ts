@@ -1161,6 +1161,7 @@ export const en: Record<string, string> = {
 	"업데이트하지 못했습니다": "Could not update",
 	"업데이트하는 중…": "Updating…",
 	"모두 업데이트 ({n})": "Update all ({n})",
+	"업데이트 있음": "Update available",
 	"{n}개를 업데이트했습니다.": "Updated {n}.",
 	"새 권한이 필요한 {n}개는 각각 확인해 주세요.": "{n} need new permissions: review each one.",
 	"{n}개는 실패했습니다.": "{n} failed.",

@@ -2,7 +2,7 @@
 	export type IconName =
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
-		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
+		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
 		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open";
 </script>
 
@@ -47,6 +47,7 @@
 		"wifi-off": "M2 8.8a15 15 0 0 1 4-2.4M22 8.8a15 15 0 0 0-8.4-3.7M5 12.9a10 10 0 0 1 3.2-1.9M19 12.9a10 10 0 0 0-3-2M8.5 16.4a5 5 0 0 1 7 0M12 20h.01M2 2l20 20",
 		key: "M11 12a3.5 3.5 0 1 0-7 0 3.5 3.5 0 0 0 7 0zM11 12h10M18 12v3.5M14.5 12v2.5",
 		"arrow-down": "M12 5v14M5 12l7 7 7-7",
+		"arrow-up": "M12 19V5M5 12l7-7 7 7",
 		bolt: "M13 2L4 14h7l-1 8 9-12h-7z",
 		list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
 		more: "M5 12h.01M12 12h.01M19 12h.01",

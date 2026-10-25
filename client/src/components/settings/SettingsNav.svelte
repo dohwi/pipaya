@@ -100,7 +100,7 @@
 						<button role="tab" class="sub" aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
 							<span class="dot" class:live={e.live} role="img" aria-label={e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
-							{#if e.update}<span class="uplabel"><Pin tone="ok" label={t("업데이트 필요")} /></span>{/if}
+							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 						</button>
 					{/each}
 				</div>
@@ -123,12 +123,17 @@
 		position: relative;
 		display: inline-flex;
 	}
-	.uplabel {
-		position: relative;
+	.nav .upmark {
 		margin-left: auto;
-		width: 7px;
-		height: 7px;
 		flex: none;
+		display: inline-flex;
+		color: var(--ok);
+		opacity: 0.85;
+	}
+	.nav .upmark :global(svg) {
+		width: 13px;
+		height: 13px;
+		stroke-width: 2.4;
 	}
 	.nav .row {
 		position: relative;

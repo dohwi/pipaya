@@ -5,7 +5,6 @@
 	import Notice from "./Notice.svelte";
 	import Accordion from "./Accordion.svelte";
 	import Switch from "./Switch.svelte";
-	import StatusChip from "./StatusChip.svelte";
 	import { download } from "../lib/download";
 	import { tick } from "svelte";
 	import { app } from "../lib/store.svelte";
@@ -314,11 +313,12 @@
 	}
 </script>
 
-{#snippet updateLine(upd: MarketEntry, disabled: boolean)}
-	<div class="updline">
-		<StatusChip tone="ok">{t("새 버전 v{version}", { version: upd.version })}</StatusChip>
-		<Button size="sm" class="update" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
-	</div>
+{#snippet updateMeta(have: string, upd: MarketEntry)}
+	<span class="meta newver" title={t("새 버전 v{version}", { version: upd.version })}>v{have} <Icon name="arrow-up" /> <b>v{upd.version}</b></span>
+{/snippet}
+
+{#snippet updateButton(upd: MarketEntry, disabled: boolean)}
+	<Button size="sm" class="updbtn" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
 {/snippet}
 
 {#snippet companionLine(id: string, disabled: boolean)}
@@ -337,8 +337,9 @@
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} onopen={() => (selected = id)}>
-		{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
+		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 		{#snippet control()}
+			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all)}{/if}
 			<Switch
 				checked={on}
 				label={t("{name} 사용", { name: entry.package.manifest.name })}
@@ -348,7 +349,6 @@
 			/>
 		{/snippet}
 		{#snippet notices()}
-			{#if upd}{@render updateLine(upd, !!tasks.busy[id] || !!tasks.busy.$import)}{/if}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
 			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 		{/snippet}
@@ -432,10 +432,10 @@
 				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
 						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
-						{#if upd}{@render updateLine(upd, !!tasks.busy[srvKey(ext.name)])}{/if}
 					{/snippet}
+					{#snippet control()}{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)] || !!tasks.busy.$all)}{/if}{/snippet}
 					{#snippet meta()}
-						{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
+						{#if upd && ext.version}{@render updateMeta(ext.version, upd)}{:else if ext.version}<span class="meta">v{ext.version}</span>{/if}
 						<span class="meta">{t("서버에서 실행")}</span>
 						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
 					{/snippet}
@@ -483,6 +483,10 @@
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
+	.newver { display: inline-flex; align-items: center; gap: 3px; color: var(--text-faint); }
+	.newver b { color: var(--ok); font-weight: 600; }
+	.newver :global(svg) { width: 11px; height: 11px; stroke-width: 2.4; color: var(--ok); }
+	.extensions :global(.btn.updbtn) { flex: none; }
 	.updline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
