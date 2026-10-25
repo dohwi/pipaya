@@ -84,6 +84,8 @@ export const en: Record<string, string> = {
 	"{name} 제거": "Remove {name}",
 	"전달 대기 중인 메시지": "Queued messages",
 	"끼워 넣기": "Steer",
+	"지금 답변 중에 전달": "Send into the current run",
+	"작업이 끝난 뒤 실행": "Run after the work finishes",
 	"대기열": "Queue",
 	"취소할 대기열이 없습니다": "Nothing queued to cancel",
 	"이미 전달되어 취소할 수 없습니다": "Already delivered, can't cancel",

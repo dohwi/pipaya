@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
-	import { chipIn, chipOut } from "../lib/motion";
+	import { chipIn, chipOut, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 
 	/**
@@ -100,12 +100,12 @@
 					{#if hasInput}
 					<div class="steerwrap">
 						{#if menu}
-							<div class="menu" role="menu">
+							<div class="menu" role="menu" in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }}>
 								<button class="opt" role="menuitem" onpointerdown={(e) => e.stopPropagation()} onclick={() => pick(onsteer)}>
-									<span class="lbl">{t("끼워 넣기")}</span><span class="mode primary"><Icon name="send" /></span>
+									<span class="ico bolt"><Icon name="bolt" /></span><span class="lbl">{t("끼워 넣기")}</span><span class="desc">{t("지금 답변 중에 전달")}</span>
 								</button>
 								<button class="opt" role="menuitem" onpointerdown={(e) => e.stopPropagation()} onclick={() => pick(onqueue)}>
-									<span class="lbl">{t("대기열")}</span><span class="mode"><Icon name="list" /></span>
+									<span class="ico"><Icon name="list" /></span><span class="lbl">{t("대기열")}</span><span class="desc">{t("작업이 끝난 뒤 실행")}</span>
 								</button>
 							</div>
 						{/if}
@@ -120,7 +120,7 @@
 							aria-label={t("끼워 넣기")}
 							title={t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 (Enter)")}
 						>
-							<Icon name="send" />
+							<Icon name="bolt" />
 						</button>
 					</div>
 					{/if}
@@ -195,7 +195,7 @@
 	.compacting .dots {
 		color: var(--warn);
 	}
-	/* icon-only controls: queue (neutral), steer (accent, same arrow as idle send), stop (danger). No overlap, no dividers */
+	/* icon-only controls: queue (neutral), steer (accent, a bolt: it goes straight into the run), stop (danger). No overlap, no dividers */
 	.stack {
 		display: flex;
 		align-items: center;
@@ -280,39 +280,62 @@
 		height: 18px;
 		stroke-width: 2;
 	}
-	.steerwrap {
-		position: relative;
+	/* the bolt bends more than an arrow, so the same stroke reads heavier: thin it a little */
+	.stack .mode.primary :global(svg),
+	.opt .ico.bolt :global(svg) {
+		stroke-width: 1.5;
 	}
+	/* no positioned ancestor here on purpose: the menu anchors to the composer box, like the slash menu */
 	.menu {
 		position: absolute;
+		left: 0;
 		right: 0;
-		bottom: calc(100% + 10px);
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		align-items: flex-end;
-		z-index: 5;
+		bottom: calc(100% + 6px);
+		background: var(--bg-elev);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow);
+		padding: 4px 0;
+		z-index: 20;
 	}
 	.opt {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: 8px;
-		animation: pop var(--motion-fast) var(--ease) both;
+		gap: 12px;
+		width: 100%;
+		min-height: 40px;
+		padding: 6px 14px;
+		text-align: left;
+	}
+	.opt:hover,
+	.opt:active {
+		background: var(--bg-active);
+	}
+	.opt .ico {
+		display: grid;
+		place-items: center;
+		flex: none;
+		color: var(--text-dim);
+	}
+	.opt .ico :global(svg) {
+		width: 18px;
+		height: 18px;
+		stroke-width: 2;
 	}
 	.opt .lbl {
-		padding: 4px 10px;
-		border-radius: var(--radius-pill);
-		background: var(--bg);
-		border: 1px solid var(--border-strong);
-		color: var(--text);
+		flex: none;
 		font-size: var(--fs-sm);
+		font-weight: 600;
+		color: var(--text);
 		white-space: nowrap;
 	}
-	@keyframes pop {
-		from {
-			opacity: 0;
-			transform: translateY(6px) scale(0.9);
-		}
+	.opt .desc {
+		min-width: 0;
+		font-size: var(--fs-xs);
+		color: var(--text-dim);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	/* Touch: the queue circle folds into the long-press menu of the steer circle */
 	@media (pointer: coarse) {
