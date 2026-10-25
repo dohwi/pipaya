@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { loadComponents } from "../src/lib/extensions/components";
 import { parsePackage } from "../src/lib/extensions/schema";
 
-// The official extensions live in their own repository (pipaya-extensions). When it sits next to this one, every
+// The official extensions live in their own repository (dohwi/pipaya-extensions, checked out as `extensions/` beside `app/`). When it is there, every
 // built package must still install and compile against this client; otherwise the check is skipped.
-const root = process.env.PIPAYA_EXTENSIONS ?? join(import.meta.dir, "..", "..", "..", "pipaya-extensions");
+const root = process.env.PIPAYA_EXTENSIONS ?? join(import.meta.dir, "..", "..", "..", "extensions");
 const official = ["quota-monitor", "peer-names"].filter(id => existsSync(join(root, id, "dist", `${id}.json`)));
 
 describe.skipIf(official.length === 0)("official client extensions", () => {
