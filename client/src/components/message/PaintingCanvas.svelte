@@ -55,7 +55,7 @@
 		position: absolute;
 		inset: 0 auto 0 0;
 		width: 45%;
-		background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
+		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
 		transform: translateX(-120%);
 		will-change: transform;
 		animation: sheen 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
