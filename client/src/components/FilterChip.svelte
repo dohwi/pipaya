@@ -6,6 +6,7 @@
 	 *
 	 *  on       the selected one. Carries `aria-current` when `current` is set (tab rails), `aria-pressed` otherwise
 	 *  size     sm (26px) for pickers, md (30px) for strips, lg (32px) for panel rails
+	 *  The selected chip is filled (like a selected tab or nav row), not outlined: a dark ring is too loud at this size.
 	 *  danger   draws an unselected chip in the danger colour
 	 *
 	 * The root is a real <button class="fchip">, so `slidingIndicator({ selector: ".fchip.on" })` and
@@ -68,7 +69,7 @@
 			color var(--motion-fast) var(--ease-std);
 	}
 	.sm {
-		height: 26px;
+		height: 26px; /* = Badge md + 4: a chip you can press sits a step above a label */
 		padding: 0 10px;
 		font-size: var(--fs-xs);
 	}
@@ -91,18 +92,20 @@
 	}
 	.fchip.on {
 		color: var(--text);
-		border-color: var(--accent);
-		background: var(--accent-soft);
+		border-color: var(--border-strong);
+		background: var(--bg-active);
 		font-weight: 600;
 	}
 	.danger:not(.on) {
 		color: var(--danger);
 		border-color: var(--danger);
 	}
-	/* when a sliding indicator is active it draws the selected border and tint itself */
+	/* when a sliding indicator is active it draws the selected fill behind the chips, so they go see-through */
+	:global([data-indicator-ready]) .fchip {
+		background: transparent;
+	}
 	:global([data-indicator-ready]) .fchip.on {
-		border-color: var(--border);
-		background: var(--bg);
+		border-color: transparent;
 	}
 	.fchip:focus-visible {
 		outline: 2px solid var(--accent);

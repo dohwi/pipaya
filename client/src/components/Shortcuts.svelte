@@ -158,13 +158,6 @@
 	.hint {
 		line-height: 1.5;
 	}
-	.hint kbd {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		padding: 1px 5px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-xs);
-	}
 	ul {
 		list-style: none;
 		margin: 4px 0 0;

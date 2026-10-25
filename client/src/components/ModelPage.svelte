@@ -237,8 +237,8 @@
 		height: 32px;
 		padding: 0 12px;
 		border-radius: var(--radius-pill);
-		border: 1px solid var(--border-strong);
-		background: transparent;
+		border: 1px solid var(--border);
+		background: var(--bg);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		font-weight: 500;
@@ -252,10 +252,12 @@
 	.cap:hover {
 		background: var(--bg-hover);
 	}
+	/* pressed = the selected FilterChip look */
 	.cap[aria-pressed="true"] {
-		background: var(--accent-soft);
-		border-color: var(--text-dim);
+		background: var(--bg-active);
+		border-color: var(--border-strong);
 		color: var(--text);
+		font-weight: 600;
 	}
 	.field[readonly] {
 		color: var(--text-dim);

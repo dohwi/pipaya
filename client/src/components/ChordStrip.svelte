@@ -61,12 +61,12 @@
 	:global(:root[data-theme="dark"]) .strip .now {
 		color: var(--accent-hover);
 	}
+	/* the strip is dark in light mode: the key caps take its colours instead of the page's */
 	kbd {
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
 		padding: 2px 6px;
-		border-radius: var(--radius-sm);
+		border: 0;
 		background: color-mix(in srgb, var(--accent-fg) 18%, transparent);
+		color: inherit;
 	}
 	.now {
 		font-weight: 700;

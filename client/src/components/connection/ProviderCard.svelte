@@ -111,7 +111,7 @@
 			<span class="spinwrap" class:spin={refreshing}><Icon name="retry" /></span> {refreshing ? t("불러오는 중…") : t("모델 새로고침")}
 		</Button>
 		<Button size="sm" disabled={busy} onclick={onedit}><Icon name="pencil" /> {t("수정")}</Button>
-		<ConfirmButton size="sm" class="ghost" confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onremove}>{t("삭제")}</ConfirmButton>
+		<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onremove}>{t("삭제")}</ConfirmButton>
 	</div>
 	{#if keying}
 		<form class="keyform" in:collapseIn out:collapseOut onsubmit={(e) => { e.preventDefault(); onsavekey(); }}>
