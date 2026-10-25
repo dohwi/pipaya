@@ -451,6 +451,8 @@ export const en: Record<string, string> = {
 	"터미널에 다시 연결하는 중…": "Reconnecting to the terminal…",
 	"터미널 보조 키": "Terminal helper keys",
 	"맨 아래로": "Jump to bottom",
+	"붙여넣기": "Paste",
+	"붙여넣을 내용": "Text to paste",
 	"화면 맞춤": "Fit to screen",
 	"키보드 접기/펴기": "Show/hide keyboard",
 	"셸이 종료되었습니다": "The shell has exited",

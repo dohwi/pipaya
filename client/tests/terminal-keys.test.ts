@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { applyMods, ctrlChar, keySequence, touchLines } from "../src/lib/terminal-keys";
+import { applyMods, BAR_KEYS, ctrlChar, keySequence, touchLines } from "../src/lib/terminal-keys";
 
 test("cursor keys follow application mode and modifiers", () => {
 	expect(keySequence("up")).toBe("\x1b[A");
@@ -21,11 +21,11 @@ test("ctrl characters", () => {
 });
 
 test("sticky modifiers apply to one typed character only", () => {
-	expect(applyMods("c", { ctrl: true, alt: false })).toEqual({ data: "\x03", used: true });
-	expect(applyMods("x", { ctrl: false, alt: true })).toEqual({ data: "\x1bx", used: true });
-	expect(applyMods("ls -la", { ctrl: true, alt: false })).toEqual({ data: "ls -la", used: false });
-	expect(applyMods("\x1b[A", { ctrl: true, alt: false }).used).toBe(false);
-	expect(applyMods("a", { ctrl: false, alt: false }).used).toBe(false);
+	expect(applyMods("c", { ctrl: true, alt: false, shift: false })).toEqual({ data: "\x03", used: true });
+	expect(applyMods("x", { ctrl: false, alt: true, shift: false })).toEqual({ data: "\x1bx", used: true });
+	expect(applyMods("ls -la", { ctrl: true, alt: false, shift: false })).toEqual({ data: "ls -la", used: false });
+	expect(applyMods("\x1b[A", { ctrl: true, alt: false, shift: false }).used).toBe(false);
+	expect(applyMods("a", { ctrl: false, alt: false, shift: false }).used).toBe(false);
 });
 
 test("touch scrolling keeps the remainder and flips direction", () => {
@@ -33,4 +33,21 @@ test("touch scrolling keeps the remainder and flips direction", () => {
 	expect(touchLines(0.5, 10, 16).lines).toBe(-1);
 	expect(touchLines(0, -35, 16).lines).toBe(2);
 	expect(touchLines(0, 5, 0)).toEqual({ lines: 0, carry: 0 });
+});
+
+test("function keys, Shift+Tab and shift letters", () => {
+	expect(keySequence("f1")).toBe("\x1bOP");
+	expect(keySequence("f5")).toBe("\x1b[15~");
+	expect(keySequence("f12")).toBe("\x1b[24~");
+	expect(keySequence("f1", { ctrl: true })).toBe("\x1b[1;5P");
+	expect(keySequence("tab", { shift: true })).toBe("\x1b[Z");
+	expect(keySequence("ins")).toBe("\x1b[2~");
+	expect(applyMods("a", { ctrl: false, alt: false, shift: true })).toEqual({ data: "A", used: true });
+});
+
+test("bar keys have unique ids and every key sends something", () => {
+	const ids = BAR_KEYS.map((k) => k.id);
+	expect(new Set(ids).size).toBe(ids.length);
+	for (const k of BAR_KEYS) expect(!!k.send || !!k.text).toBe(true);
+	expect(BAR_KEYS.length).toBeGreaterThan(60);
 });

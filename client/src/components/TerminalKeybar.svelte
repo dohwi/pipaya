@@ -2,7 +2,7 @@
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
-	import { BAR_KEYS, keySequence, type Mods } from "../lib/terminal-keys";
+	import { applyMods, BAR_KEYS, keySequence, type BarKey, type Mods } from "../lib/terminal-keys";
 
 	/**
 	 * Helper keys above the soft keyboard (Esc, Tab, arrows, Ctrl/Alt, ...). The buttons never take focus, so the
@@ -15,6 +15,7 @@
 		onfit,
 		onbottom,
 		onkeyboard,
+		onpaste,
 		scrolledUp,
 	}: {
 		mods: Mods;
@@ -23,6 +24,7 @@
 		onfit: () => void;
 		onbottom: () => void;
 		onkeyboard: () => void;
+		onpaste: () => void;
 		scrolledUp: boolean;
 	} = $props();
 
@@ -35,45 +37,64 @@
 	}
 	onDestroy(stop);
 
-	function fire(k: (typeof BAR_KEYS)[number]) {
+	const NO_MODS: Mods = { ctrl: false, alt: false, shift: false };
+	function fire(k: BarKey) {
 		if (k.send) onsend(keySequence(k.send, mods, appCursor()));
-		else if (k.text) onsend(k.text);
-		if (k.send && (mods.ctrl || mods.alt)) mods = { ctrl: false, alt: false };
+		else if (k.text) onsend(applyMods(k.text, mods).data);
+		if (mods.ctrl || mods.alt || mods.shift) mods = NO_MODS;
 		navigator.vibrate?.(8);
 	}
-	function down(e: PointerEvent, k: (typeof BAR_KEYS)[number]) {
+	/**
+	 * A key fires when the finger lifts, so swiping the bar sideways (the browser cancels the pointer then) never types
+	 * the keys under it. Keys that repeat start after a short hold and then fire on every tick.
+	 */
+	let held = false;
+	function down(e: PointerEvent, k: BarKey) {
 		e.preventDefault(); // keep the terminal's focus (and the keyboard)
-		fire(k);
-		if (!k.repeat) return;
 		stop();
-		timer = setTimeout(() => (iv = setInterval(() => fire(k), 70)), 350);
+		held = false;
+		if (!k.repeat) return;
+		timer = setTimeout(() => {
+			held = true;
+			fire(k);
+			iv = setInterval(() => fire(k), 70);
+		}, 350);
+	}
+	function up(k: BarKey) {
+		const wasHeld = held;
+		stop();
+		held = false;
+		if (!wasHeld) fire(k);
 	}
 	const noFocus = (e: Event) => e.preventDefault();
 </script>
 
 <div class="bar" role="toolbar" aria-label={t("터미널 보조 키")}>
-	<div class="keys">
+	<div class="row top">
 		<button class="k mod" class:on={mods.ctrl} aria-pressed={mods.ctrl} onpointerdown={noFocus} onclick={() => (mods = { ...mods, ctrl: !mods.ctrl })}>Ctrl</button>
 		<button class="k mod" class:on={mods.alt} aria-pressed={mods.alt} onpointerdown={noFocus} onclick={() => (mods = { ...mods, alt: !mods.alt })}>Alt</button>
-		{#each BAR_KEYS as k (k.id)}
-			<button class="k" title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={stop} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>{k.label}</button>
-		{/each}
-		<button class="k" aria-label={t("화면 맞춤")} title={t("화면 맞춤")} onpointerdown={noFocus} onclick={onfit}>Fit</button>
-	</div>
-	<div class="fixed">
+		<button class="k mod" class:on={mods.shift} aria-pressed={mods.shift} onpointerdown={noFocus} onclick={() => (mods = { ...mods, shift: !mods.shift })}>Shift</button>
+		<span class="sp"></span>
 		{#if scrolledUp}
 			<button class="k icon" aria-label={t("맨 아래로")} title={t("맨 아래로")} onpointerdown={noFocus} onclick={onbottom}><Icon name="chevron-down" /></button>
 		{/if}
+		<button class="k icon" aria-label={t("붙여넣기")} title={t("붙여넣기")} onpointerdown={noFocus} onclick={onpaste}><Icon name="copy" /></button>
+		<button class="k" aria-label={t("화면 맞춤")} title={t("화면 맞춤")} onpointerdown={noFocus} onclick={onfit}>Fit</button>
 		<button class="k" aria-label={t("키보드 접기/펴기")} title={t("키보드 접기/펴기")} onpointerdown={noFocus} onclick={onkeyboard}>⌨</button>
+	</div>
+	<div class="row keys">
+		{#each BAR_KEYS as k (k.id)}
+			<button class="k" class:gap={k.gap} title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={() => up(k)} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>{k.label}</button>
+		{/each}
 	</div>
 </div>
 
 <style>
 	.bar {
 		display: flex;
-		align-items: stretch;
+		flex-direction: column;
 		gap: 4px;
-		padding: 4px 6px 4px;
+		padding: 4px 6px;
 		border-top: 1px solid var(--border);
 		background: var(--bg-elev);
 		user-select: none;
@@ -81,23 +102,21 @@
 		touch-action: manipulation;
 		flex: none;
 	}
-	.fixed {
+	.row {
 		display: flex;
 		gap: 4px;
-		flex: none;
-		margin-left: -18px;
-		position: relative;
+	}
+	.sp {
+		flex: 1;
 	}
 	.keys {
-		display: flex;
-		gap: 4px;
-		flex: 1;
-		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 		overscroll-behavior-x: contain;
+		touch-action: pan-x;
 		/* fade at the right edge: more keys are one swipe away */
 		mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+		-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
 		padding-right: 22px;
 	}
 	.keys::-webkit-scrollbar {
@@ -105,9 +124,9 @@
 	}
 	.k {
 		flex: none;
-		min-width: 34px;
+		min-width: 38px;
 		height: 36px;
-		padding: 0 8px;
+		padding: 0 10px;
 		border-radius: var(--radius-sm);
 		background: var(--bg-hover);
 		color: var(--text);
@@ -118,6 +137,9 @@
 		align-items: center;
 		justify-content: center;
 		-webkit-tap-highlight-color: transparent;
+	}
+	.k.gap {
+		margin-left: 8px;
 	}
 	.k:active {
 		background: var(--border-strong);

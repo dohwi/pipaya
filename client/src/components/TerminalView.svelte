@@ -26,11 +26,12 @@
 	let refitNow: (() => void) | undefined;
 	/** Helper-key bar above the soft keyboard: on touch screens and phone-width windows */
 	const showBar = $derived(isTouch() || viewport.narrow);
-	let mods = $state<Mods>({ ctrl: false, alt: false });
+	let mods = $state<Mods>({ ctrl: false, alt: false, shift: false });
 	let scrolledUp = $state(false);
 	let sendInput: ((data: string) => void) | undefined;
 	let toggleKeyboard: (() => void) | undefined;
 	let toBottom: (() => void) | undefined;
+	let pasteClip: (() => void) | undefined;
 	const appCursor = () => !!term?.modes.applicationCursorKeysMode;
 
 	function css(name: string, fallback: string) {
@@ -190,7 +191,7 @@
 		const onData = xt.onData((raw) => {
 			// Sticky Ctrl/Alt of the helper bar apply to the next typed character
 			const r = applyMods(raw, mods);
-			if (r.used) mods = { ctrl: false, alt: false };
+			if (r.used) mods = { ctrl: false, alt: false, shift: false };
 			input(r.data);
 		});
 		const onResize = xt.onResize(() => sendSize());
@@ -214,6 +215,16 @@
 		const onScroll = xt.onScroll(syncScrolled);
 		const onWrite = xt.onWriteParsed(syncScrolled);
 		toBottom = () => xt.scrollToBottom();
+		pasteClip = async () => {
+			let text = "";
+			try {
+				text = await navigator.clipboard.readText();
+			} catch {
+				// Plain http (no clipboard access): ask for the text instead
+				text = window.prompt(t("붙여넣을 내용"), "") ?? "";
+			}
+			if (text) xt.paste(text);
+		};
 		toggleKeyboard = () => {
 			if (xt.textarea && document.activeElement === xt.textarea) xt.textarea.blur();
 			else xt.focus();
@@ -310,7 +321,7 @@
 			host?.removeEventListener("touchmove", tm, opts);
 			host?.removeEventListener("touchend", te, opts);
 			host?.removeEventListener("touchcancel", te, opts);
-			sendInput = toggleKeyboard = toBottom = undefined;
+			sendInput = toggleKeyboard = toBottom = pasteClip = undefined;
 			onData.dispose();
 			onResize.dispose();
 			ws?.close();
@@ -332,6 +343,7 @@
 			onfit={() => refitNow?.()}
 			onbottom={() => toBottom?.()}
 			onkeyboard={() => toggleKeyboard?.()}
+			onpaste={() => pasteClip?.()}
 		/>
 	{/if}
 	{#if status === "offline" || status === "connecting"}
