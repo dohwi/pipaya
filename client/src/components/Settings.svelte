@@ -13,6 +13,7 @@
 	import ServerForm from "./ServerForm.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import Pin from "./Pin.svelte";
+	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { app } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
@@ -94,7 +95,7 @@
 
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={t("설정")} onclose={close} />
-	<div class="srvbar" role="group" aria-label={t("설정 범위")}>
+	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
 		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
 		{#each app.servers as s (s.id)}
 			<span class="chipwrap">
@@ -151,6 +152,7 @@
 	}
 	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
 	.srvbar {
+		position: relative;
 		flex: none;
 		display: flex;
 		gap: 6px;
