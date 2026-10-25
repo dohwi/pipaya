@@ -99,7 +99,7 @@
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cnt">{kids.length}</span>{/if}<Icon name="chevron-right" /></button>
+					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-down" /></button>
 				{/if}
 			</div>
 			{#if open}
@@ -152,7 +152,7 @@
 		min-width: 0;
 	}
 	.nav .row.has > button:first-child {
-		padding-right: 50px;
+		padding-right: 56px;
 	}
 	.nav button.fold {
 		position: absolute;
@@ -161,7 +161,7 @@
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		padding: 4px;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
@@ -171,15 +171,9 @@
 		height: 15px;
 		transition: transform var(--motion-fast) var(--ease-std);
 	}
-	/* the arrow is always there: right = folded, turned down = open; the count sits beside it only while folded */
+	/* the arrow is always there: down = folded (can open), up = open; the shared count badge sits beside it only while folded */
 	.nav button.fold[aria-expanded="true"] :global(svg) {
-		transform: rotate(90deg);
-	}
-	.nav button.fold .cnt {
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		line-height: 1;
+		transform: rotate(180deg);
 	}
 	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
