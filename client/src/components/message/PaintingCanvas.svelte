@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PipayaMark from "../PipayaMark.svelte";
 	import { t } from "../../lib/i18n";
 </script>
 
@@ -8,6 +9,7 @@
 		<span class="grid"></span>
 		<span class="glow"></span>
 		<span class="sheen"></span>
+		<span class="mark"><PipayaMark size={56} /></span>
 		<span class="bar"></span>
 	</div>
 	<span class="shimmer cap">{t("이미지를 만드는 중…")}</span>
@@ -59,6 +61,14 @@
 		will-change: transform;
 		animation: sheen 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 	}
+	.mark {
+		position: relative;
+		display: grid;
+		color: var(--text-dim);
+		opacity: 0.7;
+		will-change: transform, opacity;
+		animation: mark 4.8s ease-in-out infinite;
+	}
 	.bar {
 		position: absolute;
 		inset: auto 0 0;
@@ -86,6 +96,12 @@
 			opacity: 0.55;
 		}
 	}
+	@keyframes mark {
+		50% {
+			transform: scale(1.06);
+			opacity: 1;
+		}
+	}
 	@keyframes sheen {
 		60%,
 		100% {
@@ -109,6 +125,7 @@
 	@media (prefers-reduced-motion: reduce) {
 		.painting,
 		.glow,
+		.mark,
 		.sheen {
 			animation: none;
 		}
