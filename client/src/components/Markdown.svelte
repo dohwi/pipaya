@@ -46,27 +46,16 @@
 		});
 		return () => ctl.abort();
 	});
-	/** `1 / N` badge on a swipeable strip, following the scroll position. */
+	/** More than four pictures: the fourth cell shows how many more there are (the rest are hidden until opened). */
 	function setupGalleries(host: HTMLElement) {
 		for (const g of host.querySelectorAll<HTMLElement>(".gallery:not([data-ready])")) {
 			g.dataset.ready = "1";
-			const n = Number(g.dataset.count) || g.children.length;
+			const more = (Number(g.dataset.count) || g.children.length) - 4;
+			if (more <= 0) continue;
 			const badge = document.createElement("span");
-			badge.className = "gallery-count mono";
-			badge.textContent = `1 / ${n}`;
-			g.parentElement?.insertBefore(badge, g.nextSibling);
-			const wrap = document.createElement("div");
-			wrap.className = "gallery-wrap";
-			g.before(wrap);
-			wrap.append(g, badge);
-			g.addEventListener(
-				"scroll",
-				() => {
-					const i = Math.round(g.scrollLeft / Math.max(1, g.clientWidth));
-					badge.textContent = `${Math.min(n, Math.max(1, i + 1))} / ${n}`;
-				},
-				{ passive: true },
-			);
+			badge.className = "gallery-more";
+			badge.textContent = `+${more}`;
+			g.append(badge);
 		}
 	}
 	function fillPictures(host: HTMLElement, api: NonNullable<typeof app.api>, id: string, ctl: AbortController) {
@@ -317,47 +306,53 @@
 		max-height: 420px;
 		cursor: zoom-in;
 	}
-	/* swipeable strip: one picture per page, snaps like a social-media post */
-	.md :global(.gallery-wrap) {
-		position: relative;
-		margin: 0 0 0.85em;
-	}
+	/* several pictures at a glance, like a social-media post: 2 side by side, 3 = one big + two, 4+ = 2x2 with "+N" */
 	.md :global(.gallery) {
-		display: flex;
-		gap: 8px;
-		overflow-x: auto;
-		scroll-snap-type: x mandatory;
-		overscroll-behavior-x: contain;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
+		position: relative;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		grid-template-rows: 1fr 1fr;
+		gap: 3px;
+		height: 340px; /* fixed so the grid does not jump while the pictures load */
+		margin: 0 0 0.85em;
+		overflow: hidden;
 		border-radius: var(--radius);
 	}
-	.md :global(.gallery::-webkit-scrollbar) {
+	.md :global(.gallery[data-count="2"]) {
+		grid-template-rows: 1fr;
+		height: 260px;
+	}
+	.md :global(.gallery[data-count="3"] > :first-child) {
+		grid-row: 1 / 3;
+	}
+	.md :global(.gallery > :nth-child(n + 5):not(.gallery-more)) {
 		display: none;
 	}
-	.md :global(.gallery > *) {
-		flex: 0 0 100%;
-		scroll-snap-align: center;
+	.md :global(.gallery > .wd-img),
+	.md :global(.gallery > .wd-pic) {
 		display: grid;
 		place-items: center;
-		height: 320px; /* fixed so the strip does not jump while the pictures load */
-		background: var(--bg-elev);
-		border-radius: var(--radius);
-	}
-	.md :global(.gallery > .wd-pic) {
+		min-width: 0;
+		min-height: 0;
 		width: 100%;
+		height: 100%;
 		max-height: none;
-		object-fit: contain;
+		background: var(--bg-elev);
+		border-radius: 0;
+		object-fit: cover;
 	}
-	.md :global(.gallery-count) {
+	.md :global(.gallery > .gallery-more) {
 		position: absolute;
-		top: 8px;
-		right: 8px;
-		padding: 2px 8px;
-		font-size: var(--fs-xs);
+		right: 0;
+		bottom: 0;
+		width: calc(50% - 1.5px);
+		height: calc(50% - 1.5px);
+		display: grid;
+		place-items: center;
 		color: #fff;
-		background: rgba(0, 0, 0, 0.55);
-		border-radius: var(--radius-pill);
+		font-size: 1.6em;
+		font-weight: 600;
+		background: rgba(0, 0, 0, 0.5);
 		pointer-events: none;
 	}
 	.md :global(.remote-img) {
