@@ -263,6 +263,8 @@
 	.embedded .body.pane {
 		margin: 0 -4px;
 		padding: 0 4px 8px; /* the settings pane already spaces its title from the content */
+		/* the settings body is the scroller; a nested one would be the only box sticky children stick to */
+		overflow: visible;
 	}
 	.embedded footer {
 		padding: 12px 0 0;
