@@ -101,23 +101,23 @@
 	.trigger.field {
 		gap: 8px;
 		width: 100%;
-		height: 42px;
+		height: var(--control-h);
 		padding: 0 12px;
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		color: var(--text);
 		font-size: var(--fs-md);
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
 	.trigger.field:hover:not(:disabled) {
-		border-color: var(--accent);
+		background: var(--bg-hover);
 	}
 	.trigger.inline {
 		gap: 6px;
 		height: 36px;
 		padding: 0 10px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		transition:

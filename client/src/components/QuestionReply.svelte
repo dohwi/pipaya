@@ -102,14 +102,12 @@
 		flex-wrap: wrap;
 		gap: 8px;
 	}
-	/* An answer can be a whole sentence. The shared pill is one fixed line high and clips what does not fit, so an option
-	   grows with its text and uses a corner radius that a second line still sits inside. */
+	/* An answer can be a whole sentence: the option grows with its text instead of clipping it. */
 	.opts :global(.btn.opt) {
 		height: auto;
-		min-height: 38px;
+		min-height: var(--control-h);
 		max-width: 100%;
 		padding: 8px 16px;
-		border-radius: var(--radius-pill);
 		justify-content: flex-start;
 		text-align: left;
 		line-height: 1.45;
@@ -135,11 +133,9 @@
 	.field {
 		flex: 1;
 		min-width: 0;
-		height: 38px;
 	}
 	.free :global(.btn) {
 		flex: none;
-		height: 38px;
 		min-width: 76px;
 		justify-content: center;
 	}

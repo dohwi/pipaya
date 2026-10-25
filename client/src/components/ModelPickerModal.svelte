@@ -167,9 +167,9 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: var(--radius-sm);
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
 		color: var(--text-faint);
 		opacity: 0;
 		transition:
@@ -258,9 +258,9 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 32px;
-		padding: 0 8px;
-		border-radius: var(--radius-sm);
+		height: var(--control-h-sm);
+		padding: 0 10px;
+		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		transition:

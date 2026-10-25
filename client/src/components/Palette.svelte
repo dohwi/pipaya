@@ -163,7 +163,7 @@
 		place-items: center;
 		width: 30px;
 		height: 30px;
-		border-radius: var(--radius-sm);
+		border-radius: 50%;
 		color: var(--text-faint);
 	}
 	.x:hover {

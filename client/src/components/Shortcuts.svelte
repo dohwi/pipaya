@@ -205,10 +205,10 @@
 	}
 	.key {
 		min-width: 108px;
-		height: 32px;
+		height: var(--control-h-sm);
 		padding: 0 10px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-control);
 		font-family: var(--mono);
 		font-size: var(--fs-xs);
 		color: var(--text);
@@ -229,7 +229,7 @@
 	}
 	.slot {
 		flex: none;
-		width: 28px;
+		width: 30px;
 	}
 	.key.none {
 		color: var(--text-faint);
@@ -247,9 +247,9 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius);
+		width: 30px;
+		height: 30px;
+		border-radius: 50%;
 		color: var(--text-dim);
 	}
 	.step:hover:not(:disabled) {
@@ -270,10 +270,10 @@
 	.reset {
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: 30px;
+		height: 30px;
 		flex: none;
-		border-radius: var(--radius);
+		border-radius: 50%;
 		color: var(--text-dim);
 	}
 	.reset :global(svg) {
@@ -294,10 +294,10 @@
 		margin-top: 6px;
 	}
 	.all {
-		height: 32px;
+		height: var(--control-h-sm);
 		padding: 0 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-control);
 		font-size: var(--fs-sm);
 	}
 	.all:hover:not(:disabled) {

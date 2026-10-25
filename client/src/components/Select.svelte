@@ -292,10 +292,10 @@
 		align-items: center;
 		gap: 8px;
 		width: 100%;
-		height: 42px;
+		height: var(--control-h);
 		padding: 0 10px 0 12px;
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		background: var(--bg);
 		color: var(--text);
 		font-size: var(--fs-lg);
@@ -306,7 +306,7 @@
 			background-color var(--motion-fast) var(--ease-std);
 	}
 	.sm .trigger {
-		height: 34px;
+		height: var(--control-h-sm);
 		padding: 0 8px 0 10px;
 		font-size: var(--fs-md);
 	}

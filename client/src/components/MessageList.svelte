@@ -290,16 +290,27 @@
 		bottom: 8px;
 		left: 50%;
 		translate: -50% 0;
-		width: 38px;
-		height: 38px;
+		width: 36px;
+		height: 36px;
 		display: grid;
 		place-items: center;
-		border-radius: var(--radius);
-		background: var(--bg-elev);
+		border-radius: 50%;
+		background: var(--bg);
 		border: 1px solid var(--border-strong);
-		box-shadow: var(--shadow);
-		color: var(--text);
+		box-shadow: var(--shadow-soft);
+		color: var(--text-dim);
 		z-index: 5;
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std),
+			scale var(--motion-fast) var(--ease);
+	}
+	.jump:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.jump:active {
+		scale: 0.9;
 	}
 	.jump :global(svg) {
 		width: 18px;

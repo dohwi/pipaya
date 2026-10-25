@@ -62,10 +62,10 @@
 	}
 	input[type="number"] {
 		width: 96px;
-		height: 34px;
-		padding: 0 9px;
+		height: var(--control-h-sm);
+		padding: 0 10px;
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		background: var(--bg);
 		color: var(--text);
 		font-family: var(--mono);

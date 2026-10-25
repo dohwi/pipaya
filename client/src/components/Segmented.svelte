@@ -38,7 +38,7 @@
 
 	const indicator = $derived(
 		variant === "cards"
-			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius)", mirror: ["data-tone"] }
+			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius-control)", mirror: ["data-tone"] }
 			: { selector: "button.on", variant: "fill" as const, radius: "calc(var(--radius) - 3px)" },
 	);
 </script>
@@ -83,9 +83,9 @@
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		height: 44px;
+		height: var(--control-h);
 		padding: 0 8px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-control);
 		border: 1px solid var(--border);
 		background: var(--bg-elev);
 		transition:

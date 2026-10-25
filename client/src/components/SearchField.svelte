@@ -59,10 +59,10 @@
 	}
 	input {
 		width: 100%;
-		height: 36px;
+		height: var(--control-h-sm);
 		padding: 0 12px 0 34px;
 		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		background: var(--bg);
 		color: var(--text);
 		font: inherit;

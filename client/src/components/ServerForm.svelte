@@ -271,10 +271,10 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
-		height: 34px;
+		height: var(--control-h-sm);
 		margin: 0 8px 0 -8px;
 		padding: 0 10px 0 4px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 	}
@@ -396,7 +396,7 @@
 	}
 	.tokenrow :global(.btn.eye) {
 		flex: none;
-		height: 42px;
+		height: var(--control-h);
 		padding: 0 12px;
 		font-size: var(--fs-sm);
 	}

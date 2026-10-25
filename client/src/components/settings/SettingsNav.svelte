@@ -72,7 +72,7 @@
 	class="nav"
 	role="tablist"
 	aria-label={t("설정 구역")}
-	use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius)" }}
+	use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius-control)" }}
 	use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
 >
 	{#each scoped as x (x.id)}
@@ -232,7 +232,7 @@
 		align-items: center;
 		gap: 12px;
 		padding: 10px 12px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-control);
 		text-align: left;
 		color: var(--text-dim);
 	}
@@ -296,7 +296,7 @@
 			justify-content: center;
 			gap: 8px;
 			padding: 8px 14px;
-			border-radius: 999px;
+			border-radius: var(--radius-control);
 			white-space: nowrap;
 		}
 		.nav button.addsrv {

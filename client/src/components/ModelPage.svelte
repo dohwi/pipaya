@@ -161,18 +161,18 @@
 		align-items: center;
 		gap: 8px;
 		width: 100%;
-		height: 42px;
+		height: var(--control-h);
 		padding: 0 12px;
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		color: var(--text);
 		font-size: var(--fs-md);
 		text-align: left;
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
 	.mtrigger:hover {
-		border-color: var(--accent);
+		background: var(--bg-hover);
 	}
 	.namerow {
 		display: flex;
@@ -187,11 +187,11 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 42px;
+		height: var(--control-h);
 		padding: 0 10px;
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		color: var(--text);
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}

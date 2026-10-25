@@ -134,9 +134,9 @@
 		justify-content: flex-start;
 		gap: 8px;
 		padding: 0 14px;
-		min-height: 42px; /* the height of the model field beside it */
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		min-height: var(--control-h); /* the height of the model field beside it */
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-control);
 		font-size: var(--fs-sm);
 		white-space: nowrap;
 		cursor: pointer;
