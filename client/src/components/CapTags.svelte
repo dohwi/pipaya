@@ -14,11 +14,11 @@
 </script>
 
 <span class="caps" class:end>
-	{#if ctx && !end}<span class="ctx">{ctx}</span>{/if}
+	{#if !end}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
 	{#each caps as c (c.key)}
 		<span class="cap {c.key}" title={`${t(c.label)}: ${t(c.hint)}`}><Icon name={c.icon} /><span class="word">{t(c.label)}</span></span>
 	{/each}
-	{#if end}<span class="ctx slot">{ctx ?? ""}</span>{/if}
+	{#if end}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
 </span>
 
 <style>
@@ -31,13 +31,29 @@
 		font-size: var(--fs-2xs);
 		white-space: nowrap;
 	}
+	/* the context size is a pill of its own, so it reads as a size and not as one more ability */
 	.ctx {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 18px;
+		padding: 0 7px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-pill);
+		background: var(--bg);
+		color: var(--text-dim);
 		font-family: var(--mono);
+		font-size: var(--fs-2xs);
 	}
-	/* flush-right rows: the context size is the last column, right-aligned, wide enough for "1000k" */
+	/* a fixed-width column (first under a name, last in a flush-right row), so the abilities line up from row to row */
 	.ctx.slot {
-		min-width: 5ch;
-		text-align: right;
+		min-width: 48px;
+	}
+	/* an image model has no context size: the column stays, with a faint dash and no pill */
+	.ctx.none {
+		border-color: transparent;
+		background: transparent;
+		color: var(--text-faint);
 	}
 	.cap {
 		display: inline-flex;
