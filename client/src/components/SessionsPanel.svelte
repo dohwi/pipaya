@@ -71,8 +71,7 @@
 			.map(([cwd, list]) => ({ cwd, list, updatedAt: list[0]?.updatedAt ?? 0 }))
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
-	const chosen = $derived(Object.keys(picked).filter((id) => picked[id]));
-	const nChosen = $derived(chosen.length);
+	const nIn = (list: Session[]) => list.filter((s) => picked[s.id]).length;
 
 	function ageOf(ts: number): string {
 		const d = Math.floor((now - ts) / DAY);
@@ -99,13 +98,14 @@
 		else next[id] = true;
 		picked = next;
 	}
-	async function remove() {
-		if (!api || !nChosen) return;
+	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
+	async function remove(list: Session[]) {
+		const ids = list.filter((s) => picked[s.id]).map((s) => s.id);
+		if (!api || !ids.length) return;
 		busy = true;
 		error = "";
 		note = "";
 		try {
-			const ids = [...chosen];
 			let deleted = 0, skipped = 0;
 			// the server takes up to 500 at a time
 			for (let i = 0; i < ids.length; i += 500) {
@@ -114,7 +114,9 @@
 				skipped += r.skipped.length;
 			}
 			note = skipped ? t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }) : t("{n}개를 지웠습니다.", { n: deleted });
-			picked = {};
+			const next = { ...picked };
+			for (const id of ids) delete next[id];
+			picked = next;
 			await load();
 		} catch (e) {
 			error = errorText(e);
@@ -128,14 +130,6 @@
 <div class="sessions" data-part="sessions">
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if note}<Notice tone="info">{note}</Notice>{/if}
-
-	{#if nChosen}
-		<div class="bar" in:collapseIn out:collapseOut>
-			<span>{t("{n}개 선택됨", { n: nChosen })}</span>
-			<Button size="sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</Button>
-			<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nChosen })} onconfirm={() => void remove()} disabled={busy}><Icon name="trash" /> {t("삭제")}</ConfirmButton>
-		</div>
-	{/if}
 
 	<section class="list" aria-labelledby="list-h">
 		<div class="row head">
@@ -166,6 +160,11 @@
 							<span class="mono path" title={g.cwd}>{label(g.cwd)}</span>
 							<span class="n">{g.list.length}</span>
 						</button>
+						{#if nIn(g.list)}
+							<span class="del" in:collapseIn out:collapseOut>
+								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
+							</span>
+						{/if}
 					</div>
 					{#if !folded[g.cwd]}
 						<ul in:collapseIn out:collapseOut>
@@ -303,21 +302,7 @@
 		color: var(--text-faint);
 		font-variant-numeric: tabular-nums;
 	}
-	.bar {
-		position: sticky;
-		top: 0;
-		z-index: 2;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px 12px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-panel);
-		box-shadow: var(--shadow-soft);
-		font-size: var(--fs-sm);
-	}
-	.bar span {
-		flex: 1;
+	.del {
+		flex: none;
 	}
 </style>
