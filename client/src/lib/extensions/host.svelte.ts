@@ -13,11 +13,14 @@ import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettin
 import type { Component } from "svelte";
 import { inlineAssets, raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
-import { parsePanelSpec, parseView, validateUIEvent, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
+import { PANEL_PLACEMENTS, parsePanelLayout, parsePanelSpec, parseView, validateUIEvent, type UIPanelPlacement, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
 import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ToolRenderInput } from "./sdk";
 import { splitCombo } from "../keys";
 import type { PaneAdapter } from "./panes";
+import { parseLayout } from "./layout-spec";
+import type { WorkspaceAdapter } from "./workspace";
+import { SETTINGS_TABS, WORKSPACE_DIALOGS } from "./workspace-spec";
 import type { Edge } from "../layout";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
@@ -38,6 +41,8 @@ export interface HostAdapter {
   };
   /** Orchestration of the panes (conversations and terminals) of the open group, for extensions with the `panes` permission. */
   panes?: PaneAdapter;
+  /** The screen around the panes (sidebar, tabs, settings, built-in commands), for the `workspace` permission. */
+  workspace?: WorkspaceAdapter;
   /** Modal questions. Resolve to null when the user dismisses them. */
   dialog?(request: ExtensionDialogRequest): Promise<unknown>;
   dark(): boolean;
@@ -101,6 +106,13 @@ export interface ExtensionPanel extends Omit<UIPanelSpec, "view"> {
   view: UINode;
   /** "danger" paints the launcher badge red; set by the extension through ui.update(id, view, {tone}). */
   tone?: UITone;
+  /**
+   * Non-modal placements: shown (`side`, `floating`) or unfolded (`composer`, `sidebar`). Side docks and floating
+   * windows start shown, folded sections start folded. The modal (`panel`) uses `activePanel`/`panelOpen` instead.
+   */
+  open: boolean;
+  /** Bumped by `ui.place`, so a floating window the user dragged goes back to where the extension asked. */
+  placed: number;
   revision: number;
   run(event: UIEvent): Promise<void>;
 }
@@ -820,8 +832,15 @@ export class ExtensionHost {
     if (this.commands.filter(c => c.owner === owner).length >= 20) throw new LocalizedError(t("명령은 확장당 최대 20개입니다"));
     this.commands = [...this.commands, { owner, name, desc, args, run }];
   }
+  /** Show/hide a docked or floating panel, fold/unfold a composer or sidebar one (the user's buttons and `ui.open/close`). */
+  setPanelOpen(owner: string, id: string, open: boolean) {
+    const index = this.panels.findIndex(p => p.owner === owner && p.id === id && (p.placement ?? "panel") !== "panel");
+    if (index < 0) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+    if (this.panels[index]!.open === open) return;
+    this.panels = this.panels.map((p, i) => i === index ? { ...p, open } : p);
+  }
   openPanel(owner: string, id: string) {
-    const panel = this.panels.find(p => p.owner === owner && p.id === id && p.placement !== "composer");
+    const panel = this.panels.find(p => p.owner === owner && p.id === id && (p.placement ?? "panel") === "panel");
     if (!panel || this.find(owner).state !== "active") throw new LocalizedError(t("활성 패널을 찾을 수 없습니다"));
     this.activePanel = `${owner}:${id}`; this.panelOpen = true;
   }
@@ -990,7 +1009,8 @@ export class ExtensionHost {
         if (this.panels.some(p => p.owner === id && p.id === spec.id)) throw new LocalizedError(t("중복 패널 ID"));
         if (this.panels.filter(p => p.owner === id).length >= 5) throw new LocalizedError(t("확장당 패널은 최대 5개입니다"));
         const generation = this.generations.get(id);
-        const panel: ExtensionPanel = { ...spec, owner: id, revision: 0, run: async event => {
+        const placement = spec.placement ?? "panel";
+        const panel: ExtensionPanel = { ...spec, owner: id, revision: 0, open: placement === "side" || placement === "floating", placed: 0, run: async event => {
           const current = this.panels.find(p => p.owner === id && p.id === spec.id);
           if (this.generations.get(id) !== generation || !current || current.run !== panel.run || this.find(id).state !== "active") throw new LocalizedError(t("비활성화된 패널입니다"));
           await runtime.execute(token, validateUIEvent(current.view, event));
@@ -1009,7 +1029,8 @@ export class ExtensionHost {
       case "ui.open": {
         this.require(id, "ui"); const panelId = localId(args[0]);
         const panel = this.panels.find(p => p.owner === id && p.id === panelId);
-        if (!panel || panel.placement === "composer") throw new LocalizedError(t("별도 패널을 찾을 수 없습니다"));
+        if (!panel) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        if ((panel.placement ?? "panel") !== "panel") { this.setPanelOpen(id, panelId, true); return; }
         // Do not destroy another active panel's draft during asynchronous boot.
         if (this.find(id).state === "starting" && this.panelOpen) {
           this.pendingPanelOpens.set(id, panelId); return;
@@ -1018,9 +1039,30 @@ export class ExtensionHost {
       }
       case "ui.close": {
         this.require(id, "ui"); const panelId = localId(args[0]);
-        if (!this.panels.some(p => p.owner === id && p.id === panelId)) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        const panel = this.panels.find(p => p.owner === id && p.id === panelId);
+        if (!panel) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        if ((panel.placement ?? "panel") !== "panel") { this.setPanelOpen(id, panelId, false); return; }
         if (this.pendingPanelOpens.get(id) === panelId) this.pendingPanelOpens.delete(id);
         if (this.activePanel === `${id}:${panelId}`) this.panelOpen = false; return;
+      }
+      case "ui.place": {
+        this.require(id, "ui"); const panelId = localId(args[0]); const o = object(args[1]);
+        for (const key of Object.keys(o)) if (!["placement", "size", "position"].includes(key)) throw new LocalizedError(t("알 수 없는 설정: {key}", { key }));
+        const index = this.panels.findIndex(p => p.owner === id && p.id === panelId);
+        if (index < 0) throw new LocalizedError(t("패널을 찾을 수 없습니다"));
+        const current = this.panels[index]!;
+        const placement = (o.placement === undefined ? current.placement ?? "panel" : o.placement) as UIPanelPlacement;
+        if (!(PANEL_PLACEMENTS as readonly unknown[]).includes(placement)) throw new LocalizedError(t("위치는 {list} 중 하나여야 합니다", { list: PANEL_PLACEMENTS.join(", ") }));
+        // A new placement starts from a clean size/position unless the call gives them; otherwise unspecified ones are kept.
+        const moved = placement !== (current.placement ?? "panel");
+        let layout: ReturnType<typeof parsePanelLayout>;
+        try {
+          layout = parsePanelLayout({ size: o.size ?? (moved ? undefined : current.size), position: o.position ?? (moved ? undefined : current.position) }, placement, "place");
+        } catch (e) { throw new LocalizedError(e instanceof Error ? e.message : String(e)); }
+        if (moved && this.activePanel === `${id}:${panelId}`) { this.panelOpen = false; this.activePanel = null; }
+        const { size: _s, position: _p, ...rest } = current;
+        this.panels = this.panels.map((p, i) => i === index ? { ...rest, placement, ...layout, open: moved ? placement === "side" || placement === "floating" : p.open, placed: p.placed + 1 } : p);
+        return;
       }
       case "ui.remove": {
         this.require(id, "ui"); const panelId = localId(args[0]);
@@ -1149,7 +1191,8 @@ export class ExtensionHost {
         return adapter.abort();
       }
       case "panes.list": case "panes.group": case "panes.read": case "panes.focus": case "panes.send": case "panes.abort": case "panes.split":
-      case "panes.models": case "panes.configure": case "panes.compact": case "panes.move": case "panes.swap": case "panes.resize": case "panes.leave": case "panes.close": case "panes.zoom": {
+      case "panes.models": case "panes.configure": case "panes.compact": case "panes.move": case "panes.swap": case "panes.resize": case "panes.leave": case "panes.close": case "panes.zoom":
+      case "panes.groups": case "panes.openGroup": case "panes.createGroup": case "panes.setLayout": case "panes.renameGroup": case "panes.deleteGroup": case "panes.full": {
         this.require(id, "panes");
         const panes = this.adapter?.panes;
         if (!panes) throw new LocalizedError(t("이 클라이언트는 패널 제어를 지원하지 않습니다"));
@@ -1157,7 +1200,12 @@ export class ExtensionHost {
         const edge = (v: unknown): Edge => { if (v === "left" || v === "right" || v === "top" || v === "bottom") return v; throw new LocalizedError(t("방향은 left, right, top, bottom 중 하나여야 합니다")); };
         const generation = this.generations.get(id);
         const alive = <T,>(v: T): T => { if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다")); return v; };
-        if (method === "panes.list") return clone(panes.list());
+        const gid = (v: unknown) => string(v, 80, "group id");
+        if (method === "panes.list") {
+          const o = args[0] === undefined || args[0] === null ? {} : object(args[0]);
+          return clone(panes.list(o.all === true));
+        }
+        if (method === "panes.groups") return clone(panes.groups());
         if (method === "panes.models") return clone(panes.models());
         if (method === "panes.group") return clone(panes.group());
         if (method === "panes.read") {
@@ -1200,7 +1248,60 @@ export class ExtensionHost {
           }
           case "panes.leave": return panes.leave(pid(args[0])).then(() => {});
           case "panes.close": return panes.close(pid(args[0])).then(() => {});
+          case "panes.openGroup": return panes.openGroup(gid(args[0])).then(() => {});
+          case "panes.createGroup": {
+            const layout = parseLayout(args[0]);
+            const name = args[1] === undefined || args[1] === null ? undefined : string(args[1], 100);
+            return panes.createGroup(layout, name).then(alive).then(newId => ({ id: newId }));
+          }
+          case "panes.setLayout": return panes.setLayout(gid(args[0]), parseLayout(args[1])).then(() => {});
+          case "panes.renameGroup": return panes.renameGroup(gid(args[0]), string(args[1], 100)).then(() => {});
+          case "panes.deleteGroup": return panes.deleteGroup(gid(args[0])).then(() => {});
+          case "panes.full": {
+            if (typeof args[1] !== "boolean") throw new LocalizedError(t("on은 true 또는 false여야 합니다"));
+            return panes.setFull(gid(args[0]), args[1]).then(() => {});
+          }
           default: return panes.zoom(args[0] === null || args[0] === undefined ? null : pid(args[0])).then(() => {});
+        }
+      }
+      case "workspace.state": case "workspace.sidebar": case "workspace.openTab": case "workspace.moveTab": case "workspace.openSettings":
+      case "workspace.closeSettings": case "workspace.open": case "workspace.runCommand": case "workspace.commands": {
+        this.require(id, "workspace");
+        const ws = this.adapter?.workspace;
+        if (!ws) throw new LocalizedError(t("이 클라이언트는 화면 제어를 지원하지 않습니다"));
+        if (method === "workspace.state") return clone(ws.state());
+        if (method === "workspace.commands") return [...ws.commands()];
+        this.limitPanes(id);
+        switch (method) {
+          case "workspace.sidebar": {
+            const o = object(args[0]);
+            for (const key of Object.keys(o)) if (!["open", "collapsed", "width"].includes(key)) throw new LocalizedError(t("알 수 없는 설정: {key}", { key }));
+            for (const key of ["open", "collapsed"] as const) if (o[key] !== undefined && typeof o[key] !== "boolean") throw new LocalizedError(t("{key}는 true 또는 false여야 합니다", { key }));
+            if (o.width !== undefined && (typeof o.width !== "number" || !Number.isFinite(o.width))) throw new LocalizedError(t("width는 숫자여야 합니다"));
+            ws.sidebar({ ...(o.open === undefined ? {} : { open: o.open as boolean }), ...(o.collapsed === undefined ? {} : { collapsed: o.collapsed as boolean }), ...(o.width === undefined ? {} : { width: o.width as number }) });
+            return;
+          }
+          case "workspace.openTab": return ws.openTab(string(args[0], 80, "tab id")).then(() => {});
+          case "workspace.moveTab": {
+            const edge = args[2] === undefined || args[2] === null ? "before" : args[2];
+            if (edge !== "before" && edge !== "after") throw new LocalizedError(t("위치는 before 또는 after여야 합니다"));
+            ws.moveTab(string(args[0], 80, "tab id"), string(args[1], 80, "tab id"), edge === "after"); return;
+          }
+          case "workspace.openSettings": {
+            const tab = args[0] === undefined || args[0] === null ? "general" : args[0];
+            if (!(SETTINGS_TABS as readonly unknown[]).includes(tab)) throw new LocalizedError(t("설정 탭은 {list} 중 하나여야 합니다", { list: SETTINGS_TABS.join(", ") }));
+            ws.openSettings(tab as (typeof SETTINGS_TABS)[number]); return;
+          }
+          case "workspace.closeSettings": ws.closeSettings(); return;
+          case "workspace.open": {
+            if (!(WORKSPACE_DIALOGS as readonly unknown[]).includes(args[0])) throw new LocalizedError(t("열 수 있는 화면은 {list}입니다", { list: WORKSPACE_DIALOGS.join(", ") }));
+            ws.open(args[0] as (typeof WORKSPACE_DIALOGS)[number]); return;
+          }
+          default: {
+            const name = localId(args[0]);
+            const arg = args[1] === undefined || args[1] === null ? "" : typeof args[1] === "string" && args[1].length <= 4000 ? args[1] : (() => { throw new LocalizedError(t("잘못된 {label}", { label: "arg" })); })();
+            return ws.runCommand(name, arg).then(() => {});
+          }
         }
       }
       case "tools.registerRenderer": {

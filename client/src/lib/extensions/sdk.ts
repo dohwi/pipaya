@@ -3,7 +3,7 @@ import type { NotificationSpec, NotificationResult, NotificationRule, Notificati
 export type { NotificationSpec, NotificationResult, NotificationRule, NotificationStatus, NotificationKind } from "../notification-contract";
 export type { NavbarItemSpec } from "./navbar";
 import type { UIPanelSpec, UINode, UIEvent, UITone } from "./ui";
-export type { UIPanelSpec, UINode, UIEvent, UIFieldValue, UITone, IconSpec, IconPath, UIIconNode } from "./ui";
+export type { UIPanelSpec, UIPanelPlacement, UIPanelSize, UIPanelPosition, UIFloatAnchor, UINode, UIEvent, UIFieldValue, UITone, IconSpec, IconPath, UIIconNode } from "./ui";
 
 /** Public SDK v1 types for extension authors. Runtime APIs are provided as the
  * `sdk` argument inside a package's async code body, not imported from the app. */
@@ -52,8 +52,16 @@ export interface ExtensionSDK {
     registerPanel(spec: UIPanelSpec, handler: (event: UIEvent) => void | Promise<void>): Promise<void>;
     /** `options.tone: "danger"` shows the panel's launcher badge in red until the next update clears it. */
     update(id: string, view: UINode, options?: { tone?: UITone }): Promise<void>;
+    /** `panel`: open the extension-screen modal on it. `side`/`floating`: show it. `composer`/`sidebar`: unfold it. */
     open(id: string): Promise<void>;
+    /** The reverse of `open` (hides a dock or window, folds a section, closes the modal). */
     close(id: string): Promise<void>;
+    /**
+     * Move a panel to another placement and/or change its size and position (see `UIPanelSpec`): e.g.
+     * `place("notes", { placement: "floating", size: { width: 420, height: 300 }, position: "bottom-right" })`.
+     * A new placement drops the old size/position unless given; a dock or window shows, a section starts folded.
+     */
+    place(id: string, layout: { placement?: import("./ui").UIPanelPlacement; size?: import("./ui").UIPanelSize; position?: import("./ui").UIPanelPosition }): Promise<void>;
     remove(id: string): Promise<void>;
   };
   /** Needs `ui-components`: the value (JSON, ≤64KB) is read by this package's components as `ext.data` (from "pipaya"). */
@@ -97,13 +105,32 @@ export interface ExtensionSDK {
   /** Needs `session`: act on the open conversation. At most 5 calls per 10 seconds. */
   readonly session: { send(text: string, mode?: "prompt" | "steer" | "follow_up"): Promise<void>; abort(): Promise<void> };
   /**
-   * Needs `panes`: orchestrate the panes (conversations and terminals) of the open group. A pane is addressed by its
-   * session/terminal id; outside a group the only pane is the open one. Changes are limited to 30 per 10 seconds.
+   * Needs `panes`: orchestrate the panes (conversations and terminals) and the groups (split layouts) of the open server.
+   * A pane is addressed by its session/terminal id. Changes are limited to 30 per 10 seconds.
    * Panes opened by `split` do not take focus unless `focus: true`. `close` ends a terminal's shell for good.
    */
   readonly panes: {
-    /** Panes of the open group (or the single open one), each with its state and position (`box`, fractions of the group). */
-    list(): Promise<import("./panes").PaneInfo[]>;
+    /**
+     * Panes of the open group (or the single open one), each with its state and position (`box`, fractions of the group).
+     * `{ all: true }`: every open conversation and terminal of the server.
+     */
+    list(options?: { all?: boolean }): Promise<import("./panes").PaneInfo[]>;
+    /** Every group of the server, with its layout and whether it is the one shown. */
+    groups(): Promise<import("./panes").PaneGroupSummary[]>;
+    /** Show a group (focus goes to the pane last used in it). */
+    openGroup(groupId: string): Promise<void>;
+    /**
+     * A new group from a layout: `{ type: "pane", id }` | `{ type: "split", dir: "row" | "col", ratio?: 0.1–0.9, a, b }`,
+     * 2–8 panes of open conversations/terminals. A pane already in another group moves here. Resolves to the group id.
+     */
+    createGroup(layout: import("./panes").LayoutSpec, name?: string): Promise<{ id: string }>;
+    /** Replace a group's whole layout (same rules as `createGroup`): reorder, re-split, resize, add or drop panes at once. */
+    setLayout(groupId: string, layout: import("./panes").LayoutSpec): Promise<void>;
+    renameGroup(groupId: string, name: string): Promise<void>;
+    /** Dissolve a group; its panes stay open on their own. */
+    deleteGroup(groupId: string): Promise<void>;
+    /** Full mode on/off: one pane of the group at a time, with a strip to switch. */
+    full(groupId: string, on: boolean): Promise<void>;
     /** The open group's name and layout tree, or `null` outside a group. */
     group(): Promise<import("./panes").PaneGroupInfo | null>;
     /** The last `limit` (default 20, max 100) messages of a conversation as text. */
@@ -133,6 +160,27 @@ export interface ExtensionSDK {
     configure(id: string, settings: import("./panes").PaneSettings): Promise<void>;
     /** Compress the conversation's context now (not while it is running). */
     compact(id: string, instructions?: string): Promise<void>;
+  };
+  /**
+   * Needs `workspace`: the screen around the panes on this device. Changes share the pane limit (30 per 10 seconds).
+   * Built-in commands can be run but never replaced: an extension cannot register `/new`, `/compact`, …
+   */
+  readonly workspace: {
+    state(): Promise<import("./workspace").WorkspaceState>;
+    /** `open`: the drawer on a narrow screen; `collapsed`: the docked sidebar shrinks to a rail; `width` in px (clamped). */
+    sidebar(change: import("./workspace").SidebarChange): Promise<void>;
+    /** Show a tab of `state().tabs` (a group, conversation or terminal id). */
+    openTab(id: string): Promise<void>;
+    /** Reorder the current folder's tabs: put `id` before (default) or after `target`. */
+    moveTab(id: string, target: string, edge?: "before" | "after"): Promise<void>;
+    openSettings(tab?: import("./workspace").SettingsTab): Promise<void>;
+    closeSettings(): Promise<void>;
+    /** Open a built-in screen: `skills`, `commands` (extension commands), `queue`, `folder` (the folder picker). */
+    open(dialog: import("./workspace").WorkspaceDialog): Promise<void>;
+    /** Run a built-in slash command on the focused pane, as if typed: `runCommand("compact", "keep the plan")`. */
+    runCommand(name: string, arg?: string): Promise<void>;
+    /** Names `runCommand` accepts. */
+    commands(): Promise<string[]>;
   };
   /**
    * Needs `messages`: draw the entries a server extension stored on the open conversation (`ctx.appendEntry`) as cards

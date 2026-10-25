@@ -1182,6 +1182,9 @@ describe("panes", () => {
 			resize: rec("resize"), leave: rec("leave"), close: rec("close"), zoom: rec("zoom"),
 			models: () => [{ provider: "p", id: "m", name: "M", reasoning: true, thinkingLevels: null, vision: false, contextWindow: 1 }],
 			configure: rec("configure"), compact: rec("compact"),
+			groups: () => [{ id: "g1", name: "G", layout: { type: "pane", sessionId: "s1" }, paneIds: ["s1"], open: true, full: false }],
+			openGroup: rec("openGroup"), createGroup: rec("createGroup", "g2"), setLayout: rec("setLayout"), renameGroup: rec("renameGroup"),
+			deleteGroup: rec("deleteGroup"), setFull: rec("setFull"),
 		};
 		return { panes: panes as any, log };
 	}
@@ -1245,10 +1248,80 @@ describe("panes", () => {
 		host.stop();
 	});
 
+	test("groups: layouts are validated into fresh trees before they reach the adapter", async () => {
+		const { host, id, log } = await setup();
+		expect(await call(host, id, "panes.groups")).toHaveLength(1);
+		const layout = { type: "split", dir: "row", a: { type: "pane", id: "s1" }, b: { type: "split", dir: "col", ratio: 0.3, a: { type: "pane", sessionId: "s2" }, b: { type: "pane", id: "term_1" } } };
+		expect(await call(host, id, "panes.createGroup", [layout, "Trio"])).toEqual({ id: "g2" });
+		await call(host, id, "panes.setLayout", ["g1", layout]);
+		await call(host, id, "panes.openGroup", ["g1"]);
+		await call(host, id, "panes.renameGroup", ["g1", "New"]);
+		await call(host, id, "panes.full", ["g1", true]);
+		await call(host, id, "panes.deleteGroup", ["g1"]);
+		const tree = { type: "split", dir: "row", ratio: 0.5, a: { type: "pane", sessionId: "s1" }, b: { type: "split", dir: "col", ratio: 0.3, a: { type: "pane", sessionId: "s2" }, b: { type: "pane", sessionId: "term_1" } } };
+		expect(log).toEqual([["createGroup", tree, "Trio"], ["setLayout", "g1", tree], ["openGroup", "g1"], ["renameGroup", "g1", "New"], ["setFull", "g1", true], ["deleteGroup", "g1"]]);
+		const pane = (id: string) => ({ type: "pane", id });
+		for (const bad of [
+			pane("s1"),
+			{ type: "split", dir: "row", a: pane("s1"), b: pane("s1") },
+			{ type: "split", dir: "diag", a: pane("s1"), b: pane("s2") },
+			{ type: "split", dir: "row", ratio: 0.95, a: pane("s1"), b: pane("s2") },
+			{ type: "split", dir: "row", a: pane("s1"), b: { type: "frame" } },
+		]) await expect(Promise.resolve().then(() => call(host, id, "panes.createGroup", [bad]))).rejects.toThrow();
+		await expect(Promise.resolve().then(() => call(host, id, "panes.full", ["g1", "yes"]))).rejects.toThrow();
+		expect(log).toHaveLength(6);
+		host.stop();
+	});
+
 	test("a client without pane support says so", async () => {
 		const { host } = await reload();
 		const { id } = await activate(host, code("example.nopanes", ["panes"]));
 		expect(() => call(host, id, "panes.list")).toThrow();
+		host.stop();
+	});
+});
+
+describe("workspace", () => {
+	async function setup(permissions = ["workspace"]) {
+		const log: unknown[][] = [];
+		const ws = {
+			state: () => ({ narrow: false, sidebar: { open: false, collapsed: false, width: 288, minWidth: 220, maxWidth: 560 }, folder: "/w", tabs: [], settingsOpen: false }),
+			sidebar: (c: unknown) => { log.push(["sidebar", c]); },
+			openTab: async (x: string) => { log.push(["openTab", x]); },
+			moveTab: (a: string, b: string, after: boolean) => { log.push(["moveTab", a, b, after]); },
+			openSettings: (x: string) => { log.push(["openSettings", x]); },
+			closeSettings: () => { log.push(["closeSettings"]); },
+			open: (x: string) => { log.push(["open", x]); },
+			runCommand: async (n: string, a: string) => { log.push(["run", n, a]); },
+			commands: () => ["new", "compact"],
+		};
+		const r = await reload();
+		(r.adapter as any).workspace = ws;
+		const { id } = await activate(r.host, code("example.layout", permissions));
+		return { ...r, id, log };
+	}
+	test("needs the workspace permission", async () => {
+		const { host, id } = await setup(["commands"]);
+		for (const m of ["workspace.state", "workspace.sidebar", "workspace.runCommand"]) expect(() => call(host, id, m, [{}])).toThrow(/권한 없음|permission/i);
+		host.stop();
+	});
+	test("validated calls reach the adapter; bad ones never do", async () => {
+		const { host, id, log } = await setup();
+		expect((await call(host, id, "workspace.state")).folder).toBe("/w");
+		expect(await call(host, id, "workspace.commands")).toEqual(["new", "compact"]);
+		await call(host, id, "workspace.sidebar", [{ collapsed: true, width: 300 }]);
+		await call(host, id, "workspace.openTab", ["g1"]);
+		await call(host, id, "workspace.moveTab", ["a", "b", "after"]);
+		await call(host, id, "workspace.openSettings", ["extensions"]);
+		await call(host, id, "workspace.closeSettings", []);
+		await call(host, id, "workspace.open", ["skills"]);
+		await call(host, id, "workspace.runCommand", ["compact", "keep it"]);
+		expect(log).toEqual([["sidebar", { collapsed: true, width: 300 }], ["openTab", "g1"], ["moveTab", "a", "b", true], ["openSettings", "extensions"], ["closeSettings"], ["open", "skills"], ["run", "compact", "keep it"]]);
+		for (const [m, a] of [
+			["workspace.sidebar", [{ hidden: true }]], ["workspace.sidebar", [{ open: "yes" }]], ["workspace.moveTab", ["a", "b", "inside"]],
+			["workspace.openSettings", ["secrets"]], ["workspace.open", ["terminal"]], ["workspace.runCommand", ["Bad Name"]],
+		] as [string, unknown[]][]) await expect(Promise.resolve().then(() => call(host, id, m, a))).rejects.toThrow();
+		expect(log).toHaveLength(7);
 		host.stop();
 	});
 });

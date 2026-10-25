@@ -32,6 +32,9 @@ export interface PaneGroupInfo {
   full: boolean;
   zoomed: string | null;
 }
+export type { LayoutSpec } from "./layout-spec";
+/** Any group of the open server, open or not. `paneIds` lists sessions and terminals in layout order. */
+export interface PaneGroupSummary { id: string; name: string; layout: Layout; paneIds: string[]; open: boolean; full: boolean }
 export interface PaneMessage { role: "user" | "assistant" | "notice"; text: string; at: number }
 /** Per-conversation settings; every field is optional and only the given ones change. `model` needs `provider`. */
 export interface PaneSettings { title?: string; provider?: string; model?: string; thinkingLevel?: string }
@@ -40,7 +43,19 @@ export type PaneSendMode = "prompt" | "steer" | "follow_up";
 
 /** The surface the extension host needs from the client; implemented over the app store by `paneAdapter`. */
 export interface PaneAdapter {
-  list(): PaneInfo[];
+  /** Panes of the open group (or the single open pane); `all`: every session and terminal of the server. */
+  list(all?: boolean): PaneInfo[];
+  groups(): PaneGroupSummary[];
+  /** Show a group (its last focused pane). */
+  openGroup(id: string): Promise<void>;
+  /** A new group from a layout of known panes (at least two). Resolves to its id. */
+  createGroup(layout: Layout, name?: string): Promise<string>;
+  setLayout(groupId: string, layout: Layout): Promise<void>;
+  renameGroup(groupId: string, name: string): Promise<void>;
+  /** Dissolve a group; its panes stay open on their own. */
+  deleteGroup(groupId: string): Promise<void>;
+  /** Full mode: one pane at a time with a strip to switch. */
+  setFull(groupId: string, on: boolean): Promise<void>;
   group(): PaneGroupInfo | null;
   focus(id: string): Promise<void>;
   send(id: string, text: string, mode: PaneSendMode): Promise<void>;
@@ -65,6 +80,7 @@ export interface PaneAdapter {
 }
 
 const fail = (m: string): never => { throw new LocalizedError(m); };
+
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export function paneAdapter(app: typeof AppStore): PaneAdapter {
@@ -87,8 +103,28 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
     await app.ensureChat(id);
     if (!(await what())) fail(t("보내지 못했습니다"));
   };
+  const groupById = (id: string) => app.groups.find(g => g.id === id) ?? fail(t("그룹을 찾을 수 없습니다: {id}", { id }));
+  const knownLayout = (layout: Layout) => { for (const id of panesOf(layout)) known(id); return layout; };
   return {
-    list() {
+    groups() {
+      const open = app.activeGroup?.id ?? null;
+      return app.groups.map(g => ({ id: g.id, name: g.name, layout: JSON.parse(JSON.stringify(g.layout)), paneIds: panesOf(g.layout).filter(id => app.shows(id)), open: g.id === open, full: app.isFull(g.id) }));
+    },
+    async openGroup(id) { groupById(id); app.openTab(id); },
+    async createGroup(layout, name) {
+      const g = await app.createGroup(knownLayout(layout), name);
+      return g?.id ?? fail(t("그룹을 만들지 못했습니다"));
+    },
+    async setLayout(groupId, layout) {
+      groupById(groupId);
+      await app.saveLayout(groupId, knownLayout(layout));
+      await app.refreshGroups();
+    },
+    async renameGroup(groupId, name) { groupById(groupId); await app.renameGroup(groupId, name); },
+    async deleteGroup(groupId) { groupById(groupId); await app.deleteGroup(groupId); },
+    async setFull(groupId, on) { groupById(groupId); if (app.isFull(groupId) !== on) app.toggleFull(groupId); },
+    list(all = false) {
+      if (all) return [...app.sessions.map(s => s.id), ...app.terminals.map(x => x.id)].filter(id => app.shows(id)).map(info);
       const g = app.activeGroup;
       const ids = g ? panesOf(g.layout).filter(id => app.shows(id)) : app.activeId && app.shows(app.activeId) ? [app.activeId] : [];
       return ids.map(info);

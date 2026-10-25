@@ -33,6 +33,7 @@ const sdk = Object.freeze({
     update: (id, view, options) => options === undefined ? rpc('ui.update', id, view) : rpc('ui.update', id, view, options),
     open: id => rpc('ui.open', id),
     close: id => rpc('ui.close', id),
+    place: (id, layout) => rpc('ui.place', id, layout),
     remove: async id => { await rpc('ui.remove', id); handlers.delete(panelTokens.get(id)); panelTokens.delete(id); }
   }),
   navbar: Object.freeze({ set: (id, spec) => rpc('navbar.set', id, spec), remove: id => rpc('navbar.remove', id) }),
@@ -48,7 +49,13 @@ const sdk = Object.freeze({
   dialog: Object.freeze({ confirm: spec => rpc('dialog.confirm', spec), select: spec => rpc('dialog.select', spec), input: spec => rpc('dialog.input', spec) }),
   session: Object.freeze({ send: (text, mode) => rpc('session.send', text, mode === undefined ? 'prompt' : mode), abort: () => rpc('session.abort') }),
   panes: Object.freeze({
-    list: () => rpc('panes.list'), group: () => rpc('panes.group'),
+    list: options => rpc('panes.list', options === undefined ? null : options), group: () => rpc('panes.group'),
+    groups: () => rpc('panes.groups'), openGroup: id => rpc('panes.openGroup', id),
+    createGroup: (layout, name) => rpc('panes.createGroup', layout, name === undefined ? null : name),
+    setLayout: (groupId, layout) => rpc('panes.setLayout', groupId, layout),
+    renameGroup: (groupId, name) => rpc('panes.renameGroup', groupId, name),
+    deleteGroup: groupId => rpc('panes.deleteGroup', groupId),
+    full: (groupId, on) => rpc('panes.full', groupId, on),
     read: (id, options) => rpc('panes.read', id, options === undefined ? null : options),
     focus: id => rpc('panes.focus', id),
     send: (id, text, mode) => rpc('panes.send', id, text, mode === undefined ? 'prompt' : mode),
@@ -61,6 +68,17 @@ const sdk = Object.freeze({
     zoom: id => rpc('panes.zoom', id === undefined ? null : id),
     models: () => rpc('panes.models'), configure: (id, settings) => rpc('panes.configure', id, settings),
     compact: (id, instructions) => rpc('panes.compact', id, instructions === undefined ? null : instructions)
+  }),
+  workspace: Object.freeze({
+    state: () => rpc('workspace.state'),
+    sidebar: change => rpc('workspace.sidebar', change),
+    openTab: id => rpc('workspace.openTab', id),
+    moveTab: (id, target, edge) => rpc('workspace.moveTab', id, target, edge === undefined ? 'before' : edge),
+    openSettings: tab => rpc('workspace.openSettings', tab === undefined ? 'general' : tab),
+    closeSettings: () => rpc('workspace.closeSettings'),
+    open: dialog => rpc('workspace.open', dialog),
+    runCommand: (name, arg) => rpc('workspace.runCommand', name, arg === undefined ? '' : arg),
+    commands: () => rpc('workspace.commands')
   }),
   tools: Object.freeze({ registerRenderer: (toolName, fn) => register('tools.registerRenderer', toolName, fn), removeRenderer: toolName => rpc('tools.removeRenderer', toolName) }),
   messages: Object.freeze({ registerRenderer: (entryType, fn) => register('messages.registerRenderer', entryType, fn), removeRenderer: entryType => rpc('messages.removeRenderer', entryType), setHeader: pattern => rpc('messages.setHeader', pattern), clearHeader: () => rpc('messages.clearHeader') }),
