@@ -106,7 +106,6 @@
 			{#if error}<p class="hint danger" id={errorId(field.key)}>{error}</p>{/if}
 		</div>
 	{/each}
-	<p class="hint">{t("저장 위치는 확장의 settingsScope를 따릅니다. 활성 확장은 다시 불러와 적용하고, 비활성 확장은 다음 활성화 때 적용합니다.")}</p>
 	<div class="row">
 		<Button size="sm" type="submit" disabled={disabled || !resolved.ok}>{saveLabel}</Button>
 		{#if !resolved.ok}<span class="hint" role="status">{t("입력값을 확인하세요.")}</span>{/if}

@@ -784,7 +784,6 @@ export const en: Record<string, string> = {
 	"필수": "required",
 	"선택 안 함": "None",
 	"선택하세요": "Select…",
-	"저장 위치는 확장의 settingsScope를 따릅니다. 활성 확장은 다시 불러와 적용하고, 비활성 확장은 다음 활성화 때 적용합니다.": "Where settings are stored follows the extension's settingsScope. A running extension is reloaded to apply them; an off extension applies them when it's next turned on.",
 	"입력값을 확인하세요.": "Check the values.",
 	"고급: JSON 직접 편집": "Advanced: edit JSON directly",
 	"같은 스키마로 검증하며, 선언되지 않은 키는 저장되지 않습니다 (최대 16KB).": "Validated against the same schema; undeclared keys aren't saved (up to 16 KB).",
