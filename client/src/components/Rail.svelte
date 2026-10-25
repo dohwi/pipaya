@@ -70,7 +70,7 @@
 		aria-current={cur ? "true" : undefined}
 	>
 		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
-		{#if n > 0}<Pin count={n} tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} />{/if}
+		{#if n > 0}<Pin count={n} tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} />{/if}
 	</button>
 {/snippet}
 
