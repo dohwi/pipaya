@@ -327,10 +327,10 @@
 {/snippet}
 
 {#snippet needLine(text: string, disabled: boolean, onclick: () => void)}
-	<div class="updline warnline">
+	<div class="needline">
 		<Icon name="alert" />
-		<span class="to"><b>{text}</b></span>
-		<Button variant="primary" size="sm" class="upd-btn" {disabled} {onclick}>{t("설치")}</Button>
+		<span class="need-text">{text}</span>
+		<Button size="sm" {disabled} {onclick}>{t("설치")}</Button>
 	</div>
 {/snippet}
 
@@ -507,7 +507,11 @@
 	.newver b { color: var(--ok); font-weight: 600; }
 	.newver :global(svg) { width: 11px; height: 11px; stroke-width: 2.4; color: var(--ok); }
 	.extensions :global(.btn.updbtn) { flex: none; }
-	.updline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+	/* a missing half: the same amber bar as the notices above, with the action on the right */
+	.needline { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); line-height: 1.5; }
+	.needline :global(svg) { flex: none; width: 16px; height: 16px; stroke-width: 1.8; }
+	.need-text { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+	.needline :global(.btn) { flex: none; }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
