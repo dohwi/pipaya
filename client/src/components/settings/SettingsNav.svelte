@@ -181,7 +181,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		margin: -6px 0 4px 21px;
+		margin: 0 0 4px 21px;
 		padding-left: 18px;
 	}
 	.nav button.sub {
@@ -202,7 +202,7 @@
 		border-left: 1.5px solid var(--border-strong);
 	}
 	.nav button.sub:first-child::after {
-		top: -8px;
+		top: -10px;
 	}
 	.nav button.sub.end::after {
 		bottom: calc(50% + 9px);
