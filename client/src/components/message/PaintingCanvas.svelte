@@ -3,20 +3,25 @@
 	import { t } from "../../lib/i18n";
 </script>
 
-<!-- Skeleton shown while an image model works: a quiet frame with a breathing glow and a slow sheen; the whole card fades in and out. -->
+<!-- Skeleton shown while an image model works: a quiet frame whose border carries a light travelling around it. -->
 <div class="painting" role="status" aria-label={t("이미지를 만드는 중…")}>
 	<div class="frame" aria-hidden="true">
-		<span class="grid"></span>
-		<span class="glow"></span>
-		<span class="sheen"></span>
-		<span class="mark"><PipayaMark size={56} /></span>
+		<span class="body">
+			<span class="grid"></span>
+			<span class="glow"></span>
+			<span class="mark"><PipayaMark size={56} /></span>
+		</span>
+		<span class="ring"></span>
 	</div>
 </div>
 
 <style>
+	@property --a {
+		syntax: "<angle>";
+		initial-value: 0deg;
+		inherits: false;
+	}
 	.painting {
-		display: flex;
-		flex-direction: column;
 		width: min(100%, 360px);
 		animation: appear var(--motion-normal) var(--ease) both;
 	}
@@ -24,14 +29,18 @@
 		position: relative;
 		aspect-ratio: 1;
 		overflow: hidden;
-		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		isolation: isolate;
-		will-change: opacity;
-		animation: fade 4.8s ease-in-out infinite;
+	}
+	/* everything inside the border breathes together; the border itself stays crisp */
+	.body {
+		position: absolute;
+		inset: 0;
 		display: grid;
 		place-items: center;
+		will-change: opacity;
+		animation: fade 4.8s ease-in-out infinite;
 	}
 	/* faint blueprint grid, fading out toward the edges */
 	.grid {
@@ -42,53 +51,37 @@
 		opacity: 0.45;
 		mask-image: radial-gradient(circle at center, #000 0%, transparent 75%);
 	}
-	/* one slow breathing highlight in the accent tone */
 	.glow {
 		position: absolute;
 		inset: 10%;
 		border-radius: 50%;
 		background: radial-gradient(circle, color-mix(in srgb, var(--text) 12%, transparent), transparent 70%);
-		will-change: transform, opacity;
-		animation: breathe 4.8s ease-in-out infinite;
-	}
-	.sheen {
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: 45%;
-		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
-		transform: translateX(-120%);
-		will-change: transform;
-		animation: sheen 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 	}
 	.mark {
 		position: relative;
 		display: grid;
 		color: var(--text-dim);
-		opacity: 0.7;
-		will-change: transform, opacity;
-		animation: mark 4.8s ease-in-out infinite;
+		opacity: 0.8;
+	}
+	/* 1px border ring: a faint static line plus a comet of light travelling around it */
+	.ring {
+		position: absolute;
+		inset: 0;
+		padding: 1px;
+		border-radius: inherit;
+		background: conic-gradient(from var(--a), transparent 0deg, transparent 230deg, color-mix(in srgb, var(--text) 18%, transparent) 290deg, color-mix(in srgb, var(--text) 70%, transparent) 355deg, transparent 360deg), var(--border);
+		mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+		mask-composite: exclude;
+		animation: orbit 3.2s linear infinite;
+	}
+	@keyframes orbit {
+		to {
+			--a: 360deg;
+		}
 	}
 	@keyframes fade {
 		50% {
 			opacity: 0.45;
-		}
-	}
-	@keyframes breathe {
-		50% {
-			transform: scale(1.18);
-			opacity: 0.55;
-		}
-	}
-	@keyframes mark {
-		50% {
-			transform: scale(1.06);
-			opacity: 1;
-		}
-	}
-	@keyframes sheen {
-		60%,
-		100% {
-			transform: translateX(300%);
 		}
 	}
 	@keyframes appear {
@@ -99,14 +92,9 @@
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.painting,
-		.frame,
-		.glow,
-		.mark,
-		.sheen {
+		.body,
+		.ring {
 			animation: none;
-		}
-		.sheen {
-			display: none;
 		}
 	}
 </style>
