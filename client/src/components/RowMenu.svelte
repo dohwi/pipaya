@@ -16,12 +16,14 @@
 
 	/**
 	 * The small "more" menu next to a sidebar row. Hover opens it with a mouse (and a short grace period lets the pointer
-	 * travel into it); touch and keyboard open it with a click. Lives on <body> because the list scrolls and clips.
+	 * travel into it); touch and keyboard open it with a click. `openAt` opens it as a context menu (right click / long
+	 * press) where the pointer is. Lives on <body> because the list scrolls and clips.
 	 * `open`: the id the menu is open for, so the row can highlight its button.
 	 */
 	let { open = $bindable(null) }: { open?: string | null } = $props();
 
-	let shown = $state<{ id: string; items: RowMenuItem[]; top: number; left: number } | null>(null);
+	/** `sticky`: opened as a context menu, so the pointer leaving it does not close it (a click elsewhere or Esc does). */
+	let shown = $state<{ id: string; items: RowMenuItem[]; top: number; left: number; sticky: boolean } | null>(null);
 	let el = $state<HTMLElement | null>(null);
 	let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -29,15 +31,25 @@
 	const GAP = 6;
 	const ROW = 36;
 
-	function show(btn: HTMLElement, id: string, items: RowMenuItem[]) {
+	/** Beside the rectangle `r` (a button, or the point a right click / long press landed on). */
+	function place(r: { left: number; right: number; top: number }, id: string, items: RowMenuItem[], sticky = false) {
 		clearTimeout(leaveTimer);
-		const r = btn.getBoundingClientRect();
 		const h = items.length * ROW + 10;
-		// to the right of the button; flips to its left when the screen edge is too close
+		// to the right; flips to the left when the screen edge is too close
 		const left = r.right + GAP + WIDTH <= window.innerWidth - 8 ? r.right + GAP : Math.max(8, r.left - GAP - WIDTH);
 		const top = Math.max(8, Math.min(r.top - 4, window.innerHeight - h - 8));
-		shown = { id, items, top, left };
+		shown = { id, items, top, left, sticky };
 		open = id;
+	}
+	const show = (btn: HTMLElement, id: string, items: RowMenuItem[]) => place(btn.getBoundingClientRect(), id, items);
+	/**
+	 * A context menu: right click or long press at `pt`. `key`: opened from the keyboard (the menu key / Shift+F10), so
+	 * focus moves into it.
+	 */
+	export function openAt(pt: { x: number; y: number; key?: boolean }, id: string, items: RowMenuItem[]) {
+		if (!items.length) return;
+		place({ left: pt.x - GAP, right: pt.x - GAP, top: pt.y + 4 }, id, items, true);
+		if (pt.key) queueMicrotask(() => el?.querySelector<HTMLElement>("button")?.focus());
 	}
 	export function close() {
 		clearTimeout(leaveTimer);
@@ -46,10 +58,10 @@
 	}
 	/** Mouse: hovering the button is enough. Touch has no hover, so it falls through to the click. */
 	export function hover(e: PointerEvent, id: string, items: RowMenuItem[]) {
-		if (e.pointerType === "mouse") show(e.currentTarget as HTMLElement, id, items);
+		if (e.pointerType === "mouse" && !(shown?.sticky && shown.id === id)) show(e.currentTarget as HTMLElement, id, items);
 	}
 	export function leave(e: PointerEvent) {
-		if (e.pointerType !== "mouse") return;
+		if (e.pointerType !== "mouse" || shown?.sticky) return;
 		clearTimeout(leaveTimer);
 		leaveTimer = setTimeout(close, 160);
 	}

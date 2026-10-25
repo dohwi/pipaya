@@ -16,6 +16,8 @@
 	import Palette from "./components/Palette.svelte";
 	import NoServer from "./components/NoServer.svelte";
 	import Toasts from "./components/Toasts.svelte";
+	import RowMenu from "./components/RowMenu.svelte";
+	import { registerContextMenu } from "./lib/context-menu";
 	import Lazy from "./components/Lazy.svelte";
 	import UpdateBanner from "./components/UpdateBanner.svelte";
 	import VersionNotice from "./components/VersionNotice.svelte";
@@ -86,6 +88,12 @@
 	});
 
 	onMount(() => guardWindowClose(() => app.requestClose()));
+	/** The shared context menu of the rail, pane title bars and the phone's pane strip (lib/context-menu). */
+	let contextMenu: ReturnType<typeof RowMenu> | undefined = $state();
+	$effect(() => {
+		registerContextMenu(contextMenu);
+		return () => registerContextMenu(undefined);
+	});
 	// Taskbar / dock: count of sessions waiting for the user (asking, failed, finished unread).
 	const setAttention = createAttention();
 	$effect(() => {
@@ -401,6 +409,7 @@
 
 {#if app.linking}<Lazy load={load.linkCard} />{/if}
 <Palette />
+<RowMenu bind:this={contextMenu} />
 <Toasts />
 <UpdateBanner />
 <VersionNotice />

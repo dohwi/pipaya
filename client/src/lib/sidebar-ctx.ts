@@ -1,6 +1,7 @@
 import { getContext, setContext } from "svelte";
 import type { DirSrc } from "./block-drag";
 import type { DropOpts } from "./dnd.svelte";
+import type { Point } from "./press-menu";
 import type { DragMarks } from "./drag-marks.svelte";
 import type { InlineRename } from "./inline-rename.svelte";
 import type { DirBlock, Tab } from "./nav";
@@ -45,7 +46,10 @@ export interface SidebarCtx {
 	stateOf(n: SidebarNode, x: Session): Activity;
 	/** Row menu ("more" / "+") */
 	hoverMenu(e: PointerEvent, target: MenuTarget): void;
-	clickMenu(e: MouseEvent, target: MenuTarget): void;
+	clickMenu(e: MouseEvent, target: MenuTarget, member?: boolean): void;
+	/** Context menu (right click / long press) of a row, and of a folder (`path`) or server (`path` null) header; each returns how to close it */
+	rowMenuAt(pt: Point, target: MenuTarget, member: boolean): () => void;
+	headMenuAt(pt: Point, n: SidebarNode, path: string | null, key: string): () => void;
 	leaveMenu(e: PointerEvent): void;
 	hoverNew(e: PointerEvent, n: SidebarNode, path: string, key: string): void;
 	clickNew(e: MouseEvent, n: SidebarNode, path: string, key: string): void;

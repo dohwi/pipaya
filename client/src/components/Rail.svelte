@@ -10,6 +10,10 @@
 	import { sidebarDirs, tabPanes, type DirBlock } from "../lib/nav";
 	import type { Server } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
+	import { asWorkdir, newMenuEntries } from "../lib/sidebar-model";
+	import { platformName } from "../lib/terminal";
+	import { openContextMenu, closeContextMenu } from "../lib/context-menu";
+	import { pressMenu, type Point } from "../lib/press-menu";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	interface Section {
@@ -52,6 +56,17 @@
 		const ids = d.tabs.flatMap((x) => tabPanes(x));
 		return URGENCY.find((a) => ids.some((id) => (sec.state[id] ?? "idle") === a)) ?? "idle";
 	}
+	/** Right click / long press on a folder: start a conversation or a terminal there. */
+	function dirMenu(pt: Point, sec: Section, d: DirBlock) {
+		const root = sec.current ? app.workspace?.root : app.overview[sec.server.id]?.workspace?.root;
+		const workdir = asWorkdir(d.path, root);
+		const os = sec.current ? app.terminalSupport?.platform : undefined;
+		openContextMenu(pt, `rail:${d.path}`, newMenuEntries(platformName(os), {
+			chat: () => app.openIn(sec.server.id, { workdir }),
+			terminal: () => app.openIn(sec.server.id, { workdir, terminal: true }),
+		}));
+		return closeContextMenu;
+	}
 	/** How many of a folder's sessions have something going on (working, asking, done, failed). Idle ones are not counted, so a quiet folder shows no badge. */
 	const dirCount = (sec: Section, d: DirBlock) => d.tabs.reduce((n, x) => n + tabPanes(x).filter((id) => (sec.state[id] ?? "idle") !== "idle").length, 0);
 </script>
@@ -65,6 +80,7 @@
 		class="agent dir"
 		class:active={cur}
 		onclick={() => app.openDir(sec.server.id, d.path)}
+		use:pressMenu={(pt) => dirMenu(pt, sec, d)}
 		title="{name} · {tilde(d.path, home(sec))}{multi ? ` · ${app.serverLabel(sec.server)}` : ''}{st !== 'idle' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 		aria-label="{name}{st !== 'idle' ? `, ${ACTIVITY_LABEL[st]}` : ''}"
 		aria-current={cur ? "true" : undefined}

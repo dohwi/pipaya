@@ -42,6 +42,7 @@
 	{target}
 	{drop}
 	over={sb.marks.over(x.id)}
+	{member}
 	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}

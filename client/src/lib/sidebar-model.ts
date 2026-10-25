@@ -50,7 +50,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -72,13 +72,18 @@ export interface RowActions {
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
 	dissolveGroup(id: string): void;
+	/** Take a pane out of its split tab (only offered for a `member`) */
+	leaveGroup?(id: string): void;
 }
 
 /** The id the menu is open for, so the row's "more" button can stay highlighted. */
 export const targetId = (target: RowTarget) => (target.kind === "group" ? target.g.id : target.x.id);
 
-/** The entries of a row's "more" menu: a split tab can be renamed or dissolved; a conversation or terminal can be grouped, renamed and closed. */
-export function rowMenuEntries(target: RowTarget, act: RowActions): MenuEntry[] {
+/**
+ * The entries of a row's "more" menu (and its context menu): a split tab can be renamed or dissolved; a conversation or
+ * terminal can be grouped, renamed and closed, and a pane of a split tab (`member`) taken out of it.
+ */
+export function rowMenuEntries(target: RowTarget, act: RowActions, member = false): MenuEntry[] {
 	if (target.kind === "group") {
 		const g = target.g;
 		return [
@@ -91,9 +96,11 @@ export function rowMenuEntries(target: RowTarget, act: RowActions): MenuEntry[] 
 		target.kind === "terminal"
 			? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => act.closeTerminal(x.id) }
 			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
+	const leave = act.leaveGroup;
 	return [
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
+		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
 		close,
 	];
 }
@@ -114,5 +121,23 @@ export function newMenuEntries(os: string | undefined, act: NewActions): MenuEnt
 			title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
 			run: act.terminal,
 		},
+	];
+}
+
+/** What a folder or server header's context menu does besides the "+" entries. */
+export interface HeadActions extends NewActions {
+	/** Fold or unfold it; `folded` says which the entry offers */
+	toggle(): void;
+	/** Copy the folder's path (servers have none) */
+	copyPath?(): void;
+}
+
+/** A folder or server header's context menu: what its "+" offers, then copying the path and folding. */
+export function headMenuEntries(os: string | undefined, folded: boolean, act: HeadActions): MenuEntry[] {
+	const copy = act.copyPath;
+	return [
+		...newMenuEntries(os, act),
+		...(copy ? [{ icon: "copy", label: t("경로 복사"), title: "", run: copy } satisfies MenuEntry] : []),
+		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];
 }

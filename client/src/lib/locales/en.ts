@@ -871,6 +871,8 @@ export const en: Record<string, string> = {
 	"복사할 답변이 없습니다": "No reply to copy",
 	"마지막 답변을 복사했습니다": "Copied the last reply",
 	"복사하지 못했습니다": "Couldn't copy",
+	"경로 복사": "Copy path",
+	"경로를 복사했습니다": "Copied the path",
 	"대화 영구 삭제 · 복구 불가": "Delete chat permanently · can't be undone",
 	"정말 삭제할까요? 복구할 수 없습니다": "Delete it? This can't be undone",
 	"삭제: {title}": "Delete: {title}",

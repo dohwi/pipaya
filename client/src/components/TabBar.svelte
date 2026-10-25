@@ -4,7 +4,9 @@
 	import AgentBadge from "./AgentBadge.svelte";
 	import Pin from "./Pin.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
-	import { newMenuEntries } from "../lib/sidebar-model";
+	import { newMenuEntries, rowMenuEntries, type RowTarget } from "../lib/sidebar-model";
+	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { chooseGroup } from "../lib/group-picker";
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
 	import { dragScroll } from "../lib/drag-scroll";
@@ -91,6 +93,36 @@
 			terminal: () => void (app.serverId && app.openIn(app.serverId, { workdir, terminal: true })),
 		});
 
+	/* ---- context menu (right click / long press): the sidebar row's entries, renaming in place ---- */
+	const rename = new InlineRename();
+	const targetOf = (x: Tab): RowTarget =>
+		x.kind === "group" ? { kind: "group", g: { id: x.id, name: x.group.name } } : { kind: x.kind, x: { id: x.id, title: titleOf(x) } };
+	const tabItems = (x: Tab): RowMenuItem[] =>
+		rowMenuEntries(targetOf(x), {
+			renameTab: (id, title) => rename.start(id, title),
+			renameGroup: (g) => rename.start(g.id, g.name),
+			groupWith: chooseGroup,
+			closeSession: (id) => void app.close(id),
+			closeTerminal: (id) => void app.closeTerminal(id),
+			dissolveGroup: (id) => void app.deleteGroup(id),
+		});
+	function tabMenu(pt: Point, x: Tab) {
+		menu?.openAt(pt, x.id, tabItems(x));
+		return () => menuId === x.id && menu?.close();
+	}
+	function commitRename() {
+		const done = rename.commit();
+		if (!done) return;
+		const x = tabs.find((y) => y.id === done.id);
+		if (x?.kind === "group") void app.renameGroup(done.id, done.name);
+		else if (x?.kind === "terminal") void app.renameTerminal(done.id, done.name);
+		else void app.rename(done.id, done.name);
+	}
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+
 	let strip: HTMLElement | undefined = $state();
 	$effect(() => {
 		void activeTab;
@@ -118,13 +150,15 @@
 					class:before={slot?.id === x.id && !slot.after}
 					class:after={slot?.id === x.id && slot.after}
 					class:carried={drag.id === x.id}
+					class:menuopen={menuId === x.id}
 					data-tab={x.id}
 					role="tab"
 					aria-selected={on}
 					title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
-					use:dragSource={{ id: x.id }}
+					use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
 					use:dropTarget={tabTarget(x)}
 					onclick={() => {
+						if (rename.is(x.id)) return;
 						if (x.kind === "group") viewport.backedOut = null;
 						app.openTab(x.id);
 					}}
@@ -137,7 +171,24 @@
 					{:else}
 						<AgentBadge id={x.id} state={st} size={16} />
 					{/if}
-					<span class="t">{titleOf(x)}</span>
+					{#if rename.is(x.id)}
+						<input
+							class="rename"
+							value={rename.draft}
+							maxlength={x.kind === "group" ? 100 : undefined}
+							aria-label={t("이름 바꾸기")}
+							use:focusSelect
+							oninput={(e) => (rename.draft = e.currentTarget.value)}
+							onblur={commitRename}
+							onclick={(e) => e.stopPropagation()}
+							onkeydown={(e) => {
+								if (e.key === "Enter") commitRename();
+								if (e.key === "Escape") rename.cancel();
+							}}
+						/>
+					{:else}
+						<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
+					{/if}
 					{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 					<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
 				</div>
@@ -264,6 +315,21 @@
 	}
 	.tab.on .t {
 		font-weight: 600;
+	}
+	.tab.menuopen {
+		background: var(--bg-hover);
+	}
+	.rename {
+		width: 140px;
+		min-width: 0;
+		height: 22px;
+		padding: 0 6px;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-xs);
+		background: var(--bg);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		outline: 0;
 	}
 	.n {
 		flex: none;

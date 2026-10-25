@@ -6,8 +6,11 @@
  * "drop it on the screen edge to open split-screen". Nothing here is `draggable`, so the system never gets involved.
  *
  *  - mouse / pen: press and move a few pixels
- *  - touch: press and hold (moving early is a scroll, and scrolls normally)
+ *  - touch: press and hold (moving early is a scroll, and scrolls normally). With a `menu`, the hold opens it instead
+ *    and moving on from there lifts the session (the menu closes); letting go keeps the menu.
+ *  - a right click on a source with a `menu` opens it where the pointer is
  */
+import { buzz, contextAt, swallowClick, type MenuOpener } from "./press-menu";
 
 export interface Point {
 	x: number;
@@ -23,6 +26,8 @@ export interface DropOpts {
 export interface SourceOpts {
 	id: string;
 	disabled?: boolean;
+	/** Context menu: right click, long press */
+	menu?: MenuOpener;
 }
 
 const targets = new WeakMap<Element, DropOpts>();
@@ -144,7 +149,7 @@ export const drag = new Drag();
 /** Makes an element pick-up-able: it carries session `id`. */
 export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	let opts = initial;
-	let st: { pid: number; touch: boolean; x: number; y: number; timer: number } | null = null;
+	let st: { pid: number; touch: boolean; x: number; y: number; timer: number; held: boolean; unmenu?: (() => void) | void } | null = null;
 	let active = false;
 
 	function style() {
@@ -159,14 +164,23 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		if (!st || active) return;
 		active = true;
 		clearTimeout(st.timer);
-		navigator.vibrate?.(12);
+		if (!st.held) buzz();
+		st.unmenu?.();
 		drag.begin(opts.id, node, st.x, st.y, st.touch);
+	}
+	/** The hold is up: the menu, if there is one; otherwise the session is picked up. */
+	function hold() {
+		if (!st) return;
+		if (!opts.menu || opts.disabled) return activate();
+		st.held = true;
+		buzz();
+		st.unmenu = opts.menu({ x: st.x, y: st.y });
 	}
 	function down(e: PointerEvent) {
 		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
 		const touch = e.pointerType === "touch";
-		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, timer: 0 };
-		if (touch) st.timer = window.setTimeout(activate, HOLD_MS);
+		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, timer: 0, held: false };
+		if (touch) st.timer = window.setTimeout(hold, HOLD_MS);
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
 		window.addEventListener("pointercancel", cancel);
@@ -184,20 +198,16 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 			return;
 		}
 		if (Math.hypot(e.clientX - from.x, e.clientY - from.y) <= (st.touch ? SLOP_TOUCH : SLOP_MOUSE)) return;
-		if (st.touch) return cleanup(); // moved before the hold was up: the user is scrolling
+		if (st.touch && !st.held) return cleanup(); // moved before the hold was up: the user is scrolling
 		st.x = e.clientX;
 		st.y = e.clientY;
 		activate();
 	}
 	function up(e: PointerEvent) {
 		if (!st || e.pointerId !== st.pid) return;
-		if (active) {
-			drag.end(true);
-			// the click that follows letting go is not a click on the row
-			const stop = (ev: Event) => (ev.stopPropagation(), ev.preventDefault());
-			window.addEventListener("click", stop, { capture: true, once: true });
-			setTimeout(() => window.removeEventListener("click", stop, true), 120);
-		}
+		if (active) drag.end(true);
+		// the click that follows letting go (or the long press that opened the menu) is not a click on the row
+		if (active || st.held) swallowClick();
 		cleanup();
 	}
 	function cancel(e: PointerEvent) {
@@ -205,9 +215,9 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		if (active) drag.end(false);
 		cleanup();
 	}
-	/** Once picked up, the finger moves the session, not the page. */
+	/** Once picked up (or held for the menu, so moving on can still pick it up), the finger moves the session, not the page. */
 	function block(e: TouchEvent) {
-		if (active && e.cancelable) e.preventDefault();
+		if ((active || st?.held) && e.cancelable) e.preventDefault();
 	}
 	/** The long-press that picks a session up must not also open the browser's context menu. */
 	function menu(e: Event) {
@@ -231,9 +241,11 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	}
 	/** Images and links inside would start a native drag of their own. */
 	const native = (e: Event) => e.preventDefault();
+	const ctx = (e: MouseEvent) => !opts.disabled && contextAt(e, node, opts.menu);
 
 	node.addEventListener("pointerdown", down);
 	node.addEventListener("dragstart", native);
+	node.addEventListener("contextmenu", ctx);
 	return {
 		update(next: SourceOpts) {
 			opts = next;
@@ -242,6 +254,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		destroy() {
 			node.removeEventListener("pointerdown", down);
 			node.removeEventListener("dragstart", native);
+			node.removeEventListener("contextmenu", ctx);
 			if (active) drag.end(false);
 			cleanup();
 		},

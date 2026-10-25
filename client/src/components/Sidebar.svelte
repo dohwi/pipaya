@@ -20,13 +20,16 @@
 	import { app } from "../lib/store.svelte";
 	import { extensionUpdates } from "../lib/extension-updates.svelte";
 	import { tilde } from "../lib/format";
+	import { copyText } from "../lib/clipboard";
+	import { chooseGroup } from "../lib/group-picker";
+	import type { Point } from "../lib/press-menu";
 	import { drag } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { connectionState, edgeOf, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
@@ -117,18 +120,6 @@
 		const done = groupRename.commit();
 		if (done) void app.renameGroup(done.id, done.name);
 	}
-	/** Touch has no drag and drop: pick the conversation to pull this one together with. */
-	function chooseGroup(x: { id: string; title: string }) {
-		const own = app.groupOf(x.id);
-		app.palette = {
-			title: t("'{title}'와 묶기", { title: x.title }),
-			empty: msg("묶을 다른 대화가 없습니다"),
-			items: [...app.sessions, ...app.terminals]
-				.filter((s) => s.id !== x.id)
-				.map((s) => ({ id: s.id, title: s.title, sub: app.groupOf(s.id)?.name ?? tilde(s.cwd, app.workspace?.home), current: !!own && app.groupOf(s.id)?.id === own.id })),
-			onpick: (it) => void app.groupWith(x.id, it.id),
-		};
-	}
 	/** What a dragged session hovering over `key` highlights (and clears again when it leaves). */
 	const hover = (key: string) => (pt: unknown) => marks.hover(key, !!pt);
 	const isGroupId = (id: string | null) => !!id && app.groups.some((g) => g.id === id);
@@ -198,14 +189,34 @@
 		closeSession: (id) => void app.close(id),
 		closeTerminal: (id) => void app.closeTerminal(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
+		leaveGroup: (id) => void app.leaveGroup(id),
 	};
-	const menuItems = (target: MenuTarget): RowMenuItem[] => rowMenuEntries(target, rowActions);
+	const menuItems = (target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActions, member);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	/** Id of the session or group whose menu is open (its button stays highlighted). */
 	let menuId = $state<string | null>(null);
 	const hoverMenu = (e: PointerEvent, target: MenuTarget) => rowMenu?.hover(e, targetId(target), menuItems(target));
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
-	const clickMenu = (e: MouseEvent, target: MenuTarget) => rowMenu?.click(e, targetId(target), menuItems(target));
+	const clickMenu = (e: MouseEvent, target: MenuTarget, member = false) => rowMenu?.click(e, targetId(target), menuItems(target, member));
+	/** Right click / long press on a row: the same entries as its "more" button, where the pointer is. */
+	function rowMenuAt(pt: Point, target: MenuTarget, member: boolean) {
+		const id = targetId(target);
+		rowMenu?.openAt(pt, id, menuItems(target, member));
+		return () => menuId === id && rowMenu?.close();
+	}
+	/** Right click / long press on a folder or server header: its "+" entries, copying the path, folding. */
+	function headMenuAt(pt: Point, n: Node, path: string | null, key: string) {
+		const id = newKey(key);
+		const workdir = path === null ? "." : path === n.root ? "." : path;
+		const items = headMenuEntries(platformName(n.platform), isFolded(key), {
+			chat: () => app.openIn(n.server.id, { workdir }),
+			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
+			toggle: () => app.sidebar.toggleFolded(key),
+			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
+		});
+		rowMenu?.openAt(pt, id, items);
+		return () => menuId === id && rowMenu?.close();
+	}
 	// What the rows below share, handed down once instead of through a dozen props each.
 	setSidebarCtx({
 		marks,
@@ -221,6 +232,8 @@
 		stateOf,
 		hoverMenu,
 		clickMenu,
+		rowMenuAt,
+		headMenuAt,
 		leaveMenu,
 		hoverNew,
 		clickNew,
@@ -263,7 +276,7 @@
 			{@const sfold = isFolded(n.server.id)}
 			{@const srvMark = marks.blockMark(bid("server", n.server.id))}
 			<section class="srv band" data-block={bid("server", n.server.id)} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
-				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2 }}>
+				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2, menu: (pt) => headMenuAt(pt, n, null, n.server.id) }}>
 					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 						<span class="sicon {n.state}"><Icon name="server" /></span>

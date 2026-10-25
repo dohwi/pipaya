@@ -14,6 +14,8 @@
 	import SessionToasts from "./SessionToasts.svelte";
 	import { activityOf } from "../lib/activity";
 	import { dragSource } from "../lib/dnd.svelte";
+	import { closeContextMenu, openContextMenu, type MenuItem } from "../lib/context-menu";
+	import type { Point } from "../lib/press-menu";
 	import { marquee } from "../lib/fit-text";
 	import { setPane } from "../lib/pane";
 	import { app } from "../lib/store.svelte";
@@ -50,6 +52,21 @@
 	/** A label an extension put on this session. */
 	const tag = $derived(id ? extensions.labelOf(id) : undefined);
 
+	/** Right click / long press on the title bar: what its buttons do, with renaming and closing. */
+	function paneMenu(pt: Point) {
+		if (!id) return;
+		const pane = id;
+		const items: MenuItem[] = [
+			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
+			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
+			isTerm
+				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(pane) }
+				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(pane) },
+		];
+		openContextMenu(pt, `pane:${pane}`, items);
+		return closeContextMenu;
+	}
+
 	function focus() {
 		if (grouped && id && id !== app.activeId) void app.openSession(id);
 	}
@@ -60,7 +77,7 @@
 	{#if grouped && id}
 		<header
 			class="bar"
-			use:dragSource={{ id }}
+			use:dragSource={{ id, menu: paneMenu }}
 			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 전체 화면 전환")}
 			ondblclick={(e) => {
 				if ((e.target as HTMLElement).closest("button")) return;

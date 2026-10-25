@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../src/lib/sidebar-model";
+import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../src/lib/sidebar-model";
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {
@@ -77,6 +77,16 @@ describe("row menu", () => {
 	test("a terminal closes as a terminal, not as a conversation", () => {
 		expect(run({ kind: "terminal", x: { id: "t1", title: "sh" } })).toEqual({ icons: ["columns", "pencil", "x"], calls: ["groupWith t1", "rename t1 sh", "closeTerminal t1"] });
 	});
+	test("a pane of a split tab can also be taken out of it, before closing", () => {
+		calls.length = 0;
+		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, leaveGroup: (id) => calls.push(`leave ${id}`) }, true);
+		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "unlink", "x"]);
+		entries[2]!.run();
+		expect(calls).toEqual(["leave s1"]);
+	});
+	test("a lone tab has nothing to leave", () => {
+		expect(rowMenuEntries({ kind: "session", x: { id: "s1", title: "" } }, { ...act, leaveGroup: () => {} }).map((e) => e.icon)).not.toContain("unlink");
+	});
 	test("a split tab can be renamed or dissolved", () => {
 		expect(run({ kind: "group", g: { id: "g1", name: "Work" } })).toEqual({ icons: ["pencil", "unlink"], calls: ["renameGroup g1", "dissolve g1"] });
 	});
@@ -100,5 +110,20 @@ describe("the + menu", () => {
 	test("the terminal names the server's OS when it is known", () => {
 		expect(newMenuEntries("Linux", act)[1]!.label).toContain("Linux");
 		expect(newMenuEntries(undefined, act)[1]!.label).not.toContain("(");
+	});
+});
+
+describe("the header context menu", () => {
+	const calls: string[] = [];
+	const act = { chat: () => calls.push("chat"), terminal: () => calls.push("terminal"), toggle: () => calls.push("toggle") };
+	test("a folder: new chat, new terminal, copy path, fold", () => {
+		calls.length = 0;
+		const entries = headMenuEntries(undefined, false, { ...act, copyPath: () => calls.push("copy") });
+		expect(entries.map((e) => e.icon)).toEqual(["chat", "terminal", "copy", "chevron-right"]);
+		entries.forEach((e) => e.run());
+		expect(calls).toEqual(["chat", "terminal", "copy", "toggle"]);
+	});
+	test("a server has no path to copy, and a folded one offers to unfold", () => {
+		expect(headMenuEntries(undefined, true, act).map((e) => e.icon)).toEqual(["chat", "terminal", "chevron-down"]);
 	});
 });
