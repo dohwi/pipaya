@@ -1,15 +1,13 @@
 <script lang="ts">
-	import Icon from "../Icon.svelte";
 	import { t } from "../../lib/i18n";
 </script>
 
-<!-- Skeleton shown while an image model works: a quiet frame with a slow sheen and an indeterminate bar. -->
+<!-- Skeleton shown while an image model works: a quiet frame with a breathing glow, a slow sheen and an indeterminate bar. -->
 <div class="painting" role="status" aria-label={t("이미지를 만드는 중…")}>
 	<div class="frame" aria-hidden="true">
 		<span class="grid"></span>
 		<span class="glow"></span>
 		<span class="sheen"></span>
-		<span class="mark"><Icon name="image" /></span>
 		<span class="bar"></span>
 	</div>
 	<span class="shimmer cap">{t("이미지를 만드는 중…")}</span>
@@ -46,11 +44,11 @@
 	/* one slow breathing highlight in the accent tone */
 	.glow {
 		position: absolute;
-		inset: 20%;
+		inset: 10%;
 		border-radius: 50%;
-		background: radial-gradient(circle, color-mix(in srgb, var(--text) 10%, transparent), transparent 70%);
+		background: radial-gradient(circle, color-mix(in srgb, var(--text) 12%, transparent), transparent 70%);
 		will-change: transform, opacity;
-		animation: breathe 3.6s ease-in-out infinite;
+		animation: breathe 4.8s ease-in-out infinite;
 	}
 	.sheen {
 		position: absolute;
@@ -59,23 +57,7 @@
 		background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
 		transform: translateX(-120%);
 		will-change: transform;
-		animation: sheen 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-	}
-	.mark {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 48px;
-		height: 48px;
-		border: 1px solid var(--border-strong);
-		border-radius: 12px;
-		background: var(--bg);
-		color: var(--text-dim);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
-	}
-	.mark :global(svg) {
-		width: 22px;
-		height: 22px;
+		animation: sheen 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 	}
 	.bar {
 		position: absolute;
