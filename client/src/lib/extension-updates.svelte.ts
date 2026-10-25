@@ -24,6 +24,8 @@ class ExtensionUpdates {
 		}
 		return out;
 	});
+	/** Display name of a client extension from the catalog, so an id is never shown where a name exists. */
+	clientName = (id: string): string | undefined => this.catalog?.extensions.find((x) => x.id === id && x.kind === "client")?.name;
 	/** The marketplace server extension that carries this client extension as its client half, when the open server lacks it. */
 	missingServerFor = (clientId: string): { id: string; name: string } | undefined => {
 		if (!this.serverKnown) return undefined;

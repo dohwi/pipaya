@@ -329,7 +329,7 @@
 {#snippet companionLine(id: string, disabled: boolean)}
 	<div class="updline warnline">
 		<Icon name="alert" />
-		<span class="to"><b>{t("클라이언트 확장 ‘{id}’ 필요", { id })}</b></span>
+		<span class="to"><b>{t("클라이언트 확장 ‘{id}’ 필요", { id: extensionUpdates.clientName(id) ?? id })}</b></span>
 		<Button variant="primary" size="sm" class="upd-btn" {disabled} onclick={() => installCompanion(id)}>{t("설치")}</Button>
 	</div>
 {/snippet}
