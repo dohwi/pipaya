@@ -1,4 +1,4 @@
-import { OPENROUTER_MODELS } from "@earendil-works/pi-ai/providers/openrouter.models";
+import { OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "@earendil-works/pi-ai/providers/openrouter.models";
 import { getSupportedThinkingLevels, type Model } from "@earendil-works/pi-ai";
 
 type LevelMap = NonNullable<Model<any>["thinkingLevelMap"]>;
@@ -55,11 +55,19 @@ export interface CatalogEntry {
 
 let listed: CatalogEntry[] | undefined;
 
-/** Every model in the bundled OpenRouter catalog (no `:variant` ids), for autocomplete when registering a model. */
+/** The image catalog lists no limits; these are used for image-generation models. */
+const IMAGE_CONTEXT_WINDOW = 65_536;
+const IMAGE_MAX_TOKENS = 32_768;
+
+const listable = (id: string) => !id.includes(":") && !id.startsWith("~");
+
+/** Every model in the bundled OpenRouter catalog, chat and image generation (no `:variant` ids), for autocomplete when registering a model. */
 export function catalogEntries(): CatalogEntry[] {
-	listed ??= Object.values(OPENROUTER_MODELS as Record<string, Model<any>>)
-		.filter((m) => !m.id.includes(":") && !m.id.startsWith("~"))
-		.map((m) => ({
+	if (listed) return listed;
+	const byId = new Map<string, CatalogEntry>();
+	for (const m of Object.values(OPENROUTER_MODELS as Record<string, Model<any>>)) {
+		if (!listable(m.id)) continue;
+		byId.set(m.id, {
 			id: m.id,
 			name: m.name,
 			contextWindow: m.contextWindow,
@@ -67,7 +75,16 @@ export function catalogEntries(): CatalogEntry[] {
 			reasoning: Boolean(m.reasoning),
 			vision: m.input.includes("image"),
 			levels: m.reasoning ? getSupportedThinkingLevels(m).filter((l) => l !== "off") : [],
-		}))
-		.sort((a, b) => a.id.localeCompare(b.id));
+		});
+	}
+	// A model listed as both chat and image keeps its chat entry (it has real limits).
+	for (const m of Object.values(OPENROUTER_IMAGE_MODELS as Record<string, { id: string; name: string; input: readonly string[] }>)) {
+		if (!listable(m.id) || byId.has(m.id)) continue;
+		byId.set(m.id, {
+			id: m.id, name: m.name, contextWindow: IMAGE_CONTEXT_WINDOW, maxTokens: IMAGE_MAX_TOKENS,
+			reasoning: false, vision: m.input.includes("image"), levels: [],
+		});
+	}
+	listed = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
 	return listed;
 }
