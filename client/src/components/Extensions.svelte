@@ -369,6 +369,7 @@
 			entry={openEntry}
 			{tasks}
 			{drafts}
+			bundledBy={serverSide.find((e) => e.companion === id && e.clientPackage)?.title ?? serverSide.find((e) => e.companion === id && e.clientPackage)?.name}
 			onback={closeDetail}
 			onenable={() => enable(id)}
 			ondisable={() => disable(id)}

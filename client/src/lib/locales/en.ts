@@ -663,6 +663,7 @@ export const en: Record<string, string> = {
 	"준비 중": "Preparing",
 	"이 서버에 설치된 확장이 없습니다": "No extensions on this server",
 	"서버에서 실행": "Runs on the server",
+	"서버 확장 ‘{name}’에 동봉된 클라이언트 확장입니다. 그 서버 확장과 함께 설치되어 작동합니다.": "A client extension bundled with the server extension ‘{name}’. It is installed with it and works together with it.",
 	"서버에 연결되어 있지 않습니다.": "Not connected to a server.",
 	"설정을 저장했습니다.": "Settings saved.",
 	"이 확장은 편집할 수 있는 설정이 없습니다.": "This extension has no settings to edit.",
