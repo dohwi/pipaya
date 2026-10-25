@@ -63,9 +63,11 @@
 					<Icon name="chevron-down" />
 				</button>
 			</div>
-			{#if hit}
+			{#if hit && r.imageGeneration}
+				<p class="hint note src ok"><Icon name="check" /> {t("이미지 생성 모델")}</p>
+			{:else if hit}
 				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") || "-" })}</p>
-			{:else if r.catalogId === undefined && r.id.trim()}
+			{:else if r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
 			{/if}
 		{/if}
@@ -80,6 +82,7 @@
 			</label>
 		</div>
 	</section>
+	{#if !r.imageGeneration}
 	<section class="fsec">
 		<div class="section-label">{t("제한")}</div>
 		<div class="grid2">
@@ -93,12 +96,13 @@
 			</label>
 		</div>
 	</section>
+	{/if}
 	<section class="fsec">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
 			{#if !r.imageGeneration}<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
 			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 입력")}</button>
-			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="bolt" /> {t("이미지 생성")}</button>
+			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성")}</button>
 		</div>
 	</section>
 	{#if r.reasoning && !r.imageGeneration && !matched}

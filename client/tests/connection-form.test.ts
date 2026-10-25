@@ -101,3 +101,10 @@ describe("image generation models", () => {
 		expect("out" in out && "imageGeneration" in out.out[0]!).toBe(false);
 	});
 });
+
+describe("image model summary line", () => {
+	test("an image model shows no context size, a text model does", () => {
+		expect(modelMeta(row({ imageGeneration: true, vision: true, contextWindow: "65536" }))).toBe("이미지 생성 · 이미지");
+		expect(modelMeta(row({ reasoning: true, vision: true, contextWindow: "128000" }))).toBe("128k · 추론 · 이미지");
+	});
+});

@@ -122,7 +122,7 @@ export function applyMatch(r: Row, c: CatalogModel | null) {
 /** "128k · reasoning · image" summary under a model's name. */
 export function modelMeta(r: Row): string {
 	const ctx = Number(r.contextWindow);
-	return [Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "", r.imageGeneration ? t("이미지 생성") : r.reasoning ? t("추론") : "", r.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
+	return [!r.imageGeneration && Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "", r.imageGeneration ? t("이미지 생성") : r.reasoning ? t("추론") : "", r.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
 }
 
 /** The first problem with the connection's own fields (name, id, address), or null. */

@@ -365,6 +365,7 @@ export const en: Record<string, string> = {
 	"기능": "Capabilities",
 	"이미지 입력": "Image input",
 	"이미지 생성": "Image generation",
+	"이미지 생성 모델": "Image generation model",
 	"이미지를 만드는 중…": "Creating your image…",
 	"이 모델 삭제": "Delete this model",
 	"연결 정보": "Connection details",
