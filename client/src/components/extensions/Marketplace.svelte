@@ -60,6 +60,39 @@
 		}
 	}
 
+	/** The server entry paired with a client entry (it names the client one as its companion). */
+	const serverOf = (entry: MarketEntry) => catalog?.extensions.find((e) => e.kind === "server" && e.companion === entry.id && e.source.type === "git");
+	/** The client entry that asked "install the server one too?" (only when its server half is not on the server yet). */
+	let askingServer = $state("");
+
+	function startClient(entry: MarketEntry) {
+		const s = serverOf(entry);
+		if (s && !serverHave[s.id] && app.api) askingServer = entry.id;
+		else void pick(entry);
+	}
+
+	/** With `both`, the server half goes in first; the client half then goes through the usual preview. */
+	async function installClientWith(entry: MarketEntry, both: boolean) {
+		askingServer = "";
+		const s = both ? serverOf(entry) : undefined;
+		if (s) {
+			const api = app.api;
+			if (!api || s.source.type !== "git") return;
+			working = entry.id;
+			error = "";
+			try {
+				const { repo, dir, ref, commit } = s.source;
+				await api.installServerExtension({ id: s.id, repo, ...(dir ? { dir } : {}), ref, commit });
+				await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+			} catch (cause) {
+				error = cause instanceof Error ? cause.message : String(cause);
+				working = "";
+				return;
+			}
+		}
+		await pick(entry);
+	}
+
 	async function pick(entry: MarketEntry) {
 		working = entry.id;
 		error = "";
@@ -113,7 +146,7 @@
 		}
 	}
 
-	$effect(() => { void load(); if (scope === "server") void refreshServer(); return () => ctrl?.abort(); });
+	$effect(() => { void load(); void refreshServer(); return () => ctrl?.abort(); });
 </script>
 
 <Modal {onclose} labelledby="market-title" width="1120px" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
@@ -151,7 +184,7 @@
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
 						</p>
 						{#if entry.kind === "client"}
-							<Button variant={newer ? "default" : "primary"} class={[newer && "update"]} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => pick(entry)}>
+							<Button variant={newer ? "default" : "primary"} class={[newer && "update"]} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => startClient(entry)}>
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
 							</Button>
 						{:else}
@@ -161,6 +194,28 @@
 							</Button>
 						{/if}
 					</div>
+					{#if entry.kind === "client" && have && askingServer !== entry.id}
+						{@const s = serverOf(entry)}
+						{#if s && !serverHave[s.id] && app.api}
+							<Notice tone="warn" size="sm" role="status">
+								{t("서버 확장 ‘{name}’ 필요", { name: s.name })}
+								{#snippet action()}<button type="button" disabled={!!working} onclick={() => installServer(s, false)}>{t("설치")}</button>{/snippet}
+							</Notice>
+						{/if}
+					{/if}
+					{#if askingServer === entry.id}
+						{@const s = serverOf(entry)}
+						<Notice tone="warn" size="sm">
+							<div class="ask" role="group" aria-label={t("서버 확장도 설치")}>
+								<p>{t("서버 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: s?.name ?? "" })}</p>
+								<div class="askbtns">
+									<Button variant="primary" size="sm" onclick={() => installClientWith(entry, true)}>{t("함께 설치")}</Button>
+									<Button size="sm" onclick={() => installClientWith(entry, false)}>{t("클라이언트만 설치")}</Button>
+									<Button size="sm" onclick={() => (askingServer = "")}>{t("취소")}</Button>
+								</div>
+							</div>
+						</Notice>
+					{/if}
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
 						<Notice tone="warn" size="sm" role="status">
