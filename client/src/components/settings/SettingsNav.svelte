@@ -91,7 +91,7 @@
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if open}<Icon name="chevron-down" />{:else}<span class="cbadge">{kids.length}</span><Icon name="chevron-right" />{/if}</button>
+					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cnt">{kids.length}</span>{/if}<Icon name="chevron-right" /></button>
 				{/if}
 			</div>
 			{#if open}
@@ -144,13 +144,16 @@
 		min-width: 0;
 	}
 	.nav .row.has > button:first-child {
-		padding-right: 38px;
+		padding-right: 50px;
 	}
 	.nav button.fold {
 		position: absolute;
 		top: 50%;
 		right: 6px;
 		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		gap: 2px;
 		padding: 4px;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
@@ -160,30 +163,15 @@
 		height: 15px;
 		transition: transform var(--motion-fast) var(--ease-std);
 	}
-	/* folded: the count shows at rest; on hover/focus the arrow takes its place (same cell, cross-fade) */
-	.nav button.fold[aria-expanded="false"] {
-		display: grid;
-		place-items: center;
-		min-width: 26px;
-		min-height: 26px;
+	/* the arrow is always there: right = folded, turned down = open; the count sits beside it only while folded */
+	.nav button.fold[aria-expanded="true"] :global(svg) {
+		transform: rotate(90deg);
 	}
-	.nav button.fold[aria-expanded="false"] > * {
-		grid-area: 1 / 1;
-		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	/* the icon comes from a child component, so the scoped `> *` rule above does not reach it */
-	.nav button.fold[aria-expanded="false"] > :global(svg) {
-		grid-area: 1 / 1;
-		transition: opacity var(--motion-fast) var(--ease-std);
-		opacity: 0;
-	}
-	.nav .row:hover button.fold[aria-expanded="false"] > :global(svg),
-	.nav button.fold[aria-expanded="false"]:focus-visible > :global(svg) {
-		opacity: 1;
-	}
-	.nav .row:hover button.fold[aria-expanded="false"] > .cbadge,
-	.nav button.fold[aria-expanded="false"]:focus-visible > .cbadge {
-		opacity: 0;
+	.nav button.fold .cnt {
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
 	}
 	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
