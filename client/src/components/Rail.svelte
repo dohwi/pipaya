@@ -52,14 +52,14 @@
 		const ids = d.tabs.flatMap((x) => tabPanes(x));
 		return URGENCY.find((a) => ids.some((id) => (sec.state[id] ?? "idle") === a)) ?? "idle";
 	}
-	/** How many sessions and terminals a folder holds (a group counts its members). */
-	const dirCount = (d: DirBlock) => d.tabs.reduce((n, x) => n + tabPanes(x).length, 0);
+	/** How many of a folder's sessions have something going on (working, asking, done, failed). Idle ones are not counted, so a quiet folder shows no badge. */
+	const dirCount = (sec: Section, d: DirBlock) => d.tabs.reduce((n, x) => n + tabPanes(x).filter((id) => (sec.state[id] ?? "idle") !== "idle").length, 0);
 </script>
 
 {#snippet dirBtn(sec: Section, d: DirBlock)}
 	{@const st = dirState(sec, d)}
 	{@const name = dirName(sec, d.path)}
-	{@const n = dirCount(d)}
+	{@const n = dirCount(sec, d)}
 	{@const cur = sec.current && app.activeTab?.dir.path === d.path}
 	<button
 		class="agent dir"
@@ -70,7 +70,7 @@
 		aria-current={cur ? "true" : undefined}
 	>
 		<span class="ini">{[...name][0]?.toUpperCase() ?? "?"}</span>
-		{#if n > 0}<Pin count={n} tone={st === "idle" ? (cur ? "accent" : "neutral") : st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} />{/if}
+		{#if n > 0}<Pin count={n} tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} />{/if}
 	</button>
 {/snippet}
 
