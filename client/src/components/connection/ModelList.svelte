@@ -52,14 +52,16 @@
 			<button type="button" class="mitem" onclick={() => onopen(i)}>
 				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 				<span class="mname">{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
-				<span class="mmeta">{#if !r.imageGeneration}<span class="mctx">{ctxLabel(r)}</span>{/if}<CapTags model={r} /></span>
-				{#if r.unavailable}
-					<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
-				{:else if !r.id.trim()}
-					<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
-				{:else if catalogLoaded && !matchedOf(r)}
-					<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
-				{/if}
+				<span class="mmeta"><CapTags model={r} ctx={r.imageGeneration ? "" : ctxLabel(r)} /></span>
+				<span class="mstate">
+					{#if r.unavailable}
+						<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
+					{:else if !r.id.trim()}
+						<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
+					{:else if catalogLoaded && !matchedOf(r)}
+						<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
+					{/if}
+				</span>
 				<Icon name="chevron-right" />
 			</button>
 		{/each}
@@ -147,8 +149,13 @@
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
-	.mctx {
-		font-family: var(--mono);
+	/* a fixed slot, so a row with a badge and one without keep their tags on the same line */
+	/* a fixed slot for the badge: rows with one and rows without keep their tags on the same line */
+	.mstate {
+		flex: none;
+		display: inline-flex;
+		justify-content: flex-end;
+		width: 80px;
 	}
 	.mitem :global(svg:not(.model):not(.logo)) {
 		flex: none;

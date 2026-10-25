@@ -114,7 +114,7 @@
 	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
 		{#snippet lead()}<ModelLogo {conn} icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
-		{#snippet meta()}<span class="mrow">{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if !m.imageGeneration}<span class="ctx">{compact(m.contextWindow)}</span>{/if}<CapTags model={m} />{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}</span>{/snippet}
+		{#snippet meta()}<span class="mrow">{#if inFavs}<span>{providerName(m.provider)}</span>{/if}<CapTags model={m} ctx={m.imageGeneration ? "" : compact(m.contextWindow)} />{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}</span>{/snippet}
 		{#snippet trailing()}
 			{#if onfav}
 				<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
@@ -169,9 +169,6 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: 2px 10px;
-	}
-	.ctx {
-		font-family: var(--mono);
 	}
 	.fav {
 		flex: none;
