@@ -49,7 +49,7 @@
 	{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
 	{#if missingClient}
 		<Notice tone="warn" size="sm" role="status">
-			{t("클라이언트 확장 ‘{id}’도 설치해야 동작합니다.", { id: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
+			{t("클라이언트 확장 ‘{name}’도 설치해야 동작합니다.", { name: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
 			{#snippet action()}<button type="button" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("설치")}</button>{/snippet}
 		</Notice>
 	{/if}

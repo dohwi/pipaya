@@ -326,12 +326,20 @@
 	<Button size="sm" class="updbtn" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
 {/snippet}
 
-{#snippet companionLine(id: string, disabled: boolean)}
+{#snippet needLine(text: string, disabled: boolean, onclick: () => void)}
 	<div class="updline warnline">
 		<Icon name="alert" />
-		<span class="to"><b>{t("클라이언트 확장 ‘{id}’ 필요", { id: extensionUpdates.clientName(id) ?? id })}</b></span>
-		<Button variant="primary" size="sm" class="upd-btn" {disabled} onclick={() => installCompanion(id)}>{t("설치")}</Button>
+		<span class="to"><b>{text}</b></span>
+		<Button variant="primary" size="sm" class="upd-btn" {disabled} {onclick}>{t("설치")}</Button>
 	</div>
+{/snippet}
+
+{#snippet companionLine(id: string, disabled: boolean)}
+	{@render needLine(t("클라이언트 확장 ‘{name}’ 필요", { name: extensionUpdates.clientName(id) ?? id }), disabled, () => installCompanion(id))}
+{/snippet}
+
+{#snippet serverLine(need: { id: string; name: string }, disabled: boolean)}
+	{@render needLine(t("서버 확장 ‘{name}’ 필요", { name: need.name }), disabled, () => ongoserver?.(need.id))}
 {/snippet}
 
 {#snippet installedRow(entry: InstalledExtension)}
@@ -341,8 +349,9 @@
 	{@const on = entry.state === "active" || entry.state === "starting"}
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
-	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} onopen={() => (selected = id)}>
-		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
+	{@const needServer = view === "device" && ongoserver ? extensionUpdates.missingServerFor(id) : undefined}
+	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
+		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
 		{#snippet control()}
 			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all)}{/if}
 			<Switch
@@ -356,6 +365,7 @@
 		{#snippet notices()}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
 			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
+			{#if needServer}{@render serverLine(needServer, false)}{/if}
 		{/snippet}
 	</ExtensionRow>
 {/snippet}
