@@ -114,8 +114,8 @@
 		flex: none;
 		padding: 0 6px;
 		font-size: var(--fs-2xs);
-		line-height: 18px;
-		border-radius: var(--radius-xs);
+		line-height: 16px;
+		border-radius: var(--radius-pill);
 		color: var(--accent);
 		border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 	}

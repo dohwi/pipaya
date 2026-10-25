@@ -81,5 +81,4 @@
 	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); display: flex; flex-direction: column; }
 	.email { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
-	li :global(.badge svg) { width: 11px; height: 11px; stroke-width: 2.6; }
 </style>

@@ -368,8 +368,12 @@ select:focus-visible {
 .btn.update:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--ok) 85%, #000);
 }
+/* destructive: a red label on the usual outline; the red border appears once it is armed (ConfirmButton) */
 .btn.danger {
 	color: var(--danger);
+}
+.btn.danger:hover:not(:disabled) {
+	background: var(--danger-soft);
 }
 .btn.ghost {
 	background: transparent;
@@ -545,9 +549,45 @@ input[type="checkbox"]:disabled {
 	font-size: var(--fs-2xs);
 	font-weight: 600;
 	letter-spacing: 0.01em;
-	background: var(--bg-elev);
+	background: var(--bg-active); /* --bg-elev disappears on a card */
 	color: var(--text-dim);
 	white-space: nowrap;
+	flex: none;
+}
+/* A key cap in running text ("Esc 취소"): the one square-cornered label. */
+kbd {
+	display: inline-block;
+	padding: 1px 5px;
+	border: 1px solid var(--border-strong);
+	border-bottom-width: 2px;
+	border-radius: var(--radius-xs);
+	background: var(--bg);
+	font-family: var(--mono);
+	font-size: var(--fs-2xs);
+	line-height: 1.5;
+	color: var(--text-dim);
+}
+/* A count in a round badge (folded rows, tab totals): the one shape for a bare number. */
+.cbadge {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px 2px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
+	box-sizing: border-box;
+	border-radius: var(--radius-pill);
+	background: var(--bg-active);
+	color: var(--text-faint);
+	font-family: var(--font);
+	font-size: var(--fs-2xs);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+}
+.cbadge.danger {
+	background: var(--danger);
+	color: #fff;
 }
 .chip.ok {
 	background: var(--ok-soft);
@@ -767,11 +807,11 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 .slide-ind[data-variant="outline"][data-tone="warn"] {
 	box-shadow: inset 0 0 0 1px var(--warn);
 }
+/* the selected FilterChip: the same fill and border a still chip has, travelling between them */
 .slide-ind[data-variant="accent"] {
-	z-index: 1;
 	border-radius: var(--radius-pill);
-	background: var(--accent-soft);
-	box-shadow: inset 0 0 0 1px var(--accent);
+	background: var(--bg-active);
+	box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .slide-ind[data-variant="level"] {
 	background: var(--lv-soft);

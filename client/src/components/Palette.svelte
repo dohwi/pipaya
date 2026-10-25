@@ -99,7 +99,7 @@
 							<span class="t">{it.title}</span>
 							{#if it.sub}<span class="s mono">{it.sub}</span>{/if}
 						</span>
-						{#if it.tag}<Badge variant="outline" size="sm" square>{it.tag}</Badge>{/if}
+						{#if it.tag}<Badge variant="outline" size="sm">{it.tag}</Badge>{/if}
 						{#if it.current}<span class="cur"><Icon name="check" /></span>{/if}
 					</div>
 					{#if spec.ondelete}

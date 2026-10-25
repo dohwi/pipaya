@@ -265,7 +265,7 @@
 						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 						<span class="sicon {n.state}"><Icon name="server" /></span>
 						<span class="sname">{app.serverLabel(n.server)}</span>
-						{#if n.state !== "online"}<span class="spill {n.state}"><span class="spilltext">{t(statusText[n.state])}</span></span>{/if}
+						{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
 					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
@@ -513,32 +513,6 @@
 	.sicon.checking {
 		animation: blink-cursor 1s ease-in-out infinite;
 	}
-	.spill {
-		display: inline-flex;
-		align-items: center;
-		flex: none;
-		height: 18px;
-		padding: 0 7px;
-		border-radius: var(--radius-pill);
-		border: 1px solid var(--border);
-		background: color-mix(in srgb, var(--text) 4%, transparent);
-		color: var(--text-faint);
-	}
-	:global(:where(.side) .spill.offline) {
-		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-		color: var(--danger);
-	}
-	:global(:where(.side) .spill.unauthorized),
-	:global(:where(.side) .spill.incompatible) {
-		border-color: color-mix(in srgb, var(--warn) 35%, transparent);
-		background: color-mix(in srgb, var(--warn) 12%, transparent);
-		color: var(--warn);
-	}
-	.spilltext {
-		font-size: var(--fs-2xs);
-		line-height: 1;
-		white-space: nowrap;
-	}
 	.sname {
 		flex: 0 1 auto;
 		min-width: 0;
@@ -649,21 +623,7 @@
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
 	:global(:where(.side) .cbadge) {
-		display: grid;
-		place-items: center;
-		flex: none;
-		min-width: 18px;
-		height: 18px;
 		margin-left: auto;
-		padding: 0 5px 2px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
-		box-sizing: border-box;
-		border-radius: 9px;
-		background: var(--bg-active);
-		color: var(--text-faint);
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		line-height: 1;
 	}
 	:global(:where(.side) .dirnew) {
 		display: grid;

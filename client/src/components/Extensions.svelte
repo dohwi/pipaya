@@ -431,8 +431,6 @@
 	p { margin: 0; }
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.chip { background: var(--bg-active); }
-	.chip.warn { background: var(--warn-soft); }
 	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
 	.updline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 

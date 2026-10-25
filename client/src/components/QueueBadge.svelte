@@ -9,7 +9,7 @@
 </script>
 
 <span class="qb" title={label} aria-label={label} role="img">
-	<Badge variant="soft" size="sm" mono square tone={queuedTone(q.mode)}>
+	<Badge variant="soft" size="sm" mono tone={queuedTone(q.mode)}>
 		<span class="in"><Icon name={q.mode === "steer" ? "bolt" : "list"} /><span class="n">{q.n}</span></span>
 	</Badge>
 </span>

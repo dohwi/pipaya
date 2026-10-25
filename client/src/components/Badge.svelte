@@ -7,16 +7,15 @@
 	 *
 	 *  tone     meaning: neutral | ok | warn | danger | accent
 	 *  variant  soft = tinted fill (default), outline = border only, solid = filled with the accent colour
-	 *  size     sm (18px) for dense rows, md (22px, matches `.chip`)
+	 *  size     sm (18px) for dense rows, md (22px, matches `.chip` and StatusChip)
 	 *  mono     monospace face, for codes and counts
-	 *  square   small radius instead of a full pill
+	 * Every badge is a pill: square corners are kept for key caps (`kbd`) only.
 	 */
 	let {
 		tone = "neutral",
 		variant = "soft",
 		size = "md",
 		mono = false,
-		square = false,
 		minWidth,
 		children,
 	}: {
@@ -24,14 +23,13 @@
 		variant?: "soft" | "outline" | "solid";
 		size?: "sm" | "md";
 		mono?: boolean;
-		square?: boolean;
 		/** Keeps a column of badges the same width (e.g. diff kinds). */
 		minWidth?: number;
 		children: Snippet;
 	} = $props();
 </script>
 
-<span class="badge {tone} {variant} {size}" class:mono class:square style:min-width={minWidth ? `${minWidth}px` : undefined}>{@render children()}</span>
+<span class="badge {tone} {variant} {size}" class:mono style:min-width={minWidth ? `${minWidth}px` : undefined}>{@render children()}</span>
 
 <style>
 	.badge {
@@ -39,7 +37,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: 5px;
+		gap: 4px;
 		border-radius: var(--radius-pill);
 		font-weight: 600;
 		white-space: nowrap;
@@ -47,7 +45,7 @@
 		background: var(--badge-bg);
 		border: 1px solid var(--badge-border, transparent);
 		--badge-fg: var(--text-dim);
-		--badge-bg: var(--bg-elev);
+		--badge-bg: var(--bg-active);
 	}
 	.md {
 		height: 22px;
@@ -60,8 +58,16 @@
 		padding: 0 7px;
 		font-size: var(--fs-2xs);
 	}
-	.square {
-		border-radius: var(--radius-sm);
+	/* an icon inside a badge follows its text size */
+	.badge :global(svg) {
+		flex: none;
+		width: 11px;
+		height: 11px;
+		stroke-width: 2.4;
+	}
+	.md :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.mono {
 		font-family: var(--mono);

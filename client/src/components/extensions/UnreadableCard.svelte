@@ -72,8 +72,6 @@
 	p { margin: 0; }
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.chip { background: var(--bg-active); flex: none; }
-	.chip.danger { background: var(--danger-soft); }
 	.row :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
 	.row :global(.btn.end) { margin-left: auto; }
 	@media (max-width: 640px) {

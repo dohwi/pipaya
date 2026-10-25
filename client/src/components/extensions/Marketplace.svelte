@@ -3,6 +3,7 @@
 	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
+	import Badge from "../Badge.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
 	import StatusChip from "../StatusChip.svelte";
@@ -141,7 +142,7 @@
 				<li class="item">
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
-						{#if isOfficial(entry)}<span class="official" title={t("pipaya 공식 확장")}><Icon name="check" />{t("공식")}</span>{/if}
+						{#if isOfficial(entry)}<span title={t("pipaya 공식 확장")}><Badge tone="ok" size="sm"><Icon name="check" />{t("공식")}</Badge></span>{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{/if}
 						<span class="ver">v{entry.version}</span>
 					</div>
@@ -219,8 +220,6 @@
 	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
-	.official { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 7px 0 5px; border-radius: 999px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: color-mix(in srgb, var(--ok) 70%, var(--text)); font-size: var(--fs-2xs); font-weight: 600; line-height: 1.6; }
-	.official :global(svg) { width: 10px; height: 10px; stroke-width: 3; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.ask p { margin: 0 0 8px; }
 	.ask p:last-child { margin-bottom: 0; }

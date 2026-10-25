@@ -118,11 +118,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.mitem :global(.badge svg) {
-		width: 12px;
-		height: 12px;
-		stroke-width: 2.2;
-	}
 	.mname :global(.lockic) {
 		margin-left: 6px;
 		vertical-align: -2px;
@@ -154,6 +149,13 @@
 		height: 16px;
 		stroke: var(--text-faint);
 		stroke-width: 1.9;
+	}
+	/* a badge's icon keeps the badge's own size and colour */
+	.mitem :global(.badge svg) {
+		width: 11px;
+		height: 11px;
+		stroke: currentColor;
+		stroke-width: 2.4;
 	}
 	.mlogo {
 		flex: none;

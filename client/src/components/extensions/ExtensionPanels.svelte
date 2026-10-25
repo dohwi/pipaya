@@ -161,7 +161,7 @@
 	<div class="panel-toolbar">
 		<button class="launcher" class:danger={failing.length > 0} bind:this={launcher} type="button" aria-haspopup="dialog" disabled={!available.length} onclick={() => open(failing[0])}
 			title={failing.length ? t("오류: {names}", { names: failing.map((panel) => ownerName(panel.owner)).join(", ") }) : undefined}>
-			<Icon name="widgets" /><span>{t("확장 화면")}</span><span class="count" class:danger={failing.length > 0}>{failing.length ? "!" : available.length}</span>
+			<Icon name="widgets" /><span>{t("확장 화면")}</span><span class="cbadge" class:danger={failing.length > 0}>{failing.length ? "!" : available.length}</span>
 		</button>
 		{#if !available.length}<span class="toolbar-hint">{t("활성 확장 화면이 없습니다.")}</span>{/if}
 		<div class="feedback" aria-live="polite" aria-atomic="true">{error}</div>
@@ -187,7 +187,7 @@
 			<div class="workspace">
 				{#if available.length}
 					<nav class="tabbar" aria-label={t("확장 화면 선택")}>
-						<span class="total" aria-hidden="true">{available.length}</span>
+						<span class="cbadge total" aria-hidden="true">{available.length}</span>
 						<div class="railwrap">
 						<IconButton icon="chevron-left" label={t("이전 화면 보기")} class={["step prev", { idle: !canPrev }]} tabindex={-1} disabled={!canPrev} onclick={() => page(-1)} />
 						<div
@@ -240,9 +240,7 @@
 	.launcher:disabled { opacity: 0.55; cursor: not-allowed; }
 	.launcher :global(svg), .empty :global(svg) { stroke-width: 1.8; }
 	.launcher :global(svg) { flex: none; width: 15px; height: 15px; }
-	.count { display: grid; place-items: center; min-width: 20px; padding: 1px 5px; border-radius: var(--radius-pill); background: var(--bg-active); font-family: var(--mono); font-size: 10px; }
 	.launcher.danger { color: var(--danger); border-color: var(--danger); }
-	.count.danger { background: var(--danger); color: #fff; }
 	.toolbar-hint { font-size: var(--fs-2xs); color: var(--text-faint); }
 	.feedback { color: var(--danger); font-size: var(--fs-xs); line-height: 1.6; overflow-wrap: anywhere; }
 	.feedback:empty { display: none; }
@@ -256,7 +254,7 @@
 	:global(.iconbtn.close) { flex-shrink: 0; }
 	.workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 	.tabbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 14px 10px 20px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
-	.total { display: grid; place-items: center; flex: none; min-width: 22px; height: 22px; padding: 0 6px; margin-right: 4px; border-radius: var(--radius-pill); background: var(--bg-active); color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-2xs); }
+	.total { margin-right: 4px; }
 	/* the arrows float over the ends of the rail, so they take no room while there is nothing to scroll */
 	.railwrap { position: relative; flex: 1; min-width: 0; display: flex; }
 	.rail { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 2px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }

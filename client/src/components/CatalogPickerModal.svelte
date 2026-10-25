@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Badge from "./Badge.svelte";
 	import { t } from "../lib/i18n";
 	import { compact } from "../lib/format";
 	import PickerModal from "./PickerModal.svelte";
@@ -37,7 +38,7 @@
 
 {#snippet opt(c: CatalogModel, recommended: boolean)}
 	<PickerOption selected={value === c.id} onclick={() => onpick(c)}>
-		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended}<span class="rec">{t("추천")}</span>{/if}{/snippet}
+		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended}<span class="rec"><Badge tone="ok" size="sm">{t("추천")}</Badge></span>{/if}{/snippet}
 		{#snippet meta()}<span class="mono">{c.id}</span> · {metaOf(c)}{/snippet}
 	</PickerOption>
 {/snippet}
@@ -64,12 +65,8 @@
 
 <style>
 	.rec {
+		display: inline-flex;
 		margin-left: 8px;
-		padding: 1px 6px;
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		vertical-align: 1px;
-		font-size: var(--fs-2xs);
-		color: var(--ok);
 	}
 </style>
