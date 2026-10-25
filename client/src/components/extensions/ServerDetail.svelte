@@ -55,7 +55,7 @@
 	{/if}
 
 	{#if client && onopenclient}
-		<Notice tone="info" size="sm" icon="widgets" role="status">
+		<Notice tone="info" size="sm" icon="clip" role="status">
 			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.package.manifest.name })}
 			{#snippet action()}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/snippet}
 		</Notice>

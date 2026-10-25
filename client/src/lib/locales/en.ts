@@ -669,6 +669,7 @@ export const en: Record<string, string> = {
 	"서버 확장 ‘{name}’도 설치해야 동작합니다.": "The server extension “{name}” must also be installed for this to work.",
 	"서버 확장 ‘{name}’ 필요": "Server extension “{name}” required",
 	"클라이언트 확장 필요": "Client extension needed",
+	"짝 확장과 함께 작동": "Works together with its paired extension",
 	"클라이언트 확장 ‘{name}’과 함께 작동합니다.": "Works together with the client extension ‘{name}’.",
 	"서버 확장 ‘{name}’에 동봉된 클라이언트 확장입니다. 그 서버 확장과 함께 설치되어 작동합니다.": "A client extension bundled with the server extension ‘{name}’. It is installed with it and works together with it.",
 	"서버에 연결되어 있지 않습니다.": "Not connected to a server.",
