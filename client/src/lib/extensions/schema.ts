@@ -7,7 +7,7 @@ export const MAX_PACKAGE_BYTES = 1024 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
 	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions",
-	"ui-style", "ui-components",
+	"ui-style", "ui-components", "workspace",
 ] as const);
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -30,7 +30,7 @@ export type UIPart = (typeof UI_PARTS)[number];
 export const STYLE_PARTS = Object.freeze([
 	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
 	"composer", "composer.box", "composer.bar", "statusline",
-	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal",
+	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal", "dock", "floating",
 ] as const);
 export const COMPONENT_LIMITS = Object.freeze({ components: 20, source: 64 * 1024, mounts: 20, styles: 64 * 1024 });
 /**

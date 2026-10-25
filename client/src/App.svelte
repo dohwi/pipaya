@@ -24,6 +24,8 @@
 	import { updater } from "./lib/updater.svelte";
 	import { paneAdapter } from "./lib/extensions/panes";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
+	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
+	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
 	import CloseConfirm from "./components/CloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
 	import { createAttention } from "./lib/attention";
@@ -33,7 +35,8 @@
 	import { app, SIDEBAR_W } from "./lib/store.svelte";
 	import { armSound } from "./lib/sound";
 	import { extensions } from "./lib/extensions/host.svelte";
-	import { COMMANDS } from "./lib/commands";
+	import { COMMANDS, runCommand } from "./lib/commands";
+	import { workspaceAdapter } from "./lib/extensions/workspace";
 	import { viewport } from "./lib/viewport.svelte";
 	import { notifications } from "./lib/notifications";
 	import { nativePushAdapter } from "./lib/native-push";
@@ -141,6 +144,7 @@
 				abort: async () => { if (app.activeId) await app.abort(); },
 			},
 			panes: paneAdapter(app),
+			workspace: workspaceAdapter(app, { names: () => COMMANDS.map(c => c.name), run: (name, arg) => runCommand(name, arg) }),
 			dialog: request => app.askExtension(request),
 			dark: () => app.prefs.resolvedDark,
 			reservedCommands: () => COMMANDS.map(c => c.name),
@@ -348,11 +352,16 @@
 					{#if viewport.narrow || group}<DoneNotice />{/if}
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
-				{#if group}
-					<GroupView {group} />
-				{:else}
-					<Pane id={app.activeId} />
-				{/if}
+				<div class="work">
+					<div class="panes">
+						{#if group}
+							<GroupView {group} />
+						{:else}
+							<Pane id={app.activeId} />
+						{/if}
+					</div>
+					<ExtensionDock />
+				</div>
 			</div>
 		</main>
 
@@ -397,6 +406,7 @@
 <VersionNotice />
 <ChordStrip />
 <ExtensionMount slot="app.overlay" />
+{#if app.servers.length}<ExtensionFloating />{/if}
 <ExtensionApproval />
 <ExtensionDialog />
 <CloseConfirm />
@@ -460,6 +470,20 @@
 	.stage {
 		flex: 1;
 		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		position: relative;
+	}
+	/* the conversation area and the extension dock beside it */
+	.work {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		position: relative;
+	}
+	.panes {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		position: relative;
