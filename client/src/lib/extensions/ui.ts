@@ -64,11 +64,28 @@ export type UIEvent =
 	| { type: "change"; id: string; value: UIFieldValue }
 	| { type: "submit"; id: string; values: Record<string, UIFieldValue> };
 
+/**
+ * Where a panel lives. `panel`: the extension-screen modal (default). `composer`: a foldable widget above the input.
+ * `sidebar`: a foldable section at the bottom of the sidebar. `side`: a dock beside the conversation area (resizable).
+ * `floating`: a window over the app that the user can drag; it does not block the rest of the screen.
+ */
+export const PANEL_PLACEMENTS = Object.freeze(["panel", "composer", "sidebar", "side", "floating"] as const);
+export type UIPanelPlacement = (typeof PANEL_PLACEMENTS)[number];
+export const FLOAT_ANCHORS = Object.freeze(["top-left", "top-right", "bottom-left", "bottom-right", "center"] as const);
+export type UIFloatAnchor = (typeof FLOAT_ANCHORS)[number];
+/** Size in px (`panel`, `side`: width; `floating`: both). Clamped to the screen when shown. */
+export interface UIPanelSize { width?: number; height?: number }
+/** `floating` only: a corner/centre, or a point in px from the top-left of the window. */
+export type UIPanelPosition = UIFloatAnchor | { x: number; y: number };
+export const PANEL_SIZE = Object.freeze({ minWidth: 200, maxWidth: 2000, minHeight: 120, maxHeight: 2000, maxOffset: 10000 });
+
 export interface UIPanelSpec {
 	id: string;
 	title: string;
 	description?: string;
-	placement?: "panel" | "composer";
+	placement?: UIPanelPlacement;
+	size?: UIPanelSize;
+	position?: UIPanelPosition;
 	view: UINode;
 }
 
@@ -527,15 +544,40 @@ export function parseView(input: unknown, options: ViewOptions = {}): UINode {
 /** Strict-object / text / required helpers for sibling modules that validate their own envelopes. */
 export const uiParse = Object.freeze({ object, text, required, fail });
 
+/** `size` / `position` of a panel (also what `ui.place` changes). Only placements that use them accept them. */
+export function parsePanelLayout(source: Record<string, unknown>, placement: UIPanelPlacement, path: string): { size?: UIPanelSize; position?: UIPanelPosition } {
+	const out: { size?: UIPanelSize; position?: UIPanelPosition } = {};
+	if (Object.hasOwn(source, "size") && source.size !== undefined) {
+		if (placement === "composer" || placement === "sidebar") fail(`${path}.size`, `is not used by the ${placement} placement`);
+		const size = object(source.size, `${path}.size`, ["width", "height"]);
+		out.size = {};
+		if (Object.hasOwn(size, "width")) out.size.width = integer(size.width, `${path}.size.width`, PANEL_SIZE.minWidth, PANEL_SIZE.maxWidth);
+		if (Object.hasOwn(size, "height")) {
+			if (placement === "side") fail(`${path}.size.height`, "a side dock is as tall as the screen");
+			out.size.height = integer(size.height, `${path}.size.height`, PANEL_SIZE.minHeight, PANEL_SIZE.maxHeight);
+		}
+	}
+	if (Object.hasOwn(source, "position") && source.position !== undefined) {
+		if (placement !== "floating") fail(`${path}.position`, "only floating panels have a position");
+		if (typeof source.position === "string") out.position = oneOf(source.position, `${path}.position`, FLOAT_ANCHORS);
+		else {
+			const at = object(source.position, `${path}.position`, ["x", "y"]);
+			out.position = { x: integer(required(at, `${path}.position`, "x"), `${path}.position.x`, 0, PANEL_SIZE.maxOffset), y: integer(required(at, `${path}.position`, "y"), `${path}.position.y`, 0, PANEL_SIZE.maxOffset) };
+		}
+	}
+	return out;
+}
+
 /** Validate a panel contribution (metadata plus its view). */
 export function parsePanelSpec(input: unknown): UIPanelSpec {
-	const source = object(input, "panel", ["id", "title", "description", "placement", "view"]);
+	const source = object(input, "panel", ["id", "title", "description", "placement", "size", "position", "view"]);
 	const result: UIPanelSpec = {
 		id: idText(required(source, "panel", "id"), "panel.id"),
 		title: text(required(source, "panel", "title"), "panel.title", UI_LIMITS.title),
 	} as UIPanelSpec;
 	if (Object.hasOwn(source, "description")) result.description = text(source.description, "panel.description", UI_LIMITS.description, false);
-	if (Object.hasOwn(source, "placement")) result.placement = oneOf(source.placement, "panel.placement", ["panel", "composer"] as const);
+	if (Object.hasOwn(source, "placement")) result.placement = oneOf(source.placement, "panel.placement", PANEL_PLACEMENTS);
+	Object.assign(result, parsePanelLayout(source, result.placement ?? "panel", "panel"));
 	const view = parseView(required(source, "panel", "view"));
 	result.view = view;
 	return result;

@@ -30,6 +30,9 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Composer action | `sdk.composer.registerAction` | button row under the composer | 10 | `Composer.svelte` |
 | Panel | `sdk.ui.registerPanel` | launcher → modal `<dialog>` | 5 per extension | `extensions/ExtensionPanels.svelte` |
 | Composer widget | panel with `placement:'composer'` | collapsible box above the composer | counts toward the 5 | `ExtensionPanels placement="composer"` |
+| Sidebar section | panel with `placement:'sidebar'` | collapsible box at the sidebar bottom | counts toward the 5 | `ExtensionPanels placement="sidebar"` |
+| Side dock | panel with `placement:'side'` | dock right of the panes (`App.svelte` `.work`) | counts toward the 5 | `extensions/ExtensionDock.svelte` |
+| Floating window | panel with `placement:'floating'` | non-modal window over the app | counts toward the 5 | `extensions/ExtensionFloating.svelte` |
 | Navbar item | `sdk.navbar.set` | header right slot | 3, read-only nodes | `extensions/NavbarItems.svelte`, `Header.svelte` |
 | Status chip | `sdk.status.set` | `StatusLine` | 10, 120 chars | `StatusLine.svelte` |
 | Theme | package `theme` | `:root` CSS variables | token whitelist | `host.applyThemes` |
@@ -41,7 +44,8 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Shortcut | `sdk.shortcuts.*` | `lib/actions.ts` `onShortcut` (after app shortcuts) | `shortcuts`, 10 | `shortcutFor` |
 | Dialog | `sdk.dialog.*` | `ExtensionDialog.svelte` | `dialogs`, one at a time | `store.askExtension` |
 | Session control | `sdk.session.*` | `HostAdapter.session` | `session`, 5 per 10 s | `limitSession` |
-| Pane control | `sdk.panes.*` | `HostAdapter.panes` (`extensions/panes.ts`) | `panes`, 30 changes per 10 s | `limitPanes` |
+| Pane control | `sdk.panes.*` | `HostAdapter.panes` (`extensions/panes.ts`, layouts checked by `layout-spec.ts`) | `panes`, 30 changes per 10 s | `limitPanes` |
+| Workspace | `sdk.workspace.*` | `HostAdapter.workspace` (`extensions/workspace.ts`, names in `workspace-spec.ts`) | `workspace`, shares the pane limit | `limitPanes` |
 | Tool renderer | `sdk.tools.registerRenderer` | `ToolCard.svelte` | `tools`, 20 | `rendererFor` |
 | System notification | `sdk.notifications.send/status/register/remove` | OS, FCM | `system-notifications`, 5 server rules | [notifications.md](notifications.md) |
 | Settings form | manifest `settings` | Settings > Extensions > detail page | 20 fields | `extensions/SettingsForm.svelte` |
@@ -68,8 +72,10 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `configuration.ts` / `fingerprint.ts` | config export/import/backup/approval; canonical JSON + SHA-256 |
 | `marketplace.ts` | catalog parsing and install (`DEFAULT_MARKETPLACE_URL`) |
 | `panes.ts` | `paneAdapter` for `sdk.panes` |
+| `layout-spec.ts` | `parseLayout`: an extension's layout tree, validated (no app imports, so the host can use it) |
+| `workspace.ts` / `workspace-spec.ts` | `workspaceAdapter` for `sdk.workspace` / the settings tabs and dialogs it accepts |
 
-`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`.
+`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`, `ExtensionDock` (side panels), `ExtensionFloating` (floating panels).
 
 Wiring: `App.svelte` (`extensions.init(adapter)`), `Header.svelte`, `Composer.svelte`, `StatusLine.svelte`, `lib/commands.ts`, `lib/store.svelte.ts` (`extensions.emit`, `applyThemes`, `confirmExtension`), `Settings.svelte`, `Backup.svelte`, `lib/api.ts`.
 

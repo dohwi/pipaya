@@ -221,17 +221,45 @@ describe("UI permission and registration", () => {
     expect(host.panels.filter(panel => panel.owner === a.id)).toHaveLength(5);
   });
 
-  test("composer contributions cannot be opened as a separate panel", async () => {
+  test("composer contributions never open the modal: ui.open/close fold and unfold them", async () => {
     const { host } = newHost();
     const { id, runtime } = await activate(host);
     call(host, id, "ui.registerPanel", [{ ...spec(), placement: "composer" }, "handler"], runtime);
     expect(host.panels[0]!.placement).toBe("composer");
-    expect(() => call(host, id, "ui.open", ["tools"], runtime)).toThrow();
+    expect(host.panels[0]!.open).toBe(false);
+    call(host, id, "ui.open", ["tools"], runtime);
+    expect(host.panels[0]!.open).toBe(true);
     expect(() => host.openPanel(id, "tools")).toThrow();
     expect(host.activePanel).toBeNull();
     expect(host.panelOpen).toBe(false);
+    call(host, id, "ui.close", ["tools"], runtime);
+    expect(host.panels[0]!.open).toBe(false);
     await host.panels[0]!.run(action);
     expect(runtime.executed).toEqual([{ token: "handler", arg: action }]);
+  });
+
+  test("side and floating panels start shown; ui.place moves a panel and resets what the new place does not use", async () => {
+    const { host } = newHost();
+    const { id, runtime } = await activate(host);
+    call(host, id, "ui.registerPanel", [{ ...spec(), placement: "side", size: { width: 420 } }, "handler"], runtime);
+    expect(host.panels[0]).toMatchObject({ placement: "side", size: { width: 420 }, open: true, placed: 0 });
+    call(host, id, "ui.close", ["tools"], runtime);
+    expect(host.panels[0]!.open).toBe(false);
+    call(host, id, "ui.place", ["tools", { placement: "floating", size: { width: 300, height: 200 }, position: { x: 10, y: 20 } }], runtime);
+    expect(host.panels[0]).toMatchObject({ placement: "floating", size: { width: 300, height: 200 }, position: { x: 10, y: 20 }, open: true, placed: 1 });
+    call(host, id, "ui.place", ["tools", { position: "center" }], runtime);
+    expect(host.panels[0]).toMatchObject({ size: { width: 300, height: 200 }, position: "center", placed: 2 });
+    call(host, id, "ui.place", ["tools", { placement: "sidebar" }], runtime);
+    expect(host.panels[0]!.size).toBeUndefined();
+    expect(host.panels[0]!.position).toBeUndefined();
+    expect(host.panels[0]!.open).toBe(false);
+    for (const bad of [{ placement: "nowhere" }, { size: { width: 300 } }, { placement: "side", position: "center" }, { placement: "side", size: { height: 300 } }, { placement: "floating", size: { width: 10 } }, { zIndex: 9 }])
+      expect(() => call(host, id, "ui.place", ["tools", bad], runtime)).toThrow();
+    call(host, id, "ui.place", ["tools", { placement: "panel", size: { width: 700 } }], runtime);
+    call(host, id, "ui.open", ["tools"], runtime);
+    expect(host.activePanel).toBe(`${id}:tools`);
+    call(host, id, "ui.place", ["tools", { placement: "side" }], runtime);
+    expect(host.panelOpen).toBe(false);
   });
 });
 

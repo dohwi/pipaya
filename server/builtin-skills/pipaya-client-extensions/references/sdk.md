@@ -140,9 +140,9 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 
 | Permission | Methods | Scope |
 |---|---|---|
-| `commands` | `sdk.commands.register(spec, handler)` | ≤20 per extension |
+| `commands` | `sdk.commands.register(spec, handler)` | ≤20 per extension; the app's built-in names (`new`, `compact`, …) and names another extension took are refused |
 | `composer` | `sdk.composer.setText(text)`, `registerAction(spec, handler)` | replace the draft; ≤10 buttons |
-| `ui` | `sdk.ui.registerPanel(spec, handler)`, `update(id, view, {tone}?)`, `open`, `close`, `remove` | own panels and composer widgets ([ui.md](ui.md)) |
+| `ui` | `sdk.ui.registerPanel(spec, handler)`, `update(id, view, {tone}?)`, `open`, `close`, `place(id, {placement?, size?, position?})`, `remove` | own panels: modal, composer/sidebar section, side dock, floating window ([ui.md](ui.md)) |
 | `status` | `sdk.status.set(id, text)`, `remove(id)` | ≤10 status items |
 | `navbar` | `sdk.navbar.set(id, {label, view})`, `remove(id)` | ≤3 read-only header items |
 | `http` | `sdk.http.getJson(path)` | GET JSON from the user's `httpOrigin`, no credentials |
@@ -167,7 +167,8 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `ui-style` | package `styles` | app-wide CSS on `[data-part]` hooks; see [trusted-ui.md](trusted-ui.md) |
 | `ui-components` | package `components`, `mounts`, `replaces`; `sdk.components.setData(json)` | Svelte components run **in the app**, unsandboxed (danger notice); see [trusted-ui.md](trusted-ui.md) |
 | `composer-filter` | `sdk.composerFilter.set(fn)`, `clear()` | rewrite or block text before send (`string`, `{text}`, `{cancel: reason}`, `null` = unchanged); 2 s; on error/timeout the original is sent; slash commands skip it |
-| `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus`, `send(id,text,mode?)`, `abort`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave`, `close`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?})`, `compact(id,instructions?)` | read (text only) and drive the open group's chats and terminals by ID; `split` keeps focus unless `focus: true`; 30 changes per 10 s; `configure` changes only that chat (model needs `provider`, thinking level must be supported) |
+| `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus`, `send(id,text,mode?)`, `abort`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave`, `close`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?})`, `compact(id,instructions?)` | read (text only) and drive the open group's chats and terminals by ID; `split` keeps focus unless `focus: true`; 30 changes per 10 s; `configure` changes only that chat (model needs `provider`, thinking level must be supported). Server-wide: `list({all: true})` every open chat/terminal, `groups()`, `openGroup(id)`, `createGroup(layout, name?)`, `setLayout(groupId, layout)`, `renameGroup`, `deleteGroup`, `full(groupId, on)`; a layout is `{type:'pane', id}` \| `{type:'split', dir:'row'\|'col', ratio?, a, b}` with 2–8 panes |
+| `workspace` | `sdk.workspace.state()`, `sidebar({open?, collapsed?, width?})`, `openTab(id)`, `moveTab(id, target, 'before'\|'after')`, `openSettings(tab?)`, `closeSettings()`, `open('skills'\|'commands'\|'queue'\|'folder')`, `runCommand(name, arg?)`, `commands()` | the screen around the panes on this device; shares the 30 per 10 s limit. Built-in commands can be run, never replaced |
 | none | `sdk.settings.get()`, `sdk.log(text)` | own settings, extension log |
 
 Messages sent with `session`/`panes` are run by the agent, and `panes.close` ends terminal jobs; the consent text must say so.

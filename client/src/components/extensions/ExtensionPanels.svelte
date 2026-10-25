@@ -12,12 +12,12 @@
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
 
-	let { placement = "panel" }: { placement?: "panel" | "composer" } = $props();
+	/** `panel`: the launcher and the modal. `composer` / `sidebar`: the foldable sections of that place. */
+	let { placement = "panel" }: { placement?: "panel" | "composer" | "sidebar" } = $props();
 	let dialog = $state<HTMLDialogElement>();
 	let launcher = $state<HTMLButtonElement>();
 	let error = $state("");
 	let cancelClose: (() => void) | undefined;
-	let expanded = $state.raw<Set<string>>(new Set());
 	const uid = $props.id();
 	const titleId = `${uid}-title`;
 	const panelKey = (panel: ExtensionPanel) => `${panel.owner}:${panel.id}`;
@@ -92,11 +92,8 @@
 		}
 	}
 
-	function toggle(key: string, open: boolean) {
-		const next = new Set(expanded);
-		if (open) next.add(key);
-		else next.delete(key);
-		expanded = next;
+	function toggle(panel: ExtensionPanel, open: boolean) {
+		try { extensions.setPanelOpen(panel.owner, panel.id, open); } catch { /* removed meanwhile */ }
 	}
 
 	$effect(() => {
@@ -142,11 +139,11 @@
 	});
 </script>
 
-{#if placement === "composer"}
+{#if placement !== "panel"}
 	{#if available.length}
-		<div class="composer-panels">
+		<div class="composer-panels" class:in-sidebar={placement === "sidebar"}>
 			{#each available as panel (panelKey(panel))}
-				<Accordion variant="box" open={expanded.has(panelKey(panel))} onchange={(v) => toggle(panelKey(panel), v)}>
+				<Accordion variant="box" open={panel.open} onchange={(v) => toggle(panel, v)}>
 					{#snippet head()}
 						<span class="summary-title">{panel.title}</span>
 						<span class="owner">{ownerName(panel.owner)}</span>
@@ -170,6 +167,8 @@
 
 	<dialog
 		bind:this={dialog}
+		style:--panel-w={selected?.size?.width ? `${selected.size.width}px` : undefined}
+		style:--panel-h={selected?.size?.height ? `${selected.size.height}px` : undefined}
 		aria-labelledby={titleId}
 		oncancel={(event) => { event.preventDefault(); extensions.closePanel(); }}
 		onclose={() => { if (!dialog?.open) extensions.closePanel(); }}
@@ -244,7 +243,7 @@
 	.toolbar-hint { font-size: var(--fs-2xs); color: var(--text-faint); }
 	.feedback { color: var(--danger); font-size: var(--fs-xs); line-height: 1.6; overflow-wrap: anywhere; }
 	.feedback:empty { display: none; }
-	dialog { width: min(1000px, 96vw); height: min(760px, calc(var(--dvh) * 0.9)); max-width: 96vw; max-height: calc(var(--dvh) * 0.9); padding: 0; margin: auto; overflow: hidden; color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
+	dialog { width: min(var(--panel-w, 1000px), 96vw); height: min(var(--panel-h, 760px), calc(var(--dvh) * 0.9)); max-width: 96vw; max-height: calc(var(--dvh) * 0.9); padding: 0; margin: auto; overflow: hidden; color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
 	dialog::backdrop { background: var(--scrim); backdrop-filter: blur(5px); }
 	.panel-shell { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 	header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
@@ -283,6 +282,7 @@
 	.composer-panels { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.summary-title { flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 600; overflow-wrap: anywhere; }
 	.composer-panels .owner { max-width: 40%; }
+	.composer-panels.in-sidebar { max-height: 45vh; overflow-y: auto; padding: 0 8px 8px; }
 	@media (max-width: 640px) {
 		header { padding: 16px; }
 		.tabbar { padding: 8px 12px; }

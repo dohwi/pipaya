@@ -421,7 +421,14 @@ describe("parsePanelSpec", () => {
 		bad({ ...base, title: "" }, "panel.title");
 		bad({ ...base, title: "x".repeat(81) }, "panel.title");
 		bad({ ...base, description: "x".repeat(501) }, "panel.description");
-		bad({ ...base, placement: "sidebar" }, "panel.placement");
+		bad({ ...base, placement: "header" }, "panel.placement");
+		bad({ ...base, placement: "composer", size: { width: 300 } }, "panel.size");
+		bad({ ...base, placement: "side", position: "center" }, "panel.position");
+		bad({ ...base, placement: "floating", size: { width: 100 } }, "panel.size.width");
+		bad({ ...base, placement: "floating", position: { x: 1 } }, "panel.position.y");
+		bad({ ...base, placement: "floating", position: "middle" }, "panel.position");
+		expect(parsePanelSpec({ ...base, placement: "floating", size: { width: 300, height: 200 }, position: "top-left" })).toMatchObject({ placement: "floating", size: { width: 300, height: 200 }, position: "top-left" });
+		expect(parsePanelSpec({ ...base, placement: "sidebar" }).placement).toBe("sidebar");
 		bad({ ...base, icon: "x" }, "unknown field icon");
 		bad({ ...base, script: "x" }, "unknown field script");
 		bad({ id: "p", title: "T" }, "panel.view: is required");

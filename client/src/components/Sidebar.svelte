@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SearchField from "./SearchField.svelte";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
+	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
 	import Pin from "./Pin.svelte";
@@ -298,6 +299,7 @@
 	</nav>
 
 	<div class="bottom" data-part="sidebar.bottom">
+		<ExtensionPanels placement="sidebar" />
 		<ExtensionMount slot="sidebar.bottom" />
 		<button class="settings wide" onclick={() => app.openSettings()}>
 			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert || extensionUpdates.any}<Pin tone={app.net !== "online" ? "warn" : alertTone} label={app.net !== "online" ? t("연결 안 됨") : undefined} />{/if}</span> {t("설정")}
@@ -744,7 +746,7 @@
 	:global(:where(.side) .item.active:hover) {
 		background: transparent;
 	}
-	:global(:where(.side) .open) {
+	:global(:where(.side) .open:not(.acc):not(.chev)) {
 		flex: 1;
 		min-width: 0;
 		display: flex;

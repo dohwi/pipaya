@@ -23,7 +23,7 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self' 'unsafe-eval' blob: 'sha256-XIotZ3vRlnm65AK/VmRbdNPeu2FTOJBlJ9/HGKLCB20='",
+        "script-src": "'self' 'unsafe-eval' blob: 'sha256-ZdPZaTw8nFecw6u/pViVNR/hbShT5WD9E85y+bXSsj0='",
         "worker-src": "blob:",
         "connect-src": "'self' ipc: http://ipc.localhost http: https: ws: wss:",
         "img-src": "'self' data: blob: http: https: asset: http://asset.localhost",

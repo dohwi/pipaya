@@ -6,8 +6,11 @@ Extensions build screens by sending a JSON view tree; the host renders it with S
 
 | Surface | Where | Container | Interactive | Component |
 |---|---|---|---|---|
-| Panel | launcher → modal | `<dialog>`, `min(1000px,96vw)` × `min(760px,90dvh)` | yes | `ExtensionPanels` |
-| Composer widget | above the composer (hidden without a server) | `Accordion variant="box"`, max `min(40dvh,320px)` | yes | `ExtensionPanels placement="composer"` |
+| Panel (`panel`) | launcher → modal | `<dialog>`, `min(size.width ?? 1000px,96vw)` × `min(size.height ?? 760px,90dvh)` | yes | `ExtensionPanels` |
+| Composer widget (`composer`) | above the composer (hidden without a server) | `Accordion variant="box"`, max `min(40dvh,320px)` | yes | `ExtensionPanels placement="composer"` |
+| Sidebar section (`sidebar`) | bottom of the sidebar | `Accordion variant="box"`, max `45vh` | yes | `ExtensionPanels placement="sidebar"` |
+| Side dock (`side`) | right of the conversation area (narrow screens: over it) | `size.width ?? 360px`, user-resizable, tabs per panel | yes | `ExtensionDock` |
+| Floating window (`floating`) | over the app, non-modal | `size` (default 380×320), `position` (corner, `center`, or `{x,y}`), draggable and resizable | yes | `ExtensionFloating` |
 | Navbar item | header right slot | `min(40%,160px)` (≤600 px: `min(36%,132px)`) | no | `NavbarItems` |
 | Status chip | under the composer | text | no | `StatusLine` |
 | Composer action | under the composer | small button | click | `Composer` |
@@ -36,7 +39,9 @@ await sdk.ui.registerPanel({ id: 'counter', title: 'Counter', description: 'Firs
 await sdk.ui.open('counter');
 ```
 
-- Spec `{id, title, description?, placement?: 'panel'|'composer', view}`; a handler is required.
+- Spec `{id, title, description?, placement?: 'panel'|'composer'|'sidebar'|'side'|'floating', size?: {width?, height?}, position?, view}`; a handler is required. `size` (px, width 200–2000, height 120–2000) is for `panel`, `side` (width only) and `floating`; `position` (`top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`, or `{x, y}` px) only for `floating`. Sizes are clamped to the screen.
+- `open`/`close` on a `side`/`floating` panel show and hide it (both start shown), on a `composer`/`sidebar` panel unfold and fold it (both start folded), on a `panel` open and close the modal.
+- `place(id, {placement?, size?, position?})` moves a panel or changes its size and position at runtime. A new placement drops the old size/position unless given; a window the user dragged goes back to the asked place.
 - `open` during start waits for activation and never steals the screen from another open extension panel.
 - `update(id, view, {tone?})` replaces the whole view (no patches). `tone: 'danger'` turns the launcher badge red (`!`, extension name in the tooltip) and the panel tab red until the next update without it. Use it for errors instead of a status chip.
 - `close(id)` closes but keeps the registration; `remove(id)` drops panel and handler. Other extensions' IDs are unreachable.
