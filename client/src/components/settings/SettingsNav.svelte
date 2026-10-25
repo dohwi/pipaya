@@ -54,12 +54,12 @@
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
-		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id), half: sc === "device" && !!extensionUpdates.missingServerFor(e.package.manifest.id), halfLabel: t("서버 확장 필요") }));
+		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id), half: !!extensionUpdates.missingServerFor(e.package.manifest.id), halfLabel: t("서버 확장 필요") }));
 		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, companion: n.companion, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), halfLabel: t("클라이언트 확장 필요"), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
 		const owned = (id: string) => side.some((n) => n.companion === id);
 		const free = own.filter((e) => !owned(e.id));
 		// a pair stays flat: the client half sits right after its server extension, both marked with a clip
-		const rows: Kid[] = [...free.map((e) => ({ ...e, paired: sc === "device" && !!extensionUpdates.missingServerFor(e.id) }))];
+		const rows: Kid[] = [...free.map((e) => ({ ...e, paired: !!extensionUpdates.missingServerFor(e.id) }))];
 		for (const n of side) {
 			rows.push({ ...n, paired: !!n.companion });
 			for (const e of own) if (e.id === n.companion) rows.push({ ...e, paired: true });
