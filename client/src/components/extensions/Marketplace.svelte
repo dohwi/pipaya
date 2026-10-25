@@ -6,6 +6,7 @@
 	import Badge from "../Badge.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
+	import PairInstallConfirm from "./PairInstallConfirm.svelte";
 	import StatusChip from "../StatusChip.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -115,6 +116,10 @@
 	let asking = $state("");
 	const companionOf = (entry: MarketEntry) => (entry.companion ? catalog?.extensions.find((e) => e.id === entry.companion && e.kind === "client") : undefined);
 
+	/** The other half of a pair, whichever side this entry is. */
+	const pairOf = (entry: MarketEntry) => (entry.kind === "server" ? companionOf(entry) : serverOf(entry));
+	const confirming = $derived(catalog?.extensions.find((e) => e.id === (asking || askingServer)));
+
 	async function installClient(c: MarketEntry) {
 		error = "";
 		try { onpick(await fetchPackage(c), c); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
@@ -172,6 +177,9 @@
 				<li class="item">
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
+						{#if pairOf(entry)}{@const other = pairOf(entry)}
+							<span class="pair" role="img" aria-label={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })} title={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })}><Icon name="clip" /></span>
+						{/if}
 						{#if isOfficial(entry)}<span title={t("pipaya 공식 확장")}><Badge tone="ok" size="sm"><Icon name="check" />{t("공식")}</Badge></span>{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{/if}
 						<span class="ver">v{entry.version}</span>
@@ -203,37 +211,11 @@
 							</Notice>
 						{/if}
 					{/if}
-					{#if askingServer === entry.id}
-						{@const s = serverOf(entry)}
-						<Notice tone="warn" size="sm">
-							<div class="ask" role="group" aria-label={t("서버 확장도 설치")}>
-								<p>{t("서버 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: s?.name ?? "" })}</p>
-								<div class="askbtns">
-									<Button variant="primary" size="sm" onclick={() => installClientWith(entry, true)}>{t("함께 설치")}</Button>
-									<Button size="sm" onclick={() => installClientWith(entry, false)}>{t("클라이언트만 설치")}</Button>
-									<Button size="sm" onclick={() => (askingServer = "")}>{t("취소")}</Button>
-								</div>
-							</div>
-						</Notice>
-					{/if}
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
 						<Notice tone="warn" size="sm" role="status">
 							{t("클라이언트 확장 ‘{name}’ 필요", { name: c?.name ?? entry.companion })}
 							{#snippet action()}{#if c}<button type="button" disabled={!!working} onclick={() => installClient(c)}>{t("설치")}</button>{/if}{/snippet}
-						</Notice>
-					{/if}
-					{#if asking === entry.id}
-						{@const c = companionOf(entry)}
-						<Notice tone="warn" size="sm">
-							<div class="ask" role="group" aria-label={t("클라이언트 확장도 설치")}>
-								<p>{t("클라이언트 확장 ‘{name}’도 함께 설치할까요? 사용하려면 필요합니다.", { name: c?.name ?? entry.companion ?? "" })}</p>
-								<div class="askbtns">
-									<Button variant="primary" size="sm" onclick={() => installServer(entry, true)}>{t("함께 설치")}</Button>
-									<Button size="sm" onclick={() => installServer(entry, false)}>{t("서버만 설치")}</Button>
-									<Button size="sm" onclick={() => (asking = "")}>{t("취소")}</Button>
-								</div>
-							</div>
 						</Notice>
 					{/if}
 				</li>
@@ -243,6 +225,19 @@
 		</ul>
 	</div>
 </Modal>
+
+{#if confirming}
+	{@const other = pairOf(confirming)}
+	{#if other}
+		<PairInstallConfirm
+			picked={{ name: confirming.name, kind: confirming.kind }}
+			{other}
+			onboth={() => (asking ? installServer(confirming, true) : installClientWith(confirming, true))}
+			onsolo={() => (asking ? installServer(confirming, false) : installClientWith(confirming, false))}
+			oncancel={() => { asking = ""; askingServer = ""; }}
+		/>
+	{/if}
+{/if}
 
 <style>
 	.market { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px 18px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
@@ -265,7 +260,6 @@
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
-	.ask p { margin: 0 0 8px; }
-	.ask p:last-child { margin-bottom: 0; }
-	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+	.pair { flex: none; display: inline-flex; color: var(--text-faint); }
+	.pair :global(svg) { width: 14px; height: 14px; }
 </style>
