@@ -61,10 +61,12 @@
 		--pin-fg: var(--bg-side);
 	}
 	.num {
+		/* one digit is a true circle; wider counts stretch into a pill */
+		box-sizing: border-box;
 		width: auto;
-		min-width: 12px;
+		min-width: 14px;
 		height: 14px;
-		padding: 0 3px;
+		padding: 0 4px;
 		font-family: var(--mono);
 		font-size: 9px;
 		font-weight: 600;
