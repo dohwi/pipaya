@@ -46,6 +46,7 @@ import { SessionStore, SqliteCredentialStore, THINKING_LEVELS, type ThinkingLeve
 import { makeSerializerCompiler, validatorCompiler, type TypeBoxProvider } from "./typebox-provider.ts";
 import { registerWebSocket, type WebSocketOptions } from "./ws.ts";
 import { NotificationService, type PushTransports } from "./notifications.ts";
+import { UnreadTracker } from "./unread.ts";
 import { registerNotificationRoutes } from "./notification-routes.ts";
 import { createCorsPolicy, redactUrl } from "./security.ts";
 import { createPushTransports } from "./push.ts";
@@ -105,6 +106,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		title: (id) => store.get(id)?.title ?? "",
 		lastAnswer: (id) => lastAnswer(store, id),
 	});
+	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id));
+	notifications.onLook = (ids) => unread.read(ids);
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
 	const configuration = new Configuration(db, cfg, registry, credentials);
@@ -383,7 +386,11 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	app.get("/activity", {
 		schema: { response: { 200: S.ActivityInfo, ...S.errors(401) } },
-		handler: async () => ({ sessions: sessions.activity() }),
+		handler: async () => ({ sessions: sessions.activity(), unread: unread.list() }),
+	});
+	app.post("/sessions/:id/read", {
+		schema: { params: S.IdParams, response: { 200: Type.Object({ ok: Type.Boolean() }), ...S.errors(401) } },
+		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },
 	});
 	app.post("/sessions", {
 		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },
@@ -560,6 +567,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		clearInterval(prune);
 		configuration.close();
 		agentsWatch.stop();
+		unread.dispose();
 		await notifications.close();
 		await push.close();
 		terminals.shutdown();

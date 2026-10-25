@@ -164,6 +164,12 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	},
 	// v23: nothing reads groups.names any more (the names it held moved with v22). Drop the column.
 	(db) => { if ((db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups DROP COLUMN names"); },
+	// v24: what finished while nobody was looking is kept by the server, so every device shows (and clears) the same marks.
+	`CREATE TABLE IF NOT EXISTS session_unread (
+		session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		kind       TEXT NOT NULL,
+		at         INTEGER NOT NULL
+	);`,
 ];
 
 export function openDb(path: string): Database {

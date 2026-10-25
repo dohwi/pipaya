@@ -13,7 +13,7 @@ export function registerNotificationRoutes(server: FastifyInstance, service: Not
   app.get("/notifications/devices", async () => ({ devices: service.devices() }));
   app.put("/notifications/devices/:id", {
     schema: { params: Type.Object({ id }), body: Type.Object({
-      platform: Type.Union((["desktop", "android", "ios", "web"] as const).map(value => Type.Literal(value))), focused: Type.Boolean(), enabled: Type.Boolean(), visibleSessionIds: Type.Array(id, { maxItems: 20 }), lang: Type.Optional(text(16)), name: Type.Optional(text(60)), os: Type.Optional(text(60)), app: Type.Optional(text(60)),
+      platform: Type.Union((["desktop", "android", "ios", "web"] as const).map(value => Type.Literal(value))), focused: Type.Boolean(), enabled: Type.Boolean(), visibleSessionIds: Type.Array(id, { maxItems: 20 }), activeSessionId: Type.Optional(id), lang: Type.Optional(text(16)), name: Type.Optional(text(60)), os: Type.Optional(text(60)), app: Type.Optional(text(60)),
       push: Type.Optional(Type.Union([Type.Null(), Type.Object({ provider: Type.Union([Type.Literal("fcm"), Type.Literal("apns")]), token: text(4096) }, { additionalProperties: false })])),
     }, { additionalProperties: false }) },
     handler: async req => {

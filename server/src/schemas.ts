@@ -89,6 +89,10 @@ export const ActivityInfo = Type.Object({
 		}),
 		{ description: "Only sessions that are running or waiting on the user" },
 	),
+	unread: Type.Array(
+		Type.Object({ sessionId: Type.String(), kind: Type.Union([Type.Literal("done"), Type.Literal("failed")]) }),
+		{ description: "Sessions that finished or failed while no device was looking; cleared when any device reads them" },
+	),
 });
 
 export const SessionDetail = Type.Object({
@@ -362,6 +366,7 @@ export interface EventDef {
 /** Machine-readable event payload catalog exposed through /events/types. */
 export const EVENTS: EventDef[] = [
 	{ type: "device_revoked", persisted: false, description: "A device was removed from the device list; that device should stop reporting to this server", data: Type.Object({ deviceId: Type.String() }) },
+	{ type: "session_unread", persisted: false, description: "A session's unread mark changed (sessionId is null): `kind` is null once it was read on some device", data: Type.Object({ sessionId: Type.String(), kind: Nullable(Type.Union([Type.Literal("done"), Type.Literal("failed")])) }) },
 	{ type: "notification", persisted: false, description: "Live OS notification addressed to one device; do not replay", data: Type.Object({ deviceId: Type.String(), notification: Type.Object({ id: Type.String(), at: Type.Integer(), source: Type.String(), title: Type.String(), body: Type.Optional(Type.String()), kind: Type.Optional(Type.String()), sessionId: Type.Optional(Type.String()), key: Type.Optional(Type.String()) }) }) },
 	{
 		type: "configuration_updated", persisted: true,

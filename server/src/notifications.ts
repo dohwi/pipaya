@@ -6,7 +6,7 @@ import type { EventBus, PipayaEvent } from "./events.ts";
 export type DevicePlatform = "desktop" | "android" | "ios" | "web";
 export type PushProvider = "fcm" | "apns";
 export interface PushRegistration { provider: PushProvider; token: string }
-export interface DevicePresence { platform: DevicePlatform; focused: boolean; enabled: boolean; visibleSessionIds: string[]; lang?: string; /** What the device calls itself ("MacBook Air"), shown in the device list */ name?: string; /** "macOS 15.1 · arm64" */ os?: string; /** "Desktop app 0.1.42", "Chrome 126" */ app?: string }
+export interface DevicePresence { platform: DevicePlatform; focused: boolean; enabled: boolean; visibleSessionIds: string[]; /** The focused pane, when it differs from the other visible ones (split view): only it counts as read */ activeSessionId?: string; lang?: string; /** What the device calls itself ("MacBook Air"), shown in the device list */ name?: string; /** "macOS 15.1 · arm64" */ os?: string; /** "Desktop app 0.1.42", "Chrome 126" */ app?: string }
 /** One connected device as the device list shows it. `live`: heard from within the lease. `push`: can receive a push while the app is closed. */
 export interface DeviceInfo { id: string; platform: DevicePlatform; name: string | null; os: string | null; app: string | null; enabled: boolean; live: boolean; push: boolean; lastSeen: number | null }
 export interface NotificationInput { title: string; body?: string; kind?: string; sessionId?: string; key?: string; /** Built-in notices: the facts the text is written from, once per language. Extension notices have none. */ facts?: BuiltinFacts }
@@ -64,6 +64,12 @@ export class NotificationService {
   private pushed = new Map<string, number>();
   private rates = new Map<string, number[]>();
   private unsubscribe: () => void;
+  /** Called with the sessions a focused device is showing (they count as read). */
+  onLook?: (sessionIds: string[]) => void;
+  /** Is a focused device showing this session right now? */
+  watching(sessionId: string) {
+    return this.live().some(([, p]) => p.focused && (p.activeSessionId ? p.activeSessionId === sessionId : p.visibleSessionIds.includes(sessionId)) && (p.platform === "desktop" || p.platform === "web" || this.now() - p.at < MOBILE_FOCUS_MS));
+  }
   /**
    * `escalateMs()`: how long a notification shown on a PC may go unread before it is also pushed to the phone (Discord style).
    * 0 turns that off: a PC that showed it is then enough. Read on every notification so a changed setting applies at once.
@@ -90,7 +96,7 @@ export class NotificationService {
   get providers() { return Object.keys(this.push) as PushProvider[]; }
   get pushConfigured() { return this.providers.length > 0; }
   heartbeat(id: string, presence: DevicePresence, registration?: PushRegistration | null) {
-    if (presence.focused) { this.looks++; this.clearPushed(presence.visibleSessionIds, id); }
+    if (presence.focused) { this.looks++; this.clearPushed(presence.visibleSessionIds, id); this.onLook?.(presence.activeSessionId ? [presence.activeSessionId] : presence.visibleSessionIds); }
     for (const [key, p] of this.presence) if (this.now() - p.at >= LEASE_MS) this.presence.delete(key);
     if (this.presence.size >= 100 && !this.presence.has(id)) throw new Error("live device limit reached");
     if (presence.platform === "desktop" || presence.platform === "web") {
