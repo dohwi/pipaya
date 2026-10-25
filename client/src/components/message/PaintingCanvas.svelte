@@ -3,14 +3,13 @@
 	import { t } from "../../lib/i18n";
 </script>
 
-<!-- Skeleton shown while an image model works: a quiet frame with a breathing glow, a slow sheen and an indeterminate bar. -->
+<!-- Skeleton shown while an image model works: a quiet frame with a breathing glow and a slow sheen; the whole card fades in and out. -->
 <div class="painting" role="status" aria-label={t("이미지를 만드는 중…")}>
 	<div class="frame" aria-hidden="true">
 		<span class="grid"></span>
 		<span class="glow"></span>
 		<span class="sheen"></span>
 		<span class="mark"><PipayaMark size={56} /></span>
-		<span class="bar"></span>
 	</div>
 	<span class="shimmer cap">{t("이미지를 만드는 중…")}</span>
 </div>
@@ -31,6 +30,8 @@
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		isolation: isolate;
+		will-change: opacity;
+		animation: fade 4.8s ease-in-out infinite;
 		display: grid;
 		place-items: center;
 	}
@@ -69,26 +70,14 @@
 		will-change: transform, opacity;
 		animation: mark 4.8s ease-in-out infinite;
 	}
-	.bar {
-		position: absolute;
-		inset: auto 0 0;
-		height: 2px;
-		overflow: hidden;
-	}
-	.bar::after {
-		content: "";
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: 35%;
-		background: var(--accent);
-		opacity: 0.8;
-		border-radius: 2px;
-		will-change: transform;
-		animation: slide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-	}
 	.cap {
 		font-size: var(--fs-xs);
 		align-self: flex-start;
+	}
+	@keyframes fade {
+		50% {
+			opacity: 0.45;
+		}
 	}
 	@keyframes breathe {
 		50% {
@@ -108,14 +97,6 @@
 			transform: translateX(300%);
 		}
 	}
-	@keyframes slide {
-		from {
-			transform: translateX(-100%);
-		}
-		to {
-			transform: translateX(290%);
-		}
-	}
 	@keyframes appear {
 		from {
 			opacity: 0;
@@ -124,6 +105,7 @@
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.painting,
+		.frame,
 		.glow,
 		.mark,
 		.sheen {
@@ -131,10 +113,6 @@
 		}
 		.sheen {
 			display: none;
-		}
-		.bar::after {
-			animation: none;
-			width: 40%;
 		}
 	}
 </style>
