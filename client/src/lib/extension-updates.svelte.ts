@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import { compareVersions, fetchCatalog, savedMarketplaceUrl, type MarketCatalog } from "./extensions/marketplace";
+import { compareVersions, fetchCatalog, DEFAULT_MARKETPLACE_URL, type MarketCatalog } from "./extensions/marketplace";
 import { extensions } from "./extensions/host.svelte";
 
 const RECHECK_MS = 30 * 60 * 1000;
@@ -49,7 +49,7 @@ class ExtensionUpdates {
 		} else this.server = [];
 		if (!force && this.catalog && Date.now() - this.checkedAt < RECHECK_MS) return;
 		try {
-			this.catalog = await fetchCatalog(savedMarketplaceUrl());
+			this.catalog = await fetchCatalog(DEFAULT_MARKETPLACE_URL);
 			this.checkedAt = Date.now();
 		} catch { /* offline: no update hints */ }
 	}

@@ -9,14 +9,11 @@
 	import StatusChip from "../StatusChip.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { DEFAULT_MARKETPLACE_URL, MARKETPLACE_URL_KEY, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { scope, onclose, onpick }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
 
-	const KEY = MARKETPLACE_URL_KEY;
-	const saved = (() => { try { return localStorage.getItem(KEY) || DEFAULT_MARKETPLACE_URL; } catch { return DEFAULT_MARKETPLACE_URL; } })();
-	let url = $state(saved);
 	let catalog = $state<MarketCatalog | null>(null);
 	let query = $state("");
 	let loading = $state(false);
@@ -52,8 +49,7 @@
 		loading = true;
 		error = "";
 		try {
-			catalog = await fetchCatalog(url.trim(), ctrl.signal);
-			try { if (url.trim() === DEFAULT_MARKETPLACE_URL) localStorage.removeItem(KEY); else localStorage.setItem(KEY, url.trim()); } catch { /* storage unavailable */ }
+			catalog = await fetchCatalog(DEFAULT_MARKETPLACE_URL, ctrl.signal);
 		} catch (cause) {
 			if ((cause as Error)?.name === "AbortError") return;
 			catalog = null;
@@ -189,14 +185,6 @@
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
 			{/each}
 		</ul>
-		<details class="adv">
-			<summary>{t("카탈로그 주소")}</summary>
-			<div class="urlrow">
-				<input type="url" spellcheck="false" aria-label={t("카탈로그 주소")} bind:value={url} onkeydown={(e) => { if (e.key === "Enter") void load(); }} />
-				<Button size="sm" disabled={loading} onclick={load}>{t("불러오기")}</Button>
-				<Button size="sm" onclick={() => { url = DEFAULT_MARKETPLACE_URL; void load(); }}>{t("기본값")}</Button>
-			</div>
-		</details>
 	</div>
 </Modal>
 
@@ -224,7 +212,4 @@
 	.ask p { margin: 0 0 8px; }
 	.ask p:last-child { margin-bottom: 0; }
 	.askbtns { display: flex; flex-wrap: wrap; gap: 6px; }
-	.adv summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-faint); }
-	.urlrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-	.urlrow input { flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); color: inherit; }
 </style>

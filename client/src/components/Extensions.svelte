@@ -13,7 +13,7 @@
 	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
 	import { fetchCompanion } from "../lib/extensions/marketplace";
-	import { compareVersions, fetchCatalog, fetchPackage, savedMarketplaceUrl, type MarketCatalog, type MarketEntry } from "../lib/extensions/marketplace";
+	import { compareVersions, fetchCatalog, fetchPackage, DEFAULT_MARKETPLACE_URL, type MarketCatalog, type MarketEntry } from "../lib/extensions/marketplace";
 	import ImportDialogs from "./extensions/ImportDialogs.svelte";
 	import InstalledDetail from "./extensions/InstalledDetail.svelte";
 	import ServerDetail from "./extensions/ServerDetail.svelte";
@@ -59,7 +59,7 @@
 	$effect(() => {
 		const ctrl = new AbortController();
 		void market;
-		fetchCatalog(savedMarketplaceUrl(), ctrl.signal).then((c) => { catalog = c; }).catch(() => { /* offline: no update hints */ });
+		fetchCatalog(DEFAULT_MARKETPLACE_URL, ctrl.signal).then((c) => { catalog = c; }).catch(() => { /* offline: no update hints */ });
 		return () => ctrl.abort();
 	});
 	/** Newer catalog entry of an installed extension of this tab, by id. */
