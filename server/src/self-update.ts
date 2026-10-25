@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { HttpError } from "./errors.ts";
 
 /**
- * Lets a client update the server it is connected to: look up the tip of the branch this checkout tracks (no download), fetch and move the working tree to it,
+ * Lets a client update the server it is connected to: look up the commit of the rolling `latest` release tag (no download; the client release workflow moves it, so a plain merge to main is not an update), fetch and move the working tree to it,
  * reinstall dependencies only when `package.json`/`bun.lock` changed, then exit so the service manager (systemd `Restart=always`, launchd `KeepAlive`) starts the new code.
  * It does the same as `install.sh update`, minus the service restart that would kill the server in the middle of replying.
  *
@@ -24,7 +24,7 @@ export interface UpdateStatus {
 	/** The server can update itself and come back. */
 	managed: boolean;
 	reason?: UnavailableReason;
-	/** The branch this checkout tracks. */
+	/** The branch this checkout is on (the release commit is checked out onto it). */
 	ref: string | null;
 	current: string | null;
 	latest: string | null;
@@ -52,6 +52,8 @@ export interface SelfUpdateOptions {
 
 const LAUNCHD_LABEL = "app.pipaya.server";
 const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
+/** The rolling release tag the client workflow moves on every version bump; the server follows the same release. */
+const RELEASE_TAG = "latest";
 const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
@@ -123,9 +125,9 @@ export class SelfUpdater {
 		const current = head.code === 0 && SHA_PATTERN.test(head.out) ? head.out : null;
 		if (!current) return none("not_git", { ref });
 
-		// Only asks the remote for the tip: nothing is downloaded until the update is applied.
-		const remote = await this.git(["ls-remote", "--heads", "origin", ref], 30_000);
-		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/heads/${ref}`))?.split("\t")[0] : undefined;
+		// Only asks the remote where the release tag points: nothing is downloaded until the update is applied.
+		const remote = await this.git(["ls-remote", "--tags", "origin", `refs/tags/${RELEASE_TAG}`], 30_000);
+		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/tags/${RELEASE_TAG}`))?.split("\t")[0] : undefined;
 		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
 		return (this.cached = { managed: true, ref, current, latest, available: latest !== current, checkedAt });

@@ -28,7 +28,7 @@ describe("version handshake", () => {
 		const key = a.join(" ");
 		if (key.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (key === "rev-parse HEAD") return { code: 0, out: head };
-		if (key.startsWith("ls-remote")) return { code: 0, out: `${fetched}\trefs/heads/main` };
+		if (key.startsWith("ls-remote")) return { code: 0, out: `${fetched}\trefs/tags/latest` };
 		if (key.startsWith("fetch")) return { code: 0, out: "" };
 		if (key.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		if (key.startsWith("reset")) {
@@ -175,7 +175,7 @@ describe("SelfUpdater", () => {
 		const k = cmd.slice(1).join(" ");
 		if (k.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (k === "rev-parse HEAD") return { code: 0, out: OLD };
-		if (k.startsWith("ls-remote")) return { code: 0, out: `${NEW}\trefs/heads/main` };
+		if (k.startsWith("ls-remote")) return { code: 0, out: `${NEW}\trefs/tags/latest` };
 		if (k.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		return { code: 0, out: "" };
 	};

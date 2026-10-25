@@ -19,7 +19,7 @@ PLIST_LABEL="app.pipaya.server"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT_NAME.service"
 
-REF="main"
+REF="latest"   # the rolling release tag; any other value is a branch or tag to pin
 HOST=""
 PORT="8787"
 SERVICE=1
@@ -47,7 +47,7 @@ Server options
   --host ADDR      Listen address. Default: the Tailscale IPv4 address if there is one, else 127.0.0.1.
                    Use 0.0.0.0 only behind a firewall or a private network.
   --port N         Listen port (default 8787)
-  --ref REF        Git branch or tag to install (default main)
+  --ref REF        Git branch or tag to install (default latest: the newest release, not every commit on main)
   --dir PATH       Install location (default ~/.local/share/pipaya)
   --no-service     Install only; do not register or start a service
   -y, --yes        Do not ask before installing Bun
@@ -117,13 +117,20 @@ install_bun() {
 }
 
 fetch_code() {
+	# The default follows the `latest` release tag but stays on a branch, so the server can still update itself.
+	local branch="$REF" want="$REF"
+	if [ "$REF" = latest ]; then branch="main"; want="refs/tags/latest"; fi
 	if [ -d "$APP_DIR/.git" ]; then
-		git -C "$APP_DIR" fetch --quiet --depth 1 origin "$REF"
+		git -C "$APP_DIR" fetch --quiet --depth 1 origin "$want"
 		git -C "$APP_DIR" reset --quiet --hard FETCH_HEAD
 	else
 		[ ! -e "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ] || die "$APP_DIR exists and is not a pipaya checkout (use --dir)"
 		mkdir -p "$(dirname "$APP_DIR")"
-		git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$APP_DIR"
+		git clone --quiet --depth 1 --branch "$branch" "$REPO_URL" "$APP_DIR"
+		if [ "$want" != "$branch" ]; then
+			git -C "$APP_DIR" fetch --quiet --depth 1 origin "$want"
+			git -C "$APP_DIR" reset --quiet --hard FETCH_HEAD
+		fi
 	fi
 	(cd "$APP_DIR/server" && bun install --frozen-lockfile --production --silent)
 }
