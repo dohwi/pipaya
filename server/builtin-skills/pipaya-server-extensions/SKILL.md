@@ -9,6 +9,8 @@ A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `pac
 
 A folder extension can describe itself in `package.json` so Settings shows a page like a client extension's: `version`, `description`, and under `"pipaya"`: `title`, `descriptions` (`{ "en": "...", "ko": "..." }`) and `settings`, a list of fields (`key`, `type` string/number/boolean/select, `label`, `description`, `default`, `required`, `secret`, `options`, max 20; same shape as a client manifest's `settings`). The form edits the object behind `pi.settings`.
 
+A server extension that needs a client half names it with `pipaya.companion` (its client id) and can carry the built package itself with `pipaya.client` (a path to the package JSON inside the folder, e.g. `"dist/my-ui.json"`). Settings then installs the client half from the server (`GET /server-extensions/:extension/client`), the same version as the server half and without the marketplace; it falls back to the catalog otherwise.
+
 Where they are read from (each entry is a file or a folder; names starting with `.` and `node_modules` are skipped):
 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
@@ -16,7 +18,7 @@ Where they are read from (each entry is a file or a folder; names starting with 
 
 The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`; the default ones are folders of `pipaya-extensions`, e.g. `extensions/peer-tools`). `examples/extensions/todo.ts` is a small one to copy from.
 
-Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors`. A file that throws while loading is switched off alone; the others keep working.
+Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors[?extension=name]`. A file that throws while loading is switched off alone; the others keep working.
 
 ## A complete example
 
@@ -63,7 +65,7 @@ export default (pi) => {
 | `pi.registerTool(tool)` | `{name, description, parameters, defaultActive?, alwaysActive?, switchable?, label?, execute(toolCallId, params, ctx, signal, onUpdate)}`. A built-in name (`read`, `bash`, ...) **replaces** that tool; `pi.builtinTool(name, cwd)` returns the original so you can wrap it |
 | `pi.registerCommand(name, {description?, args?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt, note?, title?}` to send it to the model, nothing to just handle it. Runs before the model sees the message |
 | `pi.registerCommands(prefix, {label?, list(cwd), run(name, args, ctx)})` | a family `/prefix:name args` found at run time (e.g. files in a folder). `list(cwd)` returns `[{name, description?, args?}]` for the menu (`GET /server-extensions/commands?cwd=`); `run` returns like a command. A `note` (`{text, collapse?, data?}`) is shown on the user's message and never sent to the model |
-| `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]` |
+| `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]`. Name: letters, digits, `_`, `-` (max 80). A call that has not answered in 20 s fails |
 | `pi.registerProvider(provider)` / `unregisterProvider(id)` | a pi-ai `Provider` (custom endpoint, proxy, OAuth). Removed when the extension unloads |
 | `pi.registerFlag(name, {type?, default?, description?})`, `pi.getFlag(name)` | value from environment `PIPAYA_FLAG_<NAME>` |
 | `pi.emit(sessionId\|null, type, data?, {ephemeral?})` | publishes `extension_event` to clients (client extensions with the `server` permission receive it) |
@@ -79,7 +81,7 @@ export default (pi) => {
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
 
-`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`, `ask(toolCallId, {question, options?, recommended?, allowFreeText?, items?}, signal?)` (asks the user, resolves to the answer text). `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries`, and never reaches the model.
+`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`, `ask(toolCallId, {question, options?, recommended?, allowFreeText?, items?}, signal?)` (asks the user, resolves to the answer text). `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries[?extension=&type=&after=<id>&limit=<≤1000>]` (oldest first), and never reaches the model.
 
 ## Hooks
 

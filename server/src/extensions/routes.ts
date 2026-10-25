@@ -23,6 +23,7 @@ const Info = Type.Object({
 	descriptions: Type.Optional(Type.Record(Type.String(), Type.String())),
 	settings: Type.Optional(Type.Array(Type.Unknown(), { description: "Fields of the settings form (`pipaya.settings` in package.json), same shape as a client manifest's `settings`" })),
 	settingsId: Type.String({ description: "Id of the shared settings object behind the form (`GET/PUT /extensions/:id/settings`)" }),
+	clientPackage: Type.Optional(Type.Boolean({ description: "The folder carries its client half (`pipaya.client`); `GET /server-extensions/:extension/client` serves it" })),
 	error: Type.Optional(Type.String()),
 });
 
@@ -59,13 +60,31 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 			return { cwd, families: await host.commandEntries(cwd) };
 		},
 	});
+	app.get("/server-extensions/:extension/client", {
+		schema: {
+			params: Type.Object({ extension: Type.String() }),
+			response: { 200: Type.Object({ package: Type.Unknown({ description: "The client extension package, as built; the client validates it" }) }), ...errors(400, 401, 404) },
+		},
+		handler: async (req) => {
+			let pkg: unknown;
+			try { pkg = host.clientPackage(req.params.extension); } catch (e) { throw badRequest(e instanceof Error ? e.message : String(e)); }
+			if (pkg === undefined) throw notFound("client package");
+			return { package: pkg };
+		},
+	});
 	app.post("/server-extensions/reload", {
 		schema: { response: { 200: Type.Object({ extensions: Type.Array(Info) }), ...errors(401, 403) } },
 		handler: async () => ({ extensions: await host.reload() }),
 	});
 	app.get("/server-extensions/errors", {
-		schema: { response: { 200: Type.Object({ errors: Type.Array(Type.Object({ at: Type.Integer(), extension: Type.String(), where: Type.String(), message: Type.String() })) }), ...errors(401) } },
-		handler: async () => ({ errors: host.errors }),
+		schema: {
+			querystring: Type.Object({ extension: Type.Optional(Type.String({ description: "Only this extension's errors (its name, or a folder name for every entry of that folder)" })) }),
+			response: { 200: Type.Object({ errors: Type.Array(Type.Object({ at: Type.Integer(), extension: Type.String(), where: Type.String(), message: Type.String() })) }), ...errors(401) },
+		},
+		handler: async (req) => {
+			const name = req.query.extension;
+			return { errors: name ? host.errors.filter((e) => e.extension === name || e.extension.startsWith(`${name}/`)) : host.errors };
+		},
 	});
 	app.post("/server-extensions/:extension/methods/:method", {
 		schema: {
@@ -90,12 +109,18 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 	app.get("/sessions/:id/extension-entries", {
 		schema: {
 			params: IdParams,
-			querystring: Type.Object({ extension: Type.Optional(Type.String()), type: Type.Optional(Type.String()) }),
+			querystring: Type.Object({
+				extension: Type.Optional(Type.String()),
+				type: Type.Optional(Type.String()),
+				after: Type.Optional(Type.Integer({ minimum: 0, description: "Only entries with a larger id (paging)" })),
+				limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000, description: "At most this many (default and max 1000)" })),
+			}),
 			response: { 200: Type.Object({ entries: Type.Array(Type.Object({ id: Type.Integer(), extension: Type.String(), type: Type.String(), data: Type.Unknown(), createdAt: Type.Integer() })) }), ...errors(401, 404) },
 		},
 		handler: async (req) => {
 			if (!sessionExists(req.params.id)) throw notFound("session");
-			return { entries: host.allEntries(req.params.id, req.query.extension, req.query.type) };
+			const { extension, type, after, limit } = req.query;
+			return { entries: host.allEntries(req.params.id, extension, type, { after, limit }) };
 		},
 	});
 }

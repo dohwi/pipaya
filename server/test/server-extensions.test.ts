@@ -187,6 +187,60 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		await api("POST", "/server-extensions/reload");
 	});
 
+	test("pipaya.client: a folder can carry its client half, served as is and never from outside the folder", async () => {
+		const pkgDir = join(extDir, "carrier");
+		mkdirSync(join(pkgDir, "dist"), { recursive: true });
+		const client = { manifest: { id: "carrier-ui", name: "Carrier", version: "1.0.0", sdkVersion: 1, permissions: [] }, code: "1" };
+		writeFileSync(join(pkgDir, "dist", "carrier-ui.json"), JSON.stringify(client));
+		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ pipaya: { companion: "carrier-ui", client: "dist/carrier-ui.json" } }));
+		writeFileSync(join(pkgDir, "index.js"), "export default () => {};");
+		const escape = join(extDir, "escape");
+		mkdirSync(escape, { recursive: true });
+		writeFileSync(join(escape, "package.json"), JSON.stringify({ pipaya: { client: "../carrier/dist/carrier-ui.json" } }));
+		writeFileSync(join(escape, "index.js"), "export default () => {};");
+		await api("POST", "/server-extensions/reload");
+		const list = (await api("GET", "/server-extensions")).json.extensions as any[];
+		expect(list.find((e) => e.name === "carrier")?.clientPackage).toBe(true);
+		expect(list.find((e) => e.name === "escape")?.clientPackage).toBeUndefined();
+		expect((await api("GET", "/server-extensions/carrier/client")).json.package).toEqual(client);
+		expect((await api("GET", "/server-extensions/escape/client")).status).toBe(404);
+		expect((await api("GET", "/server-extensions/demo/client")).status).toBe(404);
+		rmSync(pkgDir, { recursive: true });
+		rmSync(escape, { recursive: true });
+		await api("POST", "/server-extensions/reload");
+	});
+
+	test("entries are filtered and paged in the database; errors can be narrowed to one extension", async () => {
+		const id = await newSession();
+		for (let i = 0; i < 3; i++) {
+			await api("POST", `/sessions/${id}/messages`, { text: `!greet ${JSON.stringify({ who: `p${i}` })}` });
+			await untilIdle(id);
+		}
+		const all = (await api("GET", `/sessions/${id}/extension-entries?extension=demo&type=greeted`)).json.entries as any[];
+		expect(all.map((e) => e.data.who)).toEqual(["p0", "p1", "p2"]);
+		const page = (await api("GET", `/sessions/${id}/extension-entries?type=greeted&after=${all[0].id}&limit=1`)).json.entries as any[];
+		expect(page.map((e) => e.data.who)).toEqual(["p1"]);
+		expect((await api("GET", `/sessions/${id}/extension-entries?type=nothing`)).json.entries).toEqual([]);
+		const errs = (await api("GET", "/server-extensions/errors?extension=broken")).json.errors as any[];
+		expect(errs.length).toBeGreaterThan(0);
+		expect(errs.every((e) => e.extension === "broken")).toBe(true);
+	});
+
+	test("method names are checked at registration and a method that never answers times out", async () => {
+		const exDir = join(dir, "method-exts");
+		mkdirSync(exDir, { recursive: true });
+		const { ExtensionHost } = await import("../src/extensions/host.ts");
+		writeFileSync(join(exDir, "bad.js"), `export default (pi) => { pi.registerMethod("a b", () => 1); };`);
+		writeFileSync(join(exDir, "slow.js"), `export default (pi) => { pi.registerMethod("hang", () => new Promise(() => {})); };`);
+		const host = new ExtensionHost({ db: {} as any, bus: { publish() {}, subscribe: () => () => {} } as any, registry: { models: {} } as any, dataDir: dir, dirs: [exDir], methodTimeoutMs: 50 });
+		const list = await host.load();
+		expect(list.find((e) => e.name === "bad")!.error).toContain("invalid method name");
+		await expect(host.callMethod("slow", "hang", null, null)).rejects.toThrow("did not answer");
+		expect(host.errors.some((e) => e.extension === "slow" && e.where === "method:hang")).toBe(true);
+		await host.shutdown();
+		rmSync(exDir, { recursive: true });
+	});
+
 	test("methods are callable by clients and reload keeps working", async () => {
 		expect((await api("POST", "/server-extensions/demo/methods/sum", { a: 2, b: 3 })).json.result).toBe(5);
 		expect((await api("POST", "/server-extensions/demo/methods/nope", {})).status).toBe(404);

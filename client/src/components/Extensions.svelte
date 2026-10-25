@@ -95,7 +95,18 @@
 	}
 	/** The client half of a server extension: fetched from the catalog, then through the usual preview. */
 	async function installCompanion(id: string) {
-		await tasks.run("$import", async () => pickFromMarket(await fetchCompanion(id), { id }));
+		await tasks.run("$import", async () => pickFromMarket(await companionPackage(id), { id }));
+	}
+	/**
+	 * The client half: the copy the server extension carries in its own folder when it has one (same version as the
+	 * server half, works without the marketplace), else the catalog's.
+	 */
+	async function companionPackage(id: string): Promise<ExtensionPackage> {
+		const owner = serverSide.find((e) => e.companion === id && e.clientPackage);
+		if (owner && app.api) {
+			try { return parsePackage(await app.api.serverExtensionClient(owner.name)); } catch { /* fall back to the catalog */ }
+		}
+		return fetchCompanion(id);
 	}
 	const tasks = new ExtensionTasks();
 	let drafts = $state<Record<string, string>>({});

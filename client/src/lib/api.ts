@@ -173,7 +173,7 @@ export class Api {
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {
@@ -184,6 +184,9 @@ export class Api {
 	};
 	installServerExtension = (src: { id: string; repo: string; dir?: string; ref: string; commit: string }, signal?: AbortSignal) =>
 		this.req<{ extensions: unknown[] }>("POST", "/server-extensions/install", src, signal);
+	/** The client half a server extension carries in its folder (`pipaya.client`); unvalidated JSON. */
+	serverExtensionClient = (extension: string, signal?: AbortSignal) =>
+		this.req<{ package: unknown }>("GET", `/server-extensions/${encodeURIComponent(extension)}/client`, undefined, signal).then((r) => r.package);
 	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal);
 
 	/* ---------- settings that belong to this server ---------- */

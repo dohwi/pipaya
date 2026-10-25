@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, join, resolve, sep } from "node:path";
 import Type from "typebox";
 import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
@@ -39,6 +39,8 @@ export interface ExtensionHostOptions {
 	home?: string;
 	env?: Record<string, string | undefined>;
 	log?: (msg: string) => void;
+	/** How long a client's method call may take (default 20 s; the client gives up after 15). */
+	methodTimeoutMs?: number;
 	/** The per-extension settings store (`/extensions/:id/settings`). */
 	settings?: { get(id: string): Record<string, unknown> | undefined; save(id: string, value: unknown): Record<string, unknown> };
 }
@@ -66,12 +68,18 @@ export interface ExtensionInfo {
 	settings?: unknown[];
 	/** Id of the shared settings object (`GET/PUT /extensions/:id/settings`) behind `settings`. */
 	settingsId: string;
+	/** True when the folder carries the client half itself (`pipaya.client`): `GET /server-extensions/:name/client` serves it. */
+	clientPackage?: boolean;
 	error?: string;
 }
 
-type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "settings">;
+/** A client package a server extension carries is at most this big (the client's MAX_PACKAGE_BYTES plus slack for formatting). */
+export const MAX_CLIENT_PACKAGE_BYTES = 2 * 1024 * 1024;
+
+type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "settings"> & { clientFile?: string };
 
 interface Loaded extends ExtensionInfo {
+	clientFile?: string;
 	handlers: Map<EventName, EventHandler<any>[]>;
 	toolDefs: Map<string, ExtensionTool>;
 	commandDefs: Map<string, ExtensionCommand>;
@@ -87,11 +95,15 @@ const SCRIPT_EXT = new Set([".ts", ".js", ".mjs"]);
 const MAX_ERRORS = 100;
 const FAMILY_NAME = /^[A-Za-z0-9_.-]{1,80}$/;
 const MAX_FAMILY_ENTRIES = 500;
+const METHOD_NAME = /^[A-Za-z0-9_-]{1,80}$/;
+/** A method a client waits on must answer: the client gives up after 15 s, so the server stops waiting a little later. */
+const METHOD_TIMEOUT_MS = 20_000;
+const MAX_ENTRY_PAGE = 1000;
 
 const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.trim() && v.length <= max ? v : undefined);
 
 /** What a folder extension's package.json tells the settings page (all optional, none of it trusted). */
-function packageMeta(json: any): PackageMeta {
+function packageMeta(json: any, dir?: string): PackageMeta {
 	const meta = json?.pipaya;
 	const out: PackageMeta = {};
 	const c = meta?.companion;
@@ -105,11 +117,19 @@ function packageMeta(json: any): PackageMeta {
 		if (Object.keys(d).length) out.descriptions = d;
 	}
 	if (Array.isArray(meta?.settings) && meta.settings.length <= 20) out.settings = meta.settings;
+	// `pipaya.client`: a built client package inside the folder (relative, never outside it).
+	const client = meta?.client;
+	if (dir && typeof client === "string" && /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*\.json$/.test(client)) {
+		const file = resolve(dir, client);
+		if (file.startsWith(resolve(dir) + sep)) out.clientFile = file;
+	}
 	return out;
 }
 
 export class ExtensionHost {
 	private loaded: Loaded[] = [];
+	/** The extensions that loaded without an error; asked on every tool call and model call, so kept rather than filtered each time. */
+	private running: Loaded[] = [];
 	private bridge?: SessionBridge;
 	private channels = new Map<string, Set<(data: unknown) => void>>();
 	private version = 0;
@@ -142,7 +162,7 @@ export class ExtensionHost {
 				try {
 					const json = JSON.parse(readFileSync(pkg, "utf8"));
 					const meta = json?.pipaya;
-					companion = packageMeta(json);
+					companion = packageMeta(json, dir);
 					const listed = meta?.extensions;
 					if (Array.isArray(listed)) {
 						for (const rel of listed) if (typeof rel === "string") add(`${name}/${basename(rel, extname(rel))}`, resolve(dir, rel), companion);
@@ -186,6 +206,7 @@ export class ExtensionHost {
 				this.cleanup(ext); // a half-registered extension must not stay active
 			}
 		}
+		this.running = this.loaded.filter((l) => !l.error);
 		this.opts.bus.publish(null, "extensions_updated", { names: this.loaded.map((l) => l.name) });
 		await this.emit("extensions_loaded", { names: this.loaded.filter((l) => !l.error).map((l) => l.name) }, null);
 		return this.list();
@@ -221,6 +242,7 @@ export class ExtensionHost {
 			this.cleanup(ext);
 		}
 		this.loaded = [];
+		this.running = [];
 		this.channels.clear();
 	}
 
@@ -229,15 +251,15 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, settings, settingsId, error }) => ({
-			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}),
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, settings, settingsId, clientFile, error }) => ({
+			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
 			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(settings ? { settings } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
 	}
 
 	private active(): Loaded[] {
-		return this.loaded.filter((l) => !l.error);
+		return this.running;
 	}
 
 	private recordError(extension: string, where: string, e: unknown): void {
@@ -362,6 +384,7 @@ export class ExtensionHost {
 				ext.commandFamilies.push({ prefix, ...(family.label ? { label: family.label } : {}) });
 			},
 			registerMethod: (name, handler) => {
+				if (typeof name !== "string" || !METHOD_NAME.test(name)) throw new Error(`invalid method name "${name}"`);
 				own("method", name, ext.methodDefs.has(name));
 				ext.methodDefs.set(name, handler);
 				ext.methods.push(name);
@@ -577,21 +600,43 @@ export class ExtensionHost {
 		const ext = this.active().find((e) => e.name === extension);
 		const fn = ext?.methodDefs.get(name);
 		if (!ext || !fn) return { found: false };
+		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
-			return { found: true, result: (await fn(params, sessionId ? this.context(sessionId, ext.name) : null)) ?? null };
+			const call = Promise.resolve(fn(params, sessionId ? this.context(sessionId, ext.name) : null));
+			const ms = this.opts.methodTimeoutMs ?? METHOD_TIMEOUT_MS;
+			const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`method ${name} did not answer within ${ms} ms`)), ms); });
+			return { found: true, result: (await Promise.race([call, late])) ?? null };
 		} catch (e) {
 			this.recordError(ext.name, `method:${name}`, e);
 			throw e;
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 
-	/** Every entry extensions stored on a session, for clients that want to render them. */
-	allEntries(sessionId: string, extension?: string, type?: string): { id: number; extension: string; type: string; data: unknown; createdAt: number }[] {
-		const rows = this.opts.db.query("SELECT id, extension, type, data, created_at FROM extension_entries WHERE session_id = $sid ORDER BY id").all({ sid: sessionId }) as
+	/**
+	 * Entries extensions stored on a session, oldest first, for clients that want to render them. Filtered in SQL (a long
+	 * session can hold thousands); `after` (an entry id) and `limit` page through them.
+	 */
+	allEntries(sessionId: string, extension?: string, type?: string, page: { after?: number; limit?: number } = {}): { id: number; extension: string; type: string; data: unknown; createdAt: number }[] {
+		const limit = Math.min(Math.max(1, Math.floor(page.limit ?? MAX_ENTRY_PAGE)), MAX_ENTRY_PAGE);
+		const rows = this.opts.db.query(
+			`SELECT id, extension, type, data, created_at FROM extension_entries
+			 WHERE session_id = $sid AND ($ext IS NULL OR extension = $ext) AND ($type IS NULL OR type = $type) AND id > $after
+			 ORDER BY id LIMIT $limit`,
+		).all({ sid: sessionId, ext: extension || null, type: type || null, after: page.after ?? 0, limit }) as
 			{ id: number; extension: string; type: string; data: string; created_at: number }[];
-		return rows
-			.filter((r) => (!extension || r.extension === extension) && (!type || r.type === type))
-			.map((r) => ({ id: r.id, extension: r.extension, type: r.type, data: JSON.parse(r.data), createdAt: r.created_at }));
+		return rows.map((r) => ({ id: r.id, extension: r.extension, type: r.type, data: JSON.parse(r.data), createdAt: r.created_at }));
+	}
+
+	/** The client package a server extension carries (`pipaya.client`), as parsed JSON; undefined when it has none. */
+	clientPackage(extension: string): unknown {
+		const file = this.loaded.find((e) => e.name === extension || e.name.split("/")[0] === extension)?.clientFile;
+		if (!file) return undefined;
+		let st;
+		try { st = statSync(file); } catch { return undefined; }
+		if (!st.isFile() || st.size > MAX_CLIENT_PACKAGE_BYTES) throw new Error(`the client package is missing or over ${MAX_CLIENT_PACKAGE_BYTES} bytes`);
+		return JSON.parse(readFileSync(file, "utf8"));
 	}
 
 	ensureDataDir(extension: string): string {
