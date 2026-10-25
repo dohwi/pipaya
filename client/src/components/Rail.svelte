@@ -173,9 +173,10 @@
 		/* the list scrolls and clips, so the count stays inside the tile */
 		--pin-inset: 0px;
 	}
-	/* a folder: just its first letter; the button's own shape (hover, selected ring) is the only box */
+	/* a folder: its first letter on a faint tile, so the count pinned to the corner sits on something; hover and selected are stronger */
 	.agent.dir {
 		color: var(--text-faint);
+		background: color-mix(in srgb, var(--bg-hover) 55%, transparent);
 	}
 	.ini {
 		font-size: var(--fs-xl);
