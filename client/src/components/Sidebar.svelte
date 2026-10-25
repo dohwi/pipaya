@@ -633,8 +633,8 @@
 		flex: none;
 		width: 24px;
 		height: 24px;
-		margin-right: 2px;
-		border-radius: var(--radius-sm);
+		margin-right: 4px;
+		border-radius: 50%;
 		color: var(--text-faint);
 		opacity: 0;
 	}
@@ -677,7 +677,7 @@
 	}
 	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {
-		background: var(--bg-active);
+		background: color-mix(in srgb, var(--text) 14%, transparent);
 		color: var(--text);
 		opacity: 1;
 	}
@@ -710,8 +710,8 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		border-radius: var(--radius-sm);
-		margin: 0;
+		border-radius: 10px;
+		margin: 1px 2px;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .item.nested .open) {
@@ -728,7 +728,31 @@
 		background: transparent;
 	}
 	:global(:where(.side) .item.active .title) {
-		font-weight: 600;
+		font-weight: 700;
+		color: var(--text);
+	}
+	/* the open tab: a tinted fill, a hairline and an accent bar on the left, so it reads at a glance among hovered rows */
+	:global(:where(.side) .list .slide-ind) {
+		border-radius: 10px !important;
+		z-index: 1; /* above the server band's own background, which would otherwise hide it; the tint is translucent */
+		background: color-mix(in srgb, var(--text) 11%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
+	}
+	:global(:where(.side) .list .slide-ind::before) {
+		content: "";
+		position: absolute;
+		left: 4px;
+		top: 9px;
+		bottom: 9px;
+		width: 3px;
+		border-radius: 2px;
+		background: var(--accent);
+	}
+	:global(:where(.side) .item.active .lead > svg) {
+		color: var(--text);
+	}
+	:global(:where(.side) .item.active:hover) {
+		background: transparent;
 	}
 	:global(:where(.side) .open) {
 		flex: 1;
@@ -833,14 +857,15 @@
 		flex: none;
 		width: 28px;
 		height: 28px;
-		margin-right: 2px;
-		border-radius: var(--radius-sm);
+		margin-right: 4px;
+		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
 		color: var(--text-faint);
+		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .more:hover),
 	:global(:where(.side) .more.on),
 	:global(:where(.side) .more:focus-visible) {
-		background: var(--bg-active);
+		background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
 		color: var(--text);
 	}
 	:global(:where(.side) .more svg) {
