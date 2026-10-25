@@ -138,6 +138,24 @@
 
 	const tps = $derived(last?.durationMs && last.usage && last.usage.output > 0 ? last.usage.output / (last.durationMs / 1000) : null);
 
+	// Elapsed time of the current run, ticking once a second while the agent works.
+	let now = $state(Date.now());
+	const startedAt = $derived(chat?.running ? (chat.runStartedAt ?? null) : null);
+	$effect(() => {
+		if (startedAt === null) return;
+		now = Date.now();
+		const timer = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
+	const clock = (ms: number) => {
+		const s = Math.floor(ms / 1000);
+		const m = Math.floor(s / 60);
+		const h = Math.floor(m / 60);
+		const two = (n: number) => String(n).padStart(2, "0");
+		return h > 0 ? `${h}:${two(m % 60)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+	};
+	const elapsed = $derived(startedAt === null ? "" : clock(Math.max(0, now - startedAt)));
+
 	const ring = 2 * Math.PI * 7;
 	const level = $derived(ctx === null || !win ? "" : contextLevel(ctxPct));
 	const hitLevel = $derived(cacheLevel(hit, calls.length));
@@ -175,6 +193,12 @@
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
 		<span class="b" title={item.owner}>{item.text}</span>
 	{/each}
+	{#if elapsed}
+		<span class="b elapsed" title={t("작업 경과 시간")}>
+			<Icon name="clock" />
+			<span class="v">{elapsed}</span>
+		</span>
+	{/if}
 	{#if ctxFiles !== null}
 		<button class="b files" class:empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} aria-haspopup="dialog" aria-label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>
 			<Icon name="prompt" />

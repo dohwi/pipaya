@@ -116,6 +116,8 @@ export class ChatState {
 		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];
 	}
 	running = $state(false);
+	/** When the current run started (ms), for the elapsed time in the status line; null while idle. */
+	runStartedAt = $state<number | null>(null);
 	/** Bumped when the user sends something (prompt / steer / queue): the list jumps to the bottom, even if it was scrolled up. */
 	bottomRequest = $state(0);
 	requestBottom(): void {
@@ -239,6 +241,8 @@ export class ChatState {
 			this.tools = tools;
 			this.lastSeq = msgs.length ? msgs[msgs.length - 1]!.seq : -1;
 			this.running = st.running;
+			// Joined mid-run: the best guess for its start is the last prompt.
+			this.runStartedAt = st.running ? (this.runStartedAt ?? [...items].reverse().find((i) => i.kind === "user")?.ts ?? Date.now()) : null;
 			this.usage = detail.usage;
 			this.context = detail.context;
 			this.compaction = detail.compaction ?? null;
@@ -387,6 +391,7 @@ export class ChatState {
 			case "run_started":
 				this.contextRevision++;
 				this.running = true;
+				this.runStartedAt = Date.now();
 				break;
 
 			case "run_limit":
@@ -396,6 +401,7 @@ export class ChatState {
 
 			case "run_finished": {
 				this.running = false;
+				this.runStartedAt = null;
 				const s = this.streamItem();
 				if (s) s.streaming = false;
 				for (const run of Object.values(this.tools)) {

@@ -715,6 +715,7 @@ export const en: Record<string, string> = {
 	"준비 중…": "Preparing…",
 	"생각 중": "Thinking",
 	"작업 중": "Working",
+	"작업 경과 시간": "Time elapsed on this run",
 	"생각 과정": "Thinking",
 	"도구 {n}개": "{n} {n#tool|tools}",
 	"작업 {n}단계 자세히 보기": "View details of {n} {n#step|steps}",

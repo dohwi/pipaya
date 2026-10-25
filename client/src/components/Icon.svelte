@@ -3,7 +3,7 @@
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
-		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open";
+		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open";
 </script>
 
 <script lang="ts">
@@ -54,6 +54,7 @@
 		coin: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM14.6 9.6c-.5-1-1.5-1.6-2.6-1.6-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2c-1.1 0-2.1-.6-2.6-1.6M12 6.5V8M12 16v1.5",
 		download: "M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14",
 		cache: "M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
+		clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
 		gauge: "M4.5 18a8.5 8.5 0 1 1 15 0M12 14l4-5M12 14h.01",
 		columns: "M4 5h16v14H4zM12 5v14",
 		group: "M4.5 4h4a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 8.5 10h-4A1.5 1.5 0 0 1 3 8.5v-3A1.5 1.5 0 0 1 4.5 4zM15.5 4h4A1.5 1.5 0 0 1 21 5.5v3a1.5 1.5 0 0 1-1.5 1.5h-4A1.5 1.5 0 0 1 14 8.5v-3A1.5 1.5 0 0 1 15.5 4zM4.5 14h15a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-3A1.5 1.5 0 0 1 4.5 14z",
