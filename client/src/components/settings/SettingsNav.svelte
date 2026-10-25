@@ -49,13 +49,13 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; /** a client extension shown under the server extension that carries it */ child?: boolean; /** a server extension whose client half is listed right below it */ parent?: boolean; /** the last top-level row: the trunk line stops here */ end?: boolean; /** a child with no top-level row after it: the trunk does not continue past it */ tail?: boolean };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** a client extension shown under the server extension that carries it */ child?: boolean; /** a server extension whose client half is listed right below it */ parent?: boolean; /** the last top-level row: the trunk line stops here */ end?: boolean; /** a child with no top-level row after it: the trunk does not continue past it */ tail?: boolean };
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
-		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id) }));
-		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, companion: n.companion, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
+		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id), half: sc === "device" && !!extensionUpdates.missingServerFor(e.package.manifest.id), halfLabel: t("서버 확장 필요") }));
+		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, companion: n.companion, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), halfLabel: t("클라이언트 확장 필요"), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
 		const owned = (id: string) => side.some((n) => n.companion === id);
 		const free = own.filter((e) => !owned(e.id));
 		const rows: Kid[] = [...free];
@@ -106,7 +106,7 @@
 				<div class="tree" role="group" aria-label={t(x.label)}>
 					{#each kids as e (e.id)}
 						<button role="tab" class="sub" class:child={e.child} class:end={e.end} class:tail={e.tail} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
-							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? t("클라이언트 확장 필요") : e.live ? t("실행 중") : t("꺼짐")}></span>
+							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
 							{#if e.parent}<span class="stem" aria-hidden="true"></span>{/if}
 							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}

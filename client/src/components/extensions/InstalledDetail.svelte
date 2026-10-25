@@ -21,6 +21,8 @@
 		drafts,
 		bundledBy,
 		onopenserver,
+		needsServer,
+		oninstallserver,
 		onback,
 		onenable,
 		ondisable,
@@ -39,6 +41,10 @@
 		bundledBy?: string;
 		/** Open that server extension */
 		onopenserver?: () => void;
+		/** The server extension this one works with that the open server does not have */
+		needsServer?: { id: string; name: string };
+		/** Go to the server extensions' marketplace for it */
+		oninstallserver?: () => void;
 		onback: () => void;
 		onenable: () => void;
 		ondisable: () => void;
@@ -72,6 +78,7 @@
 
 	{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
 	{#if bundledBy}<Notice tone="info" size="sm" icon="server" role="status">{t("서버 확장 ‘{name}’에 동봉된 클라이언트 확장입니다. 그 서버 확장과 함께 설치되어 작동합니다.", { name: bundledBy })}{#snippet action()}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}{/snippet}</Notice>{/if}
+	{#if needsServer}<Notice tone="warn" size="sm" role="status">{t("이 서버에 서버 확장 ‘{name}’이 없습니다. 함께 설치해야 동작합니다.", { name: needsServer.name })}{#snippet action()}{#if oninstallserver}<button type="button" onclick={oninstallserver}>{t("설치하기")} →</button>{/if}{/snippet}</Notice>{/if}
 	{#if entry.error}<Notice tone="danger" size="sm" role="status">{entry.error}</Notice>{/if}
 	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 

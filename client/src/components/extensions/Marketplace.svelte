@@ -12,10 +12,11 @@
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
-	let { scope, onclose, onpick }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void } = $props();
+	let { scope, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
 
 	let catalog = $state<MarketCatalog | null>(null);
-	let query = $state("");
+	// svelte-ignore state_referenced_locally
+	let query = $state(initialQuery);
 	let loading = $state(false);
 	let error = $state("");
 	let working = $state("");

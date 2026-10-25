@@ -14,6 +14,7 @@
 	import Marketplace from "./extensions/Marketplace.svelte";
 	import { fetchCompanion } from "../lib/extensions/marketplace";
 	import { compareVersions, fetchCatalog, fetchPackage, DEFAULT_MARKETPLACE_URL, type MarketCatalog, type MarketEntry } from "../lib/extensions/marketplace";
+	import { extensionUpdates } from "../lib/extension-updates.svelte";
 	import ImportDialogs from "./extensions/ImportDialogs.svelte";
 	import InstalledDetail from "./extensions/InstalledDetail.svelte";
 	import ServerDetail from "./extensions/ServerDetail.svelte";
@@ -22,7 +23,9 @@
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view, selected = $bindable(null) }: { scope: ExtensionScope; selected?: string | null } = $props();
+	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), ongoserver }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void } = $props();
+	let marketQuery = $state("");
+	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
 	let preview = $state<ExtensionPackage | null>(null);
 	/** Where the package being imported will be installed: the scope of the tab it is imported from. */
 	const target = $derived(view);
@@ -372,6 +375,8 @@
 			{tasks}
 			{drafts}
 			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
+			needsServer={view === "device" ? extensionUpdates.missingServerFor(id) : undefined}
+			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id); if (m) ongoserver(m.id); } : undefined}
 			onopenserver={view === "server" && bundleOwner ? () => (selected = srvKey(bundleOwner.name)) : undefined}
 			onback={closeDetail}
 			onenable={() => enable(id)}
@@ -471,7 +476,7 @@
 </div>
 
 {#if market}
-	<Marketplace scope={view} onclose={() => (market = false)} onpick={pickFromMarket} />
+	<Marketplace scope={view} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
 <ImportDialogs {preview} result={tasks.result} {replacement} {willResume} {filename} {target} {serverName} busy={tasks.busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />

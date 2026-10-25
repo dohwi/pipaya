@@ -30,6 +30,8 @@
 	/** The extension open in the "확장" panes; the sidebar lists them under their section. */
 	let extId = $state<string | null>(null);
 	let dir = $state(1);
+	/** A server extension to look up in the marketplace once the server tab opens (set from a client extension that needs it). */
+	let marketFor = $state<string | null>(null);
 	function go(next: TabId) {
 		extId = null;
 		if (next === tab) return;
@@ -122,9 +124,9 @@
 				{#if current.sub}<p>{t(current.sub)}</p>{/if}
 			</div>
 			{#if tab === "extensions"}
-				<Extensions scope="device" bind:selected={extId} />
+				<Extensions scope="device" bind:selected={extId} ongoserver={(id) => { marketFor = id; go("srvext"); }} />
 			{:else if tab === "srvext"}
-				<Extensions scope="server" bind:selected={extId} />
+				<Extensions scope="server" bind:selected={extId} bind:marketFor />
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}

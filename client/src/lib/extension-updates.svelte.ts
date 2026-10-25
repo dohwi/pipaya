@@ -12,6 +12,8 @@ class ExtensionUpdates {
 	private catalog = $state<MarketCatalog | null>(null);
 	private server = $state<{ name: string; version?: string }[]>([]);
 	private checkedAt = 0;
+	/** The open server answered, so "this server lacks X" is a fact and not just a missing connection. */
+	private serverKnown = $state(false);
 
 	/** Ids of server extensions (by name) with a newer git entry in the catalog. */
 	serverNames = $derived.by(() => {
@@ -22,6 +24,13 @@ class ExtensionUpdates {
 		}
 		return out;
 	});
+	/** The marketplace server extension that carries this client extension as its client half, when the open server lacks it. */
+	missingServerFor = (clientId: string): { id: string; name: string } | undefined => {
+		if (!this.serverKnown) return undefined;
+		const m = this.catalog?.extensions.find((x) => x.kind === "server" && x.companion === clientId);
+		if (!m || this.server.some((s) => s.name === m.id)) return undefined;
+		return { id: m.id, name: m.name };
+	};
 	/** Ids of installed client extensions with a newer entry, per scope. */
 	clientIds = (scope: "device" | "server"): Set<string> => {
 		const out = new Set<string>();
@@ -45,8 +54,8 @@ class ExtensionUpdates {
 	/** Reads the open server's extensions each time; the catalog at most every 30 minutes. */
 	async refresh(api: Api | null, force = false): Promise<void> {
 		if (api) {
-			try { this.server = (await api.serverExtensions()).extensions.map((e) => ({ name: e.name, version: e.version })); } catch { this.server = []; }
-		} else this.server = [];
+			try { this.server = (await api.serverExtensions()).extensions.map((e) => ({ name: e.name, version: e.version })); this.serverKnown = true; } catch { this.server = []; this.serverKnown = false; }
+		} else { this.server = []; this.serverKnown = false; }
 		if (!force && this.catalog && Date.now() - this.checkedAt < RECHECK_MS) return;
 		try {
 			this.catalog = await fetchCatalog(DEFAULT_MARKETPLACE_URL);
