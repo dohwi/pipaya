@@ -99,7 +99,7 @@
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-down" /></button>
+					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-left" /></button>
 				{/if}
 			</div>
 			{#if open}
@@ -172,9 +172,9 @@
 		height: 15px;
 		transition: transform var(--motion-fast) var(--ease-std);
 	}
-	/* the arrow is always there: down = folded (can open), up = open; the shared count badge sits beside it only while folded */
+	/* the arrow is always there: "<" = folded (can open), down = open; the shared count badge sits beside it only while folded */
 	.nav button.fold[aria-expanded="true"] :global(svg) {
-		transform: rotate(180deg);
+		transform: rotate(-90deg);
 	}
 	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
