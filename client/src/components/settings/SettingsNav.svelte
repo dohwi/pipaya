@@ -160,6 +160,28 @@
 		height: 15px;
 		transition: transform var(--motion-fast) var(--ease-std);
 	}
+	/* folded: the count shows at rest; on hover/focus the arrow takes its place (same cell, cross-fade) */
+	.nav button.fold[aria-expanded="false"] {
+		display: grid;
+		place-items: center;
+		min-width: 26px;
+		min-height: 26px;
+	}
+	.nav button.fold[aria-expanded="false"] > * {
+		grid-area: 1 / 1;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.nav button.fold[aria-expanded="false"] > :global(svg) {
+		opacity: 0;
+	}
+	.nav .row:hover button.fold[aria-expanded="false"] > :global(svg),
+	.nav button.fold[aria-expanded="false"]:focus-visible > :global(svg) {
+		opacity: 1;
+	}
+	.nav .row:hover button.fold[aria-expanded="false"] > .cbadge,
+	.nav button.fold[aria-expanded="false"]:focus-visible > .cbadge {
+		opacity: 0;
+	}
 	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
 		display: flex;
