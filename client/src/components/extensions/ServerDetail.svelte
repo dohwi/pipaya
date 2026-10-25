@@ -17,6 +17,7 @@
 		onback,
 		onsave,
 		oninstallclient,
+		onopenclient,
 	}: {
 		ext: ServerExt;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
@@ -26,11 +27,14 @@
 		onsave: (settings: Record<string, unknown>) => void;
 		/** Download the client half and open its install preview. */
 		oninstallclient: (id: string) => void;
+		/** Open the installed client half (id, name); absent when it lives in another section */
+		onopenclient?: (id: string) => void;
 	} = $props();
 
 	const form = $derived(serverFields(ext));
 	const provides = $derived(serverProvides(ext));
 	/** A server extension that needs a client extension this device does not have runs only half. */
+	const client = $derived(ext.companion ? extensions.installed.find((e) => e.package.manifest.id === ext.companion) : undefined);
 	const missingClient = $derived(!!ext.companion && !extensions.installed.some((e) => e.package.manifest.id === ext.companion));
 </script>
 
@@ -46,6 +50,13 @@
 		<Notice tone="warn" size="sm" role="status">
 			{t("클라이언트 확장 ‘{id}’도 설치해야 동작합니다.", { id: ext.companion ?? "" })}
 			{#snippet action()}<button type="button" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("설치")}</button>{/snippet}
+		</Notice>
+	{/if}
+
+	{#if client && onopenclient}
+		<Notice tone="info" size="sm" icon="widgets" role="status">
+			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.package.manifest.name })}
+			{#snippet action()}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/snippet}
 		</Notice>
 	{/if}
 

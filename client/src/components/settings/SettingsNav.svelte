@@ -36,7 +36,7 @@
 	let collapsed = $state<Record<string, boolean>>({});
 	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
-	let serverSide = $state<{ id: string; names: { name: string; title?: string }[] } | null>(null);
+	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
 	const apiOf = (id: string) => {
 		const s = app.servers.find((x) => x.id === id);
 		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
@@ -46,16 +46,16 @@
 		const id = server?.id;
 		if (!id) { serverSide = null; return; }
 		let live = true;
-		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title })) }; }).catch(() => { if (live) serverSide = null; });
+		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean };
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
 		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id) }));
-		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name) })) : [];
+		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
 		return [...own, ...side];
 	};
 	function openExt(tabId: TabId, id: string) {
@@ -98,7 +98,7 @@
 				<div class="tree" role="group" aria-label={t(x.label)}>
 					{#each kids as e (e.id)}
 						<button role="tab" class="sub" aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
-							<span class="dot" class:live={e.live} role="img" aria-label={e.live ? t("실행 중") : t("꺼짐")}></span>
+							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? t("클라이언트 확장 필요") : e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
 							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 						</button>
@@ -240,6 +240,9 @@
 	}
 	.nav .dot.live {
 		background: var(--ok);
+	}
+	.nav .dot.half {
+		background: var(--warn);
 	}
 	.nav button.srvtab {
 		padding: 8px 12px;

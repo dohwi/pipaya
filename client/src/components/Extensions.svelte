@@ -149,6 +149,8 @@
 	const tasks = new ExtensionTasks();
 	let drafts = $state<Record<string, string>>({});
 	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
+	/** The server extension that carries the open client extension as its client half. */
+	const bundleOwner = $derived(selected ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
 	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
 	$effect(() => { if (selected && !openEntry && !(selected.startsWith("srv:") && (!serverSide.length || openServer))) selected = null; });
 	function closeDetail() {
@@ -369,7 +371,8 @@
 			entry={openEntry}
 			{tasks}
 			{drafts}
-			bundledBy={serverSide.find((e) => e.companion === id && e.clientPackage)?.title ?? serverSide.find((e) => e.companion === id && e.clientPackage)?.name}
+			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
+			onopenserver={view === "server" && bundleOwner ? () => (selected = srvKey(bundleOwner.name)) : undefined}
 			onback={closeDetail}
 			onenable={() => enable(id)}
 			ondisable={() => disable(id)}
@@ -388,6 +391,7 @@
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}
+			onopenclient={(id) => (selected = id)}
 		/>
 	{:else}
 	<section aria-labelledby="extensions-installed">
