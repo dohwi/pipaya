@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { cliCommand, compareVersions, fetchPackage, parseCatalog, safeUrl, sha256Hex, type MarketEntry } from "../src/lib/extensions/marketplace";
+import { compareVersions, fetchPackage, parseCatalog, safeUrl, sha256Hex, type MarketEntry } from "../src/lib/extensions/marketplace";
 
 const pkg = { manifest: { id: "demo", name: "Demo", version: "1.0.0", sdkVersion: 1, permissions: [] }, code: "// demo" };
 const body = JSON.stringify(pkg);
@@ -90,11 +90,10 @@ describe("fetchPackage", () => {
   });
 });
 
-test("compareVersions and cliCommand", () => {
+test("compareVersions", () => {
   expect(compareVersions("0.4.2", "0.4.1")).toBe(1);
   expect(compareVersions("0.4.1", "0.10.0")).toBe(-1);
   expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
-  expect(cliCommand(entry({ id: "guard" }))).toBe("bun scripts/market.ts install guard");
 });
 
 import { formatStars, isOfficial, localizedDescription, parseCatalog as pc, repoLoc } from "../src/lib/extensions/marketplace";

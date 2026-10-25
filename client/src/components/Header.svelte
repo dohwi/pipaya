@@ -2,7 +2,7 @@
 	import { t } from "../lib/i18n";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
-	import NavbarUsage from "./extensions/NavbarUsage.svelte";
+	import NavbarItems from "./extensions/NavbarItems.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
@@ -46,7 +46,7 @@
 
 		</ExtensionPart>
 
-		<NavbarUsage />
+		<NavbarItems />
 		<ExtensionMount slot="header.end" />
 
 	</div>

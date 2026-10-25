@@ -1,7 +1,7 @@
 import { LocalizedError, t } from "../i18n";
 import { MAX_PACKAGE_BYTES, parsePackage, type ExtensionPackage } from "./schema";
 
-/** The default public catalog. Another catalog can be typed in by the user. */
+/** The public catalog the app reads (browse, updates, companion installs). */
 export const DEFAULT_MARKETPLACE_URL = "https://raw.githubusercontent.com/dohwi/pipaya-marketplace/main/index.json";
 export const MAX_CATALOG_BYTES = 512 * 1024;
 
@@ -107,11 +107,6 @@ export async function fetchPackage(entry: MarketEntry, signal?: AbortSignal): Pr
   const pkg = parsePackage(JSON.parse(new TextDecoder().decode(buf)));
   if (pkg.manifest.id !== entry.id) throw new LocalizedError(t("패키지 ID가 카탈로그와 다릅니다. 설치하지 않았습니다."));
   return pkg;
-}
-
-/** `server` entries cannot be installed from the app: show the command that does it. */
-export function cliCommand(entry: MarketEntry): string {
-  return `bun scripts/market.ts install ${entry.id}`;
 }
 
 /** 1 when `a` is newer than `b`, -1 when older, 0 when equal (SemVer core, prerelease ignored). */

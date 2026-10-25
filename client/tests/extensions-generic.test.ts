@@ -214,12 +214,12 @@ describe("HttpReader", () => {
 
 describe("renderers, SDK surface and brand neutrality", () => {
 	test("trusted components compile and never inject HTML, images, URLs or gradients", async () => {
-		for (const name of ["ExtensionIcon", "NavbarUsage", "ExtensionView"]) {
+		for (const name of ["ExtensionIcon", "NavbarItems", "ExtensionView"]) {
 			const source = await Bun.file(`src/components/extensions/${name}.svelte`).text();
 			expect(() => compile(source, { filename: `${name}.svelte`, generate: "client" })).not.toThrow();
 			expect(source).not.toMatch(/@html|<img|<image|<use|linearGradient|https?:\/\//);
 		}
-		const navbar = await Bun.file("src/components/extensions/NavbarUsage.svelte").text();
+		const navbar = await Bun.file("src/components/extensions/NavbarItems.svelte").text();
 		expect(navbar).toContain("min-width: 0");
 		expect(navbar).toContain("overflow-x: auto");
 	});
@@ -247,7 +247,7 @@ describe("renderers, SDK surface and brand neutrality", () => {
 		expect(() => parseView({ type: "gauge", id: "g", label: "x", rings: [{ value: 1 }] })).toThrow();
 		const files: string[] = [];
 		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) files.push(file);
-		expect(files.filter((f) => /gauge|quota|usage/i.test(f.split("/").pop()!) && !/^components\/(?:Pin|Sidebar)/.test(f))).toEqual(["components/extensions/NavbarUsage.svelte"]);
+		expect(files.filter((f) => /gauge|quota|usage/i.test(f.split("/").pop()!) && !/^components\/(?:Pin|Sidebar)/.test(f))).toEqual([]);
 		expect(await Bun.file("src/lib/extensions/ui.ts").text()).not.toMatch(/gauge|\brings?\b/i);
 	});
 	test("the core never names an extension or its feature (ids, tools, @name vocabulary)", async () => {

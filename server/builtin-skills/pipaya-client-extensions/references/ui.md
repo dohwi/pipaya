@@ -8,7 +8,7 @@ Extensions build screens by sending a JSON view tree; the host renders it with S
 |---|---|---|---|---|
 | Panel | launcher → modal | `<dialog>`, `min(1000px,96vw)` × `min(760px,90dvh)` | yes | `ExtensionPanels` |
 | Composer widget | above the composer (hidden without a server) | `Accordion variant="box"`, max `min(40dvh,320px)` | yes | `ExtensionPanels placement="composer"` |
-| Navbar item | header right slot | `min(40%,160px)` (≤600 px: `min(36%,132px)`) | no | `NavbarUsage` |
+| Navbar item | header right slot | `min(40%,160px)` (≤600 px: `min(36%,132px)`) | no | `NavbarItems` |
 | Status chip | under the composer | text | no | `StatusLine` |
 | Composer action | under the composer | small button | click | `Composer` |
 | Management | Settings > Extensions | list + detail page | yes | `Extensions.svelte`, `extensions/*` |

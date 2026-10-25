@@ -30,7 +30,7 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Composer action | `sdk.composer.registerAction` | button row under the composer | 10 | `Composer.svelte` |
 | Panel | `sdk.ui.registerPanel` | launcher → modal `<dialog>` | 5 per extension | `extensions/ExtensionPanels.svelte` |
 | Composer widget | panel with `placement:'composer'` | collapsible box above the composer | counts toward the 5 | `ExtensionPanels placement="composer"` |
-| Navbar item | `sdk.navbar.set` | header right slot | 3, read-only nodes | `extensions/NavbarUsage.svelte`, `Header.svelte` |
+| Navbar item | `sdk.navbar.set` | header right slot | 3, read-only nodes | `extensions/NavbarItems.svelte`, `Header.svelte` |
 | Status chip | `sdk.status.set` | `StatusLine` | 10, 120 chars | `StatusLine.svelte` |
 | Theme | package `theme` | `:root` CSS variables | token whitelist | `host.applyThemes` |
 | Toast | `sdk.notifications.show` | toast | 5 per 10 s, 300 chars | `HostAdapter.notify` |
@@ -69,7 +69,7 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `marketplace.ts` | catalog parsing and install (`DEFAULT_MARKETPLACE_URL`) |
 | `panes.ts` | `paneAdapter` for `sdk.panes` |
 
-`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarUsage`.
+`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`.
 
 Wiring: `App.svelte` (`extensions.init(adapter)`), `Header.svelte`, `Composer.svelte`, `StatusLine.svelte`, `lib/commands.ts`, `lib/store.svelte.ts` (`extensions.emit`, `applyThemes`, `confirmExtension`), `Settings.svelte`, `Backup.svelte`, `lib/api.ts`.
 
@@ -121,7 +121,7 @@ Finish tests and docs in the same change.
 
 **E. New manifest or package field**: allowed keys in `parsePackage` (unknown keys are rejected) → what `configuration.ts` exports → same-ID replace behaviour → [sdk.md](sdk.md).
 
-**F. Settings screen**: safe mode and unreadable-entry cards are recovery paths; keep them reachable. Update the selectors in `scripts/check-extension*.cjs`.
+**F. Settings screen**: safe mode and unreadable-entry cards are recovery paths; keep them reachable.
 
 ## Invariants
 

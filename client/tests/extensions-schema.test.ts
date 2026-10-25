@@ -304,3 +304,21 @@ describe("examples/extensions/todo-view.json", () => {
 		}
 	});
 });
+
+describe("examples/extensions", () => {
+	test("every example is a valid package", async () => {
+		const { readdirSync, readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const dir = resolve(__dirname, "../examples/extensions");
+		const packages = readdirSync(dir).filter((f) => f.endsWith(".json") && !f.endsWith(".manifest.json"));
+		expect(packages.length).toBeGreaterThan(0);
+		for (const f of packages) expect(() => parsePackage(JSON.parse(readFileSync(resolve(dir, f), "utf8")))).not.toThrow();
+	});
+	test("ui-workbench.json is the build of its .js source and manifest", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const at = (f: string) => readFileSync(resolve(__dirname, "../examples/extensions", f), "utf8");
+		const built = JSON.parse(at("ui-workbench.json"));
+		expect(built).toEqual({ manifest: JSON.parse(at("ui-workbench.manifest.json")), code: at("ui-workbench.js") });
+	});
+});

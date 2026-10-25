@@ -15,7 +15,7 @@ const REF = /^\w[\w./-]*$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIR = /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*$/;
 
-/** Same checks as `scripts/market.ts install`: fetch the tag, refuse it when it no longer points at the pinned commit. */
+/** Fetch the tag and refuse it when it no longer points at the pinned commit. */
 export async function installFromGit(id: string, src: GitSource, extensionsDir: string): Promise<string> {
 	if (!ID.test(id) || !REPO.test(src.repo) || !REF.test(src.ref) || !COMMIT.test(src.commit) || (src.dir !== undefined && !DIR.test(src.dir))) throw new Error("invalid source");
 	const tmp = mkdtempSync(join(tmpdir(), "pipaya-ext-"));
