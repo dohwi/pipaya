@@ -6,22 +6,28 @@
 	 * Replaces the `.row` / `.switch` flex rows that every settings panel used to restyle for itself.
 	 *  - `for`: id of the control, when it is a field (makes the label click through to it);
 	 *  - `dim`: the control is switched off by another setting, so the whole row fades (animated).
+	 *  - `hint`: one short line under the label saying what the setting does, kept next to the thing it explains.
 	 */
 	let {
 		label,
 		for: forId,
 		dim = false,
+		hint,
 		children,
 	}: {
 		label: string;
 		for?: string;
 		dim?: boolean;
+		hint?: string;
 		children: Snippet;
 	} = $props();
 </script>
 
 <div class="row" class:dim>
-	{#if forId}<label for={forId}>{label}</label>{:else}<span>{label}</span>{/if}
+	<div class="text">
+		{#if forId}<label for={forId}>{label}</label>{:else}<span>{label}</span>{/if}
+		{#if hint}<small class="hint">{hint}</small>{/if}
+	</div>
 	{@render children()}
 </div>
 
@@ -38,13 +44,19 @@
 	.row.dim {
 		opacity: 0.45;
 	}
-	.row > :global(:not(label, span)) {
+	.row > :global(:not(.text)) {
 		flex: none;
 	}
-	label,
-	span {
+	.text {
+		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
 		/* don't split a Korean word between syllables ("글/꼴") */
 		word-break: keep-all;
+	}
+	.hint {
+		line-height: 1.45;
 	}
 </style>
