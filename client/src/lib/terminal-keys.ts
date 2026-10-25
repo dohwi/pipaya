@@ -79,6 +79,8 @@ export interface BarKey {
 	/** Not a key: what the button does */
 	action?: "paste" | "fit" | "bottom";
 	repeat?: boolean;
+	/** Icon name (components/Icon.svelte) drawn instead of the label */
+	icon?: string;
 	title: string;
 	/** Starts a new group (a gap before it) */
 	gap?: boolean;
@@ -93,10 +95,10 @@ export const BAR_KEYS: readonly BarKey[] = [
 	{ id: "tab", label: "Tab", send: "tab", title: "Tab" },
 	{ id: "ctrl", label: "Ctrl", mod: "ctrl", title: "Ctrl", gap: true },
 	{ id: "alt", label: "Alt", mod: "alt", title: "Alt" },
-	{ id: "left", label: "←", send: "left", repeat: true, title: "Left", gap: true },
-	{ id: "down", label: "↓", send: "down", repeat: true, title: "Down" },
-	{ id: "up", label: "↑", send: "up", repeat: true, title: "Up" },
-	{ id: "right", label: "→", send: "right", repeat: true, title: "Right" },
+	{ id: "left", label: "←", send: "left", repeat: true, icon: "arrow-left", title: "Left", gap: true },
+	{ id: "down", label: "↓", send: "down", repeat: true, icon: "arrow-down", title: "Down" },
+	{ id: "up", label: "↑", send: "up", repeat: true, icon: "arrow-up", title: "Up" },
+	{ id: "right", label: "→", send: "right", repeat: true, icon: "arrow-right", title: "Right" },
 	{ id: "home", label: "Home", send: "home", title: "Home", gap: true },
 	{ id: "end", label: "End", send: "end", title: "End" },
 	{ id: "pgup", label: "PgUp", send: "pgup", repeat: true, title: "Page up" },
@@ -105,6 +107,6 @@ export const BAR_KEYS: readonly BarKey[] = [
 	...[..."-|~_\\$"].map(sym),
 	{ ...ctl("c"), gap: true },
 	...[..."dzlrawu"].map(ctl),
-	{ id: "paste", label: "Paste", action: "paste", title: "Paste", gap: true },
-	{ id: "fit", label: "Fit", action: "fit", title: "Fit" },
+	{ id: "paste", label: "Paste", action: "paste", icon: "clip", title: "Paste", gap: true },
+	{ id: "fit", label: "Fit", action: "fit", icon: "expand", title: "Fit" },
 ];
