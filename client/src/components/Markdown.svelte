@@ -46,7 +46,31 @@
 		});
 		return () => ctl.abort();
 	});
+	/** `1 / N` badge on a swipeable strip, following the scroll position. */
+	function setupGalleries(host: HTMLElement) {
+		for (const g of host.querySelectorAll<HTMLElement>(".gallery:not([data-ready])")) {
+			g.dataset.ready = "1";
+			const n = Number(g.dataset.count) || g.children.length;
+			const badge = document.createElement("span");
+			badge.className = "gallery-count mono";
+			badge.textContent = `1 / ${n}`;
+			g.parentElement?.insertBefore(badge, g.nextSibling);
+			const wrap = document.createElement("div");
+			wrap.className = "gallery-wrap";
+			g.before(wrap);
+			wrap.append(g, badge);
+			g.addEventListener(
+				"scroll",
+				() => {
+					const i = Math.round(g.scrollLeft / Math.max(1, g.clientWidth));
+					badge.textContent = `${Math.min(n, Math.max(1, i + 1))} / ${n}`;
+				},
+				{ passive: true },
+			);
+		}
+	}
 	function fillPictures(host: HTMLElement, api: NonNullable<typeof app.api>, id: string, ctl: AbortController) {
+		setupGalleries(host);
 		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
 			const path = slot.dataset.wdSrc!;
 			const alt = slot.dataset.alt ?? "";
@@ -56,7 +80,6 @@
 				img.alt = alt;
 				img.src = src;
 				img.className = "wd-pic";
-				img.addEventListener("click", () => app.openImage([{ src, mimeType: "image/*" }]));
 				slot.replaceWith(img);
 			};
 			const key = `${id}\u0000${path}`;
@@ -95,6 +118,13 @@
 				copy.textContent = ok ? t("복사됨") : t("실패");
 				setTimeout(() => (copy.textContent = t("복사")), 1400);
 			});
+			return;
+		}
+		const pic = el.closest<HTMLImageElement>("img.wd-pic");
+		if (pic && root) {
+			// every picture of this message in one viewer, opened at the one pressed
+			const all = [...root.querySelectorAll<HTMLImageElement>("img.wd-pic")];
+			app.openImage(all.map((p) => ({ src: p.src, mimeType: "image/*" })), Math.max(0, all.indexOf(pic)));
 			return;
 		}
 		const remote = el.closest<HTMLButtonElement>("button[data-img-src]");
@@ -286,6 +316,49 @@
 		display: block;
 		max-height: 420px;
 		cursor: zoom-in;
+	}
+	/* swipeable strip: one picture per page, snaps like a social-media post */
+	.md :global(.gallery-wrap) {
+		position: relative;
+		margin: 0 0 0.85em;
+	}
+	.md :global(.gallery) {
+		display: flex;
+		gap: 8px;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		overscroll-behavior-x: contain;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		border-radius: var(--radius);
+	}
+	.md :global(.gallery::-webkit-scrollbar) {
+		display: none;
+	}
+	.md :global(.gallery > *) {
+		flex: 0 0 100%;
+		scroll-snap-align: center;
+		display: grid;
+		place-items: center;
+		height: 320px; /* fixed so the strip does not jump while the pictures load */
+		background: var(--bg-elev);
+		border-radius: var(--radius);
+	}
+	.md :global(.gallery > .wd-pic) {
+		width: 100%;
+		max-height: none;
+		object-fit: contain;
+	}
+	.md :global(.gallery-count) {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		padding: 2px 8px;
+		font-size: var(--fs-xs);
+		color: #fff;
+		background: rgba(0, 0, 0, 0.55);
+		border-radius: var(--radius-pill);
+		pointer-events: none;
 	}
 	.md :global(.remote-img) {
 		display: inline-flex;

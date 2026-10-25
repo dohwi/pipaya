@@ -64,10 +64,17 @@
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		moved = false;
-		if (pts.size === 2) pinch = dist();
-		else from = { x: e.clientX, y: e.clientY, px: x, py: y };
-		dragging = scale > 1;
+		if (pts.size === 2) {
+			pinch = dist();
+			pinched = true;
+		} else from = { x: e.clientX, y: e.clientY, px: x, py: y };
+		// at fit size the picture follows the finger when there are others to swipe to
+		dragging = scale > 1 || many;
 	}
+
+	/** A second finger touched during this gesture: it is a pinch, never a swipe. */
+	let pinched = false;
+	const SWIPE = 50;
 
 	const dist = () => {
 		const [a, b] = [...pts.values()];
@@ -86,13 +93,26 @@
 			if (Math.hypot(e.clientX - from.x, e.clientY - from.y) > 3) moved = true;
 			x = from.px + (e.clientX - from.x);
 			y = from.py + (e.clientY - from.y);
+		} else if (many && !pinched) {
+			// at fit size the picture follows the finger sideways
+			const dx = e.clientX - from.x;
+			if (Math.abs(dx) > 3) moved = true;
+			x = dx;
 		}
 	}
 
 	function onup(e: PointerEvent) {
+		const swipe = pts.size === 1 && !pinched && scale === 1 && many;
 		pts.delete(e.pointerId);
 		pinch = 0;
 		dragging = false;
+		if (swipe) {
+			const dx = e.clientX - from.x;
+			const dy = e.clientY - from.y;
+			if (e.type === "pointerup" && Math.abs(dx) > SWIPE && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+			else x = 0;
+		}
+		if (pts.size === 0) pinched = false;
 		if (pts.size === 1) {
 			const [p] = [...pts.values()];
 			from = { x: p.x, y: p.y, px: x, py: y };
@@ -194,6 +214,12 @@
 			<button class="ctl" onclick={onclose} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
 		</div>
 
+		{#if many && set.images.length <= 12}
+			<div class="dots" aria-hidden="true">
+				{#each set.images as _, i}<span class:on={i === set.index}></span>{/each}
+			</div>
+		{/if}
+
 		{#if many}
 			<button class="nav prev" onclick={() => step(-1)} aria-label={t("이전 이미지")} title={t("이전") + " (←)"}><Icon name="chevron-down" /></button>
 			<button class="nav next" onclick={() => step(1)} aria-label={t("다음 이미지")} title={t("다음") + " (→)"}><Icon name="chevron-down" /></button>
@@ -292,6 +318,27 @@
 		height: 18px;
 		stroke-width: 1.8;
 	}
+	.dots {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+		display: flex;
+		justify-content: center;
+		gap: 6px;
+		pointer-events: none;
+	}
+	.dots span {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.35);
+		transition: background var(--motion-fast) var(--ease-std), scale var(--motion-fast) var(--ease-std);
+	}
+	.dots span.on {
+		background: #fff;
+		scale: 1.25;
+	}
 	.nav {
 		position: absolute;
 		top: 50%;
@@ -324,6 +371,12 @@
 	}
 	.next :global(svg) {
 		rotate: -90deg;
+	}
+	/* touch screens swipe; the arrow buttons would sit on top of the picture */
+	@media (pointer: coarse) {
+		.nav {
+			display: none;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		img.snap {

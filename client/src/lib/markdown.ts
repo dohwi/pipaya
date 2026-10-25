@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath } from "./files";
+import { groupPictures } from "./gallery";
 import { MARKED_OPTIONS, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 
 const md = new Marked(MARKED_OPTIONS);
@@ -74,10 +75,10 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	if (hit !== undefined) return hit;
 	// Streaming produces a new prefix every frame; caching those would evict the finished messages the cache is for.
 	const store = opts.cache ?? true;
-	const html = DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
+	const html = groupPictures(DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
-	});
+	}));
 	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them.
 	if (store && src.length < 20_000) {
 		if (cache.size > 300) cache.delete(cache.keys().next().value!);
