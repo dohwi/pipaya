@@ -11,7 +11,7 @@ import Type from "typebox";
 const CatalogResult = Type.Object({
 	models: Type.Array(Type.Object({
 		id: Type.String(), name: Type.String(), contextWindow: Type.Integer(), maxTokens: Type.Integer(),
-		reasoning: Type.Boolean(), vision: Type.Boolean(), levels: Type.Array(Type.String()),
+		reasoning: Type.Boolean(), vision: Type.Boolean(), image: Type.Boolean(), levels: Type.Array(Type.String()),
 	}), { description: "Bundled OpenRouter catalog, for model id autocomplete" }),
 });
 

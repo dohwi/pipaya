@@ -49,6 +49,8 @@ export interface CatalogEntry {
 	maxTokens: number;
 	reasoning: boolean;
 	vision: boolean;
+	/** An image-generation model */
+	image: boolean;
 	/** Reasoning strengths, weakest first; empty without reasoning */
 	levels: string[];
 }
@@ -74,6 +76,7 @@ export function catalogEntries(): CatalogEntry[] {
 			maxTokens: m.maxTokens,
 			reasoning: Boolean(m.reasoning),
 			vision: m.input.includes("image"),
+			image: false,
 			levels: m.reasoning ? getSupportedThinkingLevels(m).filter((l) => l !== "off") : [],
 		});
 	}
@@ -82,7 +85,7 @@ export function catalogEntries(): CatalogEntry[] {
 		if (!listable(m.id) || byId.has(m.id)) continue;
 		byId.set(m.id, {
 			id: m.id, name: m.name, contextWindow: IMAGE_CONTEXT_WINDOW, maxTokens: IMAGE_MAX_TOKENS,
-			reasoning: false, vision: m.input.includes("image"), levels: [],
+			reasoning: false, vision: m.input.includes("image"), image: true, levels: [],
 		});
 	}
 	listed = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
