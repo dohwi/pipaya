@@ -225,6 +225,8 @@ export interface LoginState {
 
 export interface ActivityInfo {
 	sessions: { sessionId: string; running: boolean; pendingQuestions: number }[];
+	/** Finished or failed while no device was looking; the server clears it when any device reads the session */
+	unread: { sessionId: string; kind: "done" | "failed" }[];
 }
 
 /* ---------- model connection settings (GET /configuration) ---------- */

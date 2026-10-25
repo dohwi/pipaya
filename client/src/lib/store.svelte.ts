@@ -253,6 +253,11 @@ class AppStore {
     return this.activeId ? this.groupOf(this.activeId) : undefined;
   }
 
+  /** The focused session when it is a chat (what the server counts as read while this window is in front). */
+  get readableId(): string | null {
+    return this.activeId && !isTerminalId(this.activeId) ? this.activeId : null;
+  }
+
   /** Sessions whose transcripts must be loaded: the focused one, and every pane of the group on a wide screen. */
   get visibleIds(): string[] {
     const out = new Set<string>();
@@ -886,7 +891,7 @@ class AppStore {
   async syncActivity() {
     if (!this.api) return;
     try {
-      const { sessions } = await this.api.activity();
+      const { sessions, unread } = await this.api.activity();
       const running: Record<string, boolean> = {};
       const awaiting: Record<string, number> = {};
       for (const a of sessions) {
@@ -896,6 +901,11 @@ class AppStore {
       }
       this.running = running;
       this.awaiting = awaiting;
+      const done: Record<string, boolean> = {};
+      const bad: Record<string, boolean> = {};
+      for (const u of unread ?? []) (u.kind === "failed" ? bad : done)[u.sessionId] = true;
+      this.unread = done;
+      this.failed = bad;
     } catch {
       /* offline: the event stream keeps these current once it is back */
     }
@@ -945,6 +955,14 @@ class AppStore {
       case "notification": {
         const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
         void notifications.receive(data.deviceId, data.notification).catch(() => {});
+        break;
+      }
+      case "session_unread": {
+        const u = e.data as { sessionId: string; kind: "done" | "failed" | null };
+        delete this.unread[u.sessionId];
+        delete this.failed[u.sessionId];
+        if (u.kind === "done") this.unread[u.sessionId] = true;
+        else if (u.kind === "failed") this.failed[u.sessionId] = true;
         break;
       }
       case "device_revoked": {
@@ -1034,12 +1052,7 @@ class AppStore {
           this.running[sid] = false;
           this.awaiting[sid] = 0;
           const bad = e.data.status === "error";
-          // Only the focused pane counts as watched: a sibling pane of the open group finishing is news too.
-          const seen = sid === this.activeId && this.attended();
-          if (!seen) {
-            if (bad) this.failed[sid] = true;
-            else this.unread[sid] = true;
-          }
+          // The unread mark itself comes from the server (`session_unread`), so every device agrees on it.
           // A stopped run is the user's own doing: no sound
           if (e.data.status !== "aborted")
             this.prefs.cue(bad ? "failed" : "done");

@@ -123,7 +123,7 @@ export class Api {
 	deviceTokens() { return this.req<{ tokens: { id: string; name: string; createdAt: number; lastUsedAt: number | null }[] }>("GET", "/devices/tokens", undefined, AbortSignal.timeout(5000)); }
 	revokeDeviceToken(id: string) { return this.req("DELETE", `/devices/tokens/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5000)); }
 	notificationStatus() { return this.req<{ pushConfigured: boolean; providers: ("fcm" | "apns")[] }>("GET", "/notifications/status"); }
-	notificationPresence(id: string, presence: { platform: "desktop" | "android" | "ios" | "web"; focused: boolean; enabled: boolean; visibleSessionIds: string[]; lang?: string; name?: string; os?: string; app?: string; push?: { provider: "fcm" | "apns"; token: string } | null }) { return this.req("PUT", `/notifications/devices/${encodeURIComponent(id)}`, presence, AbortSignal.timeout(3500)); }
+	notificationPresence(id: string, presence: { platform: "desktop" | "android" | "ios" | "web"; focused: boolean; enabled: boolean; visibleSessionIds: string[]; activeSessionId?: string; lang?: string; name?: string; os?: string; app?: string; push?: { provider: "fcm" | "apns"; token: string } | null }) { return this.req("PUT", `/notifications/devices/${encodeURIComponent(id)}`, presence, AbortSignal.timeout(3500)); }
 	notificationDevices() { return this.req<{ devices: import("./notification-contract").NotificationDevice[] }>("GET", "/notifications/devices", undefined, AbortSignal.timeout(5000)); }
 	removeNotificationDevice(id: string) { return this.req("DELETE", `/notifications/devices/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5000)); }
 	testNotification(deviceId: string) { return this.req<import("./notification-contract").NotificationTestResult>("POST", `/notifications/devices/${encodeURIComponent(deviceId)}/test`, {}, AbortSignal.timeout(5000)); }
@@ -213,6 +213,8 @@ export class Api {
 		this.req<{ ok: boolean }>("DELETE", `/locales/${encodeURIComponent(tag)}${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`, undefined, signal);
 
 	activity = () => this.req<ActivityInfo>("GET", "/activity");
+	/** Marks the session read for every device (the server drops its unread mark). */
+	markRead = (id: string) => this.req<{ ok: boolean }>("POST", `/sessions/${encodeURIComponent(id)}/read`, {}, AbortSignal.timeout(3500));
 
 	/* ---------- model connection settings ---------- */
 	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
@@ -419,6 +421,7 @@ export const EVENT_TYPES = [
 	"extension_entry",
 	"notification",
 	"device_revoked",
+	"session_unread",
 ];
 
 /* ---------- helpers for the server list ---------- */

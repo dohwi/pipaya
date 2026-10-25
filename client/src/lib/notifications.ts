@@ -98,6 +98,7 @@ export class NotificationClient {
   /** The connection the user removed this device from. Reporting to it again would put the device straight back in the list. */
   private revokedOn: Api | null = null;
   private visible: () => string[] = () => [];
+  private active: () => string | null = () => null;
   private timer?: ReturnType<typeof setInterval>;
   private registration?: PushRegistration | null;
   private seen = new Set<string>();
@@ -109,8 +110,8 @@ export class NotificationClient {
   private openSession(sid: string) { if (this.api) this.navigate(sid); else this.pendingSession = sid; }
   private native?: NativePushAdapter;
   private providers: ("fcm" | "apns")[] = [];
-  init(visible: () => string[], navigate: (sessionId: string) => void, native?: NativePushAdapter) {
-    this.visible = visible; this.navigate = navigate; this.native = native;
+  init(visible: () => string[], navigate: (sessionId: string) => void, native?: NativePushAdapter, active: () => string | null = () => null) {
+    this.active = active; this.visible = visible; this.navigate = navigate; this.native = native;
     const update = () => { void this.heartbeat(); };
     // Desktop Tauri gives no click event for system notifications. Clicking one brings the window to the front,
     // so a focus shortly after a notification was shown is treated as the click.
@@ -191,7 +192,7 @@ export class NotificationClient {
     // Looking at a session reads it: its notification in this phone's shade goes away (other devices are told by the server).
     if (attended()) void this.native?.clear?.(this.visible().slice(0, 20)).catch(() => {});
     try {
-      await api.notificationPresence(this.id, { platform: notificationPlatform(), focused: attended(), enabled: this.enabled && await this.permission() === "granted", visibleSessionIds: this.visible().slice(0, 20), lang: getLang(), ...await this.identity(), ...(this.registration === undefined ? {} : { push: this.registration }) });
+      await api.notificationPresence(this.id, { platform: notificationPlatform(), focused: attended(), enabled: this.enabled && await this.permission() === "granted", visibleSessionIds: this.visible().slice(0, 20), ...(this.active() ? { activeSessionId: this.active()! } : {}), lang: getLang(), ...await this.identity(), ...(this.registration === undefined ? {} : { push: this.registration }) });
     } catch { /* offline: notifications do not break the app */ }
   }
   /**
