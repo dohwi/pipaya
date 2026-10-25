@@ -48,6 +48,6 @@ test("function keys, Shift+Tab and shift letters", () => {
 test("bar keys have unique ids and every key sends something", () => {
 	const ids = BAR_KEYS.map((k) => k.id);
 	expect(new Set(ids).size).toBe(ids.length);
-	for (const k of BAR_KEYS) expect(!!k.send || !!k.text).toBe(true);
-	expect(BAR_KEYS.length).toBeGreaterThan(60);
+	for (const k of BAR_KEYS) expect(!!k.send || !!k.text || !!k.mod || !!k.action).toBe(true);
+	expect(BAR_KEYS.length).toBeLessThan(40);
 });

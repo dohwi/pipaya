@@ -70,29 +70,28 @@
 </script>
 
 <div class="bar" role="toolbar" aria-label={t("터미널 보조 키")}>
-	<div class="row top">
-		<button class="k mod" class:on={mods.ctrl} aria-pressed={mods.ctrl} onpointerdown={noFocus} onclick={() => (mods = { ...mods, ctrl: !mods.ctrl })}>Ctrl</button>
-		<button class="k mod" class:on={mods.alt} aria-pressed={mods.alt} onpointerdown={noFocus} onclick={() => (mods = { ...mods, alt: !mods.alt })}>Alt</button>
-		<button class="k mod" class:on={mods.shift} aria-pressed={mods.shift} onpointerdown={noFocus} onclick={() => (mods = { ...mods, shift: !mods.shift })}>Shift</button>
-		<span class="sp"></span>
+	<div class="keys">
 		{#if scrolledUp}
 			<button class="k icon" aria-label={t("맨 아래로")} title={t("맨 아래로")} onpointerdown={noFocus} onclick={onbottom}><Icon name="chevron-down" /></button>
 		{/if}
-		<button class="k icon" aria-label={t("붙여넣기")} title={t("붙여넣기")} onpointerdown={noFocus} onclick={onpaste}><Icon name="copy" /></button>
-		<button class="k" aria-label={t("화면 맞춤")} title={t("화면 맞춤")} onpointerdown={noFocus} onclick={onfit}>Fit</button>
-		<button class="k" aria-label={t("키보드 접기/펴기")} title={t("키보드 접기/펴기")} onpointerdown={noFocus} onclick={onkeyboard}>⌨</button>
-	</div>
-	<div class="row keys">
 		{#each BAR_KEYS as k (k.id)}
-			<button class="k" class:gap={k.gap} title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={() => up(k)} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>{k.label}</button>
+			{#if k.mod}
+				{@const on = mods[k.mod]}
+				<button class="k mod" class:gap={k.gap} class:on aria-pressed={on} title={k.title} onpointerdown={noFocus} onclick={() => (mods = { ...mods, [k.mod!]: !on })}>{k.label}</button>
+			{:else if k.action}
+				<button class="k" class:gap={k.gap} title={k.title} aria-label={k.action === "paste" ? t("붙여넣기") : t("화면 맞춤")} onpointerdown={noFocus} onclick={k.action === "paste" ? onpaste : onfit}>{k.label}</button>
+			{:else}
+				<button class="k" class:gap={k.gap} title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={() => up(k)} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>{k.label}</button>
+			{/if}
 		{/each}
 	</div>
+	<button class="k kb" aria-label={t("키보드 접기/펴기")} title={t("키보드 접기/펴기")} onpointerdown={noFocus} onclick={onkeyboard}>⌨</button>
 </div>
 
 <style>
 	.bar {
 		display: flex;
-		flex-direction: column;
+		align-items: center;
 		gap: 4px;
 		padding: 4px 6px;
 		border-top: 1px solid var(--border);
@@ -102,14 +101,11 @@
 		touch-action: manipulation;
 		flex: none;
 	}
-	.row {
+	.keys {
 		display: flex;
 		gap: 4px;
-	}
-	.sp {
 		flex: 1;
-	}
-	.keys {
+		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 		overscroll-behavior-x: contain;
@@ -118,6 +114,7 @@
 		mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
 		-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
 		padding-right: 22px;
+		margin-right: -8px;
 	}
 	.keys::-webkit-scrollbar {
 		display: none;
@@ -145,8 +142,12 @@
 		background: var(--border-strong);
 	}
 	.k.mod.on {
-		background: var(--accent);
-		color: var(--accent-fg);
+		background: var(--text);
+		color: var(--bg);
+	}
+	.k.kb {
+		flex: none;
+		position: relative;
 	}
 	.k.icon :global(svg) {
 		width: 16px;
