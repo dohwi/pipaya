@@ -392,12 +392,12 @@
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
-			{#if pending.length > 1}<Button size="sm" variant="primary" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
 			<Button size="sm" class="add" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn sm add" class:disabled={tasks.busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
 				<Icon name="plus" /> {t("확장 추가")}
 			</label>
+			{#if pending.length > 1}<Button size="sm" variant="primary" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
 		{#if extensions.safeMode}
