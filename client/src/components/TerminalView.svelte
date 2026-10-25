@@ -6,6 +6,10 @@
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
+	import TerminalKeybar from "./TerminalKeybar.svelte";
+	import { viewport } from "../lib/viewport.svelte";
+	import { isTouch } from "../lib/format";
+	import { applyMods, keySequence, touchLines, type Mods } from "../lib/terminal-keys";
 	import { appTakesKey, clipboardKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../lib/terminal";
 
 	/**
@@ -20,6 +24,14 @@
 	let exitCode = $state<number | null>(null);
 	let term: Terminal | undefined;
 	let refitNow: (() => void) | undefined;
+	/** Helper-key bar above the soft keyboard: on touch screens and phone-width windows */
+	const showBar = $derived(isTouch() || viewport.narrow);
+	let mods = $state<Mods>({ ctrl: false, alt: false });
+	let scrolledUp = $state(false);
+	let sendInput: ((data: string) => void) | undefined;
+	let toggleKeyboard: (() => void) | undefined;
+	let toBottom: (() => void) | undefined;
+	const appCursor = () => !!term?.modes.applicationCursorKeysMode;
 
 	function css(name: string, fallback: string) {
 		return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -169,14 +181,117 @@
 			};
 		}
 
-		const onData = xt.onData((data) => {
+		const input = (data: string) => {
 			if (status !== "open") return;
 			if (!terminal.pty) xt.write(localEcho(data));
 			send({ type: "input", data });
+		};
+		sendInput = input;
+		const onData = xt.onData((raw) => {
+			// Sticky Ctrl/Alt of the helper bar apply to the next typed character
+			const r = applyMods(raw, mods);
+			if (r.used) mods = { ctrl: false, alt: false };
+			input(r.data);
 		});
 		const onResize = xt.onResize(() => sendSize());
 		const ro = new ResizeObserver(() => refit());
 		ro.observe(host);
+
+		// Soft keyboard / rotation: the visual viewport changes without the host always resizing (iOS), so measure again.
+		let raf = 0;
+		const later = () => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				refit();
+				if (xt.buffer.active.viewportY >= xt.buffer.active.baseY) xt.scrollToBottom();
+			});
+		};
+		const vv = window.visualViewport;
+		vv?.addEventListener("resize", later);
+		window.addEventListener("orientationchange", later);
+
+		const syncScrolled = () => (scrolledUp = xt.buffer.active.viewportY < xt.buffer.active.baseY);
+		const onScroll = xt.onScroll(syncScrolled);
+		const onWrite = xt.onWriteParsed(syncScrolled);
+		toBottom = () => xt.scrollToBottom();
+		toggleKeyboard = () => {
+			if (xt.textarea && document.activeElement === xt.textarea) xt.textarea.blur();
+			else xt.focus();
+		};
+
+		// Touch: drag to scroll (with a little momentum), pinch to change the font size, tap to type.
+		let sy = 0, carry = 0, vel = 0, lastT = 0, moved = false, glide = 0;
+		let pinch0 = 0, pinchSize = 0;
+		const cellH = () => (host!.querySelector(".xterm-screen") as HTMLElement | null)?.clientHeight! / xt.rows || 16;
+		const dist = (e: TouchEvent) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+		const scrollBy = (lines: number) => {
+			if (!lines) return;
+			if (xt.buffer.active.type === "alternate") {
+				// Full-screen apps (vim, less) have no scrollback: the arrow keys scroll them
+				const seq = keySequence(lines < 0 ? "up" : "down", {}, appCursor());
+				input(seq.repeat(Math.min(Math.abs(lines), 8)));
+			} else xt.scrollLines(lines);
+		};
+		const tStart = (e: TouchEvent) => {
+			cancelAnimationFrame(glide);
+			if (e.touches.length === 2) {
+				pinch0 = dist(e);
+				pinchSize = app.prefs.terminal.fontSize;
+				moved = true;
+				return;
+			}
+			sy = e.touches[0].clientY;
+			carry = vel = 0;
+			lastT = e.timeStamp;
+			moved = false;
+		};
+		const tMove = (e: TouchEvent) => {
+			if (e.touches.length === 2 && pinch0) {
+				e.preventDefault();
+				const size = Math.round(pinchSize * (dist(e) / pinch0));
+				if (size !== app.prefs.terminal.fontSize) app.prefs.setTerminal({ fontSize: size });
+				return;
+			}
+			if (e.touches.length !== 1) return;
+			const y = e.touches[0].clientY;
+			const dy = y - sy;
+			if (!moved && Math.abs(dy) < 6) return;
+			moved = true;
+			e.preventDefault();
+			const dt = Math.max(1, e.timeStamp - lastT);
+			vel = dy / dt;
+			lastT = e.timeStamp;
+			sy = y;
+			const r = touchLines(carry, dy, cellH());
+			carry = r.carry;
+			scrollBy(r.lines);
+		};
+		const tEnd = (e: TouchEvent) => {
+			if (e.touches.length) return;
+			pinch0 = 0;
+			if (!moved || Math.abs(vel) < 0.3 || e.timeStamp - lastT > 80) return;
+			let v = vel * 16;
+			let c = 0;
+			const step = () => {
+				const r = touchLines(c, v, cellH());
+				c = r.carry;
+				scrollBy(r.lines);
+				v *= 0.94;
+				if (Math.abs(v) > 0.8) glide = requestAnimationFrame(step);
+			};
+			glide = requestAnimationFrame(step);
+		};
+		// Capture phase + stopPropagation: xterm's own touch handling must not scroll a second time
+		const opts = { capture: true, passive: false } as const;
+		const stop = (fn: (e: TouchEvent) => void) => (e: TouchEvent) => {
+			fn(e);
+			e.stopPropagation();
+		};
+		const ts = stop(tStart), tm = stop(tMove), te = stop(tEnd);
+		host.addEventListener("touchstart", ts, opts);
+		host.addEventListener("touchmove", tm, opts);
+		host.addEventListener("touchend", te, opts);
+		host.addEventListener("touchcancel", te, opts);
 		refit();
 		connect();
 		if (focused) xt.focus();
@@ -185,6 +300,17 @@
 			disposed = true;
 			clearTimeout(retry);
 			ro.disconnect();
+			cancelAnimationFrame(raf);
+			cancelAnimationFrame(glide);
+			vv?.removeEventListener("resize", later);
+			window.removeEventListener("orientationchange", later);
+			onScroll.dispose();
+			onWrite.dispose();
+			host?.removeEventListener("touchstart", ts, opts);
+			host?.removeEventListener("touchmove", tm, opts);
+			host?.removeEventListener("touchend", te, opts);
+			host?.removeEventListener("touchcancel", te, opts);
+			sendInput = toggleKeyboard = toBottom = undefined;
 			onData.dispose();
 			onResize.dispose();
 			ws?.close();
@@ -197,6 +323,17 @@
 
 <div class="term" data-terminal={terminal.id}>
 	<div class="screen" bind:this={host}></div>
+	{#if showBar && status !== "exited"}
+		<TerminalKeybar
+			bind:mods
+			{appCursor}
+			{scrolledUp}
+			onsend={(d) => sendInput?.(d)}
+			onfit={() => refitNow?.()}
+			onbottom={() => toBottom?.()}
+			onkeyboard={() => toggleKeyboard?.()}
+		/>
+	{/if}
 	{#if status === "offline" || status === "connecting"}
 		<div class="note" class:quiet={status === "connecting"}>{status === "offline" ? t("터미널에 다시 연결하는 중…") : t("연결하는 중…")}</div>
 	{:else if status === "exited"}
@@ -213,14 +350,17 @@
 		min-height: 0;
 		position: relative;
 		display: flex;
+		flex-direction: column;
 		background: var(--bg);
-		padding: 6px 4px 4px 10px;
 	}
 	.screen {
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
+		margin: 6px 4px 4px 10px;
+		touch-action: none;
+		overscroll-behavior: contain;
 	}
 	.screen :global(.xterm) {
 		height: 100%;
