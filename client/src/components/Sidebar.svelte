@@ -17,6 +17,7 @@
 	import Wordmark from "./Wordmark.svelte";
 	import { activityOf, type Activity } from "../lib/activity";
 	import { app } from "../lib/store.svelte";
+	import { extensionUpdates } from "../lib/extension-updates.svelte";
 	import { tilde } from "../lib/format";
 	import { drag } from "../lib/dnd.svelte";
 	import { blockDrag } from "../lib/block-drag";
@@ -235,10 +236,11 @@
 		pretty,
 		shortLabel,
 	});
+	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(app.api); });
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. */
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
 	const alertTone = $derived(app.net === "online" && app.compat === "ok" ? "ok" : "warn");
-	const settingsAlert = $derived(updater.visible || serverUpdater.available || app.compat !== "ok" ? t("업데이트 필요") : "");
+	const settingsAlert = $derived(updater.visible || serverUpdater.available || extensionUpdates.any || app.compat !== "ok" ? t("업데이트 필요") : "");
 </script>
 
 

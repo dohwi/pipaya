@@ -8,6 +8,8 @@
 	import { SETTINGS_TABS, type SettingsTabId } from "../../lib/settings-search";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../Icon.svelte";
+	import Pin from "../Pin.svelte";
+	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 
 	/**
 	 * The column of sections on the left (a row of tabs on a phone). A section with extensions lists them under it as a
@@ -47,12 +49,13 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean };
+	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
-		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false }));
-		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, name: n.title ?? n.name, live: true, builtin: false })) : [];
+		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id) }));
+		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name) })) : [];
 		return [...own, ...side];
 	};
 	function openExt(tabId: TabId, id: string) {
@@ -81,7 +84,7 @@
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
 				<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
-					<Icon name={x.icon} />
+					<span class="nico"><Icon name={x.icon} />{#if hasUpdate(x.id)}<Pin tone="ok" label={t("업데이트 필요")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
 						{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
@@ -97,6 +100,7 @@
 						<button role="tab" class="sub" aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
 							<span class="dot" class:live={e.live} role="img" aria-label={e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
+							{#if e.update}<span class="uplabel"><Pin tone="ok" label={t("업데이트 필요")} /></span>{/if}
 						</button>
 					{/each}
 				</div>
@@ -114,6 +118,17 @@
 		padding: 7px 12px;
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
+	}
+	.nico {
+		position: relative;
+		display: inline-flex;
+	}
+	.uplabel {
+		position: relative;
+		margin-left: auto;
+		width: 7px;
+		height: 7px;
+		flex: none;
 	}
 	.nav .row {
 		position: relative;
