@@ -3,7 +3,7 @@
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down"
-		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "coin" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open";
+		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open";
 </script>
 
 <script lang="ts">
@@ -51,7 +51,6 @@
 		list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
 		more: "M5 12h.01M12 12h.01M19 12h.01",
 		sidebar: "M4 5h16v14H4zM9.5 5v14",
-		coin: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM14.6 9.6c-.5-1-1.5-1.6-2.6-1.6-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2c-1.1 0-2.1-.6-2.6-1.6M12 6.5V8M12 16v1.5",
 		download: "M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14",
 		cache: "M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
 		clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",

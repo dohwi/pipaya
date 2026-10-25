@@ -654,8 +654,6 @@ export const en: Record<string, string> = {
 	"프롬프트 {prompt} 토큰 중 {read} 토큰을 캐시에서 읽었습니다": "{read} of {prompt} prompt tokens were read from cache",
 	"출력 속도 {n} 토큰/초 (마지막 응답)": "Output speed {n} tokens/s (last reply)",
 	"출력 속도 · 응답 후 표시됩니다": "Output speed · shown after a reply",
-	"이 대화 누적 비용 · 모델 호출 {n}회": "Cost so far in this chat · {n} model {n#call|calls}",
-	"입력 {input} · 출력 {output} 토큰": "Input {input} · output {output} tokens",
 	"세션 통계": "Session stats",
 	"다음 키를 기다리는 중": "Waiting for the next key",
 	"AGENTS.md {n}개": "{n} AGENTS.md {n#file|files}",

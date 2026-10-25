@@ -3,12 +3,12 @@
 	import { localeTag, t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
-	import { compact, money } from "../lib/format";
+	import { compact } from "../lib/format";
 	import type { AssistantItem } from "../lib/types";
 	import Icon from "./Icon.svelte";
 	import SessionContext from "./SessionContext.svelte";
 	import { getPane } from "../lib/pane";
-	import { cacheLevel, contextLevel, costLevel, speedLevel } from "../lib/status-level";
+	import { cacheLevel, contextLevel, speedLevel } from "../lib/status-level";
 
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
@@ -120,14 +120,13 @@
 	const ctxPct = $derived(win && ctx !== null ? (ctx / win) * 100 : 0);
 
 	const sum = $derived.by(() => {
-		const acc = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+		const acc = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 		for (const c of calls) {
 			const u = c.usage!;
 			acc.input += u.input;
 			acc.output += u.output;
 			acc.cacheRead += u.cacheRead ?? 0;
 			acc.cacheWrite += u.cacheWrite ?? 0;
-			acc.cost += u.cost?.total ?? 0;
 		}
 		return acc;
 	});
@@ -160,7 +159,6 @@
 	const level = $derived(ctx === null || !win ? "" : contextLevel(ctxPct));
 	const hitLevel = $derived(cacheLevel(hit, calls.length));
 	const tpsLevel = $derived(speedLevel(tps));
-	const costState = $derived(costLevel(totals.cost));
 	const pct = (n: number) => (n >= 10 ? n.toFixed(0) : n.toFixed(1));
 
 	const ctxWindow = $derived(win ? ` / ${win.toLocaleString(localeTag())} ${t("토큰")} (${pct(ctxPct)}%)` : ` ${t("토큰")}`);
@@ -182,9 +180,6 @@
 			: [t("캐시 적중률 {n}%", { n: pct(hit) }), t("프롬프트 {prompt} 토큰 중 {read} 토큰을 캐시에서 읽었습니다", { prompt: prompt.toLocaleString(localeTag()), read: totals.cacheRead.toLocaleString(localeTag()) })].join("\n"),
 	);
 	const tpsTip = $derived(tps === null ? t("출력 속도 · 응답 후 표시됩니다") : t("출력 속도 {n} 토큰/초 (마지막 응답)", { n: tps.toFixed(1) }));
-	const costTip = $derived(
-		[t("이 대화 누적 비용 · 모델 호출 {n}회", { n: calls.length }), t("입력 {input} · 출력 {output} 토큰", { input: prompt.toLocaleString(localeTag()), output: totals.output.toLocaleString(localeTag()) })].join("\n"),
-	);
 	const speed = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(1));
 </script>
 
@@ -232,10 +227,6 @@
 	<span class="b tps {tpsLevel}" class:empty={tps === null} title={tpsTip}>
 		<Icon name="gauge" />
 		<span class="v">{tps === null ? "—" : speed(tps)}</span><span class="unit wide">tps</span>
-	</span>
-	<span class="b cost {costState}" class:empty={totals.cost <= 0} title={costTip}>
-		<Icon name="coin" />
-		<span class="v">{totals.cost > 0 ? money(totals.cost).replace("$", "") : "—"}</span>
 	</span>
 </div>
 

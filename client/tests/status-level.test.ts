@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cacheLevel, contextLevel, costLevel, high, low, speedLevel } from "../src/lib/status-level";
+import { cacheLevel, contextLevel, high, low, speedLevel } from "../src/lib/status-level";
 
 describe("status line levels", () => {
 	test("context: amber from 20%, red from 40%", () => {
@@ -26,10 +26,5 @@ describe("status line levels", () => {
 		expect(speedLevel(108)).toBe("");
 		expect(speedLevel(15)).toBe("warn");
 		expect(speedLevel(5)).toBe("danger");
-	});
-	test("cost: grows into amber and red", () => {
-		expect(costLevel(0.2)).toBe("");
-		expect(costLevel(1)).toBe("warn");
-		expect(costLevel(5)).toBe("danger");
 	});
 });

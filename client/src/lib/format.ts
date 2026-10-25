@@ -8,9 +8,6 @@ export const compact = (n: number): string =>
       ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`
       : String(n);
 
-export const money = (usd: number): string =>
-  usd === 0 ? "$0" : usd < 0.01 ? "<$0.01" : `$${usd.toFixed(usd < 1 ? 3 : 2)}`;
-
 export const duration = (ms: number): string =>
   ms < 1000
     ? `${Math.round(ms)}ms`
