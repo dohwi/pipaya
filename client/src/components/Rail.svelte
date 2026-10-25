@@ -170,8 +170,7 @@
 		width: 44px;
 		height: 44px;
 		border-radius: var(--radius-sm);
-		/* the list scrolls and clips, so the count stays inside the tile, set in from the corner */
-		--pin-inset: 3px;
+		/* the list scrolls and clips, but the rail leaves 6px beside a tile, enough for the pin (default -3px + 2px ring) to overhang the corner */
 	}
 	/* a folder: its first letter on a faint tile, so the count pinned to the corner sits on something; hover and selected are stronger */
 	.agent.dir {
