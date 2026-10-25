@@ -209,7 +209,7 @@
 	}
 	.nav button.sub::before {
 		top: calc(50% - 9px);
-		width: 16px;
+		width: 18px;
 		height: 9px;
 		border-left: 1.5px solid var(--border-strong);
 		border-bottom: 1.5px solid var(--border-strong);
