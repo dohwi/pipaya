@@ -129,6 +129,14 @@
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if note}<Notice tone="info">{note}</Notice>{/if}
 
+	{#if nChosen}
+		<div class="bar" in:collapseIn out:collapseOut>
+			<span>{t("{n}개 선택됨", { n: nChosen })}</span>
+			<Button size="sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</Button>
+			<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nChosen })} onconfirm={() => void remove()} disabled={busy}><Icon name="trash" /> {t("삭제")}</ConfirmButton>
+		</div>
+	{/if}
+
 	<section class="list" aria-labelledby="list-h">
 		<div class="row head">
 			<div class="grow">
@@ -177,14 +185,6 @@
 			{/each}
 		{/if}
 	</section>
-
-	{#if nChosen}
-		<div class="bar" in:collapseIn out:collapseOut>
-			<span>{t("{n}개 선택됨", { n: nChosen })}</span>
-			<Button size="sm" onclick={() => (picked = {})} disabled={busy}>{t("선택 해제")}</Button>
-			<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nChosen })} onconfirm={() => void remove()} disabled={busy}><Icon name="trash" /> {t("삭제")}</ConfirmButton>
-		</div>
-	{/if}
 </div>
 
 <style>
@@ -305,7 +305,8 @@
 	}
 	.bar {
 		position: sticky;
-		bottom: 0;
+		top: 0;
+		z-index: 2;
 		display: flex;
 		align-items: center;
 		gap: 10px;
