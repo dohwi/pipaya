@@ -194,10 +194,10 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		writeFileSync(join(pkgDir, "dist", "carrier-ui.json"), JSON.stringify(client));
 		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ pipaya: { companion: "carrier-ui", client: "dist/carrier-ui.json" } }));
 		writeFileSync(join(pkgDir, "index.js"), "export default () => {};");
-		const escape = join(extDir, "escape");
-		mkdirSync(escape, { recursive: true });
-		writeFileSync(join(escape, "package.json"), JSON.stringify({ pipaya: { client: "../carrier/dist/carrier-ui.json" } }));
-		writeFileSync(join(escape, "index.js"), "export default () => {};");
+		const escapeDir = join(extDir, "escape");
+		mkdirSync(escapeDir, { recursive: true });
+		writeFileSync(join(escapeDir, "package.json"), JSON.stringify({ pipaya: { client: "../carrier/dist/carrier-ui.json" } }));
+		writeFileSync(join(escapeDir, "index.js"), "export default () => {};");
 		await api("POST", "/server-extensions/reload");
 		const list = (await api("GET", "/server-extensions")).json.extensions as any[];
 		expect(list.find((e) => e.name === "carrier")?.clientPackage).toBe(true);
@@ -206,7 +206,7 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		expect((await api("GET", "/server-extensions/escape/client")).status).toBe(404);
 		expect((await api("GET", "/server-extensions/demo/client")).status).toBe(404);
 		rmSync(pkgDir, { recursive: true });
-		rmSync(escape, { recursive: true });
+		rmSync(escapeDir, { recursive: true });
 		await api("POST", "/server-extensions/reload");
 	});
 

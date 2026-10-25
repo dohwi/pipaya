@@ -1,6 +1,5 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import { existsSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { realpathSync } from "node:fs";
 import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
@@ -8,7 +7,6 @@ import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "
 import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resize-core.ts";
 import { resizeImage } from "./image-resize.ts";
 import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
-import type { QuestionOutcome, QuestionRequest } from "./questions.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
