@@ -49,7 +49,7 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** the last row: the trunk line stops here */ end?: boolean };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean };
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
@@ -59,13 +59,15 @@
 		const owned = (id: string) => side.some((n) => n.companion === id);
 		const free = own.filter((e) => !owned(e.id));
 		// a pair stays flat: the client half sits right after its server extension, both marked with a clip
-		const rows: Kid[] = [...free.map((e) => ({ ...e, paired: !!extensionUpdates.missingServerFor(e.id) }))];
+		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); return { ...e, paired: !!m, partner: m?.name }; })];
 		for (const n of side) {
-			rows.push({ ...n, paired: !!n.companion });
-			for (const e of own) if (e.id === n.companion) rows.push({ ...e, paired: true });
+			const mate = own.find((e) => e.id === n.companion);
+			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined) });
+			if (mate) rows.push({ ...mate, paired: true, partner: n.name });
 		}
 		return rows.map((e, i) => ({ ...e, end: i === rows.length - 1 }));
 	};
+	const clipTip = (e: Kid) => (e.half ? e.halfLabel : e.partner ? t("확장 ‘{name}’와 함께 작동합니다.", { name: e.partner }) : t("짝 확장과 함께 작동"));
 	function openExt(tabId: TabId, id: string) {
 		if (tabId !== tab) { dir = order(tabId) > order(tab) ? 1 : -1; tab = tabId; }
 		extId = id;
@@ -108,7 +110,7 @@
 						<button role="tab" class="sub" class:end={e.end} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
 							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
-							{#if e.paired}<span class="clip" class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : t("짝 확장과 함께 작동")} title={e.half ? e.halfLabel : t("짝 확장과 함께 작동")}><Icon name="clip" /></span>{/if}
+							{#if e.paired}<span class="clip" class:half={e.half} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
 							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 						</button>
 					{/each}
