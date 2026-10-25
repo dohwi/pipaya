@@ -9,6 +9,8 @@ export interface Row {
 	maxTokens: string;
 	reasoning: boolean;
 	vision: boolean;
+	/** Makes pictures instead of text */
+	imageGeneration: boolean;
 	/** Chosen brand mark; undefined = automatic (from the id) */
 	icon?: string;
 	/** Listed by the upstream itself: the id is fixed and cannot be edited */
@@ -47,7 +49,7 @@ export const localPresets = [
 ];
 export type LocalPreset = (typeof localPresets)[number];
 
-export const newRow = (): Row => ({ id: "", name: "", contextWindow: "128000", maxTokens: "8192", reasoning: false, vision: false, thinkingLevels: [] });
+export const newRow = (): Row => ({ id: "", name: "", contextWindow: "128000", maxTokens: "8192", reasoning: false, vision: false, imageGeneration: false, thinkingLevels: [] });
 
 /** A connection id suggested from its name: lowercase, starts with a letter, only `a-z 0-9 _ -`. */
 export const slug = (s: string) =>
@@ -91,6 +93,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			maxTokens: String(m.maxTokens),
 			reasoning: m.reasoning,
 			vision: m.vision,
+			imageGeneration: m.imageGeneration === true,
 			icon: m.icon,
 			fromUpstream: m.fromUpstream,
 			thinkingLevels: m.thinkingLevels ?? [],
@@ -112,13 +115,14 @@ export function applyMatch(r: Row, c: CatalogModel | null) {
 	r.maxTokens = String(Math.min(c.maxTokens, c.contextWindow));
 	r.vision = c.vision;
 	r.reasoning = c.reasoning;
+	r.imageGeneration = c.image;
 	r.thinkingLevels = [];
 }
 
 /** "128k · reasoning · image" summary under a model's name. */
 export function modelMeta(r: Row): string {
 	const ctx = Number(r.contextWindow);
-	return [Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "", r.reasoning ? t("추론") : "", r.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
+	return [Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "", r.imageGeneration ? t("이미지 생성") : r.reasoning ? t("추론") : "", r.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
 }
 
 /** The first problem with the connection's own fields (name, id, address), or null. */
@@ -160,10 +164,11 @@ export function collectModels(
 			...(r.name.trim() ? { name: r.name.trim() } : {}),
 			contextWindow: ctx,
 			maxTokens: max,
-			reasoning: r.reasoning,
+			reasoning: r.reasoning && !r.imageGeneration,
 			vision: r.vision,
+			...(r.imageGeneration ? { imageGeneration: true } : {}),
 			...(r.icon ? { icon: r.icon } : {}),
-			...(r.reasoning && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
+			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 		} as CustomModel);
 	}
 	if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };

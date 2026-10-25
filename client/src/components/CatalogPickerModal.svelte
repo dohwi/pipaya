@@ -33,7 +33,7 @@
 	const rows = $derived(hits.slice(0, LIMIT));
 	const showSuggested = $derived(!!suggested && (!q || `${suggested.name} ${suggested.id}`.toLowerCase().includes(q)));
 
-	const metaOf = (c: CatalogModel) => [`${compact(c.contextWindow)}`, c.reasoning ? t("추론") : "", c.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
+	const metaOf = (c: CatalogModel) => [c.image ? t("이미지 생성") : `${compact(c.contextWindow)}`, c.reasoning ? t("추론") : "", c.vision ? t("이미지") : ""].filter(Boolean).join(" · ");
 </script>
 
 {#snippet opt(c: CatalogModel, recommended: boolean)}

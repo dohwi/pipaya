@@ -113,7 +113,7 @@
 	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
 		{#snippet lead()}<ModelLogo {conn} icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
-		{#snippet meta()}{#if inFavs}{providerName(m.provider)} · {/if}{t("컨텍스트")} {compact(m.contextWindow)}{#if m.reasoning} · {t("추론")}{/if}{#if m.vision} · {t("이미지")}{/if}{#if m.available === false} · {t("불러오지 못함")}{:else if !m.configured} · {t("키 없음")}{/if}{/snippet}
+		{#snippet meta()}{#if inFavs}{providerName(m.provider)} · {/if}{t("컨텍스트")} {compact(m.contextWindow)}{#if m.imageGeneration} · {t("이미지 생성")}{/if}{#if m.reasoning} · {t("추론")}{/if}{#if m.vision} · {t("이미지")}{/if}{#if m.available === false} · {t("불러오지 못함")}{:else if !m.configured} · {t("키 없음")}{/if}{/snippet}
 		{#snippet trailing()}
 			{#if onfav}
 				<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>

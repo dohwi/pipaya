@@ -96,11 +96,12 @@
 	<section class="fsec">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
-			<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>
+			{#if !r.imageGeneration}<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
 			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 입력")}</button>
+			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="bolt" /> {t("이미지 생성")}</button>
 		</div>
 	</section>
-	{#if r.reasoning && !matched}
+	{#if r.reasoning && !r.imageGeneration && !matched}
 		<section class="fsec">
 			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 			<div class="caps" role="group" aria-label={t("추론 강도")}>

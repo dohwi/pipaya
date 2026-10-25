@@ -91,6 +91,8 @@
 	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
+	/** An image model is still working on its picture: no text will stream, so show a canvas that fills in. */
+	const painting = $derived(live && segments.every((s) => s.kind === "work" && !s.steps.length) && !!app.models.find((m) => m.provider === session?.provider && m.id === session?.model)?.imageGeneration);
 	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
@@ -99,8 +101,16 @@
 <div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} use:swipeable>
 	<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
 	<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
+		{#if painting}
+			<div class="painting" role="status" aria-label={t("이미지를 만드는 중…")}>
+				<div class="canvas"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span><span class="grain"></span></div>
+				<span class="shimmer cap">{t("이미지를 만드는 중…")}</span>
+			</div>
+		{/if}
 		{#each segments as seg, n (seg.i)}
-			{#if seg.kind === "work"}
+			{#if seg.kind === "work" && painting}
+				<!-- the canvas above stands in for the empty "thinking" box -->
+			{:else if seg.kind === "work"}
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
 			{:else}
 				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
@@ -147,6 +157,80 @@
 	}
 	.fresh {
 		animation: rise var(--motion-normal) var(--ease) both;
+	}
+	.painting {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		width: min(100%, 360px);
+	}
+	.canvas {
+		position: relative;
+		aspect-ratio: 1;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+		isolation: isolate;
+	}
+	.orb {
+		position: absolute;
+		width: 70%;
+		height: 70%;
+		border-radius: 50%;
+		filter: blur(34px);
+		opacity: 0.55;
+		animation: drift 5.5s ease-in-out infinite alternate;
+	}
+	.o1 {
+		left: -10%;
+		top: -5%;
+		background: #7c9cff;
+	}
+	.o2 {
+		right: -15%;
+		top: 20%;
+		background: #e879b9;
+		animation-delay: -1.8s;
+		animation-duration: 6.5s;
+	}
+	.o3 {
+		left: 15%;
+		bottom: -20%;
+		background: #5eead4;
+		animation-delay: -3.2s;
+		animation-duration: 7.5s;
+	}
+	/* a soft band sweeping over the canvas, like a brush pass */
+	.grain {
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--text) 14%, transparent) 50%, transparent 65%);
+		background-size: 250% 100%;
+		animation: sweep 2.4s linear infinite;
+	}
+	.cap {
+		font-size: var(--fs-xs);
+		align-self: flex-start;
+	}
+	@keyframes drift {
+		to {
+			transform: translate(24%, 18%) scale(1.25);
+		}
+	}
+	@keyframes sweep {
+		from {
+			background-position: 150% 0;
+		}
+		to {
+			background-position: -50% 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.orb,
+		.grain {
+			animation: none;
+		}
 	}
 	@keyframes rise {
 		from {
