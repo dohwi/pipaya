@@ -55,7 +55,7 @@
 	{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
 	{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
 	{#if missingClient}
-		<Notice tone="warn" size="sm" role="status">
+		<Notice tone="warn" size="sm" icon="clip" role="status">
 			{t("클라이언트 확장 ‘{name}’도 설치해야 동작합니다.", { name: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
 			{#snippet action()}<button type="button" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("설치")}</button>{/snippet}
 		</Notice>
@@ -64,10 +64,7 @@
 	{#if client && clientOff}
 		<Notice tone="warn" size="sm" icon="clip" role="status">
 			{t("클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.package.manifest.name })}
-			{#snippet action()}
-				{#if onenableclient}<button type="button" disabled={busy || client.state === "error"} onclick={() => onenableclient(client.package.manifest.id)}>{t("켜기")}</button>{/if}
-				{#if onopenclient}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/if}
-			{/snippet}
+			{#snippet action()}{#if onenableclient}<button type="button" disabled={busy || client.state === "error"} onclick={() => onenableclient(client.package.manifest.id)}>{t("켜기")}</button>{/if}{/snippet}
 		</Notice>
 	{:else if client && onopenclient}
 		<Notice tone="info" size="sm" icon="clip" role="status">
