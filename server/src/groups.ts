@@ -129,7 +129,7 @@ export class GroupManager {
 		private bus: EventBus,
 		private sessionExists: (id: string) => boolean,
 	) {
-		// A deleted or closed session leaves its group, so groups never point at sessions that are gone.
+		// A deleted, closed or archived session leaves its group, so groups never point at sessions that are gone.
 		// Deferred a tick so the session event reaches every subscriber (and gets its cursor) before the group event it causes.
 		const later = (sessionId: string) =>
 			queueMicrotask(() => {
@@ -141,7 +141,7 @@ export class GroupManager {
 			});
 		bus.subscribe((e) => {
 			if (e.type === "session_deleted" || e.type === "terminal_closed") later((e.data as { id: string }).id);
-			else if (e.type === "session_updated" && (e.data as { closed?: boolean }).closed && e.sessionId) later(e.sessionId);
+			else if (e.type === "session_updated" && ((e.data as { closed?: boolean }).closed || (e.data as { archived?: boolean }).archived) && e.sessionId) later(e.sessionId);
 		});
 	}
 

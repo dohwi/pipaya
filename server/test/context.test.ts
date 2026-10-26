@@ -23,7 +23,7 @@ function fixture() {
 const record = (id: string, cwd: string): SessionRecord => ({
 	id, cwd, title: "Old session", provider: "echo", model: ECHO_MODEL.id,
 	thinkingLevel: "medium", systemPrompt: "Base prompt", tools: ["read"],
-	purpose: "", parentId: null, closed: false, createdAt: 1, updatedAt: 1,
+	purpose: "", parentId: null, closed: false, archived: false, createdAt: 1, updatedAt: 1,
 });
 
 function readResult(path: string, from: number, to: number, timestamp: number, isError = false): Extract<AgentMessage, { role: "toolResult" }> {

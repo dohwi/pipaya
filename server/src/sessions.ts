@@ -115,6 +115,7 @@ export class SessionManager {
 			tools,
 			parentId,
 			closed: false,
+			archived: false,
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -388,6 +389,7 @@ export class SessionManager {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		this.assertRunnable(record.provider, record.model);
+		if (record.archived) this.store.update(id, { archived: false }), this.bus.publish(id, "session_updated", this.get(id)); // new activity brings it back
 		const mode = input.mode ?? "prompt";
 		let extraParts: { type: "text"; text: string }[] = [];
 		let inputTitle: string | undefined;

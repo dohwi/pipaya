@@ -167,6 +167,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		kind       TEXT NOT NULL,
 		at         INTEGER NOT NULL
 	);`,
+	// v25: a session can be archived: still open (not closed), but tucked away in the apps' archive instead of the active list.
+	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "archived")) db.exec("ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"); },
 ];
 
 export function openDb(path: string): Database {

@@ -391,6 +391,18 @@ describe("sessions", () => {
 		expect((await api("GET", `/sessions/${fork.json.id}`)).status).toBe(404);
 	});
 
+	test("archived sessions stay open and come back with a new message", async () => {
+		const id = (await api("POST", "/sessions", { title: "archiveme", cwd: "proj/arch" })).json.id as string;
+		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(false);
+		const a = await api("PATCH", `/sessions/${id}`, { archived: true });
+		expect(a.json.archived).toBe(true);
+		expect(a.json.closed).toBe(false);
+		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(true);
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "hello" })).status).toBeLessThan(300);
+		await untilIdle(id);
+		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(false);
+	});
+
 	test("closed sessions leave the active list, refuse work, and can be resumed", async () => {
 		const id = (await api("POST", "/sessions", { title: "closeme", cwd: "proj/a" })).json.id as string;
 		await api("POST", `/sessions/${id}/messages`, { text: "hello" });

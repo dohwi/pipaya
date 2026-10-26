@@ -20,6 +20,8 @@ export interface SessionRecord {
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list until resumed. */
 	closed: boolean;
+	/** Archived sessions stay open but are tucked away by the apps; a new message brings them back. */
+	archived: boolean;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -36,6 +38,7 @@ interface SessionRow {
 	tools: string;
 	parent_id: string | null;
 	closed: number;
+	archived: number;
 	created_at: number;
 	updated_at: number;
 }
@@ -52,12 +55,13 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	tools: JSON.parse(r.tools),
 	parentId: r.parent_id,
 	closed: r.closed === 1,
+	archived: r.archived === 1,
 	createdAt: r.created_at,
 	updatedAt: r.updated_at,
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed" | "archived">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
@@ -69,6 +73,7 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	systemPrompt: "system_prompt",
 	tools: "tools",
 	closed: "closed",
+	archived: "archived",
 };
 
 export interface StoredMessage {
@@ -154,7 +159,7 @@ export class SessionStore {
 			const value = patch[key];
 			if (value === undefined) continue;
 			sets.push(`${PATCH_COLUMNS[key]} = $${key}`);
-			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" ? (value ? 1 : 0) : (value as string);
+			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" || key === "archived" ? (value ? 1 : 0) : (value as string);
 		}
 		this.db.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $id`).run(params);
 		return this.get(id);
