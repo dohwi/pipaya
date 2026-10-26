@@ -65,6 +65,17 @@ describe("notification client", () => {
     await c.receive(c.id, payload("n7")); expect(shown).toHaveLength(1);
   });
 
+  test("reports never overtake each other: a slow older one cannot land after a newer one", async () => {
+    const c = new NotificationClient(); const sent: boolean[] = []; let release!: () => void;
+    const api = { notificationPresence: async (_id: string, p: { focused: boolean }) => { sent.push(p.focused); if (sent.length === 1) await new Promise<void>((r) => { release = r; }); }, notificationStatus: async () => ({ pushConfigured: false, providers: [] }) } as any;
+    c.connect(api); await new Promise((r) => setTimeout(r, 20)); // first report (unfocused) is stuck in flight
+    state.visible = "visible"; state.focus = true;
+    const a = c.heartbeat(), b = c.heartbeat();
+    await new Promise((r) => setTimeout(r, 20)); expect(sent).toEqual([false]); // nothing is sent while the older one is in flight
+    release(); await Promise.all([a, b]);
+    expect(sent).toEqual([false, true]); // one follow-up, carrying the state at that moment
+  });
+
   test("the app reports whether it is being looked at, and says so the moment it is", async () => {
     const c = new NotificationClient(); const { api, calls } = fakeApi(); c.init(() => [], () => {}); c.connect(api); await c.setEnabled(true);
     const before = calls.presence.length;

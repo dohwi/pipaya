@@ -87,6 +87,13 @@
 		};
 	});
 
+	// The server decides "is somebody looking at this session" from the last report, so switching panes/sessions is reported at once
+	// instead of at the next 10 s beat (a run finishing in between would otherwise be judged against the old session).
+	$effect(() => {
+		void app.readableId; void app.visibleIds.join(",");
+		untrack(() => { void notifications.heartbeat(); });
+	});
+
 	onMount(() => guardWindowClose(() => app.requestClose()));
 	/** The shared context menu of the rail, pane title bars and the phone's pane strip (lib/context-menu). */
 	let contextMenu: ReturnType<typeof RowMenu> | undefined = $state();

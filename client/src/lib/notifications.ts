@@ -186,13 +186,34 @@ export class NotificationClient {
     void this.native?.clear?.([sessionId]).catch(() => {});
     void this.heartbeat();
   }
-  async heartbeat() {
+  private beating?: Promise<void>;
+  private beatAgain = false;
+  /**
+   * Reports presence. One report is in flight at a time: reports that were asked for meanwhile collapse into one more, sent after
+   * the first has landed. Otherwise a slow older report ("not focused", the old session) could reach the server after a newer one
+   * and the server would believe it, silencing or sending notifications for the wrong reason.
+   */
+  heartbeat(): Promise<void> {
+    if (this.beating) { this.beatAgain = true; return this.beating; }
+    const run = (async () => {
+      try { do { this.beatAgain = false; await this.report(); } while (this.beatAgain); }
+      finally { this.beating = undefined; }
+    })();
+    this.beating = run;
+    return run;
+  }
+  private async report() {
     const api = this.api;
     if (!api || api === this.revokedOn) return;
-    // Looking at a session reads it: its notification in this phone's shade goes away (other devices are told by the server).
-    if (attended()) void this.native?.clear?.(this.visible().slice(0, 20)).catch(() => {});
     try {
-      await api.notificationPresence(this.id, { platform: notificationPlatform(), focused: attended(), enabled: this.enabled && await this.permission() === "granted", visibleSessionIds: this.visible().slice(0, 20), ...(this.active() ? { activeSessionId: this.active()! } : {}), lang: getLang(), ...await this.identity(), ...(this.registration === undefined ? {} : { push: this.registration }) });
+      // Everything that has to wait comes first: what is reported is what is true at the moment of sending.
+      const enabled = this.enabled && await this.permission() === "granted";
+      const identity = await this.identity();
+      if (api !== this.api || api === this.revokedOn) return;
+      const focused = attended(), visible = this.visible().slice(0, 20), active = this.active();
+      // Looking at a session reads it: its notification in this phone's shade goes away (other devices are told by the server).
+      if (focused) void this.native?.clear?.(visible).catch(() => {});
+      await api.notificationPresence(this.id, { platform: notificationPlatform(), focused, enabled, visibleSessionIds: visible, ...(active ? { activeSessionId: active } : {}), lang: getLang(), ...identity, ...(this.registration === undefined ? {} : { push: this.registration }) });
     } catch { /* offline: notifications do not break the app */ }
   }
   /**
