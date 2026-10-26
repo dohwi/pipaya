@@ -118,9 +118,10 @@ export async function generateImages(
 
 const DESCRIPTION =
 	"Draw a picture with the image model and save it in the working directory (under .pipaya/generated). Describe the whole picture in `prompt`. " +
-	"To edit or build on existing pictures, pass their paths in `images` (files in the working directory, e.g. one this tool made). " +
-	"The result is the saved path and the picture. The user already sees the picture in this tool's result, so do not embed it again with a markdown image link; just briefly describe what you made or changed. " +
-	"Mention the path only if the user asks for the file.";
+	"To edit or build on existing pictures, pass their paths in `images` (files in the working directory, e.g. one this tool made).";
+
+/** Shown with the saved path: the model reads it right when it decides what to write next. */
+const SHOWN_NOTE = "(the user already sees the picture here; embed it in your reply only if they ask to see it again, otherwise just describe it briefly)";
 
 /** The `generate_image` tool, given while an image model is set. */
 export function imageTool(registry: ModelRegistry, settings: ImageModelSettings): ToolDef {
@@ -148,7 +149,7 @@ export function imageTool(registry: ModelRegistry, settings: ImageModelSettings)
 						inputs.push({ type: "image", data: (await readFile(safePath(cwd, p))).toString("base64"), mimeType });
 					}
 					const out = await generateImages(registry, model, cwd, params.prompt, inputs, signal);
-					const lines = [...out.images.map((i) => `Saved ${i.path}`), ...(out.text ? [`Model note: ${out.text}`] : [])];
+					const lines = [...out.images.map((i) => `Saved ${i.path} ${SHOWN_NOTE}`), ...(out.text ? [`Model note: ${out.text}`] : [])];
 					return {
 						content: [{ type: "text", text: lines.join("\n") }, ...out.images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))],
 						details: { model: `${model.provider}/${model.id}`, paths: out.images.map((i) => i.path) },

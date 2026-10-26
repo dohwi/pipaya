@@ -72,6 +72,8 @@ describe("image models", () => {
 		expect(path).toMatch(/^\.pipaya\/generated\/.+\.png$/);
 		expect(readFileSync(join(ws, path)).toString("base64")).toBe(ECHO_PNG);
 		expect(result.content.map((c: any) => c.type)).toEqual(["text", "image"]);
+		// the result line itself tells the model not to embed the picture again
+		expect(result.content[0].text).toContain(`Saved ${path} (the user already sees the picture here; embed it in your reply only if they ask to see it again`);
 		const sent = upstream.requests.filter((r) => Array.isArray(r.body?.modalities)).at(-1)!;
 		expect(sent.body.model).toBe(IMG.id);
 		expect(sent.body.messages[0].content.map((c: any) => c.type)).toEqual(["text", "image_url"]);
