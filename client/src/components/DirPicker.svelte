@@ -250,6 +250,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		min-height: 36px; /* a chip row (26px + 10px gap): the empty hint keeps the same height */
 		padding: 0 22px 10px;
 	}
 	.hint {
@@ -303,7 +304,6 @@
 		overflow-y: auto;
 		padding: 4px 12px;
 		border-top: 1px solid var(--border);
-		border-bottom: 1px solid var(--border);
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.list.loading {
