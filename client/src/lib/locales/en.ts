@@ -211,6 +211,7 @@ export const en: Record<string, string> = {
 	"켤 수 없습니다.": "Can't turn on.",
 	"다시 불러오기": "Reload",
 	"삭제": "Delete",
+	"‘{name}’을 삭제할까요?": "Delete “{name}”?",
 	"이 확장을 삭제합니다. 설정값은 어떻게 할까요?": "This removes the extension. What should happen to its settings?",
 	"설정 유지하고 삭제": "Keep settings and delete",
 	"설정까지 삭제": "Delete settings too",
