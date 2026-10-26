@@ -51,9 +51,11 @@
 			</span>
 			<span class="meta">{sub}</span>
 		</div>
-		{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
-		{#if upgrade}<Button size="sm" class="updbtn" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</Button>{/if}
-		{#if control}{@render control()}{/if}
+		<div class="actions">
+			{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
+			{#if upgrade}<Button size="sm" class="updbtn" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</Button>{/if}
+			{#if control}{@render control()}{/if}
+		</div>
 	</div>
 	{@render children()}
 </div>
@@ -61,15 +63,17 @@
 <style>
 	.page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 	.page:focus { outline: none; }
-	.line { display: flex; align-items: center; gap: 10px; align-items: flex-start; }
+	.line { display: flex; align-items: center; gap: 12px; }
+	/* spinner, update button and switch share one row, vertically centred on the name block like the list rows */
+	.actions { flex: none; display: flex; align-items: center; gap: 10px; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 2px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
 	.meta { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; font-family: var(--mono); }
-	.newver { display: inline-flex; align-items: center; gap: 3px; }
+	.newver { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 	.newver b { color: var(--ok); font-weight: 600; }
 	.newver :global(svg) { width: 11px; height: 11px; stroke-width: 2.4; color: var(--ok); }
-	.line :global(.btn.updbtn) { flex: none; }
+	.actions :global(.btn.updbtn) { flex: none; white-space: nowrap; }
 	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 2px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
 	.back:hover { color: var(--text); }
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */
