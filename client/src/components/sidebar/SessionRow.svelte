@@ -19,7 +19,7 @@
 </script>
 
 {#snippet body()}
-	<span class="lead"><AgentBadge id={x.id} state={st} size={16} /></span>
+	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} /></span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
 	<RowTitle text={x.title} />
 {/snippet}

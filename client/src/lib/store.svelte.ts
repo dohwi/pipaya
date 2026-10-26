@@ -5,16 +5,16 @@ import {
   errorText,
   isUnsupportedRoute,
   normalizeUrl,
-  probeServer,
   verifyServer,
-  type ServerProbe,
 } from "./api";
 import { expandHome } from "./workdir-path";
 import { isTauri } from "./tauri";
-import { compat, isClientTooOld, type Compat, type ServerVersions } from "./protocol";
+import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
+import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
+import { applyLinkEvent } from "./server-link-model";
 import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
@@ -47,8 +47,10 @@ import type {
   ToolsInfo,
 } from "./types";
 
-export type NetState =
-  "idle" | "connecting" | "online" | "offline" | "unauthorized" | "incompatible";
+export type NetState = LinkNet;
+/** What a closed server reads as: shared and empty, so a getter never hands out something to write into. */
+const NONE: never[] = [];
+const NONE_MAP: Record<string, never> = {};
 export type { ThemePref } from "./prefs.svelte";
 export type { Toast, Notice } from "./feedback.svelte";
 export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
@@ -61,51 +63,70 @@ import type { Draft, PaletteSpec, Server } from "./store-model";
 class AppStore {
   servers = $state<Server[]>(loadServers());
   serverId = $state<string | null>(null);
-  status = $state<Record<string, ServerProbe | "checking">>({});
   /** Add-server / edit-server dialog: `null` = closed, `"new"` = add, otherwise the id being edited. */
   serverForm = $state<string | "new" | null>(null);
-  /** What the sidebar shows for servers other than the open one (read from each server, not cached by the client) */
-  overview = $state<
-    Record<
-      string,
-      {
-        sessions: Session[];
-        /** Its archived sessions (still open, tucked away) */
-        archived: Session[];
-        workspace: WorkspaceInfo | null;
-        groups: Group[];
-        /** Terminals open on that server */
-        terminals: TerminalInfo[];
-        /** Sessions of that server that are running / waiting for the user (as it reports them) */
-        running: Record<string, boolean>;
-        awaiting: Record<string, number>;
-      }
-    >
-  >({});
-  net = $state<NetState>("idle");
+  /** Every saved server, kept live (lists, models, activity) by its own event stream; the open one is only the one in view. */
+  links = $state<Record<string, ServerLink>>({});
+  /** The link of the server in view. */
+  get link(): ServerLink | null {
+    return (this.serverId && this.links[this.serverId]) || null;
+  }
+  /* What the open server holds is read from its link (every server is kept live, see ServerLink); these are the open one's. */
+  get net(): NetState {
+    return this.link?.net ?? "idle";
+  }
   /** What the open server said about its version on connect (`/health`), or null before that. */
-  serverVersions = $state<ServerVersions | null>(null);
+  get serverVersions(): ServerVersions | null {
+    return this.link?.versions ?? null;
+  }
   /** The open server needs a newer app (`update-app`) or is older than this app (`update-server`). */
   get compat(): Compat {
     return this.net === "incompatible" ? "update-app" : compat(this.serverVersions);
   }
-  netError = $state("");
+  get netError(): string {
+    return this.link?.netError ?? "";
+  }
 
   /** Active (not closed) sessions only. Closed ones are fetched on demand by /resume and /tree. */
-  sessions = $state<Session[]>([]);
+  get sessions(): Session[] {
+    return this.link?.data.sessions ?? NONE;
+  }
+  set sessions(v: Session[]) {
+    if (this.link) this.link.data.sessions = v;
+  }
   /** Archived sessions: open (not closed) but tucked into the sidebar's archive. A new message on the server brings one back. */
-  archived = $state<Session[]>([]);
+  get archived(): Session[] {
+    return this.link?.data.archived ?? NONE;
+  }
+  set archived(v: Session[]) {
+    if (this.link) this.link.data.archived = v;
+  }
   /** The server whose conversation list (manage / archive / delete) is open, or null. */
   sessionsDialog = $state<string | null>(null);
   /** Workspace root on the server; every session lives in a working directory under it. */
-  workspace = $state<WorkspaceInfo | null>(null);
+  get workspace(): WorkspaceInfo | null {
+    return this.link?.workspace ?? null;
+  }
+  set workspace(v: WorkspaceInfo | null) {
+    if (this.link) this.link.workspace = v;
+  }
   /** Working directory (relative to the root, "." = root) where the next new chat starts. */
   /** Directory the next new chat starts in: "." = the server's default, else a path relative to it or absolute */
   workdir = $state(".");
   /** The server's default working directory setting (null on servers from before it existed) */
-  workdirInfo = $state<WorkdirInfo | null>(null);
+  get workdirInfo(): WorkdirInfo | null {
+    return this.link?.workdirInfo ?? null;
+  }
+  set workdirInfo(v: WorkdirInfo | null) {
+    if (this.link) this.link.workdirInfo = v;
+  }
   /** Agent tools the user can switch off / always-on ones / the ones switched off; saved on the server */
-  toolsInfo = $state<ToolsInfo | null>(null);
+  get toolsInfo(): ToolsInfo | null {
+    return this.link?.toolsInfo ?? null;
+  }
+  set toolsInfo(v: ToolsInfo | null) {
+    if (this.link) this.link.toolsInfo = v;
+  }
   /** Open the directory picker */
   dirPicker = $state(false);
   /** Images open in the full-screen viewer (null = closed) */
@@ -140,8 +161,15 @@ class AppStore {
   /** Bumped when the open server reports a model-connection change (any client) */
   configTick = $state(0);
   /** Model new chats start with on this server (saved default, else the server's startup default) */
-  serverDefault = $state<DefaultModelSelection | null>(null);
-  sessionsLoaded = $state(false);
+  get serverDefault(): DefaultModelSelection | null {
+    return this.link?.serverDefault ?? null;
+  }
+  set serverDefault(v: DefaultModelSelection | null) {
+    if (this.link) this.link.serverDefault = v;
+  }
+  get sessionsLoaded(): boolean {
+    return this.link?.loaded ?? false;
+  }
   /** The focused session: what commands, shortcuts and the header act on. null = a new chat that has no session yet. */
   activeId = $state<string | null>(null);
   /** The session that had the focus before this one: the target of "back to the previous conversation". */
@@ -149,24 +177,50 @@ class AppStore {
   /** Transcripts of every session on screen: the focused one, plus all panes of the open group. */
   chats = $state.raw<Record<string, ChatState>>({});
   /** Session groups of the open server: named split-window layouts, stored on the server. */
-  groups = $state<Group[]>([]);
+  get groups(): Group[] {
+    return this.link?.data.groups ?? NONE;
+  }
+  set groups(v: Group[]) {
+    if (this.link) this.link.data.groups = v;
+  }
   /** Terminals open on the server (shells on its own OS), and what it supports; null support = not known (yet) */
-  terminals = $state<TerminalInfo[]>([]);
-  terminalSupport = $state<TerminalSupport | null>(null);
+  get terminals(): TerminalInfo[] {
+    return this.link?.data.terminals ?? NONE;
+  }
+  set terminals(v: TerminalInfo[]) {
+    if (this.link) this.link.data.terminals = v;
+  }
+  get terminalSupport(): TerminalSupport | null {
+    return this.link?.terminalSupport ?? null;
+  }
 
-  models = $state<ModelInfo[]>([]);
-  providers = $state<ProviderInfo[]>([]);
-  tools = $state<ToolInfo[]>([]);
+  get models(): ModelInfo[] {
+    return this.link?.models ?? NONE;
+  }
+  get providers(): ProviderInfo[] {
+    return this.link?.providers ?? NONE;
+  }
+  get tools(): ToolInfo[] {
+    return this.link?.tools ?? NONE;
+  }
 
-  running = $state<Record<string, boolean>>({});
+  get running(): Record<string, boolean> {
+    return this.link?.data.running ?? NONE_MAP;
+  }
   /** The grouped session shown full-size in its group for a moment (Esc returns to the grid) */
   zoomId = $state<string | null>(null);
   /** Groups in "full" mode (kept on this device): one pane fills the group and a strip under the header picks the pane. */
   fullGroups = $state<string[]>(read<string[]>(K.fullGroups, []));
-  awaiting = $state<Record<string, number>>({});
-  unread = $state<Record<string, boolean>>({});
+  get awaiting(): Record<string, number> {
+    return this.link?.data.awaiting ?? NONE_MAP;
+  }
+  get unread(): Record<string, boolean> {
+    return this.link?.data.unread ?? NONE_MAP;
+  }
   /** Sessions whose last run ended in an error and have not been looked at yet */
-  failed = $state<Record<string, boolean>>({});
+  get failed(): Record<string, boolean> {
+    return this.link?.data.failed ?? NONE_MAP;
+  }
 
   draft = $state<Draft>(readDraft());
 
@@ -209,11 +263,11 @@ class AppStore {
   }
   sending = $state(false);
 
-  api: Api | null = null;
-  private unsubscribe: (() => void) | null = null;
-  private retryTimer: ReturnType<typeof setTimeout> | undefined;
-  private retryDelay = 1000;
-  private syncToken = 0;
+  /** The open server's connection. */
+  get api(): Api | null {
+    return this.link?.api ?? null;
+  }
+  private attachToken = 0;
   private hiddenAt = 0;
 
   /* ---------- derived ---------- */
@@ -223,6 +277,11 @@ class AppStore {
   }
 
   /** Connection of the open server (kept as `conn` for components that only need url/token). */
+  /** Reconnect the open server now (its stream is dropped and everything is read again). */
+  async sync(): Promise<void> {
+    await this.link?.sync();
+  }
+
   get conn(): { baseUrl: string; token: string } | null {
     const s = this.server;
     return s ? { baseUrl: s.baseUrl, token: s.token } : null;
@@ -405,20 +464,18 @@ class AppStore {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.hiddenAt = Date.now();
-      } else if (
-        this.conn &&
-        (this.net !== "online" || Date.now() - this.hiddenAt > 20_000)
-      ) {
-        // Mobile OSes silently kill background sockets; resync instead of trusting the stream.
-        void this.sync();
+      } else {
+        // Mobile OSes silently kill background sockets; resync instead of trusting the streams.
+        this.resyncLinks(Date.now() - this.hiddenAt <= 20_000);
       }
     });
     window.addEventListener(
       "online",
-      () => this.conn && this.net !== "online" && void this.sync(),
+      () => this.resyncLinks(true),
     );
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
+    this.syncLinks(); // every saved server goes live at once; `first` is only the one in view
     if (first) this.openServer(first.id);
     void this.ensureLocalServer();
   }
@@ -454,12 +511,14 @@ class AppStore {
         const i = this.servers.findIndex((s) => s.id === cur.id);
         this.servers[i] = { ...cur, baseUrl, token: info.token };
         this.saveServers();
+        this.syncLinks();
         if (cur.id === this.serverId) this.openServer(cur.id, true);
       }
     } else {
       const server: Server = { id: uid(), name: t("로컬"), baseUrl, token: info.token, local: true };
       this.servers.push(server);
       this.saveServers();
+      this.syncLinks();
     }
     const local = this.servers.find((s) => s.local)!;
     if (!this.serverId || !this.servers.some((s) => s.id === this.serverId)) this.openServer(local.id);
@@ -567,7 +626,7 @@ class AppStore {
     const connChanged =
       next.baseUrl !== cur.baseUrl || next.token !== cur.token;
     if (id === this.serverId && connChanged) this.openServer(id, true);
-    if (connChanged) delete this.status[id];
+    if (connChanged) this.syncLinks();
   }
 
   /** Put server `id` before/after `target` in the list (the order the sidebar and the rail show) and remember it. */
@@ -582,7 +641,7 @@ class AppStore {
     const wasOpen = id === this.serverId;
     this.servers = this.servers.filter((s) => s.id !== id);
     this.saveServers();
-    delete this.status[id];
+    this.syncLinks();
     try {
       localStorage.removeItem(`${K.active}.${id}`);
       localStorage.removeItem(`${K.favModels}.${id}`);
@@ -597,137 +656,80 @@ class AppStore {
     else this.closeServer();
   }
 
-  /** Switch to a server: tear down the current stream, clear per-server state, and sync. */
+  /** Make `links` match the saved servers: a link for each, rebuilt when its address or token changed, dropped when it is gone. */
+  private syncLinks() {
+    const next: Record<string, ServerLink> = {};
+    let changed = false;
+    for (const s of this.servers) {
+      const old = this.links[s.id];
+      if (old && old.server.baseUrl === s.baseUrl && old.server.token === s.token) {
+        next[s.id] = old;
+        continue;
+      }
+      old?.stop();
+      const link = new ServerLink(s, {
+        event: (l, e) => this.onLinkEvent(l, e),
+        ready: (l) => void this.attach(l),
+      });
+      next[s.id] = link;
+      changed = true;
+      link.start();
+    }
+    for (const id of Object.keys(this.links)) if (!next[id]) {
+      this.links[id]!.stop();
+      changed = true;
+    }
+    if (changed) this.links = next;
+  }
+
+  /** Put a server in view: its conversations open here, and its lists (already live) are shown at once. */
   openServer(id: string, force = false) {
     const target = this.servers.find((s) => s.id === id);
     if (!target) return;
     if (!force && this.serverId === id && this.net !== "idle") return;
-    this.stopStream();
-    this.syncToken++;
+    this.syncLinks();
+    this.attachToken++;
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
     const changing = this.openedFor !== null && this.openedFor !== id;
     this.serverId = id;
     this.openedFor = id;
     write(K.currentServer, id);
-    this.api = null;
     this.settingsSync?.dispose();
     this.settingsSync = null;
     this.favModels = this.loadFavModels(id);
     this.escalateMinutes = this.loadEscalate(id);
     if (changing) void extensions.switchServer();
     notifications.connect(null);
-    this.net = "connecting";
-    this.netError = "";
-    this.serverVersions = null;
     serverUpdater.reset();
-    this.sessions = [];
-    this.archived = [];
-    this.workspace = null;
-    this.workdirInfo = null;
-    this.serverDefault = null;
     this.workdir = read<string>(`${K.workdir}.${id}`, ".");
     this.palette = null;
     this.skillsDialog = null;
     this.commandsDialog = null;
     this.queueDialog = null;
-    this.sessionsLoaded = false;
-    this.models = [];
-    this.providers = [];
-    this.tools = [];
-    this.running = {};
-    this.awaiting = {};
-    this.unread = {};
-    this.failed = {};
     this.activeId = null;
     this.chats = {};
-    this.groups = [];
-    this.terminals = [];
-    this.terminalSupport = null;
     this.sidebar.open = false;
-    this.retryDelay = 1000;
-    void this.sync();
+    const link = this.links[id];
+    if (!link) return;
+    if (link.online && link.loaded) void this.attach(link);
+    else void link.sync(); // not reachable yet (or refused earlier): try now instead of waiting for the next retry
   }
 
   private closeServer() {
-    this.stopStream();
-    this.syncToken++;
+    this.attachToken++;
     this.serverId = null;
-    this.api = null;
-    this.net = "idle";
     this.settingsSync?.dispose();
     this.settingsSync = null;
     this.favModels = [];
     this.escalateMinutes = DEFAULT_ESCALATE;
     notifications.connect(null);
-    this.sessions = [];
-    this.archived = [];
-    this.sessionsLoaded = false;
     this.activeId = null;
     this.chats = {};
-    this.groups = [];
-    this.terminals = [];
-    this.terminalSupport = null;
     try {
       localStorage.removeItem(K.currentServer);
     } catch {
       /* ignore */
     }
-  }
-
-  /** Refresh the status dots of every saved server (the open one reports from its live stream). */
-  async probeAll() {
-    await Promise.all(
-      this.servers.map(async (s) => {
-        if (s.id === this.serverId && this.net === "online") {
-          this.status[s.id] = "online";
-          return;
-        }
-        this.status[s.id] = "checking";
-        this.status[s.id] = await probeServer(s.baseUrl, s.token);
-      }),
-    );
-  }
-
-  /** Read the active sessions and working directories of every other server, straight from that server. */
-  async refreshOverview() {
-    await Promise.all(
-      this.servers
-        .filter((s) => s.id !== this.serverId)
-        .map(async (s) => {
-          const api = new Api({ baseUrl: s.baseUrl, token: s.token });
-          try {
-            const [list, workspace, groups, act, terminals] = await Promise.all([
-              api.listSessions(200, false),
-              api.workspace().catch(() => null),
-              api.groups().catch(() => [] as Group[]),
-              api.activity().catch(() => null),
-              api.terminals().catch(() => [] as TerminalInfo[]),
-            ]);
-            const running: Record<string, boolean> = {};
-            const awaiting: Record<string, number> = {};
-            for (const a of act?.sessions ?? []) {
-              if (a.running) running[a.sessionId] = true;
-              const n = a.pendingQuestions;
-              if (n) awaiting[a.sessionId] = n;
-            }
-            this.overview[s.id] = {
-              sessions: list.sessions.filter((x) => !x.closed && !x.archived),
-              archived: list.sessions.filter((x) => !x.closed && x.archived),
-              workspace,
-              groups,
-              terminals,
-              running,
-              awaiting,
-            };
-            this.status[s.id] = "online";
-          } catch (e) {
-            this.status[s.id] =
-              e instanceof ApiError && (e.status === 401 || e.status === 403)
-                ? "unauthorized"
-                : "offline";
-          }
-        }),
-    );
   }
 
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
@@ -766,126 +768,49 @@ class AppStore {
     return `${K.active}.${this.serverId}`;
   }
 
-  private stopStream() {
-    clearTimeout(this.retryTimer);
-    this.unsubscribe?.();
-    this.unsubscribe = null;
+  /** Reconnect every server that is not live (the window was away, or the network came back). */
+  private resyncLinks(onlyDown: boolean) {
+    for (const l of Object.values(this.links)) if (!onlyDown || !l.online) void l.sync();
   }
 
-  private scheduleRetry() {
-    clearTimeout(this.retryTimer);
-    this.retryTimer = setTimeout(() => void this.sync(), this.retryDelay);
-    this.retryDelay = Math.min(this.retryDelay * 2, 15_000);
-  }
-
-  /** (Re)load everything and (re)open the event stream. Safe to call repeatedly. */
-  async sync(): Promise<void> {
-    if (!this.conn) return;
-    const token = ++this.syncToken;
-    this.stopStream();
-    this.net = this.net === "online" ? "online" : "connecting";
-    const api = (this.api = new Api(this.conn));
-    try {
-      const health = await api.health();
-      if (token !== this.syncToken) return;
-      this.serverVersions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
-      if (compat(this.serverVersions) === "update-app") {
-        // Every other call would be refused (426) or answered in a shape this app cannot read: say why instead.
-        this.net = "incompatible";
-        this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
-        return;
-      }
-      const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport] =
-        await Promise.all([
-          api.listSessions(200, false),
-          api.models(),
-          api.providers(),
-          api.tools(),
-          api.latestEventId(),
-          api.workspace().catch(() => null), // servers from before workspaces existed
-          api.configuration().catch(() => null), // servers from before model configuration existed
-          api.groups().catch(() => [] as Group[]), // servers from before session groups existed
-          api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
-          api.terminalSupport().catch(() => null),
-        ]);
-      if (token !== this.syncToken) return;
-      this.workspace = workspace;
-      this.sessions = list.sessions.filter((s) => !s.closed && !s.archived);
-      this.archived = list.sessions.filter((s) => !s.closed && s.archived);
-      this.groups = groups;
-      this.terminals = terminals;
-      this.terminalSupport = terminalSupport;
-      this.sessionsLoaded = true;
-      this.models = models;
-      this.providers = providers;
-      this.tools = tools.tools;
-      void this.refreshServerExtensions();
-      this.serverDefault = config?.effectiveDefaults ?? null;
-      this.workdirInfo = config?.workdir ?? null;
-      this.toolsInfo = config?.tools ?? null;
-      this.ensureDraftModel();
-      void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
-      if (this.serverId) this.startSettingsSync(api, this.serverId);
-      await this.syncActivity();
-      if (token !== this.syncToken) return;
-
-      this.unsubscribe = api.subscribe(
-        {
-          onEvent: (e) => this.handle(e),
-          onOpen: () => {
-            this.net = "online";
-            this.netError = "";
-            this.retryDelay = 1000;
-          },
-          onError: () => {
-            if (token !== this.syncToken) return;
-            this.net = "offline";
-            this.scheduleRetry();
-          },
-        },
-        cursor,
-      );
-
-      // Restore (or refresh) the open conversation.
-      const want = this.activeId ?? read<string | null>(this.activeKey, null);
-      const had = Object.keys(this.chats);
-      if (want && this.shows(want))
-        await this.openSession(want, true);
-      else if (this.activeId) this.newChat();
-      if (this.pendingTerminal !== null) {
-        const dir = this.pendingTerminal;
-        this.pendingTerminal = null;
-        void this.openTerminal(dir);
-      }
-      if (this.pendingChat) {
-        this.pendingChat = false;
-        void this.startChat();
-      }
-      // Panes of the open group missed events while we were away: reload them too.
-      for (const id of this.visibleIds)
-        if (id !== this.activeId && had.includes(id))
-          void this.ensureChat(id, true);
-      this.net = "online";
-      notifications.connect(api);
-      this.netError = "";
-      this.retryDelay = 1000;
-      if (this.serverId) void serverUpdater.check(api, this.serverId);
-    } catch (e) {
-      if (token !== this.syncToken) return;
-      if (e instanceof ApiError && isClientTooOld(e.status, e.code)) {
-        this.net = "incompatible";
-        this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
-        return;
-      }
-      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-        this.net = "unauthorized";
-        this.netError = t("토큰이 거부되었습니다");
-        return;
-      }
-      this.net = "offline";
-      this.netError = errorText(e);
-      this.scheduleRetry();
+  /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
+  private onLinkEvent(link: ServerLink, e: PipayaEvent) {
+    if (link.id === this.serverId) return this.handle(e);
+    applyLinkEvent(link.data, e);
+    if (e.type === "provider_updated" || e.type === "configuration_updated") {
+      void link.refreshCatalog();
+      if (e.type === "configuration_updated") void link.refreshWorkspace();
     }
+  }
+
+  /** The server in view is loaded and streaming: restore its open conversation and start what belongs to the open server. */
+  private async attach(link: ServerLink): Promise<void> {
+    if (link.id !== this.serverId) return;
+    const token = ++this.attachToken;
+    const api = link.api;
+    void this.refreshServerExtensions();
+    void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
+    this.ensureDraftModel();
+    this.startSettingsSync(api, link.id);
+    // Restore (or refresh) the open conversation.
+    const want = this.activeId ?? read<string | null>(this.activeKey, null);
+    const had = Object.keys(this.chats);
+    if (want && this.shows(want)) await this.openSession(want, true);
+    else if (this.activeId) this.newChat();
+    if (token !== this.attachToken) return;
+    if (this.pendingTerminal !== null) {
+      const dir = this.pendingTerminal;
+      this.pendingTerminal = null;
+      void this.openTerminal(dir);
+    }
+    if (this.pendingChat) {
+      this.pendingChat = false;
+      void this.startChat();
+    }
+    // Panes of the open group missed events while we were away: reload them too.
+    for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
+    notifications.connect(api);
+    void serverUpdater.check(api, link.id);
   }
 
   /** The user is looking at this window right now (so a sound or badge would only be noise). */
@@ -895,30 +820,6 @@ class AppStore {
       document.visibilityState === "visible" &&
       document.hasFocus()
     );
-  }
-
-  /** Sessions that are running or waiting right now, as the server reports it (survives reloads and other clients). */
-  async syncActivity() {
-    if (!this.api) return;
-    try {
-      const { sessions, unread } = await this.api.activity();
-      const running: Record<string, boolean> = {};
-      const awaiting: Record<string, number> = {};
-      for (const a of sessions) {
-        if (a.running) running[a.sessionId] = true;
-        const n = a.pendingQuestions;
-        if (n) awaiting[a.sessionId] = n;
-      }
-      this.running = running;
-      this.awaiting = awaiting;
-      const done: Record<string, boolean> = {};
-      const bad: Record<string, boolean> = {};
-      for (const u of unread ?? []) (u.kind === "failed" ? bad : done)[u.sessionId] = true;
-      this.unread = done;
-      this.failed = bad;
-    } catch {
-      /* offline: the event stream keeps these current once it is back */
-    }
   }
 
   private ensureDraftModel() {
@@ -1162,33 +1063,20 @@ class AppStore {
   }
 
   async refreshProviders() {
-    if (!this.api) return;
-    try {
-      const [providers, models, config] = await Promise.all([
-        this.api.providers(),
-        this.api.models(),
-        this.api.configuration().catch(() => null),
-      ]);
-      this.providers = providers;
-      this.models = models;
-      const before = this.serverDefault;
-      const now = config?.effectiveDefaults ?? null;
-      this.serverDefault = now;
-      // The default was changed (here or from another client): new chats follow it, model and strength together.
-      if (
-        now &&
-        (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel) &&
-        models.some(
-          (m) =>
-            m.provider === now.provider && m.id === now.model && m.configured && m.available !== false,
-        )
-      ) {
-        this.updateDraft(draftFromDefault(now));
-      }
-      this.ensureDraftModel();
-    } catch {
-      /* next sync will retry */
+    const link = this.link;
+    if (!link) return;
+    const before = this.serverDefault;
+    if (!(await link.refreshCatalog()) || link !== this.link) return;
+    const now = this.serverDefault;
+    // The default was changed (here or from another client): new chats follow it, model and strength together.
+    if (
+      now &&
+      (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel) &&
+      this.models.some((m) => m.provider === now.provider && m.id === now.model && m.configured && m.available !== false)
+    ) {
+      this.updateDraft(draftFromDefault(now));
     }
+    this.ensureDraftModel();
   }
 
   async refreshUsage(chat: ChatState | null = this.chat) {
@@ -1403,9 +1291,9 @@ class AppStore {
 
   /** Show a folder: the tab last used in it, else its first one. `serverId` other than the open one switches server. */
   openDir(serverId: string, path: string) {
-    const ov = serverId === this.serverId ? null : this.overview[serverId];
+    const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
     const dirs = ov
-      ? sidebarDirs(ov.sessions ?? [], ov.groups ?? [], ov.terminals ?? [], { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId] })
+      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId] })
       : this.dirs;
     const dir = dirs.find((d) => d.path === path);
     if (!dir) return;
@@ -1428,12 +1316,7 @@ class AppStore {
   }
 
   async refreshWorkspace() {
-    if (!this.api) return;
-    try {
-      this.workspace = await this.api.workspace();
-    } catch {
-      /* offline: relPath falls back to the full path */
-    }
+    await this.link?.refreshWorkspace();
   }
 
   /**
@@ -1498,11 +1381,9 @@ class AppStore {
 
   /* ---------- archive ---------- */
 
-  /** An Api for `serverId`: the open server's own connection, or a short-lived one for another server. */
+  /** The connection of any saved server (every one is live). */
   private apiFor(serverId: string): Api | null {
-    if (serverId === this.serverId) return this.api;
-    const s = this.servers.find((x) => x.id === serverId);
-    return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
+    return this.links[serverId]?.api ?? null;
   }
 
   /** Tuck a session into the archive: it leaves the tabs but stays open, and a new message brings it back. */
@@ -1529,7 +1410,7 @@ class AppStore {
       if (serverId === this.serverId) {
         this.archived = this.archived.filter((x) => x.id !== id);
         this.sessions = [s, ...this.sessions.filter((x) => x.id !== id)];
-      } else await this.refreshOverview();
+      }
       if (open) this.openIn(serverId, { session: id });
     } catch (e) {
       this.fail(e, t("복원하지 못했습니다"));
@@ -1543,7 +1424,6 @@ class AppStore {
     try {
       await api.deleteSession(id);
       if (serverId === this.serverId) this.archived = this.archived.filter((x) => x.id !== id);
-      else await this.refreshOverview();
       this.toast(t("대화를 영구 삭제했습니다"));
     } catch (e) {
       this.fail(e, t("삭제하지 못했습니다"));
@@ -1966,7 +1846,7 @@ class AppStore {
       const [list, tools] = await Promise.all([api.serverExtensions(), api.tools()]);
       if (api !== this.api) return;
       this.serverCommands = list.commands;
-      this.tools = tools.tools;
+      if (this.link) this.link.tools = tools.tools;
     } catch { /* unreachable: nothing to show */ }
   }
 
@@ -2536,6 +2416,7 @@ class AppStore {
     });
     this.servers = servers;
     localStorage.setItem(K.servers, JSON.stringify(servers));
+    this.syncLinks();
     if (this.serverId && !servers.some(s => s.id === this.serverId)) this.closeServer();
     this.prefs.apply(checked.preferences);
   }
@@ -2546,6 +2427,7 @@ class AppStore {
     if (raw.servers.some(s => typeof s.id !== "string" || typeof s.token !== "string")) throw new LocalizedError(t("잘못된 서버 백업"));
     this.servers = raw.servers.map((s, i) => ({ ...checked.servers[i]!, id: s.id, token: s.token }));
     localStorage.setItem(K.servers, JSON.stringify(this.servers));
+    this.syncLinks();
     if (this.serverId && !this.servers.some(s => s.id === this.serverId)) this.closeServer();
     this.prefs.apply(checked.preferences);
     // A backup taken before shortcuts were part of it has none: leave the current ones.

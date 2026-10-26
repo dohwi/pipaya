@@ -432,8 +432,6 @@ export const EVENT_TYPES = [
 
 /* ---------- helpers for the server list ---------- */
 
-export type ServerProbe = "online" | "offline" | "unauthorized";
-
 /**
  * The server answered "no such route": it is older than this app and lacks the feature. (A missing *thing*, such as a
  * deleted session, is also a not_found, but its message names the thing; only the unrouted fallback says "route".)
@@ -474,14 +472,4 @@ export function describeConnectError(e: unknown, baseUrl: string): string {
 	if ((e as Error)?.name === "AbortError") return t("서버 응답 시간이 초과되었습니다.");
 	if (e instanceof TypeError) return t("{url}에 연결할 수 없습니다. 주소와 서버 실행 여부를 확인하세요.", { url: baseUrl });
 	return (e as Error)?.message || t("연결하지 못했습니다.");
-}
-
-/** Quick reachability check used for the status dots of servers that are not currently open. */
-export async function probeServer(baseUrl: string, token: string): Promise<ServerProbe> {
-	try {
-		await verifyServer(baseUrl, token, 4000);
-		return "online";
-	} catch (e) {
-		return e instanceof ApiError && (e.status === 401 || e.status === 403) ? "unauthorized" : "offline";
-	}
 }

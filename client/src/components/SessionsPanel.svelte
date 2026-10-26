@@ -112,7 +112,6 @@
 			for (const id of ids) delete next[id];
 			picked = next;
 			await load();
-			if (serverId !== app.serverId) void app.refreshOverview();
 		} catch (e) {
 			error = errorText(e);
 		} finally {

@@ -5,25 +5,29 @@
 	import { ACTIVITY_LABEL, type Activity } from "../lib/activity";
 
 	/** A session's agent: the (monochrome) logo of the model that did its last work; the logo itself takes the state colour and animation. */
-	let { id, state = "idle", size = 20 }: { id: string; state?: Activity; size?: number } = $props();
+	/** `server`: the server the session lives on (the open one when left out). */
+	let { id, state = "idle", size = 20, server }: { id: string; state?: Activity; size?: number; server?: string } = $props();
+	const link = $derived(app.links[server ?? app.serverId ?? ""]);
 
 	/** The model that wrote the last reply; a session with no reply yet (or not loaded) uses its current model. */
 	const logoModel = $derived.by(() => {
-		const items = app.chatOf(id)?.items;
+		const items = !server || server === app.serverId ? app.chatOf(id)?.items : undefined;
 		if (items) {
 			for (let i = items.length - 1; i >= 0; i--) {
 				const it = items[i]!;
 				if (it.kind === "assistant" && it.model) return { provider: it.provider, model: it.model };
 			}
 		}
+		const s = link?.data.sessions.find((x) => x.id === id) ?? link?.data.archived.find((x) => x.id === id);
+		if (s) return { provider: s.provider, model: s.model };
 		const e = app.effectiveOf(id);
 		return { provider: e.provider, model: e.model };
 	});
-	const icon = $derived(app.models.find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
+	const icon = $derived((link?.models ?? []).find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={ACTIVITY_LABEL[state]}>
-	<span class="logo" use:syncAnim={state}><ModelLogo provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
+	<span class="logo" use:syncAnim={state}><ModelLogo conn={link?.conn} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span>
 </span>
 
 <style>

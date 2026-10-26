@@ -23,23 +23,22 @@
 		/** activity of this server's sessions, by id */
 		state: Record<string, Activity>;
 	}
-	/** Every server's active sessions, the open one first-hand and the others as the servers report them. Servers with none are left out. */
+	/** Every server's active sessions, each read live from its own server. Servers with none are left out. */
 	const sections = $derived.by<Section[]>(() =>
 		app.servers.flatMap((server) => {
 			const current = server.id === app.serverId;
-			const ov = app.overview[server.id];
-			const sessions = current ? app.sessions : (ov?.sessions ?? []);
-			const terminals = current ? app.terminals : (ov?.terminals ?? []);
+			const ov = app.links[server.id]?.data;
+			const sessions = ov?.sessions ?? [];
+			const terminals = ov?.terminals ?? [];
 			if (!sessions.length && !terminals.length) return [];
-			const dirs = sidebarDirs(sessions, current ? app.groups : (ov?.groups ?? []), terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] });
-			const view = current ? app : { running: ov?.running ?? {}, awaiting: ov?.awaiting ?? {}, unread: {}, failed: {} };
+			const dirs = sidebarDirs(sessions, ov?.groups ?? [], terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] });
 			const state: Record<string, Activity> = {};
-			for (const x of sessions) state[x.id] = activityOf(view, x.id);
+			if (ov) for (const x of sessions) state[x.id] = activityOf(ov, x.id);
 			return [{ server, current, dirs, state }];
 		}),
 	);
 	const multi = $derived(sections.length > 1);
-	const home = (sec: Section) => (sec.current ? app.workspace?.home : app.overview[sec.server.id]?.workspace?.home);
+	const home = (sec: Section) => app.links[sec.server.id]?.workspace?.home;
 	const dirName = (sec: Section, path: string) => shortName(path, home(sec));
 	/** The most urgent thing going on in a folder's tabs. */
 	function dirState(sec: Section, d: DirBlock): Activity {
@@ -48,9 +47,9 @@
 	}
 	/** Right click / long press on a folder: start a conversation or a terminal there. */
 	function dirMenu(pt: Point, sec: Section, d: DirBlock) {
-		const root = sec.current ? app.workspace?.root : app.overview[sec.server.id]?.workspace?.root;
+		const root = app.links[sec.server.id]?.workspace?.root;
 		const workdir = asWorkdir(d.path, root);
-		const os = sec.current ? app.terminalSupport?.platform : undefined;
+		const os = app.links[sec.server.id]?.terminalSupport?.platform;
 		openContextMenu(pt, `rail:${d.path}`, newMenuEntries(platformName(os), {
 			chat: () => app.openIn(sec.server.id, { workdir }),
 			terminal: () => app.openIn(sec.server.id, { workdir, terminal: true }),

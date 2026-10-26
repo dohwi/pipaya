@@ -72,11 +72,12 @@
 		const q = query.trim().toLowerCase();
 		return app.servers.map((server) => {
 			const current = server.id === app.serverId;
-			const ov = app.overview[server.id];
-			const state = current ? connectionState(app.net) : ((app.status[server.id] ?? "checking") as Node["state"]);
-			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], current ? app.terminals : (ov?.terminals ?? []), current ? app.archived : (ov?.archived ?? []));
-			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
+			const link = app.links[server.id];
+			const state = link ? connectionState(link.net) : "checking";
+			const ws = link?.workspace ?? null;
+			const d = link?.data;
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], d?.terminals ?? [], d?.archived ?? []);
+			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 	});
 
@@ -89,30 +90,15 @@
 				untrack(() => app.sidebar.pin(n.server.id, n.dirs.map((d) => d.path), n.dirs.flatMap((d) => d.tabs.map((x) => x.id)), Object.fromEntries(n.dirs.flatMap((d) => d.tabs.filter((x) => x.kind === "group").map((x) => [x.id, d.path])))));
 	});
 	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
-	/** Activity of a session on the open server (other servers report running / waiting only). */
+	/** Activity of a session, from its own server's live state. */
 	const stateOf = (n: Node, x: Session): Activity => {
-		if (n.current) return activityOf(app, x.id);
-		const ov = app.overview[n.server.id];
-		return ov ? activityOf({ running: ov.running, awaiting: ov.awaiting, unread: {}, failed: {} }, x.id) : "idle";
+		const d = app.links[n.server.id]?.data;
+		return d ? activityOf(d, x.id) : "idle";
 	};
 
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
-
-	/* The other servers are read from the servers themselves, and kept fresh while the sidebar is in use. */
-	$effect(() => {
-		void app.servers.length;
-		void app.serverId;
-		void app.refreshOverview();
-		const t = setInterval(() => !document.hidden && void app.refreshOverview(), 5_000);
-		const onVisible = () => !document.hidden && void app.refreshOverview();
-		document.addEventListener("visibilitychange", onVisible);
-		return () => {
-			clearInterval(t);
-			document.removeEventListener("visibilitychange", onVisible);
-		};
-	});
 
 	const startRename = (id: string, title: string) => rename.start(id, title);
 	function commitRename() {

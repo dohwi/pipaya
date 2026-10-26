@@ -44,7 +44,7 @@ export interface SidebarCtx {
 	readonly searching: boolean;
 	/** Folded state of a tree node (folders, servers and split tabs never fold while searching) */
 	isFolded(key: string): boolean;
-	/** Activity of a conversation (other servers report running / waiting only) */
+	/** Activity of a conversation, from its own server's live state */
 	stateOf(n: SidebarNode, x: Session): Activity;
 	/** Row menu ("more" / "+") */
 	hoverMenu(e: PointerEvent, target: MenuTarget): void;
