@@ -31,29 +31,19 @@
 		font-size: var(--fs-2xs);
 		white-space: nowrap;
 	}
-	/* the context size is a pill of its own, so it reads as a size and not as one more ability */
+	/* the context size is plain text like the abilities, only in the mono face so the digits line up */
 	.ctx {
 		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		height: 18px;
-		padding: 0 7px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-pill);
-		background: var(--bg);
-		color: var(--text-dim);
+		justify-content: flex-end;
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-faint);
 	}
 	/* a fixed-width column (first under a name, last in a flush-right row), so the abilities line up from row to row */
 	.ctx.slot {
-		min-width: 48px;
-	}
-	/* an image model has no context size: the column stays, with a faint dash and no pill */
-	.ctx.none {
-		border-color: transparent;
-		background: transparent;
-		color: var(--text-faint);
+		min-width: 36px;
 	}
 	.cap {
 		display: inline-flex;
