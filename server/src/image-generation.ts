@@ -119,7 +119,8 @@ export async function generateImages(
 const DESCRIPTION =
 	"Draw a picture with the image model and save it in the working directory (under .pipaya/generated). Describe the whole picture in `prompt`. " +
 	"To edit or build on existing pictures, pass their paths in `images` (files in the working directory, e.g. one this tool made). " +
-	"The result is the saved path and the picture; show it to the user with a markdown image link to that path.";
+	"The result is the saved path and the picture. The user already sees the picture in this tool's result, so do not embed it again with a markdown image link; just briefly describe what you made or changed. " +
+	"Mention the path only if the user asks for the file.";
 
 /** The `generate_image` tool, given while an image model is set. */
 export function imageTool(registry: ModelRegistry, settings: ImageModelSettings): ToolDef {
