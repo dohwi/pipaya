@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { SANDBOX_HTML } from "../src/lib/extensions/runtime.ts";
 
 const IMG = "'self' data: blob: http: https: asset: http://asset.localhost";
-const CONNECT = "'self' ipc: http://ipc.localhost http: https: ws: wss:";
+// blob: lets the app read back its own object URLs (saving a previewed file, copying an image)
+const CONNECT = "'self' blob: ipc: http://ipc.localhost http: https: ws: wss:";
 
 export function sandboxScriptHash(): string {
 	const m = /<script>([\s\S]*?)<\/script>/.exec(SANDBOX_HTML);

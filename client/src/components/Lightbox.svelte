@@ -7,7 +7,9 @@
 	import { fadeIn, fadeOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import { app } from "../lib/store.svelte";
-	import { saveFile } from "../lib/save-file";
+	import { saveFile, sourceBlob } from "../lib/save-file";
+	import { copyImage } from "../lib/clipboard";
+	import { errorText } from "../lib/api";
 
 	/** Full-screen image viewer: zoom, pan, step through the images of one message, save. */
 	let { onclose }: { onclose: () => void } = $props();
@@ -147,15 +149,36 @@
 		reset();
 	}
 
-	function save() {
+	async function save() {
 		if (!img) return;
-		const ext = img.mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
-		void saveFile(img.src, `image-${(set?.index ?? 0) + 1}.${ext}`);
+		try {
+			const blob = await sourceBlob(img.src);
+			// the message's mime type can be a wildcard (images in Markdown): the real one is on the bytes
+			const type = blob.type.startsWith("image/") ? blob.type : img.mimeType;
+			const ext = type.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "") || "png";
+			await saveFile(blob, `image-${(set?.index ?? 0) + 1}.${ext}`);
+		} catch (e) {
+			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+		}
+	}
+
+	async function copy() {
+		if (!img) return;
+		if (await copyImage(img.src)) app.toast(t("이미지를 복사했습니다"), "ok");
+		else app.toast(t("복사하지 못했습니다"), "error");
 	}
 
 	function onkey(e: KeyboardEvent) {
 		// over the viewer only: a dialog opened on top of it (none today) would keep its own arrows
 		if (topLayer() !== lb) return;
+		// Ctrl/Cmd+C copies the picture (by physical key, so it works on a Korean layout too); a text selection keeps its own copy
+		if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyC") {
+			if (window.getSelection()?.toString()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			void copy();
+			return;
+		}
 		if (e.key === "ArrowLeft") step(-1);
 		else if (e.key === "ArrowRight") step(1);
 		else if (e.key === "+" || e.key === "=") zoomTo(scale * 1.4);
@@ -206,6 +229,9 @@
 			<button class="ctl" onclick={() => zoomTo(scale / 1.4)} disabled={scale <= MIN} aria-label={t("축소")} title={t("축소") + " (-)"}>−</button>
 			<button class="ctl pct mono" onclick={reset} aria-label={t("원래 크기로")} title={t("맞춤") + " (0)"}>{Math.round(scale * 100)}%</button>
 			<button class="ctl" onclick={() => zoomTo(scale * 1.4)} disabled={scale >= MAX} aria-label={t("확대")} title={t("확대") + " (+)"}>+</button>
+			<button class="ctl" onclick={copy} aria-label={t("이미지 복사")} title={t("이미지 복사") + " (Ctrl+C)"}>
+				<Icon name="copy" />
+			</button>
 			<button class="ctl" onclick={save} aria-label={t("저장")} title={t("저장")}>
 				<Icon name="download" />
 			</button>

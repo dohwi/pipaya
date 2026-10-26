@@ -70,9 +70,13 @@
 		return () => ctl.abort();
 	});
 
-	function save() {
+	async function save() {
 		if (!url || !open) return;
-		void saveFile(url, open.file.name);
+		try {
+			await saveFile(url, open.file.name);
+		} catch (e) {
+			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+		}
 	}
 
 	async function copy() {

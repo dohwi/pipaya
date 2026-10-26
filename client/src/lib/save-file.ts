@@ -5,18 +5,15 @@ import { isTauri } from "./tauri";
  * in a browser the usual anchor download works. Returns false when the user cancelled the dialog.
  */
 export async function saveFile(source: Blob | string, filename: string): Promise<boolean> {
-	const blob = typeof source !== "string" ? source : source.startsWith("data:") ? dataUrlToBlob(source) : await (await fetch(source)).blob();
+	const blob = await sourceBlob(source);
 	if (isTauri()) {
-		try {
-			const { save } = await import("@tauri-apps/plugin-dialog");
-			const path = await save({ defaultPath: filename });
-			if (!path) return false;
-			const { writeFile } = await import("@tauri-apps/plugin-fs");
-			await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
-			return true;
-		} catch {
-			/* fall through to the browser download */
-		}
+		// no fallback to the anchor below: a webview ignores it silently, so a failure must reach the caller
+		const { save } = await import("@tauri-apps/plugin-dialog");
+		const path = await save({ defaultPath: filename });
+		if (!path) return false;
+		const { writeFile } = await import("@tauri-apps/plugin-fs");
+		await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+		return true;
 	}
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement("a");
@@ -27,6 +24,13 @@ export async function saveFile(source: Blob | string, filename: string): Promise
 	a.remove();
 	setTimeout(() => URL.revokeObjectURL(url), 10_000);
 	return true;
+}
+
+/** The bytes behind a Blob, a `data:` URL, a `blob:` URL or an http(s) URL. */
+export async function sourceBlob(source: Blob | string): Promise<Blob> {
+	if (typeof source !== "string") return source;
+	if (source.startsWith("data:")) return dataUrlToBlob(source);
+	return await (await fetch(source)).blob();
 }
 
 /** Decodes a `data:` URL by hand: the app's CSP does not allow `fetch` on it. */
