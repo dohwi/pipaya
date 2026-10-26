@@ -36,7 +36,6 @@
 		onrefresh,
 		onedit,
 		onremove,
-		needsRunner = () => false,
 	}: {
 		p: CustomProvider;
 		conn: { baseUrl: string; token: string } | null;
@@ -53,10 +52,8 @@
 		onrefresh: () => void;
 		onedit: () => void;
 		onremove: () => void;
-		/** This model cannot run on the server yet (an image model with no extension that runs it). */
-		needsRunner?: (model: string) => boolean;
 	} = $props();
-	const blockedCount = $derived(p.models.filter((m) => needsRunner(m.id)).length);
+
 </script>
 
 <div class="prov" class:off={!p.models.length}>
@@ -76,7 +73,7 @@
 		</div>
 	{:else}
 	<Accordion variant="text">
-	{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{#if blockedCount}<span class="gone needx">{t("확장 필요 {n}개", { n: blockedCount })}</span>{/if}{/snippet}
+	{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 	<ul class="mlist">
 		{#each p.models as m (m.id)}
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
@@ -87,10 +84,10 @@
 					{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
 				</span>
 				<span class="mtags">
-					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{:else if needsRunner(m.id)}<span title={t("이미지 모델은 서버에 이미지 생성 확장이 있어야 쓸 수 있습니다.")}><Badge tone="warn" size="sm"><Icon name="bolt" />{t("확장 필요")}</Badge></span>{/if}
+					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 					<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />
 				</span>
-				<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable || needsRunner(m.id)} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
+				<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
 				</Button>
 				{#if probe && probe !== "running"}
@@ -226,9 +223,6 @@
 	.gone {
 		margin-left: 8px;
 		color: var(--danger);
-	}
-	.gone.needx {
-		color: var(--warn);
 	}
 	.mlist li.unavail .minfo {
 		opacity: 0.6;

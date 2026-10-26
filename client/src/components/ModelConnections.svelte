@@ -7,11 +7,10 @@
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
 	import ProviderCard from "./connection/ProviderCard.svelte";
-	import Notice from "./Notice.svelte";
-	import { IMAGE_RUNNER_EXTENSION } from "../lib/model-runners";
 	import ConnectionForm, { localPresets, type LocalPreset } from "./ConnectionForm.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
 	import SystemModelSection from "./SystemModelSection.svelte";
+	import ImageModelSection from "./ImageModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "./ConnectModal.svelte";
 	import type {
@@ -30,6 +29,8 @@
 
 	let cfg = $state<ConfigurationInfo | null>(null);
 	let models = $state<ModelInfo[]>([]);
+	/** Image models never run a chat: they are offered only as the image model. */
+	const chatModels = $derived(models.filter((m) => !m.imageGeneration));
 	let loading = $state(false);
 	let loadError = $state("");
 	let busy = $state(false);
@@ -220,7 +221,7 @@
 			<div class="section-label">{t("새 대화 기본 모델")}</div>
 			<ModelField
 				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
-				{models}
+				models={chatModels}
 				providers={providerList}
 				value={shownModel}
 				level={shownThinking}
@@ -246,19 +247,15 @@
 			</p>
 		</section>
 
-		<CompactionSection {serverId} {models} providers={providerList} />
+		<CompactionSection {serverId} models={chatModels} providers={providerList} />
 
-		<SystemModelSection {serverId} {models} providers={providerList} />
+		<SystemModelSection {serverId} models={chatModels} providers={providerList} />
+
+		<ImageModelSection {serverId} {models} providers={providerList} />
 
 		<section>
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
-			{#if models.some((m) => m.runnable === false)}
-				<Notice tone="warn" size="sm">
-					{t("이미지 모델이 있지만 이 서버에는 이미지 생성 확장이 없어 쓸 수 없습니다.")}
-					{#snippet action()}<Button size="sm" variant="primary" onclick={() => app.openMarketFor(IMAGE_RUNNER_EXTENSION)}>{t("확장 설치")}</Button>{/snippet}
-				</Notice>
-			{/if}
 			{#if cfg.providers.length}
 				<div class="plist">
 					{#each cfg.providers as p (p.id)}
@@ -279,7 +276,6 @@
 								onrefresh={() => refreshModels(p)}
 								onedit={() => (form = { kind: "edit", provider: p })}
 								onremove={() => remove(p)}
-								needsRunner={(id) => models.some((m) => m.provider === p.id && m.id === id && m.runnable === false)}
 							/>
 						</div>
 					{/each}

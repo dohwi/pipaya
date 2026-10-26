@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { needsRunner } from "../lib/model-runners";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { collapseIn, collapseOut } from "../lib/motion";
@@ -65,7 +64,8 @@
 	const isFav = (m: ModelInfo) => favs.includes(key(m.provider, m.id));
 	const matches = (m: ModelInfo) => !filter || `${providerName(m.provider)} ${m.name} ${m.id}`.toLowerCase().includes(filter.toLowerCase());
 	const info = $derived(sel ? models.find((m) => m.provider === sel!.provider && m.id === sel!.model) : undefined);
-	const reasoning = $derived(info ? info.reasoning : true);
+	// Nothing picked: offer strengths only when some listed model reasons (the image model list has none).
+	const reasoning = $derived(info ? info.reasoning : models.some((m) => m.reasoning));
 	/** Only the strengths this model accepts. */
 	const available = $derived<ThinkingLevel[]>(info?.thinkingLevels.length ? levels.filter((l) => info.thinkingLevels.includes(l)) : levels);
 	/** The highlighted strength, moved to the nearest supported one when the model does not accept it. */
@@ -115,7 +115,7 @@
 	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
 		{#snippet lead()}<ModelLogo {conn} icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
-		{#snippet meta()}{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{:else if needsRunner(m)}<span class="needx">{t("확장 필요")}</span>{/if}{/snippet}
+		{#snippet meta()}{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}{/snippet}
 		{#snippet aside()}<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />{/snippet}
 		{#snippet trailing()}
 			{#if onfav}
@@ -167,7 +167,6 @@
 </PickerModal>
 
 <style>
-	.needx { color: var(--warn); }
 	.fav {
 		flex: none;
 		display: grid;

@@ -41,6 +41,11 @@ export interface RetentionInfo {
 	/** Sessions the policy would delete now */
 	due: number;
 }
+export interface ImageModelSettings {
+	/** The image model agents draw with (the generate_image tool); null = off */
+	model: { provider: string; model: string } | null;
+}
+export interface ImageModelSettingsInfo { settings: ImageModelSettings; defaults: ImageModelSettings }
 export interface SystemModelSettings {
 	/** The light model that writes session titles and roles; null = off */
 	model: ModelChoice | null;
@@ -202,8 +207,6 @@ export interface ModelInfo {
 	vision: boolean;
 	/** Makes pictures instead of text */
 	imageGeneration: boolean;
-	/** The server can run it now. false: an image model with no server extension that runs image models (older servers leave it out) */
-	runnable?: boolean;
 	/** Brand mark chosen in the connection settings; absent = picked from the id */
 	icon?: string;
 	/** A usable credential exists for this model's provider */

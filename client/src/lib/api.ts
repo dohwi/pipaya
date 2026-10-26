@@ -1,4 +1,4 @@
-import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
 	ActivityInfo,
@@ -245,6 +245,8 @@ export class Api {
 	retention = () => this.req<RetentionInfo>("GET", "/retention");
 	setRetention = (settings: RetentionSettings) => this.req<RetentionInfo>("PUT", "/retention", settings);
 	runRetention = () => this.req<{ deleted: number }>("POST", "/retention/run");
+	imageModelSettings = () => this.req<ImageModelSettingsInfo>("GET", "/image-model");
+	setImageModelSettings = (settings: ImageModelSettings) => this.req<ImageModelSettingsInfo>("PUT", "/image-model", settings);
 	systemModelSettings = () => this.req<SystemModelSettingsInfo>("GET", "/system-model");
 	setSystemModelSettings = (settings: SystemModelSettings) => this.req<SystemModelSettingsInfo>("PUT", "/system-model", settings);
 

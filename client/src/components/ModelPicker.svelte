@@ -29,7 +29,7 @@
 <ModelField
 	variant="inline"
 	bind:open
-	models={app.models}
+	models={app.models.filter((m) => !m.imageGeneration)}
 	providers={app.providers}
 	value={eff.model ? { provider: eff.provider, model: eff.model } : null}
 	level={eff.thinkingLevel}

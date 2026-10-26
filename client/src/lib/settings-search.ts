@@ -19,6 +19,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
 	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
 	{ tab: "agent", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },
+	{ tab: "agent", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" },
 	{ tab: "agent", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
 	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" },
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" },
@@ -80,6 +81,7 @@ export function toolLabel(name: string): string {
 		case "ls": return t("폴더 목록 (ls)");
 		case "grep": return t("내용 검색 (grep)");
 		case "bash": return t("셸 명령 실행 (bash)");
+		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;
 	}
 }
