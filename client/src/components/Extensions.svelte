@@ -388,6 +388,7 @@
 			entry={openEntry}
 			{tasks}
 			{drafts}
+			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
 			needsServer={view === "device" ? extensionUpdates.missingServerFor(id) : undefined}
 			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id); if (m) ongoserver(m.id); } : undefined}
@@ -407,6 +408,7 @@
 			ext={openServer}
 			settings={serverSettings[openServer.settingsId]}
 			busy={!!tasks.busy[srvKey(openServer.name)]}
+			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}

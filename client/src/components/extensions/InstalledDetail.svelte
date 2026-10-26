@@ -23,6 +23,7 @@
 		onopenserver,
 		needsServer,
 		oninstallserver,
+		upgrade,
 		onback,
 		onenable,
 		ondisable,
@@ -45,6 +46,8 @@
 		needsServer?: { id: string; name: string };
 		/** Go to the server extensions' marketplace for it */
 		oninstallserver?: () => void;
+		/** A newer marketplace version of this extension, with what the button does */
+		upgrade?: { version: string; disabled: boolean; onclick: () => void };
 		onback: () => void;
 		onenable: () => void;
 		ondisable: () => void;
@@ -64,7 +67,7 @@
 	const saveLabel = $derived(entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장"));
 </script>
 
-<ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {onback}>
+<ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
 	{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 	{#snippet control()}
 		<Switch

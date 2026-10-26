@@ -15,6 +15,7 @@
 		ext,
 		settings,
 		busy,
+		upgrade,
 		onback,
 		onsave,
 		oninstallclient,
@@ -24,6 +25,8 @@
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
 		settings: Record<string, unknown> | undefined;
 		busy: boolean;
+		/** A newer marketplace version of this extension, with what the button does */
+		upgrade?: { version: string; disabled: boolean; onclick: () => void };
 		onback: () => void;
 		onsave: (settings: Record<string, unknown>) => void;
 		/** Download the client half and open its install preview. */
@@ -39,7 +42,7 @@
 	const missingClient = $derived(!!ext.companion && !extensions.installed.some((e) => e.package.manifest.id === ext.companion));
 </script>
 
-<ExtensionPage id="extension-{srvKey(ext.name)}" name={ext.title ?? ext.name} sub={ext.name} {busy} {onback}>
+<ExtensionPage id="extension-{srvKey(ext.name)}" name={ext.title ?? ext.name} sub={ext.name} {busy} {upgrade} {onback}>
 	{#snippet meta()}
 		{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
 		<span class="meta">{t("서버에서 실행")}</span>
