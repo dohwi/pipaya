@@ -58,16 +58,6 @@
 	</div>
 	{#if !folded}
 		<div class="fold" in:collapseIn out:collapseOut>
-			{#each d.tabs as tab (tab.id)}
-				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: sb.tabHover(d, tab), drop: sb.tabDropAt(n, d, tab) }}
-				{#if tab.kind === "session"}
-					<SessionRow {n} x={tab.session} {drop} />
-				{:else if tab.kind === "terminal"}
-					<TerminalRow {n} x={tab.terminal} {drop} />
-				{:else}
-					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo)[]} {drop} />
-				{/if}
-			{/each}
 			{#if archived.length}
 				<div class="archive">
 					<button class="archtoggle" onclick={() => app.sidebar.toggleArchive(akey)} aria-expanded={aopen}>
@@ -85,13 +75,23 @@
 					{/if}
 				</div>
 			{/if}
+			{#each d.tabs as tab (tab.id)}
+				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: sb.tabHover(d, tab), drop: sb.tabDropAt(n, d, tab) }}
+				{#if tab.kind === "session"}
+					<SessionRow {n} x={tab.session} {drop} />
+				{:else if tab.kind === "terminal"}
+					<TerminalRow {n} x={tab.terminal} {drop} />
+				{:else}
+					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo)[]} {drop} />
+				{/if}
+			{/each}
 		</div>
 	{/if}
 </div>
 
 <style>
 	.archive {
-		margin-top: 2px;
+		margin-bottom: 2px;
 	}
 	.archtoggle {
 		display: flex;
