@@ -47,17 +47,20 @@
 	/* ---------- loading (per selected server) ---------- */
 
 	let loadSeq = 0;
-	async function load(id: string) {
+	/** `quiet` refreshes in place (config changed elsewhere): keeps the current list on screen instead of blanking it. */
+	async function load(id: string, quiet = false) {
 		const s = app.servers.find((x) => x.id === id);
-		cfg = null;
-		models = [];
+		if (!quiet) {
+			cfg = null;
+			models = [];
+			form = null;
+			keyFor = null;
+			tests = {};
+		}
 		loadError = "";
-		form = null;
-		keyFor = null;
-		tests = {};
 		if (!s) return;
 		const seq = ++loadSeq;
-		loading = true;
+		loading = !quiet;
 		try {
 			const api = new Api({ baseUrl: s.baseUrl, token: s.token });
 			const [c, m] = await Promise.all([api.configuration(), api.models()]);
