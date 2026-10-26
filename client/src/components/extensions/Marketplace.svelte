@@ -6,6 +6,7 @@
 	import Badge from "../Badge.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
+	import RemoveConfirm from "./RemoveConfirm.svelte";
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
 	import StatusChip from "../StatusChip.svelte";
 	import VersionBump from "../VersionBump.svelte";
@@ -205,7 +206,7 @@
 							<span class="pair" role="img" aria-label={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })} title={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })}><Icon name="clip" /></span>
 						{/if}
 						{#if isOfficial(entry)}<span title={t("pipaya 공식 확장")}><Badge tone="ok" size="sm"><Icon name="check" />{t("공식")}</Badge></span>{/if}
-						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{/if}
+						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<StatusChip tone="ok">{t("설치됨")}</StatusChip>{/if}
 						{#if newer && have}<span class="ver"><VersionBump from={have.package.manifest.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}
@@ -216,27 +217,36 @@
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
 						</p>
 						{#if entry.kind === "client"}
-							<Button variant={newer ? "update" : "primary"} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => startClient(entry)}>
-								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
-							</Button>
-							{#if have}<Button size="sm" variant="danger" disabled={!!working} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>{/if}
+							<div class="acts">
+								{#if !have || newer}
+									<Button variant={newer ? "update" : "primary"} size="sm" disabled={!!working} onclick={() => startClient(entry)}>
+										{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : t("설치")}
+									</Button>
+								{/if}
+								{#if have}<Button size="sm" variant="danger" disabled={!!working} aria-expanded={removing === entry.id} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>{/if}
+							</div>
 						{:else}
 							{@const sHave = !!serverHave[entry.id]}
-							<Button variant="primary" size="sm" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => startServer(entry)}>
-								{working === entry.id ? t("설치하는 중…") : sHave ? t("설치됨") : t("설치하기")}
-							</Button>
-							{#if sHave}<Button size="sm" variant="danger" disabled={!!working} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>{/if}
+							<div class="acts">
+								{#if !sHave}
+									<Button variant="primary" size="sm" disabled={!!working || entry.source.type !== "git"} onclick={() => startServer(entry)}>
+										{working === entry.id ? t("설치하는 중…") : t("설치하기")}
+									</Button>
+								{:else}
+									<Button size="sm" variant="danger" disabled={!!working} aria-expanded={removing === entry.id} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>
+								{/if}
+							</div>
 						{/if}
 					</div>
 					{#if removing === entry.id}
-						<Notice tone="warn" size="sm" role="alert">
-							{t("‘{name}’을 삭제할까요?", { name: entry.name })}
-							{#snippet action()}
-								<button type="button" disabled={!!working} onclick={() => remove(entry, true)}>{t("설정값 유지")}</button>
-								<button type="button" disabled={!!working} onclick={() => remove(entry, false)}>{t("설정값도 삭제")}</button>
-								<button type="button" disabled={!!working} onclick={() => (removing = "")}>{t("취소")}</button>
-							{/snippet}
-						</Notice>
+						<RemoveConfirm labelledby="market-remove-{entry.id}" oncancel={() => (removing = "")}>
+							<p id="market-remove-{entry.id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
+							<div class="row">
+								<Button size="sm" disabled={!!working} onclick={() => remove(entry, true)}>{t("설정 유지하고 삭제")}</Button>
+								<Button variant="danger" size="sm" disabled={!!working} onclick={() => remove(entry, false)}>{t("설정까지 삭제")}</Button>
+								<Button size="sm" data-cancel disabled={!!working} onclick={() => (removing = "")}>{t("취소")}</Button>
+							</div>
+						</RemoveConfirm>
 					{/if}
 					{#if entry.kind === "client" && have && askingServer !== entry.id}
 						{@const s = serverOf(entry)}
@@ -295,6 +305,7 @@
 	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
+	.acts { display: flex; align-items: center; gap: 6px; flex: none; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.pair { flex: none; display: inline-flex; color: var(--text-faint); }
 	.pair :global(svg) { width: 14px; height: 14px; }
