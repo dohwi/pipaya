@@ -1266,6 +1266,7 @@ class AppStore {
   toggleFavDir(path: string) {
     this.favDirs = this.favDirs.includes(path) ? this.favDirs.filter((x) => x !== path) : [...this.favDirs, path];
     if (this.serverId) write(`${K.favDirs}.${this.serverId}`, this.favDirs);
+    this.settingsSync?.changed("favDirs");
   }
   private loadFavDirs(serverId: string): string[] {
     const list = read<unknown>(`${K.favDirs}.${serverId}`, []);
@@ -1299,6 +1300,7 @@ class AppStore {
   private startSettingsSync(api: Api, serverId: string) {
     this.settingsSync?.dispose();
     const favKey = `${K.favModels}.${serverId}`;
+    const favDirKey = `${K.favDirs}.${serverId}`;
     const escKey = `${K.escalate}.${serverId}`;
     const sync = new ServerSettingsSync({
       api,
@@ -1312,6 +1314,13 @@ class AppStore {
           apply: (v) => {
             this.favModels = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
             write(favKey, this.favModels);
+          },
+        },
+        favDirs: {
+          read: () => (localStorage.getItem(favDirKey) !== null || this.favDirs.length ? this.favDirs : undefined),
+          apply: (v) => {
+            this.favDirs = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
+            write(favDirKey, this.favDirs);
           },
         },
         extensions: {

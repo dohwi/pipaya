@@ -80,6 +80,12 @@ describe("client settings (server scoped)", () => {
 		expect(Object.keys(list).sort()).toEqual(["extensions", "favModels"]);
 	});
 
+	test("favorite directories must be a list of strings", async () => {
+		expect((await api("PUT", "/client-settings/favDirs", { value: ["/home/a", "/srv/b"] })).status).toBe(200);
+		expect((await api("PUT", "/client-settings/favDirs", { value: "/home/a" })).status).toBe(400);
+		expect((await api("PUT", "/client-settings/favDirs", { value: [1] })).status).toBe(400);
+	});
+
 	test("the notification policy is checked, because the server acts on it", async () => {
 		expect((await api("PUT", "/client-settings/notificationPolicy", { value: { escalateMinutes: 5 } })).status).toBe(200);
 		for (const value of [{ escalateMinutes: 4 }, { escalateMinutes: "5" }, { escalateMinutes: -1 }, { escalateMinutes: 5, extra: 1 }, [], "5", null]) {
