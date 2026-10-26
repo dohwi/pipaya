@@ -59,9 +59,9 @@
 			{#if serverUpdater.error}<span class="err">{serverUpdater.error}</span>{/if}
 		</span>
 		{#if kind === "update-app" && updater.supported}
-			<Button variant="update" size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
+			<Button size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
 		{:else if kind === "update-server" && serverUpdater.available}
-			<Button variant="update" size="sm" disabled={busy} onclick={updateServer}>
+			<Button size="sm" disabled={busy} onclick={updateServer}>
 				{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
 			</Button>
 		{/if}
@@ -99,8 +99,10 @@
 		display: block;
 		color: var(--danger);
 	}
+	/* the button is the page-coloured one, like the connection bar's: a solid green on a tinted strip looks stranded */
 	.strip :global(.btn) {
 		flex: none;
 		white-space: nowrap;
+		background: var(--bg);
 	}
 </style>
