@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Button from "./Button.svelte";
 	import CountdownClose from "./CountdownClose.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
@@ -59,11 +58,11 @@
 			{#if serverUpdater.error}<span class="err">{serverUpdater.error}</span>{/if}
 		</span>
 		{#if kind === "update-app" && updater.supported}
-			<Button size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
+			<button type="button" class="act" onclick={updateApp}>{t("업데이트 확인")}</button>
 		{:else if kind === "update-server" && serverUpdater.available}
-			<Button size="sm" disabled={busy} onclick={updateServer}>
+			<button type="button" class="act" disabled={busy} onclick={updateServer}>
 				{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
-			</Button>
+			</button>
 		{/if}
 		{#if kind === "update-server"}
 			<CountdownClose ms={STAY_MS} onclick={() => (closed = key)} label={t("나중에")} />
@@ -99,10 +98,26 @@
 		display: block;
 		color: var(--danger);
 	}
-	/* the button is the page-coloured one, like the connection bar's: a solid green on a tinted strip looks stranded */
-	.strip :global(.btn) {
+	/* the action is a bold underlined word, like the one in a Notice (Notice.svelte): no box to strand on the tinted strip */
+	.act {
 		flex: none;
 		white-space: nowrap;
-		background: var(--bg);
+		padding: 0 4px;
+		background: none;
+		border: 0;
+		color: var(--text);
+		font: inherit;
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+	.act:hover:not(:disabled) {
+		color: var(--tone);
+	}
+	.act:disabled {
+		opacity: 0.6;
+		cursor: default;
+		text-decoration: none;
 	}
 </style>
