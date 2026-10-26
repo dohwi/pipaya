@@ -1529,6 +1529,12 @@ class AppStore {
     else if (this.activeId) await this.close(this.activeId);
   }
 
+  /** Archive the focused chat (a terminal cannot be archived). */
+  async archiveActive() {
+    if (!this.activeId || isTerminalId(this.activeId)) return void this.toast(t("보관할 수 있는 대화가 아닙니다"), "error");
+    await this.archive(this.activeId);
+  }
+
   /** Reopen a closed session and show it. */
   async resume(id: string): Promise<boolean> {
     if (!this.api) return false;

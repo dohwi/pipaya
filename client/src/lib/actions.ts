@@ -195,6 +195,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   },
   newChat: () => app.newChatInPane(),
   closeSession: () => app.closeActive(),
+  archiveSession: () => app.archiveActive(),
   prevSession: () => stepSession(-1),
   nextSession: () => stepSession(1),
   prevWorkspace: () => stepWorkspace(-1),

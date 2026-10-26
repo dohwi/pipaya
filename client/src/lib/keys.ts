@@ -12,6 +12,7 @@ export type ActionId =
   | "toggleSidebar"
   | "newChat"
   | "closeSession"
+  | "archiveSession"
   | "prevSession"
   | "nextSession"
   | "prevWorkspace"
@@ -92,6 +93,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("현재 대화 닫기"),
     hint: msg("사이드바에서 치웁니다. 기록은 남아 다시 열 수 있습니다"),
     default: "Alt+W",
+  },
+  {
+    id: "archiveSession",
+    label: msg("현재 대화 보관"),
+    hint: msg("닫지 않고 보관함에 넣습니다. 새 메시지가 오면 목록으로 돌아옵니다"),
+    default: "Alt+A",
   },
   {
     id: "prevSession",
