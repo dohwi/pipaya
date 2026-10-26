@@ -434,7 +434,6 @@ export const en: Record<string, string> = {
 	"OpenRouter {id}와 일치: {levels}": "Matched OpenRouter {id}: {levels}",
 	"고른 강도만 이 모델에서 선택할 수 있습니다.": "Only the selected efforts can be chosen for this model.",
 	"고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.": "If none is selected, it is set automatically from the model name; if not found, minimal to high are shown.",
-	"이 모델은 추론 모드를 지원하지 않습니다.": "This model doesn't support reasoning.",
 	"연결 관리": "Manage connections",
 	"모델 연결": "Model connections",
 	"모델 연결 · 에이전트 도구": "Model connections · agent tools",

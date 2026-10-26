@@ -148,15 +148,16 @@
 	{/snippet}
 
 	{#snippet after()}
-		<div class="sec" class:gone={!sel}>
+		{#if reasoning}
+		<div class="sec" class:gone={!sel} in:collapseIn out:collapseOut>
 			<div class="section-label">{t("추론 강도")}</div>
-			<div class="seg" class:off={!reasoning} role="group" aria-label={t("추론 강도")} use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}>
+			<div class="seg" role="group" aria-label={t("추론 강도")} use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}>
 				{#each available as l (l)}
-					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!reasoning || !sel} onclick={() => strength(l)}>{l}</button>
+					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!sel} onclick={() => strength(l)}>{l}</button>
 				{/each}
 			</div>
-			{#if info && !info.reasoning}<div class="hint" in:collapseIn out:collapseOut>{t("이 모델은 추론 모드를 지원하지 않습니다.")}</div>{/if}
 		</div>
+		{/if}
 	{/snippet}
 
 	{#snippet footerStart()}
@@ -252,9 +253,6 @@
 	.seg:global([data-indicator-ready]) button.on {
 		background: transparent;
 		box-shadow: none;
-	}
-	.seg.off :global(.slide-ind) {
-		opacity: 0.35;
 	}
 	.manage {
 		display: inline-flex;
