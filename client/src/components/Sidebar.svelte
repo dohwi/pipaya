@@ -62,7 +62,7 @@
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
 	/** A folder's label on server `n` (see sidebar-model). */
-	const shortLabel = (n: Node, path: string) => shortName(path, n.dirs, n.home);
+	const shortLabel = (n: Node, path: string) => shortName(path, n.home);
 
 	const nodes = $derived.by<Node[]>(() => {
 		const q = query.trim().toLowerCase();

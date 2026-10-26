@@ -17,16 +17,21 @@ describe("server state", () => {
 });
 
 describe("folder labels", () => {
-	const dirs = [{ path: "/h/a/app" }, { path: "/h/b/app" }, { path: "/h/a/lib" }];
-	test("a unique name stands alone", () => {
-		expect(shortName("/h/a/lib", dirs, "/h")).toBe("lib");
+	test("shows the last two names", () => {
+		expect(shortName("/h/a/lib", "/h")).toBe("a/lib");
+		expect(shortName("/h/a/b/lib", "/h")).toBe("b/lib");
 	});
-	test("clashing names borrow parents until they differ", () => {
-		expect(shortName("/h/a/app", dirs, "/h")).toBe("a/app");
-		expect(shortName("/h/b/app", dirs, "/h")).toBe("b/app");
+	test("a folder right under home keeps the ~", () => {
+		expect(shortName("/h/work", "/h")).toBe("~/work");
+		expect(shortName("/h", "/h")).toBe("~");
+	});
+	test("Windows paths read the same as Linux ones", () => {
+		expect(shortName("C:\\Users\\me\\work\\app", "C:\\Users\\me")).toBe("work/app");
+		expect(shortName("c:\\users\\me\\work", "C:\\Users\\me")).toBe("~/work");
+		expect(shortName("D:\\proj\\app", "C:\\Users\\me")).toBe("proj/app");
 	});
 	test("a path with no segments falls back to the path itself", () => {
-		expect(shortName("/", [{ path: "/" }], undefined)).toBe("/");
+		expect(shortName("/", undefined)).toBe("/");
 	});
 });
 

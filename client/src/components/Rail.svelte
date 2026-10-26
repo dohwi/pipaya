@@ -10,7 +10,7 @@
 	import { sidebarDirs, tabPanes, type DirBlock } from "../lib/nav";
 	import type { Server } from "../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../lib/activity";
-	import { asWorkdir, newMenuEntries } from "../lib/sidebar-model";
+	import { asWorkdir, newMenuEntries, shortName } from "../lib/sidebar-model";
 	import { platformName } from "../lib/terminal";
 	import { openContextMenu, closeContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
@@ -40,17 +40,7 @@
 	);
 	const multi = $derived(sections.length > 1);
 	const home = (sec: Section) => (sec.current ? app.workspace?.home : app.overview[sec.server.id]?.workspace?.home);
-	const segs = (sec: Section, path: string) => tilde(path, home(sec)).split("/").filter(Boolean);
-	/** A folder's name: its own, with as many parents as it takes to tell it from the other folders. */
-	function dirName(sec: Section, path: string): string {
-		const mine = segs(sec, path);
-		const others = sec.dirs.filter((d) => d.path !== path).map((d) => segs(sec, d.path));
-		for (let k = 1; k < mine.length; k++) {
-			const tail = mine.slice(-k).join("/");
-			if (!others.some((o) => o.slice(-k).join("/") === tail)) return tail;
-		}
-		return mine.join("/") || path;
-	}
+	const dirName = (sec: Section, path: string) => shortName(path, home(sec));
 	/** The most urgent thing going on in a folder's tabs. */
 	function dirState(sec: Section, d: DirBlock): Activity {
 		const ids = d.tabs.flatMap((x) => tabPanes(x));

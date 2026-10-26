@@ -96,7 +96,7 @@
 				{:else}
 				{#snippet label()}{#if tag}<span class="who mono {state}" title={tag.title}>{tag.text}</span>{/if}{session?.title ?? t("대화")}{/snippet}
 				<span class="t" use:marquee={`${tag?.text ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
-				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split("/").slice(-2).join("/")}</span>{/if}
+				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>

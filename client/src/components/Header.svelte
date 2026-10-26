@@ -19,7 +19,7 @@
 	const heading = $derived(
 		group ? { title: group.name, sub: t("대화 {n}개", { n: panesOf(group.layout).length }) }
 		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
-		: { title: s?.title ?? t("새 대화"), sub: s ? s.cwd.split("/").slice(-2).join("/") : "" },
+		: { title: s?.title ?? t("새 대화"), sub: s ? s.cwd.split(/[\\/]/).slice(-2).join("/") : "" },
 	);
 </script>
 

@@ -47,7 +47,7 @@
 	let saving = $state(false);
 	let input = $state<HTMLInputElement>();
 
-	const base = (p: string) => p.split("/").filter(Boolean).slice(-2).join("/") || "/";
+	const base = (p: string) => p.split(/[\\/]/).filter(Boolean).slice(-2).join("/") || "/";
 
 	/** Shortcuts: the server's workspace first, then its home, then the folders used lately */
 	const places = $derived.by(() => {

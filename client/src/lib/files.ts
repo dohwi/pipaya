@@ -61,7 +61,7 @@ export async function fileToDraft(file: File): Promise<FileDraft> {
 }
 
 /** Last path segment of a relative path */
-export const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
+export const baseName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 /** A markdown href that points into the working directory: relative, no scheme, not an anchor. */
 export function isWorkdirPath(href: string): boolean {

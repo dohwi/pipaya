@@ -1,5 +1,4 @@
-import { tilde } from "./format";
-import type { DirBlock } from "./nav";
+import { nameSegs, tilde } from "./format";
 
 export type ServerState = "online" | "offline" | "unauthorized" | "incompatible" | "checking";
 
@@ -13,18 +12,9 @@ export function connectionState(net: string): ServerState {
 /** The states in which the server cannot be read, so its list is whatever was last seen. */
 export const unreachable = (state: ServerState) => state === "offline" || state === "unauthorized" || state === "incompatible";
 
-/** `~/workspace/x` as segments; each server has its own home. */
-const segs = (path: string, home?: string) => tilde(path, home).split("/").filter(Boolean);
-
-/** A folder's label: its own name, with as many parent names as it takes to tell it from the other folders. */
-export function shortName(path: string, dirs: readonly Pick<DirBlock, "path">[], home?: string): string {
-	const mine = segs(path, home);
-	const others = dirs.filter((d) => d.path !== path).map((d) => segs(d.path, home));
-	for (let k = 1; k < mine.length; k++) {
-		const tail = mine.slice(-k).join("/");
-		if (!others.some((o) => o.slice(-k).join("/") === tail)) return tail;
-	}
-	return mine.join("/") || tilde(path, home);
+/** A folder's label: its last two names (`~/work/app` -> `work/app`), the same on every OS; each server has its own home. */
+export function shortName(path: string, home?: string): string {
+	return nameSegs(path, home).slice(-2).join("/") || tilde(path, home);
 }
 
 /**

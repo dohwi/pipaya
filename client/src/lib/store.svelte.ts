@@ -2281,7 +2281,7 @@ class AppStore {
     const dirs: string[] = [];
     for (const id of panesOf(layout)) {
       const cwd = this.session(id)?.cwd.replace(/\/+$/, "");
-      const dir = cwd ? (cwd.split("/").pop() ?? "") : "";
+      const dir = cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? "") : "";
       if (dir && !dirs.includes(dir)) dirs.push(dir);
     }
     const taken = new Set(this.groups.map((g) => g.name));
