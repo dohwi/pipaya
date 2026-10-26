@@ -185,27 +185,24 @@
 		{/if}
 	</div>
 
-	<div class="tools">
-		<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
-		<span class="grow"></span>
-		{#if browser.creating}
-			<form
-				class="mk"
-				onsubmit={(e) => {
-					e.preventDefault();
-					void browser.mkdir();
-				}}
-			>
-				<input class="mono" bind:value={browser.newName} placeholder={t("새 폴더 이름")} spellcheck="false" use:focus aria-label={t("새 폴더 이름")} />
-				<Button size="sm" type="submit" disabled={!browser.newName.trim()}>{t("만들기")}</Button>
-				<Button variant="ghost" size="sm" onclick={() => browser.cancelCreating()}>{t("취소")}</Button>
-			</form>
-		{:else}
-			<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing}><Icon name="plus" /> {t("새 폴더")}</Button>
-		{/if}
-	</div>
+	{#if browser.creating}
+		<form
+			class="mk"
+			onsubmit={(e) => {
+				e.preventDefault();
+				void browser.mkdir();
+			}}
+		>
+			<input class="mono" bind:value={browser.newName} placeholder={t("새 폴더 이름")} spellcheck="false" use:focus aria-label={t("새 폴더 이름")} />
+			<Button size="sm" type="submit" disabled={!browser.newName.trim()}>{t("만들기")}</Button>
+			<Button variant="ghost" size="sm" onclick={() => browser.cancelCreating()}>{t("취소")}</Button>
+		</form>
+	{/if}
 
 	<footer>
+		<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
+		<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing || browser.creating}><Icon name="plus" /> {t("새 폴더")}</Button>
+		<span class="grow"></span>
 		{#if mode === "default" && current?.saved}
 			<Button variant="ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</Button>
 		{/if}
@@ -220,6 +217,10 @@
 	.mk {
 		display: flex;
 		gap: 8px;
+	}
+	.mk {
+		padding: 8px 22px;
+		border-top: 1px solid var(--border);
 	}
 	.path {
 		padding: 0 22px 10px;
@@ -345,15 +346,9 @@
 	.err {
 		color: var(--danger);
 	}
-	.tools {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 8px 22px;
+	.check {
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
-	}
-	.check {
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -362,7 +357,7 @@
 	footer {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
+		flex-wrap: wrap;
 		gap: 10px;
 		padding: 12px 22px 16px;
 		border-top: 1px solid var(--border);
