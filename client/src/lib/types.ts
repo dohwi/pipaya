@@ -96,6 +96,19 @@ export interface ContextUsage {
 }
 
 /** Exact server-side instruction snapshot plus an auditable, historical file-read trace. */
+export interface ContextTool {
+	name: string;
+	description: string;
+	/** JSON schema of the parameters */
+	parameters: unknown;
+	/** session: chosen for the session; always: peers and extension tools marked always; image / browser: added because that feature is on */
+	source: "session" | "always" | "image" | "browser";
+	/** false: switched off in the settings, so the agent does not get it */
+	enabled: boolean;
+	/** Size of name + description + parameters, sent with every request */
+	bytes: number;
+}
+
 export interface SessionContext {
 	cwd: string;
 	state: "preview" | "applied";
@@ -110,6 +123,8 @@ export interface SessionContext {
 	}[];
 	warnings: { path: string; message: string }[];
 	tools: string[];
+	/** Every tool the agent gets, as the model sees it (they travel beside the system prompt on every request). */
+	toolSpecs: ContextTool[];
 	/** Skills advertised to the model in this session (frozen once applied). */
 	skills: { name: string; description: string; path: string; scope: SkillScope }[];
 	/** Exact `<available_skills>` block in the system prompt ("" when none). */

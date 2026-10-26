@@ -174,9 +174,16 @@ describe("context API and application", () => {
 			expect((await api("GET", `/sessions/${id}/context?token=${cfg.token}`, undefined, false)).status).toBe(401);
 			expect((await api("GET", "/sessions/missing/context")).status).toBe(404);
 			const preview = (await api("GET", `/sessions/${id}/context`)).json;
-			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "skills", "skillsPrompt", "readFiles"].sort());
+			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "toolSpecs", "skills", "skillsPrompt", "readFiles"].sort());
 			expect(preview).toMatchObject({ cwd: f.cwd, state: "preview", capturedAt: null, systemPrompt: "Base", tools: ["read"], readFiles: [] });
 			expect(preview.instructions.at(-1)).toEqual({ path: join(f.cwd, "AGENTS.md"), scope: "cwd", content: "Preview version", bytes: 15 });
+			// Every tool the agent gets is listed as the model sees it, with why it is there.
+			const specs = preview.toolSpecs as { name: string; description: string; parameters: any; source: string; enabled: boolean; bytes: number }[];
+			const bySource = (src: string) => specs.filter((t) => t.source === src).map((t) => t.name);
+			expect(bySource("session")).toEqual(["read"]);
+			expect(bySource("always")).toEqual(["peer_send", "peer_read"]);
+			expect(specs.every((t) => t.enabled && t.description && t.bytes > t.description.length)).toBe(true);
+			expect(specs.find((t) => t.name === "read")!.parameters).toMatchObject({ type: "object" });
 			// Before any session exists: the same preview for a new chat in that folder.
 			expect((await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`, undefined, false)).status).toBe(401);
 			const fresh = (await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`)).json;

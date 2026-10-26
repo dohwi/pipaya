@@ -5,7 +5,7 @@ import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type SessionContext } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type ToolSource } from "./context.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
@@ -186,6 +186,7 @@ export class SessionManager {
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
 			capturedAt: snapshot?.capturedAt ?? null,
+			toolSpecs: this.toolSpecs(base.tools, record.cwd),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
 		};
 	}
@@ -202,6 +203,7 @@ export class SessionManager {
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: "preview",
 			capturedAt: null,
+			toolSpecs: this.toolSpecs(tools, cwd),
 			readFiles: [],
 		};
 	}
@@ -817,9 +819,42 @@ export class SessionManager {
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
-		const off = this.disabledTools();
-		const all = [...new Set([...names, ...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : []), ...(this.browser?.available() ? BROWSER_TOOLS : [])])].filter((n) => !off.includes(n));
+		const all = this.toolPlan(names).filter((t) => !t.off).map((t) => t.name);
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
+	}
+
+	/**
+	 * Every tool a session's agent would get, and why: chosen for the session (`session`), always added (`always`: peers,
+	 * extension tools marked always), or added because a feature is on (`image`, `browser`). A tool the user switched
+	 * off in the settings is still listed, marked `off`, so the context view can say it is withheld.
+	 */
+	private toolPlan(names: string[]): { name: string; source: ToolSource; off: boolean }[] {
+		const off = this.disabledTools();
+		const plan = new Map<string, ToolSource>();
+		const add = (list: readonly string[], source: ToolSource) => list.forEach((n) => plan.has(n) || plan.set(n, source));
+		add(names, "session");
+		add(PEER_TOOLS, "always");
+		add(this.ext?.alwaysTools() ?? [], "always");
+		if (this.imageModel?.resolve()) add([IMAGE_TOOL], "image");
+		if (this.browser?.available()) add(BROWSER_TOOLS, "browser");
+		return [...plan].map(([name, source]) => ({ name, source, off: off.includes(name) }));
+	}
+
+	/** The tools as the model receives them (name, description, parameter schema), for the context view. */
+	private toolSpecs(names: string[], cwd: string): ContextTool[] {
+		const defs = this.toolDefs();
+		return this.toolPlan(names).flatMap((t) => {
+			const def = defs[t.name];
+			if (!def) return [];
+			let parameters: unknown = null;
+			try {
+				parameters = def.create(cwd, [], this.toolContext("preview")).parameters ?? null;
+			} catch {
+				/* a tool that cannot be built here still shows its name and description */
+			}
+			const json = JSON.stringify({ name: def.name, description: def.description, parameters });
+			return [{ name: t.name, description: def.description, parameters: JSON.parse(JSON.stringify(parameters ?? null)), source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
+		});
 	}
 
 	/** What tools may ask of the running session. */

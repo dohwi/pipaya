@@ -117,6 +117,14 @@ export const SessionContext = Type.Object({
 	})),
 	warnings: Type.Array(Type.Object({ path: Type.String(), message: Type.String() })),
 	tools: Type.Array(Type.String()),
+	toolSpecs: Type.Array(Type.Object({
+		name: Type.String(),
+		description: Type.String(),
+		parameters: Type.Unknown({ description: "JSON schema of the tool's parameters" }),
+		source: Type.Union([Type.Literal("session"), Type.Literal("always"), Type.Literal("image"), Type.Literal("browser")], { description: "session: chosen for the session; always: peers and extension tools marked always; image / browser: added because that feature is on" }),
+		enabled: Type.Boolean({ description: "false: switched off in the settings, so the agent does not get it" }),
+		bytes: Type.Integer({ minimum: 0, description: "Size of name + description + parameters, sent with every request" }),
+	}), { description: "Every tool the agent gets, as the model sees it" }),
 	skills: Type.Array(Type.Object({
 		name: Type.String(),
 		description: Type.String(),

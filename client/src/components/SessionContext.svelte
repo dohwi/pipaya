@@ -21,6 +21,9 @@
 	/** Which sources are unfolded, by key. A plain <details> snaps open, so the fold is drawn by hand to animate. */
 	let opened = $state<Record<string, boolean>>({});
 	const scope = { global: msg("전역 AGENTS.md"), ancestor: msg("상위 폴더 AGENTS.md"), cwd: msg("프로젝트 AGENTS.md") };
+	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델"), browser: msg("브라우저") };
+	const toolTotal = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled).reduce((n, x) => n + x.bytes, 0));
+	const toolText = (x: { name: string; description: string; parameters: unknown }) => `${x.description}\n\n${JSON.stringify(x.parameters, null, 2)}`;
 	const bytes = (n: number) => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
 
 	// A run captures the instructions, so refresh when the conversation progresses (never on streaming deltas).
@@ -96,6 +99,23 @@
 					{/each}
 				</section>
 				<section class="group">
+					<h3>{t("도구")}</h3>
+					{#if data.toolSpecs.length}
+						<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 켜진 도구 {n}개 · 합계 {size}", { n: data.toolSpecs.filter((x) => x.enabled).length, size: bytes(toolTotal) })}</p>
+					{/if}
+					{#each data.toolSpecs as tool (tool.name)}
+						<div class="source" class:off={!tool.enabled}>
+							<button class="fold" onclick={() => (opened[`tool:${tool.name}`] = !opened[`tool:${tool.name}`])} aria-expanded={!!opened[`tool:${tool.name}`]}>
+								<span class="label"><span class="source-name mono">{tool.name}</span><span class="meta">{t(source[tool.source])} · {bytes(tool.bytes)}{#if !tool.enabled} · {t("꺼짐 (설정)")}{/if}</span></span>
+								<span class="chev" class:open={opened[`tool:${tool.name}`]}><Icon name="chevron-right" /></span>
+							</button>
+							{#if opened[`tool:${tool.name}`]}<pre in:collapseIn out:collapseOut>{toolText(tool)}</pre>{/if}
+						</div>
+					{:else}
+						<div class="empty">{t("이 세션에 주어지는 도구가 없습니다.")}</div>
+					{/each}
+				</section>
+				<section class="group">
 					<h3>{t("AGENTS.md (적용 순서)")}</h3>
 					{#each data.instructions as instruction, i (instruction.path)}
 						<div class="source">
@@ -149,4 +169,6 @@
 		.body { padding: 16px; }
 	}
 	.gap { margin-bottom: 10px; }
+	.note { margin: 0 2px 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
+	.source.off { opacity: 0.55; }
 </style>

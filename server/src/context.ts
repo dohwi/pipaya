@@ -31,7 +31,25 @@ export interface ReadFileTrace {
 	ranges: { from: number; to: number }[];
 }
 
+/** Why a tool reaches a session's agent. */
+export type ToolSource = "session" | "always" | "image" | "browser";
+
+/** One tool as the model receives it. */
+export interface ContextTool {
+	name: string;
+	description: string;
+	/** JSON schema of its parameters */
+	parameters: unknown;
+	source: ToolSource;
+	/** false: switched off in the settings, so the agent does not get it */
+	enabled: boolean;
+	/** Size of name + description + parameters as sent with every request */
+	bytes: number;
+}
+
 export interface SessionContext extends Omit<ContextSnapshot, "capturedAt" | "skills"> {
+	/** The tools with what the model sees of them (they travel beside the system prompt on every request). */
+	toolSpecs: ContextTool[];
 	skills: Omit<SkillRef, "baseDir">[];
 	/** The exact `<available_skills>` block appended to the system prompt ("" when none). */
 	skillsPrompt: string;
