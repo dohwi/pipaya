@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PaintingCanvas from "./PaintingCanvas.svelte";
 	import IconButton from "../IconButton.svelte";
 	import { t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
@@ -91,8 +92,10 @@
 	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
+	/** An image model is still working on its picture: no text will stream, so show a canvas that fills in. */
+	const painting = $derived(live && segments.every((s) => s.kind === "work" && !s.steps.length) && !!app.models.find((m) => m.provider === session?.provider && m.id === session?.model)?.imageGeneration);
 	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
-	/** A model that cannot think shows "thinking off" instead of the session's level, which it ignores. */
+	/** A model that cannot think (image models included) shows "thinking off" instead of the session's level, which it ignores. */
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
@@ -101,8 +104,13 @@
 <div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} use:swipeable>
 	<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
 	<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
+		{#if painting}
+			<PaintingCanvas />
+		{/if}
 		{#each segments as seg, n (seg.i)}
-			{#if seg.kind === "work"}
+			{#if seg.kind === "work" && painting}
+				<!-- the canvas above stands in for the empty "thinking" box -->
+			{:else if seg.kind === "work"}
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
 			{:else}
 				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />

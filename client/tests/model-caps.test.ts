@@ -11,4 +11,8 @@ describe("model abilities", () => {
 		expect(keys({ reasoning: true, vision: true })).toEqual(["chat", "reasoning", "vision"]);
 		expect(keys({ reasoning: false, vision: true })).toEqual(["chat", "vision"]);
 	});
+	test("an image model makes pictures instead of chatting", () => {
+		expect(keys({ reasoning: false, vision: true, imageGeneration: true })).toEqual(["image", "vision"]);
+		expect(keys({ reasoning: true, vision: false, imageGeneration: true })).toEqual(["image"]);
+	});
 });

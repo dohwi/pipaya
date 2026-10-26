@@ -59,7 +59,7 @@
 				{:else if catalogLoaded && !matchedOf(r)}
 					<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
 				{/if}
-				<span class="mmeta"><CapTags model={r} end ctx={ctxLabel(r)} /></span>
+				<span class="mmeta"><CapTags model={r} end ctx={r.imageGeneration ? undefined : ctxLabel(r)} /></span>
 				<Icon name="chevron-right" />
 			</button>
 		{/each}

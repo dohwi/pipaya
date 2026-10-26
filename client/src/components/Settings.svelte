@@ -34,6 +34,15 @@
 	let dir = $state(1);
 	/** A server extension to look up in the marketplace once the server tab opens (set from a client extension that needs it). */
 	let marketFor = $state<string | null>(null);
+	/** Asked from elsewhere (a model that needs an extension): open the server's marketplace on it, even while open. */
+	$effect(() => {
+		const id = app.settingsMarketFor;
+		if (!id) return;
+		app.settingsMarketFor = null;
+		sid = app.serverId;
+		go("srvext");
+		marketFor = id;
+	});
 	/** A client extension to download and preview for install as soon as the device tab opens (set from the clip of a server extension whose client half is missing). */
 	let installFor = $state<string | null>(null);
 	function go(next: TabId) {

@@ -31,6 +31,8 @@
 	import { Attachments } from "../lib/attachments.svelte";
 	import DropOverlay from "./DropOverlay.svelte";
 	import WhereChip from "./WhereChip.svelte";
+	import RunnerNotice from "./RunnerNotice.svelte";
+	import { needsRunner } from "../lib/model-runners";
 	import ReplyBadge from "./ReplyBadge.svelte";
 	import FileStrip from "./FileStrip.svelte";
 	import { isTouch } from "../lib/format";
@@ -75,7 +77,9 @@
 	});
 	const promptHint = $derived(!compacting && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
-	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
+	/** An image model this server cannot run (no extension for it): only commands go out. */
+	const blocked = $derived(needsRunner(app.effectiveModelOf(pane.id)));
+	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && (!blocked || parseSlash(text) !== null));
 
 	export function focus() {
 		ta?.focus();
@@ -547,6 +551,7 @@
 		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
+	{#if blocked}<RunnerNotice />{/if}
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />

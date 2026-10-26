@@ -7,6 +7,8 @@
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
 	import ProviderCard from "./connection/ProviderCard.svelte";
+	import Notice from "./Notice.svelte";
+	import { IMAGE_RUNNER_EXTENSION } from "../lib/model-runners";
 	import ConnectionForm, { localPresets, type LocalPreset } from "./ConnectionForm.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
 	import SystemModelSection from "./SystemModelSection.svelte";
@@ -251,6 +253,12 @@
 		<section>
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
+			{#if models.some((m) => m.runnable === false)}
+				<Notice tone="warn" size="sm">
+					{t("이미지 모델이 있지만 이 서버에는 이미지 생성 확장이 없어 쓸 수 없습니다.")}
+					{#snippet action()}<Button size="sm" variant="primary" onclick={() => app.openMarketFor(IMAGE_RUNNER_EXTENSION)}>{t("확장 설치")}</Button>{/snippet}
+				</Notice>
+			{/if}
 			{#if cfg.providers.length}
 				<div class="plist">
 					{#each cfg.providers as p (p.id)}
@@ -271,6 +279,7 @@
 								onrefresh={() => refreshModels(p)}
 								onedit={() => (form = { kind: "edit", provider: p })}
 								onremove={() => remove(p)}
+								needsRunner={(id) => models.some((m) => m.provider === p.id && m.id === id && m.runnable === false)}
 							/>
 						</div>
 					{/each}

@@ -80,3 +80,24 @@ describe("catalog match and editing", () => {
 		expect(ctxLabel(row({ contextWindow: "abc" }))).toBe("");
 	});
 });
+
+describe("image generation models", () => {
+	const img: CatalogModel = { id: "google/gemini-3.1-flash-image", name: "Gemini Image", contextWindow: 65536, maxTokens: 32768, reasoning: false, vision: true, image: true, levels: [] };
+	test("matching an image model in the catalog turns image generation on, and a text model turns it off", () => {
+		const r = row({ reasoning: true });
+		applyMatch(r, img);
+		expect(r.imageGeneration).toBe(true);
+		expect(r.reasoning).toBe(false);
+		applyMatch(r, { ...img, image: false });
+		expect(r.imageGeneration).toBe(false);
+	});
+	test("the payload carries the flag and never reasoning", () => {
+		const out = collectModels(filled({ rows: [row({ imageGeneration: true, reasoning: true, thinkingLevels: ["low"] })] }), true, none, true);
+		expect("out" in out && out.out[0]).toMatchObject({ imageGeneration: true, reasoning: false });
+		expect("out" in out && "thinkingLevels" in out.out[0]!).toBe(false);
+	});
+	test("a text model's payload has no flag", () => {
+		const out = collectModels(filled({ rows: [row()] }), true, none, true);
+		expect("out" in out && "imageGeneration" in out.out[0]!).toBe(false);
+	});
+});

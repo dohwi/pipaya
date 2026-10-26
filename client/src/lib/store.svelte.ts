@@ -190,7 +190,7 @@ class AppStore {
     if (!this.api) return;
     this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
-  settingsTab = $state<"general" | "servers" | "keys" | "extensions" | "backup" | "agent">("general");
+  settingsTab = $state<"general" | "servers" | "keys" | "extensions" | "backup" | "agent" | "srvext">("general");
   /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
   settingsServer = $state<string | "new" | null>(null);
   openSettings(
@@ -199,6 +199,15 @@ class AppStore {
   ) {
     this.settingsTab = tab;
     this.settingsServer = tab === "servers" ? server : null;
+    this.settingsOpen = true;
+  }
+  /** A server extension the settings window looks up in the marketplace when it opens (then cleared). */
+  settingsMarketFor = $state<string | null>(null);
+  /** Opens the server's extension marketplace on this extension, e.g. the one that runs image models. */
+  openMarketFor(id: string) {
+    this.settingsMarketFor = id;
+    this.settingsTab = "srvext";
+    this.settingsServer = null;
     this.settingsOpen = true;
   }
   sending = $state(false);
@@ -950,6 +959,7 @@ class AppStore {
     } else if (e.type === "extensions_updated") {
       this.serverExtensionsTick++;
       void this.refreshServerExtensions();
+      void this.refreshProviders(); // an extension may have started or stopped running a kind of model (`runnable`)
     }
     switch (e.type) {
       case "notification": {
