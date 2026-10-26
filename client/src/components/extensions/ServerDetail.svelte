@@ -20,6 +20,7 @@
 		onsave,
 		oninstallclient,
 		onopenclient,
+		onenableclient,
 	}: {
 		ext: ServerExt;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
@@ -33,12 +34,15 @@
 		oninstallclient: (id: string) => void;
 		/** Open the installed client half (id, name); absent when it lives in another section */
 		onopenclient?: (id: string) => void;
+		/** Turn the installed client half on */
+		onenableclient?: (id: string) => void;
 	} = $props();
 
 	const form = $derived(serverFields(ext));
 	const provides = $derived(serverProvides(ext));
 	/** A server extension that needs a client extension this device does not have runs only half. */
 	const client = $derived(ext.companion ? extensions.installed.find((e) => e.package.manifest.id === ext.companion) : undefined);
+	const clientOff = $derived(!!client && client.state !== "active" && client.state !== "starting");
 	const missingClient = $derived(!!ext.companion && !extensions.installed.some((e) => e.package.manifest.id === ext.companion));
 </script>
 
@@ -57,7 +61,15 @@
 		</Notice>
 	{/if}
 
-	{#if client && onopenclient}
+	{#if client && clientOff}
+		<Notice tone="warn" size="sm" icon="clip" role="status">
+			{t("클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.package.manifest.name })}
+			{#snippet action()}
+				{#if onenableclient}<button type="button" disabled={busy || client.state === "error"} onclick={() => onenableclient(client.package.manifest.id)}>{t("켜기")}</button>{/if}
+				{#if onopenclient}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/if}
+			{/snippet}
+		</Notice>
+	{:else if client && onopenclient}
 		<Notice tone="info" size="sm" icon="clip" role="status">
 			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.package.manifest.name })}
 			{#snippet action()}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/snippet}

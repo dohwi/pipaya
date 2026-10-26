@@ -18,6 +18,7 @@
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
 	import { t } from "../lib/i18n";
+	import { srvKey } from "../lib/server-extension";
 	import { backLayer } from "../lib/dialog";
 	import { viewport } from "../lib/viewport.svelte";
 
@@ -125,9 +126,9 @@
 				{#if current.sub}<p>{t(current.sub)}</p>{/if}
 			</div>
 			{#if tab === "extensions"}
-				<Extensions scope="device" bind:selected={extId} ongoserver={(id) => { marketFor = id; go("srvext"); }} />
+				<Extensions scope="device" bind:selected={extId} ongoserver={(id) => { marketFor = id; go("srvext"); }} onopenserverext={(name) => { go("srvext"); extId = srvKey(name); }} />
 			{:else if tab === "srvext"}
-				<Extensions scope="server" bind:selected={extId} bind:marketFor />
+				<Extensions scope="server" bind:selected={extId} bind:marketFor ongoclient={(id) => { go("extensions"); extId = id; }} />
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}

@@ -23,7 +23,7 @@
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), ongoserver }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void } = $props();
+	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), ongoserver, ongoclient, onopenserverext }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
 	let marketQuery = $state("");
 	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
 	let preview = $state<ExtensionPackage | null>(null);
@@ -46,7 +46,7 @@
 	const missingClient = (companion?: string) => !!companion && !extensions.installed.some((e) => e.package.manifest.id === companion);
 	async function loadServerSide() {
 		const api = app.api;
-		if (!api || view !== "server") { serverSide = []; return; }
+		if (!api) { serverSide = []; return; }
 		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
 		try { serverSettings = (await api.extensionSettings()).settings; } catch { /* the forms start from their defaults */ }
 	}
@@ -156,7 +156,9 @@
 	let drafts = $state<Record<string, string>>({});
 	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
 	/** The server extension that carries the open client extension as its client half. */
-	const bundleOwner = $derived(selected ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
+	const bundleOwner = $derived(selected && view === "server" ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
+	/** The server extension on the open server that pairs with the open client extension */
+	const pairedServer = $derived(selected ? serverSide.find((e) => e.companion === selected) : undefined);
 	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
 	$effect(() => { if (selected && !openEntry && !(selected.startsWith("srv:") && (!serverSide.length || openServer))) selected = null; });
 	function closeDetail() {
@@ -389,10 +391,11 @@
 			{tasks}
 			{drafts}
 			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
+			pairedServer={pairedServer ? (pairedServer.title ?? pairedServer.name) : undefined}
 			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
 			needsServer={view === "device" ? extensionUpdates.missingServerFor(id) : undefined}
 			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id); if (m) ongoserver(m.id); } : undefined}
-			onopenserver={view === "server" && bundleOwner ? () => (selected = srvKey(bundleOwner.name)) : undefined}
+			onopenserver={pairedServer ? () => (view === "server" ? (selected = srvKey(pairedServer.name)) : onopenserverext?.(pairedServer.name)) : undefined}
 			onback={closeDetail}
 			onenable={() => enable(id)}
 			ondisable={() => disable(id)}
@@ -412,7 +415,8 @@
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}
-			onopenclient={(id) => (selected = id)}
+			onopenclient={(id) => (extensions.installed.some((e) => e.package.manifest.id === id && e.scope === view) ? (selected = id) : ongoclient?.(id))}
+			onenableclient={enable}
 		/>
 	{:else}
 	<section aria-labelledby="extensions-installed">
