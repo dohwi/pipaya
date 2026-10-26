@@ -30,7 +30,7 @@
 </script>
 
 <div class="pk-row" class:sel={selected}>
-	<button type="button" class="pk-opt" class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
+	<button type="button" class="pk-opt" class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
 		{#if lead}<span class="lead">{@render lead()}</span>{/if}
 		<span class="main">
 			<span class="name">{@render name()}</span>
@@ -106,14 +106,30 @@
 		display: inline-flex;
 		align-items: center;
 	}
+	/* narrow: the tags drop under the name; the check centres on the whole two-line row, level with the star */
 	@media (max-width: 640px) {
-		.pk-opt {
-			flex-wrap: wrap;
+		.pk-opt.has-aside {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			grid-template-areas:
+				"lead main check"
+				". aside check";
+			column-gap: 8px;
+			align-items: start;
 		}
-		.aside {
-			order: 5;
-			flex-basis: 100%;
-			padding-left: 30px;
+		.pk-opt.has-aside .lead {
+			grid-area: lead;
+		}
+		.pk-opt.has-aside .main {
+			grid-area: main;
+		}
+		.pk-opt.has-aside .aside {
+			grid-area: aside;
+			margin-top: 2px;
+		}
+		.pk-opt.has-aside .check {
+			grid-area: check;
+			align-self: center;
 		}
 	}
 	/* the check pops in instead of appearing */
