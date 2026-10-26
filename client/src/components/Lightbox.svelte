@@ -177,7 +177,7 @@
 			const ext = type.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "") || "png";
 			await saveFile(blob, `image-${(set?.index ?? 0) + 1}.${ext}`);
 		} catch (e) {
-			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+			notify(`${t("저장하지 못했습니다")}: ${errorText(e)}`, false);
 		}
 	}
 
@@ -188,7 +188,7 @@
 	function notify(text: string, ok: boolean) {
 		note = { text, ok, n: ++noteN };
 		clearTimeout(noteTimer);
-		noteTimer = setTimeout(() => (note = null), 1600);
+		noteTimer = setTimeout(() => (note = null), ok ? 2000 : 3000);
 	}
 	onDestroy(() => {
 		clearTimeout(noteTimer);
@@ -388,8 +388,10 @@
 	.note {
 		position: absolute;
 		left: 50%;
-		top: 50%;
-		translate: -50% -50%;
+		/* just under the top bar (bar = 34px buttons + 2x12px padding), clear of the notch */
+		top: calc(58px + env(safe-area-inset-top, 0px));
+		translate: -50% 0;
+		max-width: min(92vw, 560px);
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -397,7 +399,8 @@
 		font-size: var(--fs-md, 14px);
 		color: #fff;
 		background: rgba(20, 20, 20, 0.88);
-		border-radius: 999px;
+		border-radius: 18px;
+		line-height: 1.35;
 		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 		pointer-events: none;
 		animation: note-in var(--motion-fast) var(--ease-std);
@@ -406,6 +409,7 @@
 		background: rgba(150, 30, 30, 0.92);
 	}
 	.note :global(svg) {
+		flex: none;
 		width: 18px;
 		height: 18px;
 		stroke-width: 2.2;
