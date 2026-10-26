@@ -171,7 +171,7 @@ export class SessionManager {
 		return advertisedSkills(snapshot.tools, this.skills?.active(snapshot.cwd, id) ?? []);
 	}
 
-	context(id: string): SessionContext {
+	context(id: string, auth: { anthropicOAuth?: boolean } = {}): SessionContext {
 		const record = this.get(id);
 		const snapshot = this.store.context(id);
 		const base = snapshot ?? previewContext(record, this.skills?.active(record.cwd, id), undefined);
@@ -188,7 +188,7 @@ export class SessionManager {
 			state: snapshot ? "applied" : "preview",
 			capturedAt: snapshot?.capturedAt ?? null,
 			toolSpecs: this.toolSpecs(base.tools, record.cwd),
-			systemPrompts: this.systemPromptList(record.provider, record.model),
+			systemPrompts: this.systemPromptList(record.provider, record.model, auth.anthropicOAuth),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
 		};
 	}
@@ -844,10 +844,10 @@ export class SessionManager {
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
-	private systemPromptList(provider?: string, modelId?: string): SystemPromptEntry[] {
+	private systemPromptList(provider?: string, modelId?: string, anthropicOAuth?: boolean): SystemPromptEntry[] {
 		const m = provider && modelId ? this.registry.models.getModel(provider, modelId) : undefined;
 		const hooks = (["before_agent_start", "context", "input"] as const).filter((h) => this.ext?.has(h));
-		return systemPromptEntries(m ? { provider: m.provider, api: m.api } : null, { hasExtensions: !!this.ext, extensionHooks: hooks });
+		return systemPromptEntries(m ? { provider: m.provider, api: m.api } : null, { hasExtensions: !!this.ext, extensionHooks: hooks, anthropicOAuth });
 	}
 
 	/** The tools as the model receives them (name, description, parameter schema), for the context view. */

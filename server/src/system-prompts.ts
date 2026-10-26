@@ -14,20 +14,22 @@ export interface PromptModel {
  * reader would ask about it. Wording that lives inside the pi SDK is copied here from its source (see the `when` of each
  * entry); nothing is invented: an entry exists only where the code that sends it was read.
  */
-export function systemPromptEntries(model: PromptModel | null, opts: { hasExtensions: boolean; extensionHooks: string[] }): SystemPromptEntry[] {
+export function systemPromptEntries(model: PromptModel | null, opts: { hasExtensions: boolean; extensionHooks: string[]; anthropicOAuth?: boolean }): SystemPromptEntry[] {
 	const anthropic = model?.api === "anthropic-messages";
 	const codex = model?.api === "openai-codex-responses";
 	return [
 		{
 			id: "sdk-claude-code",
+			delivery: "request" as const,
 			kind: "sdk" as const,
 			title: "Claude Code identity",
 			when: "pi SDK, Anthropic Messages API: put first in the system prompt, only when the login is an Anthropic subscription token (OAuth, `sk-ant-oat…`); the session prompt follows it as a second block",
 			text: "You are Claude Code, Anthropic's official CLI for Claude.",
-			active: anthropic,
+			active: anthropic && opts.anthropicOAuth !== false,
 		},
 		{
 			id: "sdk-codex-default",
+			delivery: "request" as const,
 			kind: "sdk" as const,
 			title: "Codex fallback instructions",
 			when: "pi SDK, OpenAI Codex Responses API: used as `instructions` only when the session prompt is empty",
@@ -36,6 +38,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "sdk-tool-changes",
+			delivery: "event" as const,
 			kind: "sdk" as const,
 			title: "Tool changes",
 			when: "pi SDK agent loop: when the tools of a session differ from the previous request, a system message records which tools were added or removed (names only, no wording)",
@@ -44,6 +47,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "runtime-peer-message",
+			delivery: "event" as const,
 			kind: "runtime" as const,
 			title: "Message from another session",
 			when: "A session used `peer_send`: this is how the receiving session sees it, as a user message",
@@ -52,6 +56,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "runtime-mention-hint",
+			delivery: "event" as const,
 			kind: "runtime" as const,
 			title: "@mention hint",
 			when: "The user wrote `@name` or a group handle in a message: a short index of those sessions is added to that message (never their transcripts)",
@@ -60,6 +65,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "runtime-compaction-summary",
+			delivery: "event" as const,
 			kind: "runtime" as const,
 			title: "Compaction summary",
 			when: "After a compaction (automatic or /compact): the summary replaces the earlier messages and goes first in the conversation as a user message",
@@ -68,6 +74,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "extension-hooks",
+			delivery: "event" as const,
 			kind: "extension" as const,
 			title: "Server extensions",
 			when: "Extensions can replace or extend the system prompt (`before_agent_start`), rewrite the messages before each model call (`context`) and add parts to a user message. None of it is stored with the session",
@@ -76,6 +83,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "helper-compaction",
+			delivery: "separate" as const,
 			kind: "helper" as const,
 			title: "Compaction (summarizer)",
 			when: "A separate model call when the conversation is compacted; its system prompt, then the request below",
@@ -84,6 +92,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "helper-describe",
+			delivery: "separate" as const,
 			kind: "helper" as const,
 			title: "Session title and purpose",
 			when: "A separate call to the system model after a session's first message (only when a system model is set)",
@@ -92,6 +101,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 		},
 		{
 			id: "helper-group-name",
+			delivery: "separate" as const,
 			kind: "helper" as const,
 			title: "Group name",
 			when: "A separate call to the system model when a split group needs a name (only when a system model is set)",

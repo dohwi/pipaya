@@ -22,13 +22,17 @@
 	let opened = $state<Record<string, boolean>>({});
 	const scope = { global: msg("전역 AGENTS.md"), ancestor: msg("상위 폴더 AGENTS.md"), cwd: msg("프로젝트 AGENTS.md") };
 	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델"), browser: msg("브라우저") };
+	const kindName = { sdk: msg("출처 SDK"), runtime: msg("출처 서버"), extension: msg("출처 확장"), helper: msg("출처 보조 모델") };
 	const promptGroups = [
-		{ kind: "sdk" as const, name: msg("SDK가 붙이는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 세션의 모델에 해당하는 것만 \"적용 중\"입니다.") },
-		{ kind: "runtime" as const, name: msg("실행 중 추가되는 메시지"), hint: msg("대화가 진행되는 동안 서버가 메시지에 덧붙이거나 만들어 넣는 문구입니다.") },
-		{ kind: "extension" as const, name: msg("확장이 바꿀 수 있는 부분"), hint: msg("서버 확장이 시스템 프롬프트나 메시지를 바꿀 수 있는 지점입니다.") },
-		{ kind: "helper" as const, name: msg("보조 모델 호출"), hint: msg("대화와 별개로 서버가 직접 모델을 부르는 프롬프트입니다(요약, 제목, 그룹 이름).") },
+		{ delivery: "request" as const, name: msg("요청마다 함께 가는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 세션의 모델과 로그인에 해당할 때만 \"적용 중\"입니다.") },
+		{ delivery: "event" as const, name: msg("상황이 생길 때만 가는 문구"), hint: msg("피어 메시지, @멘션, 압축 직후처럼 해당 상황에서만 대화에 들어갑니다. 매 요청에 따라가지 않습니다.") },
+		{ delivery: "separate" as const, name: msg("별도 모델 호출의 프롬프트"), hint: msg("대화와 별개로 서버가 직접 모델을 부르는 프롬프트입니다(요약, 제목, 그룹 이름). 이 세션의 요청 크기에 들어가지 않습니다.") },
 	];
+	const encoder = new TextEncoder();
+	const requestPromptTotal = $derived((data?.systemPrompts ?? []).filter((x) => x.delivery === "request" && x.active).reduce((n, x) => n + x.bytes, 0));
 	const toolTotal = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled).reduce((n, x) => n + x.bytes, 0));
+	/** What every request carries: the system prompt (with AGENTS.md and skills), the tool definitions, and the SDK wording that applies. */
+	const requestTotal = $derived(data ? encoder.encode(data.effectiveSystemPrompt).length + toolTotal + requestPromptTotal : 0);
 	const toolText = (x: { name: string; description: string; parameters: unknown }) => `${x.description}\n\n${JSON.stringify(x.parameters, null, 2)}`;
 	const bytes = (n: number) => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
 
@@ -81,6 +85,7 @@
 				{#each data.warnings as warning}
 					<div class="gap"><Notice tone="warn"><span class="mono">{warning.path}</span><br />{warning.message}</Notice></div>
 				{/each}
+				<p class="note">{t("매 요청에 실리는 크기 약 {size} — 시스템 프롬프트(AGENTS.md·스킬 포함) {a} + 도구 정의 {b} + SDK 문구 {c}", { size: bytes(requestTotal), a: bytes(encoder.encode(data.effectiveSystemPrompt).length), b: bytes(toolTotal), c: bytes(requestPromptTotal) })}</p>
 				<section class="group">
 					<h3>{t("기본 프롬프트")}</h3>
 					<div class="source">
@@ -106,14 +111,14 @@
 				</section>
 				<section class="group">
 					<h3>{t("시스템이 추가하는 프롬프트")}</h3>
-					{#each promptGroups as g (g.kind)}
-						{@const list = data.systemPrompts.filter((x) => x.kind === g.kind)}
+					{#each promptGroups as g (g.delivery)}
+						{@const list = data.systemPrompts.filter((x) => x.delivery === g.delivery)}
 						{#if list.length}
 							<p class="note">{t(g.name)} — {t(g.hint)}</p>
 							{#each list as p (p.id)}
 								<div class="source" class:off={!p.active}>
 									<button class="fold" onclick={() => (opened[`prompt:${p.id}`] = !opened[`prompt:${p.id}`])} aria-expanded={!!opened[`prompt:${p.id}`]}>
-										<span class="label"><span class="source-name">{p.title}</span><span class="meta">{p.active ? t("적용 중") : t("이 세션에는 해당 없음")} · {bytes(p.bytes)}</span></span>
+										<span class="label"><span class="source-name">{p.title}</span><span class="meta">{t(kindName[p.kind])} · {p.active ? t("적용 중") : t("이 세션에는 해당 없음")} · {bytes(p.bytes)}</span></span>
 										<span class="chev" class:open={opened[`prompt:${p.id}`]}><Icon name="chevron-right" /></span>
 									</button>
 									{#if opened[`prompt:${p.id}`]}<p class="when">{p.when}</p><pre in:collapseIn out:collapseOut>{p.text}</pre>{/if}

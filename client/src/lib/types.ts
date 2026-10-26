@@ -100,6 +100,8 @@ export interface SystemPromptEntry {
 	id: string;
 	/** sdk: wording the pi SDK adds per provider; runtime: messages the server adds while a session runs; extension: what extensions may add; helper: the server's own helper model calls */
 	kind: "sdk" | "runtime" | "extension" | "helper";
+	/** request: sent with every request while it applies; event: only when a situation occurs; separate: part of a different model call */
+	delivery: "request" | "event" | "separate";
 	title: string;
 	/** When it reaches a model */
 	when: string;

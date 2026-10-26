@@ -196,9 +196,13 @@ export function aggregateReadFiles(cwd: string, messages: StoredMessage[]): Read
  */
 export type PromptKind = "sdk" | "runtime" | "extension" | "helper";
 
+export type PromptDelivery = "request" | "event" | "separate";
+
 export interface SystemPromptEntry {
 	id: string;
 	kind: PromptKind;
+	/** request: goes with every request while it applies; event: only when a situation occurs; separate: part of a different model call */
+	delivery: PromptDelivery;
 	title: string;
 	/** When it reaches a model */
 	when: string;

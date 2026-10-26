@@ -128,6 +128,7 @@ export const SessionContext = Type.Object({
 	systemPrompts: Type.Array(Type.Object({
 		id: Type.String(),
 		kind: Type.Union([Type.Literal("sdk"), Type.Literal("runtime"), Type.Literal("extension"), Type.Literal("helper")], { description: "sdk: wording the pi SDK adds per provider; runtime: messages this server adds while a session runs; extension: what extensions may add; helper: prompts of the server's own helper model calls" }),
+		delivery: Type.Union([Type.Literal("request"), Type.Literal("event"), Type.Literal("separate")], { description: "request: sent with every request while it applies; event: only when a situation occurs; separate: part of a different model call" }),
 		title: Type.String(),
 		when: Type.String({ description: "When it reaches a model" }),
 		text: Type.String({ description: "The text; `${…}` marks a value filled in at run time" }),
