@@ -13,6 +13,7 @@
 		lead,
 		name,
 		meta,
+		aside,
 		trailing,
 	}: {
 		selected?: boolean;
@@ -22,6 +23,8 @@
 		lead?: Snippet;
 		name: Snippet;
 		meta?: Snippet;
+		/** flush-right tags (between the text and the check), so every row ends on the same line */
+		aside?: Snippet;
 		trailing?: Snippet;
 	} = $props();
 </script>
@@ -33,6 +36,7 @@
 			<span class="name">{@render name()}</span>
 			{#if meta}<span class="meta">{@render meta()}</span>{/if}
 		</span>
+		{#if aside}<span class="aside">{@render aside()}</span>{/if}
 		<span class="check" class:on={selected} aria-hidden="true"><Icon name="check" /></span>
 	</button>
 	{@render trailing?.()}
@@ -96,6 +100,21 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.aside {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+	}
+	@media (max-width: 640px) {
+		.pk-opt {
+			flex-wrap: wrap;
+		}
+		.aside {
+			order: 5;
+			flex-basis: 100%;
+			padding-left: 30px;
+		}
 	}
 	/* the check pops in instead of appearing */
 	.check {
