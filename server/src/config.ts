@@ -24,6 +24,8 @@ export interface Config {
 	pushEnabled?: boolean;
 	/** PIPAYA_TERMINAL=0 turns off the interactive shells clients can open on this server. */
 	terminals?: boolean;
+	/** PIPAYA_BROWSER=0 turns the browser panes and browser_* tools off. */
+	browser?: boolean;
 	/** PIPAYA_MAX_SESSIONS: most active (not closed) sessions at once; 0 = no limit. Unset = DEFAULT_MAX_SESSIONS. */
 	maxActiveSessions?: number;
 }
@@ -80,6 +82,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		// On by default; it only takes effect when Firebase credentials exist (see createPushTransports). "0" turns it off.
 		pushEnabled: env.PIPAYA_PUSH_FCM !== "0",
 		terminals: env.PIPAYA_TERMINAL !== "0",
+		browser: env.PIPAYA_BROWSER !== "0",
 		maxActiveSessions: Math.max(0, int(env.PIPAYA_MAX_SESSIONS, DEFAULT_MAX_SESSIONS)),
 	};
 }

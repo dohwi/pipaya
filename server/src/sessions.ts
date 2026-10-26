@@ -18,6 +18,8 @@ import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
 import { PeerService, type GroupRef } from "./peers.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
+import type { BrowserManager } from "./browser.ts";
+import { BROWSER_TOOLS, browserTools } from "./browser-tools.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -72,6 +74,13 @@ export class SessionManager {
 	readonly peers: PeerService;
 	/** Session ids of every group, wired by the app once the group manager exists. */
 	private groupSource: () => GroupRef[] = () => [];
+
+	private browser?: BrowserManager;
+
+	/** The server's browser: while it can run, every session gets the browser_* tools. */
+	setBrowser(b: BrowserManager): void {
+		this.browser = b;
+	}
 
 	setGroupSource(fn: () => GroupRef[]): void {
 		this.groupSource = fn;
@@ -809,7 +818,7 @@ export class SessionManager {
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
 		const off = this.disabledTools();
-		const all = [...new Set([...names, ...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : [])])].filter((n) => !off.includes(n));
+		const all = [...new Set([...names, ...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : []), ...(this.browser?.available() ? BROWSER_TOOLS : [])])].filter((n) => !off.includes(n));
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
@@ -888,7 +897,9 @@ export class SessionManager {
 	toolDefs(): Record<string, ToolDef> {
 		const defs = this.ext ? this.ext.toolDefs() : TOOL_DEFS;
 		// Only while an image model is set; an extension tool of the same name wins.
-		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
+		const withImage = this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
+		// An extension tool of the same name wins here too.
+		return this.browser?.available() ? { ...browserTools(this.browser), ...withImage } : withImage;
 	}
 
 	/** Per-run system prompt tweaks and the `context` hook, applied to what the model sees (never stored). */
