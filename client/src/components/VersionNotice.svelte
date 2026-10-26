@@ -18,6 +18,23 @@
 	const show = $derived(app.serverId !== null && kind !== "ok" && closed !== key && !(kind === "update-server" && app.net !== "online"));
 	const busy = $derived(serverUpdater.busy);
 
+	/**
+	 * Centred on the chat area (the stage), not the window, so the sidebar does not push it off the input's centre; it sits
+	 * just above the composer (Composer publishes --composer-top) instead of covering it. Without a chat area it spans the window.
+	 */
+	let box = $state<{ left: number; width: number } | null>(null);
+	$effect(() => {
+		if (!show) return;
+		const stage = document.querySelector<HTMLElement>(".stage");
+		if (!stage) { box = null; return; }
+		const measure = () => { const r = stage.getBoundingClientRect(); box = { left: r.left, width: r.width }; };
+		measure();
+		const ro = new ResizeObserver(measure);
+		ro.observe(stage);
+		window.addEventListener("resize", measure);
+		return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+	});
+
 	async function updateServer() {
 		if (!app.api) return;
 		const ok = await serverUpdater.apply(app.api);
@@ -34,7 +51,7 @@
 </script>
 
 {#if show}
-	<div class="notice" class:danger={kind === "update-app"} role={kind === "update-app" ? "alert" : "status"}>
+	<div class="notice" class:danger={kind === "update-app"} class:anchored={!!box} style:left={box ? `${box.left + box.width / 2}px` : null} style:--stage-w={box ? `${box.width}px` : null} role={kind === "update-app" ? "alert" : "status"}>
 		<p class="text">
 			{#if kind === "update-app"}
 				{t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요")}
@@ -63,9 +80,9 @@
 		position: fixed;
 		z-index: 30;
 		left: 50%;
-		bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+		bottom: max(calc(16px + env(safe-area-inset-bottom, 0px)), calc(var(--composer-top, 0px) + 12px));
 		transform: translateX(-50%);
-		width: min(440px, calc(var(--vw) - 24px));
+		width: min(440px, calc(var(--stage-w, var(--vw)) - 24px));
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
