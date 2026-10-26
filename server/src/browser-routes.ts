@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { IdParams, Ok, errors } from "./schemas.ts";
-import { BrowserSupport, BrowserTabList, BrowserTabSchema, CreateBrowserBody, NavigateBrowserBody, type BrowserInput, type BrowserManager } from "./browser.ts";
+import { BrowserProfileList, BrowserProfileSchema, BrowserSupport, BrowserTabList, BrowserTabSchema, CreateBrowserBody, CreateProfileBody, DEFAULT_PROFILE, NavigateBrowserBody, PatchProfileBody, type BrowserInput, type BrowserManager } from "./browser.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
 /** Path of a tab's view socket; the auth hook lets browsers pass the token as ?token= here. */
@@ -34,7 +34,7 @@ function parseInput(msg: Record<string, unknown>): BrowserInput | null {
  * server -> client   text    { type: "hello", tab, control }
  *                    binary  one JPEG frame of the page
  *                    text    { type: "frame", width, height }  sent right before each binary frame (page size in CSS px)
- *                    text    { type: "state", tab, control, by }   title / address changed, or control moved ("user" | "agent"; `by` = the session whose agent acts)
+ *                    text    { type: "state", tab, control, by }   title / address changed, or control moved ("user" | "agent"; `by` = the session whose agent acts; `handoff` = {by, note} while an agent waits for the person to finish something in the page)
  *                    text    { type: "closed" }
  * client -> server   text    { type: "mouse" | "wheel" | "key" | "text", ... }   input for the page
  *                    text    { type: "fit", width, height }    the panel's size: the page is laid out for it
@@ -51,6 +51,33 @@ export function registerBrowserRoutes(server: FastifyInstance, browsers: Browser
 	app.get("/browsers", {
 		schema: { response: { 200: BrowserTabList, ...errors(401) } },
 		handler: async () => ({ tabs: browsers.list() }),
+	});
+	// Profiles: a profile is a browser's saved logins and cookies. Only names and flags travel here, never their contents.
+	app.get("/browsers/profiles", {
+		schema: { response: { 200: BrowserProfileList, ...errors(401) } },
+		handler: async () => ({ profiles: browsers.listProfiles(), default: DEFAULT_PROFILE }),
+	});
+	app.post("/browsers/profiles", {
+		schema: { body: CreateProfileBody, response: { 201: BrowserProfileSchema, ...errors(400, 401, 409) } },
+		handler: async (req, reply) => reply.status(201).send(browsers.createProfile(req.body)),
+	});
+	app.patch("/browsers/profiles/:id", {
+		schema: { params: IdParams, body: PatchProfileBody, response: { 200: BrowserProfileSchema, ...errors(400, 401, 404, 409) } },
+		handler: async (req) => await browsers.updateProfile(req.params.id, req.body),
+	});
+	app.post("/browsers/profiles/:id/clear", {
+		schema: { params: IdParams, response: { 200: Ok, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			await browsers.clearProfile(req.params.id);
+			return { ok: true };
+		},
+	});
+	app.delete("/browsers/profiles/:id", {
+		schema: { params: IdParams, response: { 200: Ok, ...errors(400, 401, 404, 409) } },
+		handler: async (req) => {
+			await browsers.deleteProfile(req.params.id);
+			return { ok: true };
+		},
 	});
 	app.post("/browsers", {
 		schema: { body: CreateBrowserBody, response: { 201: BrowserTabSchema, ...errors(400, 401, 403, 409, 502) } },
@@ -87,9 +114,9 @@ export function registerBrowserRoutes(server: FastifyInstance, browsers: Browser
 					}
 					socket.send(jpeg);
 				},
-				state(tab, c, by) {
+				state(tab, c, by, handoff) {
 					control = c;
-					sendText({ type: "state", tab, control, by: by ?? null });
+					sendText({ type: "state", tab, control, by: by ?? null, handoff: handoff ?? null });
 				},
 				closed() {
 					sendText({ type: "closed" });

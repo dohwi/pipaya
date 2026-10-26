@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { chromium, type BrowserContext, type CDPSession, type Page } from "playwright-core";
 import Type, { type Static } from "typebox";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import type { EventBus } from "./events.ts";
+import { isInside } from "./tools.ts";
 
 /**
  * Browser tabs on the server, shown in the client as panes next to conversations and driven by agents with the same
@@ -20,6 +21,15 @@ export const BROWSER_PREFIX = "web_";
 export const isBrowserId = (id: string) => id.startsWith(BROWSER_PREFIX);
 export const MAX_BROWSER_TABS = 8;
 export const DEFAULT_PROFILE = "default";
+/** The throw-away profile: no history, and its folder is deleted once its last tab closes. */
+export const TEMP_PROFILE = "temp";
+export const MAX_PROFILES = 12;
+const PROFILE_ID = /^[a-z0-9][a-z0-9_-]{0,38}$/;
+export const profileId = (raw: string): string => {
+	const id = raw.trim().toLowerCase();
+	if (!PROFILE_ID.test(id)) throw badRequest("a profile name is 1-39 characters: letters a-z, digits, - and _ (starting with a letter or digit)");
+	return id;
+};
 /** At most ~15 frames per second go to the views. */
 export const FRAME_INTERVAL_MS = 66;
 /** Page size limits when a view fits the page to its panel (CSS px) */
@@ -37,9 +47,26 @@ export const BrowserTabSchema = Type.Object({
 	profile: Type.String(),
 	createdAt: Type.Integer(),
 });
+export const BrowserProfileSchema = Type.Object({
+	/** Folder name under browser-profiles/, also what tabs and tools call it */
+	id: Type.String(),
+	/** `temp`: lives in a throw-away folder that is deleted when its last tab closes */
+	temporary: Type.Boolean(),
+	/** Agents may open and act on tabs of this profile (off = people only) */
+	agent: Type.Boolean(),
+	/** Tabs open right now */
+	tabs: Type.Integer(),
+	/** Its browser is running */
+	running: Type.Boolean(),
+	createdAt: Type.Integer(),
+});
+export const BrowserProfileList = Type.Object({ profiles: Type.Array(BrowserProfileSchema), default: Type.String() });
+export const CreateProfileBody = Type.Object({ id: Type.String({ minLength: 1, maxLength: 40 }), agent: Type.Optional(Type.Boolean()) });
+export const PatchProfileBody = Type.Object({ agent: Type.Optional(Type.Boolean()), id: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })) });
+export type BrowserProfileInfo = Static<typeof BrowserProfileSchema>;
 export const BrowserTabList = Type.Object({ tabs: Type.Array(BrowserTabSchema) });
 export const BrowserSupport = Type.Object({ enabled: Type.Boolean(), available: Type.Boolean(), max: Type.Integer() });
-export const CreateBrowserBody = Type.Object({ url: Type.Optional(Type.String({ maxLength: 4000 })), cwd: Type.Optional(Type.String({ maxLength: 4000 })) });
+export const CreateBrowserBody = Type.Object({ url: Type.Optional(Type.String({ maxLength: 4000 })), cwd: Type.Optional(Type.String({ maxLength: 4000 })), profile: Type.Optional(Type.String({ maxLength: 40 })) });
 export const NavigateBrowserBody = Type.Object({ url: Type.String({ minLength: 1, maxLength: 4000 }) });
 export type BrowserTabInfo = Static<typeof BrowserTabSchema>;
 
@@ -91,7 +118,7 @@ export function findBrowser(env: Record<string, string | undefined> = process.en
 export interface BrowserClient {
 	frame(jpeg: Uint8Array, size: { width: number; height: number }): void;
 	/** `by`: the session whose agent is acting, while `control` is "agent" */
-	state(info: BrowserTabInfo, control: "user" | "agent", by?: string): void;
+	state(info: BrowserTabInfo, control: "user" | "agent", by?: string, handoff?: { by: string; note: string } | null): void;
 	closed(): void;
 }
 
@@ -103,6 +130,8 @@ interface Tab {
 	screencasting: boolean;
 	/** Sessions whose agents are acting on the page right now (a stack: calls may overlap) */
 	agents: string[];
+	/** An agent asked the person to do something here (login, captcha …) and waits: the note views show */
+	handoff: { by: string; note: string } | null;
 	/** When the last frame went out (frames are rate-limited) */
 	lastSent: number;
 	/** Size the page was last fitted to by a view */
@@ -129,7 +158,12 @@ export interface BrowserOptions {
 
 export class BrowserManager {
 	private tabs = new Map<string, Tab>();
-	private context: Promise<BrowserContext> | null = null;
+	/** One Chromium per profile (a profile folder can only be open in one process). */
+	private contexts = new Map<string, Promise<BrowserContext>>();
+	/** Browsers that are shutting down: their profile folder is still theirs until `close()` has finished. */
+	private stopping = new Map<string, Promise<void>>();
+	/** Throw-away profile folders, removed once their browser has ended (or on shutdown). */
+	private tempDirs = new Set<string>();
 	private exe: string | null;
 
 	constructor(
@@ -165,11 +199,131 @@ export class BrowserManager {
 		return t;
 	}
 
-	private launch(): Promise<BrowserContext> {
+	/* ---------- profiles ---------- */
+
+	private get root(): string {
+		return join(this.opts.dataDir, "browser-profiles");
+	}
+	private profileDir(id: string): string {
+		const dir = join(this.root, id);
+		if (!isInside(this.root, dir)) throw badRequest("invalid profile name");
+		return dir;
+	}
+	private metaFile(id: string): string {
+		return join(this.profileDir(id), ".pipaya-profile.json");
+	}
+	private meta(id: string): { agent: boolean; createdAt: number } {
+		if (id === TEMP_PROFILE) return { agent: true, createdAt: 0 };
+		try {
+			const m = JSON.parse(readFileSync(this.metaFile(id), "utf8"));
+			return { agent: m.agent !== false, createdAt: typeof m.createdAt === "number" ? m.createdAt : 0 };
+		} catch {
+			return { agent: true, createdAt: 0 };
+		}
+	}
+	private writeMeta(id: string, m: { agent: boolean; createdAt: number }) {
+		writeFileSync(this.metaFile(id), JSON.stringify(m), { mode: 0o600 });
+	}
+	private tabsOf(id: string): Tab[] {
+		return [...this.tabs.values()].filter((t) => t.info.profile === id);
+	}
+
+	/** Saved profiles (folders) plus the throw-away one while it is in use. */
+	listProfiles(): BrowserProfileInfo[] {
+		const ids = new Set<string>([DEFAULT_PROFILE]);
+		try {
+			for (const d of readdirSync(this.root, { withFileTypes: true })) if (d.isDirectory() && PROFILE_ID.test(d.name) && d.name !== TEMP_PROFILE) ids.add(d.name);
+		} catch {
+			/* nothing saved yet */
+		}
+		if (this.contexts.has(TEMP_PROFILE) || this.tabsOf(TEMP_PROFILE).length) ids.add(TEMP_PROFILE);
+		return [...ids]
+			.map((id) => {
+				const m = this.meta(id);
+				return { id, temporary: id === TEMP_PROFILE, agent: id === TEMP_PROFILE ? true : m.agent, tabs: this.tabsOf(id).length, running: this.contexts.has(id), createdAt: m.createdAt };
+			})
+			.sort((a, b) => (a.id === DEFAULT_PROFILE ? -1 : b.id === DEFAULT_PROFILE ? 1 : a.createdAt - b.createdAt || a.id.localeCompare(b.id)));
+	}
+
+	createProfile(input: Static<typeof CreateProfileBody>): BrowserProfileInfo {
+		const id = profileId(input.id);
+		if (id === TEMP_PROFILE) throw badRequest(`"${TEMP_PROFILE}" is the throw-away profile and cannot be created`);
+		if (existsSync(this.profileDir(id))) throw new HttpError(409, "profile_exists", `profile "${id}" already exists`);
+		if (this.listProfiles().filter((p) => !p.temporary).length >= MAX_PROFILES) throw new HttpError(409, "too_many_profiles", `at most ${MAX_PROFILES} profiles can be saved`);
+		mkdirSync(this.profileDir(id), { recursive: true, mode: 0o700 });
+		this.writeMeta(id, { agent: input.agent !== false, createdAt: Date.now() });
+		return this.listProfiles().find((p) => p.id === id)!;
+	}
+
+	/** Wait until a profile's browser, if it is closing, has really exited: its folder is not free before that. */
+	private async settled(profile: string): Promise<void> {
+		await this.stopping.get(profile);
+	}
+
+	/** Allow or forbid agents on a profile, or rename it (not while it has tabs: its browser holds the folder). */
+	async updateProfile(rawId: string, changes: Static<typeof PatchProfileBody>): Promise<BrowserProfileInfo> {
+		const id = profileId(rawId);
+		if (id === TEMP_PROFILE) throw badRequest("the throw-away profile cannot be changed");
+		if (!this.listProfiles().some((p) => p.id === id)) throw notFound("browser profile");
+		let at = id;
+		if (changes.id !== undefined && profileId(changes.id) !== id) {
+			const next = profileId(changes.id);
+			if (id === DEFAULT_PROFILE) throw badRequest(`"${DEFAULT_PROFILE}" cannot be renamed`);
+			if (next === TEMP_PROFILE || next === DEFAULT_PROFILE || existsSync(this.profileDir(next))) throw new HttpError(409, "profile_exists", `profile "${next}" already exists`);
+			await this.settled(id);
+			if (this.tabsOf(id).length || this.contexts.has(id)) throw new HttpError(409, "profile_in_use", `close the tabs of "${id}" before renaming it`);
+			renameSync(this.profileDir(id), this.profileDir(next));
+			at = next;
+		}
+		mkdirSync(this.profileDir(at), { recursive: true, mode: 0o700 });
+		const m = this.meta(at);
+		this.writeMeta(at, { agent: changes.agent ?? m.agent, createdAt: m.createdAt || Date.now() });
+		return this.listProfiles().find((p) => p.id === at)!;
+	}
+
+	/** Delete a profile's saved data (logins, cookies). Not while tabs are open on it. */
+	async deleteProfile(rawId: string): Promise<void> {
+		const id = profileId(rawId);
+		if (id === TEMP_PROFILE) throw badRequest("the throw-away profile cannot be deleted");
+		await this.settled(id);
+		if (this.tabsOf(id).length || this.contexts.has(id)) throw new HttpError(409, "profile_in_use", `close the tabs of "${id}" first`);
+		if (!existsSync(this.profileDir(id))) throw notFound("browser profile");
+		rmSync(this.profileDir(id), { recursive: true, force: true });
+	}
+
+	/** Forget what a profile has stored (cookies, logins, site data) but keep the profile itself. */
+	async clearProfile(rawId: string): Promise<void> {
+		const id = profileId(rawId);
+		await this.settled(id);
+		const ctx = this.contexts.get(id) ? await this.contexts.get(id)!.catch(() => null) : null;
+		if (ctx) {
+			await ctx.clearCookies().catch(() => {});
+			for (const t of this.tabsOf(id)) await t.cdp.send("Storage.clearDataForOrigin" as never, { origin: "*", storageTypes: "all" } as never).catch(() => {});
+			return;
+		}
+		if (!this.listProfiles().some((p) => p.id === id)) throw notFound("browser profile");
+		const meta = this.meta(id);
+		rmSync(this.profileDir(id), { recursive: true, force: true });
+		mkdirSync(this.profileDir(id), { recursive: true, mode: 0o700 });
+		this.writeMeta(id, meta);
+	}
+
+	/** May an agent act on tabs of this profile? */
+	agentMayUse(profile: string): boolean {
+		return profile === TEMP_PROFILE || this.meta(profile).agent;
+	}
+
+	private launch(profile: string): Promise<BrowserContext> {
 		if (!this.available()) throw new HttpError(403, "browser_unavailable", this.opts.enabled ? "no Chrome or Chromium was found on this server (install one or set PIPAYA_BROWSER)" : "the browser is turned off on this server (PIPAYA_BROWSER=0)");
-		this.context ??= (async () => {
-			const dir = join(this.opts.dataDir, "browser-profiles", DEFAULT_PROFILE);
+		let pending = this.contexts.get(profile);
+		if (pending) return pending;
+		pending = (async () => {
+			// A profile folder belongs to one browser at a time: let the one that is closing finish first.
+			await this.stopping.get(profile);
+			const dir = profile === TEMP_PROFILE ? join(this.root, `.${TEMP_PROFILE}-${randomUUID().slice(0, 8)}`) : this.profileDir(profile);
 			mkdirSync(dir, { recursive: true, mode: 0o700 });
+			if (profile === TEMP_PROFILE) this.tempDirs.add(dir);
+			if (profile !== TEMP_PROFILE && !existsSync(this.metaFile(profile))) this.writeMeta(profile, { agent: true, createdAt: Date.now() });
 			const ctx = await chromium.launchPersistentContext(dir, {
 				executablePath: this.exe!,
 				headless: this.opts.headless ?? true,
@@ -178,25 +332,30 @@ export class BrowserManager {
 				args: ["--no-first-run", "--no-default-browser-check", ...(process.getuid?.() === 0 ? ["--no-sandbox"] : [])],
 			});
 			ctx.on("close", () => {
-				this.context = null;
-				for (const t of [...this.tabs.values()]) this.drop(t);
+				if (this.contexts.get(profile) === pending) this.contexts.delete(profile);
+				for (const t of this.tabsOf(profile)) this.drop(t);
+				// The throw-away profile leaves nothing behind, whichever way its browser ended.
+				if (profile === TEMP_PROFILE) void this.sweepTemp(dir);
 			});
 			return ctx;
 		})().catch((e) => {
-			this.context = null;
+			if (this.contexts.get(profile) === pending) this.contexts.delete(profile);
 			throw new HttpError(502, "browser_launch_failed", `could not start the browser: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
 		});
-		return this.context;
+		this.contexts.set(profile, pending);
+		return pending;
 	}
 
 	async create(input: Static<typeof CreateBrowserBody> = {}, cwd?: string): Promise<BrowserTabInfo> {
 		if (this.tabs.size >= MAX_BROWSER_TABS) throw new HttpError(409, "too_many_browser_tabs", `at most ${MAX_BROWSER_TABS} browser tabs can be open at once`);
 		const url = input.url?.trim() ? normalizeUrl(input.url) : "about:blank";
-		const ctx = await this.launch();
+		const profile = input.profile?.trim() ? profileId(input.profile) : DEFAULT_PROFILE;
+		if (profile !== TEMP_PROFILE && profile !== DEFAULT_PROFILE && !existsSync(this.profileDir(profile))) throw notFound("browser profile");
+		const ctx = await this.launch(profile);
 		const page = await ctx.newPage();
 		const cdp = await ctx.newCDPSession(page);
 		const id = BROWSER_PREFIX + randomUUID();
-		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile: DEFAULT_PROFILE, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], lastSent: 0, fit: null, lastFrame: null, closing: false };
+		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], handoff: null, lastSent: 0, fit: null, lastFrame: null, closing: false };
 		this.tabs.set(id, tab);
 		cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number; metadata: { deviceWidth: number; deviceHeight: number } }) => {
 			cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
@@ -236,7 +395,7 @@ export class BrowserManager {
 	/** Tell every view who is acting on the page. */
 	private tell(tab: Tab) {
 		const by = tab.agents[tab.agents.length - 1];
-		for (const c of tab.clients) c.state(tab.info, by ? "agent" : "user", by);
+		for (const c of tab.clients) c.state(tab.info, by ? "agent" : "user", by, tab.handoff);
 	}
 
 	/** The tab was closed (by us, by the page, or because the browser went away). */
@@ -247,13 +406,39 @@ export class BrowserManager {
 		for (const c of tab.clients) c.closed();
 		tab.clients.clear();
 		this.bus.publish(null, "browser_closed", { id: tab.info.id }, { ephemeral: true });
-		if (!this.tabs.size) void this.stopBrowser();
+		if (!this.tabsOf(tab.info.profile).length) void this.stopBrowser(tab.info.profile);
 	}
 
-	private async stopBrowser() {
-		const pending = this.context;
-		this.context = null;
-		if (pending) await (await pending.catch(() => null))?.close().catch(() => {});
+	private removeTemp(dir: string) {
+		this.tempDirs.delete(dir);
+		rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+	}
+
+	/**
+	 * Chromium keeps writing into its profile for a moment after `close()` resolves (a deleted folder comes back). Delete,
+	 * check, and repeat until the folder stays gone.
+	 */
+	private async sweepTemp(dir: string) {
+		for (let i = 0; i < 40; i++) {
+			this.removeTemp(dir);
+			await new Promise((r) => setTimeout(r, i < 5 ? 50 : 200));
+			if (!existsSync(dir)) return;
+			this.tempDirs.add(dir);
+		}
+	}
+
+	/** End a profile's browser. The promise is kept so anything that needs the folder next waits for it. */
+	private stopBrowser(profile: string): Promise<void> {
+		const pending = this.contexts.get(profile);
+		this.contexts.delete(profile);
+		if (!pending) return this.stopping.get(profile) ?? Promise.resolve();
+		const done: Promise<void> = (async () => {
+			await (await pending.catch(() => null))?.close().catch(() => {});
+		})().finally(() => {
+			if (this.stopping.get(profile) === done) this.stopping.delete(profile);
+		});
+		this.stopping.set(profile, done);
+		return done;
 	}
 
 	async close(id: string): Promise<void> {
@@ -332,31 +517,62 @@ export class BrowserManager {
 
 	/* ---------- agents ---------- */
 
+	/** The tabs an agent may see and act on: not those of a profile reserved for people. */
+	agentTabs(): BrowserTabInfo[] {
+		return this.list().filter((t) => this.agentMayUse(t.profile));
+	}
+
 	/**
 	 * The tab an agent tool acts on. Nothing is guessed: a named tab is that tab; with no name the one open tab is used
 	 * (a new one is opened when none is); with several open the call fails and lists them, so the agent picks one by id
-	 * (or asks the user) instead of landing on whatever tab was used last.
+	 * (or asks the user) instead of landing on whatever tab was used last. Tabs of a profile reserved for people are
+	 * invisible to agents and refused by name.
 	 */
 	async forAgent(id?: string): Promise<string> {
 		if (id) {
-			this.tab(id);
+			const t = this.tab(id);
+			if (!this.agentMayUse(t.info.profile)) throw new Error(`tab ${id} belongs to the profile "${t.info.profile}", which is reserved for people. Ask the user, or open a page in another profile.`);
 			return id;
 		}
-		if (this.tabs.size === 1) return [...this.tabs.keys()][0]!;
-		if (this.tabs.size === 0) return (await this.create()).id;
-		throw new Error(`${this.tabs.size} browser tabs are open, so say which one with \`tab\` (or ask the user):\n${this.describe()}`);
+		const open = this.agentTabs();
+		if (open.length === 1) return open[0]!.id;
+		if (open.length === 0) return (await this.create()).id;
+		throw new Error(`${open.length} browser tabs are open, so say which one with \`tab\` (or ask the user):\n${this.describe()}`);
 	}
 
-	/** One line per open tab, for agents. */
+	/** One line per tab an agent may use. */
 	describe(): string {
-		if (!this.tabs.size) return "(no browser tabs are open)";
-		return this.list()
+		const tabs = this.agentTabs();
+		if (!tabs.length) return "(no browser tabs are open)";
+		return tabs
 			.map((t) => {
 				const tab = this.tabs.get(t.id)!;
 				const watching = tab.clients.size ? `, ${tab.clients.size} viewer(s)` : "";
-				return `- ${t.id}: ${t.title || "(untitled)"} <${t.url}>${watching}`;
+				return `- ${t.id}: ${t.title || "(untitled)"} <${t.url}> [profile ${t.profile}]${watching}`;
 			})
 			.join("\n");
+	}
+
+	/**
+	 * Hand a tab to the person: an agent that hit a login or captcha asks for it, and `wait` resolves when the person says
+	 * they are done (or rejects when the run is aborted). While it waits, views show the note and the page is theirs.
+	 */
+	async handoff<T>(id: string, by: string, note: string, wait: () => Promise<T>): Promise<T> {
+		const tab = this.tab(id);
+		tab.handoff = { by, note };
+		this.tell(tab);
+		try {
+			return await wait();
+		} finally {
+			tab.handoff = null;
+			await this.refresh(tab);
+			this.tell(tab);
+		}
+	}
+
+	/** Profiles an agent may open tabs in, for the tool description. */
+	agentProfiles(): string[] {
+		return this.listProfiles().filter((p) => p.agent).map((p) => p.id);
 	}
 
 	/** Marks the tab as agent-driven (by `who`, the session) while `fn` runs, so views can show who is in control. */
@@ -374,8 +590,9 @@ export class BrowserManager {
 	}
 
 	/** Open one more tab on purpose (an agent that wants a second page next to the first). */
-	async openAnother(url?: string): Promise<BrowserTabInfo> {
-		return this.create({ url });
+	async openAnother(url?: string, profile?: string): Promise<BrowserTabInfo> {
+		if (profile && !this.agentMayUse(profileId(profile))) throw new Error(`the profile "${profile}" is reserved for people. Available to agents: ${this.agentProfiles().join(", ")}`);
+		return this.create({ url, ...(profile ? { profile } : {}) });
 	}
 
 	async shutdown(): Promise<void> {
@@ -384,6 +601,7 @@ export class BrowserManager {
 			for (const c of t.clients) c.closed();
 		}
 		this.tabs.clear();
-		await this.stopBrowser();
+		await Promise.all([...new Set([...this.contexts.keys(), ...this.stopping.keys()])].map((p) => this.stopBrowser(p)));
+		await Promise.all([...this.tempDirs].map((dir) => this.sweepTemp(dir)));
 	}
 }

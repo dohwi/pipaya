@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
-import { BrowserManager, findBrowser, normalizeUrl } from "../src/browser.ts";
+import { BrowserManager, findBrowser, normalizeUrl, profileId } from "../src/browser.ts";
 import { BROWSER_TOOLS, browserTools } from "../src/browser-tools.ts";
 import type { Config } from "../src/config.ts";
 import type { EventBus } from "../src/events.ts";
@@ -29,6 +29,13 @@ describe("findBrowser", () => {
 	test("PIPAYA_BROWSER wins and must exist", () => {
 		expect(findBrowser({ PIPAYA_BROWSER: "/nope/chrome" })).toBeNull();
 		expect(findBrowser({ PIPAYA_BROWSER: process.execPath })).toBe(process.execPath);
+	});
+});
+
+describe("profile names", () => {
+	test("are small slugs; nothing can climb out of the profiles folder", () => {
+		expect(profileId(" Work ")).toBe("work");
+		for (const bad of ["", "..", "../x", "a/b", ".hidden", "x".repeat(41), "sp ace", "ü"]) expect(() => profileId(bad)).toThrow();
 	});
 });
 
@@ -159,6 +166,134 @@ live("browser tabs (real Chromium)", () => {
 			await expect(run("browser_click", { ref: "e999", tab: second })).rejects.toThrow(/Call browser_snapshot/);
 			expect((await run("browser_close", { tab: second })).content[0].text).toContain(`Closed ${second}`);
 			expect(b.list().length).toBe(1);
+		} finally {
+			await b.shutdown();
+		}
+	}, 60_000);
+
+	test("profiles keep logins apart, can be reserved for people, and the temp one leaves nothing behind", async () => {
+		const own = join(dir, "profiles");
+		const b = new BrowserManager(bus(), { enabled: true, dataDir: own });
+		const defs = browserTools(b);
+		const run = async (name: string, params: object) => (defs[name]!.create(own, [], { sessionId: "s1" }) as any).execute("call", params, undefined);
+		const cookieOf = async (tab: string) => b.asAgent(tab, (page) => page.evaluate("document.cookie") as Promise<string>);
+		try {
+			expect(b.listProfiles().map((p) => p.id)).toEqual(["default"]);
+			expect(() => b.createProfile({ id: "Bad Name" })).toThrow();
+			expect(b.createProfile({ id: "work" })).toMatchObject({ id: "work", agent: true, temporary: false, tabs: 0 });
+			expect(() => b.createProfile({ id: "work" })).toThrow(/already exists/);
+			expect(b.createProfile({ id: "private", agent: false }).agent).toBe(false);
+
+			// logins (cookies) belong to a profile
+			const a = await b.create({ url: origin, profile: "work" });
+			const c = await b.create({ url: origin, profile: "default" });
+			await b.asAgent(a.id, (page) => page.evaluate("document.cookie = 'who=work; path=/; max-age=86400'"));
+			expect(await cookieOf(a.id)).toContain("who=work");
+			expect(await cookieOf(c.id)).not.toContain("who=work");
+			expect(a.profile).toBe("work");
+
+			// a profile with open tabs cannot be deleted or renamed
+			await expect(b.deleteProfile("work")).rejects.toThrow(/close the tabs/);
+			await expect(b.updateProfile("work", { id: "job" })).rejects.toThrow(/close the tabs/);
+			await b.close(a.id);
+			await b.close(c.id);
+
+			// the cookie is still there after the browser closed and started again
+			const again = await b.create({ url: origin, profile: "work" });
+			expect(await cookieOf(again.id)).toContain("who=work");
+			await b.close(again.id);
+
+			// clearing forgets the login but keeps the profile
+			await b.clearProfile("work");
+			const cleared = await b.create({ url: origin, profile: "work" });
+			expect(await cookieOf(cleared.id)).not.toContain("who=work");
+			await b.close(cleared.id);
+			expect((await b.updateProfile("work", { id: "job" })).id).toBe("job");
+			expect(b.listProfiles().map((p) => p.id)).toContain("job");
+			await b.deleteProfile("job");
+			expect(b.listProfiles().map((p) => p.id)).not.toContain("job");
+
+			// a profile reserved for people: agents neither see its tabs nor can use them or open one in it
+			const mine = await b.create({ url: origin, profile: "private" });
+			const open = await run("browser_open", { url: origin, newTab: true });
+			const shared = open.details.tab as string;
+			expect(shared).not.toBe(mine.id);
+			const listed = (await run("browser_tabs", {})).content[0].text as string;
+			expect(listed).toContain(shared);
+			expect(listed).not.toContain(mine.id);
+			await expect(run("browser_snapshot", { tab: mine.id })).rejects.toThrow(/reserved for people/);
+			await expect(run("browser_open", { url: origin, profile: "private" })).rejects.toThrow(/reserved for people/);
+			// the person can still use it
+			expect(b.get(mine.id).profile).toBe("private");
+			await b.updateProfile("private", { agent: true });
+			expect((await run("browser_snapshot", { tab: mine.id })).details.tab).toBe(mine.id);
+			await b.close(mine.id);
+			await b.close(shared);
+
+			// throw-away profile: its own folder, deleted with its last tab
+			const t1 = (await run("browser_open", { url: origin, profile: "temp" })).details.tab as string;
+			const t2 = (await run("browser_open", { url: origin, profile: "temp", newTab: true })).details.tab as string;
+			expect(b.get(t1).profile).toBe("temp");
+			const during = readdirSync(join(own, "browser-profiles")).filter((n) => n.startsWith(".temp-"));
+			expect(during.length).toBe(1);
+			await b.close(t1);
+			expect(readdirSync(join(own, "browser-profiles")).filter((n) => n.startsWith(".temp-")).length).toBe(1); // still one tab
+			await b.close(t2);
+			for (let i = 0; i < 50 && readdirSync(join(own, "browser-profiles")).some((n) => n.startsWith(".temp-")); i++) await Bun.sleep(100);
+			expect(readdirSync(join(own, "browser-profiles")).filter((n) => n.startsWith(".temp-"))).toEqual([]);
+			expect(existsSync(join(own, "browser-profiles", "temp"))).toBe(false);
+		} finally {
+			await b.shutdown();
+		}
+	}, 120_000);
+
+	test("handoff: the agent waits for the person in the same page, then continues", async () => {
+		const own = join(dir, "handoff");
+		const b = new BrowserManager(bus(), { enabled: true, dataDir: own });
+		const defs = browserTools(b);
+		let asked: { id: string; question: string; options?: string[] } | null = null;
+		let answer: (a: string) => void = () => {};
+		const ctx = {
+			sessionId: "s1",
+			ask: (id: string, req: { question: string; options?: string[] }) => ((asked = { id, ...req }), new Promise<string>((r) => (answer = r))),
+		};
+		const tool = (name: string) => defs[name]!.create(own, [], ctx as any) as any;
+		try {
+			const tab = (await tool("browser_open").execute("c1", { url: origin }, undefined)).details.tab as string;
+			const seen: { control: string; handoff: { by: string; note: string } | null }[] = [];
+			b.attach(tab, { frame() {}, state: (_i, c, _by, h) => seen.push({ control: c, handoff: h ?? null }), closed() {} });
+
+			const pending = tool("browser_handoff").execute("c2", { note: "Log in with your account", tab }, undefined);
+			for (let i = 0; i < 50 && !asked; i++) await Bun.sleep(20);
+			expect(asked!.question).toContain("Log in with your account");
+			expect(asked!.question).toContain(tab);
+			expect(asked!.options).toEqual(["Done", "I can't do this"]);
+			// while it waits, the view is told the page is the person's, with the note
+			expect(seen.at(-1)).toEqual({ control: "user", handoff: { by: "s1", note: "Log in with your account" } });
+			// the person acts in the page, then answers
+			await b.asAgent(tab, (page) => page.evaluate("document.title = 'logged in'"));
+			answer("Done");
+			const res = await pending;
+			expect(res.content[0].text).toContain("The user says it is done.");
+			expect(res.content[0].text).toContain("logged in");
+			expect(seen.at(-1)!.handoff).toBeNull();
+
+			// a refusal is reported as such, free text is passed on
+			const no = tool("browser_handoff").execute("c3", { note: "Solve the captcha", tab }, undefined);
+			for (let i = 0; i < 50 && asked!.id !== "c3"; i++) await Bun.sleep(20);
+			answer("I can't do this");
+			expect((await no).content[0].text).toContain("could not do it");
+
+			// an aborted run (the question rejects) clears the hand-over
+			const abort = tool("browser_handoff").execute("c4", { note: "x", tab }, undefined);
+			for (let i = 0; i < 50 && asked!.id !== "c4"; i++) await Bun.sleep(20);
+			const failing = tool("browser_handoff");
+			void failing;
+			(ctx as any).ask = undefined;
+			answer("Done");
+			await abort;
+			expect(seen.at(-1)!.handoff).toBeNull();
+			await expect(tool("browser_handoff").execute("c5", { note: "x", tab }, undefined)).rejects.toThrow(/no way to ask/);
 		} finally {
 			await b.shutdown();
 		}

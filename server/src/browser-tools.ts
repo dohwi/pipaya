@@ -16,6 +16,7 @@ export const BROWSER_TOOLS = [
 	"browser_wait",
 	"browser_screenshot",
 	"browser_close",
+	"browser_handoff",
 ] as const;
 
 /** Page text is written by strangers: say so every time it is handed to a model. */
@@ -84,7 +85,7 @@ export function browserTools(browser: BrowserManager): Record<string, ToolDef> {
 				parameters: Type.Object({}),
 				executionMode: "sequential",
 				async execute() {
-					return text(browser.describe(), { tabs: browser.list().map((t) => t.id) });
+					return text(`${browser.describe()}\nProfiles you may open tabs in: ${browser.agentProfiles().join(", ")}, temp`, { tabs: browser.agentTabs().map((t) => t.id) });
 				},
 			},
 			{
@@ -97,11 +98,13 @@ export function browserTools(browser: BrowserManager): Record<string, ToolDef> {
 					url: Type.String({ minLength: 1, description: "Address to open" }),
 					tab: TabId,
 					newTab: Type.Optional(Type.Boolean({ description: "Open in a new tab instead of reusing one" })),
+					profile: Type.Optional(Type.String({ description: "Browser profile for a new tab: its own logins and cookies. Default `default`; `temp` is a throw-away profile with no history, deleted when its last tab closes. See browser_tabs for the ones you may use" })),
 				}),
 				executionMode: "sequential",
 				async execute(_id, raw) {
-					const p = raw as { url: string; tab?: string; newTab?: boolean };
-					const tab = p.newTab ? (await browser.openAnother()).id : await resolve(p.tab);
+					const p = raw as { url: string; tab?: string; newTab?: boolean; profile?: string };
+					// A profile is fixed when a tab is made: asking for one means a fresh tab in it.
+					const tab = p.newTab || (p.profile && !p.tab) ? (await browser.openAnother(undefined, p.profile)).id : await resolve(p.tab);
 					await browser.asAgent(tab, () => browser.navigate(tab, p.url), who);
 					return text(await snapshot(tab), { tab });
 				},
@@ -247,6 +250,26 @@ export function browserTools(browser: BrowserManager): Record<string, ToolDef> {
 					const tab = await resolve(p.tab);
 					const png = await browser.asAgent(tab, (page) => page.screenshot({ type: "png", fullPage: p.fullPage ?? false, timeout: 15_000 }), who);
 					return { content: [{ type: "text", text: `${UNTRUSTED}\nScreenshot of tab ${tab}` }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }], details: { tab } };
+				},
+			},
+			{
+				name: "browser_handoff",
+				label: "Hand over to the user",
+				description:
+					"Ask the user to do something in a tab themselves (log in, solve a captcha, approve a payment, accept a prompt) and wait until they say they are done. Say in `note` what they should do, then continue from the returned snapshot. " +
+					"Never ask for passwords or codes in chat: the user types them into the page. Use this instead of guessing or retrying when a human step blocks you.",
+				parameters: Type.Object({ note: Type.String({ minLength: 1, maxLength: 500, description: "What the user should do in the page" }), tab: TabId }),
+				executionMode: "sequential",
+				async execute(id, raw, signal) {
+					const p = raw as { note: string; tab?: string };
+					if (!ctx?.ask) throw new Error("browser_handoff is not available in this session (no way to ask the user)");
+					const tab = await resolve(p.tab);
+					const answer = await browser.handoff(tab, who, p.note, () =>
+						ctx.ask!(id, { question: `${p.note}\n\n(The page is in the browser tab ${tab}. Do it there, then answer here.)`, options: ["Done", "I can't do this"], recommended: "Done", allowFreeText: true }, signal),
+					);
+					const gave = answer.trim();
+					const note = /^(i can'?t do this|못 하겠|불가)/i.test(gave) ? `The user could not do it: ${gave}` : gave && !/^done$/i.test(gave) ? `The user says: ${gave}` : "The user says it is done.";
+					return text(await snapshot(tab, note), { tab, handoff: true });
 				},
 			},
 			{
