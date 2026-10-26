@@ -1,4 +1,3 @@
-import { cleanWorkdirPath, filePathOf } from "./files";
 import type { AssistantBlock, Step } from "./types";
 
 export type Segment = { kind: "text"; text: string; i: number } | { kind: "work"; steps: Step[]; i: number };
@@ -19,20 +18,6 @@ export function segmentsOf(blocks: readonly AssistantBlock[], live: boolean): Se
 	});
 	if (live && !out.length) out.push({ kind: "work", steps: [], i: -1 });
 	return out;
-}
-
-/**
- * Drops markdown pictures (`![](path)` or `[x](path)`) that point at a file the picture tool just drew: the work box
- * already shows it, and models embed it again despite being told not to. Other pictures and text stay.
- */
-export function withoutDrawn(text: string, drawn: readonly string[]): string {
-	if (!drawn.length) return text;
-	const set = new Set(drawn.map((p) => cleanWorkdirPath(p)));
-	const out = text.replace(/!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g, (m, href: string) => {
-		const p = filePathOf(href);
-		return set.has(p) || [...set].some((d) => p.endsWith(`/${d}`)) ? "" : m;
-	});
-	return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** The text of a reply, the way "copy" and "reply" take it: its text blocks only, a blank line apart. */

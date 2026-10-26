@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { plainTextOf, segmentsOf, withoutDrawn } from "../src/lib/reply-blocks";
+import { plainTextOf, segmentsOf } from "../src/lib/reply-blocks";
 import { SWIPE_MAX, SWIPE_TRIGGER, SwipeReply } from "../src/lib/swipe-reply";
 import type { AssistantBlock } from "../src/lib/types";
 
@@ -30,19 +30,6 @@ describe("plainTextOf", () => {
 	test("only text blocks, a blank line apart", () => {
 		expect(plainTextOf([think("x"), text("one"), tool("1"), text("two")])).toBe("one\n\ntwo");
 		expect(plainTextOf([tool("1")])).toBe("");
-	});
-});
-
-describe("withoutDrawn", () => {
-	const p = ".pipaya/generated/a.png";
-	test("removes an embed of a drawn picture, keeps the rest", () => {
-		expect(withoutDrawn(`done\n\n![elephant](${p})\n\nbye`, [p])).toBe("done\n\nbye");
-		expect(withoutDrawn(`![x](./${p})`, [p])).toBe("");
-		expect(withoutDrawn(`[x](${p})`, [p])).toBe("");
-	});
-	test("other pictures and no drawn paths stay", () => {
-		expect(withoutDrawn("![x](out/b.png)", [p])).toBe("![x](out/b.png)");
-		expect(withoutDrawn(`![x](${p})`, [])).toBe(`![x](${p})`);
 	});
 });
 
