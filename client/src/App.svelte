@@ -20,7 +20,6 @@
 	import { registerContextMenu } from "./lib/context-menu";
 	import Lazy from "./components/Lazy.svelte";
 	import UpdateBanner from "./components/UpdateBanner.svelte";
-	import VersionNotice from "./components/VersionNotice.svelte";
 	import DoneNotice from "./components/DoneNotice.svelte";
 	import ChordStrip from "./components/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
@@ -412,7 +411,6 @@
 <RowMenu bind:this={contextMenu} />
 <Toasts />
 <UpdateBanner />
-<VersionNotice />
 <ChordStrip />
 <ExtensionMount slot="app.overlay" />
 {#if app.servers.length}<ExtensionFloating />{/if}

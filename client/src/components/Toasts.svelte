@@ -3,6 +3,7 @@
 	import { app } from "../lib/store.svelte";
 	import { viewport } from "../lib/viewport.svelte";
 	import ToastStrip from "./ToastStrip.svelte";
+	import VersionNotice from "./VersionNotice.svelte";
 
 	/**
 	 * Toasts are strips like the "done" notices: full width of the chat area (not of the window,
@@ -52,6 +53,7 @@
 	style:top={box ? `${box.top}px` : null}
 	aria-live="polite"
 >
+	<VersionNotice />
 	<ToastStrip toasts={app.globalToasts} />
 </div>
 

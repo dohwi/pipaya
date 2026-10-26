@@ -1,38 +1,33 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
+	import CountdownClose from "./CountdownClose.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { updater } from "../lib/updater.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
+	import { surfaceIn, surfaceOut } from "../lib/motion";
 
 	/**
 	 * Says why things may not work when the app and the server are not the same age (lib/protocol.ts decides which case).
-	 *  - The server needs a newer app: nothing else works, so this is shown until the app is updated.
-	 *  - The server is older than the app: it works, but newer features are missing. If the server can update itself, the
-	 *    button does it; otherwise the text says to update it (install.sh update).
-	 * The notice for an older server can be closed for the rest of the session.
+	 * It is a strip at the top of the chat area, in the same stack as the toasts (Toasts.svelte), so every notice lives in one place.
+	 *  - The server needs a newer app: nothing else works, so the strip stays until the app is updated.
+	 *  - The server is older than the app: it works, but newer features are missing. Shown once when connecting, it goes by
+	 *    itself after a while (the ring on its close button) and is not shown again for that server in this session. If the
+	 *    server can update itself, the button does it; otherwise the text says to update it (install.sh update).
 	 */
+	const STAY_MS = 12000;
 	let closed = $state<string>("");
 	const kind = $derived(app.compat);
 	const key = $derived(`${app.serverId}:${kind}`);
 	const show = $derived(app.serverId !== null && kind !== "ok" && closed !== key && !(kind === "update-server" && app.net !== "online"));
 	const busy = $derived(serverUpdater.busy);
 
-	/**
-	 * Centred on the chat area (the stage), not the window, so the sidebar does not push it off the input's centre; it sits
-	 * just above the composer (Composer publishes --composer-top) instead of covering it. Without a chat area it spans the window.
-	 */
-	let box = $state<{ left: number; width: number } | null>(null);
+	// once per connection: an old-server strip leaves by itself, unless the server is being updated right now
 	$effect(() => {
-		if (!show) return;
-		const stage = document.querySelector<HTMLElement>(".stage");
-		if (!stage) { box = null; return; }
-		const measure = () => { const r = stage.getBoundingClientRect(); box = { left: r.left, width: r.width }; };
-		measure();
-		const ro = new ResizeObserver(measure);
-		ro.observe(stage);
-		window.addEventListener("resize", measure);
-		return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+		if (!show || kind !== "update-server" || busy) return;
+		const k = key;
+		const timer = setTimeout(() => (closed = k), STAY_MS);
+		return () => clearTimeout(timer);
 	});
 
 	async function updateServer() {
@@ -51,8 +46,9 @@
 </script>
 
 {#if show}
-	<div class="notice" class:danger={kind === "update-app"} class:anchored={!!box} style:left={box ? `${box.left + box.width / 2}px` : null} style:--stage-w={box ? `${box.width}px` : null} role={kind === "update-app" ? "alert" : "status"}>
-		<p class="text">
+	<!-- the same box, tint and hairline as a toast strip (ToastStrip.svelte) -->
+	<div class="strip" class:danger={kind === "update-app"} role={kind === "update-app" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }}>
+		<span class="msg">
 			{#if kind === "update-app"}
 				{t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요")}
 			{:else if serverUpdater.available}
@@ -60,57 +56,51 @@
 			{:else}
 				{t("서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)")}
 			{/if}
-		</p>
-		{#if serverUpdater.error}<p class="text err">{serverUpdater.error}</p>{/if}
-		<div class="actions">
-			{#if kind === "update-app" && updater.supported}
-				<Button variant="primary" size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
-			{:else if kind === "update-server" && serverUpdater.available}
-				<Button variant="primary" size="sm" disabled={busy} onclick={updateServer}>
-					{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
-				</Button>
-			{/if}
-			{#if kind === "update-server"}<Button size="sm" onclick={() => (closed = key)}>{t("나중에")}</Button>{/if}
-		</div>
+			{#if serverUpdater.error}<span class="err">{serverUpdater.error}</span>{/if}
+		</span>
+		{#if kind === "update-app" && updater.supported}
+			<Button variant="update" size="sm" onclick={updateApp}>{t("업데이트 확인")}</Button>
+		{:else if kind === "update-server" && serverUpdater.available}
+			<Button variant="update" size="sm" disabled={busy} onclick={updateServer}>
+				{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
+			</Button>
+		{/if}
+		{#if kind === "update-server"}
+			<CountdownClose ms={STAY_MS} onclick={() => (closed = key)} label={t("나중에")} />
+		{/if}
 	</div>
 {/if}
 
 <style>
-	.notice {
-		position: fixed;
-		z-index: var(--z-notice);
-		left: 50%;
-		bottom: max(calc(16px + env(safe-area-inset-bottom, 0px)), calc(var(--composer-top, 0px) + 12px));
-		transform: translateX(-50%);
-		width: min(440px, calc(var(--stage-w, var(--vw)) - 24px));
+	.strip {
+		--tone: var(--warn);
+		pointer-events: auto;
 		display: flex;
-		flex-direction: column;
+		align-items: center;
 		gap: 8px;
-		padding: 12px 14px;
-		border-radius: var(--radius);
-		border: 1px solid var(--border);
-		background: var(--bg-elev);
-		box-shadow: var(--shadow);
-		font-size: var(--fs-sm);
-	}
-	.notice.danger {
-		border-color: var(--danger);
-	}
-	.text {
-		margin: 0;
-		line-height: 1.5;
-		word-break: keep-all;
+		min-height: 44px;
+		padding: 4px 8px 4px 16px;
+		background: color-mix(in srgb, var(--tone) 16%, var(--bg-elev));
+		border-bottom: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
 		color: var(--text);
+		font-size: var(--fs-sm);
+		line-height: 1.4;
+	}
+	.strip.danger {
+		--tone: var(--danger);
+	}
+	.msg {
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		word-break: keep-all;
 	}
 	.err {
+		display: block;
 		color: var(--danger);
 	}
-	.actions {
-		display: flex;
-		gap: 8px;
-		justify-content: flex-end;
-	}
-	.actions:empty {
-		display: none;
+	.strip :global(.btn) {
+		flex: none;
+		white-space: nowrap;
 	}
 </style>
