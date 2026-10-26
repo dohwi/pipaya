@@ -152,6 +152,29 @@
 		}
 	}
 
+	/** The entry whose removal is being confirmed (the settings choice is made there). */
+	let removing = $state("");
+
+	async function remove(entry: MarketEntry, keepSettings: boolean) {
+		working = entry.id;
+		error = "";
+		try {
+			if (entry.kind === "server") {
+				const api = app.api;
+				if (!api) throw new Error(t("서버에 연결되어 있지 않습니다."));
+				await api.removeServerExtension(entry.id, keepSettings);
+				await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+			} else {
+				extensions.remove(entry.id, { keepSettings });
+			}
+			removing = "";
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : String(cause);
+		} finally {
+			working = "";
+		}
+	}
+
 	$effect(() => { void load(); void refreshServer(); return () => ctrl?.abort(); });
 </script>
 
@@ -196,13 +219,25 @@
 							<Button variant={newer ? "update" : "primary"} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => startClient(entry)}>
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
 							</Button>
+							{#if have}<Button size="sm" variant="danger" disabled={!!working} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>{/if}
 						{:else}
 							{@const sHave = !!serverHave[entry.id]}
 							<Button variant="primary" size="sm" disabled={!!working || entry.source.type !== "git" || sHave} onclick={() => startServer(entry)}>
 								{working === entry.id ? t("설치하는 중…") : sHave ? t("설치됨") : t("설치하기")}
 							</Button>
+							{#if sHave}<Button size="sm" variant="danger" disabled={!!working} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>{/if}
 						{/if}
 					</div>
+					{#if removing === entry.id}
+						<Notice tone="warn" size="sm" role="alert">
+							{t("‘{name}’을 삭제할까요?", { name: entry.name })}
+							{#snippet action()}
+								<button type="button" disabled={!!working} onclick={() => remove(entry, true)}>{t("설정값 유지")}</button>
+								<button type="button" disabled={!!working} onclick={() => remove(entry, false)}>{t("설정값도 삭제")}</button>
+								<button type="button" disabled={!!working} onclick={() => (removing = "")}>{t("취소")}</button>
+							{/snippet}
+						</Notice>
+					{/if}
 					{#if entry.kind === "client" && have && askingServer !== entry.id}
 						{@const s = serverOf(entry)}
 						{#if s && !serverHave[s.id] && app.api}
