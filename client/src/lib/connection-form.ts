@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { compact } from "./format";
 import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "./types";
 
 /** One model line of the connection dialog, as typed (numbers are strings until validated). */
@@ -122,7 +123,7 @@ export function applyMatch(r: Row, c: CatalogModel | null) {
 /** "128k": the context size under a model's name. */
 export function ctxLabel(r: Row): string {
 	const ctx = Number(r.contextWindow);
-	return Number.isFinite(ctx) && ctx > 0 ? `${Math.round(ctx / 1000)}k` : "";
+	return Number.isFinite(ctx) && ctx > 0 ? compact(ctx) : "";
 }
 
 /** The first problem with the connection's own fields (name, id, address), or null. */

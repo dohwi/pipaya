@@ -6,6 +6,7 @@
 	import Icon from "../Icon.svelte";
 	import ModelLogo from "../ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
+	import { compact } from "../../lib/format";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { ConnectionResult, CustomProvider } from "../../lib/types";
 	import CapTags from "../CapTags.svelte";
@@ -83,7 +84,7 @@
 				</span>
 				<span class="mtags">
 					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
-					<CapTags model={m} end ctx={m.imageGeneration ? undefined : `${Math.round(m.contextWindow / 1000)}k`} />
+					<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />
 				</span>
 				<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
