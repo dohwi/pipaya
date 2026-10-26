@@ -35,7 +35,7 @@
 				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
 			{/if}
 			{#if updater.phase === "available"}
-				<Button size="sm" class="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
+				<Button size="sm" variant="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			{/if}
 		</div>
 		{#if downloading}

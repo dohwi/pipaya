@@ -8,6 +8,7 @@
 	import Modal from "../Modal.svelte";
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
 	import StatusChip from "../StatusChip.svelte";
+	import VersionBump from "../VersionBump.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
@@ -182,7 +183,7 @@
 						{/if}
 						{#if isOfficial(entry)}<span title={t("pipaya 공식 확장")}><Badge tone="ok" size="sm"><Icon name="check" />{t("공식")}</Badge></span>{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{/if}
-						<span class="ver">v{entry.version}</span>
+						{#if newer && have}<span class="ver"><VersionBump from={have.package.manifest.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}
 					<div class="foot">
@@ -192,7 +193,7 @@
 							{#if star !== undefined}<span class="star" title={t("GitHub 스타")}><Icon name="star" />{formatStars(star)}</span>{/if}
 						</p>
 						{#if entry.kind === "client"}
-							<Button variant={newer ? "default" : "primary"} class={[newer && "update"]} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => startClient(entry)}>
+							<Button variant={newer ? "update" : "primary"} size="sm" disabled={!!working || (!!have && !newer)} onclick={() => startClient(entry)}>
 								{working === entry.id ? t("받는 중…") : newer ? t("업데이트") : have ? t("설치됨") : t("설치")}
 							</Button>
 						{:else}

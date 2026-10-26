@@ -3,6 +3,7 @@
 	import { LocalizedError, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
 	import Notice from "./Notice.svelte";
+	import VersionBump from "./VersionBump.svelte";
 	import Accordion from "./Accordion.svelte";
 	import Switch from "./Switch.svelte";
 	import { download } from "../lib/download";
@@ -328,11 +329,11 @@
 </script>
 
 {#snippet updateMeta(have: string, upd: MarketEntry)}
-	<span class="meta newver" title={t("새 버전 v{version}", { version: upd.version })}>v{have} <Icon name="arrow-up" /> <b>v{upd.version}</b></span>
+	<VersionBump from={have} to={upd.version} />
 {/snippet}
 
 {#snippet updateButton(upd: MarketEntry, disabled: boolean)}
-	<Button size="sm" class="updbtn" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
+	<Button size="sm" variant="update" {disabled} aria-label={t("v{version}으로 업데이트", { version: upd.version })} onclick={() => update(upd)}>{t("업데이트")}</Button>
 {/snippet}
 
 {#snippet needLine(text: string, disabled: boolean, onclick: () => void)}
@@ -430,7 +431,7 @@
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
 				<Icon name="plus" /> {t("확장 추가")}
 			</label>
-			{#if pending.length > 1}<Button size="sm" variant="primary" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
+			{#if pending.length > 1}<Button size="sm" variant="update" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
 		{#if extensions.safeMode}
@@ -516,10 +517,7 @@
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
-	.newver { display: inline-flex; align-items: center; gap: 3px; color: var(--text-faint); }
-	.newver b { color: var(--ok); font-weight: 600; }
-	.newver :global(svg) { width: 11px; height: 11px; stroke-width: 2.4; color: var(--ok); }
-	.extensions :global(.btn.updbtn) { flex: none; }
+	.extensions :global(.btn.update) { flex: none; }
 	/* a missing half: the same amber bar as the notices above, with the action on the right */
 	.needline { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); line-height: 1.5; }
 	.needline :global(svg) { flex: none; width: 16px; height: 16px; stroke-width: 1.8; }

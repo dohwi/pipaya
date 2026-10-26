@@ -55,7 +55,7 @@
 			<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
 		{/if}
 		{#if isNew}
-			<Button size="sm" class="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
+			<Button size="sm" variant="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
 		{/if}
 	</div>
 	{#if release === "older" && !isNew && !busy}

@@ -255,7 +255,7 @@
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. */
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
 	const alertTone = $derived(app.net === "online" && app.compat === "ok" ? "ok" : "warn");
-	const settingsAlert = $derived(updater.visible || serverUpdater.available || app.compat !== "ok" ? t("업데이트 필요") : "");
+	const settingsAlert = $derived(app.compat !== "ok" ? t("업데이트 필요") : updater.visible || serverUpdater.available ? t("업데이트 있음") : "");
 </script>
 
 
@@ -316,7 +316,7 @@
 		<ExtensionPanels placement="sidebar" />
 		<ExtensionMount slot="sidebar.bottom" />
 		<button class="settings wide" onclick={() => app.openSettings()}>
-			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert || extensionUpdates.any}<Pin tone={app.net !== "online" ? "warn" : alertTone} label={app.net !== "online" ? t("연결 안 됨") : undefined} />{/if}</span> {t("설정")}
+			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert || extensionUpdates.any}<Pin tone={app.net !== "online" ? "warn" : alertTone} label={app.net !== "online" ? t("연결 안 됨") : settingsAlert || t("업데이트 있음")} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone={alertTone} size="sm">{settingsAlert}</Badge></span>{/if}
 		</button>
 	</div>

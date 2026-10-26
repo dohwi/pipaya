@@ -103,7 +103,7 @@
 		{#each app.servers as s (s.id)}
 			<span class="chipwrap">
 				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-				{#if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={t("업데이트 필요")} />{/if}
+				{#if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
 			</span>
 		{/each}
 	</div>

@@ -3,6 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
 	import Notice from "../Notice.svelte";
+	import Button from "../Button.svelte";
 
 	/**
 	 * The frame of one extension's detail page, for an installed one and for one running on the server: the way back
@@ -58,7 +59,7 @@
 	{#if upgrade}
 		<Notice tone="ok" size="sm" icon="arrow-up" role="status">
 			{t("새 버전 v{version}을 사용할 수 있습니다.", { version: upgrade.version })}
-			{#snippet action()}<button type="button" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</button>{/snippet}
+			{#snippet action()}<Button size="sm" variant="update" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</Button>{/snippet}
 		</Notice>
 	{/if}
 	{@render children()}

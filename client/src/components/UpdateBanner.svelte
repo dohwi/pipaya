@@ -50,7 +50,7 @@
 			<p class="note">{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}</p>
 			<div class="actions">
 				<Button onclick={() => updater.dismiss()}>{t("나중에")}</Button>
-				<Button class="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
+				<Button variant="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			</div>
 		{/if}
 	</div>

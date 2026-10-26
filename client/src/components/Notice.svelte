@@ -110,7 +110,7 @@
 		white-space: nowrap;
 		font-weight: 600;
 	}
-	.action :global(button) {
+	.action :global(button:not(.btn)) {
 		color: inherit;
 		text-decoration: underline;
 		background: none;
