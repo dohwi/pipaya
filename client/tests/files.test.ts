@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
+import { mimeOf } from "../../server/src/file-routes";
+
 describe("working-directory links", () => {
 	test("only relative paths inside the directory count", () => {
 		for (const ok of ["out/report.pdf", "./a.png", "a b.txt", "x/y/z.csv#L3"]) expect(isWorkdirPath(ok), ok).toBe(true);
@@ -27,6 +29,34 @@ describe("previews", () => {
 		expect(previewKind("data", "application/json")).toBe("text");
 		expect(previewKind("a.pdf", "application/pdf")).toBe("pdf");
 		expect(previewKind("a.zip", "application/zip")).toBe("other");
+	});
+	test("every supported extension gets its kind, with the type the server really sends", () => {
+		const cases: Record<string, string[]> = {
+			image: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "svg"],
+			pdf: ["pdf"],
+			audio: ["mp3", "wav", "ogg", "oga", "m4a", "aac", "flac", "opus"],
+			video: ["mp4", "m4v", "webm", "ogv", "mov"],
+			markdown: ["md", "markdown"],
+			html: ["html", "htm"],
+			table: ["csv", "tsv"],
+			text: ["txt", "json", "log", "yml", "yaml", "toml", "ini", "xml", "css", "js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts", "svelte", "py", "rb", "go", "rs", "java", "kt", "swift", "c", "h", "cpp", "hpp", "sh", "sql", "diff", "patch", "env"],
+			other: ["zip", "docx", "xlsx", "pptx", "exe", "bin", "gz"],
+		};
+		for (const [kind, exts] of Object.entries(cases)) {
+			for (const ext of exts) {
+				const name = `file.${ext}`;
+				expect(previewKind(name), `${name} (name only)`).toBe(kind);
+				expect(previewKind(name.toUpperCase()), `${name} (upper case)`).toBe(kind);
+				expect(previewKind(name, mimeOf(name)), `${name} (server type ${mimeOf(name)})`).toBe(kind);
+			}
+		}
+	});
+	test("an unknown extension is a download, a text type is still text", () => {
+		expect(previewKind("README")).toBe("other");
+		expect(previewKind("a.png.zip")).toBe("other");
+		expect(previewKind("noext", "text/plain")).toBe("text");
+		expect(previewKind("x.bin", "image/png")).toBe("image");
+		expect(previewKind("x.heic", "image/heic")).toBe("other");
 	});
 	test("tables: quotes, escaped quotes, newlines in cells, BOM, row cap", () => {
 		expect(parseTable('\uFEFFa,b\r\n"x,1","he said ""hi"""\n"l1\nl2",z', ",").rows).toEqual([["a", "b"], ["x,1", 'he said "hi"'], ["l1\nl2", "z"]]);
