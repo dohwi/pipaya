@@ -1,11 +1,12 @@
 import { clip, firstLine } from "./format";
+import { t } from "./i18n";
 
-export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list";
+export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list" | "sparkles";
 
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 
 /** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
-export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "other";
+export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "image" | "other";
 
 /** `read` of …/<name>/SKILL.md → the skill's name, else null. */
 export function skillOf(name: string, args: Record<string, unknown>): string | null {
@@ -16,6 +17,7 @@ export function skillOf(name: string, args: Record<string, unknown>): string | n
 
 export function toolKind(name: string, args: Record<string, unknown> = {}): ToolKind {
 	if (skillOf(name, args)) return "skill";
+	if (isImageTool(name)) return "image";
 	return name in LOOK ? (name as ToolKind) : "other";
 }
 
@@ -30,7 +32,12 @@ const LOOK: Record<ToolKind, { icon: ToolIcon; hue: number }> = {
 	skill: { icon: "skill", hue: 90 },
 	think: { icon: "brain", hue: 280 },
 	other: { icon: "bolt", hue: 265 },
+	image: { icon: "sparkles", hue: 320 },
 };
+
+/** The tool that draws pictures (the server's image model setting gives it to agents). */
+export const IMAGE_TOOL = "generate_image";
+export const isImageTool = (name: string) => name === IMAGE_TOOL;
 
 export const toolIcon = (name: string, args: Record<string, unknown> = {}): ToolIcon => LOOK[toolKind(name, args)].icon;
 
@@ -41,6 +48,7 @@ export const badgeStyle = (kind: ToolKind): string => `--th:${LOOK[kind].hue}`;
 export function toolLabel(name: string, args: Record<string, unknown> = {}): string {
 	const kind = toolKind(name, args);
 	if (kind === "skill") return `skill · ${skillOf(name, args)}`;
+	if (kind === "image") return t("이미지 생성");
 	return name;
 }
 
@@ -50,6 +58,8 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 	switch (name) {
 		case "bash":
 			return firstLine(str(args.command));
+		case IMAGE_TOOL:
+			return clip(str(args.prompt), 90);
 		case "grep":
 			return `${str(args.pattern)}${args.path ? `  in ${str(args.path)}` : ""}`;
 		case "ls":
