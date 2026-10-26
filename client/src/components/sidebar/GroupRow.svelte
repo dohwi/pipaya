@@ -12,7 +12,7 @@
 	import RowTitle from "./RowTitle.svelte";
 
 	/**
-	 * The header of a split tab (group): a book that opens / closes it, its name, the number of panes while folded, then
+	 * The header of a split tab (group): a chevron that opens / closes it, the split icon, its name, the number of panes while folded, then
 	 * the menu. The panes themselves hang under it on a tree line and are rendered by the caller (`children`).
 	 */
 	let {
@@ -45,9 +45,10 @@
 	class={["grprow", n.current && g.id === app.activeGroup?.id && "cur"]}
 >
 	<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!folded} aria-label={folded ? t("펼치기") : t("접기")} title={folded ? t("펼치기") : t("접기")}>
-		<Icon name={folded ? "group" : "group-open"} />
+		<span class="chev" class:folded><Icon name="chevron-down" /></span>
 	</button>
 	<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} ondblclick={() => n.current && sb.startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
+		<span class="lead"><Icon name="group" /></span>
 		<RowTitle text={g.name} />
 		{#if folded}<span class="cbadge" title={t("{n}개", { n: members.length })}>{members.length}</span>{/if}
 	</button>

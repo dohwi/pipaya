@@ -1027,20 +1027,13 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 16px;
-		height: 16px;
-		margin-left: 43px; /* same left edge as the lead icon of the tabs above */
+		width: 14px;
+		height: 24px;
+		margin-left: 23px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
 		border-radius: var(--radius-sm);
-		color: var(--text-faint);
 	}
-	:global(:where(.side) .gfold svg) {
-		width: 16px;
-		height: 16px;
-		stroke-width: 1.9;
-	}
-	:global(:where(.side) .gfold:hover) {
-		background: var(--bg-active);
-		color: var(--text);
+	:global(:where(.side) .gfold:hover .chev svg) {
+		stroke: var(--text);
 	}
 	:global(:where(.side) .grp.over) {
 		background: var(--accent-soft);

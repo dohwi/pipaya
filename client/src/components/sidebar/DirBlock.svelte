@@ -66,7 +66,7 @@
 						<span class="chev" class:folded={!aopen}><Icon name="chevron-down" /></span>
 						<span class="dicon"><Icon name="archive" /></span>
 						<span class="archname">{t("보관함")}</span>
-						<span class="cbadge">{archived.length}</span>
+						{#if !aopen}<span class="cbadge" title={t("{n}개", { n: archived.length })}>{archived.length}</span>{/if}
 					</button>
 					{#if aopen}
 						<div class="fold" in:collapseIn out:collapseOut>
@@ -103,7 +103,7 @@
 		gap: 6px;
 		width: 100%;
 		height: 28px;
-		padding: 0 10px 0 22px;
+		padding: 0 10px 0 23px;
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
