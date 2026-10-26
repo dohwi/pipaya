@@ -10,7 +10,6 @@
 	import { duration } from "../lib/format";
 	import { badgeStyle, isImageTool, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
 	import PaintingCanvas from "./message/PaintingCanvas.svelte";
-	import ModelLogo from "./ModelLogo.svelte";
 	import type { Step, ToolRun } from "../lib/types";
 
 	/** `live`: the agent is still working and this box is the newest thing in the reply. */
@@ -102,16 +101,17 @@
 	const drawn = $derived(
 		steps.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? (runs[i]?.images ?? []) : [])),
 	);
-	/** Who drew them: the image model the tool reports (provider/id), shown by its name when the server lists it. */
+	/** Who drew them: the image model the tool reports (provider/id), by its name when the server lists it. Shown when hovering the picture. */
 	const drawnBy = $derived.by(() => {
-		const done = steps.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? [runs[i]!] : []));
-		const ref = done.map((r) => (typeof r.details?.model === "string" ? (r.details.model as string) : "")).find(Boolean);
+		const ref = steps
+			.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? [runs[i]!] : []))
+			.map((r) => (typeof r.details?.model === "string" ? (r.details.model as string) : ""))
+			.find(Boolean);
 		if (!ref) return null;
 		const cut = ref.indexOf("/");
 		const provider = cut < 0 ? "" : ref.slice(0, cut);
 		const id = cut < 0 ? ref : ref.slice(cut + 1);
-		const info = app.models.find((m) => m.provider === provider && m.id === id);
-		return { provider, id, name: info?.name ?? id, icon: info?.icon };
+		return app.models.find((m) => m.provider === provider && m.id === id)?.name ?? id;
 	});
 	const awaitingCall = $derived(awaitingIdx >= 0 ? (steps[awaitingIdx] as Extract<Step, { kind: "tool" }>) : null);
 	/** The question the waiting call asks the user (ctx.ask); it is answered right here. */
@@ -168,11 +168,8 @@
 
 	{#if drawn.length}
 		<div class="drawn" in:collapseIn>
-			{#if drawnBy}
-				<div class="by"><ModelLogo icon={drawnBy.icon} provider={drawnBy.provider} model={drawnBy.id} size={13} />{t("그린 모델: {model}", { model: drawnBy.name })}</div>
-			{/if}
 			{#each drawn as img, i (i)}
-				<button class="zoom" onclick={() => app.openImage(drawn.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
+				<button class="zoom" title={drawnBy ? t("그린 모델: {model}", { model: drawnBy }) : undefined} onclick={() => app.openImage(drawn.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
 					<img src={`data:${img.mimeType};base64,${img.data}`} alt={t("이미지")} />
 				</button>
 			{/each}
@@ -334,14 +331,6 @@
 		flex-wrap: wrap;
 		gap: 8px;
 		padding: 4px 12px 12px;
-	}
-	.drawn .by {
-		flex: 0 0 100%;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	.drawn .zoom {
 		display: block;

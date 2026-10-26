@@ -1,5 +1,4 @@
 import { clip, firstLine } from "./format";
-import { t } from "./i18n";
 
 export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list" | "sparkles";
 
@@ -48,7 +47,6 @@ export const badgeStyle = (kind: ToolKind): string => `--th:${LOOK[kind].hue}`;
 export function toolLabel(name: string, args: Record<string, unknown> = {}): string {
 	const kind = toolKind(name, args);
 	if (kind === "skill") return `skill · ${skillOf(name, args)}`;
-	if (kind === "image") return t("이미지 생성");
 	return name;
 }
 
