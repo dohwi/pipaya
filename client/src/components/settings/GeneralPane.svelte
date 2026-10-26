@@ -11,7 +11,6 @@
 	import NotificationSettings from "../NotificationSettings.svelte";
 	import TerminalSettings from "../TerminalSettings.svelte";
 	import UpdateSettings from "../UpdateSettings.svelte";
-	import LocalServerSettings from "../LocalServerSettings.svelte";
 
 	/** The app-wide basics on this device: language, theme, zoom, notification sound, then the notification, terminal and update blocks. */
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
@@ -55,7 +54,6 @@
 </section>
 <section><NotificationSettings /></section>
 <section><TerminalSettings /></section>
-<section><LocalServerSettings /></section>
 <section><UpdateSettings /></section>
 
 

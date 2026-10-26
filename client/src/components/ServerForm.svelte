@@ -15,6 +15,7 @@
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import RetentionSection from "./RetentionSection.svelte";
 	import ServerUpdate from "./ServerUpdate.svelte";
+	import LocalServerSettings from "./LocalServerSettings.svelte";
 	import { app, defaultServerUrl } from "../lib/store.svelte";
 	import { Api, describeConnectError, errorText, normalizeUrl, verifyServer } from "../lib/api";
 	import type { WorkdirInfo } from "../lib/types";
@@ -208,6 +209,7 @@
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
 				<p class="hint">{t("토큰은 이 기기에만 저장됩니다.")}</p>
 				{#if editing && isOpen}<ServerUpdate />{/if}
+				{#if editing?.local}<LocalServerSettings />{/if}
 			</div>
 
 			<footer>
