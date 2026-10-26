@@ -9,7 +9,8 @@
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { compact, duration } from "../../lib/format";
-	import { plainTextOf, segmentsOf } from "../../lib/reply-blocks";
+	import { plainTextOf, segmentsOf, withoutDrawn } from "../../lib/reply-blocks";
+	import { isImageTool } from "../../lib/tools";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 
@@ -90,6 +91,16 @@
 	/** Thoughts and tool calls between two pieces of text share one work box; text keeps its place around it. */
 	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
+	/** Files the picture tool drew in this answer; the work box shows them, so the text does not repeat them. */
+	const drawnPaths = $derived(
+		parts
+			.flatMap((p) => p.blocks)
+			.flatMap((b) => {
+				if (b.type !== "tool" || !isImageTool(b.name)) return [];
+				const paths = app.chatOf(paneId ?? "")?.tools[b.id]?.details?.paths;
+				return Array.isArray(paths) ? paths.filter((x): x is string => typeof x === "string") : [];
+			}),
+	);
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
 	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
@@ -105,7 +116,7 @@
 			{#if seg.kind === "work"}
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
 			{:else}
-				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
+				<Markdown text={withoutDrawn(seg.text, drawnPaths)} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
 			{/if}
 		{/each}
 
