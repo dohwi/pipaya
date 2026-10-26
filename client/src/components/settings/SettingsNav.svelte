@@ -49,7 +49,7 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean; /** where the clip leads: the other half of the pair (id null = that tab's list) */ link?: { tab: TabId; id: string | null } };
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
@@ -61,11 +61,11 @@
 		const serverNow = serverSide && serverSide.id === server?.id ? serverSide.names : [];
 		const free = own.filter((e) => !owned(e.id));
 		// a pair stays flat: the client half sits right after its server extension, both marked with a clip
-		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); const here = serverNow.find((n) => n.companion === e.id); return { ...e, paired: !!m || !!here, partner: m?.name ?? here?.title ?? here?.name }; })];
+		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); const here = serverNow.find((n) => n.companion === e.id); return { ...e, paired: !!m || !!here, partner: m?.name ?? here?.title ?? here?.name, link: { tab: "srvext" as TabId, id: here ? `srv:${here.name}` : null } }; })];
 		for (const n of side) {
 			const mate = own.find((e) => e.id === n.companion);
-			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined) });
-			if (mate) rows.push({ ...mate, paired: true, partner: n.name });
+			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined), link: n.companion ? { tab: "extensions" as TabId, id: mate || extensions.installed.some((e) => e.package.manifest.id === n.companion) ? n.companion : null } : undefined });
+			if (mate) rows.push({ ...mate, paired: true, partner: n.name, link: { tab: "srvext" as TabId, id: n.id } });
 		}
 		return rows.map((e, i) => ({ ...e, end: i === rows.length - 1 }));
 	};
@@ -109,10 +109,10 @@
 			{#if open}
 				<div class="tree" role="group" aria-label={t(x.label)}>
 					{#each kids as e (e.id)}
-						<button role="tab" class="sub" class:end={e.end} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
+						<button role="tab" class="sub" class:end={e.end} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={(ev) => { if (e.link && (ev.target as Element).closest(".clip")) { if (e.link.id) openExt(e.link.tab, e.link.id); else go(e.link.tab); } else if (e.builtin) go(x.id); else openExt(x.id, e.id); }}>
 							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
 							<span class="nl">{e.name}</span>
-							{#if e.paired}<span class="clip" class:half={e.half} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
+							{#if e.paired}<span class="clip" class:half={e.half} class:go={!!e.link} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
 							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 						</button>
 					{/each}
@@ -224,6 +224,7 @@
 		display: inline-flex;
 		color: var(--text-faint);
 	}
+	.nav button.sub .clip.go:hover { color: var(--text); }
 	.nav button.sub .clip.half {
 		color: var(--warn);
 	}

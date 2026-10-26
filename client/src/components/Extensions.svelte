@@ -240,6 +240,8 @@
 		const id = tasks.result?.pkg?.manifest.id;
 		tasks.result = null;
 		if (!id) return;
+		// a client extension installed from the server tab lives on the device tab
+		if (extensions.installed.find((e) => e.package.manifest.id === id)?.scope !== view) { ongoclient?.(id); return; }
 		selected = id;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
 	}
