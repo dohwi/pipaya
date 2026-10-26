@@ -23,6 +23,8 @@ export class SidebarState {
   collapsed = $state(read<boolean>(K.sidebar, false));
   width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
   folded = $state<string[]>(read<string[]>(K.folded, []));
+  /** Archives (one per folder) that are open; the others stay folded. */
+  archiveOpen = $state<string[]>(read<string[]>(K.archiveOpen, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
   tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
@@ -44,6 +46,11 @@ export class SidebarState {
   toggleFolded(key: string) {
     this.folded = this.folded.includes(key) ? this.folded.filter((p) => p !== key) : [...this.folded, key];
     write(K.folded, this.folded);
+  }
+
+  toggleArchive(key: string) {
+    this.archiveOpen = this.archiveOpen.includes(key) ? this.archiveOpen.filter((p) => p !== key) : [...this.archiveOpen, key];
+    write(K.archiveOpen, this.archiveOpen);
   }
 
   /** Put directory `path` before/after `target` within `visible` (the directories as listed now) and remember it. */

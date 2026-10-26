@@ -92,6 +92,14 @@ describe("row menu", () => {
 	test("a lone tab has nothing to leave", () => {
 		expect(rowMenuEntries({ kind: "session", x: { id: "s1", title: "" } }, { ...act, leaveGroup: () => {} }).map((e) => e.icon)).not.toContain("unlink");
 	});
+	test("a conversation can be archived before closing, when the menu offers it; a terminal cannot", () => {
+		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, archiveSession: (id) => calls.push(`archive ${id}`) });
+		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "archive", "x"]);
+		calls.length = 0;
+		entries[2]!.run();
+		expect(calls).toEqual(["archive s1"]);
+		expect(rowMenuEntries({ kind: "terminal", x: { id: "t1", title: "sh" } }, { ...act, archiveSession: () => {} }).map((e) => e.icon)).not.toContain("archive");
+	});
 	test("a split tab can be renamed or dissolved", () => {
 		expect(run({ kind: "group", g: { id: "g1", name: "Work" } })).toEqual({ icons: ["pencil", "unlink"], calls: ["renameGroup g1", "dissolve g1"] });
 	});

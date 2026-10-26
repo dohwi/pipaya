@@ -70,6 +70,7 @@
 		dirPicker: () => import("./components/DirPicker.svelte"),
 		serverForm: () => import("./components/ServerForm.svelte"),
 		linkCard: () => import("./components/LinkCard.svelte"),
+		sessions: () => import("./components/SessionsDialog.svelte"),
 	};
 
 	// "작업 완료" on what is on screen is read as soon as the user comes back to the window or clicks on it (blank space included).
@@ -376,6 +377,7 @@
 {/if}
 
 {#if app.settingsOpen}<Lazy load={load.settings} />{/if}
+{#if app.sessionsDialog}<Lazy load={load.sessions} serverId={app.sessionsDialog} />{/if}
 {#if app.skillsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.skills} dialog={app.skillsDialog} api={app.api} onclose={() => (app.skillsDialog = null)} />{/key}
 {/if}

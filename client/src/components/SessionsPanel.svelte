@@ -98,6 +98,27 @@
 		else next[id] = true;
 		picked = next;
 	}
+	/** Archive (or, with `on` false, restore) what is ticked in one folder; closed ones are left as they are. */
+	async function archive(list: Session[], on: boolean) {
+		const ids = list.filter((s) => picked[s.id] && !s.closed && !!s.archived !== on).map((s) => s.id);
+		if (!api || !ids.length) return;
+		busy = true;
+		error = "";
+		note = "";
+		try {
+			for (const id of ids) await api.patchSession(id, { archived: on });
+			note = on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
+			const next = { ...picked };
+			for (const id of ids) delete next[id];
+			picked = next;
+			await load();
+			if (serverId !== app.serverId) void app.refreshOverview();
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			busy = false;
+		}
+	}
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
 	async function remove(list: Session[]) {
 		const ids = list.filter((s) => picked[s.id]).map((s) => s.id);
@@ -162,6 +183,8 @@
 						</button>
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
+								<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed && !s.archived)}><Icon name="archive" /> {t("보관")}</Button>
+								<Button size="sm" onclick={() => void archive(g.list, false)} disabled={busy || !g.list.some((s) => picked[s.id] && s.archived)}><Icon name="undo" /> {t("복원")}</Button>
 								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>
 						{/if}
@@ -174,7 +197,7 @@
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />
 										<span class="title">{s.title || t("제목 없음")}</span>
 									</label>
-									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
+									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{:else if s.archived}<Badge size="sm">{t("보관됨")}</Badge>{/if}
 									<span class="age" title={new Date(s.updatedAt).toLocaleString()}>{ageOf(s.updatedAt)}</span>
 								</li>
 							{/each}
@@ -304,5 +327,7 @@
 	}
 	.del {
 		flex: none;
+		display: flex;
+		gap: 6px;
 	}
 </style>

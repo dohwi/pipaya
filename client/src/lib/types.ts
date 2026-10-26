@@ -63,6 +63,8 @@ export interface Session {
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list; reopen with PATCH closed=false */
 	closed: boolean;
+	/** Archived sessions stay open but sit in the sidebar's archive; a new message (or PATCH archived=false) brings them back */
+	archived: boolean;
 	/** Unix ms */
 	createdAt: number;
 	/** Unix ms */

@@ -103,6 +103,7 @@
 			renameGroup: (g) => rename.start(g.id, g.name),
 			groupWith: chooseGroup,
 			closeSession: (id) => void app.close(id),
+			archiveSession: (id) => void app.archive(id),
 			closeTerminal: (id) => void app.closeTerminal(id),
 			dissolveGroup: (id) => void app.deleteGroup(id),
 		});

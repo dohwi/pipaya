@@ -47,7 +47,7 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[]): Pick<Node, "root" | "total" | "dirs"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[], archived: Session[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
 		const dirs = sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || x.title.toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
@@ -57,7 +57,11 @@
 			groupDir: gdir,
 		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
-		return { root: ws?.root, total, dirs };
+		// Archived conversations hang under their folder; a folder with only archived ones still shows, after the others.
+		const byDir: Record<string, Session[]> = {};
+		for (const s of archived) if (!q || s.title.toLowerCase().includes(q)) (byDir[s.cwd] ??= []).push(s);
+		for (const cwd of Object.keys(byDir)) if (!dirs.some((d) => d.path === cwd)) dirs.push({ path: cwd, tabs: [] });
+		return { root: ws?.root, total, dirs, archived: byDir };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
@@ -71,7 +75,7 @@
 			const ov = app.overview[server.id];
 			const state = current ? connectionState(app.net) : ((app.status[server.id] ?? "checking") as Node["state"]);
 			const ws = current ? app.workspace : (ov?.workspace ?? null);
-			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], current ? app.terminals : (ov?.terminals ?? []));
+			const data = build(current ? app.sessions : (ov?.sessions ?? []), current ? app.groups : (ov?.groups ?? []), ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], current ? app.terminals : (ov?.terminals ?? []), current ? app.archived : (ov?.archived ?? []));
 			return { server, current, state, loaded: current ? app.sessionsLoaded : Boolean(ov), home: ws?.home, platform: current ? app.terminalSupport?.platform : undefined, ...data };
 		});
 	});
@@ -188,6 +192,7 @@
 		renameGroup: startGroupRename,
 		groupWith: chooseGroup,
 		closeSession: (id) => void app.close(id),
+		archiveSession: (id) => void app.archive(id),
 		closeTerminal: (id) => void app.closeTerminal(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
 		leaveGroup: (id) => void app.leaveGroup(id),
@@ -285,6 +290,7 @@
 						{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
+					<button class="srvlist" onclick={() => (app.sessionsDialog = n.server.id)} aria-label={t("대화 목록 관리")} title={t("대화 목록 관리 (보관·삭제)")}><Icon name="list" /></button>
 					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
 				</div>
 
@@ -690,6 +696,39 @@
 	:global(:where(.side) .srvhead.folded:hover .cbadge) {
 			opacity: 0;
 		}
+	}
+	/* the server header's conversation-list button: sits left of its "+", same look, shown on hover like it */
+	:global(:where(.side) .srvlist) {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 24px;
+		height: 24px;
+		margin-right: 2px;
+		border-radius: 50%;
+		color: var(--text-faint);
+		opacity: 0;
+	}
+	:global(:where(.side) .srvlist svg) {
+		width: 15px;
+		height: 15px;
+		stroke-width: 2;
+	}
+	:global(:where(.side) .srvhead:hover .srvlist),
+	:global(:where(.side) .srvlist:focus-visible) {
+		opacity: 1;
+	}
+	:global(:where(.side) .srvlist:hover) {
+		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+		color: var(--text);
+	}
+	@media (pointer: coarse) {
+		:global(:where(.side) .srvlist) {
+			opacity: 1;
+		}
+	}
+	:global(:where(.side) .srvhead.folded .srvlist) {
+		display: none;
 	}
 	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {

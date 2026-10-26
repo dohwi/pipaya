@@ -5,13 +5,14 @@
 	import { app } from "../../lib/store.svelte";
 	import { dropTarget } from "../../lib/dnd.svelte";
 	import type { DirBlock as Dir } from "../../lib/nav";
-	import { asWorkdir, dirKey } from "../../lib/sidebar-model";
+	import { asWorkdir, dirKey, archiveKey } from "../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Session } from "../../lib/types";
 	import type { TerminalInfo } from "../../lib/terminal";
 	import Icon from "../Icon.svelte";
 	import GroupBlock from "./GroupBlock.svelte";
 	import NewButton from "./NewButton.svelte";
+	import ArchivedRow from "./ArchivedRow.svelte";
 	import SessionRow from "./SessionRow.svelte";
 	import TerminalRow from "./TerminalRow.svelte";
 
@@ -27,6 +28,11 @@
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
+	/** This folder's archived conversations: still open, but tucked away. The row is there only when there are some. */
+	const archived = $derived(n.archived[d.path] ?? []);
+	const akey = $derived(archiveKey(n.server.id, d.path));
+	/** Archives start folded; a search opens them so its matches show. */
+	const aopen = $derived(sb.searching || app.sidebar.archiveOpen.includes(akey));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -62,6 +68,49 @@
 					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo)[]} {drop} />
 				{/if}
 			{/each}
+			{#if archived.length}
+				<div class="archive">
+					<button class="archtoggle" onclick={() => app.sidebar.toggleArchive(akey)} aria-expanded={aopen}>
+						<span class="chev" class:folded={!aopen}><Icon name="chevron-down" /></span>
+						<span class="dicon"><Icon name="archive" /></span>
+						<span class="archname">{t("보관함")}</span>
+						<span class="cbadge">{archived.length}</span>
+					</button>
+					{#if aopen}
+						<div class="fold" in:collapseIn out:collapseOut>
+							{#each archived as s (s.id)}
+								<ArchivedRow {n} x={s} />
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
+
+<style>
+	.archive {
+		margin-top: 2px;
+	}
+	.archtoggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		height: 28px;
+		padding: 0 10px 0 22px;
+		border-radius: var(--radius-sm);
+		text-align: left;
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
+	}
+	.archtoggle:hover {
+		color: var(--text);
+		background: var(--bg-hover);
+	}
+	.archname {
+		flex: 1;
+		min-width: 0;
+	}
+</style>

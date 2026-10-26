@@ -14,7 +14,6 @@
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import RetentionSection from "./RetentionSection.svelte";
-	import SessionsPanel from "./SessionsPanel.svelte";
 	import ServerUpdate from "./ServerUpdate.svelte";
 	import { app, defaultServerUrl } from "../lib/store.svelte";
 	import { Api, describeConnectError, errorText, normalizeUrl, verifyServer } from "../lib/api";
@@ -38,7 +37,6 @@
 	let tab = $state<Section>(section ?? "info");
 	const tabOrder = ["info", "agent", "sessions", "devices"] as const;
 	let dir = $state(1);
-	let sessionsTick = $state(0); // bumped after a clean-up so the list below reloads
 	function go(next: (typeof tabOrder)[number]) {
 		if (next === tab) return;
 		dir = tabOrder.indexOf(next) > tabOrder.indexOf(tab) ? 1 : -1;
@@ -165,8 +163,7 @@
 			<p class="hint">{t("새 대화가 시작되는 폴더입니다. 바꾸면 바로 저장됩니다.")}</p>
 		{/if}
 	
-			{#key editing.id}<RetentionSection serverId={editing.id} onrun={() => sessionsTick++} />{/key}
-			{#key `${editing.id}:${sessionsTick}`}<SessionsPanel serverId={editing.id} />{/key}
+			{#key editing.id}<RetentionSection serverId={editing.id} />{/key}
 		</div>
 	{:else if editing && tab === "agent"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<ModelConnections serverId={editing.id} /><ToolSettings serverId={editing.id} />{/key}</div>

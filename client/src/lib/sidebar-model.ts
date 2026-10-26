@@ -34,13 +34,14 @@ export const asWorkdir = (path: string, root: string | undefined) => (path === r
 /** Separator that cannot occur in a path or id, for keys that combine two of them. */
 const SEP = "\u0000";
 export const dirKey = (serverId: string, path: string) => `${serverId}${SEP}${path}`;
+export const archiveKey = (serverId: string, path: string) => `archive${SEP}${serverId}${SEP}${path}`;
 export const groupKey = (id: string) => `group${SEP}${id}`;
 export const newKey = (key: string) => `new${SEP}${key}`;
 
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "archive";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -61,6 +62,8 @@ export interface RowActions {
 	groupWith(tab: { id: string; title: string }): void;
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
+	/** Tuck a conversation into the folder's archive (it stays open; a new message brings it back) */
+	archiveSession?(id: string): void;
 	dissolveGroup(id: string): void;
 	/** Take a pane out of its split tab (only offered for a `member`) */
 	leaveGroup?(id: string): void;
@@ -87,10 +90,12 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 			? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => act.closeTerminal(x.id) }
 			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
 	const leave = act.leaveGroup;
+	const archive = act.archiveSession;
 	return [
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
+		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
 		close,
 	];
 }

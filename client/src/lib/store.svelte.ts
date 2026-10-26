@@ -70,6 +70,8 @@ class AppStore {
       string,
       {
         sessions: Session[];
+        /** Its archived sessions (still open, tucked away) */
+        archived: Session[];
         workspace: WorkspaceInfo | null;
         groups: Group[];
         /** Terminals open on that server */
@@ -91,6 +93,10 @@ class AppStore {
 
   /** Active (not closed) sessions only. Closed ones are fetched on demand by /resume and /tree. */
   sessions = $state<Session[]>([]);
+  /** Archived sessions: open (not closed) but tucked into the sidebar's archive. A new message on the server brings one back. */
+  archived = $state<Session[]>([]);
+  /** The server whose conversation list (manage / archive / delete) is open, or null. */
+  sessionsDialog = $state<string | null>(null);
   /** Workspace root on the server; every session lives in a working directory under it. */
   workspace = $state<WorkspaceInfo | null>(null);
   /** Working directory (relative to the root, "." = root) where the next new chat starts. */
@@ -624,6 +630,7 @@ class AppStore {
     this.serverVersions = null;
     serverUpdater.reset();
     this.sessions = [];
+    this.archived = [];
     this.workspace = null;
     this.workdirInfo = null;
     this.serverDefault = null;
@@ -662,6 +669,7 @@ class AppStore {
     this.escalateMinutes = DEFAULT_ESCALATE;
     notifications.connect(null);
     this.sessions = [];
+    this.archived = [];
     this.sessionsLoaded = false;
     this.activeId = null;
     this.chats = {};
@@ -712,7 +720,8 @@ class AppStore {
               if (n) awaiting[a.sessionId] = n;
             }
             this.overview[s.id] = {
-              sessions: list.sessions.filter((x) => !x.closed),
+              sessions: list.sessions.filter((x) => !x.closed && !x.archived),
+              archived: list.sessions.filter((x) => !x.closed && x.archived),
               workspace,
               groups,
               terminals,
@@ -810,7 +819,8 @@ class AppStore {
         ]);
       if (token !== this.syncToken) return;
       this.workspace = workspace;
-      this.sessions = list.sessions.filter((s) => !s.closed);
+      this.sessions = list.sessions.filter((s) => !s.closed && !s.archived);
+      this.archived = list.sessions.filter((s) => !s.closed && s.archived);
       this.groups = groups;
       this.terminals = terminals;
       this.terminalSupport = terminalSupport;
@@ -981,17 +991,26 @@ class AppStore {
       }
       case "session_created": {
         const s = e.data as Session;
-        if (!s.closed && !this.sessions.some((x) => x.id === s.id))
-          this.sessions.unshift(s);
+        if (!s.closed && s.archived) {
+          if (!this.archived.some((x) => x.id === s.id)) this.archived.unshift(s);
+        } else if (!s.closed && !this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         void this.refreshWorkspace();
         break;
       }
       case "session_updated": {
         const s = e.data as Session;
-        const next = s.closed ? this.neighbourOf(s.id) : undefined;
-        if (s.closed) this.forgetInGroups(s.id);
+        const hide = s.closed || s.archived;
+        const next = hide ? this.neighbourOf(s.id) : undefined;
+        if (hide) this.forgetInGroups(s.id);
         const i = this.sessions.findIndex((x) => x.id === s.id);
         if (i >= 0) this.sessions.splice(i, 1);
+        this.archived = this.archived.filter((x) => x.id !== s.id);
+        if (s.archived && !s.closed) {
+          // Archived sessions leave the tabs but stay open (a run goes on); the archive holds them until a message or a restore.
+          this.archived.unshift(s);
+          if (this.activeId === s.id) this.leave(next);
+          break;
+        }
         if (s.closed) {
           // Closed sessions leave the sidebar; only /resume brings them back.
           this.running[s.id] = false;
@@ -1032,6 +1051,7 @@ class AppStore {
         const next = this.neighbourOf(id);
         this.forgetInGroups(id);
         this.sessions = this.sessions.filter((x) => x.id !== id);
+        this.archived = this.archived.filter((x) => x.id !== id);
         delete this.running[id];
         delete this.awaiting[id];
         delete this.unread[id];
@@ -1486,6 +1506,60 @@ class AppStore {
     }
   }
 
+  /* ---------- archive ---------- */
+
+  /** An Api for `serverId`: the open server's own connection, or a short-lived one for another server. */
+  private apiFor(serverId: string): Api | null {
+    if (serverId === this.serverId) return this.api;
+    const s = this.servers.find((x) => x.id === serverId);
+    return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
+  }
+
+  /** Tuck a session into the archive: it leaves the tabs but stays open, and a new message brings it back. */
+  async archive(id: string) {
+    if (!this.api) return;
+    const next = this.neighbourOf(id);
+    try {
+      const s = await this.api.patchSession(id, { archived: true });
+      this.forgetInGroups(id);
+      this.sessions = this.sessions.filter((x) => x.id !== id);
+      this.archived = [s, ...this.archived.filter((x) => x.id !== id)];
+      if (this.activeId === id) this.leave(next);
+    } catch (e) {
+      this.fail(e, t("보관하지 못했습니다"), id);
+    }
+  }
+
+  /** Bring an archived session of `serverId` back to its folder; `open` also shows it. */
+  async unarchive(serverId: string, id: string, open = false) {
+    const api = this.apiFor(serverId);
+    if (!api) return;
+    try {
+      const s = await api.patchSession(id, { archived: false });
+      if (serverId === this.serverId) {
+        this.archived = this.archived.filter((x) => x.id !== id);
+        this.sessions = [s, ...this.sessions.filter((x) => x.id !== id)];
+      } else await this.refreshOverview();
+      if (open) this.openIn(serverId, { session: id });
+    } catch (e) {
+      this.fail(e, t("복원하지 못했습니다"));
+    }
+  }
+
+  /** Delete an archived session of `serverId` for good. */
+  async deleteArchived(serverId: string, id: string) {
+    const api = this.apiFor(serverId);
+    if (!api) return;
+    try {
+      await api.deleteSession(id);
+      if (serverId === this.serverId) this.archived = this.archived.filter((x) => x.id !== id);
+      else await this.refreshOverview();
+      this.toast(t("대화를 영구 삭제했습니다"));
+    } catch (e) {
+      this.fail(e, t("삭제하지 못했습니다"));
+    }
+  }
+
   /**
    * The session that should take focus when `id` goes away. In a group: the next pane of that group, or the previous
    * when it was last. Otherwise (or when it was alone in its group): the next session in sidebar order, or the previous
@@ -1552,9 +1626,10 @@ class AppStore {
     const from = this.activeId;
     const g = from ? this.groupOf(from) : undefined;
     try {
-      const s = await this.api.patchSession(id, { closed: false });
+      const s = await this.api.patchSession(id, { closed: false, archived: false });
       const i = this.sessions.findIndex((x) => x.id === id);
       if (i >= 0) this.sessions.splice(i, 1);
+      this.archived = this.archived.filter((x) => x.id !== id);
       this.sessions.unshift(s);
       if (g && from && from !== id && !layoutHas(g.layout, id)) {
         await this.saveLayout(g.id, replaceSession(g.layout, from, id));

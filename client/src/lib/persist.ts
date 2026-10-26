@@ -20,6 +20,7 @@ export const K = {
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
+  archiveOpen: "pipaya.archiveopen", // sidebar archives left open: "archive\u0000<serverId>\u0000<workdir>" (archives start folded)
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
   tabOrder: "pipaya.taborder", // tab order set by dragging (sidebar and tab bar): { <serverId>: [groupId | sessionId | terminalId, ...] }
   fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
