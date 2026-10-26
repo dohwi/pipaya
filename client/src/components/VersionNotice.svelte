@@ -78,7 +78,7 @@
 <style>
 	.notice {
 		position: fixed;
-		z-index: 30;
+		z-index: var(--z-notice);
 		left: 50%;
 		bottom: max(calc(16px + env(safe-area-inset-bottom, 0px)), calc(var(--composer-top, 0px) + 12px));
 		transform: translateX(-50%);
@@ -90,7 +90,7 @@
 		border-radius: var(--radius);
 		border: 1px solid var(--border);
 		background: var(--bg-elev);
-		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+		box-shadow: var(--shadow);
 		font-size: var(--fs-sm);
 	}
 	.notice.danger {

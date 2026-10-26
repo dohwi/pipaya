@@ -500,20 +500,27 @@
 	.scrim {
 		display: none;
 	}
+	/* a connection strip: the same box, tint and hairline as the toast / "done" strips (ToastStrip, DoneNotice) */
 	.banner {
+		--tone: var(--text-faint);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 10px;
-		padding: 6px 12px;
-		font-size: 13px;
-		background: var(--accent-soft);
-		color: var(--accent);
+		min-height: 44px;
+		padding: 4px 12px;
+		font-size: var(--fs-sm);
+		line-height: 1.4;
+		background: color-mix(in srgb, var(--tone) 16%, var(--bg-elev));
+		border-bottom: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
+		color: var(--text);
 		flex: none;
 	}
 	.banner.bad {
-		background: var(--warn-soft);
-		color: var(--warn);
+		--tone: var(--warn);
+	}
+	.banner :global(svg) {
+		color: var(--tone);
 	}
 	.banner :global(svg) {
 		width: 16px;
@@ -525,11 +532,13 @@
 		stroke-linejoin: round;
 	}
 	.banner button {
-		padding: 3px 10px;
-		border-radius: var(--radius);
+		height: var(--control-h-sm);
+		padding: 0 12px;
+		border-radius: var(--radius-control);
 		background: var(--bg);
+		border: 1px solid var(--border-strong);
 		font-weight: 600;
-		font-size: 12.5px;
+		font-size: var(--fs-xs);
 	}
 	.banner .spinner {
 		width: 12px;
