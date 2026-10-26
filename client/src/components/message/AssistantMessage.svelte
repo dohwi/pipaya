@@ -95,6 +95,8 @@
 	/** An image model is still working on its picture: no text will stream, so show a canvas that fills in. */
 	const painting = $derived(live && segments.every((s) => s.kind === "work" && !s.steps.length) && !!app.models.find((m) => m.provider === session?.provider && m.id === session?.model)?.imageGeneration);
 	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
+	/** A model that cannot think (image models included) shows "thinking off" instead of the session's level, which it ignores. */
+	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
 </script>
@@ -137,8 +139,8 @@
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
 				<span class="stats">
-					{#if tail.model}<span class="slogo"><ModelLogo icon={app.models.find((m) => m.provider === tail.provider && m.id === tail.model)?.icon} provider={tail.provider} model={tail.model} size={13} /></span>{tail.model}{/if}
-					{#if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
+					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} /></span>{tail.model}{/if}
+					{#if tailModel && !tailModel.reasoning}· {t("생각 꺼짐")}{:else if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
 					{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
 					{#if took}· {duration(took)}{/if}
 				</span>

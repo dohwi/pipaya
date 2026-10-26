@@ -277,6 +277,7 @@ export const en: Record<string, string> = {
 	"여기서 분기해 다시 쓰기": "Branch from here and rewrite",
 	"중지됨": "Stopped",
 	"답변 복사": "Copy reply",
+	"생각 꺼짐": "thinking off",
 	"여기서 분기": "Branch from here",
 	"답장": "Reply",
 	"답장 취소": "Cancel reply",
