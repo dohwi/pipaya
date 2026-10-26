@@ -17,6 +17,8 @@ import { Retention } from "./retention.ts";
 import { registerRetentionRoutes } from "./retention-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
+import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
+import { registerImageModelRoutes } from "./image-model-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
@@ -118,6 +120,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const modelRoles = new ModelRoles(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
+	const imageModel = new ImageModelSettings(db, registry);
 	const extensionSettings = new ExtensionSettings(cfg.dataDir);
 	const extensions = new ExtensionHost({
 		db, bus, registry, dataDir: cfg.dataDir, settings: extensionSettings,
@@ -126,7 +129,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel);
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
@@ -226,7 +229,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		confineTo: cfg.restrictWorkspace ? cfg.workspaceRoot : undefined,
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
-	configuration.setSwitchableSource(() => extensions.switchableTools());
+	// generate_image can be switched off like an extension tool, while an image model makes it exist at all.
+	configuration.setSwitchableSource(() => [...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
 	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
 	groups.evictWhere(isTerminalId);
 	const server = Fastify({
@@ -336,7 +340,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { querystring: S.ModelsQuery, response: { 200: S.ModelList, ...S.errors(400, 401) } },
 		handler: async (req) => {
 			configuration.refreshStale();
-			const all = await describeModels(registry, req.query.provider, (p, id) => configuration.isUnavailable(p, id), configuration.icons(), (p, id) => sessions.runnable(p, id));
+			const all = await describeModels(registry, req.query.provider, (p, id) => configuration.isUnavailable(p, id), configuration.icons());
 			return { models: req.query.configured ? all.filter((m) => m.configured) : all };
 		},
 	});
@@ -556,6 +560,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));
 	registerRetentionRoutes(server, retention, bus);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
+	registerImageModelRoutes(server, imageModel, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.

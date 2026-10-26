@@ -15,8 +15,8 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
-import type { MessageNote, ModelKind } from "./extensions/types.ts";
-import { modelKind, runnerStream } from "./model-runners.ts";
+import type { MessageNote } from "./extensions/types.ts";
+import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -52,10 +52,8 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 const DESCRIBE_RETRY_MS = 10 * 60_000;
 
 
-/** Why a model of this kind cannot answer without an extension (also shown to the user as the error). */
-const NO_RUNNER: Record<ModelKind, string> = {
-	image: "this is an image model: install a server extension that runs image models (see the marketplace) to use it",
-};
+/** Why a chat cannot use an image model (also shown to the user as the error). */
+const IMAGE_MODEL_IN_CHAT = "this is an image model: it does not chat. Pick a chat model, and set this one as the image model in the settings so agents can draw with the generate_image tool";
 
 export class SessionManager {
 	private live = new Map<string, Live>();
@@ -83,6 +81,8 @@ export class SessionManager {
 		private disabledTools: () => string[] = () => [],
 		/** The light model that writes session titles and roles; none = titles stay the first message cut short. */
 		private systemModel?: SystemModelSettings,
+		/** The image model; while one is set every session gets the generate_image tool. */
+		private imageModel?: ImageModelSettings,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -99,6 +99,7 @@ export class SessionManager {
 	async create(input: CreateSessionInput, parentId: string | null = null): Promise<SessionRecord> {
 		this.assertRoom();
 		const { provider, model } = await this.resolveModel(input.provider, input.model);
+		this.assertChatModel(provider, model);
 		const tools = this.validateTools(input.tools ?? this.ext?.defaultTools() ?? DEFAULT_TOOLS);
 		const id = randomUUID();
 		const cwd = this.resolveCwd(input.cwd);
@@ -307,6 +308,7 @@ export class SessionManager {
 			const provider = patch.provider ?? current.provider;
 			const model = patch.model ?? current.model;
 			if (!this.registry.models.getModel(provider, model)) throw badRequest(`unknown model ${provider}/${model}`);
+			this.assertChatModel(provider, model);
 		}
 		if (patch.tools !== undefined || patch.systemPrompt !== undefined) {
 			// The prompt and tool declarations are baked into the transcript head; changing them
@@ -335,15 +337,9 @@ export class SessionManager {
 		return updated;
 	}
 
-	/** Whether this model can answer now: an image model needs an extension that runs it. */
-	runnable(provider: string, model: string): boolean {
-		const kind = modelKind(this.registry, provider, model);
-		return !kind || !!this.ext?.runner(kind);
-	}
-
-	private assertRunnable(provider: string, model: string): void {
-		const kind = modelKind(this.registry, provider, model);
-		if (kind && !this.ext?.runner(kind)) throw new HttpError(409, "model_not_runnable", NO_RUNNER[kind]);
+	/** An image model only draws (through the generate_image tool); a chat never runs on it. */
+	private assertChatModel(provider: string, model: string): void {
+		if (this.registry.isImageModel?.(provider, model)) throw new HttpError(409, "image_model_not_chat", IMAGE_MODEL_IN_CHAT);
 	}
 
 	isRunning(id: string): boolean {
@@ -388,7 +384,7 @@ export class SessionManager {
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
-		this.assertRunnable(record.provider, record.model);
+		this.assertChatModel(record.provider, record.model);
 		if (record.archived) this.store.update(id, { archived: false }), this.bus.publish(id, "session_updated", this.get(id)); // new activity brings it back
 		const mode = input.mode ?? "prompt";
 		let extraParts: { type: "text"; text: string }[] = [];
@@ -740,14 +736,7 @@ export class SessionManager {
 				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
 				messages: history,
 			},
-			streamFn: (m, ctx, opts) => {
-				const kind = modelKind(this.registry, m.provider, m.id);
-				if (!kind) return this.registry.models.streamSimple(m, ctx, opts);
-				const runner = this.ext?.runner(kind);
-				// Checked before the message is accepted; this only happens when the extension went away mid-run.
-				if (!runner) return runnerStream(this.registry, async () => { throw new Error(NO_RUNNER[kind]); }, m, ctx.messages, opts, { id: record.id, cwd: record.cwd });
-				return runnerStream(this.registry, runner.run, m, ctx.messages, opts, { id: record.id, cwd: record.cwd });
-			},
+			streamFn: (m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
 			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),
@@ -794,7 +783,7 @@ export class SessionManager {
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
 		const off = this.disabledTools();
-		const all = [...new Set([...names, ...(this.ext?.alwaysTools() ?? [])])].filter((n) => !off.includes(n));
+		const all = [...new Set([...names, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : [])])].filter((n) => !off.includes(n));
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
@@ -862,7 +851,9 @@ export class SessionManager {
 
 	/** Built-in tools plus whatever server extensions add or replace. */
 	toolDefs(): Record<string, ToolDef> {
-		return this.ext ? this.ext.toolDefs() : TOOL_DEFS;
+		const defs = this.ext ? this.ext.toolDefs() : TOOL_DEFS;
+		// Only while an image model is set; an extension tool of the same name wins.
+		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
 	}
 
 	/** Per-run system prompt tweaks and the `context` hook, applied to what the model sees (never stored). */

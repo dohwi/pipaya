@@ -33,8 +33,6 @@ export interface ModelInfo {
 	vision: boolean;
 	/** Makes pictures instead of text */
 	imageGeneration: boolean;
-	/** The server can run it now (an image model needs an extension that runs image models) */
-	runnable: boolean;
 	/** Brand mark chosen in the connection settings; absent = picked from the id */
 	icon?: string;
 	configured: boolean;
@@ -42,7 +40,7 @@ export interface ModelInfo {
 	available: boolean;
 }
 
-export async function describeModels(reg: ModelRegistry, provider?: string, unavailable: (provider: string, id: string) => boolean = () => false, icons: ReadonlyMap<string, string> = new Map(), runnable: (provider: string, id: string) => boolean = () => true): Promise<ModelInfo[]> {
+export async function describeModels(reg: ModelRegistry, provider?: string, unavailable: (provider: string, id: string) => boolean = () => false, icons: ReadonlyMap<string, string> = new Map()): Promise<ModelInfo[]> {
 	const available = new Set((await reg.models.getAvailable(provider)).map((m) => `${m.provider}/${m.id}`));
 	return reg.models.getModels(provider).map((m: Model<Api>) => ({
 		provider: m.provider,
@@ -55,7 +53,6 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		maxTokens: m.maxTokens,
 		vision: m.input.includes("image"),
 		imageGeneration: reg.isImageModel?.(m.provider, m.id) ?? false,
-		runnable: runnable(m.provider, m.id),
 		...(icons.has(`${m.provider}/${m.id}`) ? { icon: icons.get(`${m.provider}/${m.id}`) } : {}),
 		configured: available.has(`${m.provider}/${m.id}`),
 		available: !unavailable(m.provider, m.id),

@@ -265,8 +265,7 @@ export const ModelInfo = Type.Object({
 	contextWindow: Type.Number(),
 	maxTokens: Type.Number(),
 	vision: Type.Boolean(),
-	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text: a message is a picture request, the answer is the picture" }),
-	runnable: Type.Boolean({ description: "The server can run this model now. false = an image model with no server extension that runs image models: sending to it fails with 409 model_not_runnable" }),
+	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text. It cannot run a chat (409 image_model_not_chat); set it as the image model (GET/PUT /image-model) and agents draw with the generate_image tool" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),
@@ -375,7 +374,7 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model"), Type.Literal("retention")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model"), Type.Literal("retention"), Type.Literal("image-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,

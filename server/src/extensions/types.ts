@@ -349,29 +349,6 @@ export interface EventMap {
 export type EventName = keyof EventMap;
 export type EventHandler<E extends EventName> = (event: EventMap[E][0], ctx: ExtensionContext) => EventMap[E][1] | Promise<EventMap[E][1]>;
 
-/**
- * What a model runner gets for one reply: the model as the connection describes it, with the connection's address and
- * key already resolved, and the conversation so far. It answers with the reply's text (markdown) and may write files
- * into `cwd` (e.g. a picture, linked from the text).
- */
-export interface ModelRunRequest {
-	sessionId: string;
-	cwd: string;
-	model: { provider: string; id: string; name: string; baseUrl: string; headers?: Record<string, string> };
-	/** The connection's key, when it has one. */
-	apiKey?: string;
-	/** The conversation as the model would see it (user and assistant messages, pictures as base64 blocks). */
-	messages: AgentMessage[];
-	signal?: AbortSignal;
-}
-export interface ModelRunResult {
-	text: string;
-	usage?: { input: number; output: number };
-}
-/** Runs every model of one kind (today: "image", models a connection marks as making pictures). */
-export type ModelRunner = (req: ModelRunRequest) => Promise<ModelRunResult>;
-export type ModelKind = "image";
-
 export interface ExtensionAPI {
 	/** typebox, so tool schemas need no import: `pi.Type.Object({ ... })`. */
 	Type: typeof import("typebox").default;
@@ -387,11 +364,6 @@ export interface ExtensionAPI {
 	registerMethod(name: string, handler: (params: unknown, ctx: ExtensionContext | null) => unknown | Promise<unknown>): void;
 	/** A model provider (custom endpoint, proxy, OAuth login …). Same shape as pi-ai's `Provider`. */
 	registerProvider(provider: Provider): void;
-	/**
-	 * Run the models of a kind the core knows but does not run itself. `"image"`: models marked as making pictures.
-	 * Without a runner those models are listed but cannot be used. One runner per kind; removed when the extension unloads.
-	 */
-	registerModelRunner(kind: ModelKind, run: ModelRunner): void;
 	unregisterProvider(id: string): void;
 	/** The original built-in tool, e.g. to wrap `bash` from an override of the same name. */
 	builtinTool(name: string, cwd: string): import("@earendil-works/pi-agent-core").AgentTool<any> | undefined;

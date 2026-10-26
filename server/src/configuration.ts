@@ -5,6 +5,8 @@ import { createProvider, getSupportedThinkingLevels, type Model, type ProviderSt
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
+import { openrouterImagesApi } from "@earendil-works/pi-ai/api/openrouter-images.lazy";
+import { IMAGE_API } from "./image-generation.ts";
 import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
@@ -27,7 +29,7 @@ export const CustomProviderBody = Type.Object({
 		maxTokens: Type.Integer({ minimum: 1, maximum: 10_000_000 }),
 		reasoning: Type.Boolean(),
 		vision: Type.Boolean(),
-		imageGeneration: Type.Optional(Type.Boolean({ description: "The model makes pictures instead of text. It takes no tools and no reasoning, and only runs when a server extension runs image models (GET /models `runnable`)." })),
+		imageGeneration: Type.Optional(Type.Boolean({ description: "The model makes pictures instead of text. It never runs a chat: set it as the image model (PUT /image-model) and agents draw with the generate_image tool." })),
 		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
@@ -415,6 +417,7 @@ export class Configuration {
 
 	setDefaults(selection: DefaultModelSelection | null) {
 		if (selection && !this.registry.models.getModel(selection.provider, selection.model)) throw badRequest("unknown provider/model");
+		if (selection && this.registry.isImageModel?.(selection.provider, selection.model)) throw badRequest("an image model cannot be the chat default; set it as the image model instead");
 		if (selection) this.db.query("INSERT INTO settings (key, data) VALUES ('default_model', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(selection) });
 		else this.db.query("DELETE FROM settings WHERE key = 'default_model'").run();
 		return { defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults() };
@@ -459,7 +462,7 @@ export class Configuration {
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		}));
 		return createProvider({
-			id: p.id, name: p.name, baseUrl: p.baseUrl, models, api: implementations[p.api](),
+			id: p.id, name: p.name, baseUrl: p.baseUrl, models, api: implementations[p.api](), images: { [IMAGE_API]: openrouterImagesApi() },
 			auth: { apiKey: {
 				name: `${p.name} API key`,
 				resolve: async ({ credential }) => {

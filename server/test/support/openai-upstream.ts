@@ -20,6 +20,9 @@ export interface EchoUpstream {
 	stop(): void;
 }
 
+/** 1x1 PNG the fixture answers image requests with. */
+export const ECHO_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 export const ECHO_MODEL = {
 	id: "echo-model",
 	name: "Echo",
@@ -94,6 +97,8 @@ export function startEchoUpstream(): EchoUpstream {
 			const body: any = await req.json().catch(() => null);
 			requests.push({ path, authorization: req.headers.get("authorization"), body });
 			if (!path.endsWith("/chat/completions") || !body) return new Response("not found", { status: 404 });
+			// An image request (image models): one JSON answer with a picture and a short note.
+			if (Array.isArray(body.modalities)) return Response.json({ id: "img-echo", choices: [{ message: { content: "Drew it", images: [{ image_url: { url: `data:image/png;base64,${ECHO_PNG}` } }] } }], usage: { prompt_tokens: 5, completion_tokens: 7 } });
 			const frames = chunks(plan(body.messages ?? []), `call_echo_${++calls}`);
 			let cancelled = false;
 			const enc = new TextEncoder();

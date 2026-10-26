@@ -14,7 +14,6 @@ const Info = Type.Object({
 	commandFamilies: Type.Array(Type.Object({ prefix: Type.String(), label: Type.Optional(Type.String()) })),
 	methods: Type.Array(Type.String()),
 	providers: Type.Array(Type.String()),
-	modelRunners: Type.Array(Type.String(), { description: "Kinds of model this extension runs (e.g. \"image\")" }),
 	flags: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), type: Type.String(), value: Type.Optional(Type.Union([Type.Boolean(), Type.String()])) })),
 	events: Type.Array(Type.String()),
 	companion: Type.Optional(Type.String()),
