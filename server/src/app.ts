@@ -13,6 +13,8 @@ import { Llm } from "./llm.ts";
 import { registerLlmRoutes } from "./llm-routes.ts";
 import { CompactionSettings } from "./compaction.ts";
 import { registerCompactionRoutes } from "./compaction-routes.ts";
+import { Retention } from "./retention.ts";
+import { registerRetentionRoutes } from "./retention-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
@@ -551,6 +553,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerConfigurationRoutes(server, configuration, bus);
 	registerLlmRoutes(server, modelRoles, llm, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
+	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));
+	registerRetentionRoutes(server, retention, bus);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
@@ -586,10 +590,12 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	agentsWatch.start();
 	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);
 	prune.unref?.();
+	retention.start();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
 	void configuration.refreshStale();
 	return { server, sessions, bus, async close() {
 		clearInterval(prune);
+		retention.stop();
 		configuration.close();
 		agentsWatch.stop();
 		unread.dispose();

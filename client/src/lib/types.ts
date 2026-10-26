@@ -25,6 +25,22 @@ export interface CompactionSettings {
 	thresholdPercent: number;
 }
 export interface CompactionSettingsInfo { settings: CompactionSettings; defaults: CompactionSettings }
+export interface RetentionSettings {
+	/** Delete sessions not used for `days` days */
+	enabled: boolean;
+	days: number;
+	/** Only closed sessions; active ones are kept however old */
+	onlyClosed: boolean;
+}
+export interface RetentionInfo {
+	settings: RetentionSettings;
+	defaults: RetentionSettings;
+	/** When the last clean-up ran (ms); null = never */
+	lastRun: number | null;
+	lastDeleted: number;
+	/** Sessions the policy would delete now */
+	due: number;
+}
 export interface SystemModelSettings {
 	/** The light model that writes session titles and roles; null = off */
 	model: ModelChoice | null;

@@ -372,7 +372,7 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "configuration_updated", persisted: true,
 		description: "Custom provider or default model settings changed (no secrets; refetch GET /configuration)",
-		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
+		data: Type.Object({ scope: Type.Union([Type.Literal("provider"), Type.Literal("defaults"), Type.Literal("workdir"), Type.Literal("model-roles"), Type.Literal("compaction"), Type.Literal("system-model"), Type.Literal("retention")]), roles: Type.Optional(Type.Unknown()), id: Type.Optional(Type.String()), action: Type.Optional(Type.String()), defaults: Type.Optional(Type.Unknown()), effectiveDefaults: Type.Optional(Type.Unknown()), saved: Type.Optional(Type.Unknown()), effective: Type.Optional(Type.Unknown()), fallback: Type.Optional(Type.Unknown()) }),
 	},
 	{
 		type: "skills_updated", persisted: true,
