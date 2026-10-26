@@ -34,19 +34,19 @@ describe("keys in a terminal", () => {
 		expect(appTakesKey(key("KeyA"), DEFAULT_BINDINGS)).toBe(false);
 	});
 	test("Mod+Shift shortcuts still reach the app", () => {
-		expect(appTakesKey(key("Backquote", { ctrl: true, shift: true }), DEFAULT_BINDINGS)).toBe(true);
+		expect(appTakesKey(key("KeyN", { ctrl: true, alt: true }), DEFAULT_BINDINGS)).toBe(true); // new terminal
 		expect(appTakesKey(key("KeyZ", { ctrl: true, shift: true }), DEFAULT_BINDINGS)).toBe(false); // unbound
 	});
 });
 
 describe("app shortcuts first in a terminal", () => {
-	test("off by default: Ctrl+B and Alt+N stay with the shell", () => {
+	test("off by default: Ctrl+B and Ctrl+N stay with the shell", () => {
 		expect(appTakesKey(key("KeyB", { ctrl: true }), DEFAULT_BINDINGS, false)).toBe(false);
-		expect(appTakesKey(key("KeyN", { alt: true }), DEFAULT_BINDINGS, false)).toBe(false);
+		expect(appTakesKey(key("KeyN", { ctrl: true }), DEFAULT_BINDINGS, false)).toBe(false);
 	});
 	test("on: bound Ctrl/Alt combos and chord starts go to the app", () => {
-		expect(appTakesKey(key("KeyN", { alt: true }), DEFAULT_BINDINGS, true)).toBe(true); // Alt+N
-		expect(appTakesKey(key("KeyB", { ctrl: true }), DEFAULT_BINDINGS, true)).toBe(true); // Ctrl+B (also starts Ctrl+B+V)
+		expect(appTakesKey(key("KeyN", { ctrl: true }), DEFAULT_BINDINGS, true)).toBe(true); // Ctrl+N
+		expect(appTakesKey(key("KeyB", { ctrl: true }), DEFAULT_BINDINGS, true)).toBe(true); // Ctrl+B (starts Ctrl+B+B, Ctrl+B+V)
 	});
 	test("on: plain and Shift-only keys and unbound combos still go to the shell", () => {
 		expect(appTakesKey(key("KeyA"), DEFAULT_BINDINGS, true)).toBe(false);

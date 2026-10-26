@@ -121,8 +121,8 @@ describe("shortcut catalogue", () => {
 	test("the four split directions exist and the common two are bound", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 		for (const id of ["splitRight", "splitDown", "splitLeft", "splitUp"]) expect(by[id]?.group).toBe("layout");
-		expect(by.splitRight.default).toBe("Mod+Backslash");
-		expect(by.splitDown.default).toBe("Mod+Shift+Backslash");
+		expect(by.splitRight.default).toBe("Mod+B+V");
+		expect(by.splitDown.default).toBe("Mod+B+Minus");
 	});
 });
 
