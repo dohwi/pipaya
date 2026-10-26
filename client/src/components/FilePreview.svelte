@@ -1,6 +1,6 @@
 <script lang="ts">
 	import IconButton from "./IconButton.svelte";
-	import { onDestroy } from "svelte";
+	import { onDestroy, untrack } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { errorText } from "../lib/api";
@@ -42,7 +42,7 @@
 		const f = open;
 		if (!f || !app.api) return;
 		const ctl = new AbortController();
-		revoke();
+		untrack(revoke);
 		text = null;
 		failed = null;
 		truncated = false;
@@ -61,7 +61,7 @@
 				}
 				url = URL.createObjectURL(blob);
 				// the server sends html as text/plain; the frame needs the real type
-				if (k === "html") htmlUrl = URL.createObjectURL(new Blob([await blob.arrayBuffer()], { type: "text/html" }));
+				if (k === "html") htmlUrl = URL.createObjectURL(new Blob([await blob.arrayBuffer()], { type: "text/html;charset=utf-8" }));
 			})
 			.catch((e) => {
 				if ((e as Error).name !== "AbortError") failed = errorText(e);
