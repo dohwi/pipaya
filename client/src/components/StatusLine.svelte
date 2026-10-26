@@ -207,7 +207,7 @@
 		</button>
 	{/if}
 	{#if tplNames !== null}
-		<button class="b templates" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
+		<button class="b commands" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
 			<Icon name="list" />
 			<span class="v">{t("{n}개", { n: tplNames.length })}</span>
 		</button>

@@ -263,25 +263,25 @@ export interface ExtensionCommand {
 
 /** One entry of a command family (`pi.registerCommands`), listed for a working directory. */
 export interface CommandEntry {
-	/** Without the prefix: `review` for `/prompt:review`. Letters, digits, `-`, `_`, `.` */
+	/** Without the prefix: `review` for `/snip:review`. Letters, digits, `-`, `_`, `.` */
 	name: string;
 	description?: string;
 	args?: string;
 }
 
 /**
- * A family of commands that share a prefix and are found at run time, e.g. `/prompt:<name>` for every prompt file of a
+ * A family of commands that share a prefix and are found at run time, e.g. `/snip:<name>` for every snippet file of a
  * project. `list` is asked for the menu (per working directory); `run` handles `/prefix:name args`.
  */
 export interface ExtensionCommandFamily {
-	/** Shown as the menu heading and tag, e.g. "Templates". */
+	/** Shown as the menu heading and tag, e.g. "Snippets". */
 	label?: string;
 	list(cwd: string): CommandEntry[] | Promise<CommandEntry[]>;
 	run(name: string, args: string, ctx: ExtensionContext): Promise<CommandResult> | CommandResult;
 }
 
 /**
- * A note shown with a user message instead of (or above) its text, e.g. "used template: review". It is stored with the
+ * A note shown with a user message instead of (or above) its text, e.g. "used snippet: review". It is stored with the
  * message for the client only; the model never sees it.
  */
 export interface MessageNote {

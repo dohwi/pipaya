@@ -47,9 +47,9 @@ describe("knownMention", () => {
 });
 
 describe("mirrorHtml", () => {
-	const known = { commands: ["prompt:fix"], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
+	const known = { commands: ["snip:fix"], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
-		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /prompt:fix", known);
+		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /snip:fix", known);
 		expect(html).toContain('<mark class="file">#src/a.ts</mark>');
 		expect(html).not.toContain('<mark class="file">#nope');
 		expect(html).not.toContain("ghost</mark>");
@@ -59,7 +59,7 @@ describe("mirrorHtml", () => {
 		expect(html).toContain('<mark class="mention">@미나</mark>랑');
 		expect(html).not.toContain("@철수</mark>");
 		expect(html).toContain('<mark class="skill">/skill:review</mark>');
-		expect(html).toContain('<mark class="skill">/prompt:fix</mark>');
+		expect(html).toContain('<mark class="skill">/snip:fix</mark>');
 	});
 	test("escapes the text and ends with a newline (keeps the layer as tall as the textarea)", () => {
 		expect(mirrorHtml("<b>&", known)).toBe("&lt;b&gt;&amp;\n");

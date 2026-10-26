@@ -74,7 +74,7 @@ export function knownMention(token: string, names: readonly string[]): string | 
 }
 
 export interface Known {
-	/** `prefix:name` of the command-family entries (`/prompt:review`) that exist */
+	/** `prefix:name` of the command-family entries (`/snip:review`) that exist */
 	commands: readonly string[];
 	skills: readonly { name: string }[];
 	/** Tokens an extension offers after `@` (without the `@`) */

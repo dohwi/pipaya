@@ -305,7 +305,7 @@ export function matchSkills<T extends { name: string }>(skills: T[], query: stri
 	return skills.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
-/** Command-family entries (`prefix:name`) as menu rows for a query like "rev", "prompt:" or "prompt:rev". */
+/** Command-family entries (`prefix:name`) as menu rows for a query like "rev", "snip:" or "snip:rev". */
 export function matchFamilyEntries<T extends { prefix: string; name: string; description?: string }>(entries: T[], query: string): T[] {
 	const q = query.trim().toLowerCase();
 	const full = (k: T) => `${k.prefix}:${k.name}`.toLowerCase();

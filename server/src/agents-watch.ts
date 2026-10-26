@@ -5,9 +5,9 @@ import type { EventBus } from "./events.ts";
 import { findRepoRoot } from "./skills.ts";
 
 /**
- * Watches the folders skills, prompt templates and AGENTS.md are read from (`~/.agents`, and `.agents` / `.pi`
+ * Watches the folders skills, AGENTS.md and extension files are read from (`~/.agents`, and `.agents` / `.pi`
  * from each known working directory up to its repository root) and publishes `skills_updated` when something
- * in them changes, so open clients re-read skills, templates and the footer counts without a reload.
+ * in them changes, so open clients re-read skills, extension commands and the footer counts without a reload.
  * The set of watched folders is re-evaluated periodically, so a folder created later is picked up too.
  */
 export class AgentsWatcher {

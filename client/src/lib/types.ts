@@ -123,7 +123,7 @@ export interface SkillList {
 	warnings: { path: string; message: string }[];
 }
 
-/** Commands a server extension finds at run time (`pi.registerCommands`), e.g. `/prompt:<name>`, for one folder. */
+/** Commands a server extension finds at run time (`pi.registerCommands`), e.g. `/snip:<name>`, for one folder. */
 export interface CommandFamily {
 	prefix: string;
 	label?: string;
@@ -444,7 +444,7 @@ export interface StreamDelta {
 
 /* ---------- UI model ---------- */
 
-/** `call`: what the user typed (e.g. `/prompt:review x`); `collapse`: the text is long and starts folded. */
+/** `call`: what the user typed (e.g. `/snip:review x`); `collapse`: the text is long and starts folded. */
 export interface MessageNote { text: string; call: string; collapse?: boolean; data?: unknown }
 
 export type ToolState = "pending" | "awaiting_input" | "running" | "done" | "error" | "skipped";

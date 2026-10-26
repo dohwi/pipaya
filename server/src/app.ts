@@ -581,7 +581,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();
-	// Skills, prompt templates and AGENTS.md live in plain files: tell open clients when they change on disk.
+	// Skills, AGENTS.md and whatever extensions read from those folders live in plain files: tell open clients when they change on disk.
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
 	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);

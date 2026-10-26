@@ -45,15 +45,15 @@ describe("AgentsWatcher", () => {
 		expect(f.events.length).toBeGreaterThan(n);
 	});
 
-	test("global AGENTS.md and prompt template edits fire", async () => {
+	test("global AGENTS.md and other .agents file edits fire", async () => {
 		const f = setup();
 		await sleep(100);
 		writeFileSync(join(f.home, ".agents", "AGENTS.md"), "hi");
 		await sleep(300);
 		const a = f.events.length;
 		expect(a).toBeGreaterThan(0);
-		mkdirSync(join(f.home, ".agents", "templates"));
-		writeFileSync(join(f.home, ".agents", "templates", "t.md"), "body");
+		mkdirSync(join(f.home, ".agents", "notes"));
+		writeFileSync(join(f.home, ".agents", "notes", "t.md"), "body");
 		await sleep(300);
 		expect(f.events.length).toBeGreaterThan(a);
 	});

@@ -6,12 +6,12 @@ describe("recommendation menu rows", () => {
 		const rows = slashRows([
 			{ command: { name: "model", args: "[name]", desc: "pick a model" } },
 			{ skill: { name: "review", description: "review code" } },
-			{ family: { prefix: "prompt", label: "Prompts", name: "fix", description: "fix it", args: "<what>" } },
+			{ family: { prefix: "snip", label: "Snippets", name: "fix", description: "fix it", args: "<what>" } },
 		]);
 		expect(rows).toEqual([
 			{ id: "model", text: "/model", args: "[name]", desc: "pick a model", group: "명령" },
 			{ id: "skill:review", text: "/skill:review", desc: "review code", tag: "스킬", group: "스킬" },
-			{ id: "prompt:fix", text: "/prompt:fix", args: "<what>", desc: "fix it", tag: "Prompts", group: "Prompts" },
+			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it", tag: "Snippets", group: "Snippets" },
 		]);
 	});
 	test("images come before files, and a folder is labelled", () => {

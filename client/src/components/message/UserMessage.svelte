@@ -12,7 +12,7 @@
 
 	/**
 	 * What the user sent: attached pictures and files, who it came from when another session sent it, a quoted answer,
-	 * the text (a template's note can fold it), and copy / reply / branch buttons under the bubble.
+	 * the text (an extension command's note can fold it), and copy / reply / branch buttons under the bubble.
 	 *
 	 *  working  this is the prompt the agent is busy answering (the bubble glows in the model's thinking colour)
 	 *  glow     that colour's level, when the model reasons
