@@ -101,8 +101,9 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		width: 100%;
+		width: calc(100% - 4px);
 		height: 28px;
+		margin: 0 2px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		padding: 0 10px 0 23px;
 		border-radius: var(--radius-sm);
 		text-align: left;

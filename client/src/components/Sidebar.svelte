@@ -1032,6 +1032,9 @@
 		margin-left: 23px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
 		border-radius: var(--radius-sm);
 	}
+	:global(:where(.side) .grprow .lead) {
+		width: 14px; /* the folder / archive icon column, so the name starts at the same x */
+	}
 	:global(:where(.side) .gfold:hover .chev svg) {
 		stroke: var(--text);
 	}
