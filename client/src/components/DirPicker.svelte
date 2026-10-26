@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
 	import FilterChip from "./FilterChip.svelte";
-	import { breadcrumbs, splitTyped } from "../lib/workdir-path";
+	import { splitTyped } from "../lib/workdir-path";
 	import { DirBrowser } from "../lib/dir-browser.svelte";
 	import { msg, t, tc } from "../lib/i18n";
 	import { onDestroy } from "svelte";
@@ -58,8 +58,6 @@
 		if (home && home !== root) out.push({ path: home, label: msg("홈"), title: home });
 		return out;
 	});
-
-	const crumbs = $derived(breadcrumbs(browser.listing?.path ?? ""));
 
 	/** Save (or clear, with null) the default directory on the browsed server */
 	async function saveDefault(path: string | null): Promise<boolean> {
@@ -137,6 +135,12 @@
 		}}
 	>
 		<input class="mono" bind:this={input} bind:value={browser.typed} oninput={() => browser.typedChanged()} onkeydown={onkey} spellcheck="false" autocomplete="off" aria-label={t("경로")} placeholder="/home/user/project" use:focus />
+		{#if !remote && browser.listing}
+			{@const fav = app.isFavDir(browser.listing.path)}
+			<button type="button" class="favbtn" class:on={fav} aria-pressed={fav} onclick={() => app.toggleFavDir(browser.listing!.path)} aria-label={fav ? t("즐겨찾기 해제") : t("즐겨찾기")} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
+				<Icon name="star" />
+			</button>
+		{/if}
 		<Button size="sm" type="submit">{tc("go", "이동")}</Button>
 	</form>
 
@@ -160,22 +164,6 @@
 			</div>
 		</div>
 	{/if}
-
-	<div class="crumbrow">
-		<nav class="crumbs mono" aria-label={t("현재 위치")}>
-			{#each crumbs as c, i (c.path)}
-				{#if i > 1}<span class="sep">/</span>{/if}
-				<button class:last={i === crumbs.length - 1} onclick={() => void enter(c.path)}>{c.name}</button>
-			{/each}
-		</nav>
-		{#if !remote && browser.listing}
-			{@const here = browser.listing.path}
-			{@const fav = app.isFavDir(here)}
-			<button type="button" class="favbtn" class:on={fav} aria-pressed={fav} onclick={() => app.toggleFavDir(here)} aria-label={fav ? t("즐겨찾기 해제") : t("즐겨찾기")} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
-				<Icon name="star" />
-			</button>
-		{/if}
-	</div>
 
 	<div class="list" class:loading={browser.loading}>
 		{#if browser.error}
@@ -280,32 +268,14 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
-	.crumbrow {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding-right: 18px;
-		border-top: 1px solid var(--border);
-	}
-	.crumbs {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 2px;
-		padding: 6px 22px;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 	.favbtn {
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-xs);
-		color: var(--text-faint);
+		width: 34px;
+		height: 34px;
+		border-radius: var(--radius);
+		color: var(--text-dim);
 	}
 	.favbtn:hover {
 		background: var(--bg-hover);
@@ -321,19 +291,6 @@
 	}
 	.favbtn.on :global(svg) {
 		fill: currentColor;
-	}
-	.crumbs button {
-		padding: 2px 4px;
-		border-radius: var(--radius-xs);
-		color: var(--text-dim);
-	}
-	.crumbs button:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.crumbs button.last {
-		color: var(--text);
-		font-weight: 600;
 	}
 	.list {
 		flex: 1;

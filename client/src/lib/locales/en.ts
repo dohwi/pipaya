@@ -124,7 +124,6 @@ export const en: Record<string, string> = {
 	"경로": "Path",
 	"이동\u0004go": "Go",
 	"바로가기": "Shortcuts",
-	"현재 위치": "Current location",
 	"\"{path}\" 폴더를 찾을 수 없습니다": "Folder \"{path}\" not found",
 	"상위 폴더": "Parent folder",
 	"한 번 누르면 열고, 두 번 누르면 바로 선택합니다": "Click to open, double-click to select",
