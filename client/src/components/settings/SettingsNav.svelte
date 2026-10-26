@@ -20,12 +20,15 @@
 		tab = $bindable(),
 		extId = $bindable(),
 		dir = $bindable(),
+		installFor = $bindable(null),
 		scoped,
 		server,
 	}: {
 		tab: string;
 		extId: string | null;
 		dir: number;
+		/** Set to a client extension id to open its install preview on the device tab (the clip of a pair whose client half is missing) */
+		installFor?: string | null;
 		scoped: readonly (typeof SETTINGS_TABS)[number][];
 		server: Server | null;
 	} = $props();
@@ -49,7 +52,7 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean; /** where the clip leads: the other half of the pair (id null = that tab's list) */ link?: { tab: TabId; id: string | null } };
+	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean; /** where the clip leads: the other half of the pair (`install`: it is not installed, so open its install preview) */ link?: { tab: TabId; id: string | null; install?: string } };
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
@@ -64,7 +67,7 @@
 		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); const here = serverNow.find((n) => n.companion === e.id); return { ...e, paired: !!m || !!here, partner: m?.name ?? here?.title ?? here?.name, link: { tab: "srvext" as TabId, id: here ? `srv:${here.name}` : null } }; })];
 		for (const n of side) {
 			const mate = own.find((e) => e.id === n.companion);
-			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined), link: n.companion ? { tab: "extensions" as TabId, id: mate || extensions.installed.some((e) => e.package.manifest.id === n.companion) ? n.companion : null } : undefined });
+			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined), link: n.companion ? (mate || extensions.installed.some((e) => e.package.manifest.id === n.companion) ? { tab: "extensions" as TabId, id: n.companion } : { tab: "extensions" as TabId, id: null, install: n.companion }) : undefined });
 			if (mate) rows.push({ ...mate, paired: true, partner: n.name, link: { tab: "srvext" as TabId, id: n.id } });
 		}
 		return rows.map((e, i) => ({ ...e, end: i === rows.length - 1 }));
@@ -73,6 +76,11 @@
 	function openExt(tabId: TabId, id: string) {
 		if (tabId !== tab) { dir = order(tabId) > order(tab) ? 1 : -1; tab = tabId; }
 		extId = id;
+	}
+	function follow(link: { tab: TabId; id: string | null; install?: string }) {
+		if (link.install) { go(link.tab); installFor = link.install; }
+		else if (link.id) openExt(link.tab, link.id);
+		else go(link.tab);
 	}
 	function go(next: TabId) {
 		extId = null;
@@ -109,12 +117,18 @@
 			{#if open}
 				<div class="tree" role="group" aria-label={t(x.label)}>
 					{#each kids as e (e.id)}
-						<button role="tab" class="sub" class:end={e.end} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={(ev) => { if (e.link && (ev.target as Element).closest(".clip")) { if (e.link.id) openExt(e.link.tab, e.link.id); else go(e.link.tab); } else if (e.builtin) go(x.id); else openExt(x.id, e.id); }}>
-							<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
-							<span class="nl">{e.name}</span>
-							{#if e.paired}<span class="clip" class:half={e.half} class:go={!!e.link} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
-							{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
-						</button>
+						{@const link = e.link}
+						<div class="item" class:end={e.end}>
+							<button role="tab" class="sub" class:linked={e.paired && !!link} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
+								<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
+								<span class="nl">{e.name}</span>
+								{#if e.paired && !link}<span class="clip" class:half={e.half} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
+								{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
+							</button>
+							{#if e.paired && link}
+								<button type="button" class="clip go" class:half={e.half} aria-label={clipTip(e)} title={clipTip(e)} onclick={() => follow(link)}><Icon name="clip" /></button>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -188,30 +202,38 @@
 		margin: 0 0 4px 21px;
 		padding-left: 18px;
 	}
-	.nav button.sub {
+	.nav .item {
 		position: relative;
+		display: flex;
+	}
+	.nav button.sub {
+		flex: 1;
+		min-width: 0;
 		gap: 8px;
 		padding: 7px 10px;
 	}
-	.nav button.sub::before,
-	.nav button.sub::after {
+	.nav button.sub.linked {
+		padding-right: 38px;
+	}
+	.nav .item::before,
+	.nav .item::after {
 		content: "";
 		position: absolute;
 		left: -18px;
 		pointer-events: none;
 	}
-	.nav button.sub::after {
+	.nav .item::after {
 		top: -2px;
 		bottom: -2px;
 		border-left: 1.5px solid var(--border-strong);
 	}
-	.nav button.sub:first-child::after {
+	.nav .item:first-child::after {
 		top: -10px;
 	}
-	.nav button.sub.end::after {
+	.nav .item.end::after {
 		bottom: calc(50% + 9px);
 	}
-	.nav button.sub::before {
+	.nav .item::before {
 		top: calc(50% - 9px);
 		width: 18px;
 		height: 9px;
@@ -219,16 +241,31 @@
 		border-bottom: 1.5px solid var(--border-strong);
 		border-bottom-left-radius: 9px;
 	}
-	.nav button.sub .clip {
+	.nav .clip {
 		flex: none;
 		display: inline-flex;
 		color: var(--text-faint);
 	}
-	.nav button.sub .clip.go:hover { color: var(--text); }
-	.nav button.sub .clip.half {
+	.nav .clip.half {
 		color: var(--warn);
 	}
-	.nav button.sub .clip :global(svg) {
+	.nav button.clip.go {
+		position: absolute;
+		top: 50%;
+		right: 4px;
+		transform: translateY(-50%);
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border-radius: var(--radius-sm);
+	}
+	.nav button.clip.go:hover {
+		color: var(--text);
+		background: var(--bg-hover);
+	}
+	.nav .clip :global(svg) {
 		width: 14px;
 		height: 14px;
 	}

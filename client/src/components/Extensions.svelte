@@ -23,8 +23,9 @@
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), ongoserver, ongoclient, onopenserverext }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
+	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), ongoserver, ongoclient, onopenserverext }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: a client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
 	let marketQuery = $state("");
+	$effect(() => { if (installFor && view === "device") { const id = installFor; installFor = null; void installCompanion(id); } });
 	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
 	let preview = $state<ExtensionPackage | null>(null);
 	/** Where the package being imported will be installed: the scope of the tab it is imported from. */

@@ -34,6 +34,8 @@
 	let dir = $state(1);
 	/** A server extension to look up in the marketplace once the server tab opens (set from a client extension that needs it). */
 	let marketFor = $state<string | null>(null);
+	/** A client extension to download and preview for install as soon as the device tab opens (set from the clip of a server extension whose client half is missing). */
+	let installFor = $state<string | null>(null);
 	function go(next: TabId) {
 		extId = null;
 		if (next === tab) return;
@@ -111,7 +113,7 @@
 	</div>
 
 	<div class="layout">
-		<SettingsNav bind:tab bind:extId bind:dir {scoped} {server} />
+		<SettingsNav bind:tab bind:extId bind:dir bind:installFor {scoped} {server} />
 
 		<div class="body">
 			{#if words.length}
@@ -126,7 +128,7 @@
 				{#if current.sub}<p>{t(current.sub)}</p>{/if}
 			</div>
 			{#if tab === "extensions"}
-				<Extensions scope="device" bind:selected={extId} ongoserver={(id) => { marketFor = id; go("srvext"); }} onopenserverext={(name) => { go("srvext"); extId = srvKey(name); }} />
+				<Extensions scope="device" bind:selected={extId} bind:installFor ongoserver={(id) => { marketFor = id; go("srvext"); }} onopenserverext={(name) => { go("srvext"); extId = srvKey(name); }} />
 			{:else if tab === "srvext"}
 				<Extensions scope="server" bind:selected={extId} bind:marketFor ongoclient={(id) => { go("extensions"); extId = id; }} />
 			{:else if tab === "backup"}
