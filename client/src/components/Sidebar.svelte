@@ -310,6 +310,7 @@
 		<button class="settings wide" onclick={() => app.openSettings()}>
 			<span class="sico"><Icon name="settings" />{#if app.net !== "online" || settingsAlert || extensionUpdates.any}<Pin tone={app.net !== "online" ? "warn" : alertTone} label={app.net !== "online" ? t("연결 안 됨") : settingsAlert || t("업데이트 있음")} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone={alertTone} size="sm">{settingsAlert}</Badge></span>{/if}
+			{#if updater.current}<span class="sver" class:push={!settingsAlert}>v{updater.current}</span>{/if}
 		</button>
 	</div>
 </aside>
@@ -948,6 +949,17 @@
 	.salert {
 		margin-left: auto;
 		display: inline-flex;
+	}
+	.sver {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.sver.push {
+		margin-left: auto;
+	}
+	.salert + .sver {
+		margin-left: 8px;
 	}
 	.sico {
 		position: relative;
