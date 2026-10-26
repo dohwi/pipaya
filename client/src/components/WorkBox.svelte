@@ -169,8 +169,9 @@
 	{#if drawn.length}
 		<div class="drawn" in:collapseIn>
 			{#each drawn as img, i (i)}
-				<button class="zoom" title={drawnBy ? t("그린 모델: {model}", { model: drawnBy }) : undefined} onclick={() => app.openImage(drawn.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
+				<button class="zoom" onclick={() => app.openImage(drawn.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
 					<img src={`data:${img.mimeType};base64,${img.data}`} alt={t("이미지")} />
+					{#if drawnBy}<span class="by">{drawnBy}</span>{/if}
 				</button>
 			{/each}
 		</div>
@@ -333,7 +334,9 @@
 		padding: 4px 12px 12px;
 	}
 	.drawn .zoom {
+		position: relative;
 		display: block;
+		overflow: hidden;
 		padding: 0;
 		border-radius: var(--radius);
 		cursor: zoom-in;
@@ -344,6 +347,37 @@
 		max-width: 100%;
 		max-height: 320px;
 		border-radius: var(--radius);
+	}
+	/* who drew it: a caption over the picture's lower edge, shown while the pointer is on it (always on touch screens, which cannot hover) */
+	.drawn .by {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		padding: 22px 10px 8px;
+		background: linear-gradient(to top, rgb(0 0 0 / 0.62), transparent);
+		color: #fff;
+		font-size: var(--fs-xs);
+		line-height: 1.3;
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		opacity: 0;
+		transform: translateY(4px);
+		pointer-events: none;
+		transition: opacity var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
+	}
+	.drawn .zoom:hover .by,
+	.drawn .zoom:focus-visible .by {
+		opacity: 1;
+		transform: none;
+	}
+	@media (pointer: coarse) {
+		.drawn .by {
+			opacity: 1;
+			transform: none;
+		}
 	}
 	/* the picture develops: it comes in sharp from a soft, slightly zoomed-in state, like the canvas resolving */
 	@keyframes develop {

@@ -376,7 +376,6 @@ export const en: Record<string, string> = {
 	"에이전트가 generate_image 도구로 이 모델에게 그림을 그리게 합니다. 아래 에이전트 도구에서 끌 수 있습니다.": "Agents draw with this model through the generate_image tool. You can switch the tool off under agent tools below.",
 	"이미지 생성 (generate_image)": "Generate images (generate_image)",
 	"이미지를 만드는 중…": "Creating your image…",
-	"그린 모델: {model}": "Drawn by {model}",
 	"이미지 생성·편집": "Makes & edits images",
 	"글로 대화하고 도구를 쓸 수 있습니다": "Talks in text and can use tools",
 	"답하기 전에 깊이 생각합니다": "Thinks it through before answering",
