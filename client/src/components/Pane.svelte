@@ -65,6 +65,7 @@
 		const items: MenuItem[] = [
 			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
+			...(isWeb ? [] : [{ icon: "globe", label: t("오른쪽에 브라우저 열기"), title: t("이 창 옆에 서버의 브라우저를 엽니다"), run: () => void app.openBrowser(undefined, { target: pane, zone: "right" }) } satisfies MenuItem]),
 			isTerm
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(pane) }
 				: isWeb

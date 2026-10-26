@@ -34,9 +34,10 @@ function parseInput(msg: Record<string, unknown>): BrowserInput | null {
  * server -> client   text    { type: "hello", tab, control }
  *                    binary  one JPEG frame of the page
  *                    text    { type: "frame", width, height }  sent right before each binary frame (page size in CSS px)
- *                    text    { type: "state", tab, control }   title / address changed, or control moved ("user" | "agent")
+ *                    text    { type: "state", tab, control, by }   title / address changed, or control moved ("user" | "agent"; `by` = the session whose agent acts)
  *                    text    { type: "closed" }
  * client -> server   text    { type: "mouse" | "wheel" | "key" | "text", ... }   input for the page
+ *                    text    { type: "fit", width, height }    the panel's size: the page is laid out for it
  *                    text    { type: "navigate", to }          an address, or "back" | "forward" | "reload"
  *
  * Needs @fastify/websocket registered first (see ws.ts).
@@ -86,9 +87,9 @@ export function registerBrowserRoutes(server: FastifyInstance, browsers: Browser
 					}
 					socket.send(jpeg);
 				},
-				state(tab, c) {
+				state(tab, c, by) {
 					control = c;
-					sendText({ type: "state", tab, control });
+					sendText({ type: "state", tab, control, by: by ?? null });
 				},
 				closed() {
 					sendText({ type: "closed" });
@@ -112,6 +113,10 @@ export function registerBrowserRoutes(server: FastifyInstance, browsers: Browser
 			}
 			if (msg.type === "navigate" && typeof msg.to === "string") {
 				browsers.navigate(id, NAV.has(msg.to) ? (msg.to as "back") : msg.to).catch((e) => sendText({ type: "error", message: e instanceof Error ? e.message : String(e) }));
+				return;
+			}
+			if (msg.type === "fit" && typeof msg.width === "number" && typeof msg.height === "number") {
+				browsers.fit(id, msg.width, msg.height).catch(() => {});
 				return;
 			}
 			const input = parseInput(msg);

@@ -47,6 +47,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. `server/builtin-skills/pipaya-client-extensions/references/notifications.md` 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
 | `PIPAYA_TERMINAL` | `1` | `0`이면 터미널(클라이언트가 이 서버에서 여는 대화형 셸. Linux/macOS는 사용자 셸, Windows는 PowerShell)을 끕니다 |
+| `PIPAYA_BROWSER` | `1` | `0`이면 브라우저 탭과 에이전트의 `browser_*` 도구를 끕니다. 그 외에는 서버에 설치된 Chrome/Chromium을 씁니다(경로를 값으로 주면 그 실행 파일을 씁니다). 브라우저가 없으면 기능이 꺼집니다 |
 
 새 서버의 카탈로그는 비어 있습니다. 내장 프로바이더도, 환경변수 기반 인증도 없습니다.
 저장된 커스텀 프로바이더와 모델은 재시작해도 SQLite에서 복원됩니다.

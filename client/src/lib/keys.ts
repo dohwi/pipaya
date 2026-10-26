@@ -42,6 +42,8 @@ export type ActionId =
   | "newTerminal"
   | "splitTerminal"
   | "splitTerminalRight"
+  | "newBrowser"
+  | "splitBrowser"
   | "workdir"
   | "skills"
   | "cycleServer"
@@ -259,6 +261,18 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "Mod+Alt+N",
   },
   {
+    id: "newBrowser",
+    label: msg("새 브라우저"),
+    hint: msg("서버의 브라우저에서 페이지를 엽니다. 에이전트와 함께 볼 수 있습니다"),
+    default: "Mod+Alt+B",
+  },
+  {
+    id: "splitBrowser",
+    label: msg("오른쪽에 브라우저 열기"),
+    hint: msg("선택한 창 오른쪽에 브라우저를 엽니다"),
+    default: "",
+  },
+  {
     id: "splitTerminal",
     label: msg("아래에 터미널 열기"),
     hint: msg("선택한 창 아래에 터미널을 엽니다"),
@@ -389,6 +403,8 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   newTerminal: "layout",
   splitTerminal: "layout",
   splitTerminalRight: "layout",
+  newBrowser: "layout",
+  splitBrowser: "layout",
   forkSession: "chat",
   retry: "chat",
   compact: "chat",

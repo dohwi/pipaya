@@ -224,6 +224,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   newTerminal: () => void app.openTerminal(app.workdir),
   splitTerminal: () => app.splitTerminal("bottom"),
   splitTerminalRight: () => app.splitTerminal("right"),
+  newBrowser: () => void app.openBrowser(),
+  splitBrowser: () => app.splitBrowser("right"),
   zoomPane,
   restorePane,
   toggleFull,

@@ -47,6 +47,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see `server/builtin-skills/pipaya-client-extensions/references/notifications.md` |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
 | `PIPAYA_TERMINAL` | `1` | `0` turns off terminals: interactive shells clients open on this server (the user's shell on Linux/macOS, PowerShell on Windows) |
+| `PIPAYA_BROWSER` | `1` | `0` turns off browser tabs and the `browser_*` agent tools. Otherwise the server's own Chrome/Chromium is used (set this variable to its path to choose one); without any, the feature stays off |
 
 A fresh server has an empty catalog: there are no built-in providers and no environment-based authentication.
 Saved custom providers and models are restored from SQLite on restart.

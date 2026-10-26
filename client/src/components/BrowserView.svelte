@@ -13,8 +13,12 @@
 	let { tab, focused }: { tab: BrowserTabInfo; focused: boolean } = $props();
 
 	let canvas: HTMLCanvasElement | undefined = $state();
+	let stage: HTMLDivElement | undefined = $state();
 	let status = $state<"connecting" | "open" | "offline" | "closed">("connecting");
 	let control = $state<BrowserControl>("user");
+	/** The session whose agent is acting (its title is shown) */
+	let by = $state<string | null>(null);
+	const byTitle = $derived((by && app.session(by)?.title) || null);
 	let address = $state("");
 	let editing = $state(false);
 	let hasFrame = $state(false);
@@ -90,7 +94,7 @@
 					void draw();
 					return;
 				}
-				let msg: { type?: string; control?: BrowserControl; width?: number; height?: number; missing?: boolean };
+				let msg: { type?: string; control?: BrowserControl; by?: string | null; width?: number; height?: number; missing?: boolean };
 				try {
 					msg = JSON.parse(m.data);
 				} catch {
@@ -100,11 +104,14 @@
 					status = "open";
 					delay = 500;
 					control = msg.control ?? "user";
+					by = null;
+					fitNow();
 				} else if (msg.type === "frame" && msg.width && msg.height) {
 					pendingSize = { width: msg.width, height: msg.height };
 					page = pendingSize;
 				} else if (msg.type === "state") {
 					control = msg.control ?? "user";
+					by = control === "agent" ? (msg.by ?? null) : null;
 				} else if (msg.type === "closed") {
 					status = "closed";
 					app.dropBrowser(tab.id);
@@ -119,6 +126,18 @@
 				delay = Math.min(delay * 2, 10_000);
 			};
 		}
+		/* ---- size: the page is laid out for this panel, so a small panel or a phone gets a small picture ---- */
+		let fitTimer: ReturnType<typeof setTimeout> | undefined;
+		function fitNow() {
+			const box = stage?.getBoundingClientRect();
+			if (!box || box.width < 40 || box.height < 40) return;
+			send?.({ type: "fit", width: Math.round(box.width), height: Math.round(box.height) });
+		}
+		const ro = new ResizeObserver(() => {
+			clearTimeout(fitTimer);
+			fitTimer = setTimeout(fitNow, 150);
+		});
+		if (stage) ro.observe(stage);
 		connect();
 
 		/* ---- input ---- */
@@ -128,28 +147,33 @@
 		};
 		const buttonOf = (b: number) => (b === 1 ? "middle" : b === 2 ? "right" : "left");
 		let lastMove = 0;
+		/** While an agent acts, a stray click would land in the middle of its step: ignore the pointer until it is done. */
+		const locked = () => control === "agent";
 		const down = (e: PointerEvent) => {
 			cv.focus();
+			if (locked()) return;
 			cv.setPointerCapture(e.pointerId);
 			send?.({ type: "mouse", action: "down", ...at(e), button: buttonOf(e.button), clickCount: e.detail || 1 });
 		};
 		const up = (e: PointerEvent) => {
+			if (locked()) return;
 			send?.({ type: "mouse", action: "up", ...at(e), button: buttonOf(e.button), clickCount: e.detail || 1 });
 		};
 		const move = (e: PointerEvent) => {
 			const now = performance.now();
-			if (now - lastMove < 30) return;
+			if (locked() || now - lastMove < 30) return;
 			lastMove = now;
 			send?.({ type: "mouse", action: "move", ...at(e) });
 		};
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault();
+			if (locked()) return;
 			const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? page.height : 1;
 			send?.({ type: "wheel", ...at(e), dx: e.deltaX * scale, dy: e.deltaY * scale });
 		};
 		const key = (action: "down" | "up") => (e: KeyboardEvent) => {
 			// Shortcuts of the app itself (Mod+Shift…, function keys) stay with the app; everything else is the page's.
-			if (e.isComposing) return;
+			if (e.isComposing || locked()) return;
 			const mod = e.ctrlKey || e.metaKey;
 			if ((mod && (e.shiftKey || e.altKey)) || /^F\d+$/.test(e.key)) return;
 			e.preventDefault();
@@ -161,11 +185,11 @@
 		const ku = key("up");
 		// IME text (Korean) arrives as a finished string
 		const comp = (e: CompositionEvent) => {
-			if (e.data) send?.({ type: "text", text: e.data });
+			if (e.data && !locked()) send?.({ type: "text", text: e.data });
 		};
 		const paste = (e: ClipboardEvent) => {
 			const text = e.clipboardData?.getData("text/plain");
-			if (!text) return;
+			if (!text || locked()) return;
 			e.preventDefault();
 			send?.({ type: "text", text });
 		};
@@ -190,6 +214,8 @@
 			cv.removeEventListener("keyup", ku);
 			cv.removeEventListener("compositionend", comp);
 			cv.removeEventListener("paste", paste);
+			clearTimeout(fitTimer);
+			ro.disconnect();
 			ws?.close();
 			ws = null;
 		};
@@ -212,11 +238,11 @@
 			autocapitalize="off"
 			autocomplete="off"
 		/>
-		<span class="who" class:agent={control === "agent"} title={control === "agent" ? t("에이전트가 이 페이지를 조작하고 있습니다") : t("직접 조작할 수 있습니다")}>
-			{control === "agent" ? t("에이전트 조작 중") : t("직접 조작")}
+		<span class="who" class:agent={control === "agent"} title={control === "agent" ? t("에이전트가 이 페이지를 조작하는 동안에는 입력이 잠깁니다") : t("직접 조작할 수 있습니다")}>
+			{control === "agent" ? (byTitle ? t("{name} 조작 중", { name: byTitle }) : t("에이전트 조작 중")) : t("직접 조작")}
 		</span>
 	</form>
-	<div class="stage" class:agent={control === "agent"}>
+	<div class="stage" class:agent={control === "agent"} bind:this={stage}>
 		<canvas bind:this={canvas} tabindex="0" class:blank={!hasFrame} aria-label={info.title || t("브라우저")} data-focused={focused ? "" : undefined}></canvas>
 		{#if !hasFrame && status !== "offline"}
 			<div class="hint">{info.url === "about:blank" ? t("주소를 입력해 페이지를 여세요") : t("불러오는 중…")}</div>
@@ -278,6 +304,9 @@
 	}
 	.who {
 		flex: none;
+		max-width: 40%;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		padding: 2px 8px;
 		border-radius: 999px;
 		background: var(--bg-hover);
@@ -299,7 +328,7 @@
 		min-height: 0;
 		position: relative;
 		display: flex;
-		align-items: flex-start;
+		align-items: stretch;
 		justify-content: center;
 		background: var(--bg-elev);
 		overflow: hidden;

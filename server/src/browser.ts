@@ -20,6 +20,11 @@ export const BROWSER_PREFIX = "web_";
 export const isBrowserId = (id: string) => id.startsWith(BROWSER_PREFIX);
 export const MAX_BROWSER_TABS = 8;
 export const DEFAULT_PROFILE = "default";
+/** At most ~15 frames per second go to the views. */
+export const FRAME_INTERVAL_MS = 66;
+/** Page size limits when a view fits the page to its panel (CSS px) */
+export const MIN_VIEW = { width: 320, height: 240 };
+export const MAX_VIEW = { width: 1920, height: 1440 };
 /** Output of one snapshot handed to a model. */
 export const MAX_SNAPSHOT_BYTES = 50 * 1024;
 
@@ -85,7 +90,8 @@ export function findBrowser(env: Record<string, string | undefined> = process.en
 /** What a view of a tab receives. Frames are JPEG bytes; the rest is small JSON. */
 export interface BrowserClient {
 	frame(jpeg: Uint8Array, size: { width: number; height: number }): void;
-	state(info: BrowserTabInfo, control: "user" | "agent"): void;
+	/** `by`: the session whose agent is acting, while `control` is "agent" */
+	state(info: BrowserTabInfo, control: "user" | "agent", by?: string): void;
 	closed(): void;
 }
 
@@ -95,7 +101,12 @@ interface Tab {
 	cdp: CDPSession;
 	clients: Set<BrowserClient>;
 	screencasting: boolean;
-	agentBusy: number;
+	/** Sessions whose agents are acting on the page right now (a stack: calls may overlap) */
+	agents: string[];
+	/** When the last frame went out (frames are rate-limited) */
+	lastSent: number;
+	/** Size the page was last fitted to by a view */
+	fit: { width: number; height: number } | null;
 	lastFrame: { jpeg: Uint8Array; width: number; height: number } | null;
 	closing: boolean;
 }
@@ -119,8 +130,6 @@ export interface BrowserOptions {
 export class BrowserManager {
 	private tabs = new Map<string, Tab>();
 	private context: Promise<BrowserContext> | null = null;
-	/** Most recently used tab: the one an agent tool acts on when it names none. */
-	private current: string | null = null;
 	private exe: string | null;
 
 	constructor(
@@ -187,11 +196,14 @@ export class BrowserManager {
 		const page = await ctx.newPage();
 		const cdp = await ctx.newCDPSession(page);
 		const id = BROWSER_PREFIX + randomUUID();
-		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile: DEFAULT_PROFILE, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agentBusy: 0, lastFrame: null, closing: false };
+		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile: DEFAULT_PROFILE, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], lastSent: 0, fit: null, lastFrame: null, closing: false };
 		this.tabs.set(id, tab);
-		this.current = id;
 		cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number; metadata: { deviceWidth: number; deviceHeight: number } }) => {
 			cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
+			// A page that animates would flood the link: keep to FRAME_INTERVAL_MS (the next frame repairs what was skipped).
+			const now = performance.now();
+			if (now - tab.lastSent < FRAME_INTERVAL_MS) return;
+			tab.lastSent = now;
 			const jpeg = Buffer.from(f.data, "base64");
 			tab.lastFrame = { jpeg, width: f.metadata.deviceWidth, height: f.metadata.deviceHeight };
 			for (const c of tab.clients) c.frame(jpeg, { width: f.metadata.deviceWidth, height: f.metadata.deviceHeight });
@@ -218,7 +230,13 @@ export class BrowserManager {
 		if (title === tab.info.title && url === tab.info.url) return;
 		tab.info = { ...tab.info, title, url };
 		this.bus.publish(null, "browser_updated", tab.info, { ephemeral: true });
-		for (const c of tab.clients) c.state(tab.info, tab.agentBusy ? "agent" : "user");
+		this.tell(tab);
+	}
+
+	/** Tell every view who is acting on the page. */
+	private tell(tab: Tab) {
+		const by = tab.agents[tab.agents.length - 1];
+		for (const c of tab.clients) c.state(tab.info, by ? "agent" : "user", by);
 	}
 
 	/** The tab was closed (by us, by the page, or because the browser went away). */
@@ -226,7 +244,6 @@ export class BrowserManager {
 		if (tab.closing) return;
 		tab.closing = true;
 		this.tabs.delete(tab.info.id);
-		if (this.current === tab.info.id) this.current = [...this.tabs.keys()].pop() ?? null;
 		for (const c of tab.clients) c.closed();
 		tab.clients.clear();
 		this.bus.publish(null, "browser_closed", { id: tab.info.id }, { ephemeral: true });
@@ -278,16 +295,28 @@ export class BrowserManager {
 		if (want === tab.screencasting) return;
 		tab.screencasting = want;
 		try {
-			if (want) await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 70, maxWidth: 1600, maxHeight: 1200, everyNthFrame: 1 });
+			if (want) await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, maxWidth: MAX_VIEW.width, maxHeight: MAX_VIEW.height, everyNthFrame: 1 });
 			else await tab.cdp.send("Page.stopScreencast");
 		} catch {
 			tab.screencasting = false;
 		}
 	}
 
+	/**
+	 * A view tells how big its panel is: the page is laid out for that size, so a small panel or a phone gets a small
+	 * picture (and a page that fits it) instead of a big one scaled down. The newest view wins.
+	 */
+	async fit(id: string, width: number, height: number): Promise<void> {
+		const tab = this.tab(id);
+		const w = Math.round(Math.min(MAX_VIEW.width, Math.max(MIN_VIEW.width, width)));
+		const h = Math.round(Math.min(MAX_VIEW.height, Math.max(MIN_VIEW.height, height)));
+		if (tab.fit && Math.abs(tab.fit.width - w) < 8 && Math.abs(tab.fit.height - h) < 8) return;
+		tab.fit = { width: w, height: h };
+		await tab.page.setViewportSize({ width: w, height: h }).catch(() => {});
+	}
+
 	async input(id: string, ev: BrowserInput): Promise<void> {
 		const tab = this.tab(id);
-		this.current = id;
 		const send = (method: string, params: object) => tab.cdp.send(method as never, params as never);
 		if (ev.type === "mouse") {
 			const type = ev.action === "move" ? "mouseMoved" : ev.action === "down" ? "mousePressed" : "mouseReleased";
@@ -303,29 +332,50 @@ export class BrowserManager {
 
 	/* ---------- agents ---------- */
 
-	/** The tab an agent tool acts on: the named one, else the last one used, else a new one. */
+	/**
+	 * The tab an agent tool acts on. Nothing is guessed: a named tab is that tab; with no name the one open tab is used
+	 * (a new one is opened when none is); with several open the call fails and lists them, so the agent picks one by id
+	 * (or asks the user) instead of landing on whatever tab was used last.
+	 */
 	async forAgent(id?: string): Promise<string> {
 		if (id) {
 			this.tab(id);
 			return id;
 		}
-		if (this.current && this.tabs.has(this.current)) return this.current;
-		return (await this.create()).id;
+		if (this.tabs.size === 1) return [...this.tabs.keys()][0]!;
+		if (this.tabs.size === 0) return (await this.create()).id;
+		throw new Error(`${this.tabs.size} browser tabs are open, so say which one with \`tab\` (or ask the user):\n${this.describe()}`);
 	}
 
-	/** Marks the tab as agent-driven while `fn` runs, so views can show who is in control. */
-	async asAgent<T>(id: string, fn: (page: Page) => Promise<T>): Promise<T> {
+	/** One line per open tab, for agents. */
+	describe(): string {
+		if (!this.tabs.size) return "(no browser tabs are open)";
+		return this.list()
+			.map((t) => {
+				const tab = this.tabs.get(t.id)!;
+				const watching = tab.clients.size ? `, ${tab.clients.size} viewer(s)` : "";
+				return `- ${t.id}: ${t.title || "(untitled)"} <${t.url}>${watching}`;
+			})
+			.join("\n");
+	}
+
+	/** Marks the tab as agent-driven (by `who`, the session) while `fn` runs, so views can show who is in control. */
+	async asAgent<T>(id: string, fn: (page: Page) => Promise<T>, who = "agent"): Promise<T> {
 		const tab = this.tab(id);
-		this.current = id;
-		tab.agentBusy++;
-		for (const c of tab.clients) c.state(tab.info, "agent");
+		tab.agents.push(who);
+		this.tell(tab);
 		try {
 			return await fn(tab.page);
 		} finally {
-			tab.agentBusy--;
+			tab.agents.splice(tab.agents.lastIndexOf(who), 1);
 			await this.refresh(tab);
-			for (const c of tab.clients) c.state(tab.info, tab.agentBusy ? "agent" : "user");
+			this.tell(tab);
 		}
+	}
+
+	/** Open one more tab on purpose (an agent that wants a second page next to the first). */
+	async openAnother(url?: string): Promise<BrowserTabInfo> {
+		return this.create({ url });
 	}
 
 	async shutdown(): Promise<void> {
