@@ -1226,6 +1226,7 @@ export const en: Record<string, string> = {
 	"{name} 미리보기": "Preview {name}",
 	"파일이 커서 앞부분만 보여 줍니다": "The file is large, so only the beginning is shown",
 	"미리볼 수 없는 형식입니다. 저장해서 열어 보세요.": "No preview for this type. Save it to open.",
+	"재생할 수 없는 파일입니다. 파일이 깨졌거나 이 기기가 지원하지 않는 코덱일 수 있습니다. 저장해서 열어 보세요.": "This file can't be played. It may be damaged, or use a codec this device doesn't support. Save it to open.",
 	"(첨부한 파일을 봐 주세요)": "(Please look at the attached file)",
 	"사용할 수 있는 모델이 없습니다. 모델 선택창에서 연결을 추가하세요.": "No models are available. Add a connection from the model picker.",
 	"보내지 못했습니다": "Couldn't send",

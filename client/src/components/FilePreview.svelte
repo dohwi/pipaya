@@ -25,6 +25,8 @@
 	/** HTML shows as a page by default; this flips it to the source */
 	let source = $state(false);
 	let htmlUrl = $state<string | null>(null);
+	/** The browser could not play the audio/video (broken file, or a codec it lacks such as HEVC) */
+	let mediaFailed = $state(false);
 
 	const kind = $derived(open ? previewKind(open.file.name, open.file.mimeType) : "other");
 
@@ -47,6 +49,7 @@
 		failed = null;
 		truncated = false;
 		source = false;
+		mediaFailed = false;
 		loading = true;
 		app.api
 			.fetchFile(f.sessionId, f.file.path, ctl.signal)
@@ -109,12 +112,14 @@
 				</button>
 			{:else if kind === "pdf" && url}
 				<iframe class="pdf" src={url} title={open.file.name}></iframe>
+			{:else if (kind === "audio" || kind === "video") && mediaFailed}
+				<div class="note">{t("재생할 수 없는 파일입니다. 파일이 깨졌거나 이 기기가 지원하지 않는 코덱일 수 있습니다. 저장해서 열어 보세요.")}</div>
 			{:else if kind === "audio" && url}
 				<!-- svelte-ignore a11y_media_has_caption -->
-				<audio class="media" src={url} controls preload="metadata"></audio>
+				<audio class="media" src={url} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
 			{:else if kind === "video" && url}
 				<!-- svelte-ignore a11y_media_has_caption -->
-				<video class="media" src={url} controls preload="metadata" playsinline></video>
+				<video class="media" src={url} controls preload="metadata" playsinline onerror={() => (mediaFailed = true)}></video>
 			{:else if kind === "html" && htmlUrl && !source}
 				<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
 				<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={open.file.name}></iframe>
