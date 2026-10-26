@@ -730,8 +730,8 @@
 		margin: 1px 2px;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	:global(:where(.side) .item.nested .open) {
-		padding-left: 43px; /* one step in: the tab's icon sits under the folder's name */
+	:global(:where(.side) .list .item.nested .open) {
+		padding-left: 43px; /* one step in: the tab's icon sits under the folder's icon (.list outranks the generic .open padding below) */
 	}
 	:global(:where(.side) .item:hover) {
 		background: var(--bg-hover);
