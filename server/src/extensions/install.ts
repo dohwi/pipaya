@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,6 +14,28 @@ const REPO = /^[\w.-]+\/[\w.-]+$/;
 const REF = /^\w[\w./-]*$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIR = /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*$/;
+
+/**
+ * Deletes what `installFromGit` (or a hand-copied file) put under `extensionsDir` for `id`. With `keepSettings` the
+ * shared settings of the id stay behind (`settings.json`, see extension-settings.ts). Returns false when nothing was there.
+ */
+export function removeInstalled(id: string, extensionsDir: string, keepSettings: boolean): boolean {
+	if (!/^[\w.-]+$/.test(id) || id.startsWith(".")) throw new Error("invalid extension name");
+	const dir = join(extensionsDir, id);
+	let found = false;
+	if (existsSync(dir)) {
+		found = true;
+		const settings = join(dir, "settings.json");
+		const kept = keepSettings && existsSync(settings) ? readFileSync(settings) : undefined;
+		rmSync(dir, { recursive: true, force: true });
+		if (kept) { mkdirSync(dir, { recursive: true, mode: 0o700 }); writeFileSync(settings, kept, { mode: 0o600 }); }
+	}
+	for (const ext of [".ts", ".js", ".mjs"]) {
+		const file = join(extensionsDir, id + ext);
+		if (existsSync(file)) { found = true; rmSync(file, { force: true }); }
+	}
+	return found;
+}
 
 /** Fetch the tag and refuse it when it no longer points at the pinned commit. */
 export async function installFromGit(id: string, src: GitSource, extensionsDir: string): Promise<string> {

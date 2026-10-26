@@ -312,6 +312,18 @@
 		});
 	}
 
+	function removeServer(ext: ServerExt, keepSettings: boolean) {
+		void run(srvKey(ext.name), async () => {
+			const api = app.api;
+			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
+			await api.removeServerExtension(ext.name, keepSettings);
+			tasks.closeRemove();
+			selected = null;
+			await Promise.all([loadServerSide(), app.refreshServerExtensions()]);
+			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
+		}, t("삭제하지 못했습니다"));
+	}
+
 	function removeUnreadable(index: number, keepSettings: boolean) {
 		void run(`unreadable:${index}`, () => {
 			extensions.removeUnreadable(index, { keepSettings });
@@ -421,6 +433,10 @@
 			oninstallclient={installCompanion}
 			onopenclient={(id) => (extensions.installed.some((e) => e.package.manifest.id === id && e.scope === view) ? (selected = id) : ongoclient?.(id))}
 			onenableclient={enable}
+			removing={tasks.removing === srvKey(openServer.name)}
+			onaskremove={(event) => askRemove(srvKey(openServer.name), event)}
+			oncancelremove={cancelRemove}
+			onremove={(keepSettings) => removeServer(openServer, keepSettings)}
 		/>
 	{:else}
 	<section aria-labelledby="extensions-installed">

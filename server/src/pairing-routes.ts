@@ -14,6 +14,7 @@ export const isAdminOnlyPath = (method: string, path: string) =>
 	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
 	// Server extensions execute code in this process; a paired phone may use their methods but never reload or install them.
 	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
+	(path.startsWith("/server-extensions/") && method === "DELETE") ||
 	// Replacing the server's own code and restarting it is the owner's call alone.
 	path === "/server/update";
 

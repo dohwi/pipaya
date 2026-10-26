@@ -69,7 +69,7 @@ beforeAll(async () => {
 	writeFileSync(join(extDir, "broken.js"), "export default () => { throw new Error('boom'); };");
 	upstream = startEchoUpstream();
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "db.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
-	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [extDir], home: dir });
+	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [extDir, join(dir, "extensions")], home: dir });
 	expect((await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).status).toBe(200);
 	expect((await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).status).toBe(200);
 });
@@ -77,6 +77,28 @@ afterAll(async () => {
 	await app.close();
 	upstream.stop();
 	rmSync(dir, { recursive: true, force: true });
+});
+
+describe("server extension removal", () => {
+	const names = async () => ((await api("GET", "/server-extensions")).json.extensions as any[]).map((e) => e.name);
+	test("DELETE removes an installed folder, optionally keeping its settings", async () => {
+		const folder = join(dir, "extensions", "gone");
+		mkdirSync(folder, { recursive: true });
+		writeFileSync(join(folder, "index.js"), "export default () => {};");
+		writeFileSync(join(folder, "settings.json"), '{"a":1}');
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		expect(await names()).toContain("gone");
+		expect((await api("DELETE", "/server-extensions/gone?keepSettings=true")).status).toBe(200);
+		expect(await names()).not.toContain("gone");
+		expect(existsSync(join(folder, "index.js"))).toBe(false);
+		expect(readFileSync(join(folder, "settings.json"), "utf8")).toBe('{"a":1}');
+		expect((await api("DELETE", "/server-extensions/gone")).status).toBe(404);
+	});
+	test("DELETE refuses unknown names and extensions outside the server's own folder", async () => {
+		expect((await api("DELETE", "/server-extensions/nope")).status).toBe(404);
+		expect((await api("DELETE", "/server-extensions/demo")).status).toBe(400);
+		expect(existsSync(join(extDir, "demo.js"))).toBe(true);
+	});
 });
 
 describe("server extensions", () => {

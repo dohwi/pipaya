@@ -1,5 +1,7 @@
 <script lang="ts">
+	import Button from "../Button.svelte";
 	import Notice from "../Notice.svelte";
+	import RemoveConfirm from "./RemoveConfirm.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { flagVariable, serverFields, serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
@@ -21,7 +23,16 @@
 		oninstallclient,
 		onopenclient,
 		onenableclient,
+		removing,
+		onaskremove,
+		oncancelremove,
+		onremove,
 	}: {
+		/** The delete question is open */
+		removing: boolean;
+		onaskremove: (event: Event) => void;
+		oncancelremove: () => void;
+		onremove: (keepSettings: boolean) => void;
 		ext: ServerExt;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
 		settings: Record<string, unknown> | undefined;
@@ -93,12 +104,30 @@
 			{/each}
 		</section>
 	{/if}
+
+	<section class="block">
+		<h3 class="section-label">{t("관리")}</h3>
+		<div class="row">
+			<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>
+		</div>
+		{#if removing}
+			<RemoveConfirm labelledby="extension-remove-{srvKey(ext.name)}" oncancel={oncancelremove}>
+				<p id="extension-remove-{srvKey(ext.name)}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
+				<div class="row">
+					<Button size="sm" disabled={busy} onclick={() => onremove(true)}>{t("설정 유지하고 삭제")}</Button>
+					<Button variant="danger" size="sm" disabled={busy} onclick={() => onremove(false)}>{t("설정까지 삭제")}</Button>
+					<Button size="sm" data-cancel disabled={busy} onclick={oncancelremove}>{t("취소")}</Button>
+				</div>
+			</RemoveConfirm>
+		{/if}
+	</section>
 </ExtensionPage>
 
 <style>
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	p { margin: 0; }
+	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }

@@ -118,6 +118,7 @@ describe("per-device tokens over HTTP", () => {
 	test("a device token cannot reload or install server extensions", async () => {
 		const token = await pair();
 		expect((await as(token, "POST", "/server-extensions/reload")).status).toBe(403);
+		expect((await as(token, "DELETE", "/server-extensions/x")).status).toBe(403);
 		expect((await as(token, "POST", "/server-extensions/install", { id: "x", repo: "a/b", ref: "v1", commit: "a".repeat(40) })).status).toBe(403);
 	});
 	test("the admin lists tokens by name (never the secret) and revoking one locks only that device out", async () => {

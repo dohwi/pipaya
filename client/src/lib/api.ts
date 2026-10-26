@@ -190,6 +190,8 @@ export class Api {
 	/** The client half a server extension carries in its folder (`pipaya.client`); unvalidated JSON. */
 	serverExtensionClient = (extension: string, signal?: AbortSignal) =>
 		this.req<{ package: unknown }>("GET", `/server-extensions/${encodeURIComponent(extension)}/client`, undefined, signal).then((r) => r.package);
+	removeServerExtension = (extension: string, keepSettings: boolean, signal?: AbortSignal) =>
+		this.req<{ extensions: unknown[] }>("DELETE", `/server-extensions/${encodeURIComponent(extension)}${keepSettings ? "?keepSettings=true" : ""}`, undefined, signal);
 	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal);
 
 	/* ---------- settings that belong to this server ---------- */

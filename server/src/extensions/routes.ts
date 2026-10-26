@@ -4,7 +4,7 @@ import { badRequest, notFound } from "../errors.ts";
 import { errors, IdParams } from "../schemas.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
 import type { ExtensionHost } from "./host.ts";
-import { installFromGit } from "./install.ts";
+import { installFromGit, removeInstalled } from "./install.ts";
 
 const Info = Type.Object({
 	name: Type.String(),
@@ -42,6 +42,22 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 			} catch (e) {
 				throw badRequest(e instanceof Error ? e.message : String(e));
 			}
+			return { extensions: await host.reload() };
+		},
+	});
+	app.delete("/server-extensions/:extension", {
+		schema: {
+			params: Type.Object({ extension: Type.String() }),
+			querystring: Type.Object({ keepSettings: Type.Optional(Type.Boolean({ description: "Keep the shared settings of the extension (default: delete them too)" })) }),
+			response: { 200: Type.Object({ extensions: Type.Array(Info) }), ...errors(400, 401, 403, 404) },
+		},
+		handler: async (req) => {
+			// Only what lives in the server's own extensions folder can go; `~/.agents/extensions` and extra paths are the owner's files.
+			const folder = req.params.extension.split("/")[0]!;
+			if (!host.list().some((e) => e.name.split("/")[0] === folder)) throw notFound("extension");
+			let found: boolean;
+			try { found = removeInstalled(folder, installDir, req.query.keepSettings === true); } catch (e) { throw badRequest(e instanceof Error ? e.message : String(e)); }
+			if (!found) throw badRequest("this extension is not in the server's extensions folder; delete its files by hand");
 			return { extensions: await host.reload() };
 		},
 	});
