@@ -239,6 +239,7 @@
 						{/if}
 					</div>
 					{#if removing === entry.id}
+						<div class="cover">
 						<RemoveConfirm labelledby="market-remove-{entry.id}" oncancel={() => (removing = "")}>
 							<p id="market-remove-{entry.id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
 							<div class="row">
@@ -247,6 +248,7 @@
 								<Button size="sm" data-cancel disabled={!!working} onclick={() => (removing = "")}>{t("취소")}</Button>
 							</div>
 						</RemoveConfirm>
+						</div>
 					{/if}
 					{#if entry.kind === "client" && have && askingServer !== entry.id}
 						{@const s = serverOf(entry)}
@@ -295,6 +297,9 @@
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 	.item { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.item { position: relative; min-height: 150px; }
+	.cover { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: center; padding: 10px; border-radius: var(--radius); background: var(--bg-elev); }
+	.cover :global(.confirm) { flex: 1; justify-content: center; }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }
