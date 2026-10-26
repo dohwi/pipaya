@@ -182,11 +182,15 @@
 	}
 
 	/** The app toasts sit under the viewer (z-index), so the result is shown here, over the picture */
-	let note = $state<{ text: string; ok: boolean; n: number } | null>(null);
+	let note = $state<{ text: string; ok: boolean; n: number; top: number } | null>(null);
 	let noteTimer: ReturnType<typeof setTimeout> | undefined;
 	let noteN = 0;
+	const NOTE_H = 40;
 	function notify(text: string, ok: boolean) {
-		note = { text, ok, n: ++noteN };
+		// just above the picture's top edge (follows zoom/pan); a picture that fills the height leaves no room, so the
+		// note stops under the top bar and overlaps the picture's top a little
+		const r = pic?.getBoundingClientRect();
+		note = { text, ok, n: ++noteN, top: r ? r.top - NOTE_H - 10 : 0 };
 		clearTimeout(noteTimer);
 		noteTimer = setTimeout(() => (note = null), ok ? 2000 : 3000);
 	}
@@ -259,7 +263,7 @@
 
 		{#if note}
 			{#key note.n}
-				<div class="note" class:err={!note.ok} role="status" aria-live="polite">
+				<div class="note" class:err={!note.ok} style="--note-top: {note.top}px" role="status" aria-live="polite">
 					<Icon name={note.ok ? "check" : "x"} />{note.text}
 				</div>
 			{/key}
@@ -388,8 +392,8 @@
 	.note {
 		position: absolute;
 		left: 50%;
-		/* just under the top bar (bar = 34px buttons + 2x12px padding), clear of the notch */
-		top: calc(58px + env(safe-area-inset-top, 0px));
+		/* above the picture, but never higher than just under the top bar (34px buttons + 2x12px padding) and the notch */
+		top: max(calc(58px + env(safe-area-inset-top, 0px)), var(--note-top, 0px));
 		translate: -50% 0;
 		max-width: min(92vw, 560px);
 		display: flex;
