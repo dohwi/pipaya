@@ -135,8 +135,8 @@
 	/** Can the carried thing become a tab of directory `d` beside its others: one of its tabs, or a pane of one of its groups. */
 	const ofDir = (d: DirBlock, id: string) => d.tabs.some((x) => x.id === id || (x.kind === "group" && x.members.some((m) => m.id === id)));
 	/** The edge a drag over tab `x` means, when it is a reorder. */
-	const reorderEdge = (d: DirBlock, x: string, pt: { x: number; y: number }) =>
-		!searching && drag.id && drag.id !== x && ofDir(d, drag.id) ? edgeAt(pt, isGroupId(drag.id)) : null;
+	const reorderEdge = (d: DirBlock, x: string, pt: { x: number; y: number }, carried: string | null = drag.id) =>
+		!searching && carried && carried !== x && ofDir(d, carried) ? edgeAt(pt, isGroupId(carried)) : null;
 	const tabHover = (d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
 		const edge = pt ? reorderEdge(d, x.id, pt) : null;
 		marks.setTab(x.id, edge);
@@ -144,7 +144,8 @@
 		marks.hover(x.id, pairs);
 	};
 	const tabDropAt = (n: Node, d: DirBlock, x: Tab) => async (id: string, pt: { x: number; y: number }) => {
-		const edge = reorderEdge(d, x.id, pt);
+		// drag.id is already cleared when drop runs, so pass the dropped id explicitly
+		const edge = reorderEdge(d, x.id, pt, id);
 		marks.tab = null;
 		if (edge) {
 			if (!d.tabs.some((t) => t.id === id)) await app.leaveGroup(id); // a pane steps out of its group into a tab
