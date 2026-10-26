@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from "../Button.svelte";
 	import Notice from "../Notice.svelte";
-	import RemoveConfirm from "./RemoveConfirm.svelte";
+	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { flagVariable, serverFields, serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
@@ -111,14 +111,7 @@
 			<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>
 		</div>
 		{#if removing}
-			<RemoveConfirm labelledby="extension-remove-{srvKey(ext.name)}" oncancel={oncancelremove}>
-				<p id="extension-remove-{srvKey(ext.name)}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
-				<div class="row">
-					<Button size="sm" disabled={busy} onclick={() => onremove(true)}>{t("설정 유지하고 삭제")}</Button>
-					<Button variant="danger" size="sm" disabled={busy} onclick={() => onremove(false)}>{t("설정까지 삭제")}</Button>
-					<Button size="sm" data-cancel disabled={busy} onclick={oncancelremove}>{t("취소")}</Button>
-				</div>
-			</RemoveConfirm>
+			<RemoveExtensionConfirm name={ext.name} busy={busy} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
 		{/if}
 	</section>
 </ExtensionPage>

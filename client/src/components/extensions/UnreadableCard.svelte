@@ -4,7 +4,7 @@
 	import type { UnreadableExtension } from "../../lib/extensions/host.svelte";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { t } from "../../lib/i18n";
-	import RemoveConfirm from "./RemoveConfirm.svelte";
+	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 
 	/**
 	 * An entry this version cannot read. Its raw data is kept (a version that understands it can read it again), so the
@@ -45,22 +45,7 @@
 		<Button variant="danger" size="sm" class="end" disabled={tasks.busy[key]} aria-expanded={tasks.removing === key} onclick={onaskremove}>{t("삭제")}</Button>
 	</div>
 	{#if tasks.removing === key}
-		<RemoveConfirm labelledby="extension-remove-{key}" oncancel={oncancelremove}>
-			{#if item.id}
-				<p id="extension-remove-{key}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
-				<div class="row">
-					<Button size="sm" disabled={tasks.busy[key]} onclick={() => onremove(true)}>{t("설정 유지하고 삭제")}</Button>
-					<Button variant="danger" size="sm" disabled={tasks.busy[key]} onclick={() => onremove(false)}>{t("설정까지 삭제")}</Button>
-					<Button size="sm" data-cancel disabled={tasks.busy[key]} onclick={oncancelremove}>{t("취소")}</Button>
-				</div>
-			{:else}
-				<p id="extension-remove-{key}">{t("이 항목을 삭제합니다. 되돌릴 수 없습니다.")}</p>
-				<div class="row">
-					<Button variant="danger" size="sm" disabled={tasks.busy[key]} onclick={() => onremove(false)}>{t("삭제")}</Button>
-					<Button size="sm" data-cancel disabled={tasks.busy[key]} onclick={oncancelremove}>{t("취소")}</Button>
-				</div>
-			{/if}
-		</RemoveConfirm>
+		<RemoveExtensionConfirm name={name} busy={tasks.busy[key]} keepable={!!item.id} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
 	{/if}
 </article>
 

@@ -621,18 +621,18 @@ describe("unreadable stored entries are preserved", () => {
 describe("components", () => {
 	test("settings form and navbar follow the compact/a11y requirements", async () => {
 		const { compile } = await import("svelte/compiler");
-		for (const f of ["extensions/SettingsForm", "Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveConfirm", "extensions/ExtensionRow", "extensions/ExtensionPage", "extensions/ServerDetail", "extensions/NavbarItems", "Header"]) {
+		for (const f of ["extensions/SettingsForm", "Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ExtensionPage", "extensions/ServerDetail", "extensions/NavbarItems", "Header"]) {
 			const source = await Bun.file(`src/components/${f}.svelte`).text();
 			expect(() => compile(source, { filename: `${f}.svelte`, generate: "client" }), f).not.toThrow();
 		}
 		const form = await Bun.file("src/components/extensions/SettingsForm.svelte").text();
 		for (const needle of ["aria-invalid", "aria-describedby", "고급: JSON 직접 편집", "<Accordion", "disabled={disabled || !resolved.ok}"]) expect(form).toContain(needle);
-		// the page is split into the list and its cards (Extensions, extensions/InstalledDetail, UnreadableCard, RemoveConfirm, ...): check them together
-		const parts = ["Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveConfirm", "extensions/ExtensionRow", "extensions/ServerDetail"];
+		// the page is split into the list and its cards (Extensions, extensions/InstalledDetail, UnreadableCard, RemoveExtensionConfirm, ...): check them together
+		const parts = ["Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ServerDetail"];
 		const page = (await Promise.all(parts.map((f) => Bun.file(`src/components/${f}.svelte`).text()))).join("\n");
 		expect(page).toContain("settingsProblem(id)");
 		expect(page).toContain("!!problem");
-		for (const needle of ["이 확장을 삭제합니다. 설정값은 어떻게 할까요?", "설정 유지하고 삭제", "설정까지 삭제", "읽을 수 없음", "원본 내보내기", "이 버전에서 지원하지 않는 형식입니다", "알 수 없는 확장", "Escape", "role=\"group\"", "keepSettings"]) expect(page).toContain(needle);
+		for (const needle of ["이 확장을 삭제합니다. 설정값은 어떻게 할까요?", "설정 유지하고 삭제", "설정까지 삭제", "읽을 수 없음", "원본 내보내기", "이 버전에서 지원하지 않는 형식입니다", "알 수 없는 확장", "role=\"alertdialog\"", "keepSettings"]) expect(page).toContain(needle);
 		expect(page).toContain("확장을 삭제했습니다. 설정값은 유지했습니다.");
 		expect(page).toContain("확장과 설정값을 삭제했습니다.");
 		const navbar = await Bun.file("src/components/extensions/NavbarItems.svelte").text();

@@ -7,7 +7,7 @@
 	import { t } from "../../lib/i18n";
 	import ExtensionPage from "./ExtensionPage.svelte";
 	import PermissionList from "./PermissionList.svelte";
-	import RemoveConfirm from "./RemoveConfirm.svelte";
+	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
 
 	/**
@@ -125,14 +125,7 @@
 			<Button variant="danger" size="sm" class="end" disabled={tasks.busy[id]} aria-expanded={tasks.removing === id} onclick={onaskremove}>{t("삭제")}</Button>
 		</div>
 		{#if tasks.removing === id}
-			<RemoveConfirm labelledby="extension-remove-{id}" oncancel={oncancelremove}>
-				<p id="extension-remove-{id}">{t("이 확장을 삭제합니다. 설정값은 어떻게 할까요?")}</p>
-				<div class="row">
-					<Button size="sm" disabled={tasks.busy[id]} onclick={() => onremove(true)}>{t("설정 유지하고 삭제")}</Button>
-					<Button variant="danger" size="sm" disabled={tasks.busy[id]} onclick={() => onremove(false)}>{t("설정까지 삭제")}</Button>
-					<Button size="sm" data-cancel disabled={tasks.busy[id]} onclick={oncancelremove}>{t("취소")}</Button>
-				</div>
-			</RemoveConfirm>
+			<RemoveExtensionConfirm name={entry.package.manifest.name} busy={tasks.busy[id]} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
 		{/if}
 	</section>
 </ExtensionPage>
