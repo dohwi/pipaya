@@ -38,7 +38,7 @@ fn show_toast(app: tauri::AppHandle, title: String, body: Option<String>, sessio
 #[tauri::command]
 fn show_toast() {}
 
-/// The server bundled with the desktop app (sidecar), loopback-only unless `PIPAYA_APP_HOST` is set.
+/// The server bundled with the desktop app (sidecar), loopback-only unless the settings (or `PIPAYA_APP_HOST`) say otherwise.
 #[cfg(desktop)]
 mod local_server {
     use std::io::Read;
@@ -61,13 +61,46 @@ mod local_server {
         token: String,
     }
 
-    /// Address the bundled server binds to. `PIPAYA_APP_HOST` (e.g. a Tailscale IP) opts in to
-    /// remote access; the default stays loopback-only.
-    fn bind_host() -> String {
-        std::env::var("PIPAYA_APP_HOST")
+    /// Where the bundled server listens, chosen in the settings screen (`server-bind.json` in the app data dir).
+    #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+    #[serde(rename_all = "camelCase", default)]
+    pub struct Bind {
+        /// Empty means loopback only.
+        host: String,
+        /// 0 means "8788 if free, else any".
+        port: u16,
+    }
+
+    fn bind_file(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+        let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        Ok(dir.join("server-bind.json"))
+    }
+
+    /// Write the setting file, or remove it when `text` is None (back to the default).
+    fn write_bind(file: &std::path::Path, text: Option<&str>) -> Result<(), String> {
+        match text {
+            Some(t) => std::fs::write(file, t).map_err(|e| e.to_string()),
+            None => match std::fs::remove_file(file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+                _ => Ok(()),
+            },
+        }
+    }
+
+    fn read_bind(app: &tauri::AppHandle) -> Bind {
+        bind_file(app)
             .ok()
-            .map(|h| h.trim().to_string())
-            .filter(|h| !h.is_empty())
+            .and_then(|f| std::fs::read_to_string(f).ok())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    /// Address the bundled server binds to: the saved setting, else `PIPAYA_APP_HOST`, else loopback.
+    fn bind_host(saved: &Bind) -> String {
+        let pick = |h: &str| Some(h.trim().to_string()).filter(|h| !h.is_empty());
+        pick(&saved.host)
+            .or_else(|| std::env::var("PIPAYA_APP_HOST").ok().and_then(|h| pick(&h)))
             .unwrap_or_else(|| "127.0.0.1".into())
     }
 
@@ -79,10 +112,12 @@ mod local_server {
         }
     }
 
-    fn pick_port(host: &str) -> u16 {
-        // An explicit `PIPAYA_APP_PORT` wins; otherwise prefer a stable port so the saved
-        // address keeps working across launches.
-        let forced = std::env::var("PIPAYA_APP_PORT").ok().and_then(|p| p.trim().parse::<u16>().ok());
+    fn pick_port(host: &str, saved: &Bind) -> u16 {
+        // An explicit port (setting, else `PIPAYA_APP_PORT`) is tried first; otherwise prefer a
+        // stable port so the saved address keeps working across launches.
+        let forced = Some(saved.port)
+            .filter(|p| *p != 0)
+            .or_else(|| std::env::var("PIPAYA_APP_PORT").ok().and_then(|p| p.trim().parse::<u16>().ok()));
         let mut candidates = Vec::new();
         candidates.extend(forced);
         candidates.extend([8788u16, 0]);
@@ -117,9 +152,10 @@ mod local_server {
         let data = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("server");
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
         let workspace = app.path().home_dir().map_err(|e| e.to_string())?;
-        let host = bind_host();
+        let saved = read_bind(app);
+        let host = bind_host(&saved);
         let reach = connect_host(&host);
-        let port = pick_port(&host);
+        let port = pick_port(&host, &saved);
         let mut cmd = Command::new(&bin);
         cmd.env("PIPAYA_HOST", &host)
             .env("PIPAYA_PORT", port.to_string())
@@ -172,6 +208,45 @@ mod local_server {
     }
 
     #[tauri::command]
+    pub fn local_server_bind(app: tauri::AppHandle) -> Bind {
+        read_bind(&app)
+    }
+
+    /// Save where the bundled server listens and restart it there. Reverts the file if it cannot start.
+    #[tauri::command]
+    pub async fn set_local_server_bind(
+        app: tauri::AppHandle,
+        state: tauri::State<'_, Arc<State>>,
+        host: String,
+        port: u16,
+    ) -> Result<Info, String> {
+        let host = host.trim().to_string();
+        if !host.is_empty() && host.parse::<std::net::IpAddr>().is_err() {
+            return Err(format!("invalid address: {host}"));
+        }
+        let file = bind_file(&app)?;
+        let previous = std::fs::read_to_string(&file).ok();
+        let next = serde_json::to_string(&Bind { host, port }).map_err(|e| e.to_string())?;
+        write_bind(&file, Some(&next))?;
+        let st = state.inner().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            stop(&st);
+            match start(&app, &st) {
+                Ok(i) => Ok(i),
+                Err(e) => {
+                    // Put the old setting back and bring the server up where it was.
+                    let _ = write_bind(&file, previous.as_deref());
+                    stop(&st);
+                    let _ = start(&app, &st);
+                    Err(e)
+                }
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+
+    #[tauri::command]
     pub async fn local_server(app: tauri::AppHandle, state: tauri::State<'_, Arc<State>>) -> Result<Info, String> {
         let st = state.inner().clone();
         tauri::async_runtime::spawn_blocking(move || start(&app, &st))
@@ -182,6 +257,14 @@ mod local_server {
 
 #[cfg(not(desktop))]
 mod local_server {
+    #[tauri::command]
+    pub fn local_server_bind() {}
+
+    #[tauri::command]
+    pub async fn set_local_server_bind(_host: String, _port: u16) -> Result<(), String> {
+        Err("not available on this platform".into())
+    }
+
     #[tauri::command]
     pub async fn local_server() -> Result<(), String> {
         Err("not available on this platform".into())
@@ -258,7 +341,12 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
 
     builder
-        .invoke_handler(tauri::generate_handler![show_toast, local_server::local_server])
+        .invoke_handler(tauri::generate_handler![
+            show_toast,
+            local_server::local_server,
+            local_server::local_server_bind,
+            local_server::set_local_server_bind
+        ])
         .setup(|app| {
             #[cfg(desktop)]
             {

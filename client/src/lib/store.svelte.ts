@@ -502,6 +502,24 @@ class AppStore {
   /** False until the desktop app has tried to start its bundled server (so the empty-list screen does not flash). */
   localChecked = $state(false);
 
+  /** Where the bundled server listens now (desktop only); null when this build has none. */
+  async localBind(): Promise<{ host: string; port: number } | null> {
+    if (!isTauri()) return null;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return await invoke<{ host: string; port: number }>("local_server_bind");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Change where the bundled server listens ("" = this PC only) and restart it there. Throws the reason on failure. */
+  async setLocalBind(host: string, port: number) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const info = await invoke<{ baseUrl: string; token: string }>("set_local_server_bind", { host, port });
+    await this.applyLocalInfo(info);
+  }
+
   private async startLocalServer() {
     if (!isTauri()) return;
     let info: { baseUrl: string; token: string };
@@ -511,6 +529,10 @@ class AppStore {
     } catch {
       return; // mobile, or the bundled server is missing (dev build): the manual flow still works
     }
+    await this.applyLocalInfo(info);
+  }
+
+  private async applyLocalInfo(info: { baseUrl: string; token: string }) {
     const baseUrl = normalizeUrl(info.baseUrl);
     const cur = this.servers.find((s) => s.local);
     if (cur) {
