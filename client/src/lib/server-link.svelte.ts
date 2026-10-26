@@ -3,6 +3,7 @@ import { compat, isClientTooOld, type ServerVersions } from "./protocol";
 import { t } from "./i18n";
 import { emptyLinkData, type LinkData } from "./server-link-model";
 import type { Server } from "./store-model";
+import type { BrowserSupport, BrowserTabInfo } from "./browser";
 import type { TerminalInfo, TerminalSupport } from "./terminal";
 import type {
 	DefaultModelSelection, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
@@ -39,6 +40,7 @@ export class ServerLink {
 	toolsInfo = $state<ToolsInfo | null>(null);
 	serverDefault = $state<DefaultModelSelection | null>(null);
 	terminalSupport = $state<TerminalSupport | null>(null);
+	browserSupport = $state<BrowserSupport | null>(null);
 
 	private unsubscribe: (() => void) | null = null;
 	private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -105,7 +107,7 @@ export class ServerLink {
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
 				return;
 			}
-			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await Promise.all([
+			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, browsers, browserSupport, activity] = await Promise.all([
 				api.listSessions(200, false),
 				api.models(),
 				api.providers(),
@@ -116,6 +118,8 @@ export class ServerLink {
 				api.groups().catch(() => [] as Group[]), // servers from before session groups existed
 				api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
 				api.terminalSupport().catch(() => null),
+				api.browsers().catch(() => [] as BrowserTabInfo[]), // servers from before browser tabs existed
+				api.browserSupport().catch(() => null),
 				api.activity().catch(() => null),
 			]);
 			if (token !== this.token) return;
@@ -133,6 +137,7 @@ export class ServerLink {
 				archived: list.sessions.filter((s: Session) => !s.closed && s.archived),
 				groups,
 				terminals,
+				browsers,
 				running,
 				awaiting,
 				unread,
@@ -140,6 +145,7 @@ export class ServerLink {
 			};
 			this.workspace = workspace;
 			this.terminalSupport = terminalSupport;
+			this.browserSupport = browserSupport;
 			this.models = models;
 			this.providers = providers;
 			this.tools = tools.tools;

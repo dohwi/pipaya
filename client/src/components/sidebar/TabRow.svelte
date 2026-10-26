@@ -43,10 +43,10 @@
 	{drop}
 	over={sb.marks.over(x.id)}
 	{member}
-	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
+	class={["tab", (target.kind === "terminal" || target.kind === "browser") && "term", member && "member", n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && sb.startRename(x.id, x.title)} title={tip}>
+	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && target.kind !== "browser" && sb.startRename(x.id, x.title)} title={tip}>
 		{@render body()}
 	</button>
 </RowShell>

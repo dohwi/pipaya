@@ -1,4 +1,5 @@
 import type { Group, PipayaEvent, Session } from "./types";
+import type { BrowserTabInfo } from "./browser";
 import type { TerminalInfo } from "./terminal";
 
 /** What the client keeps live about one server: its lists and what each session is doing. */
@@ -8,13 +9,14 @@ export interface LinkData {
 	archived: Session[];
 	groups: Group[];
 	terminals: TerminalInfo[];
+	browsers: BrowserTabInfo[];
 	running: Record<string, boolean>;
 	awaiting: Record<string, number>;
 	unread: Record<string, boolean>;
 	failed: Record<string, boolean>;
 }
 
-export const emptyLinkData = (): LinkData => ({ sessions: [], archived: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {} });
+export const emptyLinkData = (): LinkData => ({ sessions: [], archived: [], groups: [], terminals: [], browsers: [], running: {}, awaiting: {}, unread: {}, failed: {} });
 
 /** Events that can change a link's lists (the rest are about a transcript, which a background server does not hold). */
 export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
@@ -70,6 +72,17 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 			else d.terminals.push(x);
 			break;
 		}
+		case "browser_created":
+		case "browser_updated": {
+			const x = e.data as BrowserTabInfo;
+			const i = d.browsers.findIndex((y) => y.id === x.id);
+			if (i >= 0) d.browsers[i] = x;
+			else d.browsers.push(x);
+			break;
+		}
+		case "browser_closed":
+			d.browsers = d.browsers.filter((x) => x.id !== (e.data as { id: string }).id);
+			break;
 		case "terminal_closed":
 			d.terminals = d.terminals.filter((x) => x.id !== (e.data as { id: string }).id);
 			break;

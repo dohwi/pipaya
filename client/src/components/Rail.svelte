@@ -30,8 +30,9 @@
 			const ov = app.links[server.id]?.data;
 			const sessions = ov?.sessions ?? [];
 			const terminals = ov?.terminals ?? [];
-			if (!sessions.length && !terminals.length) return [];
-			const dirs = sidebarDirs(sessions, ov?.groups ?? [], terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] });
+			const browsers = ov?.browsers ?? [];
+			if (!sessions.length && !terminals.length && !browsers.length) return [];
+			const dirs = sidebarDirs(sessions, ov?.groups ?? [], terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] }, browsers);
 			const state: Record<string, Activity> = {};
 			if (ov) for (const x of sessions) state[x.id] = activityOf(ov, x.id);
 			return [{ server, current, dirs, state }];
@@ -53,6 +54,7 @@
 		openContextMenu(pt, `rail:${d.path}`, newMenuEntries(platformName(os), {
 			chat: () => app.openIn(sec.server.id, { workdir }),
 			terminal: () => app.openIn(sec.server.id, { workdir, terminal: true }),
+			browser: () => app.openIn(sec.server.id, { workdir, browser: true }),
 		}));
 		return closeContextMenu;
 	}

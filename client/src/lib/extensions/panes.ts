@@ -1,5 +1,6 @@
 import type { app as AppStore } from "../store.svelte";
 import { measure, panesOf, resizePane, swap, type Edge, type Layout } from "../layout";
+import { isBrowserId } from "../browser";
 import { isTerminalId } from "../terminal";
 import type { ThinkingLevel } from "../types";
 import { LocalizedError, t } from "../i18n";
@@ -8,7 +9,7 @@ import { LocalizedError, t } from "../i18n";
 export interface PaneInfo {
   /** Session id (`s…`) or terminal id. The same id addresses the pane in every `sdk.panes` call. */
   id: string;
-  kind: "session" | "terminal";
+  kind: "session" | "terminal" | "browser";
   title: string;
   cwd: string;
   focused: boolean;
@@ -85,13 +86,13 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export function paneAdapter(app: typeof AppStore): PaneAdapter {
   const known = (id: string) => app.shows(id) || fail(t("열려 있지 않은 패널입니다: {id}", { id }));
-  const sessionOnly = (id: string) => { known(id); if (isTerminalId(id)) fail(t("터미널에는 쓸 수 없는 동작입니다")); };
+  const sessionOnly = (id: string) => { known(id); if (isTerminalId(id) || isBrowserId(id)) fail(t("터미널이나 브라우저에는 쓸 수 없는 동작입니다")); };
   const groupOf = (id: string) => app.groupOf(id);
   const info = (id: string): PaneInfo => {
-    const s = app.session(id), term = app.terminal(id), g = groupOf(id);
+    const s = app.session(id), term = app.terminal(id), web = app.browser(id), g = groupOf(id);
     const box = g ? measure(g.layout).panes.find(p => p.id === id) : undefined;
     return {
-      id, kind: s ? "session" : "terminal", title: (s?.title || term?.title) ?? "", cwd: (s?.cwd || term?.cwd) ?? "",
+      id, kind: s ? "session" : web ? "browser" : "terminal", title: (s?.title || term?.title || web?.title || web?.url) ?? "", cwd: (s?.cwd || term?.cwd || web?.cwd) ?? "",
       focused: app.activeId === id, running: !!s && !!app.running[id], awaitingInput: s ? app.awaiting[id] ?? 0 : 0,
       model: s?.model ?? null, provider: s?.provider ?? null, thinkingLevel: s?.thinkingLevel ?? null, groupId: g?.id ?? null,
       box: box ? { x: box.x, y: box.y, w: box.w, h: box.h } : { x: 0, y: 0, w: 1, h: 1 },
@@ -165,7 +166,7 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
       await app.saveLayout(g.id, next);
     },
     async leave(id) { known(id); await app.leaveGroup(id); },
-    async close(id) { known(id); await (isTerminalId(id) ? app.closeTerminal(id) : app.close(id)); },
+    async close(id) { known(id); await (isTerminalId(id) ? app.closeTerminal(id) : isBrowserId(id) ? app.closeBrowser(id) : app.close(id)); },
     async zoom(id) {
       if (id === null) { app.zoomId = null; return; }
       known(id);

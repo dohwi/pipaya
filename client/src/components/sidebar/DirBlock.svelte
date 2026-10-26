@@ -9,12 +9,14 @@
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Session } from "../../lib/types";
 	import type { TerminalInfo } from "../../lib/terminal";
+	import type { BrowserTabInfo } from "../../lib/browser";
 	import Icon from "../Icon.svelte";
 	import GroupBlock from "./GroupBlock.svelte";
 	import NewButton from "./NewButton.svelte";
 	import ArchivedRow from "./ArchivedRow.svelte";
 	import SessionRow from "./SessionRow.svelte";
 	import TerminalRow from "./TerminalRow.svelte";
+	import BrowserRow from "./BrowserRow.svelte";
 
 	/**
 	 * One folder of a server: its header (fold, name, "+") and its tabs. The header can be dragged to reorder folders,
@@ -81,8 +83,10 @@
 					<SessionRow {n} x={tab.session} {drop} />
 				{:else if tab.kind === "terminal"}
 					<TerminalRow {n} x={tab.terminal} {drop} />
+				{:else if tab.kind === "browser"}
+					<BrowserRow {n} x={tab.browser} {drop} />
 				{:else}
-					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo)[]} {drop} />
+					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo | BrowserTabInfo)[]} {drop} />
 				{/if}
 			{/each}
 		</div>

@@ -41,7 +41,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "archive";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "globe" | "copy" | "chevron-down" | "chevron-right" | "archive";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -53,7 +53,7 @@ export interface MenuEntry {
 }
 
 /** What a row's menu can act on: a conversation, a terminal, or a split tab (group). */
-export type RowTarget = { kind: "session"; x: { id: string; title: string } } | { kind: "terminal"; x: { id: string; title: string } } | { kind: "group"; g: { id: string; name: string } };
+export type RowTarget = { kind: "session"; x: { id: string; title: string } } | { kind: "terminal"; x: { id: string; title: string } } | { kind: "browser"; x: { id: string; title: string } } | { kind: "group"; g: { id: string; name: string } };
 
 /** What the menu entries do; the sidebar supplies these, so the entries themselves are plain data. */
 export interface RowActions {
@@ -62,6 +62,7 @@ export interface RowActions {
 	groupWith(tab: { id: string; title: string }): void;
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
+	closeBrowser(id: string): void;
 	/** Tuck a conversation into the folder's archive (it stays open; a new message brings it back) */
 	archiveSession?(id: string): void;
 	dissolveGroup(id: string): void;
@@ -88,12 +89,15 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 	const close: MenuEntry =
 		target.kind === "terminal"
 			? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => act.closeTerminal(x.id) }
-			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
+			: target.kind === "browser"
+				? { icon: "x", label: t("브라우저 닫기"), title: t("브라우저 탭을 닫습니다"), run: () => act.closeBrowser(x.id) }
+				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
 	const leave = act.leaveGroup;
 	const archive = act.archiveSession;
 	return [
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
-		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
+		// a browser tab is named by its page
+		...(target.kind === "browser" ? [] : [{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) } satisfies MenuEntry]),
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
 		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
 		close,
@@ -104,6 +108,7 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 export interface NewActions {
 	chat(): void;
 	terminal(): void;
+	browser?(): void;
 }
 
 /** The "+" menu: a new conversation, and a new terminal named for the server's OS when it says what it runs. */
@@ -116,6 +121,7 @@ export function newMenuEntries(os: string | undefined, act: NewActions): MenuEnt
 			title: t("서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)"),
 			run: act.terminal,
 		},
+		...(act.browser ? [{ icon: "globe", label: t("새 브라우저"), title: t("서버의 브라우저에서 페이지를 엽니다. 에이전트와 함께 볼 수 있습니다"), run: act.browser } satisfies MenuEntry] : []),
 	];
 }
 

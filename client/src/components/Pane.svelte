@@ -23,8 +23,10 @@
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import Lazy from "./Lazy.svelte";
 	import { isTerminalId, platformName } from "../lib/terminal";
+	import { browserLabel, isBrowserId } from "../lib/browser";
 
 	const loadTerminal = () => import("./TerminalView.svelte");
+	const loadBrowser = () => import("./BrowserView.svelte");
 
 	/**
 	 * One conversation with its own input. `id` null = a new chat that has no session yet.
@@ -49,7 +51,10 @@
 	/** A terminal pane: the server's shell instead of a conversation */
 	const term = $derived(app.terminal(id));
 	const isTerm = $derived(isTerminalId(id));
-	const state = $derived(id && !isTerm ? activityOf(app, id) : "idle");
+	/** A browser pane: a page open in the server's Chromium, shared with the agents */
+	const web = $derived(app.browser(id));
+	const isWeb = $derived(isBrowserId(id));
+	const state = $derived(id && !isTerm && !isWeb ? activityOf(app, id) : "idle");
 	/** A label an extension put on this session. */
 	const tag = $derived(id ? (peerLabel(session) ?? extensions.labelOf(id)) : undefined);
 
@@ -62,6 +67,8 @@
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
 			isTerm
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(pane) }
+				: isWeb
+				? { icon: "x", label: t("브라우저 닫기"), title: t("브라우저 탭을 닫습니다"), run: () => void app.closeBrowser(pane) }
 				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(pane) },
 		];
 		openContextMenu(pt, `pane:${pane}`, items);
@@ -87,11 +94,16 @@
 		>
 			{#if isTerm}
 				<span class="ticon"><Icon name="terminal" /></span>
+			{:else if isWeb}
+				<span class="ticon"><Icon name="globe" /></span>
 			{:else}
 				<AgentBadge {id} {state} size={16} />
 			{/if}
 			<span class="tt">
-				{#if term}
+				{#if web}
+				<span class="t">{browserLabel(web, t("브라우저"))}</span>
+				<span class="cwd mono" title={web.url}>{web.url.replace(/^https?:\/\//, "")}</span>
+				{:else if term}
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
@@ -103,6 +115,7 @@
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
 			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
+			{#if isWeb}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeBrowser(id)} aria-label={t("브라우저 닫기")} title={t("브라우저 닫기")}><Icon name="x" /></button>{/if}
 		</header>
 	{/if}
 
@@ -113,6 +126,16 @@
 			{#key term.id}<Lazy load={loadTerminal} terminal={term} {focused} />{/key}
 		{:else}
 			<div class="gone">{t("터미널이 닫혔습니다")}</div>
+		{/if}
+	</div>
+	<DropLayer target={id!} />
+	{:else if isWeb}
+	<div class="body">
+		<SessionToasts id={id!} />
+		{#if web}
+			{#key web.id}<Lazy load={loadBrowser} tab={web} {focused} />{/key}
+		{:else}
+			<div class="gone">{t("브라우저가 닫혔습니다")}</div>
 		{/if}
 	</div>
 	<DropLayer target={id!} />

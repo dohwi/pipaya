@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
+	import { browserLabel } from "../lib/browser";
 	import Icon from "./Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Pin from "./Pin.svelte";
@@ -27,7 +28,7 @@
 	const activeTab = $derived(app.activeTab?.tab.id ?? null);
 	const ids = $derived(tabs.map((x) => x.id));
 
-	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? x.session.title : x.terminal.title);
+	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? x.session.title : x.kind === "browser" ? browserLabel(x.browser, t("브라우저")) : x.terminal.title);
 	/** The most pressing state among a tab's conversations. */
 	function stateOf(x: Tab): Activity {
 		const states = tabPanes(x)
@@ -80,9 +81,10 @@
 	function close(x: Tab) {
 		if (x.kind === "group") void app.deleteGroup(x.id);
 		else if (x.kind === "terminal") void app.closeTerminal(x.id);
+		else if (x.kind === "browser") void app.closeBrowser(x.id);
 		else void app.close(x.id);
 	}
-	const closeLabel = (x: Tab) => (x.kind === "group" ? t("그룹 해제 (대화는 그대로 남습니다)") : x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : t("닫기 (/resume 으로 다시 열기)"));
+	const closeLabel = (x: Tab) => (x.kind === "group" ? t("그룹 해제 (대화는 그대로 남습니다)") : x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : x.kind === "browser" ? t("브라우저 닫기") : t("닫기 (/resume 으로 다시 열기)"));
 
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
 	let menuId = $state<string | null>(null);
@@ -91,6 +93,7 @@
 		newMenuEntries(platformName(app.terminalSupport?.platform), {
 			chat: () => void (app.serverId && app.openIn(app.serverId, { workdir })),
 			terminal: () => void (app.serverId && app.openIn(app.serverId, { workdir, terminal: true })),
+			browser: () => void app.openBrowser(undefined, undefined, workdir),
 		});
 
 	/* ---- context menu (right click / long press): the sidebar row's entries, renaming in place ---- */
@@ -105,6 +108,7 @@
 			closeSession: (id) => void app.close(id),
 			archiveSession: (id) => void app.archive(id),
 			closeTerminal: (id) => void app.closeTerminal(id),
+			closeBrowser: (id) => void app.closeBrowser(id),
 			dissolveGroup: (id) => void app.deleteGroup(id),
 		});
 	function tabMenu(pt: Point, x: Tab) {
@@ -117,6 +121,7 @@
 		const x = tabs.find((y) => y.id === done.id);
 		if (x?.kind === "group") void app.renameGroup(done.id, done.name);
 		else if (x?.kind === "terminal") void app.renameTerminal(done.id, done.name);
+		else if (x?.kind === "browser") return;
 		else void app.rename(done.id, done.name);
 	}
 	function focusSelect(node: HTMLInputElement) {
@@ -169,6 +174,8 @@
 						<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
 					{:else if x.kind === "terminal"}
 						<span class="ico"><Icon name="terminal" /></span>
+					{:else if x.kind === "browser"}
+						<span class="ico"><Icon name="globe" /></span>
 					{:else}
 						<AgentBadge id={x.id} state={st} size={16} />
 					{/if}

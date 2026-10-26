@@ -6,6 +6,7 @@
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Group, Session } from "../../lib/types";
 	import type { TerminalInfo } from "../../lib/terminal";
+	import type { BrowserTabInfo } from "../../lib/browser";
 	import Icon from "../Icon.svelte";
 	import RowShell from "./RowShell.svelte";
 	import RowTitle from "./RowTitle.svelte";
@@ -22,7 +23,7 @@
 	}: {
 		n: SidebarNode;
 		g: Group;
-		members: (Session | TerminalInfo)[];
+		members: (Session | TerminalInfo | BrowserTabInfo)[];
 		drop: DropOpts;
 	} = $props();
 

@@ -349,6 +349,12 @@ export class Api {
 	renameTerminal = (id: string, title: string) => this.req<import("./terminal").TerminalInfo>("PATCH", `/terminals/${encodeURIComponent(id)}`, { title });
 	closeTerminal = (id: string) => this.req<{ ok: boolean }>("DELETE", `/terminals/${encodeURIComponent(id)}`);
 
+	/* ---------- browser tabs (pages in a Chromium on the server) ---------- */
+	browserSupport = () => this.req<import("./browser").BrowserSupport>("GET", "/browsers/info");
+	browsers = () => this.req<{ tabs: import("./browser").BrowserTabInfo[] }>("GET", "/browsers").then((r) => r.tabs);
+	createBrowser = (input: { url?: string; cwd?: string }) => this.req<import("./browser").BrowserTabInfo>("POST", "/browsers", input);
+	closeBrowser = (id: string) => this.req<{ ok: boolean }>("DELETE", `/browsers/${encodeURIComponent(id)}`);
+
 
 	questions = () =>
 		this.req<{ questions: Question[] }>("GET", "/questions").then((r) => r.questions).catch(() => [] as Question[]);
@@ -401,6 +407,9 @@ export const EVENT_TYPES = [
 	"terminal_created",
 	"terminal_updated",
 	"terminal_closed",
+	"browser_created",
+	"browser_updated",
+	"browser_closed",
 	"run_started",
 	"run_finished",
 	"run_limit",
