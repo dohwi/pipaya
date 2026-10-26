@@ -10,6 +10,7 @@
 	import { saveFile, sourceBlob } from "../lib/save-file";
 	import { copyImage } from "../lib/clipboard";
 	import { errorText } from "../lib/api";
+	import { onDestroy } from "svelte";
 
 	/** Full-screen image viewer: zoom, pan, step through the images of one message, save. */
 	let { onclose }: { onclose: () => void } = $props();
@@ -62,7 +63,23 @@
 		zoomTo(scale * Math.exp(-e.deltaY * 0.0022), p.x, p.y);
 	}
 
+	/** Long press on the picture (touch) copies it */
+	const HOLD = 550;
+	let holdTimer: ReturnType<typeof setTimeout> | undefined;
+	let touched = false;
+	const cancelHold = () => clearTimeout(holdTimer);
+
 	function ondown(e: PointerEvent) {
+		touched = e.pointerType === "touch";
+		cancelHold();
+		if (touched && pts.size === 0 && overPicture(e)) {
+			holdTimer = setTimeout(() => {
+				if (moved || pts.size !== 1) return;
+				moved = true; // the release after a long press is not a tap
+				navigator.vibrate?.(15);
+				void copy();
+			}, HOLD);
+		}
 		downOnBackdrop = !overPicture(e);
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -86,6 +103,7 @@
 
 	function onmove(e: PointerEvent) {
 		if (!pts.has(e.pointerId)) return;
+		if (Math.hypot(e.clientX - from.x, e.clientY - from.y) > 8 || pts.size > 1) cancelHold();
 		pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		if (pts.size === 2) {
 			const d = dist();
@@ -106,6 +124,7 @@
 
 	function onup(e: PointerEvent) {
 		const swipe = pts.size === 1 && !pinched && scale === 1 && many;
+		cancelHold();
 		pts.delete(e.pointerId);
 		pinch = 0;
 		dragging = false;
@@ -162,10 +181,24 @@
 		}
 	}
 
+	/** The app toasts sit under the viewer (z-index), so the result is shown here, over the picture */
+	let note = $state<{ text: string; ok: boolean; n: number } | null>(null);
+	let noteTimer: ReturnType<typeof setTimeout> | undefined;
+	let noteN = 0;
+	function notify(text: string, ok: boolean) {
+		note = { text, ok, n: ++noteN };
+		clearTimeout(noteTimer);
+		noteTimer = setTimeout(() => (note = null), 1600);
+	}
+	onDestroy(() => {
+		clearTimeout(noteTimer);
+		cancelHold();
+	});
+
 	async function copy() {
 		if (!img) return;
-		if (await copyImage(img.src)) app.toast(t("이미지를 복사했습니다"), "ok");
-		else app.toast(t("복사하지 못했습니다"), "error");
+		if (await copyImage(img.src)) notify(t("이미지를 복사했습니다"), true);
+		else notify(t("복사하지 못했습니다"), false);
 	}
 
 	function onkey(e: KeyboardEvent) {
@@ -210,6 +243,7 @@
 			onpointerup={onup}
 			onpointercancel={onup}
 			ondblclick={ondbl}
+			oncontextmenu={(e) => touched && e.preventDefault()}
 		>
 			{#key set.index}
 				<img
@@ -222,6 +256,14 @@
 				/>
 			{/key}
 		</div>
+
+		{#if note}
+			{#key note.n}
+				<div class="note" class:err={!note.ok} role="status" aria-live="polite">
+					<Icon name={note.ok ? "check" : "x"} />{note.text}
+				</div>
+			{/key}
+		{/if}
 
 		<div class="bar top">
 			{#if many}<span class="count mono">{set.index + 1} / {set.images.length}</span>{/if}
@@ -284,6 +326,7 @@
 		box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
 		user-select: none;
 		-webkit-user-drag: none;
+		-webkit-touch-callout: none;
 		will-change: transform;
 	}
 	img.snap {
@@ -341,6 +384,37 @@
 		width: 18px;
 		height: 18px;
 		stroke-width: 1.8;
+	}
+	.note {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		translate: -50% -50%;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 18px;
+		font-size: var(--fs-md, 14px);
+		color: #fff;
+		background: rgba(20, 20, 20, 0.88);
+		border-radius: 999px;
+		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+		pointer-events: none;
+		animation: note-in var(--motion-fast) var(--ease-std);
+	}
+	.note.err {
+		background: rgba(150, 30, 30, 0.92);
+	}
+	.note :global(svg) {
+		width: 18px;
+		height: 18px;
+		stroke-width: 2.2;
+	}
+	@keyframes note-in {
+		from {
+			opacity: 0;
+			scale: 0.92;
+		}
 	}
 	.dots {
 		position: absolute;
