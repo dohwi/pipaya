@@ -11,6 +11,8 @@
     "os:default",
     "os:allow-hostname",
     "opener:default",
+    "dialog:allow-save",
+    "fs:allow-write-file",
     "notification:default",
     "pipaya-push:default",
     "deep-link:default"

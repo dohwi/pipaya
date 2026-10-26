@@ -7,6 +7,7 @@
 	import { fadeIn, fadeOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import { app } from "../lib/store.svelte";
+	import { saveFile } from "../lib/save-file";
 
 	/** Full-screen image viewer: zoom, pan, step through the images of one message, save. */
 	let { onclose }: { onclose: () => void } = $props();
@@ -149,10 +150,7 @@
 	function save() {
 		if (!img) return;
 		const ext = img.mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
-		const a = document.createElement("a");
-		a.href = img.src;
-		a.download = `image-${(set?.index ?? 0) + 1}.${ext}`;
-		a.click();
+		void saveFile(img.src, `image-${(set?.index ?? 0) + 1}.${ext}`);
 	}
 
 	function onkey(e: KeyboardEvent) {

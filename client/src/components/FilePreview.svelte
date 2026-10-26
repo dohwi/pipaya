@@ -8,6 +8,7 @@
 	import { parseTable, previewKind, sizeLabel } from "../lib/files";
 	import Markdown from "./Markdown.svelte";
 	import Modal from "./Modal.svelte";
+	import { saveFile } from "../lib/save-file";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
 	const open = $derived(app.filePreview);
@@ -71,10 +72,7 @@
 
 	function save() {
 		if (!url || !open) return;
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = open.file.name;
-		a.click();
+		void saveFile(url, open.file.name);
 	}
 
 	async function copy() {
