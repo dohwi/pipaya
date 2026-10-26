@@ -17,6 +17,7 @@ export const K = {
   volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
   escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
   favModels: "pipaya.fav.models", // per server: pipaya.fav.models.<serverId>, entries "<provider>\u0000<modelId>"
+  favDirs: "pipaya.fav.dirs", // per server: pipaya.fav.dirs.<serverId>, absolute directory paths
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }

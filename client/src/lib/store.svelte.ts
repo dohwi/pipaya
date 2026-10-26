@@ -141,6 +141,8 @@ class AppStore {
   /** Starred sessions and models. Kept in this browser, like the layout; not part of the server's data. */
   /** Starred models of the open server (server scope: shared with every client of that server). */
   favModels = $state<string[]>([]);
+  /** Starred working directories (absolute paths) of the open server, shown in the directory picker */
+  favDirs = $state<string[]>([]);
   /** Minutes an unread PC notification waits before the phone is pushed too (server scope: the server acts on it) */
   escalateMinutes = $state<number>(DEFAULT_ESCALATE);
 
@@ -674,6 +676,7 @@ class AppStore {
     try {
       localStorage.removeItem(`${K.active}.${id}`);
       localStorage.removeItem(`${K.favModels}.${id}`);
+      localStorage.removeItem(`${K.favDirs}.${id}`);
       localStorage.removeItem(`${K.escalate}.${id}`);
       localStorage.removeItem(`pipaya.settings-sync.${id}`);
     } catch {
@@ -732,6 +735,7 @@ class AppStore {
     this.settingsSync?.dispose();
     this.settingsSync = null;
     this.favModels = this.loadFavModels(id);
+    this.favDirs = this.loadFavDirs(id);
     this.escalateMinutes = this.loadEscalate(id);
     if (changing) void extensions.switchServer();
     notifications.connect(null);
@@ -756,6 +760,7 @@ class AppStore {
     this.settingsSync?.dispose();
     this.settingsSync = null;
     this.favModels = [];
+    this.favDirs = [];
     this.escalateMinutes = DEFAULT_ESCALATE;
     notifications.connect(null);
     this.activeId = null;
@@ -1217,6 +1222,18 @@ class AppStore {
       : [...this.favModels, k];
     if (this.serverId) write(`${K.favModels}.${this.serverId}`, this.favModels);
     this.settingsSync?.changed("favModels");
+  }
+
+  isFavDir(path: string) {
+    return this.favDirs.includes(path);
+  }
+  toggleFavDir(path: string) {
+    this.favDirs = this.favDirs.includes(path) ? this.favDirs.filter((x) => x !== path) : [...this.favDirs, path];
+    if (this.serverId) write(`${K.favDirs}.${this.serverId}`, this.favDirs);
+  }
+  private loadFavDirs(serverId: string): string[] {
+    const list = read<unknown>(`${K.favDirs}.${serverId}`, []);
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
   }
 
   private loadEscalate(serverId: string): number {

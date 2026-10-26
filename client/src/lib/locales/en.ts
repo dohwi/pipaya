@@ -124,7 +124,6 @@ export const en: Record<string, string> = {
 	"경로": "Path",
 	"이동\u0004go": "Go",
 	"바로가기": "Shortcuts",
-	"최근": "Recent",
 	"현재 위치": "Current location",
 	"\"{path}\" 폴더를 찾을 수 없습니다": "Folder \"{path}\" not found",
 	"상위 폴더": "Parent folder",

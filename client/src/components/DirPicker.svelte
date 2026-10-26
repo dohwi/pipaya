@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
 	import FilterChip from "./FilterChip.svelte";
-	import { absoluteWorkdir, breadcrumbs, splitTyped } from "../lib/workdir-path";
+	import { breadcrumbs, splitTyped } from "../lib/workdir-path";
 	import { DirBrowser } from "../lib/dir-browser.svelte";
 	import { msg, t, tc } from "../lib/i18n";
 	import { onDestroy } from "svelte";
@@ -56,19 +56,6 @@
 		if (root) out.push({ path: root, label: msg("워크스페이스"), title: root });
 		const home = app.workspace?.home ?? browser.listing?.home;
 		if (home && home !== root) out.push({ path: home, label: msg("홈"), title: home });
-		return out;
-	});
-
-	const recents = $derived.by(() => {
-		const seen = new Set<string>();
-		const out: { path: string; sub: string }[] = [];
-		for (const w of app.workspace?.workdirs ?? []) {
-			const abs = absoluteWorkdir(w.path, app.workspace?.root);
-			if (!abs || seen.has(abs)) continue;
-			seen.add(abs);
-			out.push({ path: abs, sub: t("활성 {active} · 닫힘 {closed}", { active: w.active, closed: w.closed }) });
-			if (out.length >= 6) break;
-		}
 		return out;
 	});
 
@@ -163,23 +150,32 @@
 			</div>
 		</div>
 	{/if}
-	{#if recents.length && mode === "chat"}
+	{#if !remote && app.favDirs.length}
 		<div class="recent">
-			<span class="label">{t("최근")}</span>
+			<span class="label">{t("즐겨찾기")}</span>
 			<div class="chips">
-				{#each recents as r (r.path)}
-					<FilterChip size="sm" mono onclick={() => void enter(r.path)} title="{r.path} · {r.sub}">{base(r.path)}</FilterChip>
+				{#each app.favDirs as p (p)}
+					<FilterChip size="sm" mono on={browser.listing?.path === p} onclick={() => void enter(p)} title={p}>{base(p)}</FilterChip>
 				{/each}
 			</div>
 		</div>
 	{/if}
 
-	<nav class="crumbs mono" aria-label={t("현재 위치")}>
-		{#each crumbs as c, i (c.path)}
-			{#if i > 1}<span class="sep">/</span>{/if}
-			<button class:last={i === crumbs.length - 1} onclick={() => void enter(c.path)}>{c.name}</button>
-		{/each}
-	</nav>
+	<div class="crumbrow">
+		<nav class="crumbs mono" aria-label={t("현재 위치")}>
+			{#each crumbs as c, i (c.path)}
+				{#if i > 1}<span class="sep">/</span>{/if}
+				<button class:last={i === crumbs.length - 1} onclick={() => void enter(c.path)}>{c.name}</button>
+			{/each}
+		</nav>
+		{#if !remote && browser.listing}
+			{@const here = browser.listing.path}
+			{@const fav = app.isFavDir(here)}
+			<button type="button" class="favbtn" class:on={fav} aria-pressed={fav} onclick={() => app.toggleFavDir(here)} aria-label={fav ? t("즐겨찾기 해제") : t("즐겨찾기")} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
+				<Icon name="star" />
+			</button>
+		{/if}
+	</div>
 
 	<div class="list" class:loading={browser.loading}>
 		{#if browser.error}
@@ -284,7 +280,16 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
+	.crumbrow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding-right: 18px;
+		border-top: 1px solid var(--border);
+	}
 	.crumbs {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
@@ -292,7 +297,30 @@
 		padding: 6px 22px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
-		border-top: 1px solid var(--border);
+	}
+	.favbtn {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-xs);
+		color: var(--text-faint);
+	}
+	.favbtn:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.favbtn :global(svg) {
+		width: 16px;
+		height: 16px;
+		fill: none;
+	}
+	.favbtn.on {
+		color: var(--warn, #e5b53b);
+	}
+	.favbtn.on :global(svg) {
+		fill: currentColor;
 	}
 	.crumbs button {
 		padding: 2px 4px;
