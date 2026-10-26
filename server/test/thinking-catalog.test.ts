@@ -21,10 +21,8 @@ describe("thinking levels looked up by model name", () => {
 	});
 });
 
-test("catalogEntries lists image generation models too", async () => {
+test("catalogEntries lists chat models only", async () => {
 	const { catalogEntries } = await import("../src/thinking-catalog.ts");
-	const e = catalogEntries().find((c) => c.id === "google/gemini-3.1-flash-image");
-	expect(e).toBeDefined();
-	expect(e!.reasoning).toBe(false);
-	expect(catalogEntries().filter((c) => c.id === "google/gemini-3.1-flash-image")).toHaveLength(1);
+	expect(catalogEntries().find((c) => c.id === "google/gemini-3.1-flash-image")).toBeUndefined();
+	expect(catalogEntries().length).toBeGreaterThan(0);
 });

@@ -16,7 +16,6 @@ import { type SessionPatch, type SessionRecord, type SessionStore, } from "./sto
 import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
-import { imageStream } from "./image-generation.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -720,9 +719,7 @@ export class SessionManager {
 				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
 				messages: history,
 			},
-			streamFn: (m, ctx, opts) => this.registry.isImageModel?.(m.provider, m.id)
-				? imageStream(this.registry, m, ctx.messages, opts, record.cwd)
-				: this.registry.models.streamSimple(m, ctx, opts),
+			streamFn: (m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
 			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),

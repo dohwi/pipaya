@@ -84,7 +84,7 @@
 				</span>
 				<span class="mtags">
 					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
-					<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />
+					<CapTags model={m} end ctx={compact(m.contextWindow)} />
 				</span>
 				<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}

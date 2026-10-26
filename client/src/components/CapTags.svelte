@@ -4,12 +4,12 @@
 	import { capsOf } from "../lib/model-caps";
 
 	/**
-	 * What a model can do, as small icon + word tags: chat, reasoning, reading pictures, making/editing pictures.
+	 * What a model can do, as small icon + word tags: chat, reasoning, reading pictures.
 	 * They flow one after another with an even gap: the context size first (when `ctx` is given), then the abilities.
 	 * `end`: for a list row whose tags sit flush right. The abilities come first and the context size last, in a
-	 * column of its own, so every row ends on the same line and an image model (no context) just leaves it empty.
+	 * column of its own, so every row ends on the same line and a model without a size just leaves it empty.
 	 */
-	let { model, ctx, end = false }: { model: { reasoning: boolean; vision: boolean; imageGeneration?: boolean }; ctx?: string; end?: boolean } = $props();
+	let { model, ctx, end = false }: { model: { reasoning: boolean; vision: boolean }; ctx?: string; end?: boolean } = $props();
 	const caps = $derived(capsOf(model));
 </script>
 
@@ -49,7 +49,7 @@
 	.ctx.slot {
 		min-width: 48px;
 	}
-	/* an image model has no context size: the column stays, with a faint dash and no pill */
+	/* no context size: the column stays, with a faint dash and no pill */
 	.ctx.none {
 		border-color: transparent;
 		background: transparent;
@@ -66,10 +66,5 @@
 		stroke: currentColor;
 		stroke-width: 1.9;
 		flex: none;
-	}
-	/* making pictures is the one ability that changes what the model is for, so it stands out */
-	.image {
-		color: var(--text-dim);
-		font-weight: 600;
 	}
 </style>

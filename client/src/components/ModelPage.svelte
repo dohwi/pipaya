@@ -63,11 +63,9 @@
 					<Icon name="chevron-down" />
 				</button>
 			</div>
-			{#if hit && r.imageGeneration}
-				<p class="hint note src ok"><Icon name="check" /> {t("이미지를 만드는 모델입니다")}</p>
-			{:else if hit}
+			{#if hit}
 				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") || "-" })}</p>
-			{:else if r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
+			{:else if r.catalogId === undefined && r.id.trim()}
 				<p class="hint note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
 			{/if}
 		{/if}
@@ -82,7 +80,6 @@
 			</label>
 		</div>
 	</section>
-	{#if !r.imageGeneration}
 	<section class="fsec">
 		<div class="section-label">{t("제한")}</div>
 		<div class="grid2">
@@ -96,17 +93,15 @@
 			</label>
 		</div>
 	</section>
-	{/if}
 	<section class="fsec">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
-			{#if !r.imageGeneration}<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
+			<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>
 			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 읽기")}</button>
-			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
 		</div>
-		<p class="hint note">{r.imageGeneration ? t("이 모델은 글 대신 그림을 만듭니다. 채팅·추론·도구는 쓰지 않습니다.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
+		<p class="hint note">{t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
 	</section>
-	{#if r.reasoning && !r.imageGeneration && !matched}
+	{#if r.reasoning && !matched}
 		<section class="fsec">
 			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 			<div class="caps" role="group" aria-label={t("추론 강도")}>

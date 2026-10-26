@@ -263,7 +263,6 @@ export const ModelInfo = Type.Object({
 	contextWindow: Type.Number(),
 	maxTokens: Type.Number(),
 	vision: Type.Boolean(),
-	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text: a message is a picture request, the answer is the picture" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),

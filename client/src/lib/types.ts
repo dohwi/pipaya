@@ -198,8 +198,6 @@ export interface ModelInfo {
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
-	/** Makes pictures instead of text */
-	imageGeneration: boolean;
 	/** Brand mark chosen in the connection settings; absent = picked from the id */
 	icon?: string;
 	/** A usable credential exists for this model's provider */
@@ -258,8 +256,6 @@ export interface CustomModel {
 	maxTokens: number;
 	reasoning: boolean;
 	vision: boolean;
-	/** Makes pictures instead of text */
-	imageGeneration?: boolean;
 	/** Brand mark chosen for this model; absent = picked from the id */
 	icon?: string;
 	/** Came from the upstream's model list: the id is fixed */
@@ -282,8 +278,6 @@ export interface CatalogModel {
 	maxTokens: number;
 	reasoning: boolean;
 	vision: boolean;
-	/** An image-generation model */
-	image: boolean;
 	levels: string[];
 }
 
