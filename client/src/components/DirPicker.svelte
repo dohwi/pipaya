@@ -154,14 +154,18 @@
 			</div>
 		</div>
 	{/if}
-	{#if !remote && app.favDirs.length}
+	{#if !remote}
 		<div class="recent">
 			<span class="label">{t("즐겨찾기")}</span>
-			<div class="chips">
-				{#each app.favDirs as p (p)}
-					<FilterChip size="sm" mono on={browser.listing?.path === p} onclick={() => void enter(p)} title={p}>{base(p)}</FilterChip>
-				{/each}
-			</div>
+			{#if app.favDirs.length}
+				<div class="chips">
+					{#each app.favDirs as p (p)}
+						<FilterChip size="sm" mono on={browser.listing?.path === p} onclick={() => void enter(p)} title={p}>{base(p)}</FilterChip>
+					{/each}
+				</div>
+			{:else}
+				<span class="hint">{t("경로 옆 ☆를 누르면 여기에 추가됩니다")}</span>
+			{/if}
 		</div>
 	{/if}
 
@@ -247,6 +251,10 @@
 		align-items: center;
 		gap: 10px;
 		padding: 0 22px 10px;
+	}
+	.hint {
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
 	}
 	.label {
 		font-family: var(--mono);

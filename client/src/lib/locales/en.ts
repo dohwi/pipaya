@@ -407,6 +407,7 @@ export const en: Record<string, string> = {
 	"{name} 즐겨찾기": "Favorite {name}",
 	"즐겨찾기 해제": "Remove from favorites",
 	"즐겨찾기": "Favorites",
+	"경로 옆 ☆를 누르면 여기에 추가됩니다": "Tap ☆ next to the path to add it here",
 	"모델 없음": "No model",
 	"모델 검색": "Search models",
 	"키 없음": "No key",
