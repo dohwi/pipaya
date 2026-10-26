@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
-	import Button from "../Button.svelte";
 	import Icon from "../Icon.svelte";
+	import Notice from "../Notice.svelte";
 
 	/**
 	 * The frame of one extension's detail page, for an installed one and for one running on the server: the way back
@@ -15,7 +15,7 @@
 	 *  sub       the line under it (the extension's id)
 	 *  busy      a task is running on this extension
 	 *  control   what sits at the right of the heading
- *  upgrade   a newer catalog version: shown next to the version, with an update button before the control
+ *  upgrade   a newer catalog version: a notice under the heading with the update action, like the other "needs" notices
 	 */
 	let {
 		id,
@@ -47,16 +47,20 @@
 			<span class="top">
 				<h4 class="ename">{name}</h4>
 				{#if meta}{@render meta()}{/if}
-				{#if upgrade}<span class="meta newver" title={t("새 버전 v{version}", { version: upgrade.version })}><Icon name="arrow-up" /> <b>v{upgrade.version}</b></span>{/if}
 			</span>
 			<span class="meta">{sub}</span>
 		</div>
 		<div class="actions">
 			{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
-			{#if upgrade}<Button size="sm" class="updbtn" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</Button>{/if}
 			{#if control}{@render control()}{/if}
 		</div>
 	</div>
+	{#if upgrade}
+		<Notice tone="ok" size="sm" icon="arrow-up" role="status">
+			{t("새 버전 v{version}을 사용할 수 있습니다.", { version: upgrade.version })}
+			{#snippet action()}<button type="button" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</button>{/snippet}
+		</Notice>
+	{/if}
 	{@render children()}
 </div>
 
@@ -64,16 +68,12 @@
 	.page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 	.page:focus { outline: none; }
 	.line { display: flex; align-items: center; gap: 12px; }
-	/* spinner, update button and switch share one row, vertically centred on the name block like the list rows */
+	/* spinner and switch share one row, vertically centred on the name block like the list rows */
 	.actions { flex: none; display: flex; align-items: center; gap: 10px; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 2px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
 	.meta { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; font-family: var(--mono); }
-	.newver { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-	.newver b { color: var(--ok); font-weight: 600; }
-	.newver :global(svg) { width: 11px; height: 11px; stroke-width: 2.4; color: var(--ok); }
-	.actions :global(.btn.updbtn) { flex: none; white-space: nowrap; }
 	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 2px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
 	.back:hover { color: var(--text); }
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */

@@ -1199,6 +1199,7 @@ export const en: Record<string, string> = {
 	"{name}을(를) v{version}(으)로 업데이트했습니다.": "Updated {name} to v{version}.",
 	"v{version}으로 업데이트": "Update to v{version}",
 	"새 버전 v{version}": "New version v{version}",
+	"새 버전 v{version}을 사용할 수 있습니다.": "Version v{version} is available.",
 	"새 버전": "New version",
 	"나중에": "Later",
 	"앱 업데이트": "App updates",
