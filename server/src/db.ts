@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { groupHandle, nextMemberName } from "./member-names.ts";
 
 export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
@@ -169,6 +170,17 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	);`,
 	// v25: a session can be archived: still open (not closed), but tucked away in the apps' archive instead of the active list.
 	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "archived")) db.exec("ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"); },
+	// v26: session @names are part of the core again (peer_send / peer_read address sessions by them). Active sessions are numbered in creation order.
+	(db) => {
+		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => groupHandle(g.name).toLowerCase()));
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const s of db.query("SELECT id FROM sessions WHERE name = '' AND closed = 0 ORDER BY created_at, id").all() as { id: string }[]) {
+			const name = nextMemberName(taken);
+			taken.add(name.toLowerCase());
+			set.run({ id: s.id, name });
+		}
+	},
 ];
 
 export function openDb(path: string): Database {

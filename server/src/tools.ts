@@ -28,6 +28,22 @@ export interface ToolContext {
 	canSeeImages?(): boolean;
 	/** The model's own picture size limits, when its catalog entry has any; they replace the defaults. */
 	imageLimits?(): Partial<ResizeLimits> | undefined;
+	/** Ask the user and wait for the answer (`ask_user`). Rejects when the run is aborted. */
+	ask?(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
+	/** Other sessions of this server (`peer_send`, `peer_read`). */
+	peers?: {
+		send(to: string, message: string): Promise<string>;
+		read(from: string, count: number): string;
+	};
+}
+
+/** One question, or several asked together (`items`; `question`/`options` describe the first). */
+export interface AskRequest {
+	question: string;
+	options?: string[];
+	recommended?: string;
+	allowFreeText?: boolean;
+	items?: { question: string; options?: string[]; recommended?: string; allowFreeText?: boolean }[];
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -429,8 +445,103 @@ const bashTool: ToolDef = {
 	},
 };
 
+const ASK_USER_DESCRIPTION =
+	"Ask the user a question and wait for the answer. Use it only when a requirement is genuinely ambiguous or a decision is hard to undo; " +
+	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known, " +
+	"and set `recommended` to the option you suggest (it is highlighted for the user).";
+
+const askOptions = (extra: Record<string, unknown> = {}) => Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, ...extra }));
+const askRecommended = Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" }));
+
+const askUserTool: ToolDef = {
+	name: "ask_user",
+	description: ASK_USER_DESCRIPTION,
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "ask_user",
+			label: "Ask user",
+			description: ASK_USER_DESCRIPTION,
+			parameters: Type.Object({
+				question: Type.Optional(Type.String({ minLength: 1, maxLength: 2000, description: "One clear question. Omit when using `questions`" })),
+				options: askOptions({ description: "Suggested answers" }),
+				recommended: askRecommended,
+				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
+				questions: Type.Optional(
+					Type.Array(
+						Type.Object({
+							question: Type.String({ minLength: 1, maxLength: 2000 }),
+							options: askOptions(),
+							recommended: askRecommended,
+							allowFreeText: Type.Optional(Type.Boolean()),
+						}),
+						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
+					),
+				),
+			}),
+			async execute(id, p, signal) {
+				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
+				const rec = (o?: string[], r?: string) => (r && o?.includes(r) ? { recommended: r } : {});
+				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), allowFreeText: q.allowFreeText ?? true }));
+				if (!items?.length && !p.question) throw new Error("ask_user needs `question` or `questions`");
+				const first = items?.[0] ?? { question: p.question!, options: p.options, ...rec(p.options, p.recommended), allowFreeText: p.allowFreeText ?? true };
+				const answer = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
+				return text(answer, { question: first.question, answer });
+			},
+		});
+	},
+};
+
+// The tool list is built once per session, but sessions come and go later: never put names in a description (they would go stale).
+const PEER_NOTE = " Sessions are the user's @names; an unknown name is rejected with the current list.";
+
+const peerSendTool: ToolDef = {
+	name: "peer_send",
+	description: "Send a message to another session (agent) on this server.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_send",
+			label: "Message another session",
+			description:
+				"Send a message to another active session, addressed by name (without @). A group name (e.g. a tagged @group) sends it to every other session in that group. It runs independently, sees only what you write here, and does not answer unless you ask it to reply with peer_send." + PEER_NOTE,
+			parameters: Type.Object({
+				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				message: Type.String({ minLength: 1, maxLength: 8000, description: "What to tell or ask; include all context it needs" }),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(await ctx.peers.send(params.to, params.message), { to: params.to });
+			},
+		});
+	},
+};
+
+const peerReadTool: ToolDef = {
+	name: "peer_read",
+	description: "Read the latest messages of another session on this server.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_read",
+			label: "Read another session",
+			description: "Read what another session has recently said and done (text only, newest last), addressed by name (without @)." + PEER_NOTE,
+			parameters: Type.Object({
+				from: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "How many recent messages (default 10)" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.read(params.from, params.count ?? 10), { from: params.from });
+			},
+		});
+	},
+};
+
+/** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
+export const TOGGLEABLE_TOOLS = [askUserTool.name, peerSendTool.name, peerReadTool.name];
+/** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
+export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
+
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

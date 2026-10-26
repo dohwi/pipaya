@@ -17,7 +17,7 @@ describe("thinking levels", () => {
 		try {
 			const store = new SessionStore(db);
 			const record: SessionRecord = {
-				id: "legacy-off", title: "Keep my title", cwd: dir, provider: "custom", model: "manual",
+				id: "legacy-off", name: "", title: "Keep my title", cwd: dir, provider: "custom", model: "manual",
 				thinkingLevel: "medium", systemPrompt: "Keep my prompt", tools: ["read"],
 				purpose: "", parentId: null, closed: false, archived: false, createdAt: 100, updatedAt: 200,
 			};
@@ -28,7 +28,7 @@ describe("thinking levels", () => {
 			db.close();
 			db = openDb(path);
 			const migrated = new SessionStore(db);
-			expect(migrated.get("legacy-off")).toEqual(record);
+			expect(migrated.get("legacy-off")).toEqual({ ...record, name: "미나" }); // migrations name the active sessions that have none
 			expect(migrated.get("existing-high")?.thinkingLevel).toBe("high");
 			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: MIGRATIONS.length });
 			db.close();

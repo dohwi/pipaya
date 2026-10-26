@@ -2,6 +2,7 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { ACTIVITY_LABEL } from "../../lib/activity";
 	import { t } from "../../lib/i18n";
+	import { peerLabel } from "../../lib/peers";
 	import type { DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Session } from "../../lib/types";
@@ -14,7 +15,7 @@
 
 	const sb = getSidebarCtx();
 	const st = $derived(sb.stateOf(n, x));
-	const label = $derived(extensions.labelOf(x.id));
+	const label = $derived(peerLabel(x) ?? extensions.labelOf(x.id));
 	const tip = $derived([label?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · "));
 </script>
 

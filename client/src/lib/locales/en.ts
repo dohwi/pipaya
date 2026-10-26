@@ -501,6 +501,13 @@ export const en: Record<string, string> = {
 	"작업 폴더": "Working folders",
 	"사이드바 펼치기": "Expand sidebar",
 	"그룹 {n}": "Group {n}",
+	"세션": "Sessions",
+	"그룹": "Groups",
+	"{n}개 세션": "{n} sessions",
+	"이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다": "This chat's name. Other chats can call it @{name}",
+	"사용자에게 질문하고 답을 기다림 (ask_user)": "Ask you a question and wait (ask_user)",
+	"다른 대화에 메시지 보내기 (peer_send)": "Message another chat (peer_send)",
+	"다른 대화의 최근 내용 읽기 (peer_read)": "Read another chat's recent activity (peer_read)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */

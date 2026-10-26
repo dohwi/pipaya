@@ -56,6 +56,8 @@ export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaul
 export interface Session {
 	id: string;
 	title: string;
+	/** How other sessions address this one (`@name`); unique among active sessions */
+	name: string;
 	/** What this session's agent works on, written by the system model; "" until then */
 	purpose: string;
 	/** Absolute path inside the workspace root */

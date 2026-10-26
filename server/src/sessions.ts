@@ -13,7 +13,9 @@ import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
+import { PeerService, type GroupRef } from "./peers.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
@@ -66,6 +68,15 @@ export class SessionManager {
 	private backfilling = false;
 	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
+	/** Names, messages between sessions and `@name` hints. */
+	readonly peers: PeerService;
+	/** Session ids of every group, wired by the app once the group manager exists. */
+	private groupSource: () => GroupRef[] = () => [];
+
+	setGroupSource(fn: () => GroupRef[]): void {
+		this.groupSource = fn;
+	}
+
 	constructor(
 		private cfg: Config,
 		private store: SessionStore,
@@ -86,6 +97,13 @@ export class SessionManager {
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
+		this.peers = new PeerService({
+			store,
+			groups: () => this.groupSource(),
+			isRunning: (id) => this.isRunning(id),
+			deliver: (id, text, mode) => this.send(id, { text, mode }),
+			rename: (id, name) => void this.update(id, { name }),
+		});
 	}
 
 	// ── CRUD ────────────────────────────────────────────────────────────────
@@ -107,6 +125,7 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
+			name: this.peers.newName(input.lang),
 			purpose: "",
 			cwd,
 			provider,
@@ -319,7 +338,11 @@ export class SessionManager {
 			if (patch.tools) clean.tools = this.validateTools(patch.tools);
 		}
 
-		if (patch.closed === false && current.closed) this.assertRoom();
+		if (patch.closed === false && current.closed) {
+			this.assertRoom();
+			// A closed session gives its name up; on resume it takes it back unless another session has it by now.
+			clean.name = this.peers.resumedName(current);
+		}
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
 
@@ -367,6 +390,7 @@ export class SessionManager {
 				thinkingLevel: src.thinkingLevel,
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
+				lang: poolOfName(src.name) === MEMBER_NAMES_EN ? "en" : "ko",
 			},
 			src.id,
 		);
@@ -405,6 +429,7 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
+		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {
@@ -671,6 +696,7 @@ export class SessionManager {
 	// ── Internals ───────────────────────────────────────────────────────────
 
 	private run(id: string, live: Live, mode: string, start: () => Promise<void>): void {
+		this.peers.resetRun(id);
 		live.running = true;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
@@ -783,13 +809,22 @@ export class SessionManager {
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
 		const off = this.disabledTools();
-		const all = [...new Set([...names, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : [])])].filter((n) => !off.includes(n));
+		const all = [...new Set([...names, ...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.imageModel?.resolve() ? [IMAGE_TOOL] : [])])].filter((n) => !off.includes(n));
 		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
-		const ctx: ToolContext = { sessionId };
+		const q = this.questions;
+		const ctx: ToolContext = { sessionId, peers: { send: (to, message) => this.peers.send(sessionId, to, message), read: (from, count) => this.peers.read(sessionId, from, count) } };
+		if (q) {
+			ctx.ask = async (toolCallId, req, signal) => {
+				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));
+				const outcome = await q.ask({ sessionId, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
+				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
+				return outcome.answer;
+			};
+		}
 		ctx.canSeeImages = () => {
 			const rec = this.store.get(sessionId);
 			const model = rec && this.registry.models.getModel(rec.provider, rec.model);

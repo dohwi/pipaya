@@ -21,7 +21,7 @@ function fixture() {
 }
 
 const record = (id: string, cwd: string): SessionRecord => ({
-	id, cwd, title: "Old session", provider: "echo", model: ECHO_MODEL.id,
+	id, name: "", cwd, title: "Old session", provider: "echo", model: ECHO_MODEL.id,
 	thinkingLevel: "medium", systemPrompt: "Base prompt", tools: ["read"],
 	purpose: "", parentId: null, closed: false, archived: false, createdAt: 1, updatedAt: 1,
 });

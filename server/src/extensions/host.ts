@@ -7,6 +7,7 @@ import Type from "typebox";
 import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
+import { RETIRED_EXTENSIONS } from "./retired.ts";
 import type {
 	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
@@ -198,6 +199,7 @@ export class ExtensionHost {
 		await this.unloadAll();
 		const v = ++this.version;
 		for (const { name, entry, meta } of this.discover()) {
+			if (RETIRED_EXTENSIONS.has(name.split("/")[0]!)) { this.log(`extension ${name} is built into the server now; not loading it (you can delete it)`); continue; }
 			const ext = this.blank(name, entry);
 			Object.assign(ext, meta);
 			this.loaded.push(ext);

@@ -9,6 +9,7 @@
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
+	import { peerMentions } from "../lib/peers";
 	import { abortable } from "../lib/abortable";
 	import { DebouncedList } from "../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
@@ -221,8 +222,8 @@
 			: [],
 	);
 
-	// ── @mentions: the list comes from extensions (`sdk.mentions.set`); the core knows no names ──
-	const mentionItems = $derived(extensions.mentions().filter((m) => !m.except || m.except !== pane.id));
+	// ── @mentions: the other sessions and groups, then whatever extensions add (`sdk.mentions.set`) ──
+	const mentionItems = $derived([...peerMentions(app.sessions, app.groups, pane.id), ...extensions.mentions().filter((m) => !m.except || m.except !== pane.id)]);
 	const atMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("at", text, caret));
 	const atMatches = $derived(atMention ? mentionItems.filter((m) => {
 		const q = atMention.query.toLowerCase();

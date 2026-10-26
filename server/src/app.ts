@@ -17,6 +17,7 @@ import { Retention } from "./retention.ts";
 import { registerRetentionRoutes } from "./retention-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
+import { TOGGLEABLE_TOOLS } from "./tools.ts";
 import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
@@ -132,7 +133,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
-		id: r.id, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
+		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
 		tools: r.tools, closed: r.closed, archived: r.archived, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
 	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
@@ -230,9 +231,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	// generate_image can be switched off like an extension tool, while an image model makes it exist at all.
-	configuration.setSwitchableSource(() => [...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
-	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined));
+	configuration.setSwitchableSource(() => [...TOGGLEABLE_TOOLS, ...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
 	groups.evictWhere(isTerminalId);
+	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
@@ -422,6 +424,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	app.post("/sessions/:id/read", {
 		schema: { params: S.IdParams, response: { 200: Type.Object({ ok: Type.Boolean() }), ...S.errors(401) } },
 		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },
+	});
+	app.post("/sessions/localize-names", {
+		schema: { body: S.LocalizeNamesBody, response: { 200: Type.Object({ renamed: Type.Integer() }), ...S.errors(400, 401) } },
+		handler: async (req) => ({ renamed: sessions.peers.localize(req.body.lang) }),
 	});
 	app.post("/sessions", {
 		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },

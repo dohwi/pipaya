@@ -81,6 +81,9 @@ export function toolLabel(name: string): string {
 		case "ls": return t("폴더 목록 (ls)");
 		case "grep": return t("내용 검색 (grep)");
 		case "bash": return t("셸 명령 실행 (bash)");
+		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
+		case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
+		case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;
 	}

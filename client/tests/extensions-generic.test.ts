@@ -253,7 +253,7 @@ describe("renderers, SDK surface and brand neutrality", () => {
 	test("the core never names an extension or its feature (ids, tools, @name vocabulary)", async () => {
 		// What an extension owns stays out of the core: its id, its tool names and the words of its feature. The core offers
 		// neutral hooks (labels, mentions, message headers) that any extension can fill with its own meaning.
-		const pattern = /peer-tools|peer-names|peer_send|peer_read|ask-user|ask_user|prompt-templates|session-retention|quota-monitor|\bmark-(?:agent|member)\b|\bpeerbubble\b/i;
+		const pattern = /peer-tools|peer-names|ask-user|prompt-templates|session-retention|quota-monitor|\bmark-(?:agent|member)\b|\bpeerbubble\b/i;
 		const hits: string[] = [];
 		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) {
 			if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file) || file === "lib/locales/en.ts") continue;

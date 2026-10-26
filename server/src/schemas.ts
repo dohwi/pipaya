@@ -38,6 +38,7 @@ export const IdParams = Type.Object({ id: Type.String() });
 const sessionFields = {
 	id: Type.String(),
 	title: Type.String(),
+	name: Type.String({ description: "How other sessions address this one (@name); unique among active sessions" }),
 	purpose: Type.String({ description: "What this session's agent works on, written by the system model (GET /system-model); empty until then" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
 	provider: Type.String(),
@@ -139,6 +140,11 @@ export const CreateSessionBody = Type.Object({
 	thinkingLevel: Type.Optional(Thinking),
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000 })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
+	lang: Type.Optional(Type.String({ maxLength: 35, description: "UI language tag (e.g. ko, en). Picks the language of the session's @name; omit for Korean names." })),
+});
+
+export const LocalizeNamesBody = Type.Object({
+	lang: Type.String({ minLength: 1, maxLength: 35, description: "UI language tag the client switched to (e.g. ko, en). Every session's @name becomes its twin in that language (민수 <-> Minsu)." }),
 });
 
 export const PatchSessionBody = Type.Object({

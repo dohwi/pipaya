@@ -1,6 +1,7 @@
 <script lang="ts">
 	import IconButton from "../IconButton.svelte";
 	import { t } from "../../lib/i18n";
+	import { parsePeer } from "../../lib/peers";
 	import Icon from "../Icon.svelte";
 	import FileChip from "../FileChip.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -26,7 +27,7 @@
 	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; onreply: (text: string, who?: string) => void } = $props();
 
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
-	const header = $derived(extensions.headerOf(item.text));
+	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
 	const shown = $derived(splitQuote(header ? header.body : item.text));
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());

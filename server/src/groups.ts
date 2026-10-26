@@ -1,3 +1,4 @@
+import { groupHandle } from "./member-names.ts";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import Type, { type Static } from "typebox";
@@ -128,6 +129,8 @@ export class GroupManager {
 		private db: Database,
 		private bus: EventBus,
 		private sessionExists: (id: string) => boolean,
+		/** Lower-cased @names of the active sessions: a group may not take one, or the tag would be ambiguous. */
+		private sessionNames: () => ReadonlySet<string> = () => new Set(),
 	) {
 		// A deleted, closed or archived session leaves its group, so groups never point at sessions that are gone.
 		// Deferred a tick so the session event reaches every subscriber (and gets its cursor) before the group event it causes.
@@ -193,13 +196,13 @@ export class GroupManager {
 		this.bus.publish(null, "group_deleted", { id });
 	}
 
-	/** `name`, or `name 2`, `name 3`, ... when another group already has it (ignoring case; spaces and dashes count the same, so a tag made from the name is unambiguous). */
+	/** `name`, or `name 2`, `name 3`, ... when its tag (the name with dashes, any case) is already a group's or a session's @name. */
 	private uniqueName(name: string, exceptId?: string): string {
-		const key = (n: string) => n.trim().replace(/\s+/g, "-").toLowerCase();
-		const taken = new Set(this.list().filter((g) => g.id !== exceptId).map((g) => key(g.name)));
+		const taken = new Set(this.sessionNames());
+		for (const g of this.list()) if (g.id !== exceptId) taken.add(groupHandle(g.name).toLowerCase());
 		for (let n = 1; ; n++) {
 			const cand = n === 1 ? name : `${name} ${n}`;
-			if (!taken.has(key(cand))) return cand;
+			if (!taken.has(groupHandle(cand).toLowerCase())) return cand;
 		}
 	}
 
