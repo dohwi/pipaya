@@ -7,8 +7,7 @@
 <div class="painting" role="status" aria-label={t("이미지를 만드는 중…")}>
 	<div class="frame" aria-hidden="true">
 		<span class="body">
-			<span class="grid"></span>
-			<span class="glow"></span>
+			<span class="sheen"></span>
 			<span class="mark"><PipayaMark size={56} /></span>
 		</span>
 		<span class="ring"></span>
@@ -33,35 +32,26 @@
 		background: var(--bg-elev);
 		isolation: isolate;
 	}
-	/* everything inside the border breathes together; the border itself stays crisp */
 	.body {
 		position: absolute;
 		inset: 0;
 		display: grid;
 		place-items: center;
-		will-change: opacity;
-		animation: fade 4.8s ease-in-out infinite;
+		overflow: hidden;
 	}
-	/* faint blueprint grid, fading out toward the edges */
-	.grid {
+	/* a soft diagonal band of light sweeping across the empty canvas, like a shimmer skeleton */
+	.sheen {
 		position: absolute;
-		inset: 0;
-		background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
-		background-size: 32px 32px;
-		opacity: 0.45;
-		mask-image: radial-gradient(circle at center, #000 0%, transparent 75%);
-	}
-	.glow {
-		position: absolute;
-		inset: 10%;
-		border-radius: 50%;
-		background: radial-gradient(circle, color-mix(in srgb, var(--text) 12%, transparent), transparent 70%);
+		inset: -50% 0;
+		background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--text) 9%, transparent) 50%, transparent 65%);
+		transform: translateX(-100%) rotate(8deg);
+		animation: sweep 2.4s ease-in-out infinite;
 	}
 	.mark {
 		position: relative;
 		display: grid;
 		color: var(--text-dim);
-		opacity: 0.8;
+		animation: breathe 2.4s ease-in-out infinite;
 	}
 	/* 1px border ring: a faint static line plus a comet of light travelling around it */
 	.ring {
@@ -79,9 +69,20 @@
 			--a: 360deg;
 		}
 	}
-	@keyframes fade {
-		50% {
+	@keyframes sweep {
+		to {
+			transform: translateX(100%) rotate(8deg);
+		}
+	}
+	@keyframes breathe {
+		0%,
+		100% {
 			opacity: 0.45;
+			transform: scale(0.94);
+		}
+		50% {
+			opacity: 0.85;
+			transform: scale(1);
 		}
 	}
 	@keyframes appear {
@@ -92,7 +93,8 @@
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.painting,
-		.body,
+		.sheen,
+		.mark,
 		.ring {
 			animation: none;
 		}
