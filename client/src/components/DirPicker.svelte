@@ -206,10 +206,6 @@
 	</div>
 
 	<footer>
-		<div class="picked">
-			<span class="label">{mode === "default" ? t("저장할 위치") : t("새 대화를 시작할 위치")}</span>
-			<span class="mono cur" title={browser.listing?.path}>{browser.listing?.path ?? "…"}</span>
-		</div>
 		{#if mode === "default" && current?.saved}
 			<Button variant="ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</Button>
 		{/if}
@@ -366,22 +362,9 @@
 	footer {
 		display: flex;
 		align-items: center;
+		justify-content: flex-end;
 		gap: 10px;
 		padding: 12px 22px 16px;
 		border-top: 1px solid var(--border);
-	}
-	.picked {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-	.cur {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-		text-align: left;
 	}
 </style>

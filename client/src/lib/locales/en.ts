@@ -134,8 +134,6 @@ export const en: Record<string, string> = {
 	"새 폴더 이름": "New folder name",
 	"만들기": "Create",
 	"새 폴더": "New folder",
-	"저장할 위치": "Location to save",
-	"새 대화를 시작할 위치": "Location to start new chats",
 	"처음 설정으로": "Reset to initial",
 	"기본값으로 저장": "Save as default",
 	"여기서 시작": "Start here",
