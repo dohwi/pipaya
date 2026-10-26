@@ -263,6 +263,8 @@ export const ModelInfo = Type.Object({
 	contextWindow: Type.Number(),
 	maxTokens: Type.Number(),
 	vision: Type.Boolean(),
+	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text: a message is a picture request, the answer is the picture" }),
+	runnable: Type.Boolean({ description: "The server can run this model now. false = an image model with no server extension that runs image models: sending to it fails with 409 model_not_runnable" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),

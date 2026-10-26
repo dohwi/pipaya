@@ -8,7 +8,7 @@ import type { EventBus } from "../events.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import type {
-	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
+	AskRequest, EventHandler, ModelKind, ModelRunner, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -55,6 +55,8 @@ export interface ExtensionInfo {
 	commandFamilies: { prefix: string; label?: string }[];
 	methods: string[];
 	providers: string[];
+	/** Kinds of model this extension runs (`pi.registerModelRunner`), e.g. ["image"]. */
+	modelRunners: string[];
 	flags: { name: string; description?: string; type: "boolean" | "string"; value: boolean | string | undefined }[];
 	events: string[];
 	/** Id of the client extension this one needs on the device (`pipaya.companion` in its package.json). */
@@ -87,6 +89,7 @@ interface Loaded extends ExtensionInfo {
 	familyDefs: Map<string, ExtensionCommandFamily>;
 	methodDefs: Map<string, (params: unknown, ctx: ExtensionContext | null) => unknown>;
 	providerIds: Set<string>;
+	runners: Map<ModelKind, ModelRunner>;
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
 }
@@ -224,9 +227,9 @@ export class ExtensionHost {
 
 	private blank(name: string, path: string): Loaded {
 		return {
-			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], flags: [], events: [],
+			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], modelRunners: [], flags: [], events: [],
 			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(),
-			providerIds: new Set(), flagDefs: new Map(), busOff: [],
+			providerIds: new Set(), runners: new Map(), flagDefs: new Map(), busOff: [],
 		};
 	}
 
@@ -234,8 +237,8 @@ export class ExtensionHost {
 		for (const id of ext.providerIds) this.opts.registry.models.deleteProvider(id);
 		for (const off of ext.busOff) off();
 		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.familyDefs.clear(); ext.methodDefs.clear();
-		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = [];
-		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.providers = []; ext.flags = []; ext.events = [];
+		ext.providerIds.clear(); ext.runners.clear(); ext.flagDefs.clear(); ext.busOff = [];
+		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.providers = []; ext.modelRunners = []; ext.flags = []; ext.events = [];
 	}
 
 	private async unloadAll(): Promise<void> {
@@ -257,8 +260,8 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, settings, settingsId, clientFile, error }) => ({
-			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, modelRunners, flags, events, companion, title, version, description, descriptions, settings, settingsId, clientFile, error }) => ({
+			name, path, tools, commands, commandFamilies, methods, providers, modelRunners, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
 			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(settings ? { settings } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
@@ -405,6 +408,15 @@ export class ExtensionHost {
 				if (!ext.providers.includes(provider.id)) ext.providers.push(provider.id);
 				this.opts.bus.publish(null, "provider_updated", { id: provider.id, configured: true });
 			},
+			registerModelRunner: (kind, run) => {
+				if (kind !== "image") throw new Error(`unknown model kind "${kind}"`);
+				if (typeof run !== "function") throw new Error("a model runner must be a function");
+				const other = this.loaded.find((e) => e !== ext && !e.error && e.runners.has(kind));
+				if (other) throw new Error(`"${kind}" models are already run by ${other.name}`);
+				own("model runner", kind, ext.runners.has(kind));
+				ext.runners.set(kind, run);
+				ext.modelRunners.push(kind); // clients re-read /models on extensions_updated, which ends every load
+			},
 			unregisterProvider: (id) => {
 				if (!ext.providerIds.delete(id)) return;
 				ext.providers = ext.providers.filter((p) => p !== id);
@@ -492,6 +504,15 @@ export class ExtensionHost {
 	notify(event: EventName, payload: any, sessionId: string | null): void {
 		if (!this.has(event)) return;
 		void this.emit(event, payload, sessionId);
+	}
+
+	/** The runner an extension registered for this kind of model, and who registered it. */
+	runner(kind: ModelKind): { extension: string; run: ModelRunner } | undefined {
+		for (const ext of this.active()) {
+			const run = ext.runners.get(kind);
+			if (run) return { extension: ext.name, run };
+		}
+		return undefined;
 	}
 
 	has(event: EventName): boolean {

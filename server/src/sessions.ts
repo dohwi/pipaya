@@ -15,7 +15,8 @@ import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMes
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
-import type { MessageNote } from "./extensions/types.ts";
+import type { MessageNote, ModelKind } from "./extensions/types.ts";
+import { modelKind, runnerStream } from "./model-runners.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -49,6 +50,12 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 /** How many messages one run may send to group members. */
 /** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
 const DESCRIBE_RETRY_MS = 10 * 60_000;
+
+
+/** Why a model of this kind cannot answer without an extension (also shown to the user as the error). */
+const NO_RUNNER: Record<ModelKind, string> = {
+	image: "this is an image model: install a server extension that runs image models (see the marketplace) to use it",
+};
 
 export class SessionManager {
 	private live = new Map<string, Live>();
@@ -327,6 +334,17 @@ export class SessionManager {
 		return updated;
 	}
 
+	/** Whether this model can answer now: an image model needs an extension that runs it. */
+	runnable(provider: string, model: string): boolean {
+		const kind = modelKind(this.registry, provider, model);
+		return !kind || !!this.ext?.runner(kind);
+	}
+
+	private assertRunnable(provider: string, model: string): void {
+		const kind = modelKind(this.registry, provider, model);
+		if (kind && !this.ext?.runner(kind)) throw new HttpError(409, "model_not_runnable", NO_RUNNER[kind]);
+	}
+
 	isRunning(id: string): boolean {
 		return this.live.get(id)?.running ?? false;
 	}
@@ -369,6 +387,7 @@ export class SessionManager {
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+		this.assertRunnable(record.provider, record.model);
 		const mode = input.mode ?? "prompt";
 		let extraParts: { type: "text"; text: string }[] = [];
 		let inputTitle: string | undefined;
@@ -719,7 +738,14 @@ export class SessionManager {
 				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
 				messages: history,
 			},
-			streamFn: (m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts),
+			streamFn: (m, ctx, opts) => {
+				const kind = modelKind(this.registry, m.provider, m.id);
+				if (!kind) return this.registry.models.streamSimple(m, ctx, opts);
+				const runner = this.ext?.runner(kind);
+				// Checked before the message is accepted; this only happens when the extension went away mid-run.
+				if (!runner) return runnerStream(this.registry, async () => { throw new Error(NO_RUNNER[kind]); }, m, ctx.messages, opts, { id: record.id, cwd: record.cwd });
+				return runnerStream(this.registry, runner.run, m, ctx.messages, opts, { id: record.id, cwd: record.cwd });
+			},
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
 			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),

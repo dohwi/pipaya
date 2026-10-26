@@ -27,6 +27,7 @@ export const CustomProviderBody = Type.Object({
 		maxTokens: Type.Integer({ minimum: 1, maximum: 10_000_000 }),
 		reasoning: Type.Boolean(),
 		vision: Type.Boolean(),
+		imageGeneration: Type.Optional(Type.Boolean({ description: "The model makes pictures instead of text. It takes no tools and no reasoning, and only runs when a server extension runs image models (GET /models `runnable`)." })),
 		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
@@ -111,7 +112,7 @@ function upstreamModel(m: { id: string; name?: string }): CustomProvider["models
 	const contextWindow = e?.contextWindow ?? 128_000;
 	return {
 		id: m.id, ...(m.name ? { name: m.name } : {}), contextWindow, maxTokens: Math.min(e?.maxTokens ?? 8192, contextWindow),
-		reasoning: e?.reasoning ?? false, vision: e?.vision ?? false, fromUpstream: true, catalogId: e?.id ?? null,
+		reasoning: e?.reasoning ?? false, vision: e?.vision ?? false, ...(e?.image ? { imageGeneration: true } : {}), fromUpstream: true, catalogId: e?.id ?? null,
 	};
 }
 
@@ -179,6 +180,7 @@ export class Configuration {
 		this.images = new ModelIcons(db);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
 		registry.defaultSelection = () => this.effectiveDefaults();
+		registry.isImageModel = (provider, id) => this.get(provider)?.models.some((m) => m.id === id && m.imageGeneration === true) ?? false;
 	}
 
 	/** Whether a refresh may still write: set false on shutdown so a late upstream answer never touches a closed database. */
@@ -211,12 +213,7 @@ export class Configuration {
 
 	list(): CustomProvider[] {
 		const rows = this.db.query("SELECT id, data FROM custom_providers ORDER BY id").all() as { id: string; data: string }[];
-		return rows.map((r) => {
-			const p = JSON.parse(r.data) as CustomProvider;
-			// Image generation left the core: a flag saved before that is dropped, the model stays as a chat model.
-			for (const m of p.models) delete (m as { imageGeneration?: unknown }).imageGeneration;
-			return { ...p, id: r.id };
-		});
+		return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
 	}
 
 	/** Remove uploaded icon images that no model uses (recent ones stay). */
@@ -455,9 +452,9 @@ export class Configuration {
 	private buildProvider(p: CustomProvider) {
 		const models: Model<CustomProvider["api"]>[] = p.models.map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
-			reasoning: m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
+			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the bundled OpenRouter catalog, and unknown names keep the defaults.
-			...(m.reasoning ? thinkingMapFor(m) : {}),
+			...(m.reasoning && !m.imageGeneration ? thinkingMapFor(m) : {}),
 			contextWindow: m.contextWindow, maxTokens: m.maxTokens,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		}));
