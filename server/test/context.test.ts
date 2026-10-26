@@ -174,7 +174,7 @@ describe("context API and application", () => {
 			expect((await api("GET", `/sessions/${id}/context?token=${cfg.token}`, undefined, false)).status).toBe(401);
 			expect((await api("GET", "/sessions/missing/context")).status).toBe(404);
 			const preview = (await api("GET", `/sessions/${id}/context`)).json;
-			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "toolSpecs", "skills", "skillsPrompt", "readFiles"].sort());
+			expect(Object.keys(preview).sort()).toEqual(["cwd", "state", "capturedAt", "systemPrompt", "effectiveSystemPrompt", "instructions", "warnings", "tools", "toolSpecs", "systemPrompts", "skills", "skillsPrompt", "readFiles"].sort());
 			expect(preview).toMatchObject({ cwd: f.cwd, state: "preview", capturedAt: null, systemPrompt: "Base", tools: ["read"], readFiles: [] });
 			expect(preview.instructions.at(-1)).toEqual({ path: join(f.cwd, "AGENTS.md"), scope: "cwd", content: "Preview version", bytes: 15 });
 			// Every tool the agent gets is listed as the model sees it, with why it is there.
@@ -184,6 +184,15 @@ describe("context API and application", () => {
 			expect(bySource("always")).toEqual(["peer_send", "peer_read"]);
 			expect(specs.every((t) => t.enabled && t.description && t.bytes > t.description.length)).toBe(true);
 			expect(specs.find((t) => t.name === "read")!.parameters).toMatchObject({ type: "object" });
+			// The system's own wording is listed too, each entry with when it applies and its text.
+			const prompts = preview.systemPrompts as { id: string; kind: string; when: string; text: string; active: boolean; bytes: number }[];
+			expect(prompts.map((p) => p.id)).toEqual(expect.arrayContaining(["sdk-claude-code", "runtime-peer-message", "runtime-compaction-summary", "helper-compaction", "helper-describe", "helper-group-name"]));
+			expect(prompts.every((p) => p.when && p.text && p.bytes === Buffer.byteLength(p.text))).toBe(true);
+			expect(prompts.find((p) => p.id === "helper-compaction")!.text).toContain("You compress the earlier part");
+			expect(prompts.find((p) => p.id === "runtime-peer-message")!.text).toContain("peer_send");
+			// The echo model speaks openai-completions, so the Anthropic / Codex wording is listed but not active.
+			expect(prompts.find((p) => p.id === "sdk-claude-code")!.active).toBe(false);
+			expect(prompts.find((p) => p.id === "sdk-codex-default")!.active).toBe(false);
 			// Before any session exists: the same preview for a new chat in that folder.
 			expect((await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`, undefined, false)).status).toBe(401);
 			const fresh = (await api("GET", `/context?cwd=${encodeURIComponent(f.cwd)}`)).json;

@@ -125,6 +125,15 @@ export const SessionContext = Type.Object({
 		enabled: Type.Boolean({ description: "false: switched off in the settings, so the agent does not get it" }),
 		bytes: Type.Integer({ minimum: 0, description: "Size of name + description + parameters, sent with every request" }),
 	}), { description: "Every tool the agent gets, as the model sees it" }),
+	systemPrompts: Type.Array(Type.Object({
+		id: Type.String(),
+		kind: Type.Union([Type.Literal("sdk"), Type.Literal("runtime"), Type.Literal("extension"), Type.Literal("helper")], { description: "sdk: wording the pi SDK adds per provider; runtime: messages this server adds while a session runs; extension: what extensions may add; helper: prompts of the server's own helper model calls" }),
+		title: Type.String(),
+		when: Type.String({ description: "When it reaches a model" }),
+		text: Type.String({ description: "The text; `${…}` marks a value filled in at run time" }),
+		active: Type.Boolean({ description: "Applies to this session's model and settings" }),
+		bytes: Type.Integer({ minimum: 0 }),
+	}), { description: "Text the system adds for the model beyond the session prompt, tools and AGENTS.md" }),
 	skills: Type.Array(Type.Object({
 		name: Type.String(),
 		description: Type.String(),

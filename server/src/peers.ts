@@ -18,8 +18,12 @@ const TOTAL_CHARS = 6000;
 const MAX_LISTED = 12;
 const MAX_HINT_CHARS = 3000;
 const SNIPPET_CHARS = 100;
-const READ_NOTE =
+export const READ_NOTE =
 	"This is only an index. Do not guess what they did: read a session with peer_read (a few messages) only when you need its words, and prefer git (branch, log, diff in its directory) for the work itself. Use peer_send to give a session work (to a whole tagged group, pass the group name as `to` once).";
+
+/** Wording of what a peer message looks like to the receiving session (`peer_send`). */
+export const PEER_MESSAGE_TEMPLATE = "[from @${sender}, another session on this server; answer with peer_send to @${sender} only if a reply is needed]\n${message}";
+export const peerMessage = (self: string | undefined, message: string): string => PEER_MESSAGE_TEMPLATE.replaceAll("${sender}", String(self)).replace("${message}", () => message);
 
 export interface Brief { name: string; purpose: string; cwd: string; branch: string | null; running: boolean; last: string }
 export interface GroupRef { name: string; sessionIds: string[] }
@@ -181,7 +185,7 @@ export class PeerService {
 		if (count > MAX_SENDS_PER_RUN) throw conflict(`at most ${MAX_SENDS_PER_RUN} peer messages per run; stop and report to the user instead`);
 		this.sends.set(selfId, count);
 		const self = this.host.store.get(selfId)?.name;
-		const body = `[from @${self}, another session on this server; answer with peer_send to @${self} only if a reply is needed]\n${message}`;
+		const body = peerMessage(self, message);
 		const done = await Promise.all(targets.map(async (t) => {
 			const busy = this.host.isRunning(t.id);
 			await this.host.deliver(t.id, body, busy ? "follow_up" : "prompt");

@@ -22,6 +22,12 @@
 	let opened = $state<Record<string, boolean>>({});
 	const scope = { global: msg("전역 AGENTS.md"), ancestor: msg("상위 폴더 AGENTS.md"), cwd: msg("프로젝트 AGENTS.md") };
 	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델"), browser: msg("브라우저") };
+	const promptGroups = [
+		{ kind: "sdk" as const, name: msg("SDK가 붙이는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 세션의 모델에 해당하는 것만 \"적용 중\"입니다.") },
+		{ kind: "runtime" as const, name: msg("실행 중 추가되는 메시지"), hint: msg("대화가 진행되는 동안 서버가 메시지에 덧붙이거나 만들어 넣는 문구입니다.") },
+		{ kind: "extension" as const, name: msg("확장이 바꿀 수 있는 부분"), hint: msg("서버 확장이 시스템 프롬프트나 메시지를 바꿀 수 있는 지점입니다.") },
+		{ kind: "helper" as const, name: msg("보조 모델 호출"), hint: msg("대화와 별개로 서버가 직접 모델을 부르는 프롬프트입니다(요약, 제목, 그룹 이름).") },
+	];
 	const toolTotal = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled).reduce((n, x) => n + x.bytes, 0));
 	const toolText = (x: { name: string; description: string; parameters: unknown }) => `${x.description}\n\n${JSON.stringify(x.parameters, null, 2)}`;
 	const bytes = (n: number) => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
@@ -99,6 +105,24 @@
 					{/each}
 				</section>
 				<section class="group">
+					<h3>{t("시스템이 추가하는 프롬프트")}</h3>
+					{#each promptGroups as g (g.kind)}
+						{@const list = data.systemPrompts.filter((x) => x.kind === g.kind)}
+						{#if list.length}
+							<p class="note">{t(g.name)} — {t(g.hint)}</p>
+							{#each list as p (p.id)}
+								<div class="source" class:off={!p.active}>
+									<button class="fold" onclick={() => (opened[`prompt:${p.id}`] = !opened[`prompt:${p.id}`])} aria-expanded={!!opened[`prompt:${p.id}`]}>
+										<span class="label"><span class="source-name">{p.title}</span><span class="meta">{p.active ? t("적용 중") : t("이 세션에는 해당 없음")} · {bytes(p.bytes)}</span></span>
+										<span class="chev" class:open={opened[`prompt:${p.id}`]}><Icon name="chevron-right" /></span>
+									</button>
+									{#if opened[`prompt:${p.id}`]}<p class="when">{p.when}</p><pre in:collapseIn out:collapseOut>{p.text}</pre>{/if}
+								</div>
+							{/each}
+						{/if}
+					{/each}
+				</section>
+				<section class="group">
 					<h3>{t("도구")}</h3>
 					{#if data.toolSpecs.length}
 						<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 켜진 도구 {n}개 · 합계 {size}", { n: data.toolSpecs.filter((x) => x.enabled).length, size: bytes(toolTotal) })}</p>
@@ -171,4 +195,6 @@
 	.gap { margin-bottom: 10px; }
 	.note { margin: 0 2px 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.source.off { opacity: 0.55; }
+	.when { margin: 0; padding: 10px 14px 0; border-top: 1px solid var(--border); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
+	.when + pre { border-top: 0; }
 </style>

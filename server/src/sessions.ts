@@ -5,7 +5,8 @@ import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type ToolSource } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry, type ToolSource } from "./context.ts";
+import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
@@ -187,6 +188,7 @@ export class SessionManager {
 			state: snapshot ? "applied" : "preview",
 			capturedAt: snapshot?.capturedAt ?? null,
 			toolSpecs: this.toolSpecs(base.tools, record.cwd),
+			systemPrompts: this.systemPromptList(record.provider, record.model),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
 		};
 	}
@@ -204,6 +206,7 @@ export class SessionManager {
 			state: "preview",
 			capturedAt: null,
 			toolSpecs: this.toolSpecs(tools, cwd),
+			systemPrompts: this.systemPromptList(),
 			readFiles: [],
 		};
 	}
@@ -838,6 +841,13 @@ export class SessionManager {
 		if (this.imageModel?.resolve()) add([IMAGE_TOOL], "image");
 		if (this.browser?.available()) add(BROWSER_TOOLS, "browser");
 		return [...plan].map(([name, source]) => ({ name, source, off: off.includes(name) }));
+	}
+
+	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
+	private systemPromptList(provider?: string, modelId?: string): SystemPromptEntry[] {
+		const m = provider && modelId ? this.registry.models.getModel(provider, modelId) : undefined;
+		const hooks = (["before_agent_start", "context", "input"] as const).filter((h) => this.ext?.has(h));
+		return systemPromptEntries(m ? { provider: m.provider, api: m.api } : null, { hasExtensions: !!this.ext, extensionHooks: hooks });
 	}
 
 	/** The tools as the model receives them (name, description, parameter schema), for the context view. */

@@ -96,6 +96,20 @@ export interface ContextUsage {
 }
 
 /** Exact server-side instruction snapshot plus an auditable, historical file-read trace. */
+export interface SystemPromptEntry {
+	id: string;
+	/** sdk: wording the pi SDK adds per provider; runtime: messages the server adds while a session runs; extension: what extensions may add; helper: the server's own helper model calls */
+	kind: "sdk" | "runtime" | "extension" | "helper";
+	title: string;
+	/** When it reaches a model */
+	when: string;
+	/** The text; `${…}` marks a value filled in at run time */
+	text: string;
+	/** Applies to this session's model and settings */
+	active: boolean;
+	bytes: number;
+}
+
 export interface ContextTool {
 	name: string;
 	description: string;
@@ -125,6 +139,8 @@ export interface SessionContext {
 	tools: string[];
 	/** Every tool the agent gets, as the model sees it (they travel beside the system prompt on every request). */
 	toolSpecs: ContextTool[];
+	/** Text the system adds for the model beyond the session prompt, tools and AGENTS.md. */
+	systemPrompts: SystemPromptEntry[];
 	/** Skills advertised to the model in this session (frozen once applied). */
 	skills: { name: string; description: string; path: string; scope: SkillScope }[];
 	/** Exact `<available_skills>` block in the system prompt ("" when none). */

@@ -50,6 +50,8 @@ export interface ContextTool {
 export interface SessionContext extends Omit<ContextSnapshot, "capturedAt" | "skills"> {
 	/** The tools with what the model sees of them (they travel beside the system prompt on every request). */
 	toolSpecs: ContextTool[];
+	/** Text the system adds for the model beyond the session prompt, tools and AGENTS.md (SDK wording, run-time messages, extensions, helper calls). */
+	systemPrompts: SystemPromptEntry[];
 	skills: Omit<SkillRef, "baseDir">[];
 	/** The exact `<available_skills>` block appended to the system prompt ("" when none). */
 	skillsPrompt: string;
@@ -186,3 +188,26 @@ export function aggregateReadFiles(cwd: string, messages: StoredMessage[]): Read
 	}
 	return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
+
+/**
+ * Text the system itself puts in front of a model beyond the session's own prompt, tools and AGENTS.md: what the pi SDK
+ * adds per provider, what this server adds at run time (peer messages, @mentions, compaction summaries), what
+ * extensions may add, and the prompts of the server's helper calls (compaction, titles, group names).
+ */
+export type PromptKind = "sdk" | "runtime" | "extension" | "helper";
+
+export interface SystemPromptEntry {
+	id: string;
+	kind: PromptKind;
+	title: string;
+	/** When it reaches a model */
+	when: string;
+	/** The text (templates show `${…}` where a value is filled in) */
+	text: string;
+	/** Applies to this session's current model and settings (false: listed so the full set is visible) */
+	active: boolean;
+	bytes: number;
+}
+
+type EntryInput = Omit<SystemPromptEntry, "bytes">;
+export const withBytes = (e: EntryInput): SystemPromptEntry => ({ ...e, bytes: Buffer.byteLength(e.text) });

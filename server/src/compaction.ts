@@ -126,6 +126,14 @@ export function transcript(messages: AgentMessage[]): string {
 
 export const SUMMARY_SYSTEM = `You compress the earlier part of a coding-agent conversation so the agent can continue from your summary alone. Write a structured, factual summary. Keep: the user's goals and constraints, decisions made and why, files read or changed (with paths), commands run and their outcomes, errors and their fixes, and what is still open or next. Drop pleasantries and repetition. Do not invent anything. Do not answer or continue the conversation.`;
 
+/** The fixed wording of the request the summarizer gets (the conversation itself is filled in). */
+export const SUMMARY_REQUEST_TEMPLATE = [
+	"Conversation to summarize:  (or, after an earlier compaction: \"Summary so far (earlier compaction): …\" and \"New conversation since then:\")",
+	"${the earlier part of the conversation, as a transcript}",
+	"Extra instructions from the user: ${text of /compact, when given}",
+	"Write the summary now.",
+].join("\n");
+
 export function summaryRequest(previous: string | null, messages: AgentMessage[], instructions?: string, maxChars = 400_000): string {
 	let body = transcript(messages);
 	if (body.length > maxChars) body = `[earlier part omitted]\n${body.slice(body.length - maxChars)}`;
