@@ -133,6 +133,8 @@
 		{#if allowUnset}
 			<PickerOption selected={!sel} onclick={unset}>
 				{#snippet name()}{unsetLabel ?? t("지정 안 함")}{/snippet}
+				<!-- the star's width, so this row's check lines up with the model rows' -->
+				{#snippet trailing()}{#if onfav}<span class="favslot" aria-hidden="true"></span>{/if}{/snippet}
 			</PickerOption>
 		{/if}
 		{#if starred.length}
@@ -167,6 +169,11 @@
 </PickerModal>
 
 <style>
+	.favslot {
+		flex: none;
+		width: 34px;
+		height: 34px;
+	}
 	.fav {
 		flex: none;
 		display: grid;
