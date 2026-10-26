@@ -96,7 +96,11 @@ export class NotificationClient {
   private identity() { return this.identityOnce ??= deviceIdentity(); }
   private api: Api | null = null;
   /** The connection the user removed this device from. Reporting to it again would put the device straight back in the list. */
-  private revokedOn: Api | null = null;
+  private revokedOn = new Set<Api>();
+  /** The other saved servers: they are reported to (never "looked at") and their notices are shown too. */
+  private others = new Set<Api>();
+  /** Which server a session of a notice shown from a background server lives on, for the click. */
+  private home = new Map<string, Api>();
   private visible: () => string[] = () => [];
   private active: () => string | null = () => null;
   private timer?: ReturnType<typeof setInterval>;
@@ -104,13 +108,13 @@ export class NotificationClient {
   private seen = new Set<string>();
 
   private cleanup: (() => void)[] = [];
-  private navigate: (sessionId: string) => void = () => {};
+  private navigate: (sessionId: string, api?: Api) => void = () => {};
   private pendingSession: string | null = null;
   private lastShown: { sid: string; at: number } | null = null;
-  private openSession(sid: string) { if (this.api) this.navigate(sid); else this.pendingSession = sid; }
+  private openSession(sid: string) { if (this.api) this.navigate(sid, this.home.get(sid)); else this.pendingSession = sid; }
   private native?: NativePushAdapter;
   private providers: ("fcm" | "apns")[] = [];
-  init(visible: () => string[], navigate: (sessionId: string) => void, native?: NativePushAdapter, active: () => string | null = () => null) {
+  init(visible: () => string[], navigate: (sessionId: string, api?: Api) => void, native?: NativePushAdapter, active: () => string | null = () => null) {
     this.active = active; this.visible = visible; this.navigate = navigate; this.native = native;
     const update = () => { void this.heartbeat(); };
     // Desktop Tauri gives no click event for system notifications. Clicking one brings the window to the front,
@@ -145,13 +149,19 @@ export class NotificationClient {
   connect(api: Api | null) {
     const old = this.api;
     if (old && old !== api) void old.notificationPresence(this.id, { platform: notificationPlatform(), focused: false, enabled: this.enabled, visibleSessionIds: [] }).catch(() => {});
-    this.api = api; this.providers = []; if (api !== this.revokedOn) this.revokedOn = null;
+    this.api = api; this.providers = []; if (api) this.revokedOn.delete(api);
     if (api) {
       notificationRules.retry(api);
       if (this.pendingSession) { const sid = this.pendingSession; this.pendingSession = null; this.navigate(sid); }
       void api.notificationStatus().then(status => { if (this.api === api) this.providers = status.providers; }).catch(() => {});
       void this.heartbeat();
     }
+  }
+  /** Every saved server, so notices of the ones not in view arrive too. */
+  track(apis: Api[]) {
+    this.others = new Set(apis);
+    for (const a of this.revokedOn) if (!this.others.has(a) && a !== this.api) this.revokedOn.delete(a);
+    void this.heartbeat();
   }
   async permission(): Promise<NotificationStatus["permission"]> {
     if (isTauri()) {
@@ -177,8 +187,8 @@ export class NotificationClient {
     await this.heartbeat();
   }
   /** The server dropped this device from its list ("device_revoked"): stop reporting until the app is connected again. */
-  revoked(deviceId: string) {
-    if (deviceId === this.id && this.api) this.revokedOn = this.api;
+  revoked(deviceId: string, api: Api | null = this.api) {
+    if (deviceId === this.id && api) this.revokedOn.add(api);
   }
   /** A session was opened or marked read here: clear its notification from this phone now, and tell the server so other phones follow. */
   read(sessionId: string) {
@@ -203,17 +213,23 @@ export class NotificationClient {
     return run;
   }
   private async report() {
-    const api = this.api;
-    if (!api || api === this.revokedOn) return;
+    const open = this.api;
+    const targets = [...new Set([...(open ? [open] : []), ...this.others])].filter(a => !this.revokedOn.has(a));
+    if (!targets.length) return;
     try {
       // Everything that has to wait comes first: what is reported is what is true at the moment of sending.
       const enabled = this.enabled && await this.permission() === "granted";
       const identity = await this.identity();
-      if (api !== this.api || api === this.revokedOn) return;
       const focused = attended(), visible = this.visible().slice(0, 20), active = this.active();
       // Looking at a session reads it: its notification in this phone's shade goes away (other devices are told by the server).
-      if (focused) void this.native?.clear?.(visible).catch(() => {});
-      await api.notificationPresence(this.id, { platform: notificationPlatform(), focused, enabled, visibleSessionIds: visible, ...(active ? { activeSessionId: active } : {}), lang: getLang(), ...identity, ...(this.registration === undefined ? {} : { push: this.registration }) });
+      if (focused && open) void this.native?.clear?.(visible).catch(() => {});
+      const base = { platform: notificationPlatform(), enabled, lang: getLang(), ...identity, ...(this.registration === undefined ? {} : { push: this.registration }) };
+      await Promise.all(targets.map(api => {
+        if (api !== open && !this.others.has(api) || this.revokedOn.has(api)) return;
+        // Only the server in view is looked at; the others must still notify.
+        const here = api === open && api === this.api;
+        return api.notificationPresence(this.id, { ...base, focused: here && focused, visibleSessionIds: here ? visible : [], ...(here && active ? { activeSessionId: active } : {}) }).catch(() => {});
+      }));
     } catch { /* offline: notifications do not break the app */ }
   }
   /**
@@ -241,12 +257,15 @@ export class NotificationClient {
     return result.ok ? { step: "shown", server } : { step: "os_error", detail: result.detail, server };
   }
   private pendingTest?: (r: { ok: boolean; detail?: string }) => void;
-  async receive(device: string, payload: NotificationSpec & { id: string; at: number; source?: string }) {
+  async receive(device: string, payload: NotificationSpec & { id: string; at: number; source?: string }, from: Api | null = this.api) {
     if (device !== this.id || this.seen.has(payload.id) || Date.now() - payload.at > 60_000) return;
     const isTest = payload.id.startsWith("test-");
     if (!this.enabled && !isTest) return;
     this.seen.add(payload.id); if (this.seen.size > 500) this.seen.delete(this.seen.values().next().value!);
-    if (!isTest && attended()) { await this.api?.notificationReceived(payload.id).catch(() => {}); return; }
+    const inView = from === this.api;
+    if (!isTest && inView && attended()) { await from?.notificationReceived(payload.id).catch(() => {}); return; }
+    if (!inView && from && payload.sessionId) this.home.set(payload.sessionId, from);
+    else if (payload.sessionId) this.home.delete(payload.sessionId);
     if (await this.permission() !== "granted") { this.pendingTest?.({ ok: false, detail: "permission" }); return; }
     // The server writes built-in notices in this device's language (it is told in every presence report), so what arrives is shown as is.
     const title = payload.title;
@@ -267,7 +286,7 @@ export class NotificationClient {
       }
     } catch (e) { this.pendingTest?.({ ok: false, detail: e instanceof Error ? e.message : String(e) }); return; }
     this.pendingTest?.({ ok: true });
-    await this.api?.notificationReceived(payload.id).catch(() => {});
+    await from?.notificationReceived(payload.id).catch(() => {});
   }
   stop() { clearInterval(this.timer); for (const fn of this.cleanup.splice(0)) fn(); this.connect(null); }
 }

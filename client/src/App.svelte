@@ -141,7 +141,7 @@
 		updater.connection = () => ({ api: app.api, serverId: app.serverId });
 		// A few seconds after launch, so the check never competes with connecting to the server.
 		const updateTimer = setTimeout(() => updater.autoCheck(), 5000);
-		notifications.init(() => app.visibleIds, sid => { void app.openAny(sid); }, nativePushAdapter(), () => app.readableId);
+		notifications.init(() => app.visibleIds, (sid, api) => { const sv = api ? app.serverIdOfApi(api) : null; if (sv && sv !== app.serverId) app.openIn(sv, { session: sid }); else void app.openAny(sid); }, nativePushAdapter(), () => app.readableId);
 		const api = () => { if (!app.api) throw new Error(t("서버에 연결해 주세요")); return app.api; };
 		extensions.init({
 			prefill: text => { app.prefill = text; },

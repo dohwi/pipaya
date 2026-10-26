@@ -158,4 +158,15 @@ describe("device list identity", () => {
     client.connect(second); await client.heartbeat(); expect(calls.length).toBeGreaterThan(before + 1);
     client.stop();
   });
+
+  test("a server not in view is still reported to (never as looked at), and its notice is shown", async () => {
+    const view = fakeApi(), back = fakeApi();
+    const c = new NotificationClient(); c.connect(view.api); await c.setEnabled(true);
+    c.track([view.api, back.api]); await c.heartbeat();
+    state.visible = "visible"; state.focus = true; await c.heartbeat();
+    expect(back.calls.presence.length).toBeGreaterThan(0);
+    expect(back.calls.presence.every((p) => p.focused === false && p.enabled)).toBe(true);
+    await c.receive(c.id, payload("bg1"), back.api);
+    expect(shown).toHaveLength(1); expect(back.calls.received).toEqual(["bg1"]);
+  });
 });

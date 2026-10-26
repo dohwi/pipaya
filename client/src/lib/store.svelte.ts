@@ -687,6 +687,12 @@ class AppStore {
       changed = true;
     }
     if (changed) this.links = next;
+    notifications.track(Object.values(next).map((l) => l.api));
+  }
+
+  /** The id of the saved server behind `api`. */
+  serverIdOfApi(api: unknown): string | null {
+    return Object.values(this.links).find((l) => l.api === api)?.id ?? null;
   }
 
   /** Put a server in view: its conversations open here, and its lists (already live) are shown at once. */
@@ -783,6 +789,11 @@ class AppStore {
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
     if (link.id === this.serverId) return this.handle(e);
+    // Notices of a server not in view still reach this device.
+    if (e.type === "notification") {
+      const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
+      void notifications.receive(data.deviceId, data.notification, link.api).catch(() => {});
+    } else if (e.type === "device_revoked") notifications.revoked((e.data as { deviceId: string }).deviceId, link.api);
     applyLinkEvent(link.data, e);
     if (e.type === "provider_updated" || e.type === "configuration_updated") {
       void link.refreshCatalog();
