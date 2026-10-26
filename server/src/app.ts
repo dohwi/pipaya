@@ -229,7 +229,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return outcome.answer;
 		},
 	});
-	const browsers = new BrowserManager(bus, { enabled: cfg.browser !== false, dataDir: cfg.dataDir, ...(opts.browserExecutable !== undefined ? { executable: opts.browserExecutable } : {}) });
+	const browsers = new BrowserManager(bus, { enabled: cfg.browser !== false, dataDir: cfg.dataDir, defaultWorkdir: () => configuration.defaultWorkdir(), ...(opts.browserExecutable !== undefined ? { executable: opts.browserExecutable } : {}) });
 	sessions.setBrowser(browsers);
 	const terminals = new TerminalManager(bus, {
 		enabled: cfg.terminals !== false,

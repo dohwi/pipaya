@@ -27,12 +27,14 @@ export const BrowserTabSchema = Type.Object({
 	id: Type.String(),
 	title: Type.String(),
 	url: Type.String(),
+	/** Absolute folder the tab is filed under in the sidebar (browsing itself is not tied to it). */
+	cwd: Type.String(),
 	profile: Type.String(),
 	createdAt: Type.Integer(),
 });
 export const BrowserTabList = Type.Object({ tabs: Type.Array(BrowserTabSchema) });
 export const BrowserSupport = Type.Object({ enabled: Type.Boolean(), available: Type.Boolean(), max: Type.Integer() });
-export const CreateBrowserBody = Type.Object({ url: Type.Optional(Type.String({ maxLength: 4000 })) });
+export const CreateBrowserBody = Type.Object({ url: Type.Optional(Type.String({ maxLength: 4000 })), cwd: Type.Optional(Type.String({ maxLength: 4000 })) });
 export const NavigateBrowserBody = Type.Object({ url: Type.String({ minLength: 1, maxLength: 4000 }) });
 export type BrowserTabInfo = Static<typeof BrowserTabSchema>;
 
@@ -107,6 +109,8 @@ export type BrowserInput =
 export interface BrowserOptions {
 	enabled: boolean;
 	dataDir: string;
+	/** Folder a new tab is filed under; default: the data dir. */
+	defaultWorkdir?: () => string;
 	/** Defaults to `findBrowser()`. */
 	executable?: string | null;
 	headless?: boolean;
@@ -176,14 +180,14 @@ export class BrowserManager {
 		return this.context;
 	}
 
-	async create(input: Static<typeof CreateBrowserBody> = {}): Promise<BrowserTabInfo> {
+	async create(input: Static<typeof CreateBrowserBody> = {}, cwd?: string): Promise<BrowserTabInfo> {
 		if (this.tabs.size >= MAX_BROWSER_TABS) throw new HttpError(409, "too_many_browser_tabs", `at most ${MAX_BROWSER_TABS} browser tabs can be open at once`);
 		const url = input.url?.trim() ? normalizeUrl(input.url) : "about:blank";
 		const ctx = await this.launch();
 		const page = await ctx.newPage();
 		const cdp = await ctx.newCDPSession(page);
 		const id = BROWSER_PREFIX + randomUUID();
-		const tab: Tab = { info: { id, title: "", url: "about:blank", profile: DEFAULT_PROFILE, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agentBusy: 0, lastFrame: null, closing: false };
+		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile: DEFAULT_PROFILE, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agentBusy: 0, lastFrame: null, closing: false };
 		this.tabs.set(id, tab);
 		this.current = id;
 		cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number; metadata: { deviceWidth: number; deviceHeight: number } }) => {
