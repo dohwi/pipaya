@@ -38,7 +38,7 @@ fn show_toast(app: tauri::AppHandle, title: String, body: Option<String>, sessio
 #[tauri::command]
 fn show_toast() {}
 
-/// The server bundled with the desktop app (sidecar), bound to loopback only.
+/// The server bundled with the desktop app (sidecar), loopback-only unless `PIPAYA_APP_HOST` is set.
 #[cfg(desktop)]
 mod local_server {
     use std::io::Read;
@@ -61,10 +61,33 @@ mod local_server {
         token: String,
     }
 
-    fn pick_port() -> u16 {
-        // Prefer a stable port so the saved address keeps working across launches.
-        for p in [8788u16, 0] {
-            if let Ok(l) = TcpListener::bind(("127.0.0.1", p)) {
+    /// Address the bundled server binds to. `PIPAYA_APP_HOST` (e.g. a Tailscale IP) opts in to
+    /// remote access; the default stays loopback-only.
+    fn bind_host() -> String {
+        std::env::var("PIPAYA_APP_HOST")
+            .ok()
+            .map(|h| h.trim().to_string())
+            .filter(|h| !h.is_empty())
+            .unwrap_or_else(|| "127.0.0.1".into())
+    }
+
+    /// Address the app itself uses to reach the server (a wildcard bind is reached via loopback).
+    fn connect_host(bind: &str) -> String {
+        match bind.parse::<std::net::IpAddr>() {
+            Ok(ip) if ip.is_unspecified() => "127.0.0.1".into(),
+            _ => bind.to_string(),
+        }
+    }
+
+    fn pick_port(host: &str) -> u16 {
+        // An explicit `PIPAYA_APP_PORT` wins; otherwise prefer a stable port so the saved
+        // address keeps working across launches.
+        let forced = std::env::var("PIPAYA_APP_PORT").ok().and_then(|p| p.trim().parse::<u16>().ok());
+        let mut candidates = Vec::new();
+        candidates.extend(forced);
+        candidates.extend([8788u16, 0]);
+        for p in candidates {
+            if let Ok(l) = TcpListener::bind((host, p)) {
                 if let Ok(a) = l.local_addr() {
                     return a.port();
                 }
@@ -94,9 +117,11 @@ mod local_server {
         let data = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("server");
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
         let workspace = app.path().home_dir().map_err(|e| e.to_string())?;
-        let port = pick_port();
+        let host = bind_host();
+        let reach = connect_host(&host);
+        let port = pick_port(&host);
         let mut cmd = Command::new(&bin);
-        cmd.env("PIPAYA_HOST", "127.0.0.1")
+        cmd.env("PIPAYA_HOST", &host)
             .env("PIPAYA_PORT", port.to_string())
             .env("PIPAYA_DATA_DIR", &data)
             .env("PIPAYA_WORKSPACE", &workspace)
@@ -118,7 +143,9 @@ mod local_server {
         let child = cmd.spawn().map_err(|e| e.to_string())?;
         *state.child.lock().unwrap() = Some(child);
 
-        let addr: SocketAddr = ([127, 0, 0, 1], port).into();
+        let addr: SocketAddr = format!("{reach}:{port}")
+            .parse()
+            .unwrap_or_else(|_| ([127, 0, 0, 1], port).into());
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
@@ -139,7 +166,7 @@ mod local_server {
         std::fs::File::open(data.join("token"))
             .and_then(|mut f| f.read_to_string(&mut token))
             .map_err(|e| e.to_string())?;
-        let info = Info { base_url: format!("http://127.0.0.1:{port}"), token: token.trim().to_string() };
+        let info = Info { base_url: format!("http://{reach}:{port}"), token: token.trim().to_string() };
         *state.info.lock().unwrap() = Some(info.clone());
         Ok(info)
     }

@@ -38,7 +38,7 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 
 ## Quick install
 
-Install the client. On Windows and macOS the app **bundles its own server** (shown as "This PC", loopback only), so there is nothing else to set up.
+Install the client. On Windows and macOS the app **bundles its own server** (shown as "This PC", loopback only by default), so there is nothing else to set up. To reach it from other devices, launch the app with `PIPAYA_APP_HOST` set to your Tailscale IP (and optionally `PIPAYA_APP_PORT`).
 
 | Client | How |
 |---|---|

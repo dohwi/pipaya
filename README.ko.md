@@ -38,7 +38,7 @@ pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다.
 
 ## 빠른 설치
 
-클라이언트를 설치하세요. Windows와 macOS 앱은 **서버를 내장**하고 있어("이 PC", loopback 전용) 따로 설치할 것이 없습니다.
+클라이언트를 설치하세요. Windows와 macOS 앱은 **서버를 내장**하고 있어("이 PC", 기본은 loopback 전용) 따로 설치할 것이 없습니다. 다른 기기에서 접속하려면 앱을 `PIPAYA_APP_HOST`(Tailscale IP)와 필요하면 `PIPAYA_APP_PORT`를 지정해 실행하세요.
 
 | 클라이언트 | 설치 방법 |
 |---|---|
