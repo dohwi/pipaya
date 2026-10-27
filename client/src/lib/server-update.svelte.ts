@@ -107,6 +107,8 @@ function failureText(e: unknown): string {
 		if (e.code === "sessions_running") return t("실행 중인 대화가 있어 서버를 다시 시작하면 중단됩니다");
 		if (e.code === "up_to_date") return t("서버가 이미 최신 버전입니다");
 		if (e.code === "update_failed") return t("서버를 업데이트하지 못해 이전 버전으로 되돌렸습니다");
+		if (e.code === "update_restore_failed") return t("서버를 업데이트하지 못했고 이전 버전도 완전히 복원하지 못했습니다. 서버의 체크아웃을 확인하세요");
+		if (e.code === "dirty_checkout") return t("서버의 체크아웃에 로컬 변경이 있어 업데이트할 수 없습니다");
 		if (e.code === "update_unavailable") return t("이 서버는 스스로 업데이트할 수 없습니다");
 		if (e.status === 403) return t("서버 관리자 토큰으로 연결해야 업데이트할 수 있습니다");
 	}

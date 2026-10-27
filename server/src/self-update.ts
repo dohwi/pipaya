@@ -148,6 +148,12 @@ export class SelfUpdater {
 				throw new HttpError(409, "sessions_running", `${busy} session(s) are running; a restart would interrupt them`);
 			}
 
+			// `reset --hard` below would silently discard edits made in this checkout: refuse instead.
+			const dirty = await this.git(["status", "--porcelain", "--untracked-files=no"]);
+			if (dirty.code === 0 && dirty.out.length > 0) {
+				throw new HttpError(409, "dirty_checkout", "the server's checkout has local changes; commit or discard them before updating");
+			}
+
 			const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", st.latest], 120_000);
 			// Dependencies are reinstalled only when the manifest or lockfile differ between the two commits (unknown = reinstall).
 			const diff = fetched.code === 0 ? await this.git(["diff", "--name-only", st.current, st.latest, "--", "server/package.json", "server/bun.lock"]) : null;
@@ -157,9 +163,12 @@ export class SelfUpdater {
 				moved.code === 0 && existsSync(join(this.o.serverDir, "src", "index.ts")) && (!depsChanged || (await this.install(this.o.serverDir)));
 			if (!ready) {
 				// Leave the working tree as it was; a half-updated checkout would not start.
-				await this.git(["reset", "--hard", "--quiet", st.current]);
-				if (depsChanged) await this.install(this.o.serverDir);
+				const back = await this.git(["reset", "--hard", "--quiet", st.current]);
+				const depsBack = !depsChanged || (await this.install(this.o.serverDir));
 				this.cached = null;
+				if (back.code !== 0 || !depsBack) {
+					throw new HttpError(500, "update_restore_failed", "the update failed and the previous version could not be fully restored; check the server's checkout");
+				}
 				throw new HttpError(502, "update_failed", "the update could not be installed; the previous version was restored");
 			}
 			this.cached = null;

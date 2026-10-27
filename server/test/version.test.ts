@@ -238,10 +238,31 @@ describe("SelfUpdater", () => {
 			return fine(cmd, cwd, t);
 		};
 		let restarted = false;
-		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: tracking, install: async () => false, restart: () => (restarted = true) });
+		let installs = 0;
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: tracking, install: async () => ++installs > 1, restart: () => (restarted = true) });
 		await expect(u.apply()).rejects.toMatchObject({ status: 502, code: "update_failed" });
+		expect(installs).toBe(2); // the new dependencies failed, the old ones were put back
 		expect(resets).toEqual([NEW, OLD]);
 		expect(restarted).toBe(false);
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("a restore that fails is reported as such, not as a restored version", async () => {
+		const broken: Run = async (cmd, cwd, t) => (cmd[1] === "reset" && cmd[cmd.length - 1] === OLD ? { code: 1, out: "boom" } : fine(cmd, cwd, t));
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: broken, install: async () => false, restart: () => {} });
+		await expect(u.apply()).rejects.toMatchObject({ status: 500, code: "update_restore_failed" });
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("local changes in the checkout stop the update before anything is touched", async () => {
+		const resets: string[] = [];
+		const edited: Run = async (cmd, cwd, t) => {
+			if (cmd[1] === "reset") resets.push(cmd[cmd.length - 1]!);
+			return cmd[1] === "status" ? { code: 0, out: " M server/src/app.ts" } : fine(cmd, cwd, t);
+		};
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: edited, install: async () => true, restart: () => {} });
+		await expect(u.apply()).rejects.toMatchObject({ status: 409, code: "dirty_checkout" });
+		expect(resets).toEqual([]);
 		rmSync(dir, { recursive: true, force: true });
 	});
 
