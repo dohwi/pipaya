@@ -5,7 +5,7 @@ import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry, type ToolSource } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry } from "./context.ts";
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
