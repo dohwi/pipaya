@@ -96,7 +96,10 @@
 			sock.onmessage = (m) => {
 				if (typeof m.data !== "string") {
 					if (pendingSize) page = pendingSize;
-					latest = new Blob([m.data as ArrayBuffer], { type: "image/jpeg" });
+					// moving pictures are JPEG; the sharp one that follows once the page is still is PNG
+					const head = new Uint8Array(m.data as ArrayBuffer, 0, 4);
+					const png = head[0] === 0x89 && head[1] === 0x50;
+					latest = new Blob([m.data as ArrayBuffer], { type: png ? "image/png" : "image/jpeg" });
 					void draw();
 					return;
 				}

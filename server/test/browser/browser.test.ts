@@ -93,12 +93,13 @@ live("browser tabs (real Chromium)", () => {
 		const address = await app.server.listen({ port: 0, host: "127.0.0.1" });
 		const ws = new WebSocket(`${address.replace("http", "ws")}/browsers/${tab.id}/ws?token=test-token`);
 		ws.binaryType = "arraybuffer";
-		const got = { hello: false, frames: 0, jpeg: false };
+		const got = { hello: false, frames: 0, jpeg: false, png: false };
 		ws.onmessage = (e) => {
 			if (typeof e.data === "string") got.hello ||= JSON.parse(e.data).type === "hello";
 			else {
 				got.frames++;
 				got.jpeg ||= new Uint8Array(e.data)[0] === 0xff && new Uint8Array(e.data)[1] === 0xd8;
+				got.png ||= new Uint8Array(e.data)[0] === 0x89 && new Uint8Array(e.data)[1] === 0x50;
 			}
 		};
 		await new Promise((r) => (ws.onopen = r));
@@ -106,6 +107,9 @@ live("browser tabs (real Chromium)", () => {
 		expect(got.hello).toBe(true);
 		expect(got.frames).toBeGreaterThan(0);
 		expect(got.jpeg).toBe(true);
+		// once the page has been still for a moment, one lossless picture follows the JPEGs
+		for (let i = 0; i < 100 && !got.png; i++) await Bun.sleep(50);
+		expect(got.png).toBe(true);
 		ws.send(JSON.stringify({ type: "fit", width: 500, height: 400 }));
 		ws.send(JSON.stringify({ type: "text", text: "x" }));
 		ws.send(JSON.stringify({ type: "navigate", to: "reload" }));

@@ -37,6 +37,10 @@ export const profileId = (raw: string): string => {
 };
 /** At most ~15 frames per second go to the views. */
 export const FRAME_INTERVAL_MS = 66;
+/** After this long without a new frame the page is "still": one sharp (lossless) picture replaces the last JPEG. */
+export const SETTLE_MS = 450;
+/** How long the frames that our own sharp picture causes are ignored. */
+export const SETTLE_QUIET_MS = 250;
 /** Page size limits when a view fits the page to its panel (CSS px) */
 export const MIN_VIEW = { width: 320, height: 240 };
 export const MAX_VIEW = { width: 1920, height: 1440 };
@@ -141,6 +145,10 @@ interface Tab {
 	handoff: { by: string; note: string } | null;
 	/** When the last frame went out (frames are rate-limited) */
 	lastSent: number;
+	/** Waits for the page to be still, then sends one sharp picture */
+	settleTimer: ReturnType<typeof setTimeout> | null;
+	/** Until this time, frames are the echo of our own sharp picture (taking it repaints the page): they are not sent and do not restart the wait */
+	quietUntil: number;
 	/** Size the page was last fitted to by a view */
 	fit: { width: number; height: number } | null;
 	lastFrame: { jpeg: Uint8Array; width: number; height: number } | null;
@@ -398,17 +406,19 @@ export class BrowserManager {
 		this.claimed.add(page);
 		const cdp = await ctx.newCDPSession(page);
 		const id = BROWSER_PREFIX + randomUUID();
-		const tab: Tab = { context: ctx, info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], handoff: null, lastSent: 0, fit: null, lastFrame: null, closing: false };
+		const tab: Tab = { context: ctx, info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], handoff: null, lastSent: 0, settleTimer: null, quietUntil: 0, fit: null, lastFrame: null, closing: false };
 		this.tabs.set(id, tab);
 		cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number; metadata: { deviceWidth: number; deviceHeight: number } }) => {
 			cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
 			// A page that animates would flood the link: keep to FRAME_INTERVAL_MS (the next frame repairs what was skipped).
 			const now = performance.now();
+			if (now < tab.quietUntil) return;
 			if (now - tab.lastSent < FRAME_INTERVAL_MS) return;
 			tab.lastSent = now;
 			const jpeg = Buffer.from(f.data, "base64");
 			tab.lastFrame = { jpeg, width: f.metadata.deviceWidth, height: f.metadata.deviceHeight };
 			for (const c of tab.clients) c.frame(jpeg, { width: f.metadata.deviceWidth, height: f.metadata.deviceHeight });
+			this.settle(tab);
 		});
 		page.on("framenavigated", (f) => f === page.mainFrame() && void this.refresh(tab));
 		page.on("load", () => void this.refresh(tab));
@@ -445,6 +455,7 @@ export class BrowserManager {
 	private drop(tab: Tab) {
 		if (tab.closing) return;
 		tab.closing = true;
+		if (tab.settleTimer) clearTimeout(tab.settleTimer);
 		this.tabs.delete(tab.info.id);
 		for (const c of tab.clients) c.closed();
 		tab.clients.clear();
@@ -522,6 +533,32 @@ export class BrowserManager {
 				void this.syncScreencast(tab);
 			},
 		};
+	}
+
+	/**
+	 * Moving pictures go out as JPEG (small and quick). Once the page has been still for `SETTLE_MS` one lossless picture
+	 * follows: text is sharp when someone stops to read, and for text pages it is also smaller than the JPEG was.
+	 */
+	private settle(tab: Tab) {
+		if (tab.settleTimer) clearTimeout(tab.settleTimer);
+		tab.settleTimer = setTimeout(async () => {
+			tab.settleTimer = null;
+			if (tab.closing || !tab.clients.size || tab.page.isClosed()) return;
+			try {
+				const sent = tab.lastSent;
+				// Taking the picture repaints the page and makes the screencast emit a frame of its own: let that pass unseen.
+				tab.quietUntil = performance.now() + SETTLE_QUIET_MS;
+				const png = await tab.page.screenshot({ type: "png", timeout: 4000, animations: "disabled", caret: "initial" });
+				tab.quietUntil = performance.now() + SETTLE_QUIET_MS;
+				// something moved while it was being taken: the next settle will send a fresh one
+				if (tab.lastSent !== sent || tab.closing) return;
+				const size = tab.lastFrame ? { width: tab.lastFrame.width, height: tab.lastFrame.height } : (tab.fit ?? { width: 1280, height: 800 });
+				tab.lastFrame = { jpeg: png, ...size };
+				for (const c of tab.clients) c.frame(png, size);
+			} catch {
+				/* the page went away or is busy: the JPEG stays */
+			}
+		}, SETTLE_MS);
 	}
 
 	/** Frames only flow while someone watches. */
