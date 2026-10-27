@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from "../Button.svelte";
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
   import { closeAnimated } from "../../lib/motion";
@@ -69,8 +70,8 @@
       {/if}
     {/if}
     <div class="buttons">
-      <button onclick={cancel}>{t("취소")}</button>
-      <button class="approve" onclick={ok}>{r.kind === "confirm" && r.confirmLabel ? r.confirmLabel : t("확인")}</button>
+      <Button onclick={cancel}>{t("취소")}</Button>
+      <Button variant="primary" onclick={ok}>{r.kind === "confirm" && r.confirmLabel ? r.confirmLabel : t("확인")}</Button>
     </div>
   {/if}
 </dialog>
@@ -88,6 +89,4 @@
   .options input { grid-row: span 2; align-self: center; }
   .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); }
   .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-  button { padding: 9px 14px; border: 1px solid var(--border); border-radius: var(--radius); }
-  .approve { background: var(--accent); color: var(--accent-fg); }
 </style>

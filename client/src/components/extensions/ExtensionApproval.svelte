@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from "../Button.svelte";
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
   import { closeAnimated } from "../../lib/motion";
@@ -31,8 +32,8 @@
     <p>{t("확장 요청입니다. 승인한 범위만 앱에서 수행합니다.")}</p>
     <pre>{shown.message}</pre>
     <div class="buttons">
-      <button onclick={() => app.resolveExtension(false)}>{t("취소")}</button>
-      <button class="approve" onclick={() => app.resolveExtension(true)}>{t("승인하고 진행")}</button>
+      <Button onclick={() => app.resolveExtension(false)}>{t("취소")}</Button>
+      <Button variant="primary" onclick={() => app.resolveExtension(true)}>{t("승인하고 진행")}</Button>
     </div>
   {/if}
 </dialog>
@@ -43,6 +44,4 @@
   p { color: var(--text-dim); font-size: var(--fs-sm); }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
   .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-  button { padding: 9px 14px; border: 1px solid var(--border); border-radius: var(--radius); }
-  .approve { background: var(--accent); color: var(--accent-fg); }
 </style>

@@ -12,7 +12,7 @@
 	<Icon name="reply" />
 	<span class="rwho">{who ?? t("답장")}</span>
 	<span class="rtext">{text}</span>
-	<button class="rx" onclick={oncancel} aria-label={t("답장 취소")} title={t("답장 취소")}>×</button>
+	<button class="rx tap" onclick={oncancel} aria-label={t("답장 취소")} title={t("답장 취소")}><Icon name="x" /></button>
 </div>
 
 <style>
@@ -33,6 +33,7 @@
 	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke-width: 1.8; }
 	.rwho { font-weight: 600; color: var(--text); flex: none; }
 	.rtext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.rx { flex: none; width: 18px; height: 18px; line-height: 16px; border-radius: 50%; padding: 0; color: inherit; }
+	.rx { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; padding: 0; color: inherit; }
+	.rx :global(svg) { width: 12px; height: 12px; stroke-width: 2.2; }
 	.rx:hover { background: var(--accent-soft); color: var(--text); }
 </style>
