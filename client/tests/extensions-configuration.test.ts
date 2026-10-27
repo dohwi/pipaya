@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import { ConfigurationManager, parseConfiguration, parseKeybindings, publicSettings, CONFIGURATION_BACKUP } from "../src/lib/extensions/configuration";
 const store = new Map<string, string>();
-beforeEach(() => { store.clear(); Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) } }); });
+beforeEach(() => { store.clear(); Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) } }); });
 const pkg = { manifest: { id: "example.theme", name: "Theme", version: "1.0.0", sdkVersion: 1, permissions: [], settings: [{ key: "token", type: "string", label: "Token" }, { key: "mode", type: "string", label: "Mode" }] }, theme: { dark: { "--bg": "#111" } } };
 const document = () => parseConfiguration({ schemaVersion: 1, servers: [{ name: "Work", baseUrl: "http://100.64.0.1:8787" }], extensions: [{ package: pkg, enabled: true, settings: { token: "private", mode: "compact", unknown: "private" } }], preferences: { theme: "dark" } }, "example.owner");
 const flush = () => new Promise(r => setTimeout(r, 0));

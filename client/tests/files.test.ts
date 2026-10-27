@@ -1,7 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
-import { mimeOf } from "../../server/src/file-routes";
+import { readFileSync } from "node:fs";
+import { extname } from "node:path";
+
+// The server's extension -> type table, read as text: importing server/src would need the server's dependencies, which the client job does not install.
+const serverSource = readFileSync(new URL("../../server/src/file-routes.ts", import.meta.url), "utf8");
+const MIME: Record<string, string> = Object.fromEntries(
+	[...(/const MIME: Record<string, string> = \{([\s\S]*?)\n\};/.exec(serverSource)?.[1] ?? "").matchAll(/([a-z0-9]+): "([^"]+)"/g)].map((m) => [m[1]!, m[2]!]),
+);
+const mimeOf = (file: string) => MIME[extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
+
+test("the server type table was found (the preview-kind check below depends on it)", () => {
+	expect(Object.keys(MIME).length).toBeGreaterThan(20);
+	expect(mimeOf("a.png")).toBe("image/png");
+	expect(mimeOf("a.unknown")).toBe("application/octet-stream");
+});
 
 describe("working-directory links", () => {
 	test("only relative paths inside the directory count", () => {
