@@ -2,10 +2,11 @@
  * The sidebar's own state: drawer open (phone), collapsed and width (desktop), which tree nodes are folded, and the
  * order the user dragged folders and tabs into (per server). Persisted on this device.
  */
+import { clampTo } from "./number";
 import { K, read, write } from "./persist";
 
 export const SIDEBAR_W = { min: 220, max: 560, def: 288 };
-const clamp = (n: number) => (Number.isFinite(n) ? Math.min(SIDEBAR_W.max, Math.max(SIDEBAR_W.min, Math.round(n))) : SIDEBAR_W.def);
+const clamp = (n: number) => clampTo(Number.isFinite(n) ? Math.round(n) : n, SIDEBAR_W.min, SIDEBAR_W.max, SIDEBAR_W.def);
 
 /** Put `key` before/after `target` within `visible` (the entries as listed now). Null when nothing changes. */
 export function reorder(visible: string[], key: string, target: string, after: boolean): string[] | null {

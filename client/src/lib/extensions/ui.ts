@@ -10,6 +10,8 @@
  * with the input. Errors are deterministic `path: message` strings.
  */
 
+import { matches } from "../regex";
+
 export type UITone = "neutral" | "info" | "success" | "warning" | "danger";
 export type UIFieldValue = string | boolean;
 
@@ -225,11 +227,6 @@ function integer(input: unknown, path: string, min: number, max: number): number
 		fail(path, `expected an integer between ${min} and ${max}`);
 	}
 	return input + 0; // normalizes -0
-}
-
-function matches(pattern: RegExp, value: string): boolean {
-	// `$` also matches before a final newline; require an exact full match.
-	return pattern.exec(value)?.[0] === value;
 }
 
 function idText(input: unknown, path: string): string {

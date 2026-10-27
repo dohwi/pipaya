@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CATALOG_ID_PATTERN as ID } from "../extension-settings.ts";
 
 export interface GitSource {
 	repo: string;
@@ -9,7 +10,6 @@ export interface GitSource {
 	commit: string;
 }
 
-const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const REF = /^\w[\w./-]*$/;
 const COMMIT = /^[0-9a-f]{40}$/;

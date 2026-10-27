@@ -1,3 +1,5 @@
+import { clampTo } from "./number";
+
 /** Terminal look settings: shape, defaults and validation (kept free of runes so tests can import it). */
 /** How the terminal looks. `fontFamily` is a CSS font-family list; the fallbacks of the app's mono stack always follow it. */
 export interface TerminalPrefs {
@@ -28,9 +30,6 @@ export const TERMINAL_LIMITS = {
   scrollback: { min: 0, max: 100_000 },
 } as const;
 
-const clamp = (v: unknown, min: number, max: number, fallback: number) =>
-  typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
-
 function fontFamily(v: unknown): string {
   const f = typeof v === "string" ? v.trim().slice(0, 300) : "";
   return f || DEFAULT_TERMINAL_FONT;
@@ -42,10 +41,10 @@ export function sanitizeTerminal(raw: unknown): TerminalPrefs {
   const L = TERMINAL_LIMITS;
   return {
     fontFamily: fontFamily(r.fontFamily),
-    fontSize: Math.round(clamp(r.fontSize, L.fontSize.min, L.fontSize.max, DEFAULT_TERMINAL.fontSize)),
-    lineHeight: Math.round(clamp(r.lineHeight, L.lineHeight.min, L.lineHeight.max, DEFAULT_TERMINAL.lineHeight) * 100) / 100,
+    fontSize: Math.round(clampTo(r.fontSize, L.fontSize.min, L.fontSize.max, DEFAULT_TERMINAL.fontSize)),
+    lineHeight: Math.round(clampTo(r.lineHeight, L.lineHeight.min, L.lineHeight.max, DEFAULT_TERMINAL.lineHeight) * 100) / 100,
     cursorBlink: typeof r.cursorBlink === "boolean" ? r.cursorBlink : DEFAULT_TERMINAL.cursorBlink,
-    scrollback: Math.round(clamp(r.scrollback, L.scrollback.min, L.scrollback.max, DEFAULT_TERMINAL.scrollback)),
+    scrollback: Math.round(clampTo(r.scrollback, L.scrollback.min, L.scrollback.max, DEFAULT_TERMINAL.scrollback)),
     appKeysFirst: typeof r.appKeysFirst === "boolean" ? r.appKeysFirst : DEFAULT_TERMINAL.appKeysFirst,
   };
 }

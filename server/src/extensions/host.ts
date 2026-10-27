@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { basename, extname, join, resolve, sep } from "node:path";
 import Type from "typebox";
 import type { EventBus } from "../events.ts";
+import { CATALOG_ID_PATTERN, MAX_EXTENSION_ID_LENGTH } from "../extension-settings.ts";
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import { RETIRED_EXTENSIONS } from "./retired.ts";
@@ -114,7 +115,7 @@ function packageMeta(json: any, dir?: string): PackageMeta {
 	const meta = json?.pipaya;
 	const out: PackageMeta = {};
 	const c = meta?.companion;
-	if (typeof c === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(c) && c.length <= 80) out.companion = c;
+	if (typeof c === "string" && CATALOG_ID_PATTERN.test(c) && c.length <= MAX_EXTENSION_ID_LENGTH) out.companion = c;
 	const title = str(meta?.title, 80); if (title) out.title = title;
 	const version = str(json?.version, 40); if (version) out.version = version;
 	const description = str(json?.description, 500); if (description) out.description = description;

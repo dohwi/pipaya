@@ -1,5 +1,6 @@
 import { httpOrigin } from "./http";
 import { t } from "../i18n";
+import { matches } from "../regex";
 
 export const SDK_VERSION = 1;
 /** Whole package as JSON. Big enough for a design pack (fonts, icons, images) in `assets`. */
@@ -172,11 +173,6 @@ function text(input: unknown, path: string, max: number, nonempty = true): strin
 	if (input.length > max) fail(path, `must be at most ${max} characters`);
 	if (nonempty && input.trim().length === 0) fail(path, "must not be empty");
 	return input;
-}
-
-function matches(pattern: RegExp, value: string): boolean {
-	// JavaScript's $ also matches before a final newline; require an exact full match.
-	return pattern.exec(value)?.[0] === value;
 }
 
 function palette(input: unknown, path: string): Record<string, string> {

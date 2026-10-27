@@ -27,6 +27,7 @@ export type MarketEntry = {
 };
 export type MarketCatalog = { name: string; description?: string; extensions: MarketEntry[] };
 
+/** Same shape as the server's CATALOG_ID_PATTERN (server/src/extension-settings.ts). */
 const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const str = (v: unknown, max: number) => (typeof v === "string" && v.length > 0 && v.length <= max ? v : undefined);
 

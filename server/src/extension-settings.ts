@@ -8,6 +8,8 @@ export type ExtensionSettingsValue = Record<string, unknown>;
 /** Must accept exactly what the client's manifest validator accepts (client/src/lib/extensions/schema.ts `ID`), including one-word ids like `sync`. */
 export const EXTENSION_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 export const MAX_EXTENSION_ID_LENGTH = 80;
+/** Lowercase words joined by single dashes: the id of a catalog entry and the `companion` an extension names. Stricter than the id a folder extension may use. */
+export const CATALOG_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const MAX_SETTINGS_CHARS = 16000;
 export const MAX_EXTENSIONS = 100;
 
