@@ -5,7 +5,7 @@
 	import { app } from "../lib/store.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Icon from "./Icon.svelte";
-	import Modal from "./Modal.svelte";
+	import StatusCard from "./StatusCard.svelte";
 
 	const link = $derived(app.linking);
 
@@ -18,20 +18,18 @@
 </script>
 
 {#if link}
-	<Modal onclose={() => app.closeLinking()} dismissible={link.state !== "working"} label={t("서버 연결")} live="polite" width="360px" gutter="32px" layer={4} sheet={false}>
-	<div class="card">
-		<div class="mark" class:ok={link.state === "done"} class:bad={link.state === "failed"}>
+	<StatusCard
+		onclose={() => app.closeLinking()}
+		dismissible={link.state !== "working"}
+		label={t("서버 연결")}
+		tone={link.state === "done" ? "ok" : link.state === "failed" ? "bad" : "neutral"}
+		title={link.state === "confirm" ? t("이 서버에 연결할까요?") : link.state === "working" ? t("서버에 연결하는 중…") : link.state === "done" ? t("연결됐습니다") : t("연결하지 못했습니다")}
+	>
+		{#snippet mark()}
 			{#if link.state === "working"}<PipayaMark size={34} />
-			{:else if link.state === "confirm"}<Icon name="alert" />
 			{:else if link.state === "done"}<Icon name="check" />
 			{:else}<Icon name="alert" />{/if}
-		</div>
-		<h2>
-			{#if link.state === "confirm"}{t("이 서버에 연결할까요?")}
-			{:else if link.state === "working"}{t("서버에 연결하는 중…")}
-			{:else if link.state === "done"}{t("연결됐습니다")}
-			{:else}{t("연결하지 못했습니다")}{/if}
-		</h2>
+		{/snippet}
 		<p class="who"><b>{link.name}</b><span class="mono">{link.baseUrl}</span></p>
 		{#if link.state === "confirm"}
 			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<p class="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</p>{/if}
@@ -44,46 +42,10 @@
 			<p class="why" role="alert">{link.error}</p>
 			<Button variant="primary" onclick={() => app.closeLinking()}>{t("닫기")}</Button>
 		{/if}
-	</div>
-	</Modal>
+	</StatusCard>
 {/if}
 
 <style>
-	.card {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 10px;
-		padding: 30px 24px 24px;
-		text-align: center;
-	}
-	.mark {
-		width: 64px;
-		height: 64px;
-		display: grid;
-		place-items: center;
-		border-radius: var(--radius);
-		border: 1px solid var(--border-strong);
-		background: var(--bg);
-		color: var(--text);
-	}
-	.mark.ok {
-		color: var(--ok);
-		border-color: var(--ok);
-	}
-	.mark.bad {
-		color: var(--danger);
-		border-color: var(--danger);
-	}
-	.mark :global(svg:not(.logo)) {
-		width: 28px;
-		height: 28px;
-		stroke-width: 2;
-	}
-	h2 {
-		margin: 4px 0 0;
-		font-size: var(--fs-xl);
-	}
 	.who {
 		margin: 0;
 		display: flex;
@@ -110,11 +72,6 @@
 		font-size: var(--fs-sm);
 		line-height: 1.55;
 		word-break: keep-all;
-	}
-	.actions {
-		display: flex;
-		gap: 8px;
-		justify-content: center;
 	}
 	.why {
 		margin: 6px 0 4px;

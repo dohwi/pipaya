@@ -4,7 +4,7 @@
 	import { updater } from "../lib/updater.svelte";
 	import { notificationPlatform } from "../lib/notifications";
 	import Icon from "./Icon.svelte";
-	import Modal from "./Modal.svelte";
+	import StatusCard from "./StatusCard.svelte";
 	import Switch from "./Switch.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
 
@@ -15,19 +15,18 @@
 	// while downloading, a click outside or Esc must not hide the only sign that something is being installed
 	const closable = $derived(!downloading);
 	const serverBusy = $derived(serverUpdater.phase === "updating" || serverUpdater.phase === "restarting");
+	const title = $derived(
+		allowing ? t("설치를 허용해 주세요")
+		: serverBusy ? (serverUpdater.phase === "restarting" ? t("서버가 다시 시작되기를 기다리는 중…") : t("서버를 업데이트하는 중…"))
+		: updater.phase === "ready" ? t("재시작하는 중…")
+		: downloading ? t("업데이트를 내려받는 중…")
+		: t("새 버전을 사용할 수 있습니다"),
+	);
 </script>
 
 {#if updater.visible}
-	<Modal onclose={() => updater.dismiss()} dismissible={closable} label={t("업데이트")} live="polite" width="360px" gutter="32px" layer={4} sheet={false}>
-	<div class="card">
-		<div class="mark"><Icon name="download" /></div>
-		<h2>
-			{#if allowing}{t("설치를 허용해 주세요")}
-			{:else if serverBusy}{serverUpdater.phase === "restarting" ? t("서버가 다시 시작되기를 기다리는 중…") : t("서버를 업데이트하는 중…")}
-			{:else if updater.phase === "ready"}{t("재시작하는 중…")}
-			{:else if downloading}{t("업데이트를 내려받는 중…")}
-			{:else}{t("새 버전을 사용할 수 있습니다")}{/if}
-		</h2>
+	<StatusCard onclose={() => updater.dismiss()} dismissible={closable} label={t("업데이트")} tone="ok" {title}>
+		{#snippet mark()}<Icon name="download" />{/snippet}
 		<p class="ver">
 			{#if updater.current}<span class="mono">{updater.current}</span><span class="arrow" aria-hidden="true">→</span>{/if}
 			<b class="mono">{updater.version}</b>
@@ -53,39 +52,10 @@
 				<Button variant="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
 			</div>
 		{/if}
-	</div>
-	</Modal>
+	</StatusCard>
 {/if}
 
 <style>
-	/* same shape as the server-link card: a small centred dialog above everything else */
-	.card {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 10px;
-		padding: 30px 24px 24px;
-		text-align: center;
-	}
-	.mark {
-		width: 64px;
-		height: 64px;
-		display: grid;
-		place-items: center;
-		border-radius: var(--radius);
-		border: 1px solid var(--ok);
-		background: var(--bg);
-		color: var(--ok);
-	}
-	.mark :global(svg) {
-		width: 28px;
-		height: 28px;
-		stroke-width: 2;
-	}
-	h2 {
-		margin: 4px 0 0;
-		font-size: var(--fs-xl);
-	}
 	.ver {
 		margin: 0;
 		display: flex;
@@ -100,13 +70,6 @@
 	.arrow {
 		color: var(--text-faint);
 	}
-	.note {
-		margin: 2px 0 6px;
-		font-size: var(--fs-sm);
-		line-height: 1.55;
-		color: var(--text-faint);
-		word-break: keep-all;
-	}
 	.with-server {
 		align-self: stretch;
 		display: flex;
@@ -119,11 +82,6 @@
 	}
 	.warn {
 		color: var(--danger);
-	}
-	.actions {
-		display: flex;
-		gap: 8px;
-		justify-content: center;
 	}
 	.bar {
 		width: 100%;
