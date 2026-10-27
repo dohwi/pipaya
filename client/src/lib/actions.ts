@@ -1,3 +1,4 @@
+import { errorText } from "./api";
 import { tick } from "svelte";
 import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
@@ -392,7 +393,7 @@ export function onShortcut(e: KeyboardEvent) {
       if (own) {
         e.preventDefault();
         fired = true;
-        own.run().catch((cause) => app.toast(t("확장 실패: {error}", { error: cause instanceof Error ? cause.message : String(cause) }), "error", app.activeId));
+        own.run().catch((cause) => app.toast(t("확장 실패: {error}", { error: errorText(cause) }), "error", app.activeId));
         return;
       }
     }

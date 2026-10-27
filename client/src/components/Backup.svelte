@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../lib/api";
 	import Button from "./Button.svelte";
 	import ImportReview from "./ImportReview.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
@@ -44,7 +45,7 @@
 			download(doc, `pipaya-settings-${fileStamp()}.json`, true);
 			exported = t("서버 {servers}개 · 확장 {extensions}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, extensions: doc.extensions.length, keys: Object.keys(doc.keybindings ?? {}).length });
 		} catch (e) {
-			app.toast(e instanceof Error ? e.message : t("내보내지 못했습니다"), "error");
+			app.toast(errorText(e, t("내보내지 못했습니다")), "error");
 		}
 	}
 
@@ -71,7 +72,7 @@
 			loaded = { doc, plan: extensions.planImport(doc), filename: file.name };
 		} catch (e) {
 			loaded = null;
-			loadError = e instanceof Error ? e.message : String(e);
+			loadError = errorText(e);
 		} finally {
 			reading = false;
 		}
@@ -103,7 +104,7 @@
 			savedAt = backupSavedAt();
 			canRestore = hasBackup();
 		} catch (e) {
-			app.toast(e instanceof Error ? e.message : t("가져오지 못했습니다"), "error");
+			app.toast(errorText(e, t("가져오지 못했습니다")), "error");
 		}
 	}
 
@@ -118,7 +119,7 @@
 			applied = null;
 			restoredNote = t("가져오기 전 상태로 되돌렸습니다. 확장은 모두 꺼진 상태입니다.");
 		} catch (e) {
-			app.toast(e instanceof Error ? e.message : t("되돌리지 못했습니다"), "error");
+			app.toast(errorText(e, t("되돌리지 못했습니다")), "error");
 		}
 	}
 

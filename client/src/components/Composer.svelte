@@ -6,6 +6,7 @@
 </script>
 
 <script lang="ts">
+	import { errorText } from "../lib/api";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
@@ -302,7 +303,7 @@
 		try {
 			await cmd.run(arg);
 		} catch (e) {
-			app.toast(t("{cmd} 실패: {error}", { cmd: commandText(cmd), error: e instanceof Error ? e.message : String(e) }), "error", pane.id);
+			app.toast(t("{cmd} 실패: {error}", { cmd: commandText(cmd), error: errorText(e) }), "error", pane.id);
 		}
 	}
 
@@ -621,7 +622,7 @@
 	{#if extensions.actions.length}
 		<div class="extension-actions" aria-label={t("확장 액션")}>
 			{#each extensions.actions as action (`${action.owner}:${action.id}`)}
-				<button title={action.owner} onclick={() => action.run().catch(e => app.toast(t("확장 실패: {error}", { error: e instanceof Error ? e.message : String(e) }), "error", pane.id))}>{action.label}</button>
+				<button title={action.owner} onclick={() => action.run().catch(e => app.toast(t("확장 실패: {error}", { error: errorText(e) }), "error", pane.id))}>{action.label}</button>
 			{/each}
 		</div>
 	{/if}

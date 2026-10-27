@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../lib/api";
 	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
 	import PipayaMark from "./PipayaMark.svelte";
@@ -31,7 +32,7 @@
 			else error = t("pipaya 연결 QR이 아닙니다. PC 앱에 표시된 QR을 스캔해 주세요.");
 		} catch (e) {
 			// closing the camera without a code is not an error
-			const text = e instanceof Error ? e.message : String(e);
+			const text = errorText(e);
 			if (!/cancel/i.test(text)) error = t("카메라를 열지 못했습니다.");
 		} finally {
 			scanning = false;

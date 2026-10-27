@@ -444,8 +444,15 @@ export const EVENT_TYPES = [
  */
 export const isUnsupportedRoute = (e: unknown): boolean => e instanceof ApiError && e.status === 404 && e.code === "not_found" && e.message === "route not found";
 
-/** User-facing (Korean) text for any error thrown by the client. */
-export function errorText(e: unknown): string {
+/** Browsers word a failed fetch in their own English ("Failed to fetch", "Load failed", "NetworkError…"). */
+const RAW_NETWORK = /^(failed to fetch|load failed|networkerror|network request failed|fetch failed)/i;
+
+/**
+ * User-facing (Korean) text for anything caught: the one way to show an error to the user. An Error gives its message, a
+ * string itself; a bare browser network error becomes the app's own "서버에 연결할 수 없습니다". `fallback` is for a
+ * value with no message at all (default: "문제가 발생했습니다").
+ */
+export function errorText(e: unknown, fallback?: string): string {
 	if (e instanceof ApiError) {
 		if (e.status === 0) return t("서버에 연결할 수 없습니다");
 		if (e.status === 401 || e.status === 403) return t("토큰이 거부되었습니다");
@@ -453,7 +460,9 @@ export function errorText(e: unknown): string {
 		if (e.code === "not_found") return t("대상을 찾을 수 없습니다");
 		return e.message;
 	}
-	return (e as Error)?.message || t("문제가 발생했습니다");
+	const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+	if (RAW_NETWORK.test(raw.trim())) return t("서버에 연결할 수 없습니다");
+	return raw || fallback || t("문제가 발생했습니다");
 }
 
 /** Throws if the server is unreachable or rejects the token. `/health` is public, so `/tools` proves the token. */

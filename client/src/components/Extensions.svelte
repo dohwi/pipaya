@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../lib/api";
 	import Button from "./Button.svelte";
 	import { LocalizedError, t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
@@ -221,7 +222,7 @@
 				await extensions.enable(id);
 				tasks.result = { tone: "ok", title: t("확장을 교체하고 다시 실행했습니다"), detail: t("새 권한이 없어 다시 동의를 받지 않고 바로 실행했습니다."), pkg, running: true, replaced };
 			} catch (cause) {
-				const why = cause instanceof Error ? cause.message : String(cause);
+				const why = errorText(cause);
 				tasks.result = { tone: "warn", title: t("교체했지만 실행하지 못했습니다"), detail: `${t("비활성 상태로 남아 있습니다.")} ${why}`, pkg, running: false, replaced };
 			}
 		}, t("확장을 가져오지 못했습니다"));

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
 	import { onDestroy, untrack } from "svelte";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
@@ -75,7 +76,7 @@
 		} catch (cause) {
 			// A reply to an older view (or a replaced extension) must not pollute the new UI.
 			if (alive && request === token && panel.owner === current.owner && panel.id === current.id && panel.run === current.run) {
-				error = cause instanceof Error ? cause.message : String(cause);
+				error = errorText(cause);
 			}
 		} finally {
 			queued--;

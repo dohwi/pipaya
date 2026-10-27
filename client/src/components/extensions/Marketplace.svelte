@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../../lib/api";
 	import SearchField from "../SearchField.svelte";
 	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
@@ -57,7 +58,7 @@
 		} catch (cause) {
 			if ((cause as Error)?.name === "AbortError") return;
 			catalog = null;
-			error = cause instanceof Error ? cause.message : String(cause);
+			error = errorText(cause);
 		} finally {
 			loading = false;
 		}
@@ -88,7 +89,7 @@
 				await api.installServerExtension({ id: s.id, repo, ...(dir ? { dir } : {}), ref, commit });
 				await Promise.all([refreshServer(), app.refreshServerExtensions()]);
 			} catch (cause) {
-				error = cause instanceof Error ? cause.message : String(cause);
+				error = errorText(cause);
 				working = "";
 				return;
 			}
@@ -102,7 +103,7 @@
 		try {
 			onpick(await fetchPackage(entry), entry);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : String(cause);
+			error = errorText(cause);
 		} finally {
 			working = "";
 		}
@@ -124,7 +125,7 @@
 
 	async function installClient(c: MarketEntry) {
 		error = "";
-		try { onpick(await fetchPackage(c), c); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
+		try { onpick(await fetchPackage(c), c); } catch (cause) { error = errorText(cause); }
 	}
 
 	function startServer(entry: MarketEntry) {
@@ -147,7 +148,7 @@
 			const c = both ? companionOf(entry) : undefined;
 			if (c) onpick(await fetchPackage(c), c);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : String(cause);
+			error = errorText(cause);
 		} finally {
 			working = "";
 		}
@@ -170,7 +171,7 @@
 			}
 			removing = "";
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : String(cause);
+			error = errorText(cause);
 		} finally {
 			working = "";
 		}

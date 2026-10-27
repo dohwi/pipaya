@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorText } from "../../lib/api";
 	import IconButton from "../IconButton.svelte";
 	import FilterChip from "../FilterChip.svelte";
 	import { t } from "../../lib/i18n";
@@ -74,7 +75,7 @@
 		try {
 			extensions.openPanel(panel.owner, panel.id);
 		} catch (cause) {
-			error = `${ownerName(panel.owner)} (${panel.owner}): ${cause instanceof Error ? cause.message : String(cause)}`;
+			error = `${ownerName(panel.owner)} (${panel.owner}): ${errorText(cause)}`;
 		}
 	}
 
@@ -115,7 +116,7 @@
 				try {
 					dialog.showModal();
 				} catch (cause) {
-					error = t("확장 화면을 열지 못했습니다: {error}", { error: cause instanceof Error ? cause.message : String(cause) });
+					error = t("확장 화면을 열지 못했습니다: {error}", { error: errorText(cause) });
 					extensions.closePanel();
 				}
 			}
@@ -268,12 +269,12 @@
 	/* only the arrow that can scroll is shown */
 	:global(.iconbtn.step.idle) { opacity: 0; pointer-events: none; }
 	.nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; }
-	.owner { font-size: 10px; color: var(--text-faint); overflow-wrap: anywhere; }
+	.owner { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.railowner { flex: none; max-width: 90px; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid var(--border); }
 	.panel-body { min-width: 0; min-height: 0; padding: 28px; overflow-y: auto; overscroll-behavior: contain; }
 	.panel-body > .feedback { margin-bottom: 16px; }
 	.surface-heading { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
-	.eyebrow { font-family: var(--mono); font-size: 10px; color: var(--text-faint); overflow-wrap: anywhere; }
+	.eyebrow { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	h3 { margin: 8px 0 0; font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.03em; overflow-wrap: anywhere; }
 	.surface-heading p, .empty p { margin: 9px 0 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; overflow-wrap: anywhere; }
 	.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 260px; }
@@ -282,7 +283,7 @@
 	.composer-panels { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.summary-title { flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 600; overflow-wrap: anywhere; }
 	.composer-panels .owner { max-width: 40%; }
-	.composer-panels.in-sidebar { max-height: 45vh; overflow-y: auto; padding: 0 8px 8px; }
+	.composer-panels.in-sidebar { max-height: calc(var(--dvh) * 0.45); overflow-y: auto; padding: 0 8px 8px; }
 	@media (max-width: 640px) {
 		header { padding: 16px; }
 		.tabbar { padding: 8px 12px; }
