@@ -20,6 +20,7 @@ import { PeerService, type GroupRef } from "./peers.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
+import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, runawayReason } from "./run-guard.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -912,6 +913,9 @@ export class SessionManager {
 			out = [{ ...out[0], content: `${sys.replace ?? base}${sys.append ?? ""}` } as AgentMessage, ...out.slice(1)];
 		}
 		out = withoutNotes(out);
+		const rec = this.store.get(sessionId);
+		const resize = rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
+		out = await fitImagesInContext(out, resize ?? {});
 		if (this.ext?.has("context")) {
 			await this.ext.emit("context", { sessionId, messages: out }, sessionId, (r) => {
 				if (Array.isArray(r.messages)) out = r.messages;
