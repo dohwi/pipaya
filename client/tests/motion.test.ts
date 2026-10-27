@@ -160,6 +160,13 @@ describe("modals mounted by their parent animate", () => {
 			expect(s, f).not.toContain("<Modal");
 		}
 	});
+	test("the address form is a step inside ConnectModal (embedded), not a second dialog opened over it", () => {
+		expect(markup(read("components/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
+		const host = markup(read("components/ModelConnections.svelte"));
+		// only editing opens ConnectionForm as a dialog of its own
+		expect(host).not.toContain("oncustom");
+		expect(read("components/ModelConnections.svelte")).toContain('kind: "edit"');
+	});
 	test("dialog titles go through the shared header (one close button, one pull handle)", () => {
 		for (const f of ["QueueModal", "DirPicker", "WorkBox", "FilePreview", "Skills", "CommandFamilies"]) {
 			const s = markup(read(`components/${f}.svelte`));

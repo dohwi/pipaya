@@ -31,11 +31,20 @@
 		start,
 		onclose,
 		onsaved,
+		embedded = false,
+		onhead,
 	}: {
 		api: () => Api | null;
 		start: { kind: "new"; preset?: LocalPreset } | { kind: "edit"; provider: CustomProvider };
 		onclose: () => void;
 		onsaved: () => void;
+		/**
+		 * Draw only the form (body and footer) for a dialog that already exists, which owns the header and the close button:
+		 * ConnectModal shows the "enter an address" step this way instead of opening a second dialog over itself.
+		 */
+		embedded?: boolean;
+		/** Embedded: what the host's header should show now, and what its back arrow does (a model's page steps back to the connection first) */
+		onhead?: (head: { title: string; sub?: string; back?: () => void; busy: boolean }) => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -51,6 +60,16 @@
 		if (editing !== null) closeModel();
 		else close();
 	}
+	/** Embedded: the host draws the header, so tell it what to say (a model's page names the model) and what its back arrow does. */
+	$effect(() => {
+		if (!embedded || !form) return;
+		const r = editing !== null ? form.rows[editing] : undefined;
+		onhead?.(
+			editing !== null
+				? { title: r?.name.trim() || r?.id.trim() || t("새 모델"), sub: t("모델 설정"), back: closeModel, busy }
+				: { title: form.isNew ? t("직접 입력") : t("연결 수정"), back: () => close(), busy },
+		);
+	});
 
 	/* ---------- OpenRouter catalog (autocomplete + match status) ---------- */
 
@@ -247,26 +266,47 @@
 	};
 </script>
 
+{#snippet pickers(form: Form)}
+		{#if confirmClose}
+			<DiscardConfirm onsave={() => { confirmClose = false; void save(); }} oncancel={() => (confirmClose = false)} ondiscard={() => close(true)} />
+		{/if}
+		{#if matchFor !== null && form.rows[matchFor]}
+			{@const mr = form.rows[matchFor]!}
+			<CatalogPickerModal
+				{catalog}
+				value={matchedOf(mr)?.id ?? null}
+				suggested={matchOf(mr.id)}
+				onpick={(c) => { applyMatch(mr, c); matchFor = null; }}
+				onclose={() => (matchFor = null)}
+			/>
+		{/if}
+		{#if iconFor !== null && form.rows[iconFor]}
+			{@const ir = form.rows[iconFor]!}
+			<IconPickerModal api={api()} value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
+		{/if}
+{/snippet}
+
 {#if form}
-	<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
-	<Modal onclose={() => close()} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
+	{#if embedded}
 		<form class="fform" onsubmit={submit}>
-			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
-				{#if editing !== null}
-					{@const r = form.rows[editing]}
-					<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
-					<div class="ftitle">
-						<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
-						<span class="fsub">{t("모델 설정")}</span>
-					</div>
-				{:else}
-					<div class="ftitle">
-						<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
-						{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
-					</div>
-				{/if}
-				<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
-			</header>
+			{#if !embedded}
+				<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
+					{#if editing !== null}
+						{@const r = form.rows[editing]}
+						<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
+						<div class="ftitle">
+							<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
+							<span class="fsub">{t("모델 설정")}</span>
+						</div>
+					{:else}
+						<div class="ftitle">
+							<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
+							{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
+						</div>
+					{/if}
+					<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
+				</header>
+			{/if}
 
 			<div class="fbody">
 				{#if editing !== null}
@@ -303,24 +343,68 @@
 				</div>
 			</footer>
 		</form>
-		{#if confirmClose}
-			<DiscardConfirm onsave={() => { confirmClose = false; void save(); }} oncancel={() => (confirmClose = false)} ondiscard={() => close(true)} />
-		{/if}
-		{#if matchFor !== null && form.rows[matchFor]}
-			{@const mr = form.rows[matchFor]!}
-			<CatalogPickerModal
-				{catalog}
-				value={matchedOf(mr)?.id ?? null}
-				suggested={matchOf(mr.id)}
-				onpick={(c) => { applyMatch(mr, c); matchFor = null; }}
-				onclose={() => (matchFor = null)}
-			/>
-		{/if}
-		{#if iconFor !== null && form.rows[iconFor]}
-			{@const ir = form.rows[iconFor]!}
-			<IconPickerModal api={api()} value={ir.icon} provider={form.id} model={ir.id} onpick={(i) => { ir.icon = i; iconFor = null; }} onclose={() => (iconFor = null)} />
-		{/if}
-	</Modal>
+		{@render pickers(form)}
+	{:else}
+		<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
+		<Modal onclose={() => close()} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
+			<form class="fform" onsubmit={submit}>
+				{#if !embedded}
+					<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
+						{#if editing !== null}
+							{@const r = form.rows[editing]}
+							<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
+							<div class="ftitle">
+								<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
+								<span class="fsub">{t("모델 설정")}</span>
+							</div>
+						{:else}
+							<div class="ftitle">
+								<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
+								{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
+							</div>
+						{/if}
+						<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
+					</header>
+				{/if}
+
+				<div class="fbody">
+					{#if editing !== null}
+						{@const r = form.rows[editing]}
+						{#if r}
+							<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
+						{/if}
+					{:else}
+						<ConnectionFields {form} onname={onName} />
+						<ModelList
+							{form}
+							connection={api()?.connection}
+							{busy}
+							{discovering}
+							note={discoverNote}
+							{catalogLoaded}
+							{matchedOf}
+							onopen={openModel}
+							onadd={addModel}
+							ondiscover={discover}
+						/>
+					{/if}
+				</div>
+
+				<footer>
+					{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
+					<div class="fbtns">
+						{#if editing !== null}
+							<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
+						{:else}
+							<Button variant="ghost" onclick={() => close()} disabled={busy}>{t("취소")}</Button>
+							<Button variant="primary" type="submit" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</Button>
+						{/if}
+					</div>
+				</footer>
+			</form>
+			{@render pickers(form)}
+		</Modal>
+	{/if}
 {/if}
 
 <style>

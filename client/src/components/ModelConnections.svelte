@@ -7,7 +7,7 @@
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
 	import ProviderCard from "./connection/ProviderCard.svelte";
-	import ConnectionForm, { localPresets, type LocalPreset } from "./ConnectionForm.svelte";
+	import ConnectionForm, { localPresets } from "./ConnectionForm.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
 	import SystemModelSection from "./SystemModelSection.svelte";
 	import ImageModelSection from "./ImageModelSection.svelte";
@@ -40,8 +40,8 @@
 
 	/** The "add connection" picker, and a counter that makes the signed-in account list reload after it changes something. */
 	let picking = $state(false);
-	/** The add / edit dialog (ConnectionForm) and what it opened for; null = closed. */
-	let form = $state<{ kind: "new"; preset?: LocalPreset } | { kind: "edit"; provider: CustomProvider } | null>(null);
+	/** The edit dialog (ConnectionForm) of one custom connection; null = closed. Adding one is a step inside ConnectModal. */
+	let form = $state<{ kind: "edit"; provider: CustomProvider } | null>(null);
 	let accountsTick = $state(0);
 
 	/* ---------- loading (per selected server) ---------- */
@@ -297,7 +297,7 @@
 				taken={new Set(cfg.providers.map((x) => x.id))}
 				onclose={() => (picking = false)}
 				onchange={() => { accountsTick++; void load(serverId); }}
-				oncustom={(id) => (form = { kind: "new", preset: localPresets.find((l) => l.id === id) })}
+				onsaved={() => { picking = false; void reload(); }}
 			/>
 		{/if}
 

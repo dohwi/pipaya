@@ -14,6 +14,8 @@
 	import Segmented from "./Segmented.svelte";
 	import { paneIn } from "../lib/motion";
 	import type { LoginState, ProviderInfo } from "../lib/types";
+	import ConnectionForm from "./ConnectionForm.svelte";
+	import type { LocalPreset } from "../lib/connection-form";
 
 	/**
 	 * "Add connection": every way to connect a model, in two groups.
@@ -26,7 +28,7 @@
 		taken,
 		onclose,
 		onchange,
-		oncustom,
+		onsaved,
 	}: {
 		serverId: string;
 		/** Local runtimes the connection form can prefill */
@@ -35,8 +37,8 @@
 		taken: Set<string>;
 		onclose: () => void;
 		onchange?: () => void;
-		/** Open the endpoint form (optionally prefilled with a local runtime id) */
-		oncustom: (presetId?: string) => void;
+		/** A custom endpoint was saved from the "enter an address" step (the caller reloads its list) */
+		onsaved: () => void;
 	} = $props();
 
 	const server = $derived(app.servers.find((s) => s.id === serverId));
@@ -48,6 +50,10 @@
 	let error = $state("");
 	let busy = $state(false);
 
+	/** The "enter an address" step: the endpoint form shown inside this dialog (a local runtime id prefills it). */
+	let formStart = $state<{ kind: "new"; preset?: LocalPreset } | null>(null);
+	/** What the header shows while the form is open: the form says (a model's page names the model) */
+	let formHead = $state<{ title: string; sub?: string; back?: () => void; busy: boolean } | null>(null);
 	let login = $state<LoginState | null>(null);
 	let keyFor = $state<ProviderInfo | null>(null);
 	let keyValue = $state("");
@@ -160,6 +166,7 @@
 		}
 	}
 	async function back() {
+		if (formStart) return void (formHead?.back ? formHead.back() : leaveForm());
 		await cancel();
 		login = null;
 		keyFor = null;
@@ -192,13 +199,18 @@
 		}
 	}
 	function custom(id?: string) {
-		onclose();
-		oncustom(id);
+		formStart = { kind: "new", preset: locals.find((l) => l.id === id) };
+	}
+	function leaveForm() {
+		formStart = null;
+		formHead = null;
 	}
 
 	const running = $derived(login?.status === "running");
-	const inFlow = $derived(!!login || !!keyFor);
-	const title = $derived(login ? nameOf(login.providerId) : keyFor ? keyFor.name : t("연결 추가"));
+	const inFlow = $derived(!!login || !!keyFor || !!formStart);
+	const title = $derived(formStart ? (formHead?.title ?? t("직접 입력")) : login ? nameOf(login.providerId) : keyFor ? keyFor.name : t("연결 추가"));
+	const sub = $derived(formStart ? formHead?.sub : undefined);
+	const isBusy = $derived(busy || (formStart ? !!formHead?.busy : false));
 	const authUrl = $derived.by(() => {
 		const list = login?.events ?? [];
 		for (let i = list.length - 1; i >= 0; i--) {
@@ -209,10 +221,15 @@
 	});
 </script>
 
-<Modal onclose={() => !busy && onclose()} onescape={() => (inFlow ? void back() : onclose())} dismissible={!busy} label={t("연결 추가")} width="m" maxHeight="720px" layer={3} portal>
+<Modal onclose={() => !isBusy && onclose()} onescape={() => (inFlow ? void back() : onclose())} dismissible={!isBusy} label={t("연결 추가")} width="m" maxHeight="720px" layer={3} portal>
 	<div class="cm">
-		<ModalHeader {title} divider onback={inFlow ? back : undefined} {onclose} closeDisabled={busy} />
+		<ModalHeader {title} {sub} divider onback={inFlow ? back : undefined} {onclose} closeDisabled={isBusy} />
 
+		{#if formStart}
+			<div class="body form" in:paneIn={{ x: 18 }}>
+				<ConnectionForm embedded api={() => api()} start={formStart} onhead={(h) => (formHead = h)} onclose={leaveForm} {onsaved} />
+			</div>
+		{:else}
 		<div class="body">
 			{#if error}<p class="bad" role="alert">{error}</p>{/if}
 
@@ -341,11 +358,13 @@
 				{/key}
 			{/if}
 		</div>
+		{/if}
 	</div>
 </Modal>
 
 <style>
 	.cm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+	.body.form { padding: 0; overflow: hidden; flex: 1; }
 	.body { display: flex; flex-direction: column; gap: 12px; padding: 16px 22px 20px; overflow-y: auto; min-height: 0; }
 	.hint { margin: 0; line-height: 1.55; word-break: keep-all; }
 	.hint.lead { margin-top: -4px; }
