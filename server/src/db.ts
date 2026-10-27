@@ -15,7 +15,7 @@ const dropColumn = (db: Database, table: string, name: string): void => {
 export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
 	`
-	CREATE TABLE sessions (
+	CREATE TABLE IF NOT EXISTS sessions (
 		id            TEXT PRIMARY KEY,
 		title         TEXT NOT NULL,
 		cwd           TEXT NOT NULL,
@@ -29,9 +29,9 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		created_at    INTEGER NOT NULL,
 		updated_at    INTEGER NOT NULL
 	);
-	CREATE INDEX sessions_updated ON sessions(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(updated_at DESC);
 
-	CREATE TABLE messages (
+	CREATE TABLE IF NOT EXISTS messages (
 		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 		seq        INTEGER NOT NULL,
 		role       TEXT NOT NULL,
@@ -40,26 +40,28 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		PRIMARY KEY (session_id, seq)
 	);
 
-	CREATE TABLE events (
+	CREATE TABLE IF NOT EXISTS events (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		session_id TEXT,
 		type       TEXT NOT NULL,
 		data       TEXT NOT NULL,
 		ts         INTEGER NOT NULL
 	);
-	CREATE INDEX events_session ON events(session_id, id);
+	CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
 
-	CREATE TABLE credentials (
+	CREATE TABLE IF NOT EXISTS credentials (
 		provider_id TEXT PRIMARY KEY,
 		data        TEXT NOT NULL
 	);
 	`,
 	// v2: user-editable model connections and defaults (secrets remain in credentials).
-	`CREATE TABLE custom_providers (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-	 CREATE TABLE settings (key TEXT PRIMARY KEY, data TEXT NOT NULL);`,
+	`CREATE TABLE IF NOT EXISTS custom_providers (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+	 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, data TEXT NOT NULL);`,
 	// v3: sessions can be closed (hidden from the active list) and resumed later.
-	`ALTER TABLE sessions ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;
-	 CREATE INDEX sessions_closed ON sessions(closed, updated_at DESC);`,
+	(db) => {
+		addColumn(db, "sessions", "closed", "INTEGER NOT NULL DEFAULT 0");
+		db.exec("CREATE INDEX IF NOT EXISTS sessions_closed ON sessions(closed, updated_at DESC)");
+	},
 	// v4: reasoning can no longer be disabled; preserve all other session settings.
 	`UPDATE sessions SET thinking_level = 'medium' WHERE thinking_level = 'off';`,
 	// v5: session groups: a named split-window layout whose panes hold sessions (a session is in at most one group).
@@ -129,8 +131,11 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	CREATE INDEX IF NOT EXISTS extension_entries_session ON extension_entries(session_id, extension, id);`,
 	// v17: the apps no longer offer "read-only": `ask` now means "confirm only what reaches outside the project". A session or
 	// saved default stuck on read-only would have no way back out of it, so both fold into `ask`.
-	`UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly';
-	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
+	(db) => {
+		// The column is dropped further down: a database stepped back past that and reopened has none left to fold.
+		if (columns(db, "sessions").includes("approval")) db.exec("UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly'");
+		db.exec(`DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"'`);
+	},
 	// v18: a name per session in a group (JSON { sessionId: name }). Unused since v22; dropped in v23.
 	(db) => addColumn(db, "groups", "names", "TEXT NOT NULL DEFAULT '{}'"),
 	// v19: a name for each session (since moved out of core, see v22): the column is added; older databases already had names given here.
@@ -151,8 +156,10 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		}
 	},
 	// The approval option is gone: every tool runs without asking, so neither the per-session policy nor the saved default is kept.
-	`ALTER TABLE sessions DROP COLUMN approval;
-	 DELETE FROM settings WHERE key = 'default_approval';`,
+	(db) => {
+		dropColumn(db, "sessions", "approval");
+		db.exec("DELETE FROM settings WHERE key = 'default_approval'");
+	},
 	// Images uploaded as model icons (a model's `icon` is "img:<id>").
 	`CREATE TABLE IF NOT EXISTS model_icons (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);`,
 	// v22: names are no longer a core concept. A generic per-session store for extensions takes over and the column goes.

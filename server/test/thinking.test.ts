@@ -23,8 +23,8 @@ describe("thinking levels", () => {
 			};
 			store.create(record);
 			store.create({ ...record, id: "existing-high", thinkingLevel: "high" });
-			// The rewind below replays old migrations, which still read the approval column that the newest one drops.
-			db.exec("ALTER TABLE sessions ADD COLUMN approval TEXT NOT NULL DEFAULT 'auto'; UPDATE sessions SET thinking_level = 'off' WHERE id = 'legacy-off'; PRAGMA user_version = 3");
+			// Rewinding to version 3 replays every later migration, including the ones that read or drop columns that are already gone.
+			db.exec("UPDATE sessions SET thinking_level = 'off' WHERE id = 'legacy-off'; PRAGMA user_version = 3");
 			db.close();
 			db = openDb(path);
 			const migrated = new SessionStore(db);
