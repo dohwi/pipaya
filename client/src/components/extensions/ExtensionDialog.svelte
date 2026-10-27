@@ -49,7 +49,7 @@
   {#if shown}
     {@const r = shown.request}
     <h2 id="extension-dialog-title">{r.title}</h2>
-    <p class="owner">{r.ownerName}</p>
+    {#if r.ownerName}<p class="owner">{r.ownerName}</p>{/if}
     {#if r.message}<pre>{r.message}</pre>{/if}
     {#if r.kind === "select"}
       <div class="options" role="radiogroup" aria-label={r.title}>

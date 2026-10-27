@@ -220,8 +220,9 @@
 			try {
 				text = await navigator.clipboard.readText();
 			} catch {
-				// Plain http (no clipboard access): ask for the text instead
-				text = window.prompt(t("붙여넣을 내용"), "") ?? "";
+				// Plain http (no clipboard access): ask for the text in the app's own dialog (window.prompt is blocked or ugly in the apps)
+				const asked = await app.askExtension({ owner: "", ownerName: "", kind: "input", title: t("붙여넣을 내용"), multiline: true });
+				text = typeof asked === "string" ? asked : "";
 			}
 			if (text) xt.paste(text);
 		};
