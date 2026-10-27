@@ -12,7 +12,7 @@ describe("notification contract matches the server", () => {
 
 	test("the events a rule may wait for are the rows of the server's table", () => {
 		const body = /export const NOTIFYING_EVENTS = \{([\s\S]*?)\n\} as const;/.exec(server)?.[1] ?? "";
-		const keys = [...body.matchAll(/^  ([a-z_]+): \{/gm)].map((m) => m[1]);
+		const keys = [...body.matchAll(/^ {2}([a-z_]+): \{/gm)].map((m) => m[1]);
 		expect(keys.length).toBeGreaterThan(0);
 		expect(keys).toEqual([...NOTIFICATION_TRIGGERS]);
 	});
