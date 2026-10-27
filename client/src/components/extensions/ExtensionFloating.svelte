@@ -4,6 +4,7 @@
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import type { UIPanelPosition } from "../../lib/extensions/ui";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
+	import { MARGIN as M, clampBox as clampTo, nudgeBox, type Box } from "../../lib/extensions/float-box";
 
 	/**
 	 * `floating` panels: small windows over the app that never block it. The title bar drags a window; the corner
@@ -13,13 +14,11 @@
 	const key = (p: ExtensionPanel) => `${p.owner}:${p.id}`;
 	const ownerName = (owner: string) => extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest.name ?? owner;
 	const shown = $derived(extensions.panels.filter((p) => p.placement === "floating" && p.open && extensions.installed.some((e) => e.package.manifest.id === p.owner && e.state === "active")));
-	type Box = { x: number; y: number; w: number; h: number; placed: number };
 	let boxes = $state<Record<string, Box>>({});
 	/** Stacking: the window touched last is on top. */
 	let order = $state<string[]>([]);
 	let vw = $state(typeof window === "undefined" ? 1280 : window.innerWidth);
 	let vh = $state(typeof window === "undefined" ? 800 : window.innerHeight);
-	const M = 12;
 
 	function start(p: ExtensionPanel): Box {
 		const w = Math.min(p.size?.width ?? 380, vw - 2 * M);
@@ -30,10 +29,7 @@
 			: { x: at.endsWith("left") ? M : vw - w - M, y: at.startsWith("top") ? M + 48 : vh - h - M - 72 };
 		return { ...pos, w, h, placed: p.placed };
 	}
-	const clampBox = (b: Box): Box => {
-		const w = Math.max(200, Math.min(b.w, vw - 2 * M)), h = Math.max(120, Math.min(b.h, vh - 2 * M));
-		return { ...b, w, h, x: Math.min(Math.max(M, b.x), vw - w - M), y: Math.min(Math.max(M, b.y), vh - h - M) };
-	};
+	const clampBox = (b: Box): Box => clampTo(b, vw, vh);
 	const boxOf = (p: ExtensionPanel): Box => {
 		const b = boxes[key(p)];
 		return clampBox(b && b.placed === p.placed ? b : start(p));
@@ -60,6 +56,14 @@
 		drag = null;
 		document.body.style.userSelect = "";
 	}
+	/** Keyboard twin of the title bar and the corner (the box is clamped on read). */
+	function nudge(e: KeyboardEvent, p: ExtensionPanel, mode: "move" | "size") {
+		const next = nudgeBox(boxOf(p), e.key, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey }, mode);
+		if (!next) return;
+		e.preventDefault();
+		raise(p);
+		boxes = { ...boxes, [key(p)]: next };
+	}
 	function hide(p: ExtensionPanel) {
 		try { extensions.setPanelOpen(p.owner, p.id, false); } catch { /* gone */ }
 	}
@@ -72,22 +76,24 @@
 	<section class="float" data-part="floating" aria-label={p.title}
 		style:left="{b.x}px" style:top="{b.y}px" style:width="{b.w}px" style:height="{b.h}px" style:z-index={30 + Math.max(0, order.indexOf(key(p)))}
 		onpointerdowncapture={() => raise(p)}>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<header onpointerdown={(e) => down(e, p, "move")} onpointermove={move} onpointerup={up} onpointercancel={up}>
+		<!-- The title bar is a drag handle; its keyboard twin is the arrow keys (named in its label). -->
+		<!-- A window frame is a non-interactive group that also behaves as a drag handle; it holds the close button, so it cannot itself be a button. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+		<div class="bar" role="group" tabindex="0" aria-label={t("{title} 창: 화살표 키로 이동, Shift와 화살표 키로 크기 조절", { title: p.title })} onkeydown={(e) => nudge(e, p, "move")} onpointerdown={(e) => down(e, p, "move")} onpointermove={move} onpointerup={up} onpointercancel={up}>
 			<span class="title">{p.title}</span>
 			<span class="owner">{ownerName(p.owner)}</span>
 			<IconButton icon="x" label={t("확장 창 닫기")} onclick={() => hide(p)} />
-		</header>
+		</div>
 		<div class="body"><ExtensionSurface panel={p} /></div>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="corner" title={t("끌어서 크기 조절")} onpointerdown={(e) => down(e, p, "size")} onpointermove={move} onpointerup={up} onpointercancel={up}></div>
+		<div class="corner" role="button" aria-label={t("크기 조절 (Shift와 화살표 키)")} tabindex="0" title={t("끌어서 크기 조절")} onkeydown={(e) => nudge(e, p, "size")} onpointerdown={(e) => down(e, p, "size")} onpointermove={move} onpointerup={up} onpointercancel={up}></div>
 	</section>
 {/each}
 
 <style>
 	.float { position: fixed; display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
-	header { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
-	header:active { cursor: grabbing; }
+	.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
+	.bar:active { cursor: grabbing; }
+	.bar:focus-visible, .corner:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 	.title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 650; }
 	.owner { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; }

@@ -1495,6 +1495,8 @@ export const en: Record<string, string> = {
 	"확장 패널 닫기": "Close the extension panel",
 	"확장 창 닫기": "Close the extension window",
 	"끌어서 크기 조절": "Drag to resize",
+	"{title} 창: 화살표 키로 이동, Shift와 화살표 키로 크기 조절": "{title} window: arrow keys move it, Shift and the arrow keys resize it",
+	"크기 조절 (Shift와 화살표 키)": "Resize (Shift and the arrow keys)",
 	"위치는 {list} 중 하나여야 합니다": "Placement must be one of {list}",
 	"on은 true 또는 false여야 합니다": "on must be true or false",
 	"이 클라이언트는 화면 제어를 지원하지 않습니다": "This client does not support workspace control",
