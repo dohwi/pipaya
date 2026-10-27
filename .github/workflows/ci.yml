@@ -36,6 +36,8 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run test
+      - name: App and server carry the same version
+        run: bun ../scripts/check-versions.ts
 
   client:
     runs-on: ubuntu-24.04

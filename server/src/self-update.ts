@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { HttpError } from "./errors.ts";
+import { SERVER_VERSION } from "./version.ts";
 
 /**
  * Lets a client update the server it is connected to: look up the commit of the rolling `latest` release tag (no download; the client release workflow moves it, so a plain merge to main is not an update), fetch and move the working tree to it,
@@ -26,8 +27,14 @@ export interface UpdateStatus {
 	reason?: UnavailableReason;
 	/** The branch this checkout is on (the release commit is checked out onto it). */
 	ref: string | null;
+	/** Commit of the running checkout. For comparing and diagnostics only: people are shown the version. */
 	current: string | null;
+	/** Commit the release tag points at. */
 	latest: string | null;
+	/** The version this server runs (`1.2.3`), the one a person recognises. */
+	currentVersion: string | null;
+	/** The version the release tag holds, or null when it could not be read (the update is still offered, by commit). */
+	latestVersion: string | null;
 	available: boolean;
 	checkedAt: number;
 }
@@ -48,6 +55,8 @@ export interface SelfUpdateOptions {
 	/** How long a check is reused. */
 	cacheMs?: number;
 	now?: () => number;
+	/** The version this server runs. Defaults to the one in server/package.json. */
+	version?: string;
 }
 
 const DEFAULT_LAUNCHD_LABEL = "app.pipaya.server";
@@ -56,6 +65,7 @@ const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const DEFAULT_RELEASE_TAG = "latest";
 const TAG_PATTERN = /^[A-Za-z0-9._-]+$/;
 const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
 	try {
@@ -85,6 +95,8 @@ export class SelfUpdater {
 	private readonly cacheMs: number;
 	private cached: UpdateStatus | null = null;
 	private applying = false;
+	/** The version found at a release commit never changes, so each commit is read once. */
+	private readonly versionAt = new Map<string, string | null>();
 
 	constructor(private readonly o: SelfUpdateOptions) {
 		this.env = o.env ?? process.env;
@@ -92,6 +104,31 @@ export class SelfUpdater {
 		this.install = o.install ?? defaultInstall(this.run);
 		this.now = o.now ?? Date.now;
 		this.cacheMs = o.cacheMs ?? 5 * 60_000;
+	}
+
+	private get runningVersion(): string {
+		return this.o.version ?? SERVER_VERSION;
+	}
+
+	/**
+	 * The `version` in server/package.json at `sha`, read without touching the working tree: one shallow fetch of that commit,
+	 * then `git show`. Null when it cannot be read; the update is then offered by commit and shown without a version.
+	 */
+	private async readVersionAt(sha: string): Promise<string | null> {
+		if (this.versionAt.has(sha)) return this.versionAt.get(sha) ?? null;
+		let found: string | null = null;
+		const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", sha], 120_000);
+		if (fetched.code === 0) {
+			const shown = await this.git(["show", `${sha}:server/package.json`]);
+			if (shown.code === 0) {
+				try {
+					const v = (JSON.parse(shown.out) as { version?: unknown }).version;
+					if (typeof v === "string" && VERSION_PATTERN.test(v)) found = v;
+				} catch { /* not JSON: no version */ }
+			}
+		}
+		if (fetched.code === 0) this.versionAt.set(sha, found); // a failed fetch is retried next time
+		return found;
 	}
 
 	private get releaseTag(): string {
@@ -117,7 +154,7 @@ export class SelfUpdater {
 		if (!refresh && this.cached && this.now() - this.cached.checkedAt < this.cacheMs) return this.cached;
 		const checkedAt = this.now();
 		const none = (reason: UnavailableReason, extra: Partial<UpdateStatus> = {}): UpdateStatus =>
-			(this.cached = { managed: false, reason, ref: null, current: null, latest: null, available: false, checkedAt, ...extra });
+			(this.cached = { managed: false, reason, ref: null, current: null, latest: null, currentVersion: this.runningVersion, latestVersion: null, available: false, checkedAt, ...extra });
 
 		const reason = this.unmanagedReason();
 		if (reason) return none(reason);
@@ -137,11 +174,14 @@ export class SelfUpdater {
 		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/tags/${tag}`))?.split("\t")[0] : undefined;
 		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
-		return (this.cached = { managed: true, ref, current, latest, available: latest !== current, checkedAt });
+		const available = latest !== current;
+		// Only worth a download when there is something new to name.
+		const latestVersion = available ? await this.readVersionAt(latest) : this.runningVersion;
+		return (this.cached = { managed: true, ref, current, latest, currentVersion: this.runningVersion, latestVersion, available, checkedAt });
 	}
 
 	/** Moves to the newest commit and asks the process to restart. Throws HttpError with a reason the client can show. */
-	async apply(force = false): Promise<{ from: string; to: string }> {
+	async apply(force = false): Promise<{ from: string; to: string; fromVersion: string | null; toVersion: string | null }> {
 		if (this.applying) throw new HttpError(409, "update_in_progress", "an update is already running");
 		this.applying = true;
 		try {
@@ -180,7 +220,7 @@ export class SelfUpdater {
 			}
 			this.cached = null;
 			this.o.restart?.();
-			return { from: st.current, to: st.latest };
+			return { from: st.current, to: st.latest, fromVersion: st.currentVersion, toVersion: st.latestVersion };
 		} finally {
 			this.applying = false;
 		}

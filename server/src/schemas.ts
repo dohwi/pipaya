@@ -346,12 +346,14 @@ export const UpdateStatus = Type.Object({
 	managed: Type.Boolean({ description: "The server can update itself and be restarted by its service manager" }),
 	reason: Type.Optional(Type.Union([Type.Literal("disabled"), Type.Literal("unmanaged"), Type.Literal("not_git"), Type.Literal("detached"), Type.Literal("fetch_failed")])),
 	ref: Nullable(Type.String()),
-	current: Nullable(Type.String()),
-	latest: Nullable(Type.String()),
+	current: Nullable(Type.String({ description: "Commit of the running checkout (diagnostics; show the version to people)" })),
+	latest: Nullable(Type.String({ description: "Commit the release tag points at" })),
+	currentVersion: Nullable(Type.String({ description: "The version this server runs, e.g. 0.5.0" })),
+	latestVersion: Nullable(Type.String({ description: "The version at the release tag; null when it could not be read" })),
 	available: Type.Boolean(),
 	checkedAt: Type.Integer(),
 });
-export const UpdateResult = Type.Object({ ok: Type.Boolean(), from: Type.String(), to: Type.String(), restarting: Type.Boolean() });
+export const UpdateResult = Type.Object({ ok: Type.Boolean(), from: Type.String(), to: Type.String(), fromVersion: Nullable(Type.String()), toVersion: Nullable(Type.String()), restarting: Type.Boolean() });
 export const UpdateBody = Type.Object({ force: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
 
 // ── Events ──────────────────────────────────────────────────────────────────

@@ -36,6 +36,8 @@ jobs:
         working-directory: client
       - run: bun run check && bun run test && bun run build
         working-directory: client
+      - name: App and server carry the same version
+        run: bun scripts/check-versions.ts
       - name: Read the app version
         id: version
         run: echo "version=$(jq -r .version client/src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"

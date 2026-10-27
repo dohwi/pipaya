@@ -149,7 +149,7 @@ describe("version handshake", () => {
 		test("moves to the new commit, reinstalls and restarts", async () => {
 			const r = await call("POST", "/server/update", auth, {});
 			expect(r.status).toBe(200);
-			expect(r.json).toEqual({ ok: true, from: OLD, to: NEW, restarting: true });
+			expect(r.json).toMatchObject({ ok: true, from: OLD, to: NEW, restarting: true, fromVersion: SERVER_VERSION }); // the new version is named too (null when the release's package.json cannot be read)
 			expect(head).toBe(NEW);
 			expect(installs).toBe(1);
 			expect(restarts).toBe(1);
@@ -198,6 +198,62 @@ describe("SelfUpdater", () => {
 	test("PIPAYA_SELF_UPDATE=0 wins over a supervisor", async () => {
 		const { dir, u } = make({ env: { INVOCATION_ID: "x", PIPAYA_SELF_UPDATE: "0" }, run: fine });
 		expect((await u.status()).reason).toBe("disabled");
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("names the versions, not only the commits, and reads the new one without checking it out", async () => {
+		const calls: string[] = [];
+		const run: Run = async (cmd, cwd, t) => {
+			const k = cmd.slice(1).join(" ");
+			calls.push(k);
+			if (k.startsWith("fetch")) return { code: 0, out: "" };
+			if (k === `show ${NEW}:server/package.json`) return { code: 0, out: JSON.stringify({ name: "pipaya-server", version: "0.5.0" }) };
+			return fine(cmd, cwd, t);
+		};
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9" });
+		expect(await u.status()).toMatchObject({ managed: true, available: true, currentVersion: "0.4.9", latestVersion: "0.5.0", current: OLD, latest: NEW });
+		expect(calls.some((c) => c.startsWith("reset") || c.startsWith("checkout"))).toBe(false); // the tree stays as it is
+		await u.status();
+		expect(calls.filter((c) => c.startsWith("fetch")).length).toBe(1); // each release commit is read once
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("when the version cannot be read the update is still offered, by commit", async () => {
+		const broken: ((k: string) => { code: number; out: string } | null)[] = [
+			(k) => (k.startsWith("fetch") ? { code: 128, out: "unable to access" } : null),
+			(k) => (k.startsWith("show") ? { code: 128, out: "bad object" } : null),
+			(k) => (k.startsWith("show") ? { code: 0, out: "{not json" } : null),
+			(k) => (k.startsWith("show") ? { code: 0, out: JSON.stringify({ version: "latest" }) } : null), // not x.y.z
+			(k) => (k.startsWith("show") ? { code: 0, out: JSON.stringify({ version: "1.2.3; echo hi" }) } : null),
+		];
+		for (const b of broken) {
+			const run: Run = async (cmd, cwd, t) => b(cmd.slice(1).join(" ")) ?? fine(cmd, cwd, t);
+			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9" });
+			expect(await u.status()).toMatchObject({ managed: true, available: true, currentVersion: "0.4.9", latestVersion: null });
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("nothing is downloaded to name a version when the server is already current", async () => {
+		const calls: string[] = [];
+		const run: Run = async (cmd, cwd, t) => {
+			calls.push(cmd.slice(1).join(" "));
+			return cmd[1] === "ls-remote" ? { code: 0, out: `${OLD}\trefs/tags/latest` } : fine(cmd, cwd, t);
+		};
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9" });
+		expect(await u.status()).toMatchObject({ available: false, currentVersion: "0.4.9", latestVersion: "0.4.9" });
+		expect(calls.some((c) => c.startsWith("fetch"))).toBe(false);
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("an update reports the versions it moved between", async () => {
+		const run: Run = async (cmd, cwd, t) => {
+			const k = cmd.slice(1).join(" ");
+			if (k === `show ${NEW}:server/package.json`) return { code: 0, out: JSON.stringify({ version: "0.5.0" }) };
+			return fine(cmd, cwd, t);
+		};
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9", install: async () => true, restart: () => {} });
+		expect(await u.apply()).toEqual({ from: OLD, to: NEW, fromVersion: "0.4.9", toVersion: "0.5.0" });
 		rmSync(dir, { recursive: true, force: true });
 	});
 
