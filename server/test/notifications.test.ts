@@ -350,3 +350,19 @@ describe("device list", () => {
     expect((await app.server.inject({ method: "GET", url: "/notifications/devices", headers: auth })).json()).toEqual({ devices: [] });
   });
 });
+
+describe("NOTIFYING_EVENTS", () => {
+  test("a run's outcome decides the kind; an abort is silent; a question is always a request", async () => {
+    const { NOTIFYING_EVENTS } = await import("../src/notifications.ts");
+    expect(NOTIFYING_EVENTS.run_finished.kind({ status: "error" })).toBe("task_failed");
+    expect(NOTIFYING_EVENTS.run_finished.kind({ status: "ok" })).toBe("task_completed");
+    expect(NOTIFYING_EVENTS.run_finished.kind({})).toBe("task_completed");
+    expect(NOTIFYING_EVENTS.run_finished.kind({ status: "aborted" })).toBeNull();
+    expect(NOTIFYING_EVENTS.question_requested.kind()).toBe("user_request");
+  });
+
+  test("the rule API accepts exactly the events in the table", async () => {
+    const { NOTIFYING_EVENT_TYPES } = await import("../src/notifications.ts");
+    expect(NOTIFYING_EVENT_TYPES).toEqual(["run_finished", "question_requested"]);
+  });
+});

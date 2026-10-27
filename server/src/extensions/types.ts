@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Provider } from "@earendil-works/pi-ai";
 import type { TSchema } from "typebox";
+import type { NotificationKind } from "../notifications.ts";
 
 /**
  * Public API of a server extension. An extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a folder whose
@@ -388,7 +389,7 @@ export interface ExtensionAPI {
 	/** Every server event (the same stream clients get from `/events`); `types` narrows it. Returns the unsubscribe. */
 	subscribe(handler: (event: ServerEvent) => void, opts?: { sessionId?: string; types?: string[] }): () => void;
 	/** An OS / push notification to the user's devices (same rules as client extensions: 5 per 10 s). */
-	notify(n: { title: string; body?: string; sessionId?: string; key?: string; kind?: "task_completed" | "task_failed" | "user_request" | "info" }): void;
+	notify(n: { title: string; body?: string; sessionId?: string; key?: string; kind?: NotificationKind }): void;
 	/** The user's home directory. */
 	home: string;
 	/** The server's default working directory (where a new session starts). */

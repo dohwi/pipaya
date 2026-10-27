@@ -38,7 +38,9 @@ export interface NotificationDevice {
   push: boolean;
   lastSeen: number | null;
 }
-export type NotificationTrigger = "run_finished" | "question_requested";
+/** Events a rule may wait for. Keep in step with the server's NOTIFYING_EVENTS (tests/notification-contract.test.ts fails when they drift). */
+export const NOTIFICATION_TRIGGERS = ["run_finished", "question_requested"] as const;
+export type NotificationTrigger = (typeof NOTIFICATION_TRIGGERS)[number];
 export interface NotificationRule { event: NotificationTrigger; title: string; body?: string }
 
 export function parseNotification(value: unknown): NotificationSpec {
@@ -59,7 +61,7 @@ export function parseNotification(value: unknown): NotificationSpec {
 export function parseNotificationRule(value: unknown): NotificationRule {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new LocalizedError(t("알림 규칙 객체가 필요합니다"));
   const v = value as Record<string, unknown>;
-  if (Object.keys(v).some(k => !["event", "title", "body"].includes(k)) || !["run_finished", "question_requested"].includes(v.event as string)) throw new LocalizedError(t("잘못된 알림 규칙"));
+  if (Object.keys(v).some(k => !["event", "title", "body"].includes(k)) || !NOTIFICATION_TRIGGERS.includes(v.event as NotificationTrigger)) throw new LocalizedError(t("잘못된 알림 규칙"));
   const spec = parseNotification({ title: v.title, ...(v.body === undefined ? {} : { body: v.body }) });
   return { event: v.event as NotificationTrigger, ...spec };
 }

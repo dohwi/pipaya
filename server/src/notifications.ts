@@ -21,7 +21,25 @@ export function wording(p: { title: string; body?: string; facts?: BuiltinFacts 
   return { title: p.title, ...(p.body ? { body: p.body } : {}) };
 }
 export interface NotificationPayload extends NotificationInput { id: string; at: number; source: string }
-export interface NotificationRule { event: "run_finished" | "question_requested"; title: string; body?: string }
+/** The kinds of notice the server can raise (also what `ctx.notify` accepts). */
+export const NOTIFICATION_KINDS = ["task_completed", "task_failed", "user_request", "info"] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/**
+ * Which bus events raise a notice, and of what kind. This table is the one place that says so: the rule API accepts exactly its
+ * keys, and `onEvent` looks events up in it. To notify about another event, add a row (and, for a built-in notice, its wording).
+ */
+export const NOTIFYING_EVENTS = {
+  /** A run ended: an error is a failure, an abort is silent, anything else is a completion. */
+  run_finished: { kind: (data: { status?: string }): NotificationKind | null => (data.status === "aborted" ? null : data.status === "error" ? "task_failed" : "task_completed") },
+  /** The agent asked the user something. */
+  question_requested: { kind: (): NotificationKind | null => "user_request" },
+} as const;
+export type NotifyingEvent = keyof typeof NOTIFYING_EVENTS;
+export const NOTIFYING_EVENT_TYPES = Object.keys(NOTIFYING_EVENTS) as NotifyingEvent[];
+const isNotifying = (type: string): type is NotifyingEvent => Object.hasOwn(NOTIFYING_EVENTS, type);
+
+export interface NotificationRule { event: NotifyingEvent; title: string; body?: string }
 export interface PushTransport {
   send(token: string, payload: NotificationPayload, platform: DevicePlatform): Promise<"sent" | "invalid">;
   /** Silently asks a phone to take this session's notification out of its notification shade. Android only. */
@@ -264,12 +282,11 @@ export class NotificationService {
   private onEvent(e: PipayaEvent) {
     if (e.type === "question_resolved") { this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "user_request"); if (e.sessionId) this.clearPushed([e.sessionId], null); }
     if (e.type === "run_started") { this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? "")); if (e.sessionId) this.clearPushed([e.sessionId], null); }
-    if (!e.sessionId || !["run_finished", "question_requested"].includes(e.type)) return;
-    const data = e.data as { status?: string };
-    if (data.status === "aborted") return;
+    if (!e.sessionId || !isNotifying(e.type)) return;
+    const kind = NOTIFYING_EVENTS[e.type].kind((e.data ?? {}) as { status?: string });
+    if (!kind) return;
     const rules = (this.db.query("SELECT owner, id, data FROM notification_rules").all() as { owner: string; id: string; data: string }[])
       .map(row => ({ ...row, rule: JSON.parse(row.data) as NotificationRule })).filter(row => row.rule.event === e.type);
-    const kind = e.type === "question_requested" ? "user_request" : data.status === "error" ? "task_failed" : "task_completed";
     try {
       if (!rules.length) {
         const facts = this.factsFor(e, kind);
@@ -287,7 +304,7 @@ export class NotificationService {
     return { ...rest, ...wording(p, toLang(lang)) };
   }
   /** What a built-in notice is about, read from the session and its last answer. */
-  private factsFor(e: PipayaEvent, kind: string): BuiltinFacts {
+  private factsFor(e: PipayaEvent, kind: NotificationKind): BuiltinFacts {
     const title = this.sessions?.title(e.sessionId!) ?? "";
     if (kind === "user_request") {
       const d = e.data as { question?: unknown };
