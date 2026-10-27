@@ -22,6 +22,7 @@ import { parseLayout } from "./layout-spec";
 import type { WorkspaceAdapter } from "./workspace";
 import { SETTINGS_TABS, WORKSPACE_DIALOGS } from "./workspace-spec";
 import type { Edge } from "../layout";
+import { clone, identify, localId, object, plain, string, within, withoutKeybindings } from "./host-values";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
   prefill(text: string): void;
@@ -137,52 +138,6 @@ export const SYNC_SAVE_FAILED = msg("서버에 저장하지 못해 이 브라우
 export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 활성화할 수 있습니다");
 export const BOOT_INTERRUPTED = msg("시작이 완료되지 않아 비활성화했습니다");
 export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
-
-function string(value: unknown, max: number, label = msg("문자열")): string {
-  if (typeof value !== "string" || !value.trim() || value.length > max) throw new LocalizedError(t("잘못된 {label}", { label: t(label) }));
-  return value;
-}
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new LocalizedError(t("객체가 필요합니다"));
-  return value as Record<string, unknown>;
-}
-/** Run a request with a hard deadline, even if the fetch implementation ignores the abort signal. */
-async function within<T>(ms: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new LocalizedError(t("시간 초과"))); }, ms); });
-  try { return await Promise.race([task(controller.signal), deadline]); } finally { clearTimeout(timer); }
-}
-function plain(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-/**
- * A plain-JSON copy. Deliberately JSON rather than structuredClone: extension settings come from extension code and must
- * stay JSON (undefined and functions dropped, the same shape the server stores), and a Svelte $state proxy cannot be
- * structured-cloned at all.
- */
-const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
-/** Best-effort id/name of a stored entry that failed to parse. */
-function identify(raw: unknown): { id?: string; name?: string } {
-  const entry = plain(raw);
-  const manifest = plain(plain(entry?.package)?.manifest) ?? plain(entry?.manifest);
-  const out: { id?: string; name?: string } = {};
-  if (typeof manifest?.id === "string" && manifest.id) out.id = manifest.id.slice(0, 80);
-  if (typeof manifest?.name === "string" && manifest.name) out.name = manifest.name.slice(0, 80);
-  return out;
-}
-function localId(value: unknown): string {
-  const id = string(value, 40, "ID");
-  if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new LocalizedError(t("ID는 소문자·숫자·하이픈만 사용할 수 있습니다"));
-  return id;
-}
-
-/** Shortcuts are the user's own: they go into a settings file, but an extension asking for the settings never gets them. */
-function withoutKeybindings<T extends { keybindings?: unknown }>(doc: T, strip: boolean): Omit<T, "keybindings"> & Partial<Pick<T, "keybindings">> {
-  if (!strip) return doc;
-  const { keybindings: _omit, ...rest } = doc;
-  return rest;
-}
 
 export class ExtensionHost {
   installed = $state<InstalledExtension[]>([]);
