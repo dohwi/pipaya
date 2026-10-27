@@ -110,7 +110,7 @@
 
 	{#if error}<div class="warn" role="alert"><Icon name="alert" /><span>{error}</span></div>{/if}
 
-	<p class="hint">{t("QR에는 접근 토큰이 들어 있지 않습니다. 2분 동안 한 번만 쓸 수 있는 코드라, 사용하거나 시간이 지나면 무효가 됩니다.")}</p>
+	<p class="hint">{t("한 번만, 2분 안에 쓸 수 있는 코드입니다. 접근 토큰은 들어 있지 않습니다.")}</p>
 </div>
 
 <style>

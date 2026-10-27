@@ -44,7 +44,7 @@
 					<span>{t("서버도 함께 업데이트")}</span>
 					<Switch checked={serverUpdater.withApp} label={t("서버도 함께 업데이트")} onchange={(on) => serverUpdater.setWithApp(on)} />
 				</div>
-				<p class="note">{t("서버를 먼저 업데이트하고 다시 시작한 뒤 앱을 업데이트합니다. 실행 중인 대화가 있으면 서버는 건너뜁니다.")}</p>
+				<p class="note">{t("서버를 먼저 업데이트한 뒤 앱을 업데이트합니다. 대화가 실행 중이면 서버는 건너뜁니다.")}</p>
 			{/if}
 			{#if updater.serverStep === "failed" && serverUpdater.error}<p class="note warn" role="alert">{serverUpdater.error}</p>{/if}
 			<p class="note">{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}</p>

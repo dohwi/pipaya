@@ -37,7 +37,7 @@
       case "server_refused": return t("서버가 시험 요청을 받지 않았습니다. 서버가 이전 버전일 수 있습니다") + (o.detail ? ` (${o.detail})` : "");
       case "not_received": return t("서버는 보냈지만 이 앱이 6초 안에 받지 못했습니다. 실시간 연결이 끊겨 있을 수 있습니다");
       case "os_error": return t("앱이 운영체제에 알림을 넘기다 실패했습니다") + (o.detail ? `: ${o.detail}` : "");
-      case "shown": return t("앱이 운영체제에 알림을 넘겼습니다. 알림이 보이지 않으면 운영체제가 막은 것입니다: 방해 금지 모드와 이 앱의 알림 허용을 확인하세요");
+      case "shown": return t("알림을 보냈습니다. 보이지 않으면 방해 금지 모드와 이 앱의 알림 허용을 확인하세요");
     }
   };
   const label = (m: number) => (m === 0 ? t("보내지 않음") : m < 60 ? t("{n}분", { n: m }) : t("{n}시간", { n: m / 60 }));

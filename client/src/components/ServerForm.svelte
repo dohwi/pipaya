@@ -205,7 +205,7 @@
 					</div>
 				</label>
 
-				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. 인터넷을 거치면 토큰이 그대로 노출될 수 있습니다. Tailscale 주소를 쓰거나 https로 연결하세요.")}</Notice>{/if}
+				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
 				<p class="hint">{t("토큰은 이 기기에만 저장됩니다.")}</p>
 				{#if editing && isOpen}<ServerUpdate />{/if}

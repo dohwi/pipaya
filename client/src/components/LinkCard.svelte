@@ -34,7 +34,7 @@
 		</h2>
 		<p class="who"><b>{link.name}</b><span class="mono">{link.baseUrl}</span></p>
 		{#if link.state === "confirm"}
-			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<p class="warn">{t("암호화되지 않은 http 주소입니다. 인터넷을 거치면 토큰이 그대로 노출될 수 있습니다. Tailscale 주소를 쓰거나 https로 연결하세요.")}</p>{/if}
+			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<p class="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</p>{/if}
 			<p class="warn">{t("링크를 보낸 사람이 믿을 수 있는지, 위 주소가 내 서버가 맞는지 확인하세요. 연결하면 이 서버가 목록에 추가됩니다.")}</p>
 			<div class="actions">
 				<Button onclick={() => app.closeLinking()}>{t("취소")}</Button>
