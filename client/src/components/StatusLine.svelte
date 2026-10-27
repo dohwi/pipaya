@@ -318,7 +318,7 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	@media (max-width: 560px) {
+	@media (max-width: 640px) {
 		.wide {
 			display: none;
 		}

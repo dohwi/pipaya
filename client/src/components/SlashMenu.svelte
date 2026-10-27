@@ -145,7 +145,7 @@
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
-	@media (max-width: 560px) {
+	@media (max-width: 640px) {
 		.n {
 			min-width: 0;
 		}

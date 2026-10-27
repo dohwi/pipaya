@@ -128,7 +128,7 @@
 	.menu {
 		display: none;
 	}
-	@media (max-width: 600px) {
+	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */
 		.capsule { padding-right: 14px; }
 		.title { padding: 0 4px; }
@@ -140,7 +140,7 @@
 			display: grid;
 		}
 	}
-	@media (max-width: 600px) {
+	@media (max-width: 640px) {
 		/* declared after the 860px rule so it wins: the 32px button leaves 6.5px around the icon */
 		.capsule { padding-left: 7px; }
 	}

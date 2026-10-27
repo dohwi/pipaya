@@ -300,7 +300,7 @@
 		opacity: 0.4;
 	}
 	/* phones: the description gets the full width and the key controls sit on their own line under it */
-	@media (max-width: 480px) {
+	@media (max-width: 640px) {
 		li {
 			flex-wrap: wrap;
 			row-gap: 8px;

@@ -97,7 +97,7 @@
 	.more {
 		opacity: 0.7;
 	}
-	@media (max-width: 560px) {
+	@media (max-width: 640px) {
 		.wait,
 		.next {
 			display: none;

@@ -218,6 +218,11 @@
 *::after {
 	box-sizing: border-box;
 }
+/* Breakpoints, the only three (media queries cannot read variables, so they are written out):
+     640px  phone: dialogs become bottom sheets, dense rows give way (lib/motion.ts isPhone)
+     760px  settings: the side list becomes a row of tabs (Settings, SettingsNav, ExtensionPage)
+     860px  sidebar: a drawer instead of a column, one session per group (lib/viewport.svelte.ts)
+   A component that needs its own width, not the window's, uses @container. */
 /* Viewport units that survive the CSS-zoom fallback of ui-scale.ts (zoom multiplies them, so divide it out). */
 :root {
 	--vw: calc(100vw / var(--ui-zoom, 1));

@@ -22,7 +22,7 @@
   .slot { display: flex; align-items: center; flex: 0 1 auto; gap: 6px; min-width: 0; max-width: min(40%, 160px); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding: 2px 3px; overscroll-behavior-x: contain; }
   .slot::-webkit-scrollbar { display: none; }
   .item { display: flex; align-items: center; flex: none; min-width: 0; max-width: 100%; }
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .slot { max-width: min(36%, 132px); gap: 4px; padding: 2px; }
   }
 </style>
