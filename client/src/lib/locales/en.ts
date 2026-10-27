@@ -175,6 +175,8 @@ export const en: Record<string, string> = {
 	"HTTP 읽기: extension이 설정한 서버 주소로 GET 요청을 보내 JSON을 읽습니다 (자격 증명 미전송).": "HTTP read: sends GET requests to the server address the extension is configured with and reads JSON (no credentials are sent).",
 	"패키지는 최대 {n}KB까지 가져올 수 있습니다.": "Packages can be at most {n} KB.",
 	"파일을 불러오지 못했습니다": "Couldn't load the file",
+	"JSON 형식이 아닌 파일입니다.": "This file is not JSON.",
+	"확장 패키지 형식이 올바르지 않습니다.": "This is not a valid extension package.",
 	"먼저 확장 파일을 선택하세요.": "Choose an extension file first.",
 	"이 확장의 작업이 끝난 뒤 가져오세요.": "Import after this extension's current operation finishes.",
 	"확장을 교체했습니다": "Extension replaced",

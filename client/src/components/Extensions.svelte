@@ -11,7 +11,7 @@
 	import { tick } from "svelte";
 	import { app } from "../lib/store.svelte";
 		import { CONFIG_REQUIRED, extensions, type ExtensionScope, type InstalledExtension } from "../lib/extensions/host.svelte";
-	import { parsePackage, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
+	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
 	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
 	import { fetchCompanion } from "../lib/extensions/marketplace";
@@ -187,7 +187,14 @@
 			filename = "";
 			fromMarket = false;
 			if (file.size > MAX_PACKAGE_BYTES) throw new LocalizedError(t("패키지는 최대 {n}KB까지 가져올 수 있습니다.", { n: MAX_PACKAGE_BYTES / 1024 }));
-			const pkg = parsePackage(JSON.parse(await file.text()));
+			let json: unknown;
+			try { json = JSON.parse(await file.text()); } catch { throw new LocalizedError(t("JSON 형식이 아닌 파일입니다.")); }
+			let pkg: ExtensionPackage;
+			try { pkg = parsePackage(json); } catch (cause) {
+				// the validator speaks to the package's author in English: say what is wrong in our words, keep its text as the detail
+				if (cause instanceof PackageError) throw new LocalizedError(`${t("확장 패키지 형식이 올바르지 않습니다.")} (${cause.message})`);
+				throw cause;
+			}
 			preview = pkg;
 			filename = file.name;
 		}, t("파일을 불러오지 못했습니다"));

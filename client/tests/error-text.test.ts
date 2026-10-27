@@ -20,3 +20,14 @@ describe("errorText", () => {
 		expect(errorText(new ApiError(401, "unauthorized", "x"))).not.toBe("x");
 	});
 });
+
+describe("extension package errors", () => {
+	test("a package that fails validation throws a PackageError carrying the field and the reason", async () => {
+		const { parsePackage, PackageError } = await import("../src/lib/extensions/schema");
+		let caught: unknown;
+		try { parsePackage({ manifest: { id: "Bad Id", name: "x", version: "1.0.0", sdkVersion: 1, permissions: [] } }); } catch (e) { caught = e; }
+		expect(caught).toBeInstanceOf(PackageError);
+		expect((caught as InstanceType<typeof PackageError>).path).toBe("manifest.id");
+		expect((caught as Error).message).toContain("manifest.id:");
+	});
+});

@@ -138,8 +138,19 @@ const DIMENSION = /^(?:0|[1-9][0-9]*)px$/;
 const MAX_CODE_BYTES = 128 * 1024;
 const encoder = new TextEncoder();
 
+/**
+ * A package that does not pass validation. The text is a diagnostic for the package's author (English, with the path of
+ * the field), so the UI shows it as a detail under its own sentence instead of as the message itself.
+ */
+export class PackageError extends Error {
+	constructor(readonly path: string, readonly reason: string) {
+		super(`${path}: ${reason}`);
+		this.name = "PackageError";
+	}
+}
+
 function fail(path: string, message: string): never {
-	throw new Error(`${path}: ${message}`);
+	throw new PackageError(path, message);
 }
 
 function object(input: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
