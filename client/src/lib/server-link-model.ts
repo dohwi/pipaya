@@ -109,6 +109,3 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 	}
 }
 
-/** Events after which a link rereads what it cannot patch from the event alone. */
-export const RELOADS_MODELS = new Set(["provider_updated", "configuration_updated"]);
-export const RELOADS_WORKSPACE = new Set(["session_created", "session_deleted", "configuration_updated"]);

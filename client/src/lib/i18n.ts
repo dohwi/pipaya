@@ -24,7 +24,6 @@ export const PACKS_KEY = "pipaya.locales";
 
 /** Same shape the server accepts (`LOCALE_TAG_PATTERN`): `ja`, `pt-br`, `zh-hant-tw`. */
 export const LANG_TAG = /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/;
-export const BUILT_IN_LANGS: readonly Lang[] = ["ko", "en"];
 
 export interface LanguagePack {
 	tag: Lang;

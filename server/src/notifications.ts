@@ -28,7 +28,6 @@ export interface PushTransport {
   clear?(token: string, sessionId: string, platform: DevicePlatform): Promise<"sent" | "invalid">;
 }
 export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
-/** Server-side defaults are English; the desktop/web client shows its own translation for these kinds (see client notifications.ts). */
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
 export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined }
 export const DEFAULT_TITLES: Record<string, string> = { user_request: "Answer needed", task_failed: "Task failed", task_completed: "Task completed" };

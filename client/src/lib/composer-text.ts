@@ -42,22 +42,6 @@ export function insertToken(text: string, pos: number, token: string): { text: s
 	return { text: before + pre + token + post + after, caret: (before + pre + token + post).length };
 }
 
-/** Splits sent text into plain pieces and `#imageN` tokens that refer to one of `images` attached images. */
-export function splitImageTokens(text: string, images: number): { text: string; img: boolean }[] {
-	const out: { text: string; img: boolean }[] = [];
-	let last = 0;
-	for (const m of text.matchAll(/(^|\s)(#image(\d+))(?=\s|$)/g)) {
-		const n = Number(m[3]);
-		if (n < 1 || n > images) continue;
-		const start = m.index + m[1].length;
-		if (start > last) out.push({ text: text.slice(last, start), img: false });
-		out.push({ text: m[2], img: true });
-		last = start + m[2].length;
-	}
-	if (last < text.length) out.push({ text: text.slice(last), img: false });
-	return out;
-}
-
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** The known `@name` a token starts with: the longest name, not cut out of a longer ASCII word (`@미나랑` is `@미나` plus a particle). */

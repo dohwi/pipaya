@@ -1,5 +1,3 @@
-import type { Session } from "./types";
-import { localeTag, msg } from "./i18n";
 
 export const compact = (n: number): string =>
   n >= 1_000_000
@@ -24,47 +22,6 @@ export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";
 export function fileStamp(d: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-}
-
-export function timeLabel(ts: number): string {
-  return new Date(ts).toLocaleTimeString(localeTag(), {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-export interface SessionGroup {
-  label: string;
-  sessions: Session[];
-}
-
-/** Group sessions (already sorted newest-first) the way chat apps do. */
-export function groupSessions(
-  sessions: Session[],
-  now = Date.now(),
-): SessionGroup[] {
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const day = 86_400_000;
-  const t0 = startOfToday.getTime();
-  const buckets: [string, number][] = [
-    [msg("오늘"), t0],
-    [msg("어제"), t0 - day],
-    [msg("지난 7일"), t0 - 7 * day],
-    [msg("지난 30일"), t0 - 30 * day],
-  ];
-  const groups: SessionGroup[] = [];
-  for (const s of sessions) {
-    const label =
-      buckets.find(([, from]) => s.updatedAt >= from)?.[0] ?? msg("이전", "older");
-    let g = groups[groups.length - 1];
-    if (!g || g.label !== label) {
-      g = { label, sessions: [] };
-      groups.push(g);
-    }
-    g.sessions.push(s);
-  }
-  return groups;
 }
 
 export const isTouch = (): boolean =>

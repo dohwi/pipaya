@@ -1098,10 +1098,6 @@ export const en: Record<string, string> = {
 
 	/* ---- date groups ---- */
 	"오늘": "Today",
-	"어제": "Yesterday",
-	"지난 7일": "Previous 7 days",
-	"지난 30일": "Previous 30 days",
-	"이전\u0004older": "Older",
 
 	/* ---- keyboard shortcut catalogue ---- */
 	"사이드바 접기 / 펼치기": "Collapse / expand sidebar",

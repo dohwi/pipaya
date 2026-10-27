@@ -562,10 +562,6 @@ export function recordingLabel(r: Recording): string {
   return formatCombo(parts.join("+"));
 }
 
-/** Number of physical keys a combo needs held at once */
-export const comboSize = (combo: string) =>
-  combo ? combo.split("+").length : 0;
-
 /** The modifiers and plain keys of a combo */
 export function splitCombo(combo: string) {
   const parts = combo ? combo.split("+") : [];

@@ -63,3 +63,6 @@ client/src-tauri/binaries/
 AGENTS.md
 .agents/
 tmp/shots/
+
+# pipaya agent runtime files (uploads, generated images)
+.pipaya/
