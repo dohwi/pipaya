@@ -35,6 +35,7 @@
 	const aopen = $derived(sb.searching || app.sidebar.archiveOpen.includes(akey));
 </script>
 
+<!-- A drop and drag target for folders; the folder toggle inside is a real button. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="dirblock" data-block={`dir:${d.path}`} data-server={n.server.id} class:carried={mark.carried} class:before={mark.before} class:after={mark.after}>
 	<div

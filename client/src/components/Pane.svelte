@@ -73,6 +73,7 @@
 	}
 </script>
 
+<!-- Only listens (capture) to move focus to this pane when something inside it is pressed or focused; it is not itself a control. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
 	{#if grouped && id}

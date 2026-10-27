@@ -239,6 +239,7 @@
 </div>
 
 {#if open}
+	<!-- Focus stays on the trigger and its keys drive this list (aria-activedescendant); the options are only clickable for a pointer. -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		use:portal

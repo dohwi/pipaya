@@ -106,6 +106,7 @@
 <svelte:window onpointerdown={outside} onkeydown={(e) => e.key === "Escape" && shown && close()} />
 
 {#if shown}
+	<!-- The menu container only routes keys to its items (arrows, Esc); the items are the interactive elements. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		use:portal

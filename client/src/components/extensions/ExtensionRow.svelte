@@ -37,6 +37,7 @@
 	} = $props();
 </script>
 
+<!-- tabindex="-1": only so a link from elsewhere can focus this card by id; it is not in the Tab order. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <article class="card" class:dim {id} tabindex={id ? -1 : undefined} aria-label={name}>
 	<div class="line">

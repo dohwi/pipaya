@@ -65,6 +65,7 @@
 	}
 </script>
 
+<!-- The row frame handles F2 (rename) for whatever inside it has focus and is a drag source; its buttons are the controls. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class={["item nested", cls]}

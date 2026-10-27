@@ -209,6 +209,7 @@
 
 	<!-- While a pane is zoomed it covers the group, so the dividers (z-index above it) must not be grabbable. -->
 	{#each zoomId ? [] : geo.dividers as d (key(d))}
+		<!-- A window splitter (WAI-ARIA): focusable, with value attributes and arrow-key handling; the rule does not know the role is interactive. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 		<div
 			class="div {d.dir}"

@@ -152,6 +152,7 @@
 	<h3 id="bk-import" class="section-label">{t("가져오기")}</h3>
 
 	{#if !loaded}
+		<!-- A <label> around the file input: Tab and Enter/Space reach the input itself; the drag handlers only add dropping. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<label
 			class="drop"

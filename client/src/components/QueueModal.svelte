@@ -64,6 +64,7 @@
 	<div class="keys" onkeydown={onKey}>
 	<ul bind:this={listEl} use:focusList tabindex="-1" role="listbox" aria-label={t("대기열 관리")}>
 		{#each items as q, i (q.mode + "\u0000" + q.text + "\u0000" + i)}
+			<!-- Enter / Delete on the listbox (onKey above) remove the highlighted row; the click is for a pointer. -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<li
 				class:on={i === index}

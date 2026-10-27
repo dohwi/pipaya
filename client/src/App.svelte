@@ -317,6 +317,7 @@
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			{#if !app.sidebar.collapsed}
+				<!-- A window splitter (WAI-ARIA): focusable, with value attributes and arrow-key handling; the rule does not know the role is interactive. -->
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 				<div
 					class="grip"
@@ -337,6 +338,7 @@
 				></div>
 			{/if}
 		</div>
+		<!-- Tapping the scrim closes the drawer; with a keyboard the drawer closes with Esc (the app shortcut layer). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="scrim" class:show={app.sidebar.open} class:dragging={swipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={swipe !== null ? swipe / drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
 			{#if canCatch}<span class="catch-hint">{t("지금 보는 대화에 합치기")}</span>{/if}

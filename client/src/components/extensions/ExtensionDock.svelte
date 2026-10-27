@@ -58,6 +58,7 @@
 {#if current}
 	<aside class="dock" class:narrow={viewport.narrow} data-part="dock" style:--dock-w="{width}px" aria-label={t("확장 패널")}>
 		{#if !viewport.narrow}
+			<!-- A window splitter (WAI-ARIA): focusable, with value attributes and arrow-key handling (keyResize). -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 			<div class="edge" role="separator" aria-orientation="vertical" aria-label={t("확장 패널 너비 조절")} aria-valuenow={width} tabindex="0"
 				onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onkeydown={keyResize}></div>

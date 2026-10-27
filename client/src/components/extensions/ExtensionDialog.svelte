@@ -63,7 +63,6 @@
       </div>
     {:else if r.kind === "input"}
       {#if r.multiline}
-        <!-- svelte-ignore a11y_autofocus -->
         <textarea bind:value={typed} placeholder={r.placeholder} rows="5" onkeydown={enter} use:autofocus></textarea>
       {:else}
         <input type="text" bind:value={typed} placeholder={r.placeholder} onkeydown={enter} use:autofocus />
