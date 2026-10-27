@@ -83,7 +83,7 @@
 	let lastTick = app.modelPickerTick;
 	$effect(() => {
 		const tick = app.configTick;
-		if (tick !== lastTick && !busy && !form && serverId === app.serverId) void load(serverId);
+		if (tick !== lastTick && !busy && !form && serverId === app.serverId) void load(serverId, true);
 		lastTick = tick;
 	});
 

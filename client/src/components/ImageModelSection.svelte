@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
@@ -20,9 +21,9 @@
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
-	async function load() {
+	async function load(reset: boolean) {
 		const mine = ++seq;
-		settings = null;
+		if (reset) settings = null; // only when the server changes: unmounting the section would reset the scroll
 		const a = api();
 		if (!a) return;
 		try {
@@ -32,9 +33,14 @@
 			/* an older server: the section stays hidden */
 		}
 	}
+	let loadedFor = "";
 	$effect(() => {
-		void serverId;
-		void load();
+		const id = serverId;
+		untrack(() => {
+			const changed = id !== loadedFor;
+			loadedFor = id;
+			void load(changed);
+		});
 	});
 
 	async function save(next: ImageModelSettings) {
