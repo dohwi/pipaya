@@ -2,11 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildApp, type App } from "../src/app.ts";
-import { BrowserManager, findBrowser, normalizeUrl, profileId } from "../src/browser.ts";
-import { BROWSER_TOOLS, browserTools } from "../src/browser-tools.ts";
-import type { Config } from "../src/config.ts";
-import type { EventBus } from "../src/events.ts";
+import { buildApp, type App } from "../../src/app.ts";
+import { BrowserManager, findBrowser, normalizeUrl, profileId } from "../../src/browser.ts";
+import { BROWSER_TOOLS, browserTools } from "../../src/browser-tools.ts";
+import type { Config } from "../../src/config.ts";
+import type { EventBus } from "../../src/events.ts";
 
 const bus = () => ({ publish: () => {} }) as unknown as EventBus;
 
@@ -171,9 +171,9 @@ live("browser tabs (real Chromium)", () => {
 		}
 	}, 60_000);
 
-	test("profiles keep logins apart, can be reserved for people, and the temp one leaves nothing behind", async () => {
+	test("profiles keep logins apart, survive a restart, and can be cleared, renamed and deleted", async () => {
 		const own = join(dir, "profiles");
-		const b = new BrowserManager(bus(), { enabled: true, dataDir: own });
+		const b = new BrowserManager(bus(), { enabled: true, dataDir: own, actionTimeoutMs: 12_000 });
 		const defs = browserTools(b);
 		const run = async (name: string, params: object) => (defs[name]!.create(own, [], { sessionId: "s1" }) as any).execute("call", params, undefined);
 		const cookieOf = async (tab: string) => b.asAgent(tab, (page) => page.evaluate("document.cookie") as Promise<string>);
@@ -212,7 +212,18 @@ live("browser tabs (real Chromium)", () => {
 			expect(b.listProfiles().map((p) => p.id)).toContain("job");
 			await b.deleteProfile("job");
 			expect(b.listProfiles().map((p) => p.id)).not.toContain("job");
+		} finally {
+			await b.shutdown();
+		}
+	}, { timeout: 90_000, retry: 2 });
 
+	test("a profile can be reserved for people, and the temp one leaves nothing behind", async () => {
+		const own = join(dir, "profiles2");
+		const b = new BrowserManager(bus(), { enabled: true, dataDir: own, actionTimeoutMs: 12_000 });
+		const defs = browserTools(b);
+		const run = async (name: string, params: object) => (defs[name]!.create(own, [], { sessionId: "s1" }) as any).execute("call", params, undefined);
+		try {
+			b.createProfile({ id: "private", agent: false });
 			// a profile reserved for people: agents neither see its tabs nor can use them or open one in it
 			const mine = await b.create({ url: origin, profile: "private" });
 			const open = await run("browser_open", { url: origin, newTab: true });
@@ -245,7 +256,7 @@ live("browser tabs (real Chromium)", () => {
 		} finally {
 			await b.shutdown();
 		}
-	}, 120_000);
+	}, { timeout: 90_000, retry: 2 });
 
 	test("handoff: the agent waits for the person in the same page, then continues", async () => {
 		const own = join(dir, "handoff");

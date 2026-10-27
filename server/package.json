@@ -8,7 +8,8 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --path-ignore-patterns 'test/browser/**' && bun run test:browser",
+    "test:browser": "bun test test/browser",
     "lint": "cd .. && server/node_modules/.bin/biome lint ."
   },
   "dependencies": {

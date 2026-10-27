@@ -24,6 +24,11 @@ export const DEFAULT_PROFILE = "default";
 /** The throw-away profile: no history, and its folder is deleted once its last tab closes. */
 export const TEMP_PROFILE = "temp";
 export const MAX_PROFILES = 12;
+/** One agent action on a page may take this long; a page that never answers fails the call instead of hanging the run. */
+export const ACTION_TIMEOUT_MS = 45_000;
+/** A browser that does not answer within this is started again (see `start`). */
+export const LAUNCH_TIMEOUT_MS = 6000;
+export const LAUNCH_ATTEMPTS = 3;
 const PROFILE_ID = /^[a-z0-9][a-z0-9_-]{0,38}$/;
 export const profileId = (raw: string): string => {
 	const id = raw.trim().toLowerCase();
@@ -124,6 +129,8 @@ export interface BrowserClient {
 
 interface Tab {
 	info: BrowserTabInfo;
+	/** The browser this tab lives in. A profile can be started again while its old browser is still ending, so "the tabs of a profile" can belong to two browsers. */
+	context: BrowserContext;
 	page: Page;
 	cdp: CDPSession;
 	clients: Set<BrowserClient>;
@@ -154,12 +161,16 @@ export interface BrowserOptions {
 	/** Defaults to `findBrowser()`. */
 	executable?: string | null;
 	headless?: boolean;
+	/** Limit of one agent action (default `ACTION_TIMEOUT_MS`; tests shorten it). */
+	actionTimeoutMs?: number;
 }
 
 export class BrowserManager {
 	private tabs = new Map<string, Tab>();
 	/** One Chromium per profile (a profile folder can only be open in one process). */
 	private contexts = new Map<string, Promise<BrowserContext>>();
+	/** Pages that already are a tab (a browser's first blank page is taken over once). */
+	private claimed = new WeakSet<Page>();
 	/** Browsers that are shutting down: their profile folder is still theirs until `close()` has finished. */
 	private stopping = new Map<string, Promise<void>>();
 	/** Throw-away profile folders, removed once their browser has ended (or on shutdown). */
@@ -313,6 +324,41 @@ export class BrowserManager {
 		return profile === TEMP_PROFILE || this.meta(profile).agent;
 	}
 
+	/**
+	 * Start Chromium on a profile folder. A browser that ends on its own right after it was started (it hands the folder
+	 * to another instance that is still shutting down, then exits with code 0) never answers, so playwright would wait
+	 * out its whole timeout. Start again a few times, each with a short limit, instead of hanging.
+	 */
+	private async start(dir: string): Promise<BrowserContext> {
+		let last: unknown;
+		for (let attempt = 0; attempt < LAUNCH_ATTEMPTS; attempt++) {
+			// playwright's own `timeout` does not always fire (the browser can end without ever answering), so the limit is
+			// kept here too. A start that is abandoned may still finish later: it is closed then, so no browser is left over.
+			const starting = chromium.launchPersistentContext(dir, {
+				executablePath: this.exe!,
+				headless: this.opts.headless ?? true,
+				viewport: { width: 1280, height: 800 },
+				acceptDownloads: false,
+				timeout: LAUNCH_TIMEOUT_MS,
+				args: ["--no-first-run", "--no-default-browser-check", ...(process.getuid?.() === 0 ? ["--no-sandbox"] : [])],
+			});
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const limit = new Promise<"late">((r) => (timer = setTimeout(() => r("late"), LAUNCH_TIMEOUT_MS + 1500)));
+			try {
+				const got = await Promise.race([starting, limit]);
+				if (got !== "late") return got;
+				void starting.then((late) => late.close().catch(() => {}), () => {});
+				last = new Error(`the browser did not start within ${LAUNCH_TIMEOUT_MS}ms`);
+			} catch (e) {
+				last = e;
+			} finally {
+				clearTimeout(timer);
+			}
+			await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+		}
+		throw last;
+	}
+
 	private launch(profile: string): Promise<BrowserContext> {
 		if (!this.available()) throw new HttpError(403, "browser_unavailable", this.opts.enabled ? "no Chrome or Chromium was found on this server (install one or set PIPAYA_BROWSER)" : "the browser is turned off on this server (PIPAYA_BROWSER=0)");
 		let pending = this.contexts.get(profile);
@@ -324,16 +370,10 @@ export class BrowserManager {
 			mkdirSync(dir, { recursive: true, mode: 0o700 });
 			if (profile === TEMP_PROFILE) this.tempDirs.add(dir);
 			if (profile !== TEMP_PROFILE && !existsSync(this.metaFile(profile))) this.writeMeta(profile, { agent: true, createdAt: Date.now() });
-			const ctx = await chromium.launchPersistentContext(dir, {
-				executablePath: this.exe!,
-				headless: this.opts.headless ?? true,
-				viewport: { width: 1280, height: 800 },
-				acceptDownloads: false,
-				args: ["--no-first-run", "--no-default-browser-check", ...(process.getuid?.() === 0 ? ["--no-sandbox"] : [])],
-			});
+			const ctx = await this.start(dir);
 			ctx.on("close", () => {
 				if (this.contexts.get(profile) === pending) this.contexts.delete(profile);
-				for (const t of this.tabsOf(profile)) this.drop(t);
+				for (const t of [...this.tabs.values()]) if (t.context === ctx) this.drop(t);
 				// The throw-away profile leaves nothing behind, whichever way its browser ended.
 				if (profile === TEMP_PROFILE) void this.sweepTemp(dir);
 			});
@@ -352,10 +392,13 @@ export class BrowserManager {
 		const profile = input.profile?.trim() ? profileId(input.profile) : DEFAULT_PROFILE;
 		if (profile !== TEMP_PROFILE && profile !== DEFAULT_PROFILE && !existsSync(this.profileDir(profile))) throw notFound("browser profile");
 		const ctx = await this.launch(profile);
-		const page = await ctx.newPage();
+		// A fresh browser already holds one blank page: the first tab takes it over instead of opening a second beside it.
+		const spare = ctx.pages().find((p) => !this.claimed.has(p) && p.url() === "about:blank");
+		const page = spare ?? (await ctx.newPage());
+		this.claimed.add(page);
 		const cdp = await ctx.newCDPSession(page);
 		const id = BROWSER_PREFIX + randomUUID();
-		const tab: Tab = { info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], handoff: null, lastSent: 0, fit: null, lastFrame: null, closing: false };
+		const tab: Tab = { context: ctx, info: { id, title: "", url: "about:blank", cwd: input.cwd?.trim() || cwd || this.opts.defaultWorkdir?.() || this.opts.dataDir, profile, createdAt: Date.now() }, page, cdp, clients: new Set(), screencasting: false, agents: [], handoff: null, lastSent: 0, fit: null, lastFrame: null, closing: false };
 		this.tabs.set(id, tab);
 		cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number; metadata: { deviceWidth: number; deviceHeight: number } }) => {
 			cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
@@ -406,7 +449,7 @@ export class BrowserManager {
 		for (const c of tab.clients) c.closed();
 		tab.clients.clear();
 		this.bus.publish(null, "browser_closed", { id: tab.info.id }, { ephemeral: true });
-		if (!this.tabsOf(tab.info.profile).length) void this.stopBrowser(tab.info.profile);
+		if (![...this.tabs.values()].some((t) => t.context === tab.context)) void this.stopBrowser(tab.info.profile, tab.context);
 	}
 
 	private removeTemp(dir: string) {
@@ -427,14 +470,22 @@ export class BrowserManager {
 		}
 	}
 
-	/** End a profile's browser. The promise is kept so anything that needs the folder next waits for it. */
-	private stopBrowser(profile: string): Promise<void> {
+	/**
+	 * End a browser. `ctx` is the one whose last tab just closed: if the profile has already been started again, the
+	 * registered browser is a newer one and must be left alone. The promise is kept so anything that needs the profile's
+	 * folder next (a new start, a rename, a delete) waits until the old browser has really exited.
+	 */
+	private stopBrowser(profile: string, ctx?: BrowserContext): Promise<void> {
 		const pending = this.contexts.get(profile);
-		this.contexts.delete(profile);
 		if (!pending) return this.stopping.get(profile) ?? Promise.resolve();
-		const done: Promise<void> = (async () => {
-			await (await pending.catch(() => null))?.close().catch(() => {});
-		})().finally(() => {
+		// Unregister at once, before anything awaits: a start that begins now must launch a new browser, never reuse this one.
+		this.contexts.delete(profile);
+		const closing = (async () => {
+			const registered = await pending.catch(() => null);
+			await (ctx ?? registered)?.close().catch(() => {});
+		})();
+		const prev = this.stopping.get(profile);
+		const done: Promise<void> = Promise.all([prev, closing]).then(() => {}).finally(() => {
 			if (this.stopping.get(profile) === done) this.stopping.delete(profile);
 		});
 		this.stopping.set(profile, done);
@@ -580,9 +631,15 @@ export class BrowserManager {
 		const tab = this.tab(id);
 		tab.agents.push(who);
 		this.tell(tab);
+		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
-			return await fn(tab.page);
+			const limit = this.opts.actionTimeoutMs ?? ACTION_TIMEOUT_MS;
+			return await Promise.race([
+				fn(tab.page),
+				new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`the page did not respond within ${Math.round(limit / 1000)}s (tab ${id}); take a new snapshot or reload it`)), limit))),
+			]);
 		} finally {
+			clearTimeout(timer);
 			tab.agents.splice(tab.agents.lastIndexOf(who), 1);
 			await this.refresh(tab);
 			this.tell(tab);
