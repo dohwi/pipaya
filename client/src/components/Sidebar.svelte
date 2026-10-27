@@ -9,7 +9,7 @@
 	import Badge from "./Badge.svelte";
 	import { updater } from "../lib/updater.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
-	import { msg, t } from "../lib/i18n";
+	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { formatCombo } from "../lib/keys";
 	import Icon from "./Icon.svelte";
@@ -28,14 +28,12 @@
 	import { blockDrag } from "../lib/block-drag";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
-	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
-	import DirBlockView from "./sidebar/DirBlock.svelte";
-	import NewButton from "./sidebar/NewButton.svelte";
+	import ServerBlock from "./sidebar/ServerBlock.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -97,7 +95,6 @@
 		return d ? activityOf(d, x.id) : "idle";
 	};
 
-	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
 
@@ -266,40 +263,7 @@
 
 	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
-			{@const sfold = isFolded(n.server.id)}
-			{@const srvMark = marks.blockMark(bid("server", n.server.id))}
-			<section class="srv band" data-block={bid("server", n.server.id)} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
-				<div class="srvhead grabbable" class:folded={sfold} use:dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: nodes.length < 2, menu: (pt) => headMenuAt(pt, n, null, n.server.id) }}>
-					<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
-						<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
-						<span class="sicon {n.state}"><Icon name="server" /></span>
-						<span class="sname">{app.serverLabel(n.server)}</span>
-						{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
-						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
-					</button>
-					<button class="srvlist tap" onclick={() => (app.sessionsDialog = n.server.id)} aria-label={t("대화 목록 관리")} title={t("대화 목록 관리 (보관·삭제)")}><Icon name="list" /></button>
-					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
-				</div>
-
-				{#if !sfold}
-				<div class="fold" in:collapseIn out:collapseOut>
-					{#if unreachable(n.state)}
-						{#if n.loaded}<div class="nosess warnline">{t("마지막으로 확인된 목록")}</div>{/if}
-					{/if}
-					{#if !n.loaded && !unreachable(n.state)}
-						<div class="sk skeleton-bar"></div>
-					{:else if n.total === 0}
-						{#if !unreachable(n.state) || n.loaded}
-							<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
-						{/if}
-					{/if}
-
-					{#each n.dirs as d (d.path)}
-						<DirBlockView {n} {d} {searching} />
-					{/each}
-				</div>
-				{/if}
-			</section>
+			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}
 
 		{#if nothingFound}<EmptyState tone="plain">{t("검색 결과가 없습니다")}</EmptyState>{/if}
@@ -395,11 +359,6 @@
 		padding: 4px 0 12px;
 		overscroll-behavior: contain;
 	}
-	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
-	.srv {
-		position: relative;
-		padding: 0 8px 4px;
-	}
 	/* a block being dragged fades */
 	:global(:where(.side) .srv.carried),
 	:global(:where(.side) .dirblock.carried) {
@@ -420,122 +379,10 @@
 		z-index: 1;
 		pointer-events: none;
 	}
-	/* where a carried server would land: a line in the gap beside its card */
-	:global(:where(.side) .srv.before::before),
-	:global(:where(.side) .srv.after::after) {
-		left: 0;
-		right: 0;
-	}
-	:global(:where(.side) .srv.before::before) {
-		top: -5px;
-	}
-	:global(:where(.side) .srv.after::after) {
-		bottom: -5px;
-	}
-	:global(:where(.side) .srv:has(> .fold)) {
-		padding-bottom: 8px;
-	}
-	/* every server sits in a band, even when it is the only one */
-	.srv.band {
-		margin: 0 8px;
-		background: var(--band);
-		border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-		border-radius: var(--radius);
-	}
-	.srv.band + .srv.band {
-		margin-top: 8px;
-	}
-	:global(:where(.side) .srv.off .fold) {
-		opacity: 0.45;
-	}
-	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
-	:global(:where(.side) .srv > .fold) {
-		padding-left: 6px;
-	}
-	.srvhead {
-		display: flex;
-		align-items: center;
-		margin: 0 -8px 4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
-		padding: 0 8px;
-		background: var(--band-head);
-		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
-	}
-	.srvhead:last-child {
-		border-radius: 11px;
-		margin-bottom: 0;
-	}
-	.srv:has(> .srvhead:last-child) {
-		padding-bottom: 0; /* folded: the header is the whole card, no band strip under it */
-	}
-	.srvhead:hover {
-		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
-	}
-	/* pressing the name or the "+" darkens the whole strip one more step; the global row tint (a lighter square inside the strip) is switched off here */
-	.srvhead:has(.srvtoggle:active),
-	:global(:where(.side) .srvhead:has(.dirnew:active)) {
-		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
-	}
-	.srvhead .srvtoggle:active:not(:disabled) {
-		background-color: transparent;
-	}
-	:global(:where(.side) .srvhead .dirnew:hover),
-	:global(:where(.side) .srvhead .dirnew.on) {
-		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
-	}
-	.srvtoggle {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		height: 32px;
-		padding: 0 6px 0 10px; /* chevron and icon sit in the folder rows' columns */
-		text-align: left;
-		color: var(--text-dim);
-	}
-	:global(:where(.side) .srv.cur .srvtoggle) {
-		color: var(--text);
-	}
-	/* the icon takes the folder-icon column, so the name lines up with the directory names */
-	.sicon {
-		position: relative;
-		display: grid;
-		flex: none;
-		width: 14px;
-		height: 14px;
-		color: var(--text-faint);
-	}
-	.sicon :global(svg),
 	:global(:where(.side) .dicon svg) {
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.9;
-	}
-	/* the status is the server icon's colour (green online, red offline, amber needs attention, blinking while checking); only a problem adds a text pill after the name */
-	.sicon.online {
-		color: var(--ok);
-	}
-	.sicon.offline {
-		color: var(--danger);
-	}
-	.sicon.unauthorized,
-	.sicon.incompatible {
-		color: var(--warn);
-	}
-	.sicon.checking {
-		animation: blink-cursor 1s ease-in-out infinite;
-	}
-	.sname {
-		flex: 0 1 auto;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-md);
-		font-weight: 600;
-	}
-	.warnline {
-		color: var(--warn);
 	}
 	:global(:where(.side) .dir) {
 		display: flex;
@@ -685,39 +532,6 @@
 			opacity: 0;
 		}
 	}
-	/* the server header's conversation-list button: sits left of its "+", same look, shown on hover like it */
-	:global(:where(.side) .srvlist) {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 24px;
-		height: 24px;
-		margin-right: 2px;
-		border-radius: 50%;
-		color: var(--text-faint);
-		opacity: 0;
-	}
-	:global(:where(.side) .srvlist svg) {
-		width: 15px;
-		height: 15px;
-		stroke-width: 2;
-	}
-	:global(:where(.side) .srvhead:hover .srvlist),
-	:global(:where(.side) .srvlist:focus-visible) {
-		opacity: 1;
-	}
-	:global(:where(.side) .srvlist:hover) {
-		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
-		color: var(--text);
-	}
-	@media (pointer: coarse) {
-		:global(:where(.side) .srvlist) {
-			opacity: 1;
-		}
-	}
-	:global(:where(.side) .srvhead.folded .srvlist) {
-		display: none;
-	}
 	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {
 		background: color-mix(in srgb, var(--text) 14%, transparent);
@@ -744,16 +558,11 @@
 		height: 15px;
 		stroke-width: 2;
 	}
-	.nosess {
-		padding: 4px 10px 6px 44px;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
-	}
 	:global(:where(.side) .item) {
 		position: relative;
 		display: flex;
 		align-items: center;
-		border-radius: 10px;
+		border-radius: var(--radius-control);
 		margin: 1px 2px;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
@@ -776,7 +585,7 @@
 	}
 	/* the open tab: a soft wash that fades out to the right, a faint hairline and a lifted title; no bar, so it stays quiet */
 	:global(:where(.side) .list .slide-ind) {
-		border-radius: 10px !important;
+		border-radius: var(--radius-control) !important;
 		z-index: 1; /* above the server band's own background, which would otherwise hide it; the wash is translucent */
 		background: linear-gradient(90deg, color-mix(in srgb, var(--text) 13%, transparent), color-mix(in srgb, var(--text) 5%, transparent));
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
@@ -918,10 +727,6 @@
 		font-size: var(--fs-lg);
 		min-width: 0;
 	}
-	.sk {
-		height: 36px;
-		margin: 6px 4px;
-	}
 	.bottom {
 		padding: 6px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
@@ -1061,5 +866,4 @@
 		:global(.iconbtn.foldbtn) {
 			display: none;
 		}
-	}
-</style>
+	}</style>
