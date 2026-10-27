@@ -8,7 +8,7 @@ import {
   verifyServer,
 } from "./api";
 import { expandHome, isAbs, isWinAbs, sepOf, trimSep } from "./workdir-path";
-import { isTauri } from "./tauri";
+import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
@@ -512,36 +512,21 @@ class AppStore {
   localChecked = $state(false);
 
   /** Where the bundled server listens now (desktop only); null when this build has none. */
-  async localBind(): Promise<{ host: string; port: number } | null> {
-    if (!isTauri()) return null;
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      return await invoke<{ host: string; port: number }>("local_server_bind");
-    } catch {
-      return null;
-    }
+  localBind(): Promise<LocalBind | null> {
+    return readBundledBind();
   }
 
   /** Change where the bundled server listens ("" = this PC only) and restart it there. Throws the reason on failure. */
   async setLocalBind(host: string, port: number) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    const info = await invoke<{ baseUrl: string; token: string }>("set_local_server_bind", { host, port });
-    await this.applyLocalInfo(info);
+    await this.applyLocalInfo(await moveBundledServer(host, port));
   }
 
   private async startLocalServer() {
-    if (!isTauri()) return;
-    let info: { baseUrl: string; token: string };
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      info = await invoke("local_server");
-    } catch {
-      return; // mobile, or the bundled server is missing (dev build): the manual flow still works
-    }
-    await this.applyLocalInfo(info);
+    const info = await startBundledServer();
+    if (info) await this.applyLocalInfo(info);
   }
 
-  private async applyLocalInfo(info: { baseUrl: string; token: string }) {
+  private async applyLocalInfo(info: LocalServerInfo) {
     const baseUrl = normalizeUrl(info.baseUrl);
     const cur = this.servers.find((s) => s.local);
     if (cur) {
