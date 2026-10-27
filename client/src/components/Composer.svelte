@@ -37,6 +37,7 @@
 	import ReplyBadge from "./ReplyBadge.svelte";
 	import FileStrip from "./FileStrip.svelte";
 	import { isTouch } from "../lib/format";
+	import { shouldTakeFocus } from "../lib/focus-guard";
 	import { buildCombo, formatCombo, keyName } from "../lib/keys";
 	import { msg, t } from "../lib/i18n";
 
@@ -127,7 +128,7 @@
 			attached.load(d?.attachments ?? [], d?.files ?? []);
 			reply = d?.reply ?? null;
 		});
-		if (pane.focused && !isTouch()) queueMicrotask(() => ta?.focus());
+		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) ta?.focus(); });
 		return () => untrack(stash);
 	});
 
