@@ -44,9 +44,15 @@ mod local_server {
     use std::io::Read;
     use std::net::{SocketAddr, TcpListener, TcpStream};
     use std::process::{Child, Command, Stdio};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, MutexGuard};
     use std::time::{Duration, Instant};
     use tauri::Manager;
+
+    /// Locks even after a panic elsewhere poisoned the mutex: what it guards (a child handle, an address) is still valid,
+    /// and stopping the server on exit must not fail because of an earlier panic.
+    fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+        m.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     #[derive(Default)]
     pub struct State {
@@ -132,15 +138,15 @@ mod local_server {
     }
 
     pub fn stop(state: &State) {
-        if let Some(mut c) = state.child.lock().unwrap().take() {
+        if let Some(mut c) = lock(&state.child).take() {
             let _ = c.kill();
             let _ = c.wait();
         }
-        *state.info.lock().unwrap() = None;
+        *lock(&state.info) = None;
     }
 
     fn start(app: &tauri::AppHandle, state: &State) -> Result<Info, String> {
-        if let Some(i) = state.info.lock().unwrap().clone() {
+        if let Some(i) = lock(&state.info).clone() {
             return Ok(i);
         }
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -177,7 +183,7 @@ mod local_server {
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         let child = cmd.spawn().map_err(|e| e.to_string())?;
-        *state.child.lock().unwrap() = Some(child);
+        *lock(&state.child) = Some(child);
 
         let addr: SocketAddr = format!("{reach}:{port}")
             .parse()
@@ -187,7 +193,7 @@ mod local_server {
             if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
                 break;
             }
-            if let Some(c) = state.child.lock().unwrap().as_mut() {
+            if let Some(c) = lock(&state.child).as_mut() {
                 if let Ok(Some(status)) = c.try_wait() {
                     return Err(format!("server exited early: {status}"));
                 }
@@ -203,7 +209,7 @@ mod local_server {
             .and_then(|mut f| f.read_to_string(&mut token))
             .map_err(|e| e.to_string())?;
         let info = Info { base_url: format!("http://{reach}:{port}"), token: token.trim().to_string() };
-        *state.info.lock().unwrap() = Some(info.clone());
+        *lock(&state.info) = Some(info.clone());
         Ok(info)
     }
 
