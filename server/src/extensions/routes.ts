@@ -32,7 +32,7 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	app.post("/server-extensions/install", {
 		schema: {
-			body: Type.Object({ id: Type.String(), repo: Type.String(), dir: Type.Optional(Type.String()), ref: Type.String(), commit: Type.String() }),
+			body: Type.Object({ id: Type.String(), repo: Type.String(), host: Type.Optional(Type.String({ description: "Git host; default github.com. Others must be listed in PIPAYA_EXTENSION_HOSTS" })), dir: Type.Optional(Type.String()), ref: Type.String(), commit: Type.String() }),
 			response: { 200: Type.Object({ extensions: Type.Array(Info) }), ...errors(400, 401, 403) },
 		},
 		handler: async (req) => {

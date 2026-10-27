@@ -201,6 +201,26 @@ describe("SelfUpdater", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 
+	test("a fork can follow its own release tag and launchd label", async () => {
+		const asked: string[] = [];
+		const recording: Run = async (cmd, cwd, t) => {
+			if (cmd[1] === "ls-remote") {
+				asked.push(cmd[cmd.length - 1]!);
+				return { code: 0, out: `${NEW}\t${cmd[cmd.length - 1]}` }; // the remote answers for whichever tag was asked
+			}
+			return fine(cmd, cwd, t);
+		};
+		const forked = make({ env: { XPC_SERVICE_NAME: "org.fork.server", PIPAYA_LAUNCHD_LABEL: "org.fork.server", PIPAYA_RELEASE_TAG: "stable" }, run: recording });
+		expect((await forked.u.status()).managed).toBe(true);
+		expect(asked).toEqual(["refs/tags/stable"]);
+		const stock = make({ env: { XPC_SERVICE_NAME: "org.fork.server" }, run: recording });
+		expect((await stock.u.status()).reason).toBe("unmanaged"); // another label is not ours unless told so
+		const odd = make({ env: { INVOCATION_ID: "x", PIPAYA_RELEASE_TAG: "a b;rm" }, run: recording });
+		await odd.u.status();
+		expect(asked.at(-1)).toBe("refs/tags/latest"); // a malformed tag is ignored, never passed to git
+		for (const x of [forked, stock, odd]) rmSync(x.dir, { recursive: true, force: true });
+	});
+
 	test("a detached HEAD (a pinned tag or commit) is never moved", async () => {
 		const detached: Run = async (cmd) => (cmd[1] === "symbolic-ref" ? { code: 1, out: "" } : fine(cmd, "", 0));
 		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: detached });

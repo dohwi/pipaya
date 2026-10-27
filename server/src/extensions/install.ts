@@ -4,13 +4,24 @@ import { join } from "node:path";
 import { CATALOG_ID_PATTERN as ID } from "../extension-settings.ts";
 
 export interface GitSource {
+	/** `owner/name` on the git host. */
 	repo: string;
+	/** Which host serves it; omitted = `github.com`. Only hosts the operator listed (`PIPAYA_EXTENSION_HOSTS`) are accepted. */
+	host?: string;
 	dir?: string;
 	ref: string;
 	commit: string;
 }
 
 const REPO = /^[\w.-]+\/[\w.-]+$/;
+const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+export const DEFAULT_GIT_HOST = "github.com";
+
+/** Hosts extensions may be fetched from: GitHub always, plus the comma-separated `PIPAYA_EXTENSION_HOSTS` of the operator (a self-hosted GitLab, Gitea...). */
+export function allowedGitHosts(env: Record<string, string | undefined> = process.env): string[] {
+	const extra = (env.PIPAYA_EXTENSION_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter((h) => HOST.test(h));
+	return [...new Set([DEFAULT_GIT_HOST, ...extra])];
+}
 const REF = /^\w[\w./-]*$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIR = /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*$/;
@@ -38,7 +49,9 @@ export function removeInstalled(id: string, extensionsDir: string, keepSettings:
 }
 
 /** Fetch the tag and refuse it when it no longer points at the pinned commit. */
-export async function installFromGit(id: string, src: GitSource, extensionsDir: string): Promise<string> {
+export async function installFromGit(id: string, src: GitSource, extensionsDir: string, hosts: readonly string[] = allowedGitHosts()): Promise<string> {
+	const host = (src.host ?? DEFAULT_GIT_HOST).toLowerCase();
+	if (!HOST.test(host) || !hosts.includes(host)) throw new Error(`invalid source: host ${host} is not allowed (PIPAYA_EXTENSION_HOSTS)`);
 	if (!ID.test(id) || !REPO.test(src.repo) || !REF.test(src.ref) || !COMMIT.test(src.commit) || (src.dir !== undefined && !DIR.test(src.dir))) throw new Error("invalid source");
 	const tmp = mkdtempSync(join(tmpdir(), "pipaya-ext-"));
 	try {
@@ -47,7 +60,7 @@ export async function installFromGit(id: string, src: GitSource, extensionsDir: 
 			const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
 			return { code: await p.exited, out: out.trim(), err: err.trim() };
 		};
-		const cloned = await git("clone", "--quiet", "--depth", "1", "--branch", src.ref, `https://github.com/${src.repo}.git`, tmp);
+		const cloned = await git("clone", "--quiet", "--depth", "1", "--branch", src.ref, `https://${host}/${src.repo}.git`, tmp);
 		if (cloned.code !== 0) throw new Error(`clone failed: ${cloned.err}`);
 		const head = (await git("-C", tmp, "rev-parse", "HEAD")).out;
 		if (head !== src.commit) throw new Error(`${src.repo}@${src.ref} is at ${head}, the catalog lists ${src.commit}; refusing to install`);

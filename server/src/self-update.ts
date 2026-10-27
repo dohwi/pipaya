@@ -50,10 +50,11 @@ export interface SelfUpdateOptions {
 	now?: () => number;
 }
 
-const LAUNCHD_LABEL = "app.pipaya.server";
+const DEFAULT_LAUNCHD_LABEL = "app.pipaya.server";
 const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
-/** The rolling release tag the client workflow moves on every version bump; the server follows the same release. */
-const RELEASE_TAG = "latest";
+/** The rolling release tag the client workflow moves on every version bump; the server follows the same release. A fork that publishes under another tag sets `PIPAYA_RELEASE_TAG`. */
+const DEFAULT_RELEASE_TAG = "latest";
+const TAG_PATTERN = /^[A-Za-z0-9._-]+$/;
 const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
@@ -93,13 +94,18 @@ export class SelfUpdater {
 		this.cacheMs = o.cacheMs ?? 5 * 60_000;
 	}
 
+	private get releaseTag(): string {
+		const wanted = this.env.PIPAYA_RELEASE_TAG?.trim();
+		return wanted && TAG_PATTERN.test(wanted) ? wanted : DEFAULT_RELEASE_TAG;
+	}
+
 	/** Why the server could not come back after an update, or null when it can. */
 	private unmanagedReason(): UnavailableReason | null {
 		const flag = this.env.PIPAYA_SELF_UPDATE;
 		if (flag === "0") return "disabled";
 		if (!existsSync(join(this.o.root, ".git"))) return "not_git";
 		if (flag === "1") return null;
-		const supervised = Boolean(this.env.INVOCATION_ID) || this.env.XPC_SERVICE_NAME === LAUNCHD_LABEL;
+		const supervised = Boolean(this.env.INVOCATION_ID) || this.env.XPC_SERVICE_NAME === (this.env.PIPAYA_LAUNCHD_LABEL || DEFAULT_LAUNCHD_LABEL);
 		return supervised ? null : "unmanaged";
 	}
 
@@ -126,8 +132,9 @@ export class SelfUpdater {
 		if (!current) return none("not_git", { ref });
 
 		// Only asks the remote where the release tag points: nothing is downloaded until the update is applied.
-		const remote = await this.git(["ls-remote", "--tags", "origin", `refs/tags/${RELEASE_TAG}`], 30_000);
-		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/tags/${RELEASE_TAG}`))?.split("\t")[0] : undefined;
+		const tag = this.releaseTag;
+		const remote = await this.git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`], 30_000);
+		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/tags/${tag}`))?.split("\t")[0] : undefined;
 		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
 		return (this.cached = { managed: true, ref, current, latest, available: latest !== current, checkedAt });
