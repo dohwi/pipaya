@@ -278,14 +278,14 @@ button {
 button:disabled {
 	cursor: not-allowed;
 }
-/* Touch hit area: a small control keeps its look but answers a finger like a 44px one. `.hit` adds an invisible
+/* Touch hit area: a small control keeps its look but answers a finger like a 44px one. `.tap` adds an invisible
    padded box (needs a positioned element); it does nothing with a mouse, where the real size is fine. */
 @media (pointer: coarse) {
 	/* :where keeps the specificity at zero, so a control that is already absolute (a fold button) keeps its own position */
-	.hit:where(:not(.sw, .fold)) {
+	.tap:where(:not(.sw, .fold)) {
 		position: relative;
 	}
-	.hit::after {
+	.tap::after {
 		content: "";
 		position: absolute;
 		top: 50%;
@@ -317,6 +317,11 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
 	outline: none;
+}
+/* a slider has no border to light up like a text field does, so it keeps the ring */
+input[type="range"]:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
 }
 
 /* thin scrollbars on desktop */

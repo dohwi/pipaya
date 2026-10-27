@@ -195,19 +195,19 @@
 		</span>
 	{/if}
 	{#if ctxFiles !== null}
-		<button class="b files hit" class:empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} aria-haspopup="dialog" aria-label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>
+		<button class="b files tap" class:empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} aria-haspopup="dialog" aria-label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>
 			<Icon name="prompt" />
 			<span class="v">{t("{n}개", { n: ctxFiles })}</span>
 		</button>
 	{/if}
 	{#if skillCount !== null}
-		<button class="b skills hit" class:empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} aria-haspopup="dialog" aria-label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>
+		<button class="b skills tap" class:empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} aria-haspopup="dialog" aria-label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>
 			<Icon name="skill" />
 			<span class="v">{t("{n}개", { n: skillCount })}</span>
 		</button>
 	{/if}
 	{#if tplNames !== null}
-		<button class="b commands hit" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
+		<button class="b commands tap" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
 			<Icon name="list" />
 			<span class="v">{t("{n}개", { n: tplNames.length })}</span>
 		</button>

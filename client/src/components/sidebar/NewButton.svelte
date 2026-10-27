@@ -13,4 +13,4 @@
 	const sb = getSidebarCtx();
 </script>
 
-<button class="dirnew hit" class:on={sb.menuId === newKey(key)} data-menu-button onpointerenter={(e) => sb.hoverNew(e, n, workdir, key)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickNew(e, n, workdir, key)} aria-label={t("{name}에서 새로 만들기", { name })} aria-haspopup="menu" title={tip}><Icon name="plus" /></button>
+<button class="dirnew tap" class:on={sb.menuId === newKey(key)} data-menu-button onpointerenter={(e) => sb.hoverNew(e, n, workdir, key)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickNew(e, n, workdir, key)} aria-label={t("{name}에서 새로 만들기", { name })} aria-haspopup="menu" title={tip}><Icon name="plus" /></button>

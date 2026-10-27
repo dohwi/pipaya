@@ -277,7 +277,7 @@
 						{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
 						{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 					</button>
-					<button class="srvlist hit" onclick={() => (app.sessionsDialog = n.server.id)} aria-label={t("대화 목록 관리")} title={t("대화 목록 관리 (보관·삭제)")}><Icon name="list" /></button>
+					<button class="srvlist tap" onclick={() => (app.sessionsDialog = n.server.id)} aria-label={t("대화 목록 관리")} title={t("대화 목록 관리 (보관·삭제)")}><Icon name="list" /></button>
 					<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
 				</div>
 
