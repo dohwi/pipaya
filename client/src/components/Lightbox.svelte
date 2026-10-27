@@ -324,7 +324,7 @@
 	}
 	img {
 		max-width: min(96vw, 1800px);
-		max-height: 88vh;
+		max-height: calc(var(--dvh) * 0.88);
 		object-fit: contain;
 		border-radius: 6px;
 		box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);

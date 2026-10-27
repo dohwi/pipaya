@@ -91,7 +91,7 @@
 </script>
 
 {#if open}
-	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="85vh" layer={2} portal>
+	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal>
 		{#snippet headerActions()}
 			{#if kind === "html"}
 				<IconButton icon="terminal" label={t("소스 보기")} tip class={{ on: source }} onclick={() => (source = !source)} aria-pressed={source} />
@@ -162,13 +162,13 @@
 	.pic img {
 		display: block;
 		max-width: 100%;
-		max-height: 70vh;
+		max-height: calc(var(--dvh) * 0.70);
 		border-radius: var(--radius);
 	}
 	.pdf {
 		display: block;
 		width: 100%;
-		height: 70vh;
+		height: calc(var(--dvh) * 0.70);
 		border: 0;
 		border-radius: var(--radius);
 		background: #fff;
@@ -177,7 +177,7 @@
 		display: block;
 		width: 100%;
 		/* a page's height is unknown (no script can measure it), so keep the frame modest and let long pages scroll inside */
-		height: clamp(240px, 48vh, 460px);
+		height: clamp(240px, calc(var(--dvh) * 0.48), 460px);
 		border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
 		border-radius: var(--radius);
 		background: #fff;
@@ -188,12 +188,12 @@
 	.media {
 		display: block;
 		width: 100%;
-		max-height: 70vh;
+		max-height: calc(var(--dvh) * 0.70);
 		border-radius: var(--radius);
 	}
 	.tablewrap {
 		overflow: auto;
-		max-height: 70vh;
+		max-height: calc(var(--dvh) * 0.70);
 	}
 	table {
 		border-collapse: collapse;

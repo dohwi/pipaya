@@ -2,7 +2,7 @@
 	import { modalLayer } from "../lib/dialog";
 	import Badge from "./Badge.svelte";
 	import { t } from "../lib/i18n";
-	import { fadeIn, fadeOut, surfaceIn, surfaceOut } from "../lib/motion";
+	import { fadeIn, fadeOut, isPhone, surfaceIn, surfaceOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
 	import { app } from "../lib/store.svelte";
 
@@ -25,7 +25,7 @@
 		const cur = spec.items.findIndex((i) => i.current);
 		index = Math.max(0, cur);
 		queueMicrotask(() => {
-			input?.focus();
+			if (!isPhone()) input?.focus();
 			scrollToIndex();
 		});
 	});
@@ -135,11 +135,11 @@
 	.pal {
 		position: fixed;
 		z-index: var(--z-modal-1);
-		top: min(14vh, 120px);
+		top: min(calc(var(--dvh) * 0.14), 120px);
 		left: 50%;
 		translate: -50% 0;
 		width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter)));
-		max-height: min(560px, 76vh);
+		max-height: min(560px, calc(var(--dvh) * 0.76));
 		display: flex;
 		flex-direction: column;
 		background: var(--bg-elev);

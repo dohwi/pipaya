@@ -57,7 +57,7 @@
 		left: 0;
 		right: 0;
 		bottom: calc(100% + 6px);
-		max-height: min(300px, 40vh);
+		max-height: min(300px, calc(var(--dvh) * 0.40));
 		overflow-y: auto;
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
