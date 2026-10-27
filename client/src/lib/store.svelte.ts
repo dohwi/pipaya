@@ -280,7 +280,7 @@ class AppStore {
   /** Update the connected server, then say so and reload what it serves. The one path for every "update the server" button. */
   async updateServerSoftware(api: Api | null = this.api): Promise<boolean> {
     if (!api || !(await serverUpdater.apply(api))) return false;
-    this.toast(t("서버를 업데이트했습니다"), "ok");
+    this.toast(serverUpdater.updatedTo ? t("서버를 v{version}(으)로 업데이트했습니다", { version: serverUpdater.updatedTo }) : t("서버를 업데이트했습니다"), "ok");
     await this.sync();
     return true;
   }

@@ -1391,6 +1391,7 @@ export const en: Record<string, string> = {
 	"서버도 함께 업데이트": "Update the server too",
 	"서버를 먼저 업데이트한 뒤 앱을 업데이트합니다. 대화가 실행 중이면 서버는 건너뜁니다.": "The server is updated first, then the app. It is skipped while a conversation is running.",
 	"서버를 업데이트했습니다": "Server updated",
+	"서버를 v{version}(으)로 업데이트했습니다": "Server updated to v{version}",
 	"서버가 앱보다 오래된 버전입니다. 일부 기능이 동작하지 않을 수 있습니다": "The server is older than the app. Some features may not work",
 	"서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)": "The server is older than the app. Run the update on the server (install.sh update)",
 	"서버 업데이트": "Update server",

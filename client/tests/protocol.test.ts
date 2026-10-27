@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { compareVersions, compat, isClientTooOld, PROTOCOL_VERSION, serverReleaseState } from "../src/lib/protocol";
+import { compareVersions, compat, isClientTooOld, PROTOCOL_VERSION, serverReleaseState, serverVersionLabel } from "../src/lib/protocol";
 
 const serverSrc = readFileSync(new URL("../../server/src/version.ts", import.meta.url), "utf8");
 const serverConst = (name: string) => Number(new RegExp(`export const ${name} = (\\d+);`).exec(serverSrc)?.[1]);
@@ -65,5 +65,30 @@ describe("server release state", () => {
 	test("missing versions are unknown", () => {
 		expect(serverReleaseState("", "0.2.1")).toBe("unknown");
 		expect(serverReleaseState("0.2.1", "")).toBe("unknown");
+	});
+});
+
+describe("serverVersionLabel", () => {
+	const status = (over: object) => ({ currentVersion: "0.4.9", latestVersion: "0.5.0", available: true, ...over });
+
+	test("names the installed and the new version, never a commit", () => {
+		expect(serverVersionLabel(status({}), "0.4.9")).toEqual({ from: "0.4.9", to: "0.5.0" });
+	});
+
+	test("the new version is shown only while an update is on offer", () => {
+		expect(serverVersionLabel(status({ available: false, latestVersion: "0.4.9" }), "0.4.9")).toEqual({ from: "0.4.9", to: "" });
+	});
+
+	test("an update whose version could not be read still shows what is installed", () => {
+		expect(serverVersionLabel(status({ latestVersion: null }), "0.4.9")).toEqual({ from: "0.4.9", to: "" });
+	});
+
+	test("a server from before versions were reported falls back to what /health said, or nothing", () => {
+		expect(serverVersionLabel({ available: true } as never, "0.4.5")).toEqual({ from: "0.4.5", to: "" });
+		expect(serverVersionLabel(null, undefined)).toEqual({ from: "", to: "" });
+	});
+
+	test("a latest version equal to the installed one is not an arrow", () => {
+		expect(serverVersionLabel(status({ latestVersion: "0.4.9" }), "0.4.9").to).toBe("");
 	});
 });

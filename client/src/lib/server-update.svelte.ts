@@ -18,6 +18,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 class ServerUpdater {
 	status = $state<ServerUpdateStatus | null>(null);
+	/** The version the last update moved the server to, when the server named it. */
+	updatedTo = $state("");
 	phase = $state<Phase>("idle");
 	error = $state("");
 	/** Update the server whenever the app is updated (the checkbox in the update dialog). */
@@ -47,6 +49,7 @@ class ServerUpdater {
 	/** Forget everything about the previous server. */
 	reset() {
 		this.status = null;
+		this.updatedTo = "";
 		this.phase = "idle";
 		this.error = "";
 		this.checkedFor = "";
@@ -81,8 +84,9 @@ class ServerUpdater {
 		if (this.busy || !this.available) return false;
 		this.error = "";
 		this.phase = "updating";
+		this.updatedTo = "";
 		try {
-			await api.updateServer(force);
+			this.updatedTo = (await api.updateServer(force)).toVersion ?? "";
 		} catch (e) {
 			this.phase = "error";
 			this.error = failureText(e);

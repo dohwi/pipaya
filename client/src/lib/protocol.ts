@@ -62,8 +62,25 @@ export interface ServerUpdateStatus {
 	managed: boolean;
 	reason?: "disabled" | "unmanaged" | "not_git" | "detached" | "fetch_failed";
 	ref: string | null;
+	/** Commit hashes: for comparing, never for showing to people. */
 	current: string | null;
 	latest: string | null;
+	/** Versions (`0.5.0`). Servers from before these existed leave them out, and `latestVersion` is null when it could not be read. */
+	currentVersion?: string | null;
+	latestVersion?: string | null;
 	available: boolean;
 	checkedAt: number;
+}
+
+/**
+ * What to show for a server's installed and newest version: the versions when the server names them, nothing otherwise.
+ * Never a commit hash. `to` is only set while an update is on offer and its version is known.
+ */
+export function serverVersionLabel(
+	status: Pick<ServerUpdateStatus, "currentVersion" | "latestVersion" | "available"> | null | undefined,
+	reported?: string | null,
+): { from: string; to: string } {
+	const from = status?.currentVersion || reported || "";
+	const to = status?.available && status.latestVersion && status.latestVersion !== from ? status.latestVersion : "";
+	return { from, to };
 }

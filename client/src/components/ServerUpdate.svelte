@@ -4,7 +4,7 @@
 	import { updater } from "../lib/updater.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { app } from "../lib/store.svelte";
-	import { serverReleaseState } from "../lib/protocol";
+	import { serverReleaseState, serverVersionLabel } from "../lib/protocol";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import UpdateHeader from "./UpdateHeader.svelte";
 	import StatusChip from "./StatusChip.svelte";
@@ -16,7 +16,7 @@
 	/** Without a git status (not self-updating, or the fetch failed) compare the release with the app's: they ship together. */
 	const release = $derived(serverReleaseState(version, updater.current));
 	const isNew = $derived(Boolean(status?.available));
-	const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "");
+	const shown = $derived(serverVersionLabel(serverUpdater.status, version));
 
 	async function check() {
 		const conn = updater.connection?.();
@@ -30,10 +30,8 @@
 	<UpdateHeader label={t("서버 버전")} checking={serverUpdater.phase === "checking"} disabled={busy} onclick={check} />
 	<div class="item">
 		<div class="meta">
-			{#if version || status?.current}
-				<span class="ver">
-					{[version, short(status?.current)].filter(Boolean).join(" · ")}{#if isNew && status?.latest} → {short(status.latest)}{/if}
-				</span>
+			{#if shown.from}
+				<span class="ver">{shown.from}{#if isNew && shown.to} → {shown.to}{/if}</span>
 			{/if}
 		</div>
 		{#if serverUpdater.progressLabel}

@@ -146,7 +146,7 @@ export class Api {
 	/** Is there a newer server build, and can this server update itself? (admin token only) */
 	serverUpdateStatus = (signal?: AbortSignal) => this.req<ServerUpdateStatus>("GET", "/server/update", undefined, signal ?? AbortSignal.timeout(90_000));
 	/** Update the server's code and restart it. The connection drops while it restarts. */
-	updateServer = (force = false) => this.req<{ ok: boolean; from: string; to: string; restarting: boolean }>("POST", "/server/update", { force }, AbortSignal.timeout(10 * 60_000));
+	updateServer = (force = false) => this.req<{ ok: boolean; from: string; to: string; fromVersion?: string | null; toVersion?: string | null; restarting: boolean }>("POST", "/server/update", { force }, AbortSignal.timeout(10 * 60_000));
 
 	/** Newest persisted event id; used as the starting cursor so we do not replay all history. */
 	latestEventId = () =>
