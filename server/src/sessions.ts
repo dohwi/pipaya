@@ -20,6 +20,7 @@ import { PeerService, type GroupRef } from "./peers.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
+import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -813,24 +814,11 @@ export class SessionManager {
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
-		const all = this.toolPlan(names).filter((t) => !t.off).map((t) => t.name);
-		return buildTools(all, cwd, readRoots, this.toolContext(id), this.toolDefs());
+		return buildTools(enabledTools(this.toolPlan(names)), cwd, readRoots, this.toolContext(id), this.toolDefs());
 	}
 
-	/**
-	 * Every tool a session's agent would get, and why: chosen for the session (`session`), always added (`always`: peers,
-	 * extension tools marked always), or added because a feature is on (`image`). A tool the user switched
-	 * off in the settings is still listed, marked `off`, so the context view can say it is withheld.
-	 */
-	private toolPlan(names: string[]): { name: string; source: ToolSource; off: boolean }[] {
-		const off = this.disabledTools();
-		const plan = new Map<string, ToolSource>();
-		const add = (list: readonly string[], source: ToolSource) => list.forEach((n) => plan.has(n) || plan.set(n, source));
-		add(names, "session");
-		add(PEER_TOOLS, "always");
-		add(this.ext?.alwaysTools() ?? [], "always");
-		if (this.imageModel?.resolve()) add([IMAGE_TOOL], "image");
-		return [...plan].map(([name, source]) => ({ name, source, off: off.includes(name) }));
+	private toolPlan(names: string[]) {
+		return planTools({ chosen: names, always: [...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -840,23 +828,8 @@ export class SessionManager {
 		return systemPromptEntries(m ? { provider: m.provider, api: m.api } : null, { hasExtensions: !!this.ext, extensionHooks: hooks, anthropicOAuth });
 	}
 
-	/** The tools as the model receives them (name, description, parameter schema), for the context view. */
 	private toolSpecs(names: string[], cwd: string): ContextTool[] {
-		const defs = this.toolDefs();
-		return this.toolPlan(names).flatMap((t) => {
-			const def = defs[t.name];
-			if (!def) return [];
-			let parameters: unknown = null;
-			try {
-				parameters = def.create(cwd, [], this.toolContext("preview")).parameters ?? null;
-			} catch {
-				/* a tool that cannot be built here still shows its name and description */
-			}
-			const json = JSON.stringify({ name: def.name, description: def.description, parameters });
-			// Cloned through the JSON that is measured anyway: unlike structuredClone it tolerates a schema carrying a function (an extension's).
-			const plain = (JSON.parse(json) as { parameters?: unknown }).parameters ?? null;
-			return [{ name: t.name, description: def.description, parameters: plain, source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
-		});
+		return describeTools(this.toolPlan(names), this.toolDefs(), cwd, this.toolContext("preview"));
 	}
 
 	/** What tools may ask of the running session. */
