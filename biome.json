@@ -29,6 +29,7 @@
       },
       "suspicious": {
         "noExplicitAny": "off",
+        "noTemplateCurlyInString": "off",
         "noAssignInExpressions": "off",
         "noConfusingVoidType": "off",
         "noControlCharactersInRegex": "off",

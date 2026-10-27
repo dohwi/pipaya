@@ -129,3 +129,12 @@ describe("old copies of the replaced extensions", () => {
 		}
 	});
 });
+
+describe("peerMessage", () => {
+	test("placeholders typed inside the message are not expanded", async () => {
+		const { peerMessage } = await import("../src/peers.ts");
+		const text = peerMessage("ana", "price is ${sender} and ${message}");
+		expect(text).toContain("[from @ana, another session");
+		expect(text.endsWith("price is ${sender} and ${message}")).toBe(true);
+	});
+});

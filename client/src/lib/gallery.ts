@@ -1,4 +1,4 @@
-const PIC = String.raw`<span class="wd-img"[^>]*>[^<]*</span>`;
+const PIC = '<span class="wd-img"[^>]*>[^<]*</span>';
 /** Paragraphs made only of server pictures (separated by line breaks or blank lines), one or more in a row. */
 const PIC_RUN = new RegExp(String.raw`(?:<p>\s*(?:${PIC}\s*(?:<br\s*/?>\s*)?)+</p>\s*)+`, "g");
 

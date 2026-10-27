@@ -23,7 +23,9 @@ export const READ_NOTE =
 
 /** Wording of what a peer message looks like to the receiving session (`peer_send`). */
 export const PEER_MESSAGE_TEMPLATE = "[from @${sender}, another session on this server; answer with peer_send to @${sender} only if a reply is needed]\n${message}";
-export const peerMessage = (self: string | undefined, message: string): string => PEER_MESSAGE_TEMPLATE.replaceAll("${sender}", String(self)).replace("${message}", () => message);
+/** Fills the template in one pass, so a `${sender}` or `${message}` typed inside the message itself is never expanded. */
+export const peerMessage = (self: string | undefined, message: string): string =>
+	PEER_MESSAGE_TEMPLATE.replace(/\$\{(sender|message)\}/g, (_, key: string) => (key === "sender" ? String(self) : message));
 
 export interface Brief { name: string; purpose: string; cwd: string; branch: string | null; running: boolean; last: string }
 export interface GroupRef { name: string; sessionIds: string[] }

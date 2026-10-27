@@ -853,7 +853,9 @@ export class SessionManager {
 				/* a tool that cannot be built here still shows its name and description */
 			}
 			const json = JSON.stringify({ name: def.name, description: def.description, parameters });
-			return [{ name: t.name, description: def.description, parameters: JSON.parse(JSON.stringify(parameters ?? null)), source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
+			// Cloned through the JSON that is measured anyway: unlike structuredClone it tolerates a schema carrying a function (an extension's).
+			const plain = (JSON.parse(json) as { parameters?: unknown }).parameters ?? null;
+			return [{ name: t.name, description: def.description, parameters: plain, source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
 		});
 	}
 
