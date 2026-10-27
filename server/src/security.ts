@@ -23,6 +23,8 @@ function isTrustedHost(hostname: string): boolean {
 export interface CorsPolicy {
 	/** True when a cross-origin browser request from `origin` may be answered with CORS headers. */
 	allows(origin: string | undefined): boolean;
+	/** `PIPAYA_CORS_ORIGINS=*`: any web page may call the API with a token it holds, so the operator should know. */
+	readonly allowsAll: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export function createCorsPolicy(extra: string | undefined): CorsPolicy {
 	const allowAll = entries.includes("*");
 	const exact = new Set(entries.map((s) => s.replace(/\/+$/, "")));
 	return {
+		allowsAll: allowAll,
 		allows(origin) {
 			if (!origin) return false;
 			if (allowAll || exact.has(origin) || TAURI_ORIGINS.has(origin)) return true;

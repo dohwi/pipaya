@@ -258,6 +258,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(makeSerializerCompiler(opts.strictResponses ?? false));
 	const corsPolicy = createCorsPolicy(cfg.corsOrigins);
+	if (corsPolicy.allowsAll) server.log.warn("PIPAYA_CORS_ORIGINS=* lets every web page call this server from a browser that holds a token; list exact origins instead");
 	await server.register(cors, { origin: (origin, cb) => cb(null, !origin || corsPolicy.allows(origin)), methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] });
 
 	const deviceTokens = new DeviceTokens(db);

@@ -32,5 +32,8 @@ describe("createCorsPolicy", () => {
 		expect(extra.allows("https://b.example.com")).toBe(true);
 		expect(extra.allows("https://c.example.com")).toBe(false);
 		expect(createCorsPolicy("*").allows("https://anything.example")).toBe(true);
+		expect(createCorsPolicy("*").allowsAll).toBe(true);
+		expect(extra.allowsAll).toBe(false);
+		expect(policy.allowsAll).toBe(false);
 	});
 });

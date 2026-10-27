@@ -150,23 +150,24 @@ async function runProcess(
 	cmd: string[],
 	opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; onChunk?: (tail: string) => void },
 ): Promise<ProcResult> {
-	// Run in its own session (setsid keeps the pid) so a kill reaches grandchildren too, not just the shell.
-	const setsid = process.platform === "win32" ? null : Bun.which("setsid");
-	const proc = Bun.spawn(setsid ? [setsid, ...cmd] : cmd, { cwd: opts.cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: childEnv() });
+	// POSIX: run in its own session (Bun calls setsid(); the pid stays the group id) so a kill reaches grandchildren too, not just
+	// the shell. This needs no `setsid` binary, which macOS does not ship.
+	const grouped = process.platform !== "win32";
+	const proc = Bun.spawn(cmd, { cwd: opts.cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: childEnv(), detached: grouped });
 	let timedOut = false;
 	let aborted = false;
 	let killedAt = 0;
 	const kill = () => {
 		killedAt ||= Date.now();
-		if (setsid) {
-			try { process.kill(-proc.pid, "SIGKILL"); } catch {}
-		} else if (process.platform === "win32") {
+		if (grouped) {
+			try { process.kill(-proc.pid, "SIGKILL"); } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ESRCH") process.stderr.write(`could not kill process group ${proc.pid}: ${(e as Error).message}` + "\n"); }
+		} else {
 			// No process groups on Windows: taskkill /T takes the whole tree down.
-			try { Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" }); } catch {}
+			try { Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" }); } catch (e) { process.stderr.write(`taskkill failed for ${proc.pid}: ${(e as Error).message}` + "\n"); }
 		}
 		try {
 			proc.kill("SIGKILL");
-		} catch {}
+		} catch {} // already gone
 	};
 	const timer = setTimeout(() => {
 		timedOut = true;
