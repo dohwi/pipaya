@@ -62,7 +62,7 @@
 	.ext {
 		display: grid;
 		place-items: center;
-		font-size: 10px;
+		font-size: var(--fs-2xs);
 		color: var(--text-dim);
 		background: var(--bg-hover);
 	}

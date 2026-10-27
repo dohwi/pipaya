@@ -89,7 +89,7 @@
 	header { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
 	header:active { cursor: grabbing; }
 	.title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 650; }
-	.owner { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--text-faint); }
+	.owner { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; }
 	.corner { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, var(--border-strong) 50%, var(--border-strong) 60%, transparent 60%, transparent 70%, var(--border-strong) 70%, var(--border-strong) 80%, transparent 80%); }
 </style>

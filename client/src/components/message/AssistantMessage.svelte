@@ -262,7 +262,7 @@
 			flex: 1;
 			min-width: 0;
 			margin-left: 4px;
-			font-size: 10px;
+			font-size: var(--fs-2xs);
 		}
 	}
 </style>

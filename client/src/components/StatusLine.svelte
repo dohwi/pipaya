@@ -328,7 +328,7 @@
 		.statusline {
 			column-gap: 10px;
 			padding: 6px 6px 0;
-			font-size: 10px;
+			font-size: var(--fs-2xs);
 		}
 		.b {
 			gap: 3px;
