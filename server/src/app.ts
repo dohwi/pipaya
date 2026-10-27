@@ -105,7 +105,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const db = openDb(cfg.dbPath);
 	const bus = new EventBus(db);
 	const store = new SessionStore(db);
-	const push = createPushTransports(opts.pushTransports === undefined && cfg.pushEnabled === true);
+	const push = await createPushTransports(opts.pushTransports === undefined && cfg.pushEnabled === true);
 	const clientSettings = new ClientSettings(db);
 	const notifications = new NotificationService(db, bus, opts.pushTransports ?? push.transports, Date.now, opts.mobileDelayMs, () => clientSettings.escalateMs(), {
 		title: (id) => store.get(id)?.title ?? "",

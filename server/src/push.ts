@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { applicationDefault, initializeApp, type App } from "firebase-admin/app";
-import { getMessaging } from "firebase-admin/messaging";
+import type { App } from "firebase-admin/app";
 import type { PushTransport, PushTransports } from "./notifications.ts";
 
 type Payload = Parameters<PushTransport["send"]>[1];
@@ -29,7 +28,7 @@ export function fcmClearMessage(token: string, sessionId: string) {
 }
 
 /** FCM supports Android and iOS (when Firebase has an APNs key). Direct APNs can be injected separately. */
-export function createPushTransports(enabled: boolean): { transports: PushTransports; close(): Promise<void> } {
+export async function createPushTransports(enabled: boolean): Promise<{ transports: PushTransports; close(): Promise<void> }> {
   if (!enabled) return { transports: {}, close: async () => {} };
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.HOME) {
     const defaultSecret = resolve(process.env.HOME, ".secrets/pipaya/firebase-adminsdk.json");
@@ -39,6 +38,9 @@ export function createPushTransports(enabled: boolean): { transports: PushTransp
   }
   // No credentials (a fresh install without a Firebase key): stay off, so pushConfigured does not claim a push that cannot be sent.
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || !existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) return { transports: {}, close: async () => {} };
+  // Loaded only now: firebase-admin is large (about 25 MB resident), and most servers never send a push.
+  const { applicationDefault, deleteApp, initializeApp } = await import("firebase-admin/app");
+  const { getMessaging } = await import("firebase-admin/messaging");
   const app: App = initializeApp({ credential: applicationDefault() }, `pipaya-${crypto.randomUUID()}`);
   const deliver = async (message: Parameters<ReturnType<typeof getMessaging>["send"]>[0]) => {
     try {
@@ -54,5 +56,5 @@ export function createPushTransports(enabled: boolean): { transports: PushTransp
     send: (token, payload, platform) => deliver(fcmMessage(token, payload, platform)),
     clear: (token, sessionId) => deliver(fcmClearMessage(token, sessionId)),
   };
-  return { transports: { fcm }, close: async () => { const { deleteApp } = await import("firebase-admin/app"); await deleteApp(app); } };
+  return { transports: { fcm }, close: async () => { await deleteApp(app); } };
 }
