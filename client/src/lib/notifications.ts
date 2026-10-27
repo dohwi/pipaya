@@ -66,9 +66,7 @@ export function deviceIdentity(ua: string = navigator.userAgent, tauri: boolean 
     } catch { return generic; }
   })();
 }
-/** Minutes a notification shown on a PC may stay unread before the phone is pushed too. Server scope: the server acts on it. */
-export const ESCALATE_CHOICES = [0, 1, 2, 3, 5, 10, 15, 30, 60] as const;
-export const DEFAULT_ESCALATE = 3;
+export { DEFAULT_ESCALATE, ESCALATE_CHOICES } from "./notification-contract";
 /** Where a test notification stopped, from the server to the operating system. */
 export type TestStep = "no_server" | "not_enabled" | "no_permission" | "server_unknown" | "server_refused" | "not_received" | "os_error" | "shown";
 export interface TestOutcome { step: TestStep; detail?: string; server?: NotificationTestResult }

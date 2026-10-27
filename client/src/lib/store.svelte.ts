@@ -19,7 +19,7 @@ import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
-import { DEFAULT_ESCALATE, ESCALATE_CHOICES, deviceIdentity, notifications } from "./notifications";
+import { deviceIdentity, notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { PairingError, redeemPairing, type PairingLink } from "./pairing";
 import { getLang, LocalizedError, onLangChange, remotePack, remotePackVersions, setRemotePacks, t } from "./i18n";
@@ -27,6 +27,7 @@ import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
+import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
@@ -138,20 +139,18 @@ class AppStore {
   openImage(images: { src: string; mimeType: string }[], index = 0) {
     if (images.length) this.viewer = { images, index };
   }
-  /** Starred sessions and models. Kept in this browser, like the layout; not part of the server's data. */
-  /** Starred models of the open server (server scope: shared with every client of that server). */
-  favModels = $state<string[]>([]);
-  /** Starred working directories (absolute paths) of the open server, shown in the directory picker */
-  favDirs = $state<string[]>([]);
+  /** Stars and the notification delay of the open server (server scope: shared with every client of that server). */
+  private readonly serverPrefs = new ServerPrefs((key) => this.settingsSync?.changed(key), () => this.models);
+  get favModels() { return this.serverPrefs.favModels; }
+  get favDirs() { return this.serverPrefs.favDirs; }
   /** Minutes an unread PC notification waits before the phone is pushed too (server scope: the server acts on it) */
-  escalateMinutes = $state<number>(DEFAULT_ESCALATE);
-
-  setEscalateMinutes(minutes: number) {
-    if (!(ESCALATE_CHOICES as readonly number[]).includes(minutes) || minutes === this.escalateMinutes) return;
-    this.escalateMinutes = minutes;
-    if (this.serverId) write(`${K.escalate}.${this.serverId}`, minutes);
-    this.settingsSync?.changed("notificationPolicy");
-  }
+  get escalateMinutes() { return this.serverPrefs.escalateMinutes; }
+  setEscalateMinutes(minutes: number) { this.serverPrefs.setEscalateMinutes(minutes); }
+  get favModelList() { return this.serverPrefs.favModelList; }
+  isFavModel(provider: string, id: string) { return this.serverPrefs.isFavModel(provider, id); }
+  toggleFavModel(provider: string, id: string) { this.serverPrefs.toggleFavModel(provider, id); }
+  isFavDir(path: string) { return this.serverPrefs.isFavDir(path); }
+  toggleFavDir(path: string) { this.serverPrefs.toggleFavDir(path); }
   /** Picker overlay opened by a slash command. */
   palette = $state.raw<PaletteSpec | null>(null);
   /** Bumped by /model to open the model picker. */
@@ -683,9 +682,7 @@ class AppStore {
     this.syncLinks();
     try {
       localStorage.removeItem(`${K.active}.${id}`);
-      localStorage.removeItem(`${K.favModels}.${id}`);
-      localStorage.removeItem(`${K.favDirs}.${id}`);
-      localStorage.removeItem(`${K.escalate}.${id}`);
+      for (const key of serverPrefKeys(id)) localStorage.removeItem(key);
       localStorage.removeItem(`pipaya.settings-sync.${id}`);
     } catch {
       /* ignore */
@@ -742,9 +739,7 @@ class AppStore {
     write(K.currentServer, id);
     this.settingsSync?.dispose();
     this.settingsSync = null;
-    this.favModels = this.loadFavModels(id);
-    this.favDirs = this.loadFavDirs(id);
-    this.escalateMinutes = this.loadEscalate(id);
+    this.serverPrefs.load(id);
     if (changing) void extensions.switchServer();
     notifications.connect(null);
     serverUpdater.reset();
@@ -767,9 +762,7 @@ class AppStore {
     this.serverId = null;
     this.settingsSync?.dispose();
     this.settingsSync = null;
-    this.favModels = [];
-    this.favDirs = [];
-    this.escalateMinutes = DEFAULT_ESCALATE;
+    this.serverPrefs.clear();
     notifications.connect(null);
     this.activeId = null;
     this.chats = {};
@@ -1221,49 +1214,6 @@ class AppStore {
     write(`${K.workdir}.${this.serverId}`, this.workdir);
   }
 
-  /** `key`: a server id, or `<serverId>\u0000<workdir>` */
-  /** Starred models that still exist, in the order they were starred (the picker's order, and the quick-switch slots). */
-  get favModelList(): ModelInfo[] {
-    return this.favModels
-      .map((k) => this.models.find((m) => `${m.provider}\u0000${m.id}` === k))
-      .filter((m): m is ModelInfo => !!m);
-  }
-  isFavModel(provider: string, id: string) {
-    return this.favModels.includes(`${provider}\u0000${id}`);
-  }
-  toggleFavModel(provider: string, id: string) {
-    const k = `${provider}\u0000${id}`;
-    this.favModels = this.favModels.includes(k)
-      ? this.favModels.filter((x) => x !== k)
-      : [...this.favModels, k];
-    if (this.serverId) write(`${K.favModels}.${this.serverId}`, this.favModels);
-    this.settingsSync?.changed("favModels");
-  }
-
-  isFavDir(path: string) {
-    return this.favDirs.includes(path);
-  }
-  toggleFavDir(path: string) {
-    this.favDirs = this.favDirs.includes(path) ? this.favDirs.filter((x) => x !== path) : [...this.favDirs, path];
-    if (this.serverId) write(`${K.favDirs}.${this.serverId}`, this.favDirs);
-    this.settingsSync?.changed("favDirs");
-  }
-  private loadFavDirs(serverId: string): string[] {
-    const list = read<unknown>(`${K.favDirs}.${serverId}`, []);
-    return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
-  }
-
-  private loadEscalate(serverId: string): number {
-    const v = read<unknown>(`${K.escalate}.${serverId}`, null);
-    return typeof v === "number" && (ESCALATE_CHOICES as readonly number[]).includes(v) ? v : DEFAULT_ESCALATE;
-  }
-
-  /** This server's starred models. */
-  private loadFavModels(serverId: string): string[] {
-    const list = read<unknown>(`${K.favModels}.${serverId}`, []);
-    return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
-  }
-
   /* ---------- settings that belong to the open server ---------- */
 
   private settingsSync: ServerSettingsSync | null = null;
@@ -1279,30 +1229,13 @@ class AppStore {
   /** (Re)start syncing the open server's shared settings. Never throws: an unreachable server just keeps the local copy. */
   private startSettingsSync(api: Api, serverId: string) {
     this.settingsSync?.dispose();
-    const favKey = `${K.favModels}.${serverId}`;
-    const favDirKey = `${K.favDirs}.${serverId}`;
-    const escKey = `${K.escalate}.${serverId}`;
     const sync = new ServerSettingsSync({
       api,
       origin: notifications.id,
       storage: localStorage,
       storageKey: `pipaya.settings-sync.${serverId}`,
       adapters: {
-        favModels: {
-          // undefined = this device has never had a list for this server, so there is nothing to offer yet
-          read: () => (localStorage.getItem(favKey) !== null || this.favModels.length ? this.favModels : undefined),
-          apply: (v) => {
-            this.favModels = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
-            write(favKey, this.favModels);
-          },
-        },
-        favDirs: {
-          read: () => (localStorage.getItem(favDirKey) !== null || this.favDirs.length ? this.favDirs : undefined),
-          apply: (v) => {
-            this.favDirs = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
-            write(favDirKey, this.favDirs);
-          },
-        },
+        ...this.serverPrefs.adapters(serverId),
         extensions: {
           read: () => extensions.packages(),
           apply: (v) => extensions.applyPackages(v),
@@ -1310,17 +1243,6 @@ class AppStore {
         extensionStates: {
           read: () => extensions.states(),
           apply: (v) => extensions.applyStates(v),
-        },
-        notificationPolicy: {
-          // only offer what the user actually chose on this device; otherwise the server's value (or its default) stands
-          read: () => (localStorage.getItem(escKey) !== null ? { escalateMinutes: this.escalateMinutes } : undefined),
-          apply: (v) => {
-            const m = (v as { escalateMinutes?: unknown } | null)?.escalateMinutes;
-            if (typeof m === "number" && (ESCALATE_CHOICES as readonly number[]).includes(m)) {
-              this.escalateMinutes = m;
-              write(escKey, m);
-            }
-          },
         },
       },
     });

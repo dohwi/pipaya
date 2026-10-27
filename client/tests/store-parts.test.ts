@@ -6,11 +6,13 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import type * as FeedbackModule from "../src/lib/feedback.svelte";
 import type * as SidebarModule from "../src/lib/sidebar.svelte";
+import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
 let Feedback: typeof FeedbackModule.Feedback;
 let NOTICE_MAX: number;
 let reorder: typeof SidebarModule.reorder;
+let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -35,6 +37,7 @@ beforeAll(async () => {
 	// sidebar.svelte.ts reads localStorage at construction only; reorder is a pure function
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };
 	({ reorder } = await loadRunes("sidebar"));
+	({ ServerPrefs } = await loadRunes("server-prefs"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -69,5 +72,98 @@ describe("feedback", () => {
 		expect(f.notices.length).toBe(NOTICE_MAX);
 		expect(f.notices[0]!.sid).toBe(`s${NOTICE_MAX + 1}`);
 		for (const n of [...f.notices]) f.dismissNotice(n.id);
+	});
+});
+
+describe("server preferences", () => {
+	const store = new Map<string, string>();
+	const model = (provider: string, id: string) => ({ provider, id }) as never;
+	const make = (models: never[] = []) => {
+		const changed: string[] = [];
+		(globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+		return { changed, prefs: new ServerPrefs((k) => changed.push(k), () => models) };
+	};
+
+	test("stars are kept per server and reported as changes", () => {
+		store.clear();
+		const a = make();
+		a.prefs.load("s1");
+		a.prefs.toggleFavModel("openai", "gpt");
+		a.prefs.toggleFavDir("/work");
+		expect(a.changed).toEqual(["favModels", "favDirs"]);
+		expect(a.prefs.isFavModel("openai", "gpt")).toBe(true);
+		const b = make();
+		b.prefs.load("s1");
+		expect(b.prefs.favModels).toEqual(["openai\u0000gpt"]);
+		expect(b.prefs.favDirs).toEqual(["/work"]);
+		b.prefs.load("s2");
+		expect(b.prefs.favModels).toEqual([]); // another server has its own stars
+		b.prefs.toggleFavModel("openai", "gpt");
+		expect(b.prefs.isFavModel("openai", "gpt")).toBe(true);
+		b.prefs.toggleFavModel("openai", "gpt");
+		expect(b.prefs.isFavModel("openai", "gpt")).toBe(false);
+	});
+
+	test("only models that still exist are listed, in the order they were starred", () => {
+		store.clear();
+		const { prefs } = make([model("a", "1"), model("b", "2")]);
+		prefs.load("s");
+		prefs.toggleFavModel("b", "2");
+		prefs.toggleFavModel("gone", "x");
+		prefs.toggleFavModel("a", "1");
+		expect(prefs.favModelList.map((m) => `${m.provider}/${m.id}`)).toEqual(["b/2", "a/1"]);
+	});
+
+	test("the notification delay accepts only the offered choices", () => {
+		store.clear();
+		const { prefs, changed } = make();
+		prefs.load("s");
+		expect(prefs.escalateMinutes).toBe(3);
+		prefs.setEscalateMinutes(7); // not a choice
+		prefs.setEscalateMinutes(3); // unchanged
+		expect(changed).toEqual([]);
+		prefs.setEscalateMinutes(10);
+		expect(prefs.escalateMinutes).toBe(10);
+		expect(changed).toEqual(["notificationPolicy"]);
+		expect(store.get("pipaya.notify.escalate.s")).toBe("10");
+	});
+
+	test("damaged stored values fall back instead of breaking the load", () => {
+		store.clear();
+		store.set("pipaya.fav.models.s", JSON.stringify([1, "ok", null]));
+		store.set("pipaya.fav.dirs.s", "{not json");
+		store.set("pipaya.notify.escalate.s", JSON.stringify(99));
+		const { prefs } = make();
+		prefs.load("s");
+		expect(prefs.favModels).toEqual(["ok"]);
+		expect(prefs.favDirs).toEqual([]);
+		expect(prefs.escalateMinutes).toBe(3);
+	});
+
+	test("the sync adapters offer only what this device chose, and apply what the server sends", () => {
+		store.clear();
+		const { prefs } = make();
+		prefs.load("s");
+		const ad = prefs.adapters("s");
+		expect(ad.favModels!.read()).toBeUndefined();
+		expect(ad.notificationPolicy!.read()).toBeUndefined();
+		ad.favModels!.apply(["x", 5]);
+		ad.notificationPolicy!.apply({ escalateMinutes: 15 });
+		ad.notificationPolicy!.apply({ escalateMinutes: 8 }); // not a choice: ignored
+		expect(prefs.favModels).toEqual(["x"]);
+		expect(prefs.escalateMinutes).toBe(15);
+		expect(ad.favModels!.read()).toEqual(["x"]);
+		expect(ad.notificationPolicy!.read()).toEqual({ escalateMinutes: 15 });
+	});
+
+	test("clear forgets the open server", () => {
+		store.clear();
+		const { prefs } = make();
+		prefs.load("s");
+		prefs.toggleFavDir("/a");
+		prefs.clear();
+		expect(prefs.favDirs).toEqual([]);
+		prefs.toggleFavDir("/b"); // no server in view: kept in memory only
+		expect(store.get("pipaya.fav.dirs.s")).toBe(JSON.stringify(["/a"]));
 	});
 });

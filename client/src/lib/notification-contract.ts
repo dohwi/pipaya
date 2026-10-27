@@ -1,4 +1,7 @@
 import { LocalizedError, t } from "./i18n";
+/** Minutes a notification shown on a PC may stay unread before the phone is pushed too. Server scope: the server acts on it. */
+export const ESCALATE_CHOICES = [0, 1, 2, 3, 5, 10, 15, 30, 60] as const;
+export const DEFAULT_ESCALATE = 3;
 /** Data-only notification contract shared by the host and extension SDK. */
 export const NOTIFICATION_KINDS = ["task_completed", "task_failed", "user_request", "info"] as const;
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
