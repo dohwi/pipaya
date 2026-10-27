@@ -6,6 +6,7 @@
 </script>
 
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import { errorText } from "../lib/api";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
@@ -622,7 +623,7 @@
 	{#if extensions.actions.length}
 		<div class="extension-actions" aria-label={t("확장 액션")}>
 			{#each extensions.actions as action (`${action.owner}:${action.id}`)}
-				<button title={action.owner} onclick={() => action.run().catch(e => app.toast(t("확장 실패: {error}", { error: errorText(e) }), "error", pane.id))}>{action.label}</button>
+				<Button size="sm" title={action.owner} onclick={() => action.run().catch(e => app.toast(t("확장 실패: {error}", { error: errorText(e) }), "error", pane.id))}>{action.label}</Button>
 			{/each}
 		</div>
 	{/if}
@@ -634,7 +635,6 @@
 	.extension-widgets { max-height: min(40dvh, 320px); overflow-y: auto; overscroll-behavior: contain; }
 	.extension-widgets:not(:empty) { margin-bottom: 8px; }
 	.extension-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-	.extension-actions button { padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-xs); }
 	.wrap {
 		padding: 0 16px calc(12px + var(--sab));
 		max-width: calc(var(--content-w) + 32px);
