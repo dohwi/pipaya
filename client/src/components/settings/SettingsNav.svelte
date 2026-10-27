@@ -47,6 +47,7 @@
 	};
 	$effect(() => {
 		void app.configTick;
+		void app.serverExtensionsTick;
 		const id = server?.id;
 		if (!id) { serverSide = null; return; }
 		let live = true;

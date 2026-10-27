@@ -890,7 +890,6 @@ class AppStore {
       if (sid) this.chats[sid]?.addEntry(d);
       extensions.emitServer({ kind: "entry", extension: d.extension, type: d.type, sessionId: sid, data: d.data, id: d.id });
     } else if (e.type === "extensions_updated") {
-      this.serverExtensionsTick++;
       void this.refreshServerExtensions();
     }
     switch (e.type) {
@@ -1843,6 +1842,7 @@ class AppStore {
       if (api !== this.api) return;
       this.serverCommands = list.commands;
       if (this.link) this.link.tools = tools.tools;
+      this.serverExtensionsTick++;
     } catch { /* unreachable: nothing to show */ }
   }
 
