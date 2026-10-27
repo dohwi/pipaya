@@ -632,7 +632,7 @@ describe("components", () => {
 		const page = (await Promise.all(parts.map((f) => Bun.file(`src/components/${f}.svelte`).text()))).join("\n");
 		expect(page).toContain("settingsProblem(id)");
 		expect(page).toContain("!!problem");
-		for (const needle of ["이 확장을 삭제합니다. 설정값은 어떻게 할까요?", "설정 유지하고 삭제", "설정까지 삭제", "읽을 수 없음", "원본 내보내기", "이 버전에서 지원하지 않는 형식입니다", "알 수 없는 확장", "keepSettings"]) expect(page).toContain(needle);
+		for (const needle of ["설정값은 남겨 두고, 같은 확장을 다시 설치하면 이어서 씁니다.", "설정값도 함께 삭제", "읽을 수 없음", "원본 내보내기", "이 버전에서 지원하지 않는 형식입니다", "알 수 없는 확장", "keepSettings"]) expect(page).toContain(needle);
 		const confirm = await Bun.file("src/components/ConfirmDialog.svelte").text();
 		expect(confirm).toContain('role="alertdialog"');
 		expect(page).toContain("확장을 삭제했습니다. 설정값은 유지했습니다.");
