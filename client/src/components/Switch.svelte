@@ -21,7 +21,7 @@
 <button
 	type="button"
 	role="switch"
-	class="sw"
+	class="sw hit"
 	aria-checked={checked}
 	aria-label={label}
 	aria-describedby={describedby}

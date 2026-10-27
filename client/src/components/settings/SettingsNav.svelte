@@ -111,7 +111,7 @@
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-left" /></button>
+					<button type="button" class="fold hit" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-left" /></button>
 				{/if}
 			</div>
 			{#if open}
