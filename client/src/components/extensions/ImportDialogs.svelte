@@ -61,70 +61,79 @@
 	}
 </script>
 
-{#if preview && !result}
-	{@const p = preview}
-	<Modal onclose={oncancel} labelledby="import-preview-title" width="l" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
-		<div class="rmodal" use:focusOk>
-			<div class="rhead">
-				<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
-				<h2 id="import-preview-title">{replacement ? t("확장 교체") : t("확장 가져오기")}</h2>
-			</div>
-			<div class="rbody">
-				<div class="rpkg">
-					<strong>{p.manifest.name}</strong>
-					<span class="meta">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
-					{#if p.manifest.description}<span class="rdesc">{p.manifest.description}</span>{/if}
-					<div class="tags" aria-label={t("포함 기능")}>
-						{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-					</div>
+{#if preview || result}
+	<!-- one dialog for the whole import: the result takes the preview's place inside it, so deciding does not close one window and open another -->
+	<Modal
+		onclose={result ? onclose : oncancel}
+		role={result?.tone === "danger" ? "alertdialog" : "dialog"}
+		labelledby={result ? "import-result-title" : "import-preview-title"}
+		describedby={result ? "import-result-detail" : undefined}
+		width={result ? "s" : "l"}
+		maxHeight="var(--dvh)"
+		layer={3}
+		sheet={false}
+		portal
+	>
+		{#if result}
+			{@const r = result}
+			<div class="rmodal {r.tone}" use:focusOk>
+				<div class="rhead">
+					<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
+					<h2 id="import-result-title">{r.title}</h2>
 				</div>
-				{#if !replacement}
-					<p class="hint">{target === "server" ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</p>
-				{/if}
-				<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
-				<PermissionList pkg={p} />
-				{#if replacement}
-					<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
-				{/if}
+				<div class="rbody">
+					{#if r.pkg}
+						<div class="rpkg">
+							<strong>{r.pkg.manifest.name}</strong>
+							<span class="meta">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
+							<div class="tags">
+								{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
+								<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("비활성")}</span>
+							</div>
+						</div>
+					{/if}
+					<p id="import-result-detail" class="rdetail">{r.detail}</p>
+				</div>
+				<div class="rfoot">
+					{#if r.pkg}
+						<Button variant="primary" size="sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</Button>
+						<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
+					{:else}
+						<Button variant="primary" size="sm" data-ok onclick={onclose}>{t("확인")}</Button>
+					{/if}
+				</div>
 			</div>
-			<div class="rfoot">
-				<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
-				<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</Button>
-			</div>
-		</div>
-	</Modal>
-{/if}
-
-{#if result}
-	{@const r = result}
-	<Modal onclose={onclose} role={r.tone === "danger" ? "alertdialog" : "dialog"} labelledby="import-result-title" describedby="import-result-detail" width="s" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
-		<div class="rmodal {r.tone}" use:focusOk>
-			<div class="rhead">
-				<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
-				<h2 id="import-result-title">{r.title}</h2>
-			</div>
-			<div class="rbody">
-				{#if r.pkg}
+		{:else if preview}
+			{@const p = preview}
+			<div class="rmodal" use:focusOk>
+				<div class="rhead">
+					<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
+					<h2 id="import-preview-title">{replacement ? t("확장 교체") : t("확장 가져오기")}</h2>
+				</div>
+				<div class="rbody">
 					<div class="rpkg">
-						<strong>{r.pkg.manifest.name}</strong>
-						<span class="meta">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
-						<div class="tags">
-							{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-							<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("비활성")}</span>
+						<strong>{p.manifest.name}</strong>
+						<span class="meta">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
+						{#if p.manifest.description}<span class="rdesc">{p.manifest.description}</span>{/if}
+						<div class="tags" aria-label={t("포함 기능")}>
+							{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
 						</div>
 					</div>
-				{/if}
-				<p id="import-result-detail" class="rdetail">{r.detail}</p>
+					{#if !replacement}
+						<p class="hint">{target === "server" ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</p>
+					{/if}
+					<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
+					<PermissionList pkg={p} />
+					{#if replacement}
+						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
+					{/if}
+				</div>
+				<div class="rfoot">
+					<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
+					<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</Button>
+				</div>
 			</div>
-			<div class="rfoot">
-				{#if r.pkg}
-					<Button variant="primary" size="sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</Button>
-					<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
-				{:else}
-					<Button variant="primary" size="sm" data-ok onclick={onclose}>{t("확인")}</Button>
-				{/if}
-			</div>
-		</div>
+		{/if}
 	</Modal>
 {/if}
 
