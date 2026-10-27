@@ -480,6 +480,8 @@ export const en: Record<string, string> = {
 	"서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)": "Opens the server's shell in this folder (PowerShell on Windows)",
 	"브라우저": "Browser",
 	"브라우저 프로필": "Browser profiles",
+	"프로필 · 로그인 · 에이전트 허용": "Profiles · logins · agent access",
+	"로그인 내보내기·가져오기": "Export / import logins",
 	"프로필마다 로그인과 쿠키가 따로 저장됩니다. 사람 전용으로 두면 에이전트는 그 프로필의 탭을 보거나 조작할 수 없습니다.": "Each profile keeps its own logins and cookies. A profile reserved for people cannot be seen or used by agents.",
 	"{name} (기본)": "{name} (default)",
 	"열린 탭 {n}개": "{n} tabs open",

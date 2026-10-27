@@ -11,8 +11,14 @@
 	import { download } from "../lib/download";
 	import { fileStamp } from "../lib/format";
 
+	/** The server these profiles belong to: the one chosen in the settings window, which need not be the open one. */
+	let { serverId }: { serverId: string } = $props();
+	const link = $derived(app.links[serverId] ?? null);
+	const api = $derived(link?.api ?? null);
+	const isOpen = $derived(serverId === app.serverId);
+
 	/**
-	 * Browser profiles of the open server: each keeps its own logins and cookies. A profile can be reserved for people
+	 * Browser profiles of one server: each keeps its own logins and cookies. A profile can be reserved for people
 	 * (agents then neither see nor use its tabs), cleared of what it stored, renamed and deleted. The throw-away `temp`
 	 * profile is not listed here: agents and the "new browser" menu make it on demand.
 	 */
@@ -22,13 +28,14 @@
 	let name = $state("");
 	let busy = $state(false);
 
-	const unsupported = $derived(app.browserSupport !== null && (!app.browserSupport.enabled || !app.browserSupport.available));
+	const support = $derived(link?.browserSupport ?? null);
+	const unsupported = $derived(support !== null && (!support.enabled || !support.available));
 
 	async function load() {
-		const api = app.api;
-		if (!api) return;
+		const a = api;
+		if (!a) return;
 		try {
-			profiles = (await api.browserProfiles()).profiles.filter((p) => !p.temporary);
+			profiles = (await a.browserProfiles()).profiles.filter((p) => !p.temporary);
 			error = "";
 		} catch (e) {
 			error = errorText(e);
@@ -38,7 +45,7 @@
 	onMount(load);
 	// A tab opening or closing changes which profiles are in use.
 	$effect(() => {
-		app.browsers.length;
+		link?.data.browsers.length;
 		void load();
 	});
 
@@ -58,7 +65,7 @@
 	const exportLogins = (p: BrowserProfile) =>
 		run(async () => {
 			if (!window.confirm(t("이 파일에는 {name} 프로필의 로그인(쿠키)이 들어 있습니다. 가진 사람은 같은 계정으로 로그인할 수 있으니 안전하게 보관하세요. 저장할까요?", { name: p.id }))) return;
-			const state = await app.api!.exportBrowserProfile(p.id);
+			const state = await api!.exportBrowserProfile(p.id);
 			await download(state, `pipaya-browser-${p.id}-${fileStamp()}.json`);
 		});
 	let importTarget = $state<string | null>(null);
@@ -76,13 +83,13 @@
 		if (file.size > MAX_PROFILE_FILE_BYTES) return void (error = t("파일이 너무 큽니다 (최대 4MB)"));
 		const state = parseProfileState(await file.text());
 		if (!state) return void (error = t("프로필 파일이 아닙니다 (cookies가 있는 JSON이어야 합니다)"));
-		await run(() => app.api!.importBrowserProfile(id, state));
+		await run(() => api!.importBrowserProfile(id, state));
 	}
 	const create = () =>
 		run(async () => {
 			const id = name.trim();
 			if (!id) return;
-			await app.api!.createBrowserProfile({ id });
+			await api!.createBrowserProfile({ id });
 			name = "";
 		});
 	/** The profile being renamed in place, and the name typed so far */
@@ -96,7 +103,7 @@
 		const from = renaming;
 		const next = draft.trim();
 		renaming = null;
-		if (from && next && next !== from) void run(() => app.api!.updateBrowserProfile(from, { id: next }));
+		if (from && next && next !== from) void run(() => api!.updateBrowserProfile(from, { id: next }));
 	};
 	const focusSelect = (node: HTMLInputElement) => {
 		node.focus();
@@ -104,34 +111,31 @@
 	};
 </script>
 
-<div class="head">
-	<div class="section-label">{t("브라우저 프로필")}</div>
-</div>
 <p class="hint">{t("프로필마다 로그인과 쿠키가 따로 저장됩니다. 사람 전용으로 두면 에이전트는 그 프로필의 탭을 보거나 조작할 수 없습니다.")}</p>
 
 {#if unsupported}
-	<p class="hint warn">{app.browserSupport?.enabled === false ? t("이 서버는 브라우저가 꺼져 있습니다 (PIPAYA_BROWSER=0)") : t("이 서버에 Chrome 또는 Chromium이 없습니다")}</p>
+	<p class="hint warn">{support?.enabled === false ? t("이 서버는 브라우저가 꺼져 있습니다 (PIPAYA_BROWSER=0)") : t("이 서버에 Chrome 또는 Chromium이 없습니다")}</p>
 {:else}
 	{#each profiles as p (p.id)}
 		<div class="profile">
 			<SettingRow label={p.id === DEFAULT_BROWSER_PROFILE ? t("{name} (기본)", { name: p.id }) : p.id} hint={p.tabs ? t("열린 탭 {n}개", { n: p.tabs }) : ""}>
 				<div class="controls">
 					<span class="who">{t("에이전트 허용")}</span>
-					<Switch checked={p.agent} label={t("{name}: 에이전트 허용", { name: p.id })} onchange={(on) => run(() => app.api!.updateBrowserProfile(p.id, { agent: on }))} />
+					<Switch checked={p.agent} label={t("{name}: 에이전트 허용", { name: p.id })} onchange={(on) => run(() => api!.updateBrowserProfile(p.id, { agent: on }))} />
 				</div>
 			</SettingRow>
 			<div class="actions">
-				<Button size="sm" disabled={busy} onclick={() => app.openBrowser(undefined, undefined, undefined, p.id)}>{t("이 프로필로 열기")}</Button>
+				{#if isOpen}<Button size="sm" disabled={busy} onclick={() => app.openBrowser(undefined, undefined, undefined, p.id)}>{t("이 프로필로 열기")}</Button>{/if}
 				<Button size="sm" disabled={busy} onclick={() => exportLogins(p)}>{t("내보내기")}</Button>
 				<Button size="sm" disabled={busy} onclick={() => pickFor(p.id)}>{t("가져오기")}</Button>
-				<ConfirmButton size="sm" confirmLabel={t("지울까요?")} disabled={busy} onconfirm={() => run(() => app.api!.clearBrowserProfile(p.id))}>{t("로그인 지우기")}</ConfirmButton>
+				<ConfirmButton size="sm" confirmLabel={t("지울까요?")} disabled={busy} onconfirm={() => run(() => api!.clearBrowserProfile(p.id))}>{t("로그인 지우기")}</ConfirmButton>
 				{#if p.id !== DEFAULT_BROWSER_PROFILE}
 					{#if renaming === p.id}
 						<input class="rename" bind:value={draft} use:focusSelect maxlength="39" aria-label={t("새 이름")} spellcheck="false" autocapitalize="off" onblur={commitRename} onkeydown={(e) => (e.key === "Enter" ? commitRename() : e.key === "Escape" && ((renaming = null), e.stopPropagation()))} />
 					{:else}
 						<Button size="sm" disabled={busy || p.tabs > 0} onclick={() => startRename(p)}>{t("이름 바꾸기")}</Button>
 					{/if}
-					<ConfirmButton size="sm" danger confirmLabel={t("삭제할까요?")} disabled={busy || p.tabs > 0} onconfirm={() => run(() => app.api!.deleteBrowserProfile(p.id))}>{t("삭제")}</ConfirmButton>
+					<ConfirmButton size="sm" danger confirmLabel={t("삭제할까요?")} disabled={busy || p.tabs > 0} onconfirm={() => run(() => api!.deleteBrowserProfile(p.id))}>{t("삭제")}</ConfirmButton>
 				{/if}
 			</div>
 		</div>
@@ -146,12 +150,6 @@
 {#if !loaded && !unsupported}<p class="hint">{t("불러오는 중…")}</p>{/if}
 
 <style>
-	.head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-	}
 	.hint {
 		margin: 0;
 		font-size: var(--fs-xs);

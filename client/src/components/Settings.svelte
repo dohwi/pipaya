@@ -11,6 +11,7 @@
 	import Extensions from "./Extensions.svelte";
 	import Backup from "./Backup.svelte";
 	import ServerForm from "./ServerForm.svelte";
+	import BrowserSettings from "./BrowserSettings.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import Pin from "./Pin.svelte";
 	import { slidingIndicator } from "../lib/sliding-indicator";
@@ -137,6 +138,8 @@
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}
 				<GeneralPane />
+			{:else if tab === "browser" && server}
+				{#key server.id}<BrowserSettings serverId={server.id} />{/key}
 			{:else if current.server && server}
 				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
 			{/if}
