@@ -1,3 +1,4 @@
+import { mapRows } from "./json-column.ts";
 import { groupHandle } from "./member-names.ts";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
@@ -149,7 +150,7 @@ export class GroupManager {
 	}
 
 	list(): GroupRecord[] {
-		return (this.db.query("SELECT * FROM groups ORDER BY created_at, id").all() as GroupRow[]).map(toRecord);
+		return mapRows(this.db.query("SELECT * FROM groups ORDER BY created_at, id").all() as GroupRow[], toRecord); // a group with a damaged layout is left out, the others stay
 	}
 
 	get(id: string): GroupRecord {

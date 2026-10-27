@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { mapRows } from "./json-column.ts";
 import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { createProvider, getSupportedThinkingLevels, type Model, type ProviderStreams } from "@earendil-works/pi-ai";
@@ -215,7 +216,7 @@ export class Configuration {
 
 	list(): CustomProvider[] {
 		const rows = this.db.query("SELECT id, data FROM custom_providers ORDER BY id").all() as { id: string; data: string }[];
-		return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
+		return mapRows(rows, (r) => ({ ...JSON.parse(r.data), id: r.id }) as CustomProvider);
 	}
 
 	/** Remove uploaded icon images that no model uses (recent ones stay). */

@@ -3,6 +3,15 @@ import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { groupHandle, nextMemberName } from "./member-names.ts";
 
+/** SQLite has no `ADD COLUMN IF NOT EXISTS`, and a database stepped back and reopened runs a migration again: these make a step safe to repeat. */
+const columns = (db: Database, table: string): string[] => (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+const addColumn = (db: Database, table: string, name: string, definition: string): void => {
+	if (!columns(db, table).includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+};
+const dropColumn = (db: Database, table: string, name: string): void => {
+	if (columns(db, table).includes(name)) db.exec(`ALTER TABLE ${table} DROP COLUMN ${name}`);
+};
+
 export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	// v1
 	`
@@ -77,18 +86,16 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	`CREATE TABLE IF NOT EXISTS notification_escalations (id TEXT PRIMARY KEY, due_at INTEGER NOT NULL, payload TEXT NOT NULL);`,
 	// v10: the language each device reads, so a push that never passes through the app is already in that language.
 	// A function rather than SQL: SQLite has no "ADD COLUMN IF NOT EXISTS", and a database stepped back and reopened runs this again.
-	(db) => { if (!(db.query("PRAGMA table_info(notification_devices)").all() as { name: string }[]).some((c) => c.name === "lang")) db.exec("ALTER TABLE notification_devices ADD COLUMN lang TEXT"); },
+	(db) => addColumn(db, "notification_devices", "lang", "TEXT"),
 	// v11: a name each device gives itself and when it was last heard from, so the device list can tell one phone from another.
 	(db) => {
-		const have = (db.query("PRAGMA table_info(notification_devices)").all() as { name: string }[]).map((c) => c.name);
-		if (!have.includes("name")) db.exec("ALTER TABLE notification_devices ADD COLUMN name TEXT");
-		if (!have.includes("last_seen")) db.exec("ALTER TABLE notification_devices ADD COLUMN last_seen INTEGER");
+		addColumn(db, "notification_devices", "name", "TEXT");
+		addColumn(db, "notification_devices", "last_seen", "INTEGER");
 	},
 	// v12: what the device is running ("macOS 15.1 · arm64") and which client ("Desktop app 0.1.42"), to tell two similar devices apart.
 	(db) => {
-		const have = (db.query("PRAGMA table_info(notification_devices)").all() as { name: string }[]).map((c) => c.name);
-		if (!have.includes("os")) db.exec("ALTER TABLE notification_devices ADD COLUMN os TEXT");
-		if (!have.includes("app")) db.exec("ALTER TABLE notification_devices ADD COLUMN app TEXT");
+		addColumn(db, "notification_devices", "os", "TEXT");
+		addColumn(db, "notification_devices", "app", "TEXT");
 	},
 	// v13: one access token per paired device. Only the SHA-256 of a token is kept.
 	`CREATE TABLE IF NOT EXISTS device_tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, last_used_at INTEGER);`,
@@ -125,11 +132,11 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	`UPDATE sessions SET approval = 'ask' WHERE approval = 'readonly';
 	 DELETE FROM settings WHERE key = 'default_approval' AND data = '"readonly"';`,
 	// v18: a name per session in a group (JSON { sessionId: name }). Unused since v22; dropped in v23.
-	(db) => { if (!(db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups ADD COLUMN names TEXT NOT NULL DEFAULT '{}'"); },
+	(db) => addColumn(db, "groups", "names", "TEXT NOT NULL DEFAULT '{}'"),
 	// v19: a name for each session (since moved out of core, see v22): the column is added; older databases already had names given here.
-	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''"); },
+	(db) => addColumn(db, "sessions", "name", "TEXT NOT NULL DEFAULT ''"),
 	// v20: what a session's agent works on (written by the system model). Any client or extension may read it.
-	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "purpose")) db.exec("ALTER TABLE sessions ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"); },
+	(db) => addColumn(db, "sessions", "purpose", "TEXT NOT NULL DEFAULT ''"),
 	// v21: a group's tag (its name with dashes, any case) must differ from every other group's and from the names extensions
 	// gave sessions at the time. Older duplicates keep the first (by creation) and get " 2", " 3", ... appended.
 	(db) => {
@@ -156,12 +163,9 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		value      TEXT NOT NULL,
 		PRIMARY KEY (session_id, extension, key)
 	);`,
-	(db) => {
-		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) return;
-		db.exec("ALTER TABLE sessions DROP COLUMN name");
-	},
+	(db) => dropColumn(db, "sessions", "name"),
 	// v23: nothing reads groups.names any more. Drop the column.
-	(db) => { if ((db.query("PRAGMA table_info(groups)").all() as { name: string }[]).some((c) => c.name === "names")) db.exec("ALTER TABLE groups DROP COLUMN names"); },
+	(db) => dropColumn(db, "groups", "names"),
 	// v24: what finished while nobody was looking is kept by the server, so every device shows (and clears) the same marks.
 	`CREATE TABLE IF NOT EXISTS session_unread (
 		session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
@@ -169,10 +173,10 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		at         INTEGER NOT NULL
 	);`,
 	// v25: a session can be archived: still open (not closed), but tucked away in the apps' archive instead of the active list.
-	(db) => { if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "archived")) db.exec("ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"); },
+	(db) => addColumn(db, "sessions", "archived", "INTEGER NOT NULL DEFAULT 0"),
 	// v26: session @names are part of the core again (peer_send / peer_read address sessions by them). Active sessions are numbered in creation order.
 	(db) => {
-		if (!(db.query("PRAGMA table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "name")) db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+		addColumn(db, "sessions", "name", "TEXT NOT NULL DEFAULT ''");
 		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => groupHandle(g.name).toLowerCase()));
 		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
 		for (const s of db.query("SELECT id FROM sessions WHERE name = '' AND closed = 0 ORDER BY created_at, id").all() as { id: string }[]) {

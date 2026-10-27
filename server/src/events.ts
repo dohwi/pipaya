@@ -1,3 +1,4 @@
+import { mapRows } from "./json-column.ts";
 import type { Database, Statement } from "bun:sqlite";
 
 /**
@@ -81,7 +82,7 @@ export class EventBus {
 				? this.selectSession.all({ sessionId: opts.sessionId, after: opts.after, limit: opts.limit })
 				: this.selectAll.all({ after: opts.after, limit: opts.limit })
 		) as EventRow[];
-		return rows.map(toEvent);
+		return mapRows(rows, toEvent); // an event whose data is damaged is skipped, not fatal for the replay
 	}
 
 	/** Drop persisted events older than `maxAgeMs`; messages are stored separately and unaffected. */

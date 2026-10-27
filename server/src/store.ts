@@ -1,3 +1,4 @@
+import { parseJson } from "./json-column.ts";
 import type { Database } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
@@ -56,7 +57,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	model: r.model,
 	thinkingLevel: r.thinking_level as ThinkingLevel,
 	systemPrompt: r.system_prompt,
-	tools: JSON.parse(r.tools),
+	tools: parseJson<string[]>(r.tools, []), // a damaged list reads as no tools rather than hiding the session
 	parentId: r.parent_id,
 	closed: r.closed === 1,
 	archived: r.archived === 1,
@@ -80,6 +81,9 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	closed: "closed",
 	archived: "archived",
 };
+
+interface MessageRow { seq: number; role: string; data: string; created_at: number }
+const toStored = (r: MessageRow): StoredMessage => ({ seq: r.seq, role: r.role, createdAt: r.created_at, message: JSON.parse(r.data) });
 
 export interface StoredMessage {
 	seq: number;
@@ -226,31 +230,27 @@ export class SessionStore {
 	}
 
 	messages(sessionId: string, opts: { after?: number; limit?: number } = {}): StoredMessage[] {
-		const rows = this.db
+		return this.db
 			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit")
-			.all({ sid: sessionId, after: opts.after ?? -1, limit: opts.limit ?? -1 }) as {
-			seq: number;
-			role: string;
-			data: string;
-			created_at: number;
-		}[];
-		return rows.map((r) => ({ seq: r.seq, role: r.role, createdAt: r.created_at, message: JSON.parse(r.data) }));
+			.all({ sid: sessionId, after: opts.after ?? -1, limit: opts.limit ?? -1 })
+			.map((r) => toStored(r as MessageRow));
 	}
 
 	/** Only the toolResult messages of one tool, filtered in SQL so other messages are never parsed. */
 	toolResults(sessionId: string, toolName: string): StoredMessage[] {
-		const rows = this.db
+		return this.db
 			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND role = 'toolResult' AND json_extract(data, '$.toolName') = $tool ORDER BY seq")
-			.all({ sid: sessionId, tool: toolName }) as { seq: number; role: string; data: string; created_at: number }[];
-		return rows.map((r) => ({ seq: r.seq, role: r.role, createdAt: r.created_at, message: JSON.parse(r.data) }));
+			.all({ sid: sessionId, tool: toolName })
+			.map((r) => toStored(r as MessageRow));
 	}
 
 	/** The newest `n` messages, oldest first (reads only those rows, not the whole transcript). */
 	lastMessages(sessionId: string, n: number): StoredMessage[] {
-		const rows = this.db
+		return this.db
 			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid ORDER BY seq DESC LIMIT $n")
-			.all({ sid: sessionId, n }) as { seq: number; role: string; data: string; created_at: number }[];
-		return rows.reverse().map((r) => ({ seq: r.seq, role: r.role, createdAt: r.created_at, message: JSON.parse(r.data) }));
+			.all({ sid: sessionId, n })
+			.reverse()
+			.map((r) => toStored(r as MessageRow));
 	}
 
 	// ── compaction ──────────────────────────────────────────────────────────
@@ -346,6 +346,14 @@ export class SqliteCredentialStore implements CredentialStore {
 
 	constructor(private db: Database) {}
 
+	/** Serialises work per provider; the entry leaves the map once nothing newer is queued behind it. */
+	private enqueue<T>(providerId: string, work: () => Promise<T>): Promise<T> {
+		const next = (this.chains.get(providerId) ?? Promise.resolve()).catch(() => {}).then(work);
+		this.chains.set(providerId, next);
+		void next.then(() => {}, () => {}).then(() => { if (this.chains.get(providerId) === next) this.chains.delete(providerId); });
+		return next;
+	}
+
 	async read(providerId: string): Promise<Credential | undefined> {
 		const row = this.db.query("SELECT data FROM credentials WHERE provider_id = $id").get({ id: providerId }) as {
 			data: string;
@@ -362,21 +370,16 @@ export class SqliteCredentialStore implements CredentialStore {
 		providerId: string,
 		fn: (current: Credential | undefined) => Promise<Credential | undefined>,
 	): Promise<Credential | undefined> {
-		const prev = this.chains.get(providerId) ?? Promise.resolve();
-		const next = prev
-			.catch(() => {})
-			.then(async () => {
-				const updated = await fn(await this.read(providerId));
-				if (updated) {
-					this.db
-						.query("INSERT INTO credentials (provider_id, data) VALUES ($id, $data) ON CONFLICT(provider_id) DO UPDATE SET data = $data")
-						.run({ id: providerId, data: JSON.stringify(updated) });
-					return updated;
-				}
-				return this.read(providerId);
-			});
-		this.chains.set(providerId, next);
-		return next;
+		return this.enqueue(providerId, async () => {
+			const updated = await fn(await this.read(providerId));
+			if (updated) {
+				this.db
+					.query("INSERT INTO credentials (provider_id, data) VALUES ($id, $data) ON CONFLICT(provider_id) DO UPDATE SET data = $data")
+					.run({ id: providerId, data: JSON.stringify(updated) });
+				return updated;
+			}
+			return this.read(providerId);
+		});
 	}
 
 	async delete(providerId: string): Promise<void> {
@@ -385,12 +388,11 @@ export class SqliteCredentialStore implements CredentialStore {
 
 	/** Optional synchronous cleanup participates in the same SQLite transaction as key deletion. */
 	async deleteWithCleanup(providerId: string, cleanup?: () => void): Promise<void> {
-		const prev = this.chains.get(providerId) ?? Promise.resolve();
-		const next = prev.catch(() => {}).then(() => this.db.transaction(() => {
-			cleanup?.();
-			this.db.query("DELETE FROM credentials WHERE provider_id = $id").run({ id: providerId });
-		})());
-		this.chains.set(providerId, next);
-		await next;
+		await this.enqueue(providerId, async () => {
+			this.db.transaction(() => {
+				cleanup?.();
+				this.db.query("DELETE FROM credentials WHERE provider_id = $id").run({ id: providerId });
+			})();
+		});
 	}
 }
