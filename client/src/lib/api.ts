@@ -352,7 +352,12 @@ export class Api {
 	/* ---------- browser tabs (pages in a Chromium on the server) ---------- */
 	browserSupport = () => this.req<import("./browser").BrowserSupport>("GET", "/browsers/info");
 	browsers = () => this.req<{ tabs: import("./browser").BrowserTabInfo[] }>("GET", "/browsers").then((r) => r.tabs);
-	createBrowser = (input: { url?: string; cwd?: string }) => this.req<import("./browser").BrowserTabInfo>("POST", "/browsers", input);
+	createBrowser = (input: { url?: string; cwd?: string; profile?: string }) => this.req<import("./browser").BrowserTabInfo>("POST", "/browsers", input);
+	browserProfiles = () => this.req<{ profiles: import("./browser").BrowserProfile[]; default: string }>("GET", "/browsers/profiles");
+	createBrowserProfile = (input: { id: string; agent?: boolean }) => this.req<import("./browser").BrowserProfile>("POST", "/browsers/profiles", input);
+	updateBrowserProfile = (id: string, changes: { agent?: boolean; id?: string }) => this.req<import("./browser").BrowserProfile>("PATCH", `/browsers/profiles/${encodeURIComponent(id)}`, changes);
+	clearBrowserProfile = (id: string) => this.req<{ ok: boolean }>("POST", `/browsers/profiles/${encodeURIComponent(id)}/clear`, {});
+	deleteBrowserProfile = (id: string) => this.req<{ ok: boolean }>("DELETE", `/browsers/profiles/${encodeURIComponent(id)}`);
 	closeBrowser = (id: string) => this.req<{ ok: boolean }>("DELETE", `/browsers/${encodeURIComponent(id)}`);
 
 

@@ -55,6 +55,7 @@
 			chat: () => app.openIn(sec.server.id, { workdir }),
 			terminal: () => app.openIn(sec.server.id, { workdir, terminal: true }),
 			browser: () => app.openIn(sec.server.id, { workdir, browser: true }),
+			tempBrowser: () => app.openIn(sec.server.id, { workdir, browser: true, profile: "temp" }),
 		}));
 		return closeContextMenu;
 	}

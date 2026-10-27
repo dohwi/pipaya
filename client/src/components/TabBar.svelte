@@ -94,6 +94,7 @@
 			chat: () => void (app.serverId && app.openIn(app.serverId, { workdir })),
 			terminal: () => void (app.serverId && app.openIn(app.serverId, { workdir, terminal: true })),
 			browser: () => void app.openBrowser(undefined, undefined, workdir),
+			tempBrowser: () => void app.openBrowser(undefined, undefined, workdir, "temp"),
 		});
 
 	/* ---- context menu (right click / long press): the sidebar row's entries, renaming in place ---- */

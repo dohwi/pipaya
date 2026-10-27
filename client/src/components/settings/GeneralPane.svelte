@@ -10,6 +10,7 @@
 	import Switch from "../Switch.svelte";
 	import NotificationSettings from "../NotificationSettings.svelte";
 	import TerminalSettings from "../TerminalSettings.svelte";
+	import BrowserSettings from "../BrowserSettings.svelte";
 	import UpdateSettings from "../UpdateSettings.svelte";
 
 	/** The app-wide basics on this device: language, theme, zoom, notification sound, then the notification, terminal and update blocks. */
@@ -54,6 +55,7 @@
 </section>
 <section><NotificationSettings /></section>
 <section><TerminalSettings /></section>
+<section><BrowserSettings /></section>
 <section><UpdateSettings /></section>
 
 

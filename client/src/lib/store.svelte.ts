@@ -788,11 +788,12 @@ class AppStore {
   }
 
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
-  openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean; browser?: boolean }) {
+  openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean; browser?: boolean; profile?: string }) {
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal asked for on another server opens once that server is connected (see sync).
       this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
       this.pendingBrowser = to.browser ? (to.workdir ?? ".") : null;
+      this.pendingBrowserProfile = to.browser ? to.profile : undefined;
       this.pendingChat = !to.session && !to.terminal && !to.browser;
       if (to.workdir !== undefined)
         write(`${K.workdir}.${serverId}`, to.workdir);
@@ -808,7 +809,7 @@ class AppStore {
     }
     if (to.session) void this.openSession(to.session);
     else if (to.terminal) void this.openTerminal(to.workdir);
-    else if (to.browser) void this.openBrowser(undefined, undefined, to.workdir);
+    else if (to.browser) void this.openBrowser(undefined, undefined, to.workdir, to.profile);
     else {
       if (to.workdir !== undefined) this.setWorkdir(to.workdir);
       void this.startChat();
@@ -820,6 +821,7 @@ class AppStore {
 
   /** Folder of a browser tab to open as soon as the server being switched to is connected */
   private pendingBrowser: string | null = null;
+  private pendingBrowserProfile: string | undefined;
 
   /** A new chat to start as soon as the server being switched to is connected */
   private pendingChat = false;
@@ -871,7 +873,9 @@ class AppStore {
     if (this.pendingBrowser !== null) {
       const dir = this.pendingBrowser;
       this.pendingBrowser = null;
-      void this.openBrowser(undefined, undefined, dir);
+      const profile = this.pendingBrowserProfile;
+      this.pendingBrowserProfile = undefined;
+      void this.openBrowser(undefined, undefined, dir, profile);
     }
     if (this.pendingChat) {
       this.pendingChat = false;
@@ -2282,7 +2286,7 @@ class AppStore {
   /* ---------- browser tabs ---------- */
 
   /** Open a page in a browser tab on the server and show it. `beside`: put it next to that pane (grouping them). */
-  async openBrowser(url?: string, beside?: { target: string; zone: Zone; focus?: boolean }, workdir?: string): Promise<BrowserTabInfo | null> {
+  async openBrowser(url?: string, beside?: { target: string; zone: Zone; focus?: boolean }, workdir?: string, profile?: string): Promise<BrowserTabInfo | null> {
     const api = this.api;
     if (!api) return null;
     const support = this.browserSupport;
@@ -2295,7 +2299,7 @@ class AppStore {
     const from = workdir && workdir !== "." ? workdir : beside ? (this.session(beside.target)?.cwd ?? this.terminal(beside.target)?.cwd ?? this.browser(beside.target)?.cwd) : this.session(this.activeId)?.cwd;
     let made: BrowserTabInfo;
     try {
-      made = await api.createBrowser({ ...(url ? { url } : {}), ...(from ? { cwd: from } : {}) });
+      made = await api.createBrowser({ ...(url ? { url } : {}), ...(from ? { cwd: from } : {}), ...(profile ? { profile } : {}) });
     } catch (e) {
       if (isUnsupportedRoute(e)) this.toast(t("이 서버는 브라우저를 지원하지 않습니다. 서버를 업데이트하세요"), "error");
       else this.fail(e, t("브라우저를 열지 못했습니다"));

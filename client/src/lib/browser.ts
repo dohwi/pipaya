@@ -25,6 +25,27 @@ export interface BrowserSupport {
 	max: number;
 }
 
+/** A browser profile: the logins and cookies a browser keeps. `temp` is the throw-away one. */
+export interface BrowserProfile {
+	id: string;
+	/** Deleted with its last tab */
+	temporary: boolean;
+	/** Agents may open and act on tabs of this profile (off = people only) */
+	agent: boolean;
+	tabs: number;
+	running: boolean;
+	createdAt: number;
+}
+
+export const DEFAULT_BROWSER_PROFILE = "default";
+export const TEMP_BROWSER_PROFILE = "temp";
+
+/** The note an agent left while it waits for you to do something in a page (login, captcha …) */
+export interface BrowserHandoff {
+	by: string;
+	note: string;
+}
+
 /** Who is acting on the page right now */
 export type BrowserControl = "user" | "agent";
 

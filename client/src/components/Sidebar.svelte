@@ -170,6 +170,7 @@
 			chat: () => app.openIn(n.server.id, { workdir: path }),
 			terminal: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
 			browser: () => app.openIn(n.server.id, { workdir: path, browser: true }),
+			tempBrowser: () => app.openIn(n.server.id, { workdir: path, browser: true, profile: "temp" }),
 		});
 	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
 	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));

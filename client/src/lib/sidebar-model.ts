@@ -109,6 +109,8 @@ export interface NewActions {
 	chat(): void;
 	terminal(): void;
 	browser?(): void;
+	/** A browser with no history that is gone once it is closed (the `temp` profile) */
+	tempBrowser?(): void;
 }
 
 /** The "+" menu: a new conversation, and a new terminal named for the server's OS when it says what it runs. */
@@ -122,6 +124,7 @@ export function newMenuEntries(os: string | undefined, act: NewActions): MenuEnt
 			run: act.terminal,
 		},
 		...(act.browser ? [{ icon: "globe", label: t("새 브라우저"), title: t("서버의 브라우저에서 페이지를 엽니다. 에이전트와 함께 볼 수 있습니다"), run: act.browser } satisfies MenuEntry] : []),
+		...(act.tempBrowser ? [{ icon: "globe", label: t("임시 브라우저"), title: t("기록과 로그인이 남지 않는 브라우저입니다. 닫으면 모두 사라집니다"), run: act.tempBrowser } satisfies MenuEntry] : []),
 	];
 }
 
