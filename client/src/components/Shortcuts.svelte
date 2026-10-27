@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from "./Button.svelte";
 	import SearchField from "./SearchField.svelte";
 	import { msg, t } from "../lib/i18n";
 	import { onDestroy } from "svelte";
@@ -140,7 +141,7 @@
 	{/each}
 
 	<div class="foot">
-		<button class="all" disabled={!changed} onclick={() => app.prefs.resetBindings()}>{t("모두 기본값으로")}</button>
+		<Button size="sm" disabled={!changed} onclick={() => app.prefs.resetBindings()}>{t("모두 기본값으로")}</Button>
 	</div>
 </section>
 
@@ -285,19 +286,6 @@
 		display: flex;
 		justify-content: flex-end;
 		margin-top: 6px;
-	}
-	.all {
-		height: var(--control-h-sm);
-		padding: 0 12px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-control);
-		font-size: var(--fs-sm);
-	}
-	.all:hover:not(:disabled) {
-		background: var(--bg-hover);
-	}
-	.all:disabled {
-		opacity: 0.4;
 	}
 	/* phones: the description gets the full width and the key controls sit on their own line under it */
 	@media (max-width: 640px) {
