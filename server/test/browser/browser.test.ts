@@ -338,6 +338,13 @@ live("browser tabs (real Chromium)", () => {
 			expect(await probe(to, b.id)).toBe("who=work|dark");
 			await to.close(b.id);
 
+			// a session cookie (no expiry) survives the import: it is kept for a week instead of dying with the browser
+			const session = { name: "sid", value: "abc", domain: "example.test", path: "/", httpOnly: true, secure: true, sameSite: "Lax", expires: -1 };
+			await to.importProfile("kept", { cookies: [session], origins: [] });
+			const back = await to.exportProfile("kept");
+			expect(back.cookies.map((c) => c.name)).toEqual(["sid"]);
+			expect(Number(back.cookies[0]!.expires)).toBeGreaterThan(Date.now() / 1000 + 6 * 24 * 3600);
+
 			// the throw-away profile has nothing to move; a file that is too big is refused
 			await expect(from.exportProfile("temp")).rejects.toThrow(/throw-away/);
 			await expect(to.importProfile("work", { cookies: [{ name: "x", value: "y".repeat(5 * 1024 * 1024) }], origins: [] })).rejects.toThrow(/too big/);

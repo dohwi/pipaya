@@ -392,7 +392,7 @@ export class BrowserManager {
 		return [...out].slice(0, 60);
 	}
 
-	/** Put logins into a profile (it is created when missing). Existing cookies of the same name and site are replaced. */
+	/** Put logins into a profile (it is created when missing). Existing cookies of the same name and site are replaced; session cookies are kept for a week. */
 	async importProfile(rawId: string, state: ProfileState): Promise<BrowserProfileInfo> {
 		const id = profileId(rawId);
 		if (id === TEMP_PROFILE) throw badRequest("the throw-away profile cannot be imported into");
@@ -402,7 +402,11 @@ export class BrowserManager {
 		const running = this.contexts.get(id);
 		const ctx = running ? await running : await this.launch(id);
 		try {
-			await ctx.addCookies(state.cookies as never);
+			// A session cookie (no expiry) would be dropped when this browser closes, so a login that rests on one would be
+			// gone at once. Give those a week: long enough to be used, short enough not to outlive a forgotten import.
+			const week = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+			const cookies = (state.cookies as { expires?: number }[]).map((c) => (typeof c.expires === "number" && c.expires > 0 ? c : { ...c, expires: week }));
+			await ctx.addCookies(cookies as never);
 			// local storage is set per site, by opening that site's origin in a scratch page of this browser
 			for (const o of state.origins as { origin?: string; localStorage?: { name: string; value: string }[] }[]) {
 				if (!o.origin || !/^https?:\/\//.test(o.origin) || !o.localStorage?.length) continue;
