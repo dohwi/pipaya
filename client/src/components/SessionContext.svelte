@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
@@ -92,7 +93,7 @@
 				<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 			{/if}
 			{#if !data && loading}
-				<div class="empty" role="status">{t("불러오는 중…")}</div>
+				<EmptyState loading />
 			{:else if data}
 				{#each data.warnings as warning}
 					<div class="gap"><Notice tone="warn"><span class="mono">{warning.path}</span><br />{warning.message}</Notice></div>
@@ -148,7 +149,7 @@
 							{/if}
 						</div>
 					{:else}
-						<div class="empty">{t("이 세션에 주어지는 도구가 없습니다.")}</div>
+						<EmptyState>{t("이 세션에 주어지는 도구가 없습니다.")}</EmptyState>
 					{/each}
 				</section>
 				<section class="group">
@@ -224,7 +225,6 @@
 	.source-name { font-size: var(--fs-xs); }
 	.meta { display: block; margin-top: 5px; color: var(--text-faint); font-size: var(--fs-2xs); }
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 14px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
-	.empty { padding: 18px 14px; font-size: var(--fs-sm); color: var(--text-faint); background: var(--bg); border-radius: var(--radius); }
 	@media (max-width: 640px) {
 		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
 		header { padding: 14px 12px 14px 16px; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import SearchField from "./SearchField.svelte";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
@@ -301,7 +302,7 @@
 			</section>
 		{/each}
 
-		{#if nothingFound}<div class="empty">{t("검색 결과가 없습니다")}</div>{/if}
+		{#if nothingFound}<EmptyState tone="plain">{t("검색 결과가 없습니다")}</EmptyState>{/if}
 	</nav>
 
 	<div class="bottom" data-part="sidebar.bottom">
@@ -916,12 +917,6 @@
 		outline: 0;
 		font-size: var(--fs-lg);
 		min-width: 0;
-	}
-	.empty {
-		padding: 28px 10px;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
 	}
 	.sk {
 		height: 36px;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import Button from "./Button.svelte";
 	import { onMount } from "svelte";
 	import ConfirmButton from "./ConfirmButton.svelte";
@@ -160,9 +161,9 @@
 		</div>
 
 		{#if !sessions && !error}
-			<p class="hint">{t("불러오는 중…")}</p>
+			<EmptyState loading tone="plain" as="p" />
 		{:else if sessions && !sessions.length}
-			<p class="empty">{t("이 서버에는 대화가 없습니다")}</p>
+			<EmptyState tone="dashed" as="p">{t("이 서버에는 대화가 없습니다")}</EmptyState>
 		{:else if sessions}
 			{#each groups as g (g.cwd)}
 				<div class="group">
@@ -223,25 +224,12 @@
 		flex: 1;
 		min-width: 0;
 	}
-	.hint {
-		margin: 4px 0 0;
-		line-height: 1.5;
-	}
 	.n {
 		margin-left: 4px;
 		font-size: var(--fs-xs);
 		font-weight: 500;
 		color: var(--text-faint);
 		font-variant-numeric: tabular-nums;
-	}
-	.empty {
-		margin: 4px 0;
-		padding: 18px;
-		border: 1px dashed var(--border);
-		border-radius: var(--radius);
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
-		text-align: center;
 	}
 	.list {
 		display: flex;

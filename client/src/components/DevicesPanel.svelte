@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import Button from "./Button.svelte";
 	import Notice from "./Notice.svelte";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
@@ -124,7 +125,7 @@
 	<p class="lead">{t("이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")}</p>
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if devices === null && !error}
-		<p class="hint">{t("불러오는 중…")}</p>
+		<EmptyState loading tone="plain" as="p" />
 	{:else if devices && devices.length === 0}
 		<p class="hint">{t("연결된 기기가 없습니다")}</p>
 	{:else if devices}

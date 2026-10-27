@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import SearchField from "./SearchField.svelte";
 	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
@@ -56,7 +57,7 @@
 			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 		{/if}
 		{#if !data && loading}
-			<div class="empty" role="status">{t("불러오는 중…")}</div>
+			<EmptyState loading />
 		{:else if data}
 			{#each shown as f (f.prefix)}
 				<h3 class="fam">{f.label ?? f.prefix} <Badge size="sm">{f.extension}</Badge></h3>
@@ -69,7 +70,7 @@
 					{/each}
 				</ul>
 			{:else}
-				<div class="empty">{total ? t("일치하는 명령이 없습니다.") : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다.")}</div>
+				<EmptyState>{total ? t("일치하는 명령이 없습니다.") : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다.")}</EmptyState>
 			{/each}
 		{/if}
 	</div>
@@ -86,7 +87,6 @@
 	.name { font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
 	.args { font-weight: 400; color: var(--text-faint); }
 	.desc { margin: 6px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-	.empty { padding: 18px 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-faint); background: var(--bg); border-radius: var(--radius); overflow-wrap: anywhere; }
 	.gap { margin-bottom: 10px; }
 	@media (max-width: 640px) {
 		.tools { padding: 0 16px; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import { modalLayer } from "../lib/dialog";
 	import Badge from "./Badge.svelte";
 	import { t } from "../lib/i18n";
@@ -118,7 +119,7 @@
 					{/if}
 				</div>
 			{:else}
-				<div class="empty">{query ? t("일치하는 항목이 없습니다") : t(spec.empty)}</div>
+				<EmptyState tone="plain">{query ? t("일치하는 항목이 없습니다") : t(spec.empty)}</EmptyState>
 			{/each}
 		</div>
 		<div class="foot mono"><span>↑↓ {t("이동")}</span><span>Enter {t("선택")}</span><span>Esc {t("닫기")}</span></div>
@@ -279,12 +280,6 @@
 		flex: none;
 		display: grid;
 		color: var(--text-dim);
-	}
-	.empty {
-		padding: 22px 14px;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
 	}
 	.foot {
 		display: flex;

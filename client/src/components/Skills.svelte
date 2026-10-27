@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from "./EmptyState.svelte";
 	import SearchField from "./SearchField.svelte";
 	import IconButton from "./IconButton.svelte";
 	import { abortable } from "../lib/abortable";
@@ -125,13 +126,13 @@
 	</div>
 </li>
 		{:else}
-<li class="empty">
+<EmptyState as="li">
 	{#if data?.skills.length}
 		{t("일치하는 스킬이 없습니다.")}
 	{:else}
 		{t("스킬이 없습니다.")} <span class="mono">~/.agents/skills/&lt;{t("스킬 이름")}&gt;/SKILL.md</span> {t("또는 프로젝트의")} <span class="mono">.agents/skills/</span>{t("에 추가하세요.")}
 	{/if}
-</li>
+</EmptyState>
 		{/each}
 	</ul>
 {/snippet}
@@ -152,7 +153,7 @@
 			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 		{/if}
 		{#if !data && loading}
-			<div class="empty" role="status">{t("불러오는 중…")}</div>
+			<EmptyState loading />
 		{:else if data}
 			<div class="note" role="status">
 				{#if target.sessionId}
@@ -199,7 +200,6 @@
 	.link.small { font-size: var(--fs-2xs); }
 	.link:hover:not(:disabled) { color: var(--text); }
 	.switch { flex: none; display: inline-flex; margin-top: 2px; }
-	.empty { padding: 18px 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-faint); background: var(--bg); border-radius: var(--radius); overflow-wrap: anywhere; }
 	@media (max-width: 640px) {
 		.tools { padding: 0 16px; }
 		.body { padding: 14px 16px 16px; }
