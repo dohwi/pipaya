@@ -142,10 +142,22 @@ describe("modals mounted by their parent animate", () => {
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["ServerForm", "Settings", "DirPicker", "QueueModal", "WorkBox", "ConnectionForm", "extensions/ImportDialogs", "DiscardConfirm", "LinkCard", "UpdateBanner", "Skills", "CommandFamilies", "CloseConfirm", "PickerModal"]) {
+		for (const f of ["ServerForm", "Settings", "DirPicker", "QueueModal", "WorkBox", "ConnectionForm", "extensions/ImportDialogs", "Skills", "CommandFamilies", "PickerModal", "ConfirmDialog", "StatusCard"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
+		}
+	});
+	test("confirmations and status cards are the shared ConfirmDialog / StatusCard, never their own Modal", () => {
+		for (const f of ["DiscardConfirm", "CloseConfirm", "extensions/RemoveExtensionConfirm", "extensions/PairInstallConfirm"]) {
+			const s = markup(read(`components/${f}.svelte`));
+			expect(s, f).toContain("<ConfirmDialog");
+			expect(s, f).not.toContain("<Modal");
+		}
+		for (const f of ["LinkCard", "UpdateBanner"]) {
+			const s = markup(read(`components/${f}.svelte`));
+			expect(s, f).toContain("<StatusCard");
+			expect(s, f).not.toContain("<Modal");
 		}
 	});
 	test("dialog titles go through the shared header (one close button, one pull handle)", () => {

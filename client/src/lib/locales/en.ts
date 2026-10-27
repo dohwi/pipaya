@@ -1325,6 +1325,7 @@ export const en: Record<string, string> = {
 	"새 대화는 추론 강도 {level}로 시작합니다.": "New chats start at reasoning strength {level}.",
 	"추론 강도를 지정하지 않아 새 대화는 이 기기의 마지막 설정으로 시작합니다.": "No strength set, so new chats start with this device's last setting.",
 	"작업을 종료하고 닫을까요?": "Stop the work and close?",
+	"종료하고 닫기": "Stop and close",
 	"진행 중인 작업 {n}개가 종료되면서 창이 닫힙니다.": "{n#task is|tasks are} running. Stopping {n#it|them} will close the window.",
 	/* ---- server-extension bridge, shortcuts, dialogs ---- */
 	"서버 확장 연결: 서버에서 실행되는 확장의 메서드를 호출하고, 그 확장이 저장한 대화별 기록과 보낸 이벤트를 읽습니다.": "Server extensions: calls methods of extensions running inside the server, and reads the per-conversation entries and events they publish.",
