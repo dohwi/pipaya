@@ -10,6 +10,7 @@
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
 	import { dragScroll } from "../lib/drag-scroll";
+	import { rovingKeys } from "../lib/roving";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../lib/nav";
 	import { app } from "../lib/store.svelte";
@@ -140,11 +141,10 @@
 {#if app.serverId && app.net !== "idle" && !viewport.inGroup(app.activeGroup?.id)}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
 				<div
 					class="tab"
 					class:on
@@ -154,6 +154,7 @@
 					class:menuopen={menuId === x.id}
 					data-tab={x.id}
 					role="tab"
+					tabindex={on ? 0 : -1}
 					aria-selected={on}
 					title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 					use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
@@ -164,6 +165,13 @@
 						app.openTab(x.id);
 					}}
 					onauxclick={(e) => e.button === 1 && close(x)}
+					onkeydown={(e) => {
+						// Enter / Space open the tab (arrows are handled by rovingKeys); a rename field or the close button keep their own keys.
+						if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+							e.preventDefault();
+							e.currentTarget.click();
+						}
+					}}
 				>
 					{#if x.kind === "group"}
 						<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>

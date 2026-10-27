@@ -154,6 +154,7 @@
 	{#if painting}
 		<div class="canvas" in:collapseIn out:collapseOut><PaintingCanvas /></div>
 	{:else if active && peek.lines.length}
+		<!-- A mouse shortcut to the same dialog the "details" button above opens (hidden from assistive tech on purpose). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="peek mono {peek.kind}" onclick={() => (modal = true)} aria-hidden="true" in:collapseIn out:collapseOut>
 			<div class="pin" class:clip={peekH > PEEK_LINES * LINE_H} style:height="{peekWin}px">

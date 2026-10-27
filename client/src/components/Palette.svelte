@@ -68,6 +68,7 @@
 </script>
 
 {#if spec}
+	<!-- The backdrop is a pointer shortcut for closing; the keyboard closes the palette with Esc (modalLayer). -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="scrim" onclick={close} in:fadeIn out:fadeOut></div>
 	<!-- Esc, Tab kept inside, focus back to the opener, app shortcuts muted: the same layer every modal uses -->
@@ -93,6 +94,7 @@
 					style="padding-left:{14 + (it.depth ?? 0) * 18}px"
 					onmousemove={() => (index = i)}
 				>
+					<!-- Rows are chosen with the arrow keys and Enter on the list itself; the click is for the pointer. -->
 					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 					<div class="hit" onclick={() => choose(i)}>
 						{#if it.depth}<span class="branch" aria-hidden="true"></span>{/if}

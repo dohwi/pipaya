@@ -92,6 +92,7 @@
 </script>
 
 {#snippet body()}
+	<!-- The backdrop is a pointer shortcut for closing; the keyboard closes the dialog with Esc (modalLayer). -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="scrim" style:z-index="var(--z-scrim-{layer})" onclick={dismiss} in:fadeIn|global out:fadeOut|global></div>
 	<div
