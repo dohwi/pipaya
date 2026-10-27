@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { AuthEvent, AuthPrompt, AuthType, MutableModels } from "@earendil-works/pi-ai";
 import { badRequest, conflict, notFound } from "./errors.ts";
+import { parseJson } from "./json-column.ts";
 
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
 const FINISHED_KEEP_MS = 60_000;
@@ -127,8 +128,9 @@ export class ProviderLogins {
 /** The stable ID of this server installation, created on first use (some providers want one at login). */
 export function deviceId(db: Database): string {
 	const row = db.query("SELECT data FROM settings WHERE key = 'device_id'").get() as { data: string } | null;
-	if (row) return JSON.parse(row.data);
+	const saved = row ? parseJson<unknown>(row.data, null) : null;
+	if (typeof saved === "string" && saved) return saved;
 	const id = randomUUID();
-	db.query("INSERT INTO settings (key, data) VALUES ('device_id', $data)").run({ data: JSON.stringify(id) });
+	db.query("INSERT INTO settings (key, data) VALUES ('device_id', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(id) }); // also replaces a damaged value
 	return id;
 }

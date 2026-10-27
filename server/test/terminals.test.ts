@@ -187,3 +187,34 @@ describe.skipIf(process.platform === "win32")("terminals API", () => {
 		await api("DELETE", `/terminals/${t2.json.id}`);
 	});
 });
+
+describe("TerminalManager limits", () => {
+	const make = async (enabled: boolean) => {
+		const { TerminalManager, MAX_TERMINALS } = await import("../src/terminals.ts");
+		const { EventBus } = await import("../src/events.ts");
+		const { openDb } = await import("../src/db.ts");
+		const manager = new TerminalManager(new EventBus(openDb(":memory:")), { enabled, defaultWorkdir: () => dir });
+		return { manager, MAX_TERMINALS };
+	};
+
+	test("a server with terminals turned off refuses to open one", async () => {
+		const { manager } = await make(false);
+		expect(() => manager.create({})).toThrow(/turned off/);
+		expect(manager.support().enabled).toBe(false);
+	});
+
+	test("opening more than the limit is refused with a conflict, and closing one frees a slot", async () => {
+		const { manager, MAX_TERMINALS } = await make(true);
+		const made: string[] = [];
+		try {
+			for (let i = 0; i < MAX_TERMINALS; i++) made.push(manager.create({}).id);
+			expect(() => manager.create({})).toThrow(/at most/);
+			manager.kill(made[0]!);
+			for (let i = 0; i < 100 && manager.has(made[0]!); i++) await Bun.sleep(30);
+			expect(manager.has(made[0]!)).toBe(false);
+			made.push(manager.create({}).id);
+		} finally {
+			manager.shutdown();
+		}
+	});
+});
