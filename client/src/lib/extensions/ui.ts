@@ -160,8 +160,25 @@ export interface ViewOptions {
 	allowed?: readonly UINode["type"][];
 }
 
-function fail(path: string, message: string): never {
-	throw new Error(`${path}: ${message}`);
+/** Why a value was refused, for a UI that wants to word it itself instead of showing `message`. */
+export type UIProblem =
+	| { code: "required" }
+	| { code: "too_long"; max: number }
+	| { code: "too_short"; min: number }
+	| { code: "email" }
+	| { code: "number" }
+	| { code: "option" };
+
+/** `path: message` in English for logs and tests; `problem` is set for the mistakes a person can make while filling in a form. */
+export class UIValidationError extends Error {
+	constructor(path: string, message: string, readonly problem?: UIProblem) {
+		super(`${path}: ${message}`);
+		this.name = "UIValidationError";
+	}
+}
+
+function fail(path: string, message: string, problem?: UIProblem): never {
+	throw new UIValidationError(path, message, problem);
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +260,7 @@ function copy(
 }
 
 function required(source: Record<string, unknown>, path: string, key: string): unknown {
-	if (!Object.hasOwn(source, key)) fail(`${path}.${key}`, "is required");
+	if (!Object.hasOwn(source, key)) fail(`${path}.${key}`, "is required", { code: "required" });
 	return source[key];
 }
 
@@ -650,24 +667,24 @@ function indexNodes(root: UINode): Map<string, IndexEntry> {
 function checkFieldValue(field: UIFieldNode, value: unknown, path: string, full: boolean): UIFieldValue {
 	if (field.type === "checkbox") {
 		if (typeof value !== "boolean") fail(path, "expected a boolean");
-		if (full && field.required && !value) fail(path, "is required");
+		if (full && field.required && !value) fail(path, "is required", { code: "required" });
 		return value;
 	}
 	if (typeof value !== "string") fail(path, "expected a string");
 	if (field.type === "select") {
-		if (value.length > UI_LIMITS.optionValue) fail(path, `must be at most ${UI_LIMITS.optionValue} characters`);
-		if (value !== "" && !field.options.some((option) => option.value === value)) fail(path, "must be empty or one of the option values");
-		if (full && field.required && value === "") fail(path, "is required");
+		if (value.length > UI_LIMITS.optionValue) fail(path, `must be at most ${UI_LIMITS.optionValue} characters`, { code: "too_long", max: UI_LIMITS.optionValue });
+		if (value !== "" && !field.options.some((option) => option.value === value)) fail(path, "must be empty or one of the option values", { code: "option" });
+		if (full && field.required && value === "") fail(path, "is required", { code: "required" });
 		return value;
 	}
 	text(value, path, UI_LIMITS.fieldValue, false);
-	if (field.maxLength !== undefined && value.length > field.maxLength) fail(path, `must be at most ${field.maxLength} characters`);
+	if (field.maxLength !== undefined && value.length > field.maxLength) fail(path, `must be at most ${field.maxLength} characters`, { code: "too_long", max: field.maxLength });
 	if (!full) return value;
-	if (field.required && value.length === 0) fail(path, "is required");
-	if (field.minLength !== undefined && value.length < field.minLength) fail(path, `must be at least ${field.minLength} characters`);
+	if (field.required && value.length === 0) fail(path, "is required", { code: "required" });
+	if (field.minLength !== undefined && value.length < field.minLength) fail(path, `must be at least ${field.minLength} characters`, { code: "too_short", min: field.minLength });
 	if (field.type === "input" && value !== "") {
-		if (field.inputType === "email" && !matches(EMAIL, value)) fail(path, "expected an email address");
-		if (field.inputType === "number" && !(matches(NUMBER, value) && Number.isFinite(Number(value)))) fail(path, "expected a finite number");
+		if (field.inputType === "email" && !matches(EMAIL, value)) fail(path, "expected an email address", { code: "email" });
+		if (field.inputType === "number" && !(matches(NUMBER, value) && Number.isFinite(Number(value)))) fail(path, "expected a finite number", { code: "number" });
 	}
 	return value;
 }
@@ -714,7 +731,7 @@ export function validateUIEvent(view: UINode, event: unknown): UIEvent {
 	}
 	const out: Record<string, UIFieldValue> = {};
 	for (const field of fields) {
-		if (!Object.hasOwn(values, field.id)) fail(`event.values.${field.id}`, "is required");
+		if (!Object.hasOwn(values, field.id)) fail(`event.values.${field.id}`, "is required", { code: "required" });
 		out[field.id] = checkFieldValue(field, values[field.id], `event.values.${field.id}`, true);
 	}
 	return { type, id, values: out };

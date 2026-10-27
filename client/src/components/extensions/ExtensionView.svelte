@@ -28,7 +28,7 @@
 	import Select from "../Select.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
 	import ExtensionIcon from "./ExtensionIcon.svelte";
-	import { fieldsIn, validateUIEvent, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";
+	import { fieldsIn, UIValidationError, validateUIEvent, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";
 
 	type Kind<T extends UINode["type"]> = Extract<UINode, { type: T }>;
 	type Field = ReturnType<typeof fieldsIn>[number];
@@ -125,15 +125,18 @@
 	function reason(cause: unknown): string {
 		const raw = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
 		if (!raw) return t("요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+		const problem = cause instanceof UIValidationError ? cause.problem : undefined;
+		if (problem) {
+			switch (problem.code) {
+				case "required": return t("필수 항목입니다.");
+				case "too_long": return t("{n}자 이하로 입력해 주세요.", { n: String(problem.max) });
+				case "too_short": return t("{n}자 이상 입력해 주세요.", { n: String(problem.min) });
+				case "email": return t("올바른 이메일 주소를 입력해 주세요. (예: name@example.com)");
+				case "number": return t("숫자만 입력해 주세요.");
+				case "option": return t("목록에 있는 항목을 선택해 주세요.");
+			}
+		}
 		const detail = raw.slice(raw.indexOf(": ") + 2);
-		if (detail === "is required") return t("필수 항목입니다.");
-		let match = /^must be at most (\d+) characters$/.exec(detail);
-		if (match) return t("{n}자 이하로 입력해 주세요.", { n: match[1]! });
-		match = /^must be at least (\d+) characters$/.exec(detail);
-		if (match) return t("{n}자 이상 입력해 주세요.", { n: match[1]! });
-		if (detail === "expected an email address") return t("올바른 이메일 주소를 입력해 주세요. (예: name@example.com)");
-		if (detail === "expected a finite number") return t("숫자만 입력해 주세요.");
-		if (detail === "must be empty or one of the option values") return t("목록에 있는 항목을 선택해 주세요.");
 		if (/disabled|unknown target|expected a (string|boolean)|^event|^view/.test(detail)) return t(GENERIC);
 		// Our own messages (LocalizedError) reach the user as they are; anything else is a technical error.
 		return cause instanceof LocalizedError ? raw : t(GENERIC);

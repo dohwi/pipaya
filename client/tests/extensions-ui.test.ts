@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-	UI_LIMITS, fieldsIn, findNode, parsePanelSpec, parseView, validateUIEvent,
+	UI_LIMITS, UIValidationError, fieldsIn, findNode, parsePanelSpec, parseView, validateUIEvent,
 	type UIEvent, type UINode,
 } from "../src/lib/extensions/ui";
 
@@ -753,5 +753,40 @@ describe("validateUIEvent", () => {
 		});
 		expect(validateUIEvent(v, { type: "submit", id: "f", values: { a: "x", b: false } }).type).toBe("submit");
 		eventRejects(v, { type: "submit", id: "f", values: { a: "", b: false } }, "event.values.a: is required");
+	});
+});
+
+describe("UIValidationError", () => {
+	const form = (field: Record<string, unknown>) => ({ type: "form", id: "f", submitLabel: "Go", children: [{ type: "input", id: "name", label: "Name", ...field }] }) as UINode;
+	const problemOf = (view: UINode, value: string) => {
+		try {
+			validateUIEvent(view, { type: "submit", id: "f", values: { name: value } });
+		} catch (e) {
+			expect(e).toBeInstanceOf(UIValidationError);
+			return (e as UIValidationError).problem;
+		}
+		return "accepted";
+	};
+
+	test("names the mistake a person made, with the limit, instead of making callers parse English", () => {
+		expect(problemOf(parseView(form({ required: true })), "")).toEqual({ code: "required" });
+		expect(problemOf(parseView(form({ maxLength: 5 })), "abcdef")).toEqual({ code: "too_long", max: 5 });
+		expect(problemOf(parseView(form({ minLength: 3 })), "ab")).toEqual({ code: "too_short", min: 3 });
+		expect(problemOf(parseView(form({ inputType: "email" })), "nope")).toEqual({ code: "email" });
+		expect(problemOf(parseView(form({ inputType: "number" })), "abc")).toEqual({ code: "number" });
+	});
+
+	test("keeps the English path: message text for logs", () => {
+		expect(() => validateUIEvent(parseView(form({ maxLength: 2 })), { type: "submit", id: "f", values: { name: "abc" } })).toThrow("must be at most 2 characters");
+	});
+
+	test("a structural mistake has no friendly problem", () => {
+		try {
+			validateUIEvent(parseView(form({})), { type: "submit", id: "f", values: { name: 5 } });
+		} catch (e) {
+			expect((e as UIValidationError).problem).toBeUndefined();
+			return;
+		}
+		throw new Error("expected a rejection");
 	});
 });
