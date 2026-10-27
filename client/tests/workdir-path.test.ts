@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { absoluteWorkdir, breadcrumbs, cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
+import { isAbs, isWinAbs, sepOf, trimSep, absoluteWorkdir, breadcrumbs, cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
 
 const ctx = { root: "/home/u/workspace", home: "/home/u" };
 
@@ -129,5 +129,35 @@ describe("the /cd menu", () => {
 	});
 	test("Tab with no target does nothing", () => {
 		expect(cdTab(null, ["a"], false)).toEqual({ do: "none" });
+	});
+});
+
+describe("Windows paths", () => {
+	test("detects drive and UNC paths", () => {
+		expect(isWinAbs("C:\\Users\\a")).toBe(true);
+		expect(isWinAbs("c:/x")).toBe(true);
+		expect(isWinAbs("\\\\host\\share")).toBe(true);
+		expect(isWinAbs("/home/u")).toBe(false);
+		expect(isAbs("/home/u")).toBe(true);
+		expect(isAbs("proj/a")).toBe(false);
+		expect(sepOf("C:\\x")).toBe("\\");
+		expect(sepOf("/x")).toBe("/");
+	});
+	test("trimSep keeps roots", () => {
+		expect(trimSep("C:\\a\\b\\")).toBe("C:\\a\\b");
+		expect(trimSep("C:\\")).toBe("C:\\");
+		expect(trimSep("C:\\a/")).toBe("C:\\a");
+		expect(trimSep("/")).toBe("/");
+		expect(trimSep("/a//")).toBe("/a");
+	});
+	test("splitTyped handles both separators", () => {
+		expect(splitTyped("C:\\Users\\do")).toEqual({ dir: "C:\\Users", part: "do" });
+		expect(splitTyped("C:\\Users\\")).toEqual({ dir: "C:\\Users", part: "" });
+		expect(splitTyped("C:\\x")).toEqual({ dir: "C:\\", part: "x" });
+		expect(splitTyped("C:/Users/a")).toEqual({ dir: "C:/Users", part: "a" });
+	});
+	test("tabComplete uses the path's separator", () => {
+		expect(tabComplete("C:\\Users", ["alice"], undefined)).toEqual({ text: "C:\\Users\\alice\\", whole: true });
+		expect(tabComplete("C:\\", ["Users"], undefined).text).toBe("C:\\Users\\");
 	});
 });

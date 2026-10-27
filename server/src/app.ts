@@ -412,7 +412,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			const root = configuration.defaultWorkdir();
 			const label = (cwd: string) => {
 				const r = relative(root, cwd);
-				return r === "" ? "." : r === ".." || r.startsWith("../") || isAbsolute(r) ? cwd : r;
+				return r === "" ? "." : r === ".." || r.startsWith("../") || r.startsWith("..\\") || isAbsolute(r) ? cwd : r.replaceAll("\\", "/");
 			};
 			return { root, home: homedir(), workdirs: store.workdirs().map((w) => ({ ...w, path: label(w.cwd) })) };
 		},

@@ -7,7 +7,7 @@ import {
   normalizeUrl,
   verifyServer,
 } from "./api";
-import { expandHome } from "./workdir-path";
+import { expandHome, isAbs, isWinAbs, sepOf, trimSep } from "./workdir-path";
 import { isTauri } from "./tauri";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -1140,6 +1140,14 @@ class AppStore {
   relPath(cwd: string): string {
     const root = this.workspace?.root;
     if (root) {
+      if (isWinAbs(root)) {
+        // Windows: either slash, any letter case; the result uses "/" like every relative workdir
+        const r = trimSep(root).replace(/\\/g, "/").toLowerCase();
+        const c = trimSep(cwd).replace(/\\/g, "/");
+        if (c.toLowerCase() === r) return ".";
+        if (c.toLowerCase().startsWith(`${r}/`)) return c.slice(r.length + 1);
+        return cwd;
+      }
       if (cwd === root) return ".";
       if (cwd.startsWith(`${root}/`)) return cwd.slice(root.length + 1);
     }
@@ -1150,9 +1158,9 @@ class AppStore {
   workdirLabel(rel: string = this.workdir): string {
     return rel === "."
       ? (this.workspace?.root ?? t("서버 기본 디렉터리"))
-      : rel.startsWith("/")
+      : isAbs(rel)
         ? rel
-        : `${this.workspace?.root ?? ""}/${rel}`.replace(/^\//, "/");
+        : `${this.workspace?.root ?? ""}${sepOf(this.workspace?.root ?? "")}${rel}`.replace(/^\//, "/");
   }
 
   /** Absolute path the next new chat will start in (best effort until the server confirms). */
@@ -1160,9 +1168,9 @@ class AppStore {
     const root = this.workspace?.root ?? "";
     return this.workdir === "."
       ? root
-      : this.workdir.startsWith("/")
+      : isAbs(this.workdir)
         ? this.workdir
-        : `${root}/${this.workdir}`;
+        : `${root}${sepOf(root)}${this.workdir}`;
   }
 
   /** Switch one agent tool on or off for every chat. Saved on the server. */
@@ -1390,20 +1398,21 @@ class AppStore {
    * An open chat keeps its own directory, so this leaves it and starts a fresh chat there.
    */
   changeWorkdir(raw: string): boolean {
-    let rel = expandHome(raw.trim(), this.workspace?.home).replace(/\/+$/, "") || ".";
+    let rel = trimSep(expandHome(raw.trim(), this.workspace?.home)) || ".";
     if (rel === "~" || rel.startsWith("~/")) {
       this.toast(t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다"), "error");
       return false;
     }
-    if (/[\0\\]/.test(rel)) {
+    // a backslash is a separator in a Windows path (`C:\work`), and nothing else
+    if (/\0/.test(rel) || (!isWinAbs(rel) && rel.includes("\\")) || (isWinAbs(rel) && /[<>"|?*\0]/.test(rel.slice(2)))) {
       this.toast(t("경로에 사용할 수 없는 문자가 있습니다"), "error");
       return false;
     }
     // An absolute path inside the default directory is stored relative to it, so the sidebar groups it with the rest.
-    if (rel.startsWith("/")) rel = this.relPath(rel);
+    if (isAbs(rel)) rel = this.relPath(rel);
     else rel = rel.replace(/^(\.\/)+/, "") || ".";
     if (
-      !rel.startsWith("/") &&
+      !isAbs(rel) &&
       rel.split("/").some((seg) => seg === ".." || seg === "")
     ) {
       this.toast(

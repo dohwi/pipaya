@@ -1,4 +1,4 @@
-import { splitTyped, tabComplete, typedMatches } from "./workdir-path";
+import { isAbs, sepOf, splitTyped, tabComplete, typedMatches } from "./workdir-path";
 import type { DirListing } from "./types";
 
 /** What the browser needs from the outside: the server's listing and folder creation, and how a failure reads. */
@@ -8,7 +8,7 @@ export interface DirSource {
 	errorText(cause: unknown): string;
 }
 
-const asDir = (p: string) => (p.endsWith("/") ? p : `${p}/`);
+const asDir = (p: string) => (/[\\/]$/.test(p) ? p : `${p}${sepOf(p)}`);
 
 /**
  * Browsing a server's folders with a path box: the folder on screen, what is typed, which row the arrow keys are on,
@@ -87,7 +87,7 @@ export class DirBrowser {
 		this.active = -1;
 		clearTimeout(this.timer);
 		const v = this.typed.trim();
-		if (!v.startsWith("/")) return;
+		if (!isAbs(v)) return;
 		const { dir } = splitTyped(v);
 		this.timer = setTimeout(() => {
 			this.missing = false;
@@ -105,7 +105,7 @@ export class DirBrowser {
 
 	/** Backspace over a trailing slash drops the highlight, so the next Enter does not open a row the user left. */
 	backspaced(atEnd: boolean): void {
-		if (this.typed.endsWith("/") && this.typed.length > 1 && atEnd) this.active = -1;
+		if (/[\\/]$/.test(this.typed) && this.typed.length > 1 && atEnd) this.active = -1;
 	}
 
 	/**
@@ -138,7 +138,7 @@ export class DirBrowser {
 			const hit = shown.find((d) => d.name === part) ?? (shown.length === 1 ? shown[0] : undefined);
 			if (hit) return void this.go(hit.path);
 		}
-		if (v.startsWith("/") && v.endsWith("/") && !this.missing && this.listing && splitTyped(v).dir === this.listing.path && !busy) return { confirm: this.listing.path };
+		if (isAbs(v) && /[\\/]$/.test(v) && !this.missing && this.listing && splitTyped(v).dir === this.listing.path && !busy) return { confirm: this.listing.path };
 		void this.go(v);
 	}
 

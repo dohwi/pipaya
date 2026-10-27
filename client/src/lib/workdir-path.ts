@@ -1,5 +1,21 @@
 /** Path helpers for `/cd`: `~` expansion and the folder suggestions shown above the input while typing its argument. */
 
+/** A Windows absolute path: `C:\x`, `C:/x`, `C:` or a UNC share `\\\\host\\share` */
+export const isWinAbs = (p: string): boolean => /^[A-Za-z]:([\\/]|$)/.test(p) || p.startsWith("\\\\");
+
+/** Absolute on the server, whichever OS it runs on */
+export const isAbs = (p: string): boolean => p.startsWith("/") || isWinAbs(p);
+
+/** The separator the server's paths use: `\` for Windows paths, else `/` */
+export const sepOf = (p: string): string => (isWinAbs(p) ? "\\" : "/");
+
+/** Drop trailing separators, keeping a root (`/`, `C:\`) intact */
+export function trimSep(p: string): string {
+	const t = p.replace(/[\\/]+$/, "");
+	if (!t) return p.startsWith("/") ? "/" : t;
+	return /^[A-Za-z]:$/.test(t) ? `${t}\\` : t;
+}
+
 /** `~` and `~/x` become `<home>/…`. Anything else (including `~user`) is returned as is. */
 export function expandHome(raw: string, home?: string | null): string {
 	if (raw !== "~" && !raw.startsWith("~/")) return raw;
@@ -72,8 +88,11 @@ export function commonPrefix(names: string[]): string {
 
 /** `/a/b/par` -> list `/a/b`, filter by `par`. `/a/b/` lists `/a/b` with no filter; no slash means nothing to list yet. */
 export function splitTyped(value: string): { dir: string; part: string } {
-	const i = value.lastIndexOf("/");
-	return i < 0 ? { dir: "", part: value } : { dir: value.slice(0, i) || "/", part: value.slice(i + 1) };
+	const i = Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\"));
+	if (i < 0) return { dir: "", part: value };
+	const dir = value.slice(0, i);
+	// the root keeps its separator: `C:\` rather than `C:`
+	return { dir: /^[A-Za-z]:$/.test(dir) ? `${dir}${value[i]}` : dir || "/", part: value.slice(i + 1) };
 }
 
 /** `/a/b` as clickable steps from the root: `/`, `a`, `b`, each with its own path. */
@@ -83,7 +102,7 @@ export function breadcrumbs(path: string): { name: string; path: string }[] {
 }
 
 /** The absolute path of a workspace entry: already absolute, `.` = the root itself, else relative to the root. */
-export const absoluteWorkdir = (path: string, root: string | undefined): string => (path.startsWith("/") ? path : path === "." ? (root ?? "") : `${root}/${path}`);
+export const absoluteWorkdir = (path: string, root: string | undefined): string => (isAbs(path) ? path : path === "." ? (root ?? "") : `${root}${sepOf(root ?? "")}${path}`);
 
 /**
  * What Tab types after `dir/`: the highlighted folder, else like a shell the only match or the longest common start of
@@ -92,7 +111,8 @@ export const absoluteWorkdir = (path: string, root: string | undefined): string 
 export function tabComplete(typedDir: string, names: readonly string[], picked: string | undefined): { text: string; whole: boolean } {
 	const pre = picked ?? commonPrefix([...names]);
 	const whole = picked !== undefined || names.length === 1;
-	return { text: `${typedDir === "/" ? "" : typedDir}/${pre}${whole ? "/" : ""}`, whole };
+	const sep = sepOf(typedDir);
+	return { text: `${/[\\/]$/.test(typedDir) ? typedDir : typedDir + sep}${pre}${whole ? sep : ""}`, whole };
 }
 
 /** Folders of a listing that start with what is being typed; the whole list while the listing is for another folder. */
