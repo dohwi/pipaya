@@ -32,7 +32,7 @@ export interface ReadFileTrace {
 }
 
 /** Why a tool reaches a session's agent. */
-export type ToolSource = "session" | "always" | "image" | "browser";
+export type ToolSource = "session" | "always" | "image";
 
 /** One tool as the model receives it. */
 export interface ContextTool {

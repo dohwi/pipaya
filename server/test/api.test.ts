@@ -45,7 +45,7 @@ beforeAll(async () => {
 		workspaceRoot: join(dir, "ws"),
 		logLevel: "silent",
 	};
-	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [], browserExecutable: null });
+	app = await buildApp(cfg, { strictResponses: true, extensionDirs: [] });
 	await app.server.listen({ host: "0.0.0.0", port: 0 });
 	const addr = app.server.server.address() as { port: number };
 	base = `http://127.0.0.1:${addr.port}`;

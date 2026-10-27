@@ -117,8 +117,8 @@ export interface ContextTool {
 	description: string;
 	/** JSON schema of the parameters */
 	parameters: unknown;
-	/** session: chosen for the session; always: peers and extension tools marked always; image / browser: added because that feature is on */
-	source: "session" | "always" | "image" | "browser";
+	/** session: chosen for the session; always: peers and extension tools marked always; image: added because an image model is set */
+	source: "session" | "always" | "image";
 	/** false: switched off in the settings, so the agent does not get it */
 	enabled: boolean;
 	/** Size of name + description + parameters, sent with every request */

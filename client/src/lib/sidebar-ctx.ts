@@ -28,7 +28,7 @@ export interface SidebarNode {
 }
 
 /** What a row can be: a conversation, a terminal, or a split tab (group). */
-export type MenuTarget = RowTarget & ({ kind: "session"; x: Session } | { kind: "terminal"; x: TerminalInfo } | { kind: "browser"; x: { id: string; title: string } } | { kind: "group"; g: Group });
+export type MenuTarget = RowTarget & ({ kind: "session"; x: Session } | { kind: "terminal"; x: TerminalInfo } | { kind: "group"; g: Group });
 
 /**
  * Everything the sidebar's rows share: the open "more" menu, the drag highlights, the two in-place renames, and the

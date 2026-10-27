@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { browserLabel, type BrowserTabInfo } from "../lib/browser";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { dragScroll } from "../lib/drag-scroll";
@@ -12,9 +11,6 @@
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
 
-	/** A browser tab as a chip: its page title stands in for the conversation title. */
-	const asItem = (b: BrowserTabInfo | undefined) => (b ? { id: b.id, title: browserLabel(b, t("브라우저")) } : undefined);
-
 	/** Long press / right click on a chip: take it out of the group, or close it. */
 	function chipMenu(pt: Point, id: string) {
 		const term = !!app.terminal(id);
@@ -22,8 +18,6 @@
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(id) },
 			term
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(id) }
-				: app.browser(id)
-				? { icon: "x", label: t("브라우저 닫기"), title: t("브라우저 탭을 닫습니다"), run: () => void app.closeBrowser(id) }
 				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(id) },
 		]);
 		return closeContextMenu;
@@ -31,7 +25,7 @@
 
 	/** Phones: the sessions of the open group as a strip under the header; a tap switches to that session. */
 	const group = $derived(app.activeGroup);
-	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id) ?? asItem(app.browser(id))).filter((s) => !!s) : []);
+	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
 
 	let strip: HTMLElement | undefined = $state();
 	// keep the focused chip in view when it changes (also when switched from elsewhere)
@@ -48,9 +42,9 @@
 		{/if}
 		<span class="name" title={group.name}>{group.name}</span>
 		{#each items as x (x.id)}
-			{@const st = app.terminal(x.id) || app.browser(x.id) ? "idle" : activityOf(app, x.id)}
+			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			<button class="chip" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} use:pressMenu={(pt) => chipMenu(pt, x.id)} title="{x.title} · {ACTIVITY_LABEL[st]}">
-				{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else if app.browser(x.id)}<span class="tico"><Icon name="globe" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
+				{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 				<span class="t">{x.title}</span>
 			</button>
 		{/each}

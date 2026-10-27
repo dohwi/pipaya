@@ -29,7 +29,6 @@ import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState, reorder } from "./sidebar.svelte";
-import { isBrowserId, type BrowserSupport, type BrowserTabInfo } from "./browser";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -196,16 +195,6 @@ class AppStore {
   get terminalSupport(): TerminalSupport | null {
     return this.link?.terminalSupport ?? null;
   }
-  /** Browser tabs open on the server (pages in its Chromium), and whether it can run one; null support = not known (yet) */
-  get browsers(): BrowserTabInfo[] {
-    return this.link?.data.browsers ?? NONE;
-  }
-  set browsers(v: BrowserTabInfo[]) {
-    if (this.link) this.link.data.browsers = v;
-  }
-  get browserSupport(): BrowserSupport | null {
-    return this.link?.browserSupport ?? null;
-  }
 
   get models(): ModelInfo[] {
     return this.link?.models ?? NONE;
@@ -308,13 +297,9 @@ class AppStore {
     return isTerminalId(id) ? this.terminals.find((x) => x.id === id) : undefined;
   }
 
-  browser(id: string | null | undefined): BrowserTabInfo | undefined {
-    return isBrowserId(id) ? this.browsers.find((x) => x.id === id) : undefined;
-  }
-
-  /** A session, terminal or browser tab that is open: something a pane can show. */
+  /** A session or a terminal that is open: something a pane can show. */
   shows(id: string | null | undefined): boolean {
-    return !!this.session(id) || !!this.terminal(id) || !!this.browser(id);
+    return !!this.session(id) || !!this.terminal(id);
   }
 
   session(id: string | null | undefined): Session | undefined {
@@ -337,13 +322,13 @@ class AppStore {
 
   /** The focused session when it is a chat (what the server counts as read while this window is in front). */
   get readableId(): string | null {
-    return this.activeId && !isTerminalId(this.activeId) && !isBrowserId(this.activeId) ? this.activeId : null;
+    return this.activeId && !isTerminalId(this.activeId) ? this.activeId : null;
   }
 
   /** Sessions whose transcripts must be loaded: the focused one, and every pane of the group on a wide screen. */
   get visibleIds(): string[] {
     const out = new Set<string>();
-    if (this.activeId && !isTerminalId(this.activeId) && !isBrowserId(this.activeId)) out.add(this.activeId);
+    if (this.activeId && !isTerminalId(this.activeId)) out.add(this.activeId);
     const g = this.activeGroup;
     if (g && !viewport.narrow)
       for (const id of panesOf(g.layout)) if (this.session(id)) out.add(id);
@@ -788,13 +773,11 @@ class AppStore {
   }
 
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
-  openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean; browser?: boolean; profile?: string }) {
+  openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean }) {
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal asked for on another server opens once that server is connected (see sync).
       this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
-      this.pendingBrowser = to.browser ? (to.workdir ?? ".") : null;
-      this.pendingBrowserProfile = to.browser ? to.profile : undefined;
-      this.pendingChat = !to.session && !to.terminal && !to.browser;
+      this.pendingChat = !to.session && !to.terminal;
       if (to.workdir !== undefined)
         write(`${K.workdir}.${serverId}`, to.workdir);
       if (to.session) write(`${K.active}.${serverId}`, to.session);
@@ -809,7 +792,6 @@ class AppStore {
     }
     if (to.session) void this.openSession(to.session);
     else if (to.terminal) void this.openTerminal(to.workdir);
-    else if (to.browser) void this.openBrowser(undefined, undefined, to.workdir, to.profile);
     else {
       if (to.workdir !== undefined) this.setWorkdir(to.workdir);
       void this.startChat();
@@ -818,10 +800,6 @@ class AppStore {
 
   /** Working directory of a terminal to open as soon as the server being switched to is connected */
   private pendingTerminal: string | null = null;
-
-  /** Folder of a browser tab to open as soon as the server being switched to is connected */
-  private pendingBrowser: string | null = null;
-  private pendingBrowserProfile: string | undefined;
 
   /** A new chat to start as soon as the server being switched to is connected */
   private pendingChat = false;
@@ -869,13 +847,6 @@ class AppStore {
       const dir = this.pendingTerminal;
       this.pendingTerminal = null;
       void this.openTerminal(dir);
-    }
-    if (this.pendingBrowser !== null) {
-      const dir = this.pendingBrowser;
-      this.pendingBrowser = null;
-      const profile = this.pendingBrowserProfile;
-      this.pendingBrowserProfile = undefined;
-      void this.openBrowser(undefined, undefined, dir, profile);
     }
     if (this.pendingChat) {
       this.pendingChat = false;
@@ -1010,17 +981,6 @@ class AppStore {
       }
       case "terminal_closed":
         this.dropTerminal((e.data as { id: string }).id);
-        break;
-      case "browser_created":
-      case "browser_updated": {
-        const x = e.data as BrowserTabInfo;
-        const i = this.browsers.findIndex((y) => y.id === x.id);
-        if (i >= 0) this.browsers[i] = x;
-        else this.browsers.push(x);
-        break;
-      }
-      case "browser_closed":
-        this.dropBrowser((e.data as { id: string }).id);
         break;
       case "session_deleted": {
         const id = e.data.id as string;
@@ -1364,7 +1324,7 @@ class AppStore {
 
   /** The open server's working directories and their tabs, in sidebar order. */
   get dirs(): DirBlock[] {
-    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined }, this.browsers);
+    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined });
   }
 
   /** The tab the focused pane is in, and its directory. */
@@ -1399,7 +1359,7 @@ class AppStore {
   openDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
     const dirs = ov
-      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId] }, ov.browsers)
+      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId] })
       : this.dirs;
     const dir = dirs.find((d) => d.path === path);
     if (!dir) return;
@@ -1557,7 +1517,7 @@ class AppStore {
       const pane = sib && (this.lastPane[sib.id] && this.shows(this.lastPane[sib.id]) ? this.lastPane[sib.id] : tabPanes(sib)[0]);
       if (pane) return pane;
     }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals, this.browsers);
+    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
   }
@@ -1592,13 +1552,12 @@ class AppStore {
   /** Close the focused session (focus moves to a remaining pane of its group, see `close`). */
   async closeActive() {
     if (isTerminalId(this.activeId)) await this.closeTerminal(this.activeId);
-    else if (isBrowserId(this.activeId)) await this.closeBrowser(this.activeId);
     else if (this.activeId) await this.close(this.activeId);
   }
 
   /** Archive the focused chat (a terminal cannot be archived). */
   async archiveActive() {
-    if (!this.activeId || isTerminalId(this.activeId) || isBrowserId(this.activeId)) return void this.toast(t("보관할 수 있는 대화가 아닙니다"), "error");
+    if (!this.activeId || isTerminalId(this.activeId)) return void this.toast(t("보관할 수 있는 대화가 아닙니다"), "error");
     await this.archive(this.activeId);
   }
 
@@ -1730,7 +1689,7 @@ class AppStore {
   /** Focus a session (showing its group if it has one). */
   async openSession(id: string, force = false) {
     if (!this.api) return;
-    if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id) || isBrowserId(id))) {
+    if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
       this.sidebar.open = false;
       return;
     }
@@ -1744,10 +1703,10 @@ class AppStore {
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
-    const cwd = this.sessions.find((s) => s.id === id)?.cwd ?? this.terminal(id)?.cwd ?? this.browser(id)?.cwd;
+    const cwd = this.sessions.find((s) => s.id === id)?.cwd ?? this.terminal(id)?.cwd;
     if (cwd) this.setWorkdir(this.relPath(cwd));
     this.sidebar.open = false;
-    if (isTerminalId(id) || isBrowserId(id)) return;
+    if (isTerminalId(id)) return;
     await this.ensureChat(id, force);
   }
 
@@ -2151,7 +2110,7 @@ class AppStore {
    */
   async splitPane(target: string, zone: Zone, focus = true): Promise<string | null> {
     const api = this.api;
-    const from = this.session(target) ?? this.terminal(target) ?? this.browser(target);
+    const from = this.session(target) ?? this.terminal(target);
     if (!api || !from) return null;
     const g = this.groupOf(target);
     if (g && panesOf(g.layout).length >= MAX_PANES) {
@@ -2190,8 +2149,6 @@ class AppStore {
     if (!api) return;
     const term = this.terminal(this.activeId);
     if (term) return this.splitWithNewChat(term.id, term.cwd, zone);
-    const web = this.browser(this.activeId);
-    if (web) return this.splitWithNewChat(web.id, web.cwd, zone);
     let from = this.session(this.activeId);
     // A new chat has no session yet: make one from the draft (the pending model settings and working directory)
     // so there is something to split. Both halves then start empty and ready for input.
@@ -2281,62 +2238,6 @@ class AppStore {
     if (beside) await this.dropSession(made.id, beside.target, beside.zone, beside.focus ?? true);
     else await this.openSession(made.id);
     return made;
-  }
-
-  /* ---------- browser tabs ---------- */
-
-  /** Open a page in a browser tab on the server and show it. `beside`: put it next to that pane (grouping them). */
-  async openBrowser(url?: string, beside?: { target: string; zone: Zone; focus?: boolean }, workdir?: string, profile?: string): Promise<BrowserTabInfo | null> {
-    const api = this.api;
-    if (!api) return null;
-    const support = this.browserSupport;
-    if (support && !support.enabled) return void this.toast(t("이 서버는 브라우저가 꺼져 있습니다 (PIPAYA_BROWSER=0)"), "error"), null;
-    if (support && !support.available) return void this.toast(t("이 서버에 Chrome 또는 Chromium이 없습니다"), "error"), null;
-    if (beside) {
-      const g = this.groupOf(beside.target);
-      if (g && panesOf(g.layout).length >= MAX_PANES) return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error"), null;
-    }
-    const from = workdir && workdir !== "." ? workdir : beside ? (this.session(beside.target)?.cwd ?? this.terminal(beside.target)?.cwd ?? this.browser(beside.target)?.cwd) : this.session(this.activeId)?.cwd;
-    let made: BrowserTabInfo;
-    try {
-      made = await api.createBrowser({ ...(url ? { url } : {}), ...(from ? { cwd: from } : {}), ...(profile ? { profile } : {}) });
-    } catch (e) {
-      if (isUnsupportedRoute(e)) this.toast(t("이 서버는 브라우저를 지원하지 않습니다. 서버를 업데이트하세요"), "error");
-      else this.fail(e, t("브라우저를 열지 못했습니다"));
-      return null;
-    }
-    if (!this.browsers.some((x) => x.id === made.id)) this.browsers.push(made);
-    if (beside) await this.dropSession(made.id, beside.target, beside.zone, beside.focus ?? true);
-    else await this.openSession(made.id);
-    return made;
-  }
-
-  /** A browser tab beside the focused pane (right by default). */
-  async splitBrowser(zone: Zone = "right"): Promise<void> {
-    const id = this.activeId;
-    if (!id) return void (await this.openBrowser());
-    await this.openBrowser(undefined, { target: id, zone });
-  }
-
-  /** Close the tab (the server confirms with browser_closed). */
-  async closeBrowser(id: string): Promise<void> {
-    if (!this.api) return;
-    try {
-      await this.api.closeBrowser(id);
-    } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) return this.fail(e, t("브라우저를 닫지 못했습니다"), id);
-    }
-    this.dropBrowser(id);
-  }
-
-  /** The tab is gone (closed here, elsewhere, or the browser ended): forget it and move focus on. */
-  dropBrowser(id: string) {
-    if (!this.browsers.some((x) => x.id === id)) return;
-    const next = this.neighbourOf(id);
-    this.forgetInGroups(id);
-    this.browsers = this.browsers.filter((x) => x.id !== id);
-    if (this.zoomId === id) this.zoomId = null;
-    if (this.activeId === id) this.leave(next);
   }
 
   /** A terminal beside the focused pane: below by default, or the given side: it starts where that pane works. */

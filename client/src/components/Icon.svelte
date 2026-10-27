@@ -3,7 +3,7 @@
 		| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 		| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 		| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
-		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "archive" | "globe";
+		| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "archive";
 </script>
 
 <script lang="ts">
@@ -34,7 +34,6 @@
 		phone: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 19h2",
 		image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M9 9.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z",
 		terminal: "M4 5h16v14H4zM7 10l3 2.5L7 15M12 15h5",
-		globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z",
 		file: "M7 3h7l5 5v13H7zM14 3v5h5",
 		attach: "M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
 		search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",

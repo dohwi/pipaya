@@ -19,8 +19,6 @@ import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
 import { PeerService, type GroupRef } from "./peers.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
-import type { BrowserManager } from "./browser.ts";
-import { BROWSER_TOOLS, browserTools } from "./browser-tools.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -75,13 +73,6 @@ export class SessionManager {
 	readonly peers: PeerService;
 	/** Session ids of every group, wired by the app once the group manager exists. */
 	private groupSource: () => GroupRef[] = () => [];
-
-	private browser?: BrowserManager;
-
-	/** The server's browser: while it can run, every session gets the browser_* tools. */
-	setBrowser(b: BrowserManager): void {
-		this.browser = b;
-	}
 
 	setGroupSource(fn: () => GroupRef[]): void {
 		this.groupSource = fn;
@@ -828,7 +819,7 @@ export class SessionManager {
 
 	/**
 	 * Every tool a session's agent would get, and why: chosen for the session (`session`), always added (`always`: peers,
-	 * extension tools marked always), or added because a feature is on (`image`, `browser`). A tool the user switched
+	 * extension tools marked always), or added because a feature is on (`image`). A tool the user switched
 	 * off in the settings is still listed, marked `off`, so the context view can say it is withheld.
 	 */
 	private toolPlan(names: string[]): { name: string; source: ToolSource; off: boolean }[] {
@@ -839,7 +830,6 @@ export class SessionManager {
 		add(PEER_TOOLS, "always");
 		add(this.ext?.alwaysTools() ?? [], "always");
 		if (this.imageModel?.resolve()) add([IMAGE_TOOL], "image");
-		if (this.browser?.available()) add(BROWSER_TOOLS, "browser");
 		return [...plan].map(([name, source]) => ({ name, source, off: off.includes(name) }));
 	}
 
@@ -942,9 +932,7 @@ export class SessionManager {
 	toolDefs(): Record<string, ToolDef> {
 		const defs = this.ext ? this.ext.toolDefs() : TOOL_DEFS;
 		// Only while an image model is set; an extension tool of the same name wins.
-		const withImage = this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
-		// An extension tool of the same name wins here too.
-		return this.browser?.available() ? { ...browserTools(this.browser), ...withImage } : withImage;
+		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
 	}
 
 	/** Per-run system prompt tweaks and the `context` hook, applied to what the model sees (never stored). */

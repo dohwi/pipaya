@@ -15,8 +15,6 @@ export const isAdminOnlyPath = (method: string, path: string) =>
 	// Server extensions execute code in this process; a paired phone may use their methods but never reload or install them.
 	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
 	(path.startsWith("/server-extensions/") && method === "DELETE") ||
-	// A profile's logins are the owner's: exporting or importing them hands over (or replaces) signed-in sessions.
-	(/^\/browsers\/profiles\/[^/]+\/(export|import)$/.test(path) && method === "POST") ||
 	// Replacing the server's own code and restarting it is the owner's call alone.
 	path === "/server/update";
 

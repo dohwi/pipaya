@@ -1,10 +1,9 @@
 import { panesOf } from "./layout";
-import type { BrowserTabInfo } from "./browser";
 import type { TerminalInfo } from "./terminal";
 import type { Group, Session } from "./types";
 
 /** Something a pane can show: a conversation or a terminal. */
-export type Member = Session | TerminalInfo | BrowserTabInfo;
+export type Member = Session | TerminalInfo;
 
 /**
  * One tab of a working directory: a group (several panes laid out together), a lone conversation, or a lone terminal.
@@ -13,8 +12,7 @@ export type Member = Session | TerminalInfo | BrowserTabInfo;
 export type Tab =
 	| { kind: "group"; id: string; group: Group; members: Member[] }
 	| { kind: "session"; id: string; session: Session }
-	| { kind: "terminal"; id: string; terminal: TerminalInfo }
-	| { kind: "browser"; id: string; browser: BrowserTabInfo };
+	| { kind: "terminal"; id: string; terminal: TerminalInfo };
 
 export interface DirBlock {
 	path: string;
@@ -30,7 +28,6 @@ export interface BlockOpts {
 	/** search on group names: a group that matches keeps all its members */
 	matchGroup?: (g: Group) => boolean;
 	matchTerminal?: (t: TerminalInfo) => boolean;
-	matchBrowser?: (b: BrowserTabInfo) => boolean;
 	/** directories placed by hand */
 	dirOrder?: readonly string[];
 	/** tabs (group / session / terminal ids) placed by hand, across all directories */
@@ -54,15 +51,13 @@ function dirOf(members: Member[], pinned?: string): string {
  * bar, the folded rail and the previous / next shortcuts all read this, so they can never disagree about the order.
  * Groups without any member left are skipped (the server dissolves them).
  */
-export function sidebarDirs(sessions: readonly Session[], groups: readonly Group[], terminals: readonly TerminalInfo[] = [], o: BlockOpts = {}, browsers: readonly BrowserTabInfo[] = []): DirBlock[] {
+export function sidebarDirs(sessions: readonly Session[], groups: readonly Group[], terminals: readonly TerminalInfo[] = [], o: BlockOpts = {}): DirBlock[] {
 	const match = o.match ?? (() => true);
 	const matchTerminal = o.matchTerminal ?? (() => true);
 	const matchGroup = o.matchGroup ?? (() => false);
-	const matchBrowser = o.matchBrowser ?? (() => true);
 	const termIds = new Set(terminals.map((t) => t.id));
-	const webIds = new Set(browsers.map((b) => b.id));
-	const byId = new Map<string, Member>([...sessions.map((s) => [s.id, s] as const), ...terminals.map((t) => [t.id, t] as const), ...browsers.map((b) => [b.id, b] as const)]);
-	const matches = (m: Member) => (termIds.has(m.id) ? matchTerminal(m as TerminalInfo) : webIds.has(m.id) ? matchBrowser(m as BrowserTabInfo) : match(m as Session));
+	const byId = new Map<string, Member>([...sessions.map((s) => [s.id, s] as const), ...terminals.map((t) => [t.id, t] as const)]);
+	const matches = (m: Member) => (termIds.has(m.id) ? matchTerminal(m as TerminalInfo) : match(m as Session));
 	const grouped = new Set<string>();
 	const all: { cwd: string; tab: Tab; created: number }[] = [];
 	for (const g of groups) {
@@ -82,10 +77,6 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	for (const t of terminals) {
 		if (grouped.has(t.id) || !matchTerminal(t)) continue;
 		all.push({ cwd: t.cwd, tab: { kind: "terminal", id: t.id, terminal: t }, created: t.createdAt ?? 0 });
-	}
-	for (const b of browsers) {
-		if (grouped.has(b.id) || !matchBrowser(b)) continue;
-		all.push({ cwd: b.cwd, tab: { kind: "browser", id: b.id, browser: b }, created: b.createdAt ?? 0 });
 	}
 	const tabOrder = o.tabOrder ?? [];
 	const trank = (id: string) => {
@@ -123,10 +114,10 @@ export function tabOf(dirs: readonly DirBlock[], id: string | null | undefined):
 }
 
 /** Session and terminal ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
-export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = [], browsers: readonly BrowserTabInfo[] = []): string[] {
+export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = []): string[] {
 	const out: string[] = [];
 	const seen = new Set<string>();
-	for (const d of sidebarDirs(sessions, groups, terminals, { dirOrder, tabOrder }, browsers))
+	for (const d of sidebarDirs(sessions, groups, terminals, { dirOrder, tabOrder }))
 		for (const t of d.tabs) for (const id of tabPanes(t)) if (!seen.has(id)) (seen.add(id), out.push(id));
 	return out;
 }

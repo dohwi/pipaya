@@ -69,7 +69,7 @@ async function cycleThinking() {
 
 /** Previous / next conversation in sidebar order. */
 function stepSession(step: 1 | -1) {
-  const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.browsers), app.activeId, step);
+  const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals), app.activeId, step);
   if (id && id !== app.activeId) void app.openSession(id);
 }
 
@@ -95,7 +95,7 @@ function lastSession() {
 
 /** Jump to the topmost conversation that finished while nobody was looking. */
 function nextFinished() {
-  const id = firstUnseen(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.browsers), (x) => !!(app.unread[x] || app.failed[x]), app.activeId);
+  const id = firstUnseen(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals), (x) => !!(app.unread[x] || app.failed[x]), app.activeId);
   if (id) void app.openSession(id);
   else app.toast(t("확인하지 않은 완료된 대화가 없습니다"), "error");
 }
@@ -224,8 +224,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   newTerminal: () => void app.openTerminal(app.workdir),
   splitTerminal: () => app.splitTerminal("bottom"),
   splitTerminalRight: () => app.splitTerminal("right"),
-  newBrowser: () => void app.openBrowser(),
-  splitBrowser: () => app.splitBrowser("right"),
   zoomPane,
   restorePane,
   toggleFull,

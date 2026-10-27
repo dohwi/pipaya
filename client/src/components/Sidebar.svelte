@@ -29,7 +29,6 @@
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { browserLabel, type BrowserTabInfo } from "../lib/browser";
 	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
@@ -48,16 +47,15 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[], archived: Session[], browsers: BrowserTabInfo[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[], archived: Session[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
 		const dirs = sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || x.title.toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
 			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
-			matchBrowser: (x) => !q || browserLabel(x, "").toLowerCase().includes(q) || x.url.toLowerCase().includes(q),
 			dirOrder: order,
 			tabOrder: torder,
 			groupDir: gdir,
-		}, browsers);
+		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		// Archived conversations hang under their folder; a folder with only archived ones still shows, after the others.
 		const byDir: Record<string, Session[]> = {};
@@ -78,7 +76,7 @@
 			const state = link ? connectionState(link.net) : "checking";
 			const ws = link?.workspace ?? null;
 			const d = link?.data;
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], d?.terminals ?? [], d?.archived ?? [], d?.browsers ?? []);
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], d?.terminals ?? [], d?.archived ?? []);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 	});
@@ -169,8 +167,6 @@
 		newMenuEntries(platformName(n.platform), {
 			chat: () => app.openIn(n.server.id, { workdir: path }),
 			terminal: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
-			browser: () => app.openIn(n.server.id, { workdir: path, browser: true }),
-			tempBrowser: () => app.openIn(n.server.id, { workdir: path, browser: true, profile: "temp" }),
 		});
 	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
 	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));
@@ -184,7 +180,6 @@
 		closeSession: (id) => void app.close(id),
 		archiveSession: (id) => void app.archive(id),
 		closeTerminal: (id) => void app.closeTerminal(id),
-		closeBrowser: (id) => void app.closeBrowser(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
 		leaveGroup: (id) => void app.leaveGroup(id),
 	};

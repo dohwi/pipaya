@@ -10,7 +10,7 @@ import { LocalizedError, t } from "../i18n";
 import { SETTINGS_TABS, WORKSPACE_DIALOGS, type SettingsTab, type WorkspaceDialog } from "./workspace-spec";
 export { SETTINGS_TABS, WORKSPACE_DIALOGS, type SettingsTab, type WorkspaceDialog };
 
-export interface WorkspaceTab { id: string; kind: "group" | "session" | "terminal" | "browser"; title: string; active: boolean; paneIds: string[] }
+export interface WorkspaceTab { id: string; kind: "group" | "session" | "terminal"; title: string; active: boolean; paneIds: string[] }
 export interface WorkspaceState {
   /** `narrow`: phone layout, the sidebar is a drawer (`open`); otherwise it is docked and can be `collapsed`. */
   narrow: boolean;
@@ -52,7 +52,7 @@ export function workspaceAdapter(app: typeof AppStore, builtIn: { names(): strin
         folder: dir?.path ?? app.workdirAbs,
         tabs: (dir?.tabs ?? []).map((x) => ({
           id: x.id, kind: x.kind, active: x.id === active,
-          title: x.kind === "group" ? x.group.name : x.kind === "session" ? x.session.title : x.kind === "browser" ? x.browser.title || x.browser.url : x.terminal.title,
+          title: x.kind === "group" ? x.group.name : x.kind === "session" ? x.session.title : x.terminal.title,
           paneIds: x.kind === "group" ? x.members.map((m) => m.id) : [x.id],
         })),
         settingsOpen: app.settingsOpen,

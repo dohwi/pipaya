@@ -33,9 +33,6 @@ import { GroupManager, panesOf, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
 import { registerTerminalRoutes, TERMINAL_SOCKET } from "./terminal-routes.ts";
-import { BrowserManager, isBrowserId } from "./browser.ts";
-import { BROWSER_TOOLS } from "./browser-tools.ts";
-import { BROWSER_SOCKET, registerBrowserRoutes } from "./browser-routes.ts";
 import { LocaleStore } from "./locales.ts";
 import { registerLocaleRoutes } from "./locales-routes.ts";
 import { openDb } from "./db.ts";
@@ -76,8 +73,6 @@ export interface App {
 }
 
 export interface BuildOptions {
-	/** Chrome/Chromium to run; null = none (tests). Default: look for one on this machine. */
-	browserExecutable?: string | null;
 	/** Validate response contracts in tests; production uses plain JSON serialization. */
 	strictResponses?: boolean;
 	/** Home directory used to find global skills (tests); defaults to the OS user home. */
@@ -141,7 +136,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
 		tools: r.tools, closed: r.closed, archived: r.archived, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
-	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id) && !isBrowserId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), browserIds: panesOf(g.layout).filter(isBrowserId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
+	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
 	const thinking = (v: string | undefined) => {
 		if (v !== undefined && !(THINKING_LEVELS as readonly string[]).includes(v)) throw badRequest(`unknown thinking level "${v}"`);
 		return v as ThinkingLevel | undefined;
@@ -229,8 +224,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return outcome.answer;
 		},
 	});
-	const browsers = new BrowserManager(bus, { enabled: cfg.browser !== false, dataDir: cfg.dataDir, defaultWorkdir: () => configuration.defaultWorkdir(), ...(opts.browserExecutable !== undefined ? { executable: opts.browserExecutable } : {}) });
-	sessions.setBrowser(browsers);
 	const terminals = new TerminalManager(bus, {
 		enabled: cfg.terminals !== false,
 		defaultWorkdir: () => configuration.defaultWorkdir(),
@@ -238,10 +231,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	// generate_image can be switched off like an extension tool, while an image model makes it exist at all.
-	configuration.setSwitchableSource(() => [...TOGGLEABLE_TOOLS, ...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : []), ...(browsers.available() ? BROWSER_TOOLS : [])]);
-	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : isBrowserId(id) ? browsers.has(id) : store.get(id) !== undefined), () => store.activeNames());
-	groups.evictWhere((id) => isTerminalId(id) || isBrowserId(id));
-	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id) && !isBrowserId(id)) })));
+	configuration.setSwitchableSource(() => [...TOGGLEABLE_TOOLS, ...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
+	groups.evictWhere(isTerminalId);
+	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
@@ -289,7 +282,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
 		const bearer = bearerOf(req.headers.authorization);
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
-		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || BROWSER_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
+		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
 		const query = (req.query as { token?: string } | undefined)?.token;
 		const given = bearer ?? (browserStream ? query : undefined);
 		if (tokenMatches(given)) return; // the admin token
@@ -606,7 +599,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
 	await registerWebSocket(server, { bus, sessions, questions }, opts.websocket);
 	registerTerminalRoutes(server, terminals);
-	registerBrowserRoutes(server, browsers);
 
 	await extensions.load();
 	// Skills, AGENTS.md and whatever extensions read from those folders live in plain files: tell open clients when they change on disk.
@@ -626,7 +618,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		await notifications.close();
 		await push.close();
 		terminals.shutdown();
-		await browsers.shutdown();
 		sessions.shutdown();
 		await sessions.idle();
 		await extensions.shutdown();

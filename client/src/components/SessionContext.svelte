@@ -21,7 +21,7 @@
 	/** Which sources are unfolded, by key. A plain <details> snaps open, so the fold is drawn by hand to animate. */
 	let opened = $state<Record<string, boolean>>({});
 	const scope = { global: msg("전역 AGENTS.md"), ancestor: msg("상위 폴더 AGENTS.md"), cwd: msg("프로젝트 AGENTS.md") };
-	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델"), browser: msg("브라우저") };
+	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델") };
 	const kindName = { sdk: msg("출처 SDK"), runtime: msg("출처 서버"), extension: msg("출처 확장"), helper: msg("출처 보조 모델") };
 	const promptGroups = [
 		{ delivery: "request" as const, name: msg("요청마다 함께 가는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 세션의 모델과 로그인에 해당할 때만 \"적용 중\"입니다.") },
