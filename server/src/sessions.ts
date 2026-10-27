@@ -21,6 +21,7 @@ import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
+import { afterTurn, runawayReason } from "./run-guard.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
@@ -859,19 +860,9 @@ export class SessionManager {
 
 	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */
 	private guardRunaway(sessionId: string, live: Live, event: Extract<AgentEvent, { type: "turn_end" }>): void {
-		live.turns++;
-		const content = (event.message as { content?: unknown }).content;
-		const calls = Array.isArray(content)
-			? content.filter((b) => b?.type === "toolCall").map((b) => `${b.name}:${JSON.stringify(b.arguments)}`).sort().join("|")
-			: "";
-		// Only turns that ended in tool calls can be a loop; a plain answer ends the run on its own.
-		live.recentCalls = calls ? [...live.recentCalls, calls].slice(-MAX_REPEATED_CALLS) : [];
-		let reason: string | null = null;
-		if (live.turns >= MAX_RUN_TURNS) {
-			reason = `Stopped after ${MAX_RUN_TURNS} model calls in one run. Send a message to continue.`;
-		} else if (live.recentCalls.length === MAX_REPEATED_CALLS && live.recentCalls.every((c) => c === live.recentCalls[0])) {
-			reason = `Stopped: the same tool call was repeated ${MAX_REPEATED_CALLS} times in a row.`;
-		}
+		const limits = { maxTurns: MAX_RUN_TURNS, maxRepeated: MAX_REPEATED_CALLS };
+		({ turns: live.turns, recentCalls: live.recentCalls } = afterTurn(live, (event.message as { content?: unknown }).content, limits));
+		const reason = runawayReason(live, limits);
 		if (!reason || !live.running) return;
 		this.bus.publish(sessionId, "run_limit", { reason, turns: live.turns });
 		this.abortRun(sessionId, live);
