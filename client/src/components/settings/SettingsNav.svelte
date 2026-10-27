@@ -6,6 +6,7 @@
 	import { Api } from "../../lib/api";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { SETTINGS_TABS, type SettingsTabId } from "../../lib/settings-search";
+	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../Icon.svelte";
 	import Pin from "../Pin.svelte";
@@ -52,25 +53,13 @@
 		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
-	type Kid = { id: string; name: string; live: boolean; builtin: boolean; update?: boolean; /** a server extension whose client half is not installed on this device */ half?: boolean; halfLabel?: string; /** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */ paired?: boolean; /** name of the other half of the pair, for the clip tooltip */ partner?: string; /** the last row: the trunk line stops here */ end?: boolean; /** where the clip leads: the other half of the pair (`install`: it is not installed, so open its install preview) */ link?: { tab: TabId; id: string | null; install?: string } };
+	type Kid = ExtensionRow;
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
-		const own = extensions.installed.filter((e) => e.scope === sc).map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, live: e.state === "active" || e.state === "starting", builtin: false, update: extensionUpdates.clientIds(sc).has(e.package.manifest.id), half: !!extensionUpdates.missingServerFor(e.package.manifest.id), halfLabel: t("서버 확장 필요") }));
-		const side = sc === "server" && serverSide && serverSide.id === server?.id ? serverSide.names.map((n) => ({ id: `srv:${n.name}`, companion: n.companion, name: n.title ?? n.name, live: true, builtin: false, update: extensionUpdates.serverNames.has(n.name), halfLabel: t("클라이언트 확장 필요"), half: !!n.companion && !extensions.installed.some((e) => e.package.manifest.id === n.companion) })) : [];
-		const owned = (id: string) => side.some((n) => n.companion === id);
-		// the open server's extensions, whichever tab is listed: a client extension on this device is paired with its server half
-		const serverNow = serverSide && serverSide.id === server?.id ? serverSide.names : [];
-		const free = own.filter((e) => !owned(e.id));
-		// a pair stays flat: the client half sits right after its server extension, both marked with a clip
-		const rows: Kid[] = [...free.map((e) => { const m = extensionUpdates.missingServerFor(e.id); const here = serverNow.find((n) => n.companion === e.id); return { ...e, paired: !!m || !!here, partner: m?.name ?? here?.title ?? here?.name, link: { tab: "srvext" as TabId, id: here ? `srv:${here.name}` : null } }; })];
-		for (const n of side) {
-			const mate = own.find((e) => e.id === n.companion);
-			rows.push({ ...n, paired: !!n.companion, partner: mate?.name ?? extensions.installed.find((e) => e.package.manifest.id === n.companion)?.package.manifest.name ?? (n.companion ? extensionUpdates.clientName(n.companion) ?? n.companion : undefined), link: n.companion ? (mate || extensions.installed.some((e) => e.package.manifest.id === n.companion) ? { tab: "extensions" as TabId, id: n.companion } : { tab: "extensions" as TabId, id: null, install: n.companion }) : undefined });
-			if (mate) rows.push({ ...mate, paired: true, partner: n.name, link: { tab: "srvext" as TabId, id: n.id } });
-		}
-		return rows.map((e, i) => ({ ...e, end: i === rows.length - 1 }));
+		const installed = extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, scope: e.scope, live: e.state === "active" || e.state === "starting" }));
+		return extensionRows(sc, installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, extensionUpdates);
 	};
 	const clipTip = (e: Kid) => (e.half ? e.halfLabel : e.partner ? t("확장 ‘{name}’와 함께 작동합니다.", { name: e.partner }) : t("짝 확장과 함께 작동"));
 	function openExt(tabId: TabId, id: string) {
