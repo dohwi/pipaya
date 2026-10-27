@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusOnDesktop } from "../../lib/focus";
 	import Button from "../Button.svelte";
 	import Badge from "../Badge.svelte";
 	import Accordion from "../Accordion.svelte";
@@ -116,8 +117,7 @@
 	</div>
 	{#if keying}
 		<form class="keyform" in:collapseIn out:collapseOut onsubmit={(e) => { e.preventDefault(); onsavekey(); }}>
-			<!-- svelte-ignore a11y_autofocus -->
-			<input class="field" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
+			<input class="field" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop />
 			<Button variant="primary" type="submit" disabled={busy || !keyValue.trim()}>{t("저장")}</Button>
 		</form>
 	{/if}

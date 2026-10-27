@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusOnDesktop } from "../lib/focus";
 	import Button from "./Button.svelte";
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
@@ -236,7 +237,7 @@
 								</li>
 								<li class:on={running}>
 									<b>{t("로그인 완료")}</b>
-									<span>{t("로그인이 끝나면 자동으로 연결됩니다. 이 서버가 다른 컴퓨터에 있어 자동으로 안 끝나면, 로그인 후 열린 페이지(localhost로 시작하는 주소가 열리지 않아도 됩니다)의 주소 전체를 복사해 아래에 붙여넣으세요.")}</span>
+									<span>{t("로그인하면 자동으로 연결됩니다. 안 되면 로그인 후 열린 페이지의 주소 전체(localhost가 열리지 않아도 됩니다)를 아래에 붙여넣으세요.")}</span>
 								</li>
 							</ol>
 						{/if}
@@ -263,8 +264,7 @@
 									<div class="row">{#each pr.options as o (o.id)}<Button size="sm" disabled={busy} title={o.description} onclick={() => submitAnswer(o.id)}>{o.label}</Button>{/each}</div>
 								{:else}
 									<form class="row" onsubmit={(e) => { e.preventDefault(); if (answer.trim()) void submitAnswer(answer.trim()); }}>
-										<!-- svelte-ignore a11y_autofocus -->
-										<input class="field mono" type={pr.type === "secret" ? "password" : "text"} placeholder={pr.type === "manual_code" ? "http://localhost:…/callback?code=…" : (pr.placeholder ?? "")} bind:value={answer} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
+										<input class="field mono" type={pr.type === "secret" ? "password" : "text"} placeholder={pr.type === "manual_code" ? "http://localhost:…/callback?code=…" : (pr.placeholder ?? "")} bind:value={answer} autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop />
 										<Button variant="primary" type="submit" disabled={busy || !answer.trim()}>{t("확인")}</Button>
 									</form>
 								{/if}
@@ -277,8 +277,7 @@
 			{:else if keyFor}
 				<form class="flow" onsubmit={(e) => { e.preventDefault(); void saveKey(); }}>
 					<p class="hint">{t("{name}의 API 키를 붙여넣으세요. 키는 서버에만 저장됩니다.", { name: keyFor.name })}</p>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input class="field mono" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
+					<input class="field mono" type="password" placeholder={t("API 키")} bind:value={keyValue} autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop />
 					<Button variant="primary" type="submit" disabled={busy || !keyValue.trim()}>{t("저장")}</Button>
 				</form>
 			{:else}

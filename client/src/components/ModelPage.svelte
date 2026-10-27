@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusOnDesktop } from "../lib/focus";
 	import Button from "./Button.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { ICON_LABEL } from "../lib/brand";
@@ -44,8 +45,7 @@
 	<section class="fsec">
 		<label>
 			<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
-			<!-- svelte-ignore a11y_autofocus -->
-			<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus={fresh && !r.fromUpstream} />
+			<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop={fresh && !r.fromUpstream} />
 			<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다. 바꾸려면 모델을 삭제하고 다시 불러오세요.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
 		</label>
 		{#if catalogLoaded}
@@ -104,7 +104,7 @@
 			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 읽기")}</button>
 			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
 		</div>
-		<p class="hint note">{r.imageGeneration ? t("이 모델은 대화하지 않고 그림만 그립니다. 에이전트 설정의 이미지 모델로 고르면 에이전트가 generate_image 도구로 씁니다.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
+		<p class="hint note">{r.imageGeneration ? t("그림만 그리는 모델입니다. 에이전트 설정에서 이미지 모델로 고르세요.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
 	</section>
 	{#if r.reasoning && !r.imageGeneration && !matched}
 		<section class="fsec">
