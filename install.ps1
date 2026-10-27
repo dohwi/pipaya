@@ -1,6 +1,6 @@
 # pipaya Windows client installer.
 #
-#   irm https://raw.githubusercontent.com/pipaya/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 | iex
 #
 # Downloads the latest Windows x64 installer, verifies it against SHA256SUMS.txt and starts it.
 # The installer is not Authenticode-signed, so SmartScreen may show a warning.

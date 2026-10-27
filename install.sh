@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # pipaya installer (Linux, macOS).
 #
-#   curl -fsSL https://raw.githubusercontent.com/pipaya/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/pipaya/main/install.sh | bash -s -- client
+#   curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash -s -- client
 #
 # Commands: server (default) | client | update | status | uninstall | help
 set -euo pipefail
@@ -331,7 +331,11 @@ cmd_uninstall() {
 			rm -f "$PLIST" ;;
 	esac
 	rm -rf "$CONF_DIR"
-	if [ -d "$APP_DIR/.git" ]; then rm -rf "$APP_DIR"; fi
+	# Only a checkout this installer made: never $HOME, / or any folder that merely happens to be a git repository.
+	case "$APP_DIR" in
+		""|/|"$HOME"|"$HOME"/) warn "refusing to delete $APP_DIR" ;;
+		*) if [ -d "$APP_DIR/.git" ] && [ -f "$APP_DIR/server/src/index.ts" ]; then rm -rf "$APP_DIR"; fi ;;
+	esac
 	say "Removed the service and $APP_DIR."
 	say "Your data (sessions, API keys, token) is still in $DATA_DIR. Delete it yourself if you no longer need it."
 }
