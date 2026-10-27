@@ -278,12 +278,20 @@ class AppStore {
     return this.servers.find((s) => s.id === this.serverId);
   }
 
-  /** Connection of the open server (kept as `conn` for components that only need url/token). */
+  /** Update the connected server, then say so and reload what it serves. The one path for every "update the server" button. */
+  async updateServerSoftware(api: Api | null = this.api): Promise<boolean> {
+    if (!api || !(await serverUpdater.apply(api))) return false;
+    this.toast(t("서버를 업데이트했습니다"), "ok");
+    await this.sync();
+    return true;
+  }
+
   /** Reconnect the open server now (its stream is dropped and everything is read again). */
   async sync(): Promise<void> {
     await this.link?.sync();
   }
 
+  /** Connection of the open server (kept as `conn` for components that only need url/token). */
   get conn(): { baseUrl: string; token: string } | null {
     const s = this.server;
     return s ? { baseUrl: s.baseUrl, token: s.token } : null;

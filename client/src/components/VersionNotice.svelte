@@ -29,14 +29,7 @@
 		return () => clearTimeout(timer);
 	});
 
-	async function updateServer() {
-		if (!app.api) return;
-		const ok = await serverUpdater.apply(app.api);
-		if (ok) {
-			app.toast(t("서버를 업데이트했습니다"), "ok");
-			await app.sync();
-		}
-	}
+	const updateServer = () => app.updateServerSoftware();
 	function updateApp() {
 		void updater.check(true).then(() => {
 			if (updater.phase === "available") updater.dismissed = "";

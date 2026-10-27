@@ -23,14 +23,7 @@
 		if (conn?.api && conn.serverId) await serverUpdater.check(conn.api, conn.serverId, true);
 	}
 
-	async function update() {
-		const api = updater.connection?.().api;
-		if (!api) return;
-		if (await serverUpdater.apply(api)) {
-			app.toast(t("서버를 업데이트했습니다"), "ok");
-			await app.sync();
-		}
-	}
+	const update = () => app.updateServerSoftware(updater.connection?.().api ?? null);
 </script>
 
 {#if status || version}
@@ -43,10 +36,8 @@
 				</span>
 			{/if}
 		</div>
-		{#if serverUpdater.phase === "updating"}
-			<StatusChip tone="warn">{t("서버를 업데이트하는 중…")}</StatusChip>
-		{:else if serverUpdater.phase === "restarting"}
-			<StatusChip tone="warn">{t("서버가 다시 시작되기를 기다리는 중…")}</StatusChip>
+		{#if serverUpdater.progressLabel}
+			<StatusChip tone="warn">{serverUpdater.progressLabel}</StatusChip>
 		{:else if isNew}
 			<StatusChip tone="ok">{t("서버에 새 버전이 있습니다")}</StatusChip>
 		{:else if release === "older"}

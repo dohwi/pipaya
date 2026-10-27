@@ -32,6 +32,12 @@ class ServerUpdater {
 	get busy(): boolean {
 		return this.phase === "checking" || this.phase === "updating" || this.phase === "restarting";
 	}
+	/** What the server is doing right now, in words; "" when it is not being updated. The one wording for every place that shows it. */
+	get progressLabel(): string {
+		if (this.phase === "updating") return t("서버를 업데이트하는 중…");
+		if (this.phase === "restarting") return t("서버가 다시 시작되기를 기다리는 중…");
+		return "";
+	}
 
 	setWithApp(on: boolean) {
 		this.withApp = on;

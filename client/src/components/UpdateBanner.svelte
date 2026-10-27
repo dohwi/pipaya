@@ -17,7 +17,7 @@
 	const serverBusy = $derived(serverUpdater.phase === "updating" || serverUpdater.phase === "restarting");
 	const title = $derived(
 		allowing ? t("설치를 허용해 주세요")
-		: serverBusy ? (serverUpdater.phase === "restarting" ? t("서버가 다시 시작되기를 기다리는 중…") : t("서버를 업데이트하는 중…"))
+		: serverBusy ? serverUpdater.progressLabel
 		: updater.phase === "ready" ? t("재시작하는 중…")
 		: downloading ? t("업데이트를 내려받는 중…")
 		: t("새 버전을 사용할 수 있습니다"),
