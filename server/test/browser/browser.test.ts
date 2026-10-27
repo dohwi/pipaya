@@ -313,4 +313,71 @@ live("browser tabs (real Chromium)", () => {
 			await b.shutdown();
 		}
 	}, 60_000);
+
+	test("a profile's logins can be exported and imported into another server", async () => {
+		const from = new BrowserManager(bus(), { enabled: true, dataDir: join(dir, "export-a"), actionTimeoutMs: 12_000 });
+		const to = new BrowserManager(bus(), { enabled: true, dataDir: join(dir, "export-b"), actionTimeoutMs: 12_000 });
+		const probe = async (m: BrowserManager, tab: string) => m.asAgent(tab, (page) => page.evaluate("document.cookie + '|' + localStorage.getItem('theme')") as Promise<string>);
+		try {
+			if (!from.listProfiles().some((p) => p.id === "work")) from.createProfile({ id: "work" });
+			const a = await from.create({ url: origin, profile: "work" });
+			await from.asAgent(a.id, (page) => page.evaluate("document.cookie = 'who=work; path=/; max-age=86400'; localStorage.setItem('theme', 'dark')"));
+			await from.close(a.id);
+
+			// exported while no tab is open: a short-lived browser reads it, and none is left running
+			const state = await from.exportProfile("work");
+			expect(state.cookies.some((c) => c.name === "who" && c.value === "work")).toBe(true);
+			expect(JSON.stringify(state.origins)).toContain("theme"); // local storage too, though no page was open
+			expect(from.listProfiles().find((p) => p.id === "work")!.running).toBe(false);
+
+			// another server has no such profile: importing creates it, and the login works there
+			expect(to.listProfiles().map((p) => p.id)).toEqual(["default"]);
+			const made = await to.importProfile("work", state);
+			expect(made).toMatchObject({ id: "work", agent: true });
+			const b = await to.create({ url: origin, profile: "work" });
+			expect(await probe(to, b.id)).toBe("who=work|dark");
+			await to.close(b.id);
+
+			// the throw-away profile has nothing to move; a file that is too big is refused
+			await expect(from.exportProfile("temp")).rejects.toThrow(/throw-away/);
+			await expect(to.importProfile("work", { cookies: [{ name: "x", value: "y".repeat(5 * 1024 * 1024) }], origins: [] })).rejects.toThrow(/too big/);
+		} finally {
+			await from.shutdown();
+			await to.shutdown();
+		}
+	}, { timeout: 90_000, retry: 2 });
+
+	test("only the admin token may export or import logins", async () => {
+		const own = (await api("POST", "/pairing", {})).json;
+		expect(own.code).toBeTruthy();
+		const redeemed = await app.server.inject({ method: "POST", url: "/pairing/redeem", headers: { "content-type": "application/json" }, payload: JSON.stringify({ code: own.code, name: "phone" }) });
+		const device = redeemed.json().token as string;
+		const asDevice = async (method: any, url: string, payload?: unknown) => {
+			const r = await app.server.inject({ method, url, headers: { authorization: `Bearer ${device}`, ...(payload !== undefined ? { "content-type": "application/json" } : {}) }, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}) });
+			return r.statusCode;
+		};
+		expect(await asDevice("POST", "/browsers/profiles/default/export", {})).toBe(403);
+		expect(await asDevice("POST", "/browsers/profiles/default/import", { cookies: [], origins: [] })).toBe(403);
+		// the rest of the browser is open to a paired device
+		expect(await asDevice("GET", "/browsers/profiles")).toBe(200);
+	});
+
+	test("text being composed (Korean) shows in the page, and the finished text replaces it", async () => {
+		const own = join(dir, "ime");
+		const b = new BrowserManager(bus(), { enabled: true, dataDir: own, actionTimeoutMs: 12_000 });
+		try {
+			const t = await b.create({ url: origin });
+			const value = () => b.asAgent(t.id, (page) => page.evaluate("document.querySelector('input').value") as Promise<string>);
+			await b.asAgent(t.id, (page) => page.locator("input").click());
+			await b.input(t.id, { type: "compose", text: "ㅎ" });
+			await b.input(t.id, { type: "compose", text: "하" });
+			expect(await value()).toBe("하"); // visible while it is still being composed
+			await b.input(t.id, { type: "text", text: "한" });
+			expect(await value()).toBe("한"); // the composition was replaced, not appended
+			await b.input(t.id, { type: "text", text: "글" });
+			expect(await value()).toBe("한글");
+		} finally {
+			await b.shutdown();
+		}
+	}, { timeout: 60_000, retry: 2 });
 });

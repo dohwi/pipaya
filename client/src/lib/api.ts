@@ -357,6 +357,8 @@ export class Api {
 	createBrowserProfile = (input: { id: string; agent?: boolean }) => this.req<import("./browser").BrowserProfile>("POST", "/browsers/profiles", input);
 	updateBrowserProfile = (id: string, changes: { agent?: boolean; id?: string }) => this.req<import("./browser").BrowserProfile>("PATCH", `/browsers/profiles/${encodeURIComponent(id)}`, changes);
 	clearBrowserProfile = (id: string) => this.req<{ ok: boolean }>("POST", `/browsers/profiles/${encodeURIComponent(id)}/clear`, {});
+	exportBrowserProfile = (id: string) => this.req<import("./browser").BrowserProfileState>("POST", `/browsers/profiles/${encodeURIComponent(id)}/export`, {});
+	importBrowserProfile = (id: string, state: import("./browser").BrowserProfileState) => this.req<import("./browser").BrowserProfile>("POST", `/browsers/profiles/${encodeURIComponent(id)}/import`, state);
 	deleteBrowserProfile = (id: string) => this.req<{ ok: boolean }>("DELETE", `/browsers/profiles/${encodeURIComponent(id)}`);
 	closeBrowser = (id: string) => this.req<{ ok: boolean }>("DELETE", `/browsers/${encodeURIComponent(id)}`);
 

@@ -73,6 +73,14 @@ export const BrowserProfileList = Type.Object({ profiles: Type.Array(BrowserProf
 export const CreateProfileBody = Type.Object({ id: Type.String({ minLength: 1, maxLength: 40 }), agent: Type.Optional(Type.Boolean()) });
 export const PatchProfileBody = Type.Object({ agent: Type.Optional(Type.Boolean()), id: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })) });
 export type BrowserProfileInfo = Static<typeof BrowserProfileSchema>;
+/** Cookies and local storage of a profile (Playwright's storage state): the logins, as a file that can move between servers. */
+export const ProfileStateSchema = Type.Object({
+	cookies: Type.Array(Type.Record(Type.String(), Type.Unknown())),
+	origins: Type.Array(Type.Record(Type.String(), Type.Unknown())),
+});
+export type ProfileState = Static<typeof ProfileStateSchema>;
+/** An exported profile is at most this big (cookies and local storage as JSON). */
+export const MAX_PROFILE_STATE_BYTES = 4 * 1024 * 1024;
 export const BrowserTabList = Type.Object({ tabs: Type.Array(BrowserTabSchema) });
 export const BrowserSupport = Type.Object({ enabled: Type.Boolean(), available: Type.Boolean(), max: Type.Integer() });
 export const CreateBrowserBody = Type.Object({ url: Type.Optional(Type.String({ maxLength: 4000 })), cwd: Type.Optional(Type.String({ maxLength: 4000 })), profile: Type.Optional(Type.String({ maxLength: 40 })) });
@@ -159,7 +167,9 @@ export type BrowserInput =
 	| { type: "mouse"; action: "move" | "down" | "up"; x: number; y: number; button?: "left" | "middle" | "right"; clickCount?: number }
 	| { type: "wheel"; x: number; y: number; dx: number; dy: number }
 	| { type: "key"; action: "down" | "up"; key: string; code?: string; text?: string; modifiers?: number }
-	| { type: "text"; text: string };
+	| { type: "text"; text: string }
+	/** Text still being composed (Korean, Japanese …): shown underlined in the page until it is committed with `text` */
+	| { type: "compose"; text: string };
 
 export interface BrowserOptions {
 	enabled: boolean;
@@ -325,6 +335,90 @@ export class BrowserManager {
 		rmSync(this.profileDir(id), { recursive: true, force: true });
 		mkdirSync(this.profileDir(id), { recursive: true, mode: 0o700 });
 		this.writeMeta(id, meta);
+	}
+
+	/**
+	 * The logins of a profile as one JSON value (cookies and local storage), to move them to another server or keep a
+	 * copy. The profile's browser has to run to read them: when it is not running a short-lived one is started.
+	 */
+	async exportProfile(rawId: string): Promise<ProfileState> {
+		const id = profileId(rawId);
+		if (id === TEMP_PROFILE) throw badRequest("the throw-away profile has nothing to export");
+		await this.settled(id);
+		if (!this.listProfiles().some((p) => p.id === id)) throw notFound("browser profile");
+		const running = this.contexts.get(id);
+		const ctx = running ? await running : await this.launch(id);
+		try {
+			// Local storage only shows for a site while a page of it is open: visit each site the profile has cookies for
+			// (answered from nothing, so no request leaves the server) and read it, then take the state.
+			const sites = new Set<string>([...this.storedOrigins(id)]);
+			for (const c of await ctx.cookies()) {
+				const host = String(c.domain).replace(/^\./, "");
+				if (host) sites.add(`${c.secure ? "https" : "http"}://${host}`);
+			}
+			for (const origin of [...sites].slice(0, 40)) {
+				const page = await ctx.newPage();
+				try {
+					await page.route("**/*", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>export</title>" }));
+					await page.goto(origin, { waitUntil: "commit", timeout: 8_000 }).catch(() => {});
+				} finally {
+					await page.close().catch(() => {});
+				}
+			}
+			const state = (await ctx.storageState()) as ProfileState;
+			if (Buffer.byteLength(JSON.stringify(state)) > MAX_PROFILE_STATE_BYTES) throw badRequest("this profile has too much stored data to export");
+			return state;
+		} finally {
+			if (!running && !this.tabsOf(id).length) await this.stopBrowser(id);
+		}
+	}
+
+	/**
+	 * Sites that have local storage in a profile, read from Chromium's own store on disk (`_<origin>` keys). A site with
+	 * local storage but no cookie would otherwise be missed. Best effort: an unreadable store gives nothing.
+	 */
+	private storedOrigins(id: string): string[] {
+		const dir = join(this.profileDir(id), "Default", "Local Storage", "leveldb");
+		const out = new Set<string>();
+		try {
+			for (const f of readdirSync(dir)) {
+				if (!/\.(ldb|log)$/.test(f)) continue;
+				const raw = readFileSync(join(dir, f)).toString("latin1");
+				for (const m of raw.matchAll(/_(https?:\/\/[A-Za-z0-9.\-]+(?::\d{1,5})?)/g)) out.add(m[1]!);
+			}
+		} catch {
+			/* no store yet */
+		}
+		return [...out].slice(0, 60);
+	}
+
+	/** Put logins into a profile (it is created when missing). Existing cookies of the same name and site are replaced. */
+	async importProfile(rawId: string, state: ProfileState): Promise<BrowserProfileInfo> {
+		const id = profileId(rawId);
+		if (id === TEMP_PROFILE) throw badRequest("the throw-away profile cannot be imported into");
+		if (Buffer.byteLength(JSON.stringify(state)) > MAX_PROFILE_STATE_BYTES) throw badRequest("the profile file is too big");
+		await this.settled(id);
+		if (!existsSync(this.profileDir(id)) && id !== DEFAULT_PROFILE) this.createProfile({ id });
+		const running = this.contexts.get(id);
+		const ctx = running ? await running : await this.launch(id);
+		try {
+			await ctx.addCookies(state.cookies as never);
+			// local storage is set per site, by opening that site's origin in a scratch page of this browser
+			for (const o of state.origins as { origin?: string; localStorage?: { name: string; value: string }[] }[]) {
+				if (!o.origin || !/^https?:\/\//.test(o.origin) || !o.localStorage?.length) continue;
+				const page = await ctx.newPage();
+				try {
+					await page.route("**/*", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>import</title>" }));
+					await page.goto(o.origin, { waitUntil: "commit", timeout: 10_000 });
+					await page.evaluate(`((items) => { for (const i of items) localStorage.setItem(i.name, i.value); })(${JSON.stringify(o.localStorage)})`);
+				} finally {
+					await page.close().catch(() => {});
+				}
+			}
+		} finally {
+			if (!running && !this.tabsOf(id).length) await this.stopBrowser(id);
+		}
+		return this.listProfiles().find((p) => p.id === id)!;
 	}
 
 	/** May an agent act on tabs of this profile? */
@@ -598,6 +692,8 @@ export class BrowserManager {
 			await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: ev.x, y: ev.y, deltaX: ev.dx, deltaY: ev.dy });
 		} else if (ev.type === "key") {
 			await send("Input.dispatchKeyEvent", { type: ev.action === "down" ? (ev.text ? "keyDown" : "rawKeyDown") : "keyUp", key: ev.key, code: ev.code, text: ev.action === "down" ? ev.text : undefined, modifiers: ev.modifiers ?? 0 });
+		} else if (ev.type === "compose") {
+			await send("Input.imeSetComposition", { text: ev.text, selectionStart: ev.text.length, selectionEnd: ev.text.length });
 		} else {
 			await send("Input.insertText", { text: ev.text });
 		}

@@ -7,7 +7,9 @@
 	import { t } from "../lib/i18n";
 	import { errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
-	import { DEFAULT_BROWSER_PROFILE, type BrowserProfile } from "../lib/browser";
+	import { DEFAULT_BROWSER_PROFILE, MAX_PROFILE_FILE_BYTES, parseProfileState, type BrowserProfile } from "../lib/browser";
+	import { download } from "../lib/download";
+	import { fileStamp } from "../lib/format";
 
 	/**
 	 * Browser profiles of the open server: each keeps its own logins and cookies. A profile can be reserved for people
@@ -51,6 +53,30 @@
 			busy = false;
 			await load();
 		}
+	}
+	/** Logins out as a file. It signs whoever holds it in as you: say so before saving. */
+	const exportLogins = (p: BrowserProfile) =>
+		run(async () => {
+			if (!window.confirm(t("이 파일에는 {name} 프로필의 로그인(쿠키)이 들어 있습니다. 가진 사람은 같은 계정으로 로그인할 수 있으니 안전하게 보관하세요. 저장할까요?", { name: p.id }))) return;
+			const state = await app.api!.exportBrowserProfile(p.id);
+			await download(state, `pipaya-browser-${p.id}-${fileStamp()}.json`);
+		});
+	let importTarget = $state<string | null>(null);
+	let picker: HTMLInputElement | undefined = $state();
+	const pickFor = (id: string) => {
+		importTarget = id;
+		picker?.click();
+	};
+	async function onPicked(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		const id = importTarget;
+		input.value = "";
+		if (!file || !id) return;
+		if (file.size > MAX_PROFILE_FILE_BYTES) return void (error = t("파일이 너무 큽니다 (최대 4MB)"));
+		const state = parseProfileState(await file.text());
+		if (!state) return void (error = t("프로필 파일이 아닙니다 (cookies가 있는 JSON이어야 합니다)"));
+		await run(() => app.api!.importBrowserProfile(id, state));
 	}
 	const create = () =>
 		run(async () => {
@@ -96,6 +122,8 @@
 			</SettingRow>
 			<div class="actions">
 				<Button size="sm" disabled={busy} onclick={() => app.openBrowser(undefined, undefined, undefined, p.id)}>{t("이 프로필로 열기")}</Button>
+				<Button size="sm" disabled={busy} onclick={() => exportLogins(p)}>{t("내보내기")}</Button>
+				<Button size="sm" disabled={busy} onclick={() => pickFor(p.id)}>{t("가져오기")}</Button>
 				<ConfirmButton size="sm" confirmLabel={t("지울까요?")} disabled={busy} onconfirm={() => run(() => app.api!.clearBrowserProfile(p.id))}>{t("로그인 지우기")}</ConfirmButton>
 				{#if p.id !== DEFAULT_BROWSER_PROFILE}
 					{#if renaming === p.id}
@@ -108,6 +136,7 @@
 			</div>
 		</div>
 	{/each}
+	<input bind:this={picker} type="file" accept="application/json,.json" hidden onchange={onPicked} />
 	<form class="add" onsubmit={(e) => { e.preventDefault(); void create(); }}>
 		<input bind:value={name} placeholder={t("새 프로필 이름 (영문 소문자, 숫자, -, _)")} aria-label={t("새 프로필 이름")} maxlength="39" spellcheck="false" autocapitalize="off" autocomplete="off" />
 		<Button size="sm" type="submit" disabled={busy || !name.trim()}>{t("프로필 만들기")}</Button>

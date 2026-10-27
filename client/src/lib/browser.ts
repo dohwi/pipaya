@@ -37,6 +37,31 @@ export interface BrowserProfile {
 	createdAt: number;
 }
 
+/** A profile's logins as a file: cookies and local storage (Playwright's storage state) */
+export interface BrowserProfileState {
+	cookies: Record<string, unknown>[];
+	origins: Record<string, unknown>[];
+}
+
+/** What a picked file must look like to be sent as a profile; null when it is something else. */
+export function parseProfileState(text: string): BrowserProfileState | null {
+	let v: unknown;
+	try {
+		v = JSON.parse(text);
+	} catch {
+		return null;
+	}
+	const o = v as { cookies?: unknown; origins?: unknown } | null;
+	if (!o || typeof o !== "object" || !Array.isArray(o.cookies)) return null;
+	const origins = Array.isArray(o.origins) ? o.origins : [];
+	const plain = (x: unknown) => !!x && typeof x === "object" && !Array.isArray(x);
+	if (!o.cookies.every(plain) || !origins.every(plain)) return null;
+	return { cookies: o.cookies as Record<string, unknown>[], origins: origins as Record<string, unknown>[] };
+}
+
+/** Largest profile file the server takes (it refuses anything bigger anyway) */
+export const MAX_PROFILE_FILE_BYTES = 4 * 1024 * 1024;
+
 export const DEFAULT_BROWSER_PROFILE = "default";
 export const TEMP_BROWSER_PROFILE = "temp";
 

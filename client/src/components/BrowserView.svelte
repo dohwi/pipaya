@@ -260,18 +260,20 @@
 		};
 		const tkd = tkey("down");
 		const tku = tkey("up");
+		// While a syllable is being composed (Korean) it is shown in the page as it forms, so typing does not look dead;
+		// once the composition ends the finished text replaces it.
 		const tinput = (e: Event) => {
 			const ie = e as InputEvent;
 			const field = e.currentTarget as HTMLTextAreaElement;
-			// while composing (Korean), wait for the finished syllables; the text is sent once the composition ends
-			if (ie.isComposing) return;
-			if (field.value && !locked()) send?.({ type: "text", text: field.value });
+			if (locked()) return void (field.value = "");
+			if (ie.isComposing) return void send?.({ type: "compose", text: field.value });
+			if (field.value) send?.({ type: "text", text: field.value });
 			field.value = "";
 		};
 		const tcomp = () => {
 			const field = tk;
 			if (!field) return;
-			if (field.value && !locked()) send?.({ type: "text", text: field.value });
+			if (!locked() && field.value) send?.({ type: "text", text: field.value });
 			field.value = "";
 		};
 		tk?.addEventListener("keydown", tkd);

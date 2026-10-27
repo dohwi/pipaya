@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { IdParams, Ok, errors } from "./schemas.ts";
-import { BrowserProfileList, BrowserProfileSchema, BrowserSupport, BrowserTabList, BrowserTabSchema, CreateBrowserBody, CreateProfileBody, DEFAULT_PROFILE, NavigateBrowserBody, PatchProfileBody, type BrowserInput, type BrowserManager } from "./browser.ts";
+import { BrowserProfileList, BrowserProfileSchema, BrowserSupport, BrowserTabList, BrowserTabSchema, CreateBrowserBody, CreateProfileBody, DEFAULT_PROFILE, NavigateBrowserBody, PatchProfileBody, ProfileStateSchema, type BrowserInput, type BrowserManager } from "./browser.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
 /** Path of a tab's view socket; the auth hook lets browsers pass the token as ?token= here. */
@@ -25,6 +25,7 @@ function parseInput(msg: Record<string, unknown>): BrowserInput | null {
 		return { type: "key", action: msg.action as "down" | "up", key: msg.key, code: typeof msg.code === "string" ? msg.code : undefined, text: typeof msg.text === "string" ? msg.text : undefined, modifiers: num(msg.modifiers) ?? 0 };
 	}
 	if (msg.type === "text" && typeof msg.text === "string" && msg.text.length <= 100_000) return { type: "text", text: msg.text };
+	if (msg.type === "compose" && typeof msg.text === "string" && msg.text.length <= 200) return { type: "compose", text: msg.text };
 	return null;
 }
 
@@ -36,7 +37,7 @@ function parseInput(msg: Record<string, unknown>): BrowserInput | null {
  *                    text    { type: "frame", width, height }  sent right before each binary frame (page size in CSS px)
  *                    text    { type: "state", tab, control, by }   title / address changed, or control moved ("user" | "agent"; `by` = the session whose agent acts; `handoff` = {by, note} while an agent waits for the person to finish something in the page)
  *                    text    { type: "closed" }
- * client -> server   text    { type: "mouse" | "wheel" | "key" | "text", ... }   input for the page
+ * client -> server   text    { type: "mouse" | "wheel" | "key" | "text" | "compose", ... }   input for the page
  *                    text    { type: "fit", width, height }    the panel's size: the page is laid out for it
  *                    text    { type: "navigate", to }          an address, or "back" | "forward" | "reload"
  *
@@ -71,6 +72,15 @@ export function registerBrowserRoutes(server: FastifyInstance, browsers: Browser
 			await browsers.clearProfile(req.params.id);
 			return { ok: true };
 		},
+	});
+	// Logins of a profile as a file. Only the admin token may call these (see isAdminOnlyPath).
+	app.post("/browsers/profiles/:id/export", {
+		schema: { params: IdParams, response: { 200: ProfileStateSchema, ...errors(400, 401, 403, 404, 502) } },
+		handler: async (req) => browsers.exportProfile(req.params.id),
+	});
+	app.post("/browsers/profiles/:id/import", {
+		schema: { params: IdParams, body: ProfileStateSchema, bodyLimit: 5 * 1024 * 1024, response: { 200: BrowserProfileSchema, ...errors(400, 401, 403, 409, 502) } },
+		handler: async (req) => browsers.importProfile(req.params.id, req.body),
 	});
 	app.delete("/browsers/profiles/:id", {
 		schema: { params: IdParams, response: { 200: Ok, ...errors(400, 401, 404, 409) } },
