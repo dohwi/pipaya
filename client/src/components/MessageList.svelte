@@ -75,6 +75,18 @@
 		if (e.deltaY > -2) lastWheelUp = performance.now();
 		else release();
 	};
+	// Keys that scroll the list upward unpin too (otherwise onScroll would pin the view back at once). Typing fields keep
+	// their own arrows, so a key only counts when the focus is not in one.
+	const onKeyDown = (e: KeyboardEvent) => {
+		if (e.defaultPrevented || e.ctrlKey || e.altKey) return;
+		const up = e.key === "PageUp" || e.key === "Home" || e.key === "ArrowUp" || (e.key === " " && e.shiftKey);
+		if (!up || !scroller) return;
+		const el = e.target as HTMLElement | null;
+		if (el?.closest("input, textarea, select, [contenteditable], [role=textbox]")) return;
+		// Only this list: focus inside it, or nowhere (body). Other panes stay put.
+		if (el !== document.body && !scroller.contains(el)) return;
+		release();
+	};
 	let touching = false;
 	const onTouchStart = (e: TouchEvent) => { touching = true; touchY = e.touches[0]?.clientY ?? 0; };
 	const onTouchMove = (e: TouchEvent) => {
@@ -182,7 +194,7 @@
 
 </script>
 
-<svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} />
+<svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} onkeydown={onKeyDown} />
 
 <div
 	class="scroller"
