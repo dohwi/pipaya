@@ -387,6 +387,10 @@
 		background: var(--accent);
 		animation: caret 1s steps(2, start) infinite;
 	}
+	/* `text-wrap: balance` (app.css) re-splits a heading's lines on every token, so its words jump between lines while it is written */
+	.md.streaming :global(> :last-child:is(h1, h2, h3, h4)) {
+		text-wrap: wrap;
+	}
 	.md.streaming :global(> pre:last-child::after),
 	.md.streaming :global(> .codeblock:last-child::after),
 	.md.streaming :global(> .tablewrap:last-child::after) {
