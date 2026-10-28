@@ -101,72 +101,55 @@
 		else next[id] = true;
 		picked = next;
 	}
+	/** Run `act` over what is ticked in `list` and passes `keep`; then untick those, report with `done` and reload. */
+	async function bulk(list: Session[], keep: (s: Session) => boolean, act: (ids: string[]) => Promise<string | void>) {
+		const ids = list.filter((s) => picked[s.id] && keep(s)).map((s) => s.id);
+		if (!api || !ids.length) return;
+		busy = true;
+		error = "";
+		note = "";
+		try {
+			note = (await act(ids)) ?? "";
+			const next = { ...picked };
+			for (const id of ids) delete next[id];
+			picked = next;
+			await load();
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			busy = false;
+		}
+	}
+	const can = (list: Session[], keep: (s: Session) => boolean) => list.some((s) => picked[s.id] && keep(s));
+	const canArchive = (s: Session) => !s.closed && !s.archived;
+	const canRestore = (s: Session) => !!s.archived && !s.closed;
+	const canClose = (s: Session) => !s.closed;
+	const any = () => true;
+
 	/** Archive (or, with `on` false, restore) what is ticked in one folder; closed ones are left as they are. */
-	async function archive(list: Session[], on: boolean) {
-		const ids = list.filter((s) => picked[s.id] && !s.closed && !!s.archived !== on).map((s) => s.id);
-		if (!api || !ids.length) return;
-		busy = true;
-		error = "";
-		note = "";
-		try {
-			for (const id of ids) await api.patchSession(id, { archived: on });
-			note = on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
-			const next = { ...picked };
-			for (const id of ids) delete next[id];
-			picked = next;
-			await load();
-		} catch (e) {
-			error = errorText(e);
-		} finally {
-			busy = false;
-		}
-	}
-	/** Move what is ticked in one folder to the closed sessions (out of the list and the archive, still resumable). */
-	async function close(list: Session[]) {
-		const ids = list.filter((s) => picked[s.id] && !s.closed).map((s) => s.id);
-		if (!api || !ids.length) return;
-		busy = true;
-		error = "";
-		note = "";
-		try {
-			for (const id of ids) await api.patchSession(id, { closed: true, archived: false });
-			note = t("{n}개를 닫았습니다.", { n: ids.length });
-			const next = { ...picked };
-			for (const id of ids) delete next[id];
-			picked = next;
-			await load();
-		} catch (e) {
-			error = errorText(e);
-		} finally {
-			busy = false;
-		}
-	}
+	const archive = (list: Session[], on: boolean) =>
+		bulk(list, on ? canArchive : canRestore, async (ids) => {
+			for (const id of ids) await api!.patchSession(id, { archived: on });
+			return on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
+		});
+	/** Move what is ticked to the closed sessions (out of the list and the archive, still resumable). */
+	const close = (list: Session[]) =>
+		bulk(list, canClose, async (ids) => {
+			for (const id of ids) await api!.patchSession(id, { closed: true, archived: false });
+			return t("{n}개를 닫았습니다.", { n: ids.length });
+		});
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
-	async function remove(list: Session[]) {
-		const ids = list.filter((s) => picked[s.id]).map((s) => s.id);
-		if (!api || !ids.length) return;
-		busy = true;
-		error = "";
-		note = "";
-		try {
+	const remove = (list: Session[]) =>
+		bulk(list, any, async (ids) => {
 			let deleted = 0, skipped = 0;
 			// the server takes up to 500 at a time
 			for (let i = 0; i < ids.length; i += 500) {
-				const r = await api.deleteSessions(ids.slice(i, i + 500));
+				const r = await api!.deleteSessions(ids.slice(i, i + 500));
 				deleted += r.deleted.length;
 				skipped += r.skipped.length;
 			}
-			note = skipped ? t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }) : t("{n}개를 지웠습니다.", { n: deleted });
-			const next = { ...picked };
-			for (const id of ids) delete next[id];
-			picked = next;
-			await load();
-		} catch (e) {
-			error = errorText(e);
-		} finally {
-			busy = false;
-		}
-	}
+			return skipped ? t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }) : t("{n}개를 지웠습니다.", { n: deleted });
+		});
 
 </script>
 
@@ -205,9 +188,9 @@
 						</button>
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
-								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed)}><Icon name="x" /> {t("닫기")}</Button>
-								{#if !archivedOnly}<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed && !s.archived)}><Icon name="archive" /> {t("보관")}</Button>{/if}
-								<Button size="sm" onclick={() => void archive(g.list, false)} disabled={busy || !g.list.some((s) => picked[s.id] && s.archived)}><Icon name="undo" /> {t("복원")}</Button>
+								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !can(g.list, canClose)}><Icon name="x" /> {t("닫기")}</Button>
+								{#if !archivedOnly}<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !can(g.list, canArchive)}><Icon name="archive" /> {t("보관")}</Button>{/if}
+								<Button size="sm" onclick={() => void archive(g.list, false)} disabled={busy || !can(g.list, canRestore)}><Icon name="undo" /> {t("복원")}</Button>
 								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>
 						{/if}

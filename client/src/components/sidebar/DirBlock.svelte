@@ -11,6 +11,7 @@
 	import type { TerminalInfo } from "../../lib/terminal";
 	import Icon from "../Icon.svelte";
 	import GroupBlock from "./GroupBlock.svelte";
+	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
 	import ArchivedRow from "./ArchivedRow.svelte";
 	import SessionRow from "./SessionRow.svelte";
@@ -55,7 +56,7 @@
 			</span>
 			{#if folded}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
 		</button>
-		<button class="srvlist tap" onclick={() => app.openSessions(n.server.id, { cwd: d.path })} aria-label={t("대화 목록 관리")} title={t("이 디렉터리의 대화 목록 관리")}><Icon name="list" /></button>
+		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 디렉터리의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 디렉터리에서 새 대화 또는 터미널")} />
 	</div>
 	{#if !folded}
@@ -68,7 +69,7 @@
 						<span class="archname">{t("보관함")}</span>
 						{#if !aopen}<span class="cbadge" title={t("{n}개", { n: archived.length })}>{archived.length}</span>{/if}
 					</button>
-					<button class="srvlist tap archlist" onclick={() => app.openSessions(n.server.id, { cwd: d.path, archived: true })} aria-label={t("보관함 비우기")} title={t("보관함 관리 (선택해서 닫은 대화로 이동)")}><Icon name="list" /></button>
+					<ListButton serverId={n.server.id} filter={{ cwd: d.path, archived: true }} name={t("보관함 비우기")} tip={t("보관함 관리 (선택해서 닫은 대화로 이동)")} />
 					{#if aopen}
 						<div class="fold" in:collapseIn out:collapseOut>
 							{#each archived as s (s.id)}
@@ -97,12 +98,12 @@
 		position: relative;
 		margin-bottom: 2px;
 	}
-	.archlist {
+	.archive :global(.listbtn) {
 		position: absolute;
 		top: 2px;
 		right: 6px;
 	}
-	.archive:hover .archlist {
+	.archive:hover :global(.listbtn) {
 		opacity: 1;
 	}
 	.archive:hover .archtoggle .cbadge {

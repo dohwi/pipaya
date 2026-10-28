@@ -7,6 +7,7 @@
 	import Badge from "../Badge.svelte";
 	import Icon from "../Icon.svelte";
 	import DirBlockView from "./DirBlock.svelte";
+	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
 
 	/**
@@ -30,7 +31,7 @@
 				{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
 				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
 			</button>
-			<button class="srvlist tap" onclick={() => app.openSessions(n.server.id)} aria-label={t("대화 목록 관리")} title={t("대화 목록 관리 (보관·삭제)")}><Icon name="list" /></button>
+			<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
 			<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
 		</div>
 
@@ -169,42 +170,7 @@
 		font-size: var(--fs-md);
 		font-weight: 600;
 	}
-	/* the server header's conversation-list button: sits left of its "+", same look, shown on hover like it */
-	:global(:where(.side) .srvlist) {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 24px;
-		height: 24px;
-		margin-right: 2px;
-		border-radius: 50%;
-		color: var(--text-faint);
-		opacity: 0;
-	}
-	:global(:where(.side) .srvlist svg) {
-		width: 15px;
-		height: 15px;
-		stroke-width: 2;
-	}
-	:global(:where(.side) .srvhead:hover .srvlist),
-	:global(:where(.side) .dir:hover .srvlist),
-	:global(:where(.side) .archive:hover .srvlist),
-	:global(:where(.side) .srvlist:focus-visible) {
-		opacity: 1;
-	}
-	:global(:where(.side) .srvlist:hover) {
-		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
-		color: var(--text);
-	}
-	@media (pointer: coarse) {
-		:global(:where(.side) .srvlist) {
-			opacity: 1;
-		}
-	}
-	:global(:where(.side) .srvhead.folded .srvlist),
-	:global(:where(.side) .dir.folded .srvlist) {
-		display: none;
-	}	.warnline {
+	.warnline {
 		color: var(--warn);
 	}
 	.nosess {
