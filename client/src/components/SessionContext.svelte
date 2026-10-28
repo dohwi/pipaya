@@ -35,10 +35,7 @@
 	/** Only tools actually handed to the model; ones switched off in the settings are withheld and not listed. */
 	const activeTools = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled));
 	const baseBytes = $derived(data ? encoder.encode(data.systemPrompt).length + encoder.encode(data.skillsPrompt ?? "").length : 0);
-	const requestPromptTotal = $derived((data?.systemPrompts ?? []).filter((x) => x.delivery === "request" && x.active).reduce((n, x) => n + x.bytes, 0));
 	const toolTotal = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled).reduce((n, x) => n + x.bytes, 0));
-	/** What every request carries: the system prompt (with AGENTS.md and skills), the tool definitions, and the SDK wording that applies. */
-	const requestTotal = $derived(data ? encoder.encode(data.effectiveSystemPrompt).length + toolTotal + requestPromptTotal : 0);
 	const toolText = (x: { name: string; description: string; parameters: unknown }) => `${x.description}\n\n${JSON.stringify(x.parameters, null, 2)}`;
 	const bytes = (n: number) => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
 
@@ -91,7 +88,7 @@
 				{#each data.warnings as warning}
 					<div class="gap"><Notice tone="warn"><span class="mono">{warning.path}</span><br />{warning.message}</Notice></div>
 				{/each}
-				<p class="note">{t("매 요청에 실리는 크기 약 {size} — 시스템 프롬프트(AGENTS.md·스킬 포함) {a} + 도구 정의 {b} + SDK 문구 {c}", { size: bytes(requestTotal), a: bytes(encoder.encode(data.effectiveSystemPrompt).length), b: bytes(toolTotal), c: bytes(requestPromptTotal) })}</p>
+				<h2 class="part">{t("사용자 정의")}</h2>
 				<section class="group">
 					<h3>{t("AGENTS.md (적용 순서)")}</h3>
 					{#each data.instructions as instruction, i (instruction.path)}
@@ -106,6 +103,8 @@
 						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
 					{/each}
 				</section>
+				<div class="rest">
+					<h2 class="part">{t("시스템 정의")}</h2>
 				<section class="group">
 					<div class="source">
 						<button class="fold" onclick={() => (opened.base = !opened.base)} aria-expanded={!!opened.base}>
@@ -183,6 +182,7 @@
 						{/if}
 					</div>
 				</section>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -200,7 +200,10 @@
 	.body { overflow-y: auto; padding: 18px 24px 24px; min-height: 80px; }
 	.source { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.source + .source { margin-top: 8px; }
-	.group + .group { margin-top: 22px; }
+	.group + .group { margin-top: 10px; }
+	/* a paragraph of its own: what the system adds, apart from the AGENTS.md the user writes */
+	.part { margin: 0 0 10px 2px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+	.rest { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
 	h3 { margin: 0 0 8px 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
 	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; overflow-wrap: anywhere; }
 	.fold:hover { background: var(--bg-hover); }
