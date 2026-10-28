@@ -101,7 +101,7 @@
 	.archive :global(.listbtn) {
 		position: absolute;
 		top: 2px;
-		right: 6px;
+		right: 28px; /* the list-button column of the rows above (x 214-238): the same button sits in the same place */
 	}
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
