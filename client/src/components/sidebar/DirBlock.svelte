@@ -96,12 +96,12 @@
 <style>
 	.archive {
 		position: relative;
-		margin-bottom: 2px;
+		margin: 1px 0; /* 1px between rows, like the tab rows */
 	}
 	.archive :global(.listbtn) {
 		position: absolute;
 		top: 4px;
-		right: 26px; /* 288 - 234 - 10 - 18: its centre on x 234, the list-button column of the rows above */
+		right: 20px; /* its centre on x 244, the list-button column of the rows above */
 	}
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
@@ -114,7 +114,7 @@
 		align-items: center;
 		gap: 6px;
 		width: calc(100% - 4px);
-		height: 28px;
+		height: 32px; /* every row is 32px tall */
 		margin: 0 2px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		padding: 0 10px 0 22px; /* chevron centred under the folder icon above */
 		border-radius: var(--radius-sm);

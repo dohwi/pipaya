@@ -420,7 +420,7 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		height: 30px;
+		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
 		padding: 0 6px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
 		text-align: left;
@@ -490,7 +490,7 @@
 		flex: none;
 		width: 20px; /* grid: right-hand centres at x 254 and 234, 20px apart, so the buttons sit edge to edge */
 		height: 20px;
-		margin-right: 6px; /* 288 - 254 = 34: the same gutter as the left edge's 34 */
+		margin-right: 0; /* the button's right edge is the row's right edge: its centre is 24px from the sidebar's edge (x 264) */
 		border-radius: 50%;
 		color: var(--text-faint);
 		opacity: 0;
@@ -521,7 +521,7 @@
 			right: 0; /* the same centre (x 254) as when unfolded */
 		}
 		:global(:where(.side) .srvhead.folded .dirnew) {
-			right: 8px; /* the same centre (x 254); the strip is 8px wider on each side */
+			right: 4px; /* the strip's right padding: the same centre (x 264) */
 		}
 		:global(:where(.side) .dir.folded .cbadge),
 	:global(:where(.side) .srvhead.folded .cbadge) {
@@ -563,7 +563,7 @@
 		display: flex;
 		align-items: center;
 		border-radius: var(--radius-control);
-		margin: 1px 2px;
+		margin: 1px 0 1px 2px; /* no right margin: the row's button column is the folder row's */
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
@@ -699,7 +699,7 @@
 		flex: none;
 		width: 20px;
 		height: 20px;
-		margin-right: 4px; /* a tab row ends 2px short of a folder row, so its 20px button centres on x 254 like the "+" above */
+		margin-right: 0; /* tab rows end where folder rows do (no right margin), so this centres on x 264 like the "+" above */
 		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
 		color: var(--text-faint);
 		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
@@ -769,7 +769,7 @@
 
 	/* A split tab and its panes read as one tree: the book row on top, its panes hanging off a line under the book. */
 	:global(:where(.side) .grp) {
-		margin: 2px 0; /* full width like the other tabs, so the book sits where their icons do */
+		margin: 1px 0; /* full width like the other tabs, so the book sits where their icons do; 1px between rows like every other row */
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
@@ -777,7 +777,7 @@
 	}
 	:global(:where(.side) .grp .item.member .open) {
 		padding-left: 61px; /* grid: the pane icon centres on x 94, 20px past the book */
-		min-height: 30px;
+		min-height: 32px;
 	}
 	:global(:where(.side) .grp .item.member .title) {
 		color: var(--text-dim);

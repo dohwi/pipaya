@@ -60,7 +60,7 @@
 	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
 		position: relative;
-		padding: 0 8px 4px;
+		padding: 0 4px 4px 8px; /* right gutter: 4px (left stays 8): the "+" centre sits 24px from the sidebar's edge */
 	}
 	/* where a carried server would land: a line in the gap beside its card */
 	:global(:where(.side) .srv.before::before),
@@ -97,8 +97,8 @@
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin: 0 -8px 4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
-		padding: 0 8px;
+		margin: 0 -4px 4px -8px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
+		padding: 0 4px 0 8px;
 		background: var(--band-head);
 		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
 	}
