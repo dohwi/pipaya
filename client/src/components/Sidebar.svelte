@@ -773,7 +773,7 @@
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
-		padding-left: 6px;
+		padding-left: 7px; /* chevron (x 47-61) + 7 = the tabs' icon column at x 68 */
 	}
 	:global(:where(.side) .grp .item.member .open) {
 		padding-left: 70px; /* the pane's icon, just past the elbow */
@@ -825,11 +825,11 @@
 		place-items: center;
 		width: 14px;
 		height: 24px;
-		margin-left: 23px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
+		margin-left: 22px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grprow .lead) {
-		width: 14px; /* the folder / archive icon column, so the name starts at the same x */
+		width: 16px; /* the tabs' icon column (16px), so the book icon and the name line up with theirs */
 	}
 	:global(:where(.side) .gfold:hover .chev svg) {
 		stroke: var(--text);

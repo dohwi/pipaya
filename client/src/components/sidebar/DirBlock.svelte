@@ -116,7 +116,7 @@
 		width: calc(100% - 4px);
 		height: 28px;
 		margin: 0 2px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
-		padding: 0 10px 0 23px;
+		padding: 0 10px 0 22px; /* chevron centred under the folder icon above */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
@@ -125,6 +125,11 @@
 	.archtoggle:hover {
 		color: var(--text);
 		background: var(--bg-hover);
+	}
+	/* the same 16px icon column as a tab's icon (x 68), so the archive icon and the tabs' icons share one centre */
+	.archtoggle :global(.dicon) {
+		width: 16px;
+		place-items: center;
 	}
 	.archname {
 		flex: 1;
