@@ -93,10 +93,11 @@ export class ServerLink {
 		clearTimeout(this.retryTimer);
 		this.unsubscribe?.();
 		this.unsubscribe = null;
-		this.net = this.net === "online" ? "online" : "connecting";
+		// "connecting" only before the first attempt settles; a retry keeps showing online/offline instead of flickering
+		if (this.net === "idle") this.net = "connecting";
 		const api = this.api;
 		try {
-			const health = await api.health();
+			const health = await api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
 			if (token !== this.token) return;
 			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
 			if (compat(this.versions) === "update-app") {
