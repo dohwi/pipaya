@@ -155,7 +155,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 12px 8px 4px 16px;
+		padding: 12px 8px 4px 16px; /* the 32px close button's 15px glyph is 8.5px from its edge: 8 + 8.5 = 16.5, the search box's right edge */
 	}
 	.ttl {
 		font-size: var(--fs-sm);
@@ -166,6 +166,7 @@
 		place-items: center;
 		width: 32px;
 		height: 32px;
+		margin-right: 0;
 		border-radius: 50%;
 		color: var(--text-faint);
 	}

@@ -193,7 +193,7 @@
 	dialog { margin: auto; width: min(var(--modal-w-xl), calc(var(--vw) - var(--modal-gutter))); max-width: none; max-height: min(720px, calc(var(--dvh) - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
 	dialog::backdrop { background: var(--scrim); }
 	.panel { display: flex; flex-direction: column; max-height: inherit; }
-	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); border-bottom: 1px solid var(--border); flex: none; }
+	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); border-bottom: 1px solid var(--border); flex: none; }
 	h2 { margin: 0; font-size: var(--fs-xl); line-height: 1.4; }
 	.state { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
 	.actions { display: flex; flex: none; }
@@ -220,7 +220,7 @@
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 	@media (max-width: 640px) {
 		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
-		header { padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); }
+		header { padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); }
 		h2 { font-size: var(--fs-lg); }
 		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}

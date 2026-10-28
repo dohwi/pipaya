@@ -35,21 +35,22 @@
 	} = $props();
 </script>
 
-<div class="range" class:off={disabled}>
+<div class="range" class:off={disabled} class:act={!!trailing}>
 	<label>
 		<span class="name">{label}</span>
 		<input type="range" {min} {max} {step} {value} {disabled} aria-label={ariaLabel ?? label} oninput={(e) => oninput?.(e.currentTarget.valueAsNumber)} onchange={(e) => onchange?.(e.currentTarget.valueAsNumber)} />
-		<output>{format(value)}</output>
 	</label>
-	{#if trailing}{@render trailing()}{/if}
+	<output>{format(value)}</output>
+	{#if trailing}<span class="tail">{@render trailing()}</span>{/if}
 </div>
 
 <style>
 	.range {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 48px; /* track | value: the value is the row's right edge, like a switch or a field */
 		align-items: center;
 		gap: 8px;
-		min-height: 34px; /* same row height with or without a trailing button */
+		min-height: 36px; /* same row height with or without a trailing button */
 		font-size: var(--fs-md);
 		transition: opacity var(--motion-normal) var(--ease-std);
 	}
@@ -71,9 +72,15 @@
 		min-width: 0;
 		margin: 0;
 	}
+	.range.act {
+		grid-template-columns: minmax(0, 1fr) 48px 88px; /* with an action: track | value | action (the action's right edge is the row's right edge) */
+	}
+	.tail {
+		display: flex;
+		justify-content: flex-end;
+	}
 	output {
-		flex: none;
-		min-width: 44px;
+		min-width: 0;
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 		font-weight: 600;

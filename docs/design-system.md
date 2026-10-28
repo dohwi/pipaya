@@ -133,6 +133,17 @@ Eyeballing a screenshot hides 1–2px errors. Measure the DOM, then draw rulers 
 To capture every screen and dialog at the three viewports, write a throwaway Playwright script under `tmp/` modelled on `.agents/bin/shot.py`.
 Exposing the store needs an audit-only line in `client/src/main.ts` (`window.__app = app`); never commit that line.
 
+### Right-edge rule (one line, never two close ones)
+
+Everything you read in a dialog ends on **one** right line and starts on **one** left line. Two edges 2 to 16px apart are always a mistake
+(a refresh button at 25 and a delete button at 38 in the same list).
+- A control that sits inside a bordered box (card, list, row) ends one padding step inside the box, and **all** controls in that box end on the same line.
+  A toolbar above such cards sits on the cards' inner line, not the dialog gutter (`SessionsPanel .row.head`).
+- A row of controls that wraps (bulk buttons) wraps; it never overlaps and never leaves one button on a different edge.
+- Slider rows use one grid (`RangeField`): track, a 48px value column, and an 88px action column only when there is an action, so the value
+  or the action is the row's right edge like a switch.
+- A close button's hit box is wider than what you see: measure the glyph. Header padding is `calc(var(--dlg-px) - 9px)` so the glyph lands on the body's right edge.
+
 ### Alignment lint (finds the misses by itself)
 
 Walk each screen and compare the **edges** of everything that has a border or fill (inputs, buttons, cards, rows):
@@ -140,7 +151,7 @@ Walk each screen and compare the **edges** of everything that has a border or fi
 - two edges that differ by 1 to 8px (e.g. a search field ending at 1445 and a form ending at 1419) are a misalignment;
 - a vertical gap between two stacked boxes that is not a multiple of 4 (ignoring a 1px hairline) is off the scale.
 
-Run it for every screen at 1440 / 820 / 390 and treat any hit as a bug. Scroll-strips of chips and switches are exempt (they have no shared edge).
+Run it for every screen at 1440 / 820 / 390 and treat any hit as a bug. A **right-edge cluster** check also runs: collect the right edge of every visible control and text, merge edges within 1px, and report any pair 2 to 16px apart. Scroll-strips of chips and switches are exempt (they have no shared edge).
 Screens to cover: every settings tab, the server form (add / edit), conversation list (all / folder / archive / selected),
 skills, commands, folder picker, palette, confirmations (close, link, extension confirm / input / select), queue, file preview,
 sidebar, header, tab bar, composer, status line, messages, terminal, split tab.

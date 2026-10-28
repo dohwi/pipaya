@@ -420,7 +420,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px);
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px);
 		border-bottom: 1px solid var(--border);
 	}
 	.ftitle {

@@ -293,7 +293,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) 4px var(--dlg-px);
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) 4px var(--dlg-px);
 	}
 	.title {
 		display: flex;

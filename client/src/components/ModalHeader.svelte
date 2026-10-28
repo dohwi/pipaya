@@ -62,7 +62,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--dlg-gap-sm);
-		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); /* measured: the 38px close button holds a 19px glyph, 9.5px from its edge, so 10px here puts the glyph on the body's right edge (0.5px off by design: the scale has no 14.5) */
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); /* measured: the 38px close button holds a 19px glyph, 9.5px from its edge: 9 + 9.5 = 18.5 + the modal's 1px border = the body's right edge (gutter + 1) */
 	}
 	.mh:has(> :global(.iconbtn:first-child)) {
 		padding-left: 12px;
@@ -101,10 +101,10 @@
 	/* phones: the title lines up with the 16px gutter every dialog body uses there */
 	@media (max-width: 640px) {
 		.mh {
-			padding: 12px calc(var(--dlg-px) - 10px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above */
+			padding: 12px calc(var(--dlg-px) - 9px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above */
 		}
 		.mh.compact {
-			padding: 12px calc(var(--dlg-px) - 10px) 4px var(--dlg-px);
+			padding: 12px calc(var(--dlg-px) - 9px) 4px var(--dlg-px);
 		}
 	}
 </style>

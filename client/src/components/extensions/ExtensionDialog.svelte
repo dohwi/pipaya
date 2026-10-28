@@ -88,5 +88,5 @@
   .options label.on { border-color: var(--accent); background: var(--accent-soft); }
   .options input { grid-row: span 2; align-self: center; }
   .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 </style>

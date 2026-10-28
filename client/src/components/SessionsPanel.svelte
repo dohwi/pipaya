@@ -224,6 +224,12 @@
 		align-items: center;
 		gap: 12px;
 	}
+	/* ONE right line for everything you read in this list: the toolbar ("대화 목록 3 / 새로고침") sits on the cards' inner edge (12px padding +
+	   1px border), so the refresh button ends on the same line as the bulk buttons, the folder count and every row's age; its label starts
+	   on the same line as the checkboxes. Only the card boxes themselves reach out to the dialog gutter. */
+	.row.head {
+		padding: 0 13px;
+	}
 	.grow {
 		flex: 1;
 		min-width: 0;
@@ -244,8 +250,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 		overflow: hidden;
-		/* the card's outer edge is the content edge: the 1px border sits inside the buttons' right edge above */
-		margin: 0 -1px;
+		/* the card's outer edge is the content edge, flush with the buttons above it; what is inside the card sits 12px in
+		   (its own padding) plus the 1px border, so every control inside lines up with every other one */
 	}
 	/* the checkbox, folder name and the bulk buttons share one row that wraps: on a phone the buttons drop under the name
 	   instead of covering it. Checkbox column x = 12 in the header and in every row below, so the ticks line up. */
