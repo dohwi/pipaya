@@ -228,6 +228,8 @@
 	.inner { padding: 0 10px 10px; border-top: 1px solid var(--border); }
 	.inner > .note { margin-top: 10px; }
 	.inner .source { margin-top: 6px; }
+	/* same box as a collapsed row, so "nothing applied" reads as a muted row rather than stray body text */
+	.empty { padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); }
 	.note { margin: 0 2px 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
 </style>
