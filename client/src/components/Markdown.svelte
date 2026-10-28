@@ -6,6 +6,7 @@
 	import { renderMarkdown, renderStreaming } from "../lib/markdown";
 	import { copyText } from "../lib/clipboard";
 	import { openExternal } from "../lib/tauri";
+	import { patchHtml } from "../lib/patch-html";
 
 	let { text, streaming = false, sessionId = null }: { text: string; streaming?: boolean; sessionId?: string | null } = $props();
 	let root: HTMLElement | undefined = $state();
@@ -136,7 +137,7 @@
 
 <!-- Delegated click for the links and buttons inside the rendered HTML: those are focusable and keyboard-activated themselves. -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="md" class:streaming bind:this={root} onclick={onClick}>{@html html}</div>
+<div class="md" class:streaming bind:this={root} onclick={onClick} use:patchHtml={html}></div>
 
 <style>
 	.md {
