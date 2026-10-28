@@ -1840,7 +1840,9 @@ class AppStore {
   serverExtensionsTick = $state(0);
   /** Commands and tools that extensions inside the server provide; refreshed when the server (re)loads them. */
   serverCommands = $state<{ name: string; description?: string; args?: string; extension: string }[]>([]);
-  async refreshServerExtensions() {
+  async refreshServerExtensions(serverId?: string) {
+    // Another server's lists are read by whoever shows them; commands and tools belong to the open one.
+    if (serverId && serverId !== this.serverId) { this.serverExtensionsTick++; return; }
     const api = this.api;
     if (!api) return;
     try {

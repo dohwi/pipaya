@@ -240,7 +240,7 @@
 		pretty,
 		shortLabel,
 	});
-	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(app.api); });
+	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(Object.fromEntries(Object.entries(app.links).map(([id, l]) => [id, l?.api]))); });
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. */
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
 	const alertTone = $derived(app.net === "online" && app.compat === "ok" ? "ok" : "warn");

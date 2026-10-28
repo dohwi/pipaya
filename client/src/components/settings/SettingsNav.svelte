@@ -3,8 +3,7 @@
 	import { rovingKeys } from "../../lib/roving";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { Api } from "../../lib/api";
-	import { extensions } from "../../lib/extensions/host.svelte";
+		import { extensions } from "../../lib/extensions/host.svelte";
 	import { SETTINGS_TABS, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
 	import type { Server } from "../../lib/store.svelte";
@@ -41,26 +40,27 @@
 	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
-	const apiOf = (id: string) => {
-		const s = app.servers.find((x) => x.id === id);
-		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
-	};
 	$effect(() => {
 		void app.configTick;
 		void app.serverExtensionsTick;
 		const id = server?.id;
 		if (!id) { serverSide = null; return; }
 		let live = true;
-		apiOf(id)?.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
+		app.links[id]?.api.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
 	type Kid = ExtensionRow;
-	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
+	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount(server?.id) : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
 		const installed = extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, scope: e.scope, live: e.state === "active" || e.state === "starting" }));
-		return extensionRows(sc, installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, extensionUpdates);
+		return extensionRows(sc, installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, {
+			clientIds: (s) => extensionUpdates.clientIds(s),
+			serverNames: extensionUpdates.serverNames(server?.id),
+			missingServerFor: (cid) => extensionUpdates.missingServerFor(cid, server?.id),
+			clientName: (cid) => extensionUpdates.clientName(cid),
+		});
 	};
 	const clipTip = (e: Kid) => (e.half ? e.halfLabel : e.partner ? t("확장 ‘{name}’와 함께 작동합니다.", { name: e.partner }) : t("짝 확장과 함께 작동"));
 	function openExt(tabId: TabId, id: string) {

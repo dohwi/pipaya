@@ -10,27 +10,27 @@ const RECHECK_MS = 30 * 60 * 1000;
  */
 class ExtensionUpdates {
 	private catalog = $state<MarketCatalog | null>(null);
-	private server = $state<{ name: string; version?: string }[]>([]);
+	/** Each saved server's extensions, by server id; a server that did not answer is absent. */
+	private servers = $state<Record<string, { name: string; version?: string }[]>>({});
 	private checkedAt = 0;
-	/** The open server answered, so "this server lacks X" is a fact and not just a missing connection. */
-	private serverKnown = $state(false);
 
-	/** Ids of server extensions (by name) with a newer git entry in the catalog. */
-	serverNames = $derived.by(() => {
+	/** Names of one server's extensions with a newer git entry in the catalog. */
+	serverNames = (serverId: string | null | undefined): Set<string> => {
 		const out = new Set<string>();
-		for (const e of this.server) {
+		for (const e of (serverId && this.servers[serverId]) || []) {
 			const m = this.catalog?.extensions.find((x) => x.id === e.name && x.kind === "server");
 			if (m && e.version && m.source.type === "git" && compareVersions(m.version, e.version) > 0) out.add(e.name);
 		}
 		return out;
-	});
+	};
 	/** Display name of a client extension from the catalog, so an id is never shown where a name exists. */
 	clientName = (id: string): string | undefined => this.catalog?.extensions.find((x) => x.id === id && x.kind === "client")?.name;
-	/** The marketplace server extension that carries this client extension as its client half, when the open server lacks it. */
-	missingServerFor = (clientId: string): { id: string; name: string } | undefined => {
-		if (!this.serverKnown) return undefined;
+	/** The marketplace server extension that carries this client extension as its client half, when that server lacks it. */
+	missingServerFor = (clientId: string, serverId: string | null | undefined): { id: string; name: string } | undefined => {
+		const have = serverId ? this.servers[serverId] : undefined;
+		if (!have) return undefined;
 		const m = this.catalog?.extensions.find((x) => x.kind === "server" && x.companion === clientId);
-		if (!m || this.server.some((s) => s.name === m.id)) return undefined;
+		if (!m || have.some((s) => s.name === m.id)) return undefined;
 		return { id: m.id, name: m.name };
 	};
 	/** Ids of installed client extensions with a newer entry, per scope. */
@@ -43,21 +43,25 @@ class ExtensionUpdates {
 		}
 		return out;
 	};
-	get serverCount(): number {
-		return this.serverNames.size + this.clientIds("server").size;
+	serverCount(serverId: string | null | undefined): number {
+		return this.serverNames(serverId).size + this.clientIds("server").size;
 	}
 	get deviceCount(): number {
 		return this.clientIds("device").size;
 	}
+	/** Anything to update on this device or on any saved server. */
 	get any(): boolean {
-		return this.serverCount + this.deviceCount > 0;
+		return this.deviceCount > 0 || Object.keys(this.servers).some((id) => this.serverCount(id) > 0);
 	}
 
-	/** Reads the open server's extensions each time; the catalog at most every 30 minutes. */
-	async refresh(api: Api | null, force = false): Promise<void> {
-		if (api) {
-			try { this.server = (await api.serverExtensions()).extensions.map((e) => ({ name: e.name, version: e.version })); this.serverKnown = true; } catch { this.server = []; this.serverKnown = false; }
-		} else { this.server = []; this.serverKnown = false; }
+	/** Reads every saved server's extensions each time (`apis`: server id to its connection); the catalog at most every 30 minutes. */
+	async refresh(apis: Record<string, Api | null | undefined>, force = false): Promise<void> {
+		const next: Record<string, { name: string; version?: string }[]> = {};
+		await Promise.all(Object.entries(apis).map(async ([id, api]) => {
+			if (!api) return;
+			try { next[id] = (await api.serverExtensions()).extensions.map((e) => ({ name: e.name, version: e.version })); } catch { /* unreachable: nothing known */ }
+		}));
+		this.servers = next;
 		if (!force && this.catalog && Date.now() - this.checkedAt < RECHECK_MS) return;
 		try {
 			this.catalog = await fetchCatalog(DEFAULT_MARKETPLACE_URL);

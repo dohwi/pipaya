@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { errorText } from "../../lib/api";
+	import { errorText, type Api } from "../../lib/api";
 	import SearchField from "../SearchField.svelte";
 	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
@@ -11,11 +11,10 @@
 	import StatusChip from "../StatusChip.svelte";
 	import VersionBump from "../VersionBump.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
-	import { app } from "../../lib/store.svelte";
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
-	let { scope, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
+	let { scope, api, onchanged, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; /** Connection of the server being listed (the one picked in settings), not necessarily the open one */ api: Api | null; /** A server extension was installed or removed there: the caller reads its own lists again */ onchanged: () => void | Promise<void>; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
 
 	let catalog = $state<MarketCatalog | null>(null);
 	// svelte-ignore state_referenced_locally
@@ -70,7 +69,7 @@
 
 	function startClient(entry: MarketEntry) {
 		const s = serverOf(entry);
-		if (s && !serverHave[s.id] && app.api) askingServer = entry.id;
+		if (s && !serverHave[s.id] && api) askingServer = entry.id;
 		else void pick(entry);
 	}
 
@@ -79,14 +78,13 @@
 		askingServer = "";
 		const s = both ? serverOf(entry) : undefined;
 		if (s) {
-			const api = app.api;
 			if (!api || s.source.type !== "git") return;
 			working = entry.id;
 			error = "";
 			try {
 				const { repo, dir, ref, commit } = s.source;
 				await api.installServerExtension({ id: s.id, repo, ...(dir ? { dir } : {}), ref, commit });
-				await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+				await Promise.all([refreshServer(), onchanged()]);
 			} catch (cause) {
 				error = errorText(cause);
 				working = "";
@@ -109,8 +107,7 @@
 	}
 
 	async function refreshServer() {
-		const api = app.api;
-		if (!api) return;
+		if (!api) { serverHave = {}; return; }
 		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* unreachable: nothing marked as installed */ }
 	}
 
@@ -135,7 +132,6 @@
 
 	/** With `both`, the client half goes through the usual preview (permissions) right after the server half is in. */
 	async function installServer(entry: MarketEntry, both: boolean) {
-		const api = app.api;
 		if (!api || entry.source.type !== "git") return;
 		asking = "";
 		working = entry.id;
@@ -143,7 +139,7 @@
 		try {
 			const { repo, dir, ref, commit } = entry.source;
 			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
-			await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+			await Promise.all([refreshServer(), onchanged()]);
 			const c = both ? companionOf(entry) : undefined;
 			if (c) onpick(await fetchPackage(c), c);
 		} catch (cause) {
@@ -161,10 +157,9 @@
 		error = "";
 		try {
 			if (entry.kind === "server") {
-				const api = app.api;
 				if (!api) throw new Error(t("서버에 연결되어 있지 않습니다."));
 				await api.removeServerExtension(entry.id, keepSettings);
-				await Promise.all([refreshServer(), app.refreshServerExtensions()]);
+				await Promise.all([refreshServer(), onchanged()]);
 			} else {
 				extensions.remove(entry.id, { keepSettings });
 			}
@@ -176,7 +171,8 @@
 		}
 	}
 
-	$effect(() => { void load(); void refreshServer(); return () => ctrl?.abort(); });
+	$effect(() => { void load(); return () => ctrl?.abort(); });
+	$effect(() => { void api; void refreshServer(); });
 </script>
 
 <Modal {onclose} labelledby="market-title" width="1120px" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
@@ -239,7 +235,7 @@
 					</div>
 					{#if entry.kind === "client" && have && askingServer !== entry.id}
 						{@const s = serverOf(entry)}
-						{#if s && !serverHave[s.id] && app.api}
+						{#if s && !serverHave[s.id] && api}
 							<Notice tone="warn" size="sm" role="status">
 								{t("서버 확장 ‘{name}’ 필요", { name: s.name })}
 								{#snippet action()}<button type="button" disabled={!!working} onclick={() => installServer(s, false)}>{t("설치")}</button>{/snippet}

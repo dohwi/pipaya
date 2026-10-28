@@ -55,6 +55,8 @@
 		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
 		try { serverSettings = (await api.extensionSettings()).settings; } catch { /* the forms start from their defaults */ }
 	}
+	/** Read this server's extensions again; the open server's commands and tools follow only when it is the one listed. */
+	const reloadServer = () => Promise.all([loadServerSide(), app.refreshServerExtensions(serverId ?? undefined)]);
 	function saveServerSettings(ext: ServerExt, settings: Record<string, unknown>) {
 		void run(srvKey(ext.name), async () => {
 			const api = srvApi;
@@ -92,7 +94,7 @@
 			if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 			const { repo, dir, ref, commit } = entry.source;
 			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
-			await Promise.all([loadServerSide(), app.refreshServerExtensions()]);
+			await reloadServer();
 			tasks.notice = t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version });
 		}, t("업데이트하지 못했습니다"));
 	}
@@ -127,7 +129,7 @@
 					done++;
 				} catch { failed++; }
 			}
-			await Promise.all([loadServerSide(), app.refreshServerExtensions()]);
+			await reloadServer();
 			tasks.notice = [
 				t("{n}개를 업데이트했습니다.", { n: done }),
 				needsConsent ? t("새 권한이 필요한 {n}개는 각각 확인해 주세요.", { n: needsConsent }) : "",
@@ -329,7 +331,7 @@
 			await api.removeServerExtension(ext.name, keepSettings);
 			tasks.closeRemove();
 			selected = null;
-			await Promise.all([loadServerSide(), app.refreshServerExtensions()]);
+			await reloadServer();
 			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
 		}, t("삭제하지 못했습니다"));
 	}
@@ -381,7 +383,7 @@
 	{@const on = entry.state === "active" || entry.state === "starting"}
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
-	{@const needServer = view === "device" && ongoserver ? extensionUpdates.missingServerFor(id) : undefined}
+	{@const needServer = view === "device" && ongoserver ? extensionUpdates.missingServerFor(id, serverId ?? app.serverId) : undefined}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
 		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
 		{#snippet control()}
@@ -419,8 +421,8 @@
 			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			pairedServer={pairedServer ? (pairedServer.title ?? pairedServer.name) : undefined}
 			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
-			needsServer={view === "device" ? extensionUpdates.missingServerFor(id) : undefined}
-			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id); if (m) ongoserver(m.id); } : undefined}
+			needsServer={view === "device" ? extensionUpdates.missingServerFor(id, serverId ?? app.serverId) : undefined}
+			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id, serverId ?? app.serverId); if (m) ongoserver(m.id); } : undefined}
 			onopenserver={pairedServer ? () => (view === "server" ? (selected = srvKey(pairedServer.name)) : onopenserverext?.(pairedServer.name)) : undefined}
 			onback={closeDetail}
 			onenable={() => enable(id)}
@@ -526,7 +528,7 @@
 </div>
 
 {#if market}
-	<Marketplace scope={view} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
+	<Marketplace scope={view} api={srvApi} onchanged={async () => { await reloadServer(); }} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
 <ImportDialogs {preview} result={tasks.result} {replacement} {willResume} {filename} {target} {serverName} busy={tasks.busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />
