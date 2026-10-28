@@ -100,8 +100,8 @@
 	}
 	.archive :global(.listbtn) {
 		position: absolute;
-		top: 2px;
-		right: 28px; /* the list-button column of the rows above (x 214-238): the same button sits in the same place */
+		top: 4px;
+		right: 26px; /* 288 - 234 - 10 - 18: its centre on x 234, the list-button column of the rows above */
 	}
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
@@ -126,11 +126,11 @@
 		color: var(--text);
 		background: var(--bg-hover);
 	}
-	/* the same 16px icon column as a tab's icon (x 68), so the archive icon and the tabs' icons share one centre */
+	/* the same 16px icon column as a tab's icon (centre x 74), so the archive icon and the tabs' icons share one centre */
 	.archtoggle :global(.dicon) {
 		width: 16px;
 		place-items: center;
-		translate: 1px 0; /* the 14px svg centres on x 76 like the tabs' icons (the chevron and the name stay put) */
+		translate: -1px 0; /* the 14px svg centres on x 74 like the tabs' icons (the chevron and the name stay put) */
 	}
 	.archname {
 		flex: 1;

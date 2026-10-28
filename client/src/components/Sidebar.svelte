@@ -488,9 +488,9 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 24px;
-		height: 24px;
-		margin-right: 4px;
+		width: 20px; /* grid: right-hand centres at x 254 and 234, 20px apart, so the buttons sit edge to edge */
+		height: 20px;
+		margin-right: 6px; /* 288 - 254 = 34: the same gutter as the left edge's 34 */
 		border-radius: 50%;
 		color: var(--text-faint);
 		opacity: 0;
@@ -518,10 +518,10 @@
 			translate: 0 -50%;
 		}
 		:global(:where(.side) .dir.folded .dirnew) {
-			right: 2px;
+			right: 0; /* the same centre (x 254) as when unfolded */
 		}
 		:global(:where(.side) .srvhead.folded .dirnew) {
-			right: 10px;
+			right: 8px; /* the same centre (x 254); the strip is 8px wider on each side */
 		}
 		:global(:where(.side) .dir.folded .cbadge),
 	:global(:where(.side) .srvhead.folded .cbadge) {
@@ -567,7 +567,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
-		padding-left: 43px; /* one step in: the tab's icon sits under the folder's icon (.list outranks the generic .open padding below) */
+		padding-left: 41px; /* grid: the tab icon's centre is x 74 (34 / 54 / 74, 20px apart) */
 	}
 	:global(:where(.side) .item:hover) {
 		background: var(--bg-hover);
@@ -697,9 +697,9 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 24px;
-		height: 24px;
-		margin-right: 2px; /* a tab row ends 2px short of a folder row, so 24px + 2px = the "+" column of the folder row above (x 242-266) */
+		width: 20px;
+		height: 20px;
+		margin-right: 4px; /* a tab row ends 2px short of a folder row, so its 20px button centres on x 254 like the "+" above */
 		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
 		color: var(--text-faint);
 		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
@@ -773,10 +773,10 @@
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
-		padding-left: 7px; /* chevron (x 47-61) + 7 = the tabs' icon column at x 68 */
+		padding-left: 5px; /* chevron (x 47-61) + 5: the book icon centres on x 74 like the tabs' icons */
 	}
 	:global(:where(.side) .grp .item.member .open) {
-		padding-left: 70px; /* the pane's icon, just past the elbow */
+		padding-left: 61px; /* grid: the pane icon centres on x 94, 20px past the book */
 		min-height: 30px;
 	}
 	:global(:where(.side) .grp .item.member .title) {
@@ -788,7 +788,7 @@
 	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
 	:global(:where(.side) .branch) {
 		position: absolute;
-		left: 50px; /* the book's centre */
+		left: 48px; /* the book's centre (x 74) */
 		top: 0;
 		bottom: 0;
 		width: 12px;
