@@ -232,10 +232,14 @@
 {/if}
 
 <style>
-	/* Long sessions: off-screen turns skip layout and paint. `auto` remembers each turn's last real height. */
-	.unit.settled {
-		content-visibility: auto;
-		contain-intrinsic-size: auto 160px;
+	/* Long sessions: off-screen turns skip layout and paint. `auto` remembers each turn's last real height.
+	   Only where scroll anchoring exists: a turn swaps its 160px estimate for its real height as it scrolls into view, and
+	   WebKit (macOS Safari / Tauri) cannot anchor that shift, so scrolling up flickered there. */
+	@supports (overflow-anchor: auto) {
+		.unit.settled {
+			content-visibility: auto;
+			contain-intrinsic-size: auto 160px;
+		}
 	}
 	/* The reply being written is rebuilt every frame and only grows at its end. As a scroll anchor it made a reader above the
 	   bottom creep down with the stream (the browser kept "correcting" for nodes that were replaced), so it is left out. */
