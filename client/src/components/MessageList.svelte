@@ -45,8 +45,13 @@
 		if (smoothing) {
 			if (gap() < 2) smoothing = false;
 		} else if (stuck) {
-			// Not the user (they unpin first): the browser settled layout or clamped scrollTop. Stay at the bottom.
-			if (gap() > 1) pin();
+			if (scroller.scrollTop < lastTop - 0.5 && performance.now() - lastWheelUp < 150) {
+				// A gentle upward wheel that moved the view: the user is leaving the bottom.
+				setStuck(false);
+			} else if (gap() > 1) {
+				// Not the user (they unpin first): the browser settled layout or clamped scrollTop. Stay at the bottom.
+				pin();
+			}
 		} else if (gap() < 2 && scroller.scrollTop > lastTop) {
 			// The user came back down to the end. Strictly greater: the scroll event of our own pin() arrives a frame late,
 			// and if a wheel-up unpinned in between, that stale event (same position) must not pin again and undo the wheel.
