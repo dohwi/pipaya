@@ -60,7 +60,7 @@
 	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
 		position: relative;
-		padding: 0 4px 4px 8px; /* right gutter: 4px (left stays 8): the "+" centre sits 24px from the sidebar's edge */
+		padding: 0 4px 4px 4px; /* left 4 / right 4: the left column (chevron centre) and the right column ("+" centre) are both 24px from the sidebar's edge */
 	}
 	/* where a carried server would land: a line in the gap beside its card */
 	:global(:where(.side) .srv.before::before),
@@ -92,13 +92,13 @@
 	}
 	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
 	:global(:where(.side) .srv > .fold) {
-		padding-left: 6px;
+		padding-left: 0;
 	}
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin: 0 -4px 4px -8px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
-		padding: 0 4px 0 8px;
+		margin: 0 -4px 4px -4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
+		padding: 0 4px 0 4px;
 		background: var(--band-head);
 		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
 	}
@@ -131,7 +131,7 @@
 		align-items: center;
 		gap: 6px;
 		height: 32px;
-		padding: 0 6px 0 10px; /* chevron and icon sit in the folder rows' columns */
+		padding: 0 6px 0 4px; /* chevron and icon sit in the folder rows' columns (same 4px as .dirtoggle) */
 		text-align: left;
 		color: var(--text-dim);
 	}
