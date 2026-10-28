@@ -314,7 +314,7 @@
 	.mc {
 		display: flex;
 		flex-direction: column;
-		gap: 22px;
+		gap: 24px;
 	}
 	.plist {
 		display: flex;
@@ -327,8 +327,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
-		padding: 10px 12px;
+		gap: 8px;
+		padding: 8px 12px;
 		border: 1px solid var(--danger);
 		border-radius: var(--radius);
 		font-size: var(--fs-sm);
@@ -341,7 +341,7 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.note {
 		margin: 0;

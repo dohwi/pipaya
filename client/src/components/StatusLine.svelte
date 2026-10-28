@@ -242,11 +242,11 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		column-gap: 14px;
+		column-gap: 12px;
 		row-gap: 4px;
 		min-height: 26px;
 		flex-wrap: wrap;
-		padding: 8px 10px 0;
+		padding: 8px 8px 0;
 		font-size: var(--fs-2xs);
 		line-height: 1;
 		color: var(--text-faint);
@@ -256,7 +256,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		padding: 2px 0;
+		padding: 4px 0;
 		font: inherit;
 		color: inherit;
 		white-space: nowrap;
@@ -326,12 +326,12 @@
 	/* narrow pane: tighter spacing and smaller type so the line stays on as few rows as possible */
 	@container (max-width: 420px) {
 		.statusline {
-			column-gap: 10px;
-			padding: 6px 6px 0;
+			column-gap: 8px;
+			padding: 4px 4px 0;
 			font-size: var(--fs-2xs);
 		}
 		.b {
-			gap: 3px;
+			gap: 4px;
 		}
 		.b :global(svg:not(.ring)),
 		.ring {

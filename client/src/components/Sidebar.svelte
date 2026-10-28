@@ -306,7 +306,7 @@
 	.brandrow {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		/* same box as the header capsule (44px + 1px hairline), so the two lines meet across the sidebar edge */
 		box-sizing: content-box;
 		height: 44px;
@@ -419,10 +419,10 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
-		padding: 0 6px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
+		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
 		text-align: left;
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
@@ -443,7 +443,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: baseline;
-		gap: 6px;
+		gap: 4px;
 		line-height: 1;
 		padding-bottom: 1px; /* lowercase sits low in its box: lift it onto the icons' centre */
 	}
@@ -563,7 +563,7 @@
 		display: flex;
 		align-items: center;
 		border-radius: var(--radius-control);
-		margin: 1px 0 1px 2px; /* no right margin: the row's button column is the folder row's */
+		margin: 1px 0 1px 4px; /* no right margin: the row's button column is the folder row's */
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
@@ -601,9 +601,9 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		min-height: 32px;
-		padding: 0 10px 0 4px;
+		padding: 0 8px 0 4px;
 		text-align: left;
 		outline-offset: -1px;
 	}
@@ -728,16 +728,16 @@
 		min-width: 0;
 	}
 	.bottom {
-		padding: 6px 8px calc(8px + var(--sab));
+		padding: 8px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
 	.settings {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		width: 100%;
 		height: 38px;
-		padding: 0 10px;
+		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std);
@@ -773,7 +773,7 @@
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
-		padding-left: 5px; /* chevron (x 47-61) + 5: the book icon centres on x 74 like the tabs' icons */
+		padding-left: 4px; /* chevron (x 47-61) + 5: the book icon centres on x 74 like the tabs' icons */
 	}
 	:global(:where(.side) .grp .item.member .open) {
 		padding-left: 61px; /* grid: the pane icon centres on x 94, 20px past the book */
@@ -828,7 +828,7 @@
 		place-items: center;
 		width: 14px;
 		height: 24px;
-		margin-left: 22px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
+		margin-left: 24px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grprow .lead) {

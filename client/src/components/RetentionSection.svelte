@@ -113,7 +113,7 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.status {
 		display: flex;

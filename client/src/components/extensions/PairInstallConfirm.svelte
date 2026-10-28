@@ -37,7 +37,7 @@
 </ConfirmDialog>
 
 <style>
-	.rows { list-style: none; margin: 12px 0 0; padding: 0; align-self: stretch; display: flex; flex-direction: column; gap: 6px; }
-	.rows li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); font-size: var(--fs-sm); }
+	.rows { list-style: none; margin: 12px 0 0; padding: 0; align-self: stretch; display: flex; flex-direction: column; gap: 4px; }
+	.rows li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); font-size: var(--fs-sm); }
 	.k { color: var(--text-faint); font-size: var(--fs-xs); }
 </style>

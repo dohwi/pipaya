@@ -89,8 +89,8 @@
 	.review {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
-		padding: 14px;
+		gap: 12px;
+		padding: 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -132,7 +132,7 @@
 		gap: 4px;
 	}
 	.group h4 {
-		margin: 0 0 2px;
+		margin: 0 0 4px;
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--text-dim);
@@ -157,7 +157,7 @@
 	}
 	.assure {
 		margin: 0;
-		padding: 0 0 0 18px;
+		padding: 0 0 0 16px;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;

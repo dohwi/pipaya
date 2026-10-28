@@ -635,7 +635,7 @@
 <style>
 	.extension-widgets { max-height: min(40dvh, 320px); overflow-y: auto; overscroll-behavior: contain; }
 	.extension-widgets:not(:empty) { margin-bottom: 8px; }
-	.extension-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+	.extension-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 	.wrap {
 		padding: 0 16px calc(12px + var(--sab));
 		max-width: calc(var(--content-w) + 32px);
@@ -669,7 +669,7 @@
 		border: 0;
 		outline: 0;
 		background: transparent;
-		padding: 14px 18px 4px;
+		padding: 12px 16px 4px;
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		max-height: 220px;
@@ -689,7 +689,7 @@
 		grid-area: 1 / 1;
 		min-width: 0;
 		max-height: 220px;
-		padding: 14px 18px 4px;
+		padding: 12px 16px 4px;
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		white-space: pre-wrap;
@@ -764,11 +764,11 @@
 	/* narrow pane (split group, small window): tighter paddings and smaller type instead of wrapping or overlapping */
 	@container (max-width: 480px) {
 		.wrap {
-			padding: 0 10px calc(8px + var(--sab));
+			padding: 0 8px calc(8px + var(--sab));
 		}
 		.bar {
-			gap: 2px;
-			padding: 2px 6px 6px;
+			gap: 4px;
+			padding: 4px 4px 4px;
 			min-width: 0;
 		}
 	}
@@ -778,7 +778,7 @@
 		}
 		textarea,
 		.mirror {
-			padding: 10px 14px 2px;
+			padding: 8px 12px 4px;
 		}
 		.prompt-hint {
 			top: 10px;

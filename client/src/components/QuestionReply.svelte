@@ -85,7 +85,7 @@
 	.reply {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 		padding: 12px;
 		border-top: 1px solid var(--border);
 		background: var(--warn-soft);
@@ -119,7 +119,7 @@
 		font-weight: 600;
 	}
 	.num {
-		margin-right: 6px;
+		margin-right: 4px;
 		opacity: 0.7;
 		font-variant-numeric: tabular-nums;
 	}
@@ -143,13 +143,13 @@
 		display: flex;
 		gap: 8px;
 		overflow-x: auto;
-		padding: 2px; /* room for the selected outline so it is not clipped */
-		margin: -2px;
+		padding: 4px; /* room for the selected outline so it is not clipped */
+		margin: -4px;
 	}
 	.tab {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		box-sizing: border-box;
 		max-width: 200px;
 		flex: none;

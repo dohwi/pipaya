@@ -112,11 +112,11 @@
 	.archtoggle {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		width: calc(100% - 4px);
 		height: 32px; /* every row is 32px tall */
-		margin: 0 2px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
-		padding: 0 10px 0 22px; /* chevron centred under the folder icon above */
+		margin: 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
+		padding: 0 8px 0 24px; /* chevron centred under the folder icon above */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);

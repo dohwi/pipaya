@@ -69,12 +69,12 @@
 	.capsule {
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		height: 44px;
 		/* Every visible edge sits 16px from the window, like the extension button below. The round menu button's circle is
 		   only a hover state, so the drawn icon is what counts: the sidebar glyph's strokes start ~2.4px inside its 19px box,
 		   so left = 3px + 10.5px around the icon + 2.4px of glyph inset (set below where the menu shows) or 6px + the title's own 10px; right = 13px + the 3px padding of the nav slot. */
-		padding: 0 13px 0 6px;
+		padding: 0 12px 0 4px;
 	}
 	.title {
 		flex: 1 1 0;
@@ -83,7 +83,7 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
-		padding: 0 10px;
+		padding: 0 8px;
 	}
 	.t {
 		font-weight: 600;
@@ -130,18 +130,18 @@
 	}
 	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */
-		.capsule { padding-right: 14px; }
+		.capsule { padding-right: 12px; }
 		.title { padding: 0 4px; }
 		.tool { width: 32px; }
 	}
 	@media (max-width: 860px) {
-		.capsule { padding-left: 3px; }
+		.capsule { padding-left: 4px; }
 		.menu {
 			display: grid;
 		}
 	}
 	@media (max-width: 640px) {
 		/* declared after the 860px rule so it wins: the 32px button leaves 6.5px around the icon */
-		.capsule { padding-left: 7px; }
+		.capsule { padding-left: 8px; }
 	}
 </style>

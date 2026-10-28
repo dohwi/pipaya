@@ -20,8 +20,8 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 10px 14px 0;
-		padding: 5px 6px 5px 10px;
+		margin: 8px 12px 0;
+		padding: 4px 4px 4px 8px;
 		max-width: max-content;
 		min-width: 0;
 		border-radius: var(--radius-pill);

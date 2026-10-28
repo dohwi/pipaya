@@ -82,11 +82,11 @@
   h2 { margin: 0 0 4px; font-size: var(--fs-xl); }
   .owner { margin: 0 0 12px; color: var(--text-faint); font-size: var(--fs-xs); }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; color: var(--text-dim); font-size: var(--fs-sm); margin: 0 0 12px; }
-  input[type="text"], textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
-  .options { display: flex; flex-direction: column; gap: 6px; max-height: min(50dvh, 360px); overflow-y: auto; }
-  .options label { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+  input[type="text"], textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
+  .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-y: auto; }
+  .options label { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
   .options label.on { border-color: var(--accent); background: var(--accent-soft); }
   .options input { grid-row: span 2; align-self: center; }
   .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); }
-  .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 </style>

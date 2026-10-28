@@ -20,7 +20,7 @@
 {/if}
 
 <style>
-  .slot { display: flex; flex-direction: column; gap: 6px; padding: 6px 16px; min-width: 0; max-width: calc(var(--content-w) + 32px); width: 100%; margin: 0 auto; box-sizing: border-box; }
+  .slot { display: flex; flex-direction: column; gap: 4px; padding: 4px 16px; min-width: 0; max-width: calc(var(--content-w) + 32px); width: 100%; margin: 0 auto; box-sizing: border-box; }
   .slot.header { border-bottom: 1px solid var(--border); }
   .item { min-width: 0; overflow-wrap: anywhere; }
 </style>

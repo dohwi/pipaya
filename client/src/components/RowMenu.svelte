@@ -135,8 +135,8 @@
 		z-index: var(--z-modal-3);
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 5px;
+		gap: 4px;
+		padding: 4px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -145,9 +145,9 @@
 	.mi {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		height: 34px;
-		padding: 0 10px;
+		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-sm);

@@ -36,7 +36,7 @@
 	}
 	.strip.compact {
 		min-height: 40px;
-		padding: 2px 8px 2px 14px;
+		padding: 4px 8px 4px 12px;
 	}
 	.strip.ok {
 		--tone: var(--ok);

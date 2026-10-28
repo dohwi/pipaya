@@ -129,9 +129,9 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: 32px;
-		padding: 0 6px 0 4px; /* chevron and icon sit in the folder rows' columns (same 4px as .dirtoggle) */
+		padding: 0 4px 0 4px; /* chevron and icon sit in the folder rows' columns (same 4px as .dirtoggle) */
 		text-align: left;
 		color: var(--text-dim);
 	}
@@ -174,13 +174,13 @@
 		color: var(--warn);
 	}
 	.nosess {
-		padding: 4px 10px 6px 44px;
+		padding: 4px 8px 4px 44px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}
 	.sk {
 		height: 36px;
-		margin: 6px 4px;
+		margin: 4px 4px;
 	}
 	.sicon :global(svg) {
 		width: 14px;

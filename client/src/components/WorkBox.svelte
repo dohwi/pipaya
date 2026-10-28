@@ -218,7 +218,7 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		width: 100%;
 		height: 44px;
 		padding: 0 12px;
@@ -288,8 +288,8 @@
 	}
 	/* the live preview is plain text under the header, not a box of its own: no border or fill, only a thin guide line */
 	.peek {
-		margin: 0 14px 12px 21px;
-		padding: 0 0 0 17px;
+		margin: 0 12px 12px 20px; /* the guide line sits under the header icon's centre */
+		padding: 0 0 0 16px;
 		cursor: pointer;
 		border-left: 2px solid var(--border);
 		font-size: var(--fs-xs);
@@ -357,7 +357,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		padding: 22px 10px 8px;
+		padding: 24px 8px 8px;
 		background: linear-gradient(to top, rgb(0 0 0 / 0.62), transparent);
 		color: #fff;
 		font-size: var(--fs-xs);
@@ -397,7 +397,7 @@
 	}
 
 	.list {
-		padding: 6px 18px 18px;
+		padding: 4px 16px 16px;
 		overflow-y: auto;
 	}
 	.prep {
@@ -410,7 +410,7 @@
 	}
 	.thought {
 		margin: 8px 0;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -429,7 +429,7 @@
 		stroke-width: 1.8;
 	}
 	.tbody {
-		margin-top: 6px;
+		margin-top: 4px;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		white-space: pre-wrap;

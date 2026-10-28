@@ -50,7 +50,7 @@
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		max-width: 100%;
 	}
 	.who b {
@@ -64,8 +64,8 @@
 		white-space: nowrap;
 	}
 	.warn {
-		margin: 6px 0 4px;
-		padding: 10px 12px;
+		margin: 4px 0 4px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--warn-soft);
 		color: var(--warn);
@@ -74,8 +74,8 @@
 		word-break: keep-all;
 	}
 	.why {
-		margin: 6px 0 4px;
-		padding: 10px 12px;
+		margin: 4px 0 4px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--danger-soft);
 		color: var(--danger);

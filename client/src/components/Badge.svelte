@@ -49,13 +49,13 @@
 	}
 	.md {
 		height: 22px;
-		padding: 0 9px;
+		padding: 0 8px;
 		font-size: var(--fs-2xs);
 		letter-spacing: 0.01em;
 	}
 	.sm {
 		height: 18px;
-		padding: 0 7px;
+		padding: 0 8px;
 		font-size: var(--fs-2xs);
 	}
 	/* an icon inside a badge follows its text size */

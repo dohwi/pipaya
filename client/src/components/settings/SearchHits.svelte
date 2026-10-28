@@ -27,8 +27,8 @@
 		width: 100%;
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
-		padding: 10px 8px;
+		gap: 8px;
+		padding: 8px 8px;
 		border-top: 1px solid var(--border);
 		text-align: left;
 		border-radius: 0;

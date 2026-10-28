@@ -114,9 +114,9 @@
 		background: var(--bg-hover);
 	}
 	.trigger.inline {
-		gap: 6px;
+		gap: 4px;
 		height: 36px;
-		padding: 0 10px;
+		padding: 0 8px;
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -152,7 +152,7 @@
 	@container (max-width: 420px) {
 		.trigger.inline {
 			gap: 4px;
-			padding: 0 6px;
+			padding: 0 4px;
 			height: 32px;
 			font-size: var(--fs-xs);
 			flex: 0 1 auto;

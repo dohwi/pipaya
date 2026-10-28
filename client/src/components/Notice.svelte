@@ -58,7 +58,7 @@
 		display: flex;
 		gap: 8px;
 		align-items: center;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		color: var(--text-dim);
@@ -84,7 +84,7 @@
 		color: var(--ok);
 	}
 	.sm {
-		padding: 9px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius-sm);
 		font-size: var(--fs-xs);
 	}

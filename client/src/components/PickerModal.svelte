@@ -97,7 +97,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
-		padding: 6px 14px 12px;
+		padding: 4px 12px 12px;
 	}
 	.pk-search {
 		flex: none;
@@ -108,8 +108,8 @@
 		flex-direction: column;
 		flex: 1;
 		overflow-y: auto;
-		margin: 0 -6px;
-		padding: 0 6px;
+		margin: 0 -4px;
+		padding: 0 4px;
 	}
 	/* group labels and the empty line are plain markup from the caller */
 	.pk-list :global(.pk-group) {
@@ -135,7 +135,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 10px 14px calc(10px + var(--sab));
+		padding: 8px 16px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
 	.grow {

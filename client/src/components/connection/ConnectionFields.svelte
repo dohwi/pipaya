@@ -68,7 +68,7 @@
 	label {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: 4px;
 		min-width: 0;
 	}
 	label > span {
@@ -79,14 +79,14 @@
 	.grid2 {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px;
+		gap: 8px;
 	}
 	.switchrow {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
 		gap: 12px;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -95,7 +95,7 @@
 	.swtext {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		min-width: 0;
 	}
 	.swtext b {

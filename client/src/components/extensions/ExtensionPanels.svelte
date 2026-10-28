@@ -235,7 +235,7 @@
 
 <style>
 	.panel-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-	.launcher { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+	.launcher { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-xs); }
 	.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
 	.launcher:disabled { opacity: 0.55; cursor: not-allowed; }
 	.launcher :global(svg), .empty :global(svg) { stroke-width: 1.8; }
@@ -250,19 +250,19 @@
 	header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
 	.heading { min-width: 0; }
 	h2 { margin: 0; font-size: var(--fs-base); font-weight: 650; overflow-wrap: anywhere; }
-	.heading p { margin: 5px 0 0; font-size: var(--fs-2xs); color: var(--text-faint); }
+	.heading p { margin: 4px 0 0; font-size: var(--fs-2xs); color: var(--text-faint); }
 	:global(.iconbtn.close) { flex-shrink: 0; }
 	.workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-	.tabbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 14px 10px 20px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
+	.tabbar { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px 8px 20px; background: var(--bg-side); border-bottom: 1px solid var(--border); }
 	.total { margin-right: 4px; }
 	/* the arrows float over the ends of the rail, so they take no room while there is nothing to scroll */
 	.railwrap { position: relative; flex: 1; min-width: 0; display: flex; }
-	.rail { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 2px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
+	.rail { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
 	.rail::-webkit-scrollbar { display: none; }
 	.rail.fade-l { mask-image: linear-gradient(to right, transparent, #000 28px); }
 	.rail.fade-r { mask-image: linear-gradient(to left, transparent, #000 28px); }
 	.rail.fade-l.fade-r { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-	:global(.iconbtn.step) { position: absolute; top: 50%; z-index: 2; width: 28px; height: 28px; margin-top: -14px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
+	:global(.iconbtn.step) { position: absolute; top: 50%; z-index: 2; width: 28px; height: 28px; margin-top: -12px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
 	:global(.iconbtn.step.prev) { left: 0; }
 	:global(.iconbtn.step.next) { right: 0; }
 	:global(.iconbtn.step svg) { width: 15px; height: 15px; }
@@ -276,9 +276,9 @@
 	.surface-heading { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
 	.eyebrow { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	h3 { margin: 8px 0 0; font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.03em; overflow-wrap: anywhere; }
-	.surface-heading p, .empty p { margin: 9px 0 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; overflow-wrap: anywhere; }
+	.surface-heading p, .empty p { margin: 8px 0 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; overflow-wrap: anywhere; }
 	.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 260px; }
-	.empty :global(svg) { width: 28px; height: 28px; margin-bottom: 10px; color: var(--text-faint); }
+	.empty :global(svg) { width: 28px; height: 28px; margin-bottom: 8px; color: var(--text-faint); }
 	.empty h3 { font-size: var(--fs-base); }
 	.composer-panels { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.summary-title { flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 600; overflow-wrap: anywhere; }

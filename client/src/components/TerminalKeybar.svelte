@@ -117,8 +117,8 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 6px 8px calc(6px + var(--sab));
+		gap: 4px;
+		padding: 4px 8px calc(4px + var(--sab));
 		border-top: 1px solid var(--border);
 		background: var(--bg-elev);
 		user-select: none;
@@ -183,7 +183,7 @@
 		flex: none;
 		min-width: 40px;
 		height: var(--control-h-sm);
-		padding: 0 11px;
+		padding: 0 12px;
 		border-radius: var(--radius-control);
 		border: 1px solid var(--border);
 		background: var(--bg-hover);

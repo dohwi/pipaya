@@ -117,7 +117,7 @@
 	.pair {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: 12px;
 	}
 	.lead {
 		margin: 0;
@@ -129,7 +129,7 @@
 	.addr {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 4px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
 		color: var(--text-dim);
@@ -139,7 +139,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 12px;
-		padding: 18px;
+		padding: 16px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 		background: var(--bg-elev, transparent);
@@ -147,7 +147,7 @@
 	.timer {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		width: 232px;
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
@@ -193,7 +193,7 @@
 		display: flex;
 		gap: 8px;
 		align-items: flex-start;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--warn-soft);
 		color: var(--warn);

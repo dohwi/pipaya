@@ -228,7 +228,7 @@
 		flex: none;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 4px;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.sec.gone {
@@ -248,7 +248,7 @@
 		display: inline-block;
 		width: 5px;
 		height: 5px;
-		margin-right: 5px;
+		margin-right: 4px;
 		border-radius: 50%;
 		background: var(--lv);
 		opacity: 0.55;
@@ -267,9 +267,9 @@
 	.manage {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: var(--control-h-sm);
-		padding: 0 10px;
+		padding: 0 8px;
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);

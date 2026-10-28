@@ -371,7 +371,7 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		margin: 6px 4px 4px 10px;
+		margin: 4px 4px 4px 8px;
 		touch-action: none;
 		overscroll-behavior: contain;
 	}
@@ -387,8 +387,8 @@
 		bottom: 10px;
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 6px 10px;
+		gap: 8px;
+		padding: 4px 8px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
 		background: var(--bg-elev);
@@ -400,7 +400,7 @@
 		opacity: 0.7;
 	}
 	.note button {
-		padding: 2px 8px;
+		padding: 4px 8px;
 		border-radius: var(--radius-sm);
 		background: var(--bg-hover);
 		color: var(--text);

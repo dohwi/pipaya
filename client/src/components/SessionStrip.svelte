@@ -58,7 +58,7 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		height: 38px;
 		padding: 0 6px 0 max(6px, var(--sal));
 		padding-right: max(6px, var(--sar));
@@ -87,7 +87,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		padding: 0 6px 0 2px;
+		padding: 0 4px 0 4px;
 		font-size: var(--fs-sm);
 		font-weight: 700;
 		color: var(--text);
@@ -124,10 +124,10 @@
 		flex: none;
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: 28px;
 		max-width: 46vw;
-		padding: 0 9px;
+		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);

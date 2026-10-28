@@ -54,9 +54,9 @@
 {/if}
 
 <style>
-	.item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-height: 56px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); }
-	.meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+	.item { display: flex; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); }
+	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
 	.ver { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
 	.item :global(.btn) { flex: none; white-space: nowrap; }
-	.note { line-height: 1.6; margin: 10px 0 0; }
+	.note { line-height: 1.6; margin: 8px 0 0; }
 </style>

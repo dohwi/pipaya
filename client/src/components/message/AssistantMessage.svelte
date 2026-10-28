@@ -145,7 +145,7 @@
 	.row {
 		display: flex;
 		gap: 12px;
-		padding: 10px 0;
+		padding: 8px 0;
 	}
 	.fresh {
 		animation: rise var(--motion-normal) var(--ease) both;
@@ -158,7 +158,7 @@
 	}
 	@media (max-width: 640px) {
 		.row {
-			gap: 10px;
+			gap: 8px;
 		}
 	}
 
@@ -176,7 +176,7 @@
 	}
 	/* one prompt -> one answer: the turn's steps and text flow as plain content, no box */
 	.reply-card {
-		padding: 2px 0 0;
+		padding: 4px 0 0;
 		transition: transform var(--motion-fast) var(--ease-std);
 	}
 	.reply-card.swiping {
@@ -210,8 +210,8 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 8px;
-		margin-top: 10px;
-		padding: 9px 12px;
+		margin-top: 8px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--danger-soft);
 		color: var(--danger);
@@ -229,9 +229,9 @@
 	.foot {
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		margin-top: 4px;
-		margin-left: -6px;
+		margin-left: -4px;
 		opacity: 0.55;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}

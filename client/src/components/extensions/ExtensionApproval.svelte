@@ -43,5 +43,5 @@
   h2 { margin: 0 0 12px; font-size: var(--fs-xl); }
   p { color: var(--text-dim); font-size: var(--fs-sm); }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
-  .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 </style>

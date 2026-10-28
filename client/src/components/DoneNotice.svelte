@@ -69,7 +69,7 @@
 		height: 100%;
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		padding: 0 8px 0 16px;
 		text-align: left;
 		color: var(--text);

@@ -150,7 +150,7 @@
 <style>
 	.body {
 		overflow: auto;
-		padding: 14px;
+		padding: 12px;
 		min-height: 120px;
 	}
 	.pic {
@@ -201,7 +201,7 @@
 	}
 	th,
 	td {
-		padding: 4px 10px;
+		padding: 4px 8px;
 		border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
 		text-align: left;
 		white-space: nowrap;

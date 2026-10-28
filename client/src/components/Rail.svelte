@@ -132,7 +132,7 @@
 		gap: 4px;
 		width: 100%;
 		align-items: center;
-		padding: 10px 0;
+		padding: 8px 0;
 		border-bottom: 1px solid var(--border);
 	}
 	.agents {
@@ -146,7 +146,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
-		padding: 10px 0;
+		padding: 8px 0;
 		overflow-y: auto;
 		scrollbar-width: none;
 	}
@@ -157,14 +157,14 @@
 		flex: none;
 		width: 28px;
 		height: 2px;
-		margin: 6px 0;
+		margin: 4px 0;
 		border-radius: 1px;
 		background: color-mix(in srgb, var(--text-faint) 55%, transparent);
 	}
 	/* between two servers: a longer, stronger line than the one between workdirs */
 	.sep.srv {
 		width: 36px;
-		margin: 10px 0;
+		margin: 8px 0;
 		background: var(--text-faint);
 	}
 	.agent {
@@ -226,9 +226,9 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		width: 100%;
-		padding: 8px 0 calc(10px + var(--sab));
+		padding: 8px 0 calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
 </style>

@@ -280,26 +280,26 @@
 {/if}
 
 <style>
-	.market { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px 18px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
+	.market { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px 16px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
 	.mhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 	.mhead h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
-	.hints { display: flex; flex-direction: column; gap: 2px; }
+	.hints { display: flex; flex-direction: column; gap: 4px; }
 	.hints .hint { margin: 0; }
 	.hint, .meta { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
-	.item { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }
-	.foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 4px; }
-	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0; min-width: 0; }
-	.star { display: inline-flex; align-items: center; gap: 3px; }
+	.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
+	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; min-width: 0; }
+	.star { display: inline-flex; align-items: center; gap: 4px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 5px; vertical-align: -2px; stroke-width: 2; }
+	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 4px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
-	.acts { display: flex; align-items: center; gap: 6px; flex: none; }
+	.acts { display: flex; align-items: center; gap: 4px; flex: none; }
 	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
 	.pair { flex: none; display: inline-flex; color: var(--text-faint); }
 	.pair :global(svg) { width: 14px; height: 14px; }

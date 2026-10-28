@@ -48,7 +48,7 @@
 	.range {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		min-height: 34px; /* same row height with or without a trailing button */
 		font-size: var(--fs-md);
 		transition: opacity var(--motion-normal) var(--ease-std);

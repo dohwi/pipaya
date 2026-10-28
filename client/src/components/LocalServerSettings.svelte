@@ -70,11 +70,11 @@
 	.actions {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 6px;
+		margin-top: 4px;
 	}
 	input {
 		width: 160px;
-		padding: 5px 8px;
+		padding: 4px 8px;
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		background: var(--bg-input, transparent);

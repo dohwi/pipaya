@@ -142,14 +142,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 10px 14px 12px;
+		padding: 8px 12px 12px;
 		border-bottom: 1px solid var(--border);
 		background: var(--bg-elev);
 	}
 	.phead {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 	}
 	.pname {
 		flex: 1;
@@ -171,7 +171,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 4px;
 	}
 	.prov.off .phead,
 	.prov.off .nomodels {
@@ -187,8 +187,8 @@
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 4px 10px;
-		padding: 6px 8px 6px 10px;
+		gap: 4px 8px;
+		padding: 4px 8px 4px 8px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg);
@@ -217,7 +217,7 @@
 	.mtags {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		color: var(--text-faint);
 	}
 	.gone {
@@ -238,7 +238,7 @@
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px;
+		gap: 4px;
 	}
 	.keyform {
 		display: flex;

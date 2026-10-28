@@ -24,9 +24,31 @@ Allowed exceptions (write the reason next to the value):
 - **Odd values that come from a measured alignment** (an icon's optical centre). Comment them with the column they serve.
 - **Safe-area insets** (`var(--sat)`, `--sab`, `--sal`, `--sar`) are added on top of the scale, never replace it: `calc(8px + var(--sab))`.
 
-Never mix 10 / 6 / 14 / 22 into new code. Audit status at the time of writing: 554 declarations in 119 files are still off-scale
-(10px ×182, 6px ×143, 14px ×94, 2px ×68, 22px ×29, 18px ×25). Move them in screen-sized steps, not with a search-and-replace:
-the right neighbour (8 or 12, 4 or 8) depends on the element.
+Never mix 10 / 6 / 14 / 22 into new code. Audit history: 554 declarations in 119 files were off-scale; after the dialog and whole-app pass about 36 remain, all of them
+deliberate (1px hairlines, `calc()` with safe areas, fractional optical centres) and commented. Moving a value onto the scale
+needs a look at the element: 10 → 8 or 12, 6 → 4 or 8, 14 → 12 or 16 depends on what it spaces.
+
+## 1b. Dialogs (one set of tokens)
+
+Every dialog, sheet and settings page takes its edges from `app.css` tokens, so a field, a footer button and the close button
+share one left and one right line. Never write a raw side padding in a dialog; use the token.
+
+| Token | Value | Use |
+|---|---|---|
+| `--dlg-px` | 24 (16 on phones, `max-width: 640px`) | left / right padding of header, body, footer, search strip |
+| `--dlg-gap` | 16 | between fields and sections in a body |
+| `--dlg-gap-sm` | 8 | label to field, chips, buttons in a row |
+| `--dlg-head-t` / `--dlg-head-b` | 16 / 12 | header top / bottom |
+| `--dlg-body-t` / `--dlg-body-b` | 16 / 24 (16 on phones) | body top / bottom |
+| `--dlg-foot-t` / `--dlg-foot-b` | 12 / 16 (+ `--sab`) | footer top / bottom |
+
+- The close button is a 38px circle holding a 19px glyph (9.5px from its edge). The header's right padding is
+  `calc(var(--dlg-px) - 10px)`, which puts the glyph on the body's right edge (measured: 24.5 vs 24, the 0.5px is the glyph's own rounding).
+- A label above a field uses a whole-pixel line box (`line-height: 20px`, class `.lbl` in `app.css`): label 20 + gap 8 + field 40 = **68px**,
+  so a form stacks on 16px steps. The body's `line-height: 1.55` would give 68.1 and drift.
+- Search fields: icon at 12px from the left, 16px wide, text at 36px (`SearchField`, `ConnectModal`).
+- A list of bordered cards (`SessionsPanel`): the card's 1px border sits inside the buttons' right edge (`margin: 0 -1px`), checkbox column x = 12 in the header and in every row.
+- A header action row that can be too wide for a phone wraps (`flex-wrap`), it never overlaps the name (bulk buttons of the conversation list).
 
 ## 2. Vertical rhythm
 
@@ -107,6 +129,18 @@ Eyeballing a screenshot hides 1–2px errors. Measure the DOM, then draw rulers 
 
 To capture every screen and dialog at the three viewports, write a throwaway Playwright script under `tmp/` modelled on `.agents/bin/shot.py`.
 Exposing the store needs an audit-only line in `client/src/main.ts` (`window.__app = app`); never commit that line.
+
+### Alignment lint (finds the misses by itself)
+
+Walk each screen and compare the **edges** of everything that has a border or fill (inputs, buttons, cards, rows):
+
+- two edges that differ by 1 to 8px (e.g. a search field ending at 1445 and a form ending at 1419) are a misalignment;
+- a vertical gap between two stacked boxes that is not a multiple of 4 (ignoring a 1px hairline) is off the scale.
+
+Run it for every screen at 1440 / 820 / 390 and treat any hit as a bug. Scroll-strips of chips and switches are exempt (they have no shared edge).
+Screens to cover: every settings tab, the server form (add / edit), conversation list (all / folder / archive / selected),
+skills, commands, folder picker, palette, confirmations (close, link, extension confirm / input / select), queue, file preview,
+sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 
 ## 7. Process rules
 

@@ -221,7 +221,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 5px 6px 5px 14px;
+		padding: 4px 4px 4px 12px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 		border-bottom: 1px solid var(--border);
@@ -230,7 +230,7 @@
 	.md :global(.copy) {
 		font-family: var(--font);
 		font-size: var(--fs-xs);
-		padding: 4px 10px;
+		padding: 4px 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 	}
@@ -240,7 +240,7 @@
 	}
 	.md :global(pre) {
 		margin: 0;
-		padding: 12px 14px;
+		padding: 12px 12px;
 		overflow-x: auto;
 		-webkit-overflow-scrolling: touch;
 		font-family: var(--mono);
@@ -265,7 +265,7 @@
 	}
 	.md :global(th),
 	.md :global(td) {
-		padding: 7px 12px;
+		padding: 8px 12px;
 		text-align: left;
 		border-bottom: 1px solid var(--border);
 		white-space: nowrap;
@@ -293,7 +293,7 @@
 	}
 	.md :global(a.wd-file::before) {
 		content: "📄";
-		margin-right: 5px;
+		margin-right: 4px;
 		font-size: 0.9em;
 	}
 	.md :global(a.wd-file:hover) {
@@ -314,7 +314,7 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		grid-template-rows: 1fr 1fr;
-		gap: 3px;
+		gap: 4px;
 		height: 340px; /* fixed so the grid does not jump while the pictures load */
 		margin: 0 0 0.85em;
 		overflow: hidden;
@@ -361,7 +361,7 @@
 		display: inline-flex;
 		align-items: center;
 		min-height: 28px;
-		padding: 0 10px;
+		padding: 0 8px;
 		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-pill);
 		background: transparent;
@@ -381,7 +381,7 @@
 		display: inline-block;
 		width: 7px;
 		height: 1.05em;
-		margin-left: 3px;
+		margin-left: 4px;
 		vertical-align: text-bottom;
 		border-radius: 2px;
 		background: var(--accent);

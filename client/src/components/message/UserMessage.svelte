@@ -85,7 +85,7 @@
 	.row {
 		display: flex;
 		gap: 12px;
-		padding: 10px 0;
+		padding: 8px 0;
 	}
 	.fresh {
 		animation: rise var(--motion-normal) var(--ease) both;
@@ -98,7 +98,7 @@
 	}
 	@media (max-width: 640px) {
 		.row {
-			gap: 10px;
+			gap: 8px;
 		}
 	}
 
@@ -106,11 +106,11 @@
 	.row.user {
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 2px;
+		gap: 4px;
 	}
 	.bubble {
 		max-width: min(85%, 560px);
-		padding: 10px 15px;
+		padding: 8px 16px;
 		border-radius: var(--radius);
 		background: var(--user-bg);
 		border: 1px solid var(--border);
@@ -127,7 +127,7 @@
 	.header {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		margin-bottom: 4px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
@@ -139,8 +139,8 @@
 		stroke-width: 1.8;
 	}
 	.quote {
-		margin: 0 0 6px;
-		padding: 2px 0 2px 10px;
+		margin: 0 0 4px;
+		padding: 4px 0 4px 8px;
 		border-left: 3px solid var(--border-strong);
 		color: var(--text-faint);
 		font-size: var(--fs-sm);
@@ -160,7 +160,7 @@
 		display: flex;
 		gap: 8px;
 		align-items: center;
-		margin-top: 6px;
+		margin-top: 4px;
 		font-size: 12px;
 		color: var(--muted, inherit);
 		opacity: 0.8;
@@ -177,14 +177,14 @@
 	.imgs {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px;
-		margin: 2px 0 8px;
+		gap: 4px;
+		margin: 4px 0 8px;
 	}
 	.filechips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px;
-		margin: 2px 0 8px;
+		gap: 4px;
+		margin: 4px 0 8px;
 	}
 	.zoom {
 		display: block;

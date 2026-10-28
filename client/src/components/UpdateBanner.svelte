@@ -86,7 +86,7 @@
 	.bar {
 		width: 100%;
 		height: 6px;
-		margin-top: 6px;
+		margin-top: 4px;
 	}
 	.pct {
 		margin: 0;

@@ -70,19 +70,19 @@
 	.page:focus { outline: none; }
 	.line { display: flex; align-items: center; gap: 12px; }
 	/* spinner and switch share one row, vertically centred on the name block like the list rows */
-	.actions { flex: none; display: flex; align-items: center; gap: 10px; }
-	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 2px; }
+	.actions { flex: none; display: flex; align-items: center; gap: 8px; }
+	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 4px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
 	.meta { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; font-family: var(--mono); }
-	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 2px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
+	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
 	.back:hover { color: var(--text); }
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */
 	@media (min-width: 761px) { .back { display: none; } }
 	@media (max-width: 760px) {
-		.page { gap: 14px; }
-		.back { padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); }
-		.line { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--bg-elev); }
+		.page { gap: 12px; }
+		.back { padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); }
+		.line { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--bg-elev); }
 	}
 	.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }

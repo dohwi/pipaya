@@ -18,8 +18,8 @@
 	/* bottom padding: the scroller clips vertically too, and the chips' border and focus ring end there */
 	.files {
 		display: flex;
-		gap: 10px;
-		padding: 12px 14px 4px;
+		gap: 8px;
+		padding: 12px 12px 4px;
 		overflow-x: auto;
 		scrollbar-width: thin;
 	}

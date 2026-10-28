@@ -460,7 +460,7 @@
 		position: fixed;
 		right: 16px;
 		bottom: calc(16px + var(--sab));
-		padding: 8px 14px;
+		padding: 8px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -515,7 +515,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 10px;
+		gap: 8px;
 		min-height: 44px;
 		padding: 4px 12px;
 		font-size: var(--fs-sm);
@@ -669,7 +669,7 @@
 			place-items: center;
 		}
 		.catch-hint {
-			padding: 6px 14px;
+			padding: 4px 12px;
 			border-radius: var(--radius-pill);
 			background: var(--bg);
 			border: 1px solid var(--border-strong);

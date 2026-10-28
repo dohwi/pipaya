@@ -141,7 +141,7 @@
 	.src {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 	}
 	.src :global(svg) {
 		width: 14px;
@@ -155,7 +155,7 @@
 	.matchrow {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: 4px;
 	}
 	.mlabel {
 		font-size: var(--fs-xs);
@@ -194,7 +194,7 @@
 		align-items: center;
 		gap: 4px;
 		height: var(--control-h);
-		padding: 0 10px;
+		padding: 0 8px;
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
@@ -239,7 +239,7 @@
 	.cap {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: 32px;
 		padding: 0 12px;
 		border-radius: var(--radius-pill);
@@ -279,12 +279,12 @@
 	.grid2 {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px;
+		gap: 8px;
 	}
 	label {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: 4px;
 		min-width: 0;
 	}
 	label em {
@@ -304,7 +304,7 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.note {
 		margin: 0;

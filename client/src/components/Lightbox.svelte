@@ -353,8 +353,8 @@
 		right: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 12px 14px;
+		gap: 4px;
+		padding: 12px 12px;
 		pointer-events: none;
 	}
 	.bar > * {
@@ -410,7 +410,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 10px 18px;
+		padding: 8px 16px;
 		font-size: var(--fs-md, 14px);
 		color: #fff;
 		background: rgba(20, 20, 20, 0.88);
@@ -442,7 +442,7 @@
 		bottom: calc(14px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		justify-content: center;
-		gap: 6px;
+		gap: 4px;
 		pointer-events: none;
 	}
 	.dots span {

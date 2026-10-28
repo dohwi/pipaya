@@ -53,9 +53,9 @@
 		flex: none;
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		max-width: 46vw;
-		padding: 0 11px;
+		padding: 0 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-pill);
 		background: var(--bg);
@@ -70,7 +70,7 @@
 	}
 	.sm {
 		height: 26px; /* = Badge md + 4: a chip you can press sits a step above a label */
-		padding: 0 10px;
+		padding: 0 8px;
 		font-size: var(--fs-xs);
 	}
 	.md {
@@ -78,7 +78,7 @@
 	}
 	.lg {
 		height: 32px;
-		padding: 0 14px;
+		padding: 0 12px;
 		gap: 8px;
 		max-width: 260px;
 	}

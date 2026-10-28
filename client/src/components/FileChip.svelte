@@ -37,7 +37,7 @@
 		gap: 8px;
 		min-width: 0;
 		height: 48px;
-		padding: 0 12px 0 6px;
+		padding: 0 12px 0 4px;
 		text-align: left;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

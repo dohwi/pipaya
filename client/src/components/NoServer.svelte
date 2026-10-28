@@ -82,7 +82,7 @@
 		align-items: center;
 		text-align: center;
 		gap: 12px;
-		padding: 34px 26px 26px;
+		padding: 32px 24px 24px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 		background: var(--bg-side);
@@ -120,7 +120,7 @@
 	}
 	.card :global(.btn.add) {
 		height: 46px;
-		padding: 0 26px;
+		padding: 0 24px;
 		font-size: var(--fs-md);
 		border-radius: var(--radius);
 	}
@@ -145,8 +145,8 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 6px;
-		padding-left: 34px;
+		gap: 4px;
+		padding-left: 32px;
 		counter-increment: step;
 		font-size: var(--fs-sm);
 		color: var(--text-dim);

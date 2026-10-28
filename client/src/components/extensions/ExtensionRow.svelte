@@ -58,10 +58,10 @@
 </article>
 
 <style>
-	.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.card.dim .line { opacity: 0.55; }
-	.line { display: flex; align-items: center; gap: 10px; }
-	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
+	.line { display: flex; align-items: center; gap: 8px; }
+	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 4px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
 	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; }

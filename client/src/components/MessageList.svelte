@@ -272,7 +272,7 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 8px;
-		padding: 10px 0;
+		padding: 8px 0;
 	}
 	.content {
 		flex: none;
@@ -301,8 +301,8 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 10px 0;
-		padding: 9px 12px;
+		margin: 8px 0;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--danger-soft);
 		color: var(--danger);
@@ -349,7 +349,7 @@
 	.skeleton {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: 12px;
 		padding-top: 8px;
 	}
 	.sk {
@@ -371,7 +371,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		padding: 60px 0;
 		color: var(--text-dim);
 	}

@@ -181,9 +181,9 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 7px;
+		gap: 8px;
 		height: 38px;
-		padding: 0 4px 0 9px;
+		padding: 0 4px 0 8px;
 		background: var(--bg-side);
 		border-bottom: 1px solid var(--border);
 		cursor: grab;
@@ -198,7 +198,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: baseline;
-		gap: 7px;
+		gap: 8px;
 	}
 	/* pushed to the right edge of the title area, next to the badge / unlink button */
 	.ticon {
@@ -214,7 +214,7 @@
 		stroke-width: 1.9;
 	}
 	.os {
-		margin-left: 7px;
+		margin-left: 8px;
 		font-size: var(--fs-2xs);
 		font-weight: 500;
 		color: var(--text-faint);
@@ -247,7 +247,7 @@
 		color: var(--text-dim);
 	}
 	.who {
-		margin-right: 6px;
+		margin-right: 4px;
 		color: var(--text-dim);
 		font-weight: 700;
 	}

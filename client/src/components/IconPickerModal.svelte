@@ -94,7 +94,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-		gap: 6px;
+		gap: 4px;
 		padding: 4px 0;
 	}
 	.cell {
@@ -102,9 +102,9 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 6px;
+		gap: 4px;
 		height: 72px;
-		padding: 6px 4px;
+		padding: 4px 4px;
 		background: transparent;
 		border: 1px solid transparent;
 		border-radius: var(--radius-sm);
@@ -136,7 +136,7 @@
 		stroke-width: 1.9;
 	}
 	.hint {
-		margin: 6px 4px 0;
+		margin: 4px 4px 0;
 	}
 	.none {
 		margin: 16px 0;

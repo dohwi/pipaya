@@ -100,7 +100,7 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.note {
 		margin: 0;

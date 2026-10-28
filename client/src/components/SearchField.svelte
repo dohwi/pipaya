@@ -50,7 +50,7 @@
 	}
 	.searchfield :global(svg) {
 		position: absolute;
-		left: 11px;
+		left: 12px; /* the field's own 12px side padding: the magnifier starts where text would */
 		width: 16px;
 		height: 16px;
 		stroke: var(--text-faint);
@@ -60,7 +60,7 @@
 	input {
 		width: 100%;
 		height: var(--control-h-sm);
-		padding: 0 12px 0 34px;
+		padding: 0 12px 0 36px; /* 12 + 16 icon + 8 gap */
 		border: 1px solid var(--border);
 		border-radius: var(--radius-control);
 		background: var(--bg);

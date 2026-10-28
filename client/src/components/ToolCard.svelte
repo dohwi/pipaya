@@ -141,9 +141,9 @@
 	.head {
 		display: flex;
 		align-items: center;
-		gap: 9px;
+		gap: 8px;
 		width: 100%;
-		padding: 9px 12px;
+		padding: 8px 12px;
 		text-align: left;
 		min-height: 44px;
 	}
@@ -201,7 +201,7 @@
 		padding: 0 12px 12px;
 	}
 	.label {
-		margin: 10px 0 5px;
+		margin: 8px 0 4px;
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		letter-spacing: 0.04em;
@@ -211,7 +211,7 @@
 	}
 	pre {
 		margin: 0;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		max-height: 320px;
 		overflow: auto;
 		border-radius: var(--radius-sm);
@@ -225,7 +225,7 @@
 		color: var(--text-faint);
 		user-select: none;
 	}
-	.pics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+	.pics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 	.pics .zoom { display: block; padding: 0; border-radius: var(--radius); cursor: zoom-in; }
 	.pics img { max-width: 100%; max-height: 220px; border-radius: var(--radius); display: block; }
 	.out.err {

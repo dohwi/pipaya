@@ -203,7 +203,7 @@
 	.devices {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: 12px;
 	}
 	.lead {
 		margin: 0;
@@ -229,7 +229,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 14px;
+		padding: 12px 12px;
 	}
 	li + li {
 		border-top: 1px solid var(--border);
@@ -254,7 +254,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 4px;
 	}
 	.name {
 		display: flex;

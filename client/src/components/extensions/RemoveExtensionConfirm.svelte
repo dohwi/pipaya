@@ -38,5 +38,5 @@
 </ConfirmDialog>
 
 <style>
-	.wipe { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font-size: var(--fs-sm); color: var(--text-dim); cursor: pointer; }
+	.wipe { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-size: var(--fs-sm); color: var(--text-dim); cursor: pointer; }
 </style>

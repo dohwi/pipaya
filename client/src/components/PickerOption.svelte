@@ -61,7 +61,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 10px;
+		padding: 8px 8px;
 		min-height: 44px;
 		border-radius: var(--radius);
 		text-align: left;
@@ -125,7 +125,7 @@
 		}
 		.pk-opt.has-aside .aside {
 			grid-area: aside;
-			margin-top: 2px;
+			margin-top: 4px;
 		}
 		.pk-opt.has-aside .check {
 			grid-area: check;

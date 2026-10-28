@@ -50,17 +50,17 @@
 </article>
 
 <style>
-	.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.heading, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.heading { justify-content: space-between; flex-wrap: nowrap; }
 	h4 { margin: 0; font-size: var(--fs-base); font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 	p { margin: 0; }
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.row :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
+	.row :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
 	.row :global(.btn.end) { margin-left: auto; }
 	@media (max-width: 640px) {
-		.card { padding: 12px 14px; }
+		.card { padding: 12px 12px; }
 		.row > :global(.btn) { flex: 1 1 auto; }
 		.row :global(.btn.end) { margin-left: 0; }
 	}

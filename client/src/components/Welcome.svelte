@@ -62,7 +62,7 @@
 		width: 100%;
 		max-width: 680px;
 		min-height: min(240px, 100%);
-		padding: 16px 18px;
+		padding: 16px 16px;
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -125,7 +125,7 @@
 		line-height: 1.15;
 	}
 	.sub {
-		margin: 6px 0 0;
+		margin: 4px 0 0;
 		font-size: var(--fs-sm);
 		color: var(--text-dim);
 		text-wrap: balance;

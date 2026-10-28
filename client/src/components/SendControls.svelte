@@ -147,7 +147,7 @@
 		grid-area: 1 / 1;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 	}
 	.send {
 		display: grid;
@@ -186,7 +186,7 @@
 	.compacting {
 		display: inline-flex;
 		align-items: center;
-		gap: 7px;
+		gap: 8px;
 		padding: 0 8px;
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
@@ -199,7 +199,7 @@
 	.stack {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 	}
 	.stack .mode {
 		width: 38px;
@@ -304,7 +304,7 @@
 		gap: 12px;
 		width: 100%;
 		min-height: 40px;
-		padding: 6px 14px;
+		padding: 4px 12px;
 		text-align: left;
 	}
 	.opt:hover,

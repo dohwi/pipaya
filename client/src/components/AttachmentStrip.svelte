@@ -34,7 +34,7 @@
 	.thumbs {
 		display: flex;
 		gap: 8px;
-		padding: 12px 14px 4px;
+		padding: 12px 12px 4px;
 		overflow-x: auto;
 		scrollbar-width: thin;
 	}

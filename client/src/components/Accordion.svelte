@@ -53,7 +53,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
+		gap: 8px;
 		width: 100%;
 		margin: 0;
 		border: 0;
@@ -66,7 +66,7 @@
 	}
 	.head:hover, .open > .head { color: var(--text); }
 	.head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.label { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+	.label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 	/* the arrow turns in step with the body: collapseIn (normal, ease) when opening, collapseOut (fast, ease-exit) when closing */
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev.open { transform: rotate(180deg); transition: transform var(--motion-normal) var(--ease); }
@@ -78,11 +78,11 @@
 	.body { overflow: hidden; padding: 4px; margin: -4px; }
 
 	.line { border-top: 1px solid var(--border); }
-	.line .head { padding: 10px 2px; font-size: var(--fs-sm); font-weight: 500; }
-	.line .inner { padding: 0 2px 4px; }
+	.line .head { padding: 8px 4px; font-size: var(--fs-sm); font-weight: 500; }
+	.line .inner { padding: 0 4px 4px; }
 
 	.box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); overflow: hidden; }
-	.box .head { padding: 12px 14px; border-radius: 0; font-size: var(--fs-xs); font-weight: 600; }
+	.box .head { padding: 12px 12px; border-radius: 0; font-size: var(--fs-xs); font-weight: 600; }
 	.box .head:hover { background: var(--bg-hover); }
 	.box .inner { padding: 16px; border-top: 1px solid var(--border); }
 

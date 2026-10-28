@@ -128,28 +128,28 @@
 </div>
 
 <style>
-	.settings, .field-row, .body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+	.settings, .field-row, .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.settings { gap: 12px; }
 	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
 	.hint { margin: 0; overflow-wrap: anywhere; }
-	.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+	.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
 	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }
 	input[type="text"], input[type="password"], input[type="number"], textarea {
 		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: 38px;
 		border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text);
 		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
 	}
-	textarea { height: auto; min-height: 110px; resize: vertical; padding: 10px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
+	textarea { height: auto; min-height: 110px; resize: vertical; padding: 8px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
 	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
 	input:disabled, textarea:disabled { opacity: 0.6; }
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-	.settings :global(.btn.sm), .advanced :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
+	.settings :global(.btn.sm), .advanced :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
 	.advanced { margin-top: 4px; }
-	.body { gap: 10px; }
+	.body { gap: 8px; }
 	@media (max-width: 640px) {
 		.row > :global(.btn) { flex: 1 1 auto; }
 	}

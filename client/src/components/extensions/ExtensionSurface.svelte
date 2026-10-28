@@ -102,6 +102,6 @@
 <style>
 	.extension-surface { min-width: 0; }
 	.feedback { color: var(--danger); font-size: var(--fs-xs); line-height: 1.7; overflow-wrap: anywhere; }
-	.error { display: flex; flex-direction: column; gap: 3px; margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--danger); border-radius: var(--radius-sm); background: var(--danger-soft); }
+	.error { display: flex; flex-direction: column; gap: 4px; margin: 16px 0 0; padding: 12px 12px; border: 1px solid var(--danger); border-radius: var(--radius-sm); background: var(--danger-soft); }
 	.attribution { font-weight: 600; }
 </style>

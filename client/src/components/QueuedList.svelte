@@ -24,7 +24,7 @@
 	.queued {
 		list-style: none;
 		margin: 0;
-		padding: 8px 14px 0;
+		padding: 8px 12px 0;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;

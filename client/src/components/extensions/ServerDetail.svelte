@@ -127,6 +127,6 @@
 	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-	.block { gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+	.block { gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 </style>

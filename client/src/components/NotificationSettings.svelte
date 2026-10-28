@@ -64,9 +64,9 @@
 </SettingRow>
 <style>
   .section-label { margin-bottom: 12px; }
-  .hint { line-height: 1.6; margin: 10px 0 0; word-break: keep-all; }
+  .hint { line-height: 1.6; margin: 8px 0 0; word-break: keep-all; }
   .test { margin-top: 12px; }
   .test + :global(*) { margin-top: 12px; }
-  .result { font-size: var(--fs-xs); line-height: 1.6; margin: 10px 0 0; color: var(--danger); word-break: keep-all; }
+  .result { font-size: var(--fs-xs); line-height: 1.6; margin: 8px 0 0; color: var(--danger); word-break: keep-all; }
   .result.ok { color: var(--text-dim); }
 </style>

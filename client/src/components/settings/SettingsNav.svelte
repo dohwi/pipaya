@@ -132,7 +132,7 @@
 <style>
 	.nav button.addsrv {
 		gap: 8px;
-		padding: 7px 12px;
+		padding: 8px 12px;
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
@@ -188,9 +188,9 @@
 	.nav .tree {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		margin: 0 0 4px 21px;
-		padding-left: 18px;
+		gap: 4px;
+		margin: 0 0 4px 20px; /* the tree line hangs under the item icon's centre */
+		padding-left: 16px;
 	}
 	.nav .item {
 		position: relative;
@@ -200,10 +200,10 @@
 		flex: 1;
 		min-width: 0;
 		gap: 8px;
-		padding: 7px 10px;
+		padding: 8px 8px;
 	}
 	.nav button.sub.linked {
-		padding-right: 38px;
+		padding-right: 40px; /* room for the 38px unlink button + 2px, so the label never runs under it */
 	}
 	.nav .item::before,
 	.nav .item::after {
@@ -286,9 +286,9 @@
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		align-self: stretch;
-		padding: 12px 10px;
+		padding: 12px 8px;
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
 		scroll-padding-block: 8px;
@@ -299,7 +299,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius-control);
 		text-align: left;
 		color: var(--text-dim);
@@ -341,7 +341,7 @@
 	@media (max-width: 760px) {
 		.nav {
 			flex-direction: row;
-			padding: 6px 12px;
+			padding: 4px 12px;
 			border-right: 0;
 			border-bottom: 1px solid var(--border);
 			overflow-x: auto;
@@ -363,12 +363,12 @@
 			flex: 1 0 auto;
 			justify-content: center;
 			gap: 8px;
-			padding: 8px 14px;
+			padding: 8px 12px;
 			border-radius: var(--radius-control);
 			white-space: nowrap;
 		}
 		.nav button.addsrv {
-			padding: 9px 12px;
+			padding: 8px 12px;
 			font-size: var(--fs-md);
 		}
 		.ns {

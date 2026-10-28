@@ -26,7 +26,7 @@
 		display: inline-flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 2px 12px;
+		gap: 4px 12px;
 		color: var(--text-faint);
 		font-size: var(--fs-2xs);
 		white-space: nowrap;

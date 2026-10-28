@@ -69,7 +69,7 @@
 	/* a divider and a small heading wherever the kind of rows changes: commands, skills, files ... */
 	.head {
 		margin-top: 4px;
-		padding: 8px 14px 3px;
+		padding: 8px 12px 4px;
 		border-top: 1px solid var(--border);
 		font-size: var(--fs-2xs);
 		font-weight: 600;
@@ -87,7 +87,7 @@
 		gap: 12px;
 		width: 100%;
 		min-height: 36px;
-		padding: 6px 14px;
+		padding: 4px 12px;
 		text-align: left;
 		align-items: center;
 	}
@@ -112,7 +112,7 @@
 	.tag {
 		margin-left: auto;
 		flex: none;
-		padding: 0 6px;
+		padding: 0 4px;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		border-radius: var(--radius-pill);
@@ -141,7 +141,7 @@
 		color: var(--text-faint);
 	}
 	.none {
-		padding: 12px 14px;
+		padding: 12px 12px;
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}

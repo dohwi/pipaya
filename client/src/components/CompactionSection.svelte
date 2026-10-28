@@ -123,12 +123,12 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.crow {
 		display: flex;
 		align-items: stretch;
-		gap: 10px;
+		gap: 8px;
 	}
 	.cfield {
 		flex: 1 1 0;
@@ -139,7 +139,7 @@
 		align-items: center;
 		justify-content: flex-start;
 		gap: 8px;
-		padding: 0 14px;
+		padding: 0 12px;
 		min-height: var(--control-h); /* the height of the model field beside it */
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);

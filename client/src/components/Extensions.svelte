@@ -556,8 +556,8 @@
 
 <style>
 	.extensions,
-	section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-	.extensions { gap: 22px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
+	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+	.extensions { gap: 24px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
 	.feedback { display: flex; flex-direction: column; gap: 8px; }
 	/* The live region stays mounted, but while it holds no element (only Svelte's {#if} anchor comments, so :empty never matches) it must not take a flex gap */
 	.feedback:not(:has(*)) { position: absolute; }
@@ -574,24 +574,24 @@
 	.needline :global(.btn) { flex: none; }
 
 	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-	.switch-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
+	.switch-title { display: inline-flex; align-items: center; gap: 4px; font-weight: 550; }
 	.switch-title :global(svg) { width: 17px; height: 17px; stroke-width: 1.9; }
 	.switch-title :global(svg) { color: var(--text-dim); }
 
-	.extensions :global(.btn.sm) { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; }
+	.extensions :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
 
-	.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }
-	.extensions .bar > :global(.add) { position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+	.extensions .bar > :global(.add) { position: relative; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 	.extensions .bar > :global(.add.disabled) { opacity: 0.5; cursor: default; }
 	.extensions .bar > :global(.add input) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.extensions .bar > :global(.add svg) { width: 16px; height: 16px; }
-	.adv { display: flex; flex-direction: column; gap: 10px; }
-	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+	.adv { display: flex; flex-direction: column; gap: 8px; }
+	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 
 	a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 	.none {
-		margin: 2px 0 6px;
+		margin: 4px 0 4px;
 		padding: 12px;
 		border: 1px dashed var(--border);
 		border-radius: var(--radius);

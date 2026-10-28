@@ -244,7 +244,7 @@
 		height: 100%;
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -258,11 +258,11 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		height: 28px;
 		max-width: 220px;
 		min-width: 0;
-		padding: 0 3px 0 9px;
+		padding: 0 4px 0 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -332,7 +332,7 @@
 		width: 140px;
 		min-width: 0;
 		height: 22px;
-		padding: 0 6px;
+		padding: 0 4px;
 		border: 1px solid var(--accent);
 		border-radius: var(--radius-xs);
 		background: var(--bg);

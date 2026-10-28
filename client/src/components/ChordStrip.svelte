@@ -39,7 +39,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 7px 16px calc(7px + var(--sab));
+		padding: 8px 16px calc(8px + var(--sab));
 		background: var(--accent);
 		color: var(--accent-fg);
 		font-size: var(--fs-xs);
@@ -63,7 +63,7 @@
 	}
 	/* the strip is dark in light mode: the key caps take its colours instead of the page's */
 	kbd {
-		padding: 2px 6px;
+		padding: 4px 4px;
 		border: 0;
 		background: color-mix(in srgb, var(--accent-fg) 18%, transparent);
 		color: inherit;
@@ -79,19 +79,19 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		gap: 14px;
+		gap: 12px;
 		overflow: hidden;
 		white-space: nowrap;
 	}
 	.keys {
 		flex: none;
 		display: flex;
-		gap: 14px;
+		gap: 12px;
 	}
 	.opt {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		white-space: nowrap;
 	}
 	.more {

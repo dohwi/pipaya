@@ -180,7 +180,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 4px 4px 10px;
+		padding: 4px 4px 4px 8px;
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
@@ -205,7 +205,7 @@
 		color: var(--text);
 		font: inherit;
 		font-size: var(--fs-sm);
-		padding: 4px 2px;
+		padding: 4px 4px;
 	}
 	.n {
 		min-width: 44px;

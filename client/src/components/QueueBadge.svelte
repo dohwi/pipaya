@@ -22,7 +22,7 @@
 	.in {
 		display: inline-flex;
 		align-items: center;
-		gap: 3px;
+		gap: 4px;
 		padding: 0 1px;
 	}
 	.in :global(svg) {

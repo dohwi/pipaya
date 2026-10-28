@@ -9,7 +9,7 @@
 
 <style>
 	/* same box as the global .chip / Badge md (22px); a status reads as a short sentence, so one size up */
-	.chip { flex: 0 1 auto; height: 24px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+	.chip { flex: 0 1 auto; height: 24px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
 	i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 	.ok { background: var(--ok-soft); color: var(--ok); }
 	.warn { background: var(--warn-soft); color: var(--warn); }

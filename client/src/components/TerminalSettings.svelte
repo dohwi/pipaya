@@ -58,12 +58,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
+		gap: 8px;
 	}
 	input[type="number"] {
 		width: 96px;
 		height: var(--control-h-sm);
-		padding: 0 10px;
+		padding: 0 8px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
 		background: var(--bg);

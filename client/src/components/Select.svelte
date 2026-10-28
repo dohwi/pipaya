@@ -294,7 +294,7 @@
 		gap: 8px;
 		width: 100%;
 		height: var(--control-h);
-		padding: 0 10px 0 12px;
+		padding: 0 8px 0 12px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
 		background: var(--bg);
@@ -308,7 +308,7 @@
 	}
 	.sm .trigger {
 		height: var(--control-h-sm);
-		padding: 0 8px 0 10px;
+		padding: 0 8px 0 8px;
 		font-size: var(--fs-md);
 	}
 	.mono .trigger {
@@ -377,7 +377,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		padding: 5px;
+		padding: 4px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		border: 1px solid var(--border-strong);
@@ -391,9 +391,9 @@
 	.opt {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		min-height: 34px;
-		padding: 0 8px 0 10px;
+		padding: 0 8px 0 8px;
 		border-radius: var(--radius-sm);
 		font-size: var(--fs-md);
 		color: var(--text);

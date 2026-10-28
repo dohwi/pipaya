@@ -51,7 +51,7 @@
 		transition: inset var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
 	}
 	.zone span {
-		padding: 3px 10px;
+		padding: 4px 8px;
 		border-radius: var(--radius-pill);
 		background: var(--bg);
 		border: 1px solid var(--border-strong);

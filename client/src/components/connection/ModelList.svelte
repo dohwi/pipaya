@@ -96,9 +96,9 @@
 	.mitem {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		min-height: 46px;
-		padding: 0 12px 0 14px;
+		padding: 0 12px 0 12px;
 		background: var(--bg-elev);
 		border-bottom: 1px solid var(--border);
 		text-align: left;
@@ -120,7 +120,7 @@
 		white-space: nowrap;
 	}
 	.mname :global(.lockic) {
-		margin-left: 6px;
+		margin-left: 4px;
 		vertical-align: -2px;
 	}
 	.mname :global(.lockic svg) {
@@ -143,7 +143,7 @@
 		flex: none;
 		display: inline-flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}

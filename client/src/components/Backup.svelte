@@ -228,8 +228,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 14px;
-		padding: 12px 14px;
+		gap: 12px;
+		padding: 12px 12px;
 	}
 	.item + .item {
 		border-top: 1px solid var(--border);
@@ -237,7 +237,7 @@
 	.txt {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		min-width: 0;
 	}
 	.t {
@@ -245,7 +245,7 @@
 		font-weight: 600;
 	}
 	.n {
-		margin-left: 6px;
+		margin-left: 4px;
 		font-weight: 400;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
@@ -287,7 +287,7 @@
 	.note :global(svg) {
 		width: 15px;
 		height: 15px;
-		margin-top: 2px;
+		margin-top: 4px;
 	}
 
 	.drop {
@@ -295,8 +295,8 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 6px;
-		padding: 26px 16px;
+		gap: 4px;
+		padding: 24px 16px;
 		border: 1.5px dashed var(--border-strong);
 		border-radius: var(--radius);
 		color: var(--text-dim);
@@ -342,16 +342,16 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 14px;
-		padding: 12px 14px;
+		gap: 12px;
+		padding: 12px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
 	.confirm {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
-		padding: 12px 14px;
+		gap: 8px;
+		padding: 12px 12px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);

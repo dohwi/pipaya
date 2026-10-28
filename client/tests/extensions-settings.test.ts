@@ -639,7 +639,7 @@ describe("components", () => {
 		expect(page).toContain("확장과 설정값을 삭제했습니다.");
 		const navbar = await Bun.file("src/components/extensions/NavbarItems.svelte").text();
 		expect(navbar).toContain("max-width: min(40%, 160px)");
-		expect(navbar).toContain("gap: 6px");
+		expect(navbar).toContain("gap: 4px"); // spacing scale 4 / 8 / 12 / 16 / 24 (docs/design-system.md)
 	});
 });
 
