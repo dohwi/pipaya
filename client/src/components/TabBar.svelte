@@ -218,8 +218,8 @@
 		align-items: center;
 		gap: 4px;
 		height: 38px;
-		padding: 0 6px 0 max(6px, var(--sal));
-		padding-right: max(6px, var(--sar));
+		padding: 0 8px 0 max(8px, var(--sal));
+		padding-right: max(8px, var(--sar));
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 	}

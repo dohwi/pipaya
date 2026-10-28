@@ -183,7 +183,7 @@
 	.md :global(ul),
 	.md :global(ol) {
 		margin: 0 0 0.85em;
-		padding-left: 1.5em;
+		padding-left: 24px;
 	}
 	.md :global(li) {
 		margin: 0.2em 0;
@@ -193,7 +193,7 @@
 	}
 	.md :global(blockquote) {
 		margin: 0 0 0.85em;
-		padding: 0.1em 1em;
+		padding: 0.1em 0 0.1em 16px;
 		border-left: 3px solid var(--border-strong);
 		color: var(--text-dim);
 	}

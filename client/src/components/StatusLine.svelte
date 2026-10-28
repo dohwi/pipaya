@@ -246,7 +246,7 @@
 		row-gap: 4px;
 		min-height: 26px;
 		flex-wrap: wrap;
-		padding: 8px 8px 0;
+		padding: 8px 16px 0; /* the same 16px column as the messages and the composer */
 		font-size: var(--fs-2xs);
 		line-height: 1;
 		color: var(--text-faint);
@@ -327,7 +327,7 @@
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;
-			padding: 4px 4px 0;
+			padding: 4px 16px 0;
 			font-size: var(--fs-2xs);
 		}
 		.b {

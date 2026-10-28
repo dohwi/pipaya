@@ -764,7 +764,7 @@
 	/* narrow pane (split group, small window): tighter paddings and smaller type instead of wrapping or overlapping */
 	@container (max-width: 480px) {
 		.wrap {
-			padding: 0 8px calc(8px + var(--sab));
+			padding: 0 16px calc(8px + var(--sab)); /* the same 16px as the conversation column above it, at every width */
 		}
 		.bar {
 			gap: 4px;

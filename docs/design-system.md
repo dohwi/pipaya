@@ -142,6 +142,14 @@ and takes it back with `margin: 0 -4px` still has its content on the gutter. Ell
 Checked at 1440 / 820 / 390, light and dark: 223 bands over 29 screens, 0 off-rule sides (extension dialogs included, they are native `<dialog>` with
 `padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b)`).
 
+### The conversation column (main screen)
+
+Header title, the first tab's label, the conversation text, the composer box and the status line share **one left and one right line**: 16px from the pane
+(on a wide pane the column is 760px, centred, so the line is wherever the column starts). Do not give the composer or the status line its own narrower side
+padding in a narrow pane (it used to step down to 8 and stood 8px out from the text). The tab bar starts 8px from the window so its first label is at 16.
+Inside messages: quote text sits 16px from its 3px bar, a list's text 24px from the column, a user bubble 16px inside; code and tables fill the column. Check
+with `tmp`-style scripts that measure each pane's own box, not the window (a split group has one column per pane).
+
 ### Right-edge rule (one line, never two close ones)
 
 Everything you read in a dialog ends on **one** right line and starts on **one** left line. Two edges 2 to 16px apart are always a mistake

@@ -84,9 +84,10 @@
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; color: var(--text-dim); font-size: var(--fs-sm); margin: 0 0 12px; }
   input[type="text"], textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
   .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-y: auto; }
-  .options label { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+  .options label { display: grid; grid-template-columns: 16px 1fr; gap: 0 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
   .options label.on { border-color: var(--accent); background: var(--accent-soft); }
-  .options input { grid-row: span 2; align-self: center; }
-  .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); }
+  .options input { grid-row: span 2; align-self: start; margin: 4px 0 0; width: 16px; height: 16px; } /* centred on the label's first 24px line */
+  .options .label { line-height: 24px; }
+  .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); line-height: 16px; }
   .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 </style>

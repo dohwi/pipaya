@@ -83,7 +83,7 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
-		padding: 0 8px;
+		padding: 0 12px; /* with the 4px capsule padding the title text starts at 16: the tab label's and the conversation column's line */
 	}
 	.t {
 		font-weight: 600;
