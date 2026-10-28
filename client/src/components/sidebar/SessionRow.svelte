@@ -21,7 +21,7 @@
 
 {#snippet body()}
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} /></span>
-	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
+	<span class="who mono {st}" title={label?.text}>{label?.text ?? ""}</span>
 	<RowTitle text={x.title} />
 {/snippet}
 

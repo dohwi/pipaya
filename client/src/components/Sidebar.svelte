@@ -285,9 +285,14 @@
 <RowMenu bind:this={rowMenu} bind:open={menuId} />
 
 <style>
-	/* label of a pane in a split tab: kept in view while the pane scrolls */
+	/* label of a pane in a split tab: kept in view while the pane scrolls. A fixed column (about four mono characters) so the
+	   title after it starts at the same x in every row, with or without a label; a longer label is cut with an ellipsis. */
 	:global(:where(.side) .who) {
 		flex: none;
+		width: 4em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
