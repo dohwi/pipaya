@@ -735,8 +735,8 @@
 	.prompt-hint {
 		position: absolute;
 		top: 14px;
-		left: 18px;
-		right: 18px;
+		left: 16px; /* the box has a 1px border, so the hint text lands on the textarea's own 16px (x 17) */
+		right: 16px;
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		overflow: hidden;
@@ -755,7 +755,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 8px 8px;
+		padding: 4px 8px 8px 7px; /* measured: the 19px glyph in its 38px button lands on the text line (17), not 1.5px after it */
 	}
 	.grow {
 		flex: 1;
@@ -768,7 +768,7 @@
 		}
 		.bar {
 			gap: 4px;
-			padding: 4px 4px 4px;
+			padding: 4px 4px 4px 3px; /* narrow pane: the same rule, glyph on the 13px text line */
 			min-width: 0;
 		}
 	}
@@ -782,8 +782,8 @@
 		}
 		.prompt-hint {
 			top: 10px;
-			left: 14px;
-			right: 14px;
+			left: 12px;
+			right: 12px;
 		}
 	}
 	@container (max-width: 420px) {

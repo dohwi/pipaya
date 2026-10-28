@@ -35,8 +35,7 @@
 		line-height: 1.4;
 	}
 	.strip.compact {
-		min-height: 40px;
-		padding: 4px 8px 4px 12px;
+		min-height: 40px; /* a shorter strip, the same 16px text line as every other strip */
 	}
 	.strip.ok {
 		--tone: var(--ok);

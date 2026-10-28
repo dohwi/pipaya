@@ -20,7 +20,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 8px 12px 0;
+		margin: 8px 16px 0; /* the composer's 16px text line (12 in a narrow pane, below) */
 		padding: 4px 4px 4px 8px;
 		max-width: max-content;
 		min-width: 0;
@@ -36,4 +36,10 @@
 	.rx { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; padding: 0; color: inherit; }
 	.rx :global(svg) { width: 12px; height: 12px; stroke-width: 2.2; }
 	.rx:hover { background: var(--accent-soft); color: var(--text); }
+	@container (max-width: 420px) {
+		.reply-badge {
+			margin-left: 12px;
+			margin-right: 12px;
+		}
+	}
 </style>

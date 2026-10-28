@@ -118,7 +118,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 8px calc(4px + var(--sab));
+		padding: 4px 16px calc(4px + var(--sab)); /* first key on the 16px line, like the composer above a conversation */
 		border-top: 1px solid var(--border);
 		background: var(--bg-elev);
 		user-select: none;

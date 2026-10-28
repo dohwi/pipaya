@@ -19,8 +19,12 @@
 	.files {
 		display: flex;
 		gap: 8px;
-		padding: 12px 12px 4px;
+		padding: 12px 16px 4px;
 		overflow-x: auto;
 		scrollbar-width: thin;
+	}
+	/* the composer's text is 16px in from the box, 12px in a narrow pane (@container 420px): the strips above it follow the same line */
+	@container (max-width: 420px) {
+		.files { padding-left: 12px; padding-right: 12px; }
 	}
 </style>

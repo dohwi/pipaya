@@ -371,7 +371,7 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		margin: 4px 4px 4px 8px;
+		margin: 4px 4px 4px 16px; /* text starts on the same 16px line as the tabs above and the conversation column */
 		touch-action: none;
 		overscroll-behavior: contain;
 	}

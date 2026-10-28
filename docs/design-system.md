@@ -150,6 +150,14 @@ padding in a narrow pane (it used to step down to 8 and stood 8px out from the t
 Inside messages: quote text sits 16px from its 3px bar, a list's text 24px from the column, a user bubble 16px inside; code and tables fill the column. Check
 with `tmp`-style scripts that measure each pane's own box, not the window (a split group has one column per pane).
 
+### Things that sit on the conversation column (or on the composer's text line)
+
+- **Toasts and notices** start their text at 16 (a compact session strip too), full width.
+- **Terminal**: the screen's text and the key bar's first key start at 16, like the tab label above.
+- **Composer**: the text line is 16 (12 in a narrow pane) from the box's inner edge; the attach button's glyph, the reply badge, the file and image strips, the placeholder
+  hint and the slash menu's text all start on that same line. The 38px attach button holds a 19px glyph 9.5 from its edge, so the bar's left padding is 7 (3 narrow), not 8.
+- A thing inside a bordered box (the slash menu has a 1px border) counts that border: 15 inside it to land on the same x as 16 inside the composer box.
+
 ### Right-edge rule (one line, never two close ones)
 
 Everything you read in a dialog ends on **one** right line and starts on **one** left line. Two edges 2 to 16px apart are always a mistake

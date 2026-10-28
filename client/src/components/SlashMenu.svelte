@@ -56,7 +56,7 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		bottom: calc(100% + 6px);
+		bottom: calc(100% + 8px);
 		max-height: min(300px, calc(var(--dvh) * 0.40));
 		overflow-y: auto;
 		background: var(--bg-elev);
@@ -69,7 +69,7 @@
 	/* a divider and a small heading wherever the kind of rows changes: commands, skills, files ... */
 	.head {
 		margin-top: 4px;
-		padding: 8px 12px 4px;
+		padding: 8px 15px 4px; /* 1px menu border + 15 = the composer text line (16 + the composer box's own 1px border) */
 		border-top: 1px solid var(--border);
 		font-size: var(--fs-2xs);
 		font-weight: 600;
@@ -87,7 +87,7 @@
 		gap: 12px;
 		width: 100%;
 		min-height: 36px;
-		padding: 4px 12px;
+		padding: 4px 15px;
 		text-align: left;
 		align-items: center;
 	}
@@ -141,7 +141,7 @@
 		color: var(--text-faint);
 	}
 	.none {
-		padding: 12px 12px;
+		padding: 12px 15px;
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
@@ -152,5 +152,11 @@
 		.d {
 			font-size: var(--fs-xs);
 		}
+	}
+	/* in a narrow pane the composer's text line is 12px in: the menu follows it */
+	@container (max-width: 420px) {
+		.head { padding-left: 11px; padding-right: 11px; }
+		.cmd { padding-left: 11px; padding-right: 11px; }
+		.none { padding-left: 11px; padding-right: 11px; }
 	}
 </style>
