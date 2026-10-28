@@ -75,7 +75,7 @@
 		bottom: -5px;
 	}
 	:global(:where(.side) .srv:has(> .fold)) {
-		padding-bottom: 8px;
+		padding-bottom: 4px; /* a card ends 4px under its last row (the row's own 1px margin makes it 5): the same 4 as its top */
 	}
 	/* every server sits in a band, even when it is the only one */
 	.srv.band {

@@ -310,7 +310,7 @@
 		/* same box as the header capsule (44px + 1px hairline), so the two lines meet across the sidebar edge */
 		box-sizing: content-box;
 		height: 44px;
-		padding: 0 16px;
+		padding: 0 8px 0 12px; /* spacing scale: 4 / 8 / 12 / 16 / 24. The wordmark sits 12 in, the fold button's right edge lines up with the card (8) */
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
@@ -319,7 +319,7 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 8px;
-		padding: 10px 16px;
+		padding: 12px 8px; /* the search box shares the card's left and right edges (8) */
 		border-bottom: 1px solid var(--border);
 	}
 	.settings :global(svg) {
@@ -356,7 +356,7 @@
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
-		padding: 4px 0 12px;
+		padding: 8px 0 16px; /* 8 below the search box, 16 above the window edge */
 		overscroll-behavior: contain;
 	}
 	/* a block being dragged fades */
