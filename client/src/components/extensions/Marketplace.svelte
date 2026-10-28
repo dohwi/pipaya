@@ -4,7 +4,6 @@
 	import Button from "../Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
-	import Badge from "../Badge.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
@@ -13,7 +12,7 @@
 	import VersionBump from "../VersionBump.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, isOfficial, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
+	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 
 	let { scope, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
@@ -206,7 +205,6 @@
 						{#if pairOf(entry)}{@const other = pairOf(entry)}
 							<span class="pair" role="img" aria-label={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })} title={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })}><Icon name="clip" /></span>
 						{/if}
-						{#if isOfficial(entry)}<span title={t("pipaya 공식 확장")}><Badge tone="ok" size="sm"><Icon name="check" />{t("공식")}</Badge></span>{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<StatusChip tone="ok">{t("설치됨")}</StatusChip>{/if}
 						{#if newer && have}<span class="ver"><VersionBump from={have.package.manifest.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
 					</div>

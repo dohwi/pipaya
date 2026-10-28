@@ -96,7 +96,7 @@ test("compareVersions", () => {
   expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
 });
 
-import { formatStars, isOfficial, localizedDescription, parseCatalog as pc, repoLoc } from "../src/lib/extensions/marketplace";
+import { formatStars, localizedDescription, parseCatalog as pc, repoLoc } from "../src/lib/extensions/marketplace";
 import { describe as d2, expect as e2, test as t2 } from "bun:test";
 
 d2("marketplace card helpers", () => {
@@ -112,12 +112,9 @@ d2("marketplace card helpers", () => {
     const c = pc({ name: "n", extensions: [{ id: "a", kind: "client", name: "A", version: "1", description: "d", descriptions: { ko: "k", "bad tag": "x", en: 3 }, source: { type: "path", path: "p" } }] });
     e2(c.extensions[0]!.descriptions).toEqual({ ko: "k" });
   });
-  t2("official and repo detection", () => {
-    const git = { ...base, source: { type: "git", repo: "dohwi/pipaya-extensions", dir: "guard", ref: "v1", commit: "a".repeat(40) } } as MarketEntry;
-    e2(isOfficial(git)).toBe(true);
+  t2("repo detection", () => {
     const other = { ...base, homepage: "https://github.com/someone/ext/tree/v1/dir", source: { type: "path", path: "x" } } as MarketEntry;
     e2(repoLoc(other)).toEqual({ repo: "someone/ext", ref: "v1", dir: "dir" });
-    e2(isOfficial(other)).toBe(false);
   });
   t2("formatStars", () => { e2(formatStars(950)).toBe("950"); e2(formatStars(1200)).toBe("1.2k"); });
 });

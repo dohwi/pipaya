@@ -118,9 +118,6 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Owners whose extensions get the "official" badge: the owner of the default catalog. */
-export const OFFICIAL_OWNERS = [new URL(DEFAULT_MARKETPLACE_URL).pathname.split("/")[1]!.toLowerCase()];
-
 export type RepoLoc = { repo: string; ref: string; dir?: string };
 
 /** Where an entry lives on GitHub: from its git source, else from a `github.com/<repo>/tree/<ref>/<dir>` homepage. */
@@ -130,11 +127,6 @@ export function repoLoc(entry: MarketEntry): RepoLoc | undefined {
   if (!m) return undefined;
   return { repo: m[1]!, ref: m[2] ?? "HEAD", ...(m[3] ? { dir: m[3] } : {}) };
 }
-
-export const isOfficial = (entry: MarketEntry): boolean => {
-  const owner = repoLoc(entry)?.repo.split("/")[0]?.toLowerCase();
-  return !!owner && OFFICIAL_OWNERS.includes(owner);
-};
 
 /** The description in the user's language: exact tag, then base language, then the default `description`. */
 export function localizedDescription(entry: MarketEntry, lang: string): string {

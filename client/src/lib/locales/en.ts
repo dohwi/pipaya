@@ -1409,8 +1409,6 @@ export const en: Record<string, string> = {
 	"설치됨": "Installed",
 	"받는 중…": "Downloading…",
 	"설치하는 중…": "Installing…",
-	"공식": "Official",
-	"pipaya 공식 확장": "Official pipaya extension",
 	"GitHub 스타": "GitHub stars",
 	"서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.": "Server extensions run with the server's full privileges. Read the code before installing.",
 	"클라이언트 확장 ‘{name}’ 필요": "Client extension “{name}” required",
