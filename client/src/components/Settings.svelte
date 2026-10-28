@@ -130,7 +130,7 @@
 			{#if tab === "extensions"}
 				<Extensions scope="device" bind:selected={extId} bind:installFor ongoserver={(id) => { marketFor = id; go("srvext"); }} onopenserverext={(name) => { go("srvext"); extId = srvKey(name); }} />
 			{:else if tab === "srvext"}
-				<Extensions scope="server" bind:selected={extId} bind:marketFor ongoclient={(id) => { go("extensions"); extId = id; }} />
+				<Extensions scope="server" serverId={server?.id ?? null} bind:selected={extId} bind:marketFor ongoclient={(id) => { go("extensions"); extId = id; }} />
 			{:else if tab === "backup"}
 				<Backup />
 			{:else if tab === "keys"}

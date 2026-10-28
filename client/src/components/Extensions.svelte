@@ -25,7 +25,7 @@
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), ongoserver, ongoclient, onopenserverext }: { scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: a client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
+	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), ongoserver, ongoclient, onopenserverext, serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: a client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
 	let marketQuery = $state("");
 	$effect(() => { if (installFor && view === "device") { const id = installFor; installFor = null; void installCompanion(id); } });
 	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
@@ -34,7 +34,9 @@
 	/** A package from the marketplace is a client extension: it goes to this device (the client extensions tab), even when picked from the server tab as the client half of a pair. */
 	let fromMarket = $state(false);
 	const target = $derived<ExtensionScope>(fromMarket ? "device" : view);
-	const serverName = $derived(app.servers.find((s) => s.id === app.serverId)?.name ?? "");
+	/** The connection of the server being listed: the one picked in the settings window, else the open one. */
+	const srvApi = $derived((serverId ? app.links[serverId]?.api : null) ?? app.api);
+	const serverName = $derived(app.servers.find((s) => s.id === (serverId ?? app.serverId))?.name ?? "");
 	const list = $derived(extensions.installed.filter((e) => e.scope === view));
 	const indexed = $derived(extensions.unreadable.map((item, index) => ({ item, index })));
 	const unreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === view));
@@ -48,20 +50,20 @@
 	/** A server extension that needs a client extension this device does not have runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !extensions.installed.some((e) => e.package.manifest.id === companion);
 	async function loadServerSide() {
-		const api = app.api;
+		const api = srvApi;
 		if (!api) { serverSide = []; return; }
 		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
 		try { serverSettings = (await api.extensionSettings()).settings; } catch { /* the forms start from their defaults */ }
 	}
 	function saveServerSettings(ext: ServerExt, settings: Record<string, unknown>) {
 		void run(srvKey(ext.name), async () => {
-			const api = app.api;
+			const api = srvApi;
 			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 			serverSettings[ext.settingsId] = (await api.saveExtensionSettings(ext.settingsId, settings)).settings;
 			tasks.notice = t("설정을 저장했습니다.");
 		});
 	}
-	$effect(() => { void app.api; void market; void loadServerSide(); });
+	$effect(() => { void srvApi; void market; void loadServerSide(); });
 	/** The catalog, read quietly in the background so updates can be offered without opening the marketplace. */
 	let catalog = $state<MarketCatalog | null>(null);
 	$effect(() => {
@@ -86,7 +88,7 @@
 				filename = `${entry.id}.json`;
 				return;
 			}
-			const api = app.api;
+			const api = srvApi;
 			if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 			const { repo, dir, ref, commit } = entry.source;
 			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
@@ -117,7 +119,7 @@
 						extensions.install(pkg, old.scope);
 						if (resume) await extensions.enable(entry.id);
 					} else {
-						const api = app.api;
+						const api = srvApi;
 						if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 						const { repo, dir, ref, commit } = entry.source;
 						await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
@@ -150,8 +152,8 @@
 	 */
 	async function companionPackage(id: string): Promise<ExtensionPackage> {
 		const owner = serverSide.find((e) => e.companion === id && e.clientPackage);
-		if (owner && app.api) {
-			try { return parsePackage(await app.api.serverExtensionClient(owner.name)); } catch { /* fall back to the catalog */ }
+		if (owner && srvApi) {
+			try { return parsePackage(await srvApi.serverExtensionClient(owner.name)); } catch { /* fall back to the catalog */ }
 		}
 		return fetchCompanion(id);
 	}
@@ -322,7 +324,7 @@
 
 	function removeServer(ext: ServerExt, keepSettings: boolean) {
 		void run(srvKey(ext.name), async () => {
-			const api = app.api;
+			const api = srvApi;
 			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 			await api.removeServerExtension(ext.name, keepSettings);
 			tasks.closeRemove();
