@@ -130,6 +130,7 @@
 	.archtoggle :global(.dicon) {
 		width: 16px;
 		place-items: center;
+		translate: 1px 0; /* the 14px svg centres on x 76 like the tabs' icons (the chevron and the name stay put) */
 	}
 	.archname {
 		flex: 1;
