@@ -798,8 +798,8 @@
 		content: "";
 		position: absolute;
 		left: 0;
-		top: 0;
-		bottom: 0;
+		top: -1px; /* rows are 1px apart (their margin): run the rule across that gap so it never breaks */
+		bottom: -1px;
 		border-left: 1.5px solid var(--border-strong, var(--border));
 	}
 	:global(:where(.side) .branch::after) {
@@ -815,6 +815,9 @@
 	}
 	:global(:where(.side) .members .item:last-child .branch::before) {
 		bottom: calc(50% + 8px);
+	}
+	:global(:where(.side) .members .item:first-child .branch::before) {
+		top: -2px; /* the first pane also reaches up into the gap under the book row */
 	}
 	:global(:where(.side) .grprow.cur .title) {
 		font-weight: 600;
