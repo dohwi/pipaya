@@ -32,16 +32,9 @@
 	const encoder = new TextEncoder();
 	/** Entries that do not apply to this session are left out; the rest is read-only background. */
 	const shownPrompts = $derived((data?.systemPrompts ?? []).filter((x) => x.active));
-	const toolGroups = $derived.by(() => {
-		const groups = new Map<string, { source: keyof typeof source; tools: NonNullable<typeof data>["toolSpecs"]; bytes: number; off: number }>();
-		for (const tool of data?.toolSpecs ?? []) {
-			const g = groups.get(tool.source) ?? { source: tool.source, tools: [], bytes: 0, off: 0 };
-			g.tools.push(tool);
-			if (tool.enabled) g.bytes += tool.bytes; else g.off++;
-			groups.set(tool.source, g);
-		}
-		return [...groups.values()];
-	});
+	/** Only tools actually handed to the model; ones switched off in the settings are withheld and not listed. */
+	const activeTools = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled));
+	const baseBytes = $derived(data ? encoder.encode(data.systemPrompt).length + encoder.encode(data.skillsPrompt ?? "").length : 0);
 	const requestPromptTotal = $derived((data?.systemPrompts ?? []).filter((x) => x.delivery === "request" && x.active).reduce((n, x) => n + x.bytes, 0));
 	const toolTotal = $derived((data?.toolSpecs ?? []).filter((x) => x.enabled).reduce((n, x) => n + x.bytes, 0));
 	/** What every request carries: the system prompt (with AGENTS.md and skills), the tool definitions, and the SDK wording that applies. */
@@ -100,57 +93,54 @@
 				{/each}
 				<p class="note">{t("매 요청에 실리는 크기 약 {size} — 시스템 프롬프트(AGENTS.md·스킬 포함) {a} + 도구 정의 {b} + SDK 문구 {c}", { size: bytes(requestTotal), a: bytes(encoder.encode(data.effectiveSystemPrompt).length), b: bytes(toolTotal), c: bytes(requestPromptTotal) })}</p>
 				<section class="group">
-					<h3>{t("기본 프롬프트")}</h3>
 					<div class="source">
-						<button class="fold" onclick={() => (opened.system = !opened.system)} aria-expanded={!!opened.system}>
-							<span class="label"><span class="source-name">{t("시스템")}</span><span class="meta">{sessionId ? t("이 세션 기본") : t("새 대화 기본")} · {bytes(new TextEncoder().encode(data.systemPrompt).length)}</span></span>
-							<span class="chev" class:open={opened.system}><Icon name="chevron-right" /></span>
+						<button class="fold" onclick={() => (opened.base = !opened.base)} aria-expanded={!!opened.base}>
+							<span class="label"><span class="source-name">{t("기본 프롬프트")}</span><span class="meta">{t("{n}개", { n: 1 + (data.skillsPrompt ? 1 : 0) })} · {t("읽기 전용")} · {bytes(baseBytes)}</span></span>
+							<span class="chev" class:open={opened.base}><Icon name="chevron-right" /></span>
 						</button>
-						{#if opened.system}<pre in:collapseIn out:collapseOut>{data.systemPrompt}</pre>{/if}
-					</div>
-					{#each [
-						{ key: "skills", name: t("스킬"), text: data.skillsPrompt, count: data.skills.length },
-					] as block (block.key)}
-						{#if block.text}
-							<div class="source">
-								<button class="fold" onclick={() => (opened[block.key] = !opened[block.key])} aria-expanded={!!opened[block.key]}>
-									<span class="label"><span class="source-name">{block.name}</span><span class="meta">{t("{n}개 주입 중", { n: block.count })} · {bytes(new TextEncoder().encode(block.text).length)}</span></span>
-									<span class="chev" class:open={opened[block.key]}><Icon name="chevron-right" /></span>
-								</button>
-								{#if opened[block.key]}<pre in:collapseIn out:collapseOut>{block.text}</pre>{/if}
+						{#if opened.base}
+							<div class="inner" in:collapseIn out:collapseOut>
+								{#each [
+									{ key: "system", name: t("시스템"), text: data.systemPrompt, meta: sessionId ? t("이 세션 기본") : t("새 대화 기본") },
+									{ key: "skills", name: t("스킬"), text: data.skillsPrompt, meta: t("{n}개 주입 중", { n: data.skills.length }) },
+								] as block (block.key)}
+									{#if block.text}
+										<div class="source">
+											<button class="fold" onclick={() => (opened[block.key] = !opened[block.key])} aria-expanded={!!opened[block.key]}>
+												<span class="label"><span class="source-name">{block.name}</span><span class="meta">{block.meta} · {bytes(encoder.encode(block.text).length)}</span></span>
+												<span class="chev" class:open={opened[block.key]}><Icon name="chevron-right" /></span>
+											</button>
+											{#if opened[block.key]}<pre in:collapseIn out:collapseOut>{block.text}</pre>{/if}
+										</div>
+									{/if}
+								{/each}
 							</div>
 						{/if}
-					{/each}
+					</div>
 				</section>
 				<section class="group">
-					<h3>{t("도구")}</h3>
-					{#if data.toolSpecs.length}
-						<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 켜진 도구 {n}개 · 합계 {size}", { n: data.toolSpecs.filter((x) => x.enabled).length, size: bytes(toolTotal) })}</p>
-					{/if}
-					{#each toolGroups as g (g.source)}
-						{@const key = `toolgroup:${g.source}`}
-						<div class="source">
-							<button class="fold" onclick={() => (opened[key] = !opened[key])} aria-expanded={!!opened[key]}>
-								<span class="label"><span class="source-name">{t(source[g.source])}</span><span class="meta">{t("{n}개", { n: g.tools.length })} · {bytes(g.bytes)}{#if g.off} · {t("{n}개 꺼짐", { n: g.off })}{/if}</span></span>
-								<span class="chev" class:open={opened[key]}><Icon name="chevron-right" /></span>
-							</button>
-							{#if opened[key]}
-								<div class="inner" in:collapseIn out:collapseOut>
-									{#each g.tools as tool (tool.name)}
-										<div class="source" class:off={!tool.enabled}>
-											<button class="fold" onclick={() => (opened[`tool:${tool.name}`] = !opened[`tool:${tool.name}`])} aria-expanded={!!opened[`tool:${tool.name}`]}>
-												<span class="label"><span class="source-name mono">{tool.name}</span><span class="meta">{bytes(tool.bytes)}{#if !tool.enabled} · {t("꺼짐 (설정)")}{/if}</span></span>
-												<span class="chev" class:open={opened[`tool:${tool.name}`]}><Icon name="chevron-right" /></span>
-											</button>
-											{#if opened[`tool:${tool.name}`]}<pre in:collapseIn out:collapseOut>{toolText(tool)}</pre>{/if}
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					{:else}
-						<EmptyState>{t("이 세션에 주어지는 도구가 없습니다.")}</EmptyState>
-					{/each}
+					<div class="source">
+						<button class="fold" onclick={() => (opened.tools = !opened.tools)} aria-expanded={!!opened.tools}>
+							<span class="label"><span class="source-name">{t("도구")}</span><span class="meta">{t("{n}개", { n: activeTools.length })} · {bytes(toolTotal)}</span></span>
+							<span class="chev" class:open={opened.tools}><Icon name="chevron-right" /></span>
+						</button>
+						{#if opened.tools}
+							<div class="inner" in:collapseIn out:collapseOut>
+								<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 이 세션에 적용된 도구만 보입니다.")}</p>
+								{#each activeTools as tool (tool.name)}
+									<div class="source">
+										<button class="fold" onclick={() => (opened[`tool:${tool.name}`] = !opened[`tool:${tool.name}`])} aria-expanded={!!opened[`tool:${tool.name}`]}>
+											<span class="label"><span class="source-name mono">{tool.name}</span><span class="meta">{t(source[tool.source])} · {bytes(tool.bytes)}</span></span>
+											<span class="chev" class:open={opened[`tool:${tool.name}`]}><Icon name="chevron-right" /></span>
+										</button>
+										{#if opened[`tool:${tool.name}`]}<pre in:collapseIn out:collapseOut>{toolText(tool)}</pre>{/if}
+									</div>
+								{:else}
+									<EmptyState>{t("이 세션에 주어지는 도구가 없습니다.")}</EmptyState>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</section>
 				<section class="group">
 					<div class="source">
@@ -167,10 +157,10 @@
 										{#each list as p (p.id)}
 											<div class="source">
 												<button class="fold" onclick={() => (opened[`prompt:${p.id}`] = !opened[`prompt:${p.id}`])} aria-expanded={!!opened[`prompt:${p.id}`]}>
-													<span class="label"><span class="source-name">{p.title}</span><span class="meta">{t(kindName[p.kind])} · {bytes(p.bytes)}</span></span>
+													<span class="label"><span class="source-name">{p.title}</span><span class="meta">{t(kindName[p.kind])} · {bytes(p.bytes)}</span><span class="when-line">{p.when}</span></span>
 													<span class="chev" class:open={opened[`prompt:${p.id}`]}><Icon name="chevron-right" /></span>
 												</button>
-												{#if opened[`prompt:${p.id}`]}<p class="when">{p.when}</p><pre in:collapseIn out:collapseOut>{p.text}</pre>{/if}
+												{#if opened[`prompt:${p.id}`]}<pre in:collapseIn out:collapseOut>{p.text}</pre>{/if}
 											</div>
 										{/each}
 									{/if}
@@ -236,7 +226,5 @@
 	.inner > .note { margin-top: 10px; }
 	.inner .source { margin-top: 6px; }
 	.note { margin: 0 2px 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
-	.source.off { opacity: 0.55; }
-	.when { margin: 0; padding: 10px 14px 0; border-top: 1px solid var(--border); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
-	.when + pre { border-top: 0; }
+	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
 </style>
