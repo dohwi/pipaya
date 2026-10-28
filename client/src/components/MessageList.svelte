@@ -62,9 +62,13 @@
 	}
 	let touchY = 0;
 	// Only a clearly upward, mostly vertical wheel unpins: trackpad sideways swipes, pinch (ctrlKey) and inertia jitter must not.
+	// A slower upward wheel (|deltaY| < 2, a gentle trackpad nudge) only notes the time: if the view then really moves up,
+	// onScroll unpins. Otherwise onScroll would pin the view back to the bottom on every such event (a flicker).
+	let lastWheelUp = 0;
 	const onWheel = (e: WheelEvent) => {
-		if (e.ctrlKey || e.deltaY > -2 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-		release();
+		if (e.ctrlKey || e.deltaY >= 0 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+		if (e.deltaY > -2) lastWheelUp = performance.now();
+		else release();
 	};
 	let touching = false;
 	const onTouchStart = (e: TouchEvent) => { touching = true; touchY = e.touches[0]?.clientY ?? 0; };
