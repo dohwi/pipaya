@@ -91,7 +91,7 @@
 					tabindex={i === index ? 0 : -1}
 					aria-selected={i === index}
 					data-i={i}
-					style="padding-left:{14 + (it.depth ?? 0) * 18}px"
+					style="padding-left:{8 + (it.depth ?? 0) * 16}px"
 					onmousemove={() => (index = i)}
 				>
 					<!-- Rows are chosen with the arrow keys and Enter on the list itself; the click is for the pointer. -->

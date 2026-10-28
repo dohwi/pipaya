@@ -133,6 +133,15 @@ Eyeballing a screenshot hides 1–2px errors. Measure the DOM, then draw rulers 
 To capture every screen and dialog at the three viewports, write a throwaway Playwright script under `tmp/` modelled on `.agents/bin/shot.py`.
 Exposing the store needs an audit-only line in `client/src/main.ts` (`window.__app = app`); never commit that line.
 
+### Left/right margin audit
+
+Every dialog band (header, search strip, body, footer, list rows) must start and end at the gutter: **24 (phone 16) + the modal's 1px border**.
+Popovers that are lists (`Palette`, queue) use a fixed **16**: their rows start at 16, so the title and the close glyph do too. A settings window's body starts
+after its nav column (nav right edge + the same gutter). Measure the content (text range or control box), not a scroller: a scroller that gives 4px of focus-ring room
+and takes it back with `margin: 0 -4px` still has its content on the gutter. Ellipsised and wrapped text is judged by its box.
+Checked at 1440 / 820 / 390, light and dark: 223 bands over 29 screens, 0 off-rule sides (extension dialogs included, they are native `<dialog>` with
+`padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b)`).
+
 ### Right-edge rule (one line, never two close ones)
 
 Everything you read in a dialog ends on **one** right line and starts on **one** left line. Two edges 2 to 16px apart are always a mistake

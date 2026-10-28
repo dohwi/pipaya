@@ -77,7 +77,7 @@
 </dialog>
 
 <style>
-  dialog { width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter))); padding: 24px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
+  dialog { width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter))); padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
   dialog::backdrop { background: var(--scrim); }
   h2 { margin: 0 0 4px; font-size: var(--fs-xl); }
   .owner { margin: 0 0 12px; color: var(--text-faint); font-size: var(--fs-xs); }

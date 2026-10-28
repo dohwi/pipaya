@@ -72,7 +72,7 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.mh.compact {
-		padding: 12px 8px 4px 16px; /* compact: a list popover, tighter than a form dialog */
+		padding: 12px 7px 4px 16px; /* compact list popover: fixed 16px gutter (its rows start at 16), the 38px close button's 9.5px puts the glyph at 16.5 */
 	}
 	.mh-title {
 		flex: 1;
@@ -104,7 +104,7 @@
 			padding: 12px calc(var(--dlg-px) - 9px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above */
 		}
 		.mh.compact {
-			padding: 12px calc(var(--dlg-px) - 9px) 4px var(--dlg-px);
+			padding: 12px 7px 4px 16px; /* the same fixed 16px as on a desktop: it already is the phone gutter */
 		}
 	}
 </style>
