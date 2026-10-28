@@ -697,9 +697,9 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 28px;
-		height: 28px;
-		margin-right: 4px;
+		width: 24px;
+		height: 24px;
+		margin-right: 2px; /* a tab row ends 2px short of a folder row, so 24px + 2px = the "+" column of the folder row above (x 242-266) */
 		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
 		color: var(--text-faint);
 		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
