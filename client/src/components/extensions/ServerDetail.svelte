@@ -2,7 +2,7 @@
 	import Button from "../Button.svelte";
 	import Notice from "../Notice.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
-	import { extensions } from "../../lib/extensions/host.svelte";
+	import { app } from "../../lib/store.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { flagVariable, serverFields, serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
 	import { t } from "../../lib/i18n";
@@ -20,6 +20,7 @@
 		upgrade,
 		onback,
 		onsave,
+		serverId = null,
 		oninstallclient,
 		onopenclient,
 		onenableclient,
@@ -34,6 +35,8 @@
 		oncancelremove: () => void;
 		onremove: (keepSettings: boolean) => void;
 		ext: ServerExt;
+		/** The server this extension runs on (the one picked in settings); the open one when unset */
+		serverId?: string | null;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
 		settings: Record<string, unknown> | undefined;
 		busy: boolean;
@@ -52,9 +55,10 @@
 	const form = $derived(serverFields(ext));
 	const provides = $derived(serverProvides(ext));
 	/** A server extension that needs a client extension this device does not have runs only half. */
-	const client = $derived(ext.companion ? extensions.installed.find((e) => e.package.manifest.id === ext.companion) : undefined);
-	const clientOff = $derived(!!client && client.state !== "active" && client.state !== "starting");
-	const missingClient = $derived(!!ext.companion && !extensions.installed.some((e) => e.package.manifest.id === ext.companion));
+	const clients = $derived((void app.extensionStoreTick, app.clientExtensionsOf(serverId ?? app.serverId)));
+	const client = $derived(ext.companion ? clients.find((e) => e.id === ext.companion) : undefined);
+	const clientOff = $derived(!!client && !client.live);
+	const missingClient = $derived(!!ext.companion && !client);
 </script>
 
 <ExtensionPage id="extension-{srvKey(ext.name)}" name={ext.title ?? ext.name} sub={ext.name} {busy} {upgrade} {onback}>
@@ -74,13 +78,13 @@
 
 	{#if client && clientOff}
 		<Notice tone="warn" size="sm" icon="clip" role="status">
-			{t("클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.package.manifest.name })}
-			{#snippet action()}{#if onenableclient}<button type="button" disabled={busy || client.state === "error"} onclick={() => onenableclient(client.package.manifest.id)}>{t("켜기")}</button>{/if}{/snippet}
+			{t("클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.name })}
+			{#snippet action()}{#if onenableclient}<button type="button" disabled={busy} onclick={() => onenableclient(client.id)}>{t("켜기")}</button>{/if}{/snippet}
 		</Notice>
 	{:else if client && onopenclient}
 		<Notice tone="info" size="sm" icon="clip" role="status">
-			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.package.manifest.name })}
-			{#snippet action()}<button type="button" onclick={() => onopenclient(client.package.manifest.id)}>{t("열기")}</button>{/snippet}
+			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.name })}
+			{#snippet action()}<button type="button" onclick={() => onopenclient(client.id)}>{t("열기")}</button>{/snippet}
 		</Notice>
 	{/if}
 

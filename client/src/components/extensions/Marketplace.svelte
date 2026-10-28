@@ -10,11 +10,12 @@
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
 	import StatusChip from "../StatusChip.svelte";
 	import VersionBump from "../VersionBump.svelte";
-	import { extensions } from "../../lib/extensions/host.svelte";
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
+	import type { ExtensionSource } from "../../lib/extensions/source";
+	import { app } from "../../lib/store.svelte";
 
-	let { scope, api, onchanged, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; /** Connection of the server being listed (the one picked in settings), not necessarily the open one */ api: Api | null; /** A server extension was installed or removed there: the caller reads its own lists again */ onchanged: () => void | Promise<void>; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
+	let { scope, api, serverId = null, src, onchanged, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; /** Connection of the server being listed (the one picked in settings), not necessarily the open one */ api: Api | null; /** Id of that server; the open one when unset */ serverId?: string | null; /** Where client extensions are removed from: the host, or that server's idle list */ src: ExtensionSource; /** A server extension was installed or removed there: the caller reads its own lists again */ onchanged: () => void | Promise<void>; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
 
 	let catalog = $state<MarketCatalog | null>(null);
 	// svelte-ignore state_referenced_locally
@@ -25,7 +26,8 @@
 	let serverHave = $state<Record<string, true>>({});
 	let ctrl: AbortController | null = null;
 
-	const installed = (id: string) => extensions.installed.find((e) => e.package.manifest.id === id);
+	/** Whether a client extension is installed where it would go: this device's own, or the listed server's */
+	const installed = (id: string) => (void app.extensionStoreTick, app.clientExtensionsOf(serverId ?? app.serverId)).find((e) => e.id === id);
 	/** A server tab lists server extensions only, a device tab client ones only. */
 	const kind = $derived(scope === "server" ? "server" : "client");
 	const shown = $derived((catalog?.extensions ?? []).filter((e) => {
@@ -161,7 +163,7 @@
 				await api.removeServerExtension(entry.id, keepSettings);
 				await Promise.all([refreshServer(), onchanged()]);
 			} else {
-				extensions.remove(entry.id, { keepSettings });
+				await src.remove(entry.id, { keepSettings });
 			}
 			removing = "";
 		} catch (cause) {
@@ -194,7 +196,7 @@
 				{@const repo = repoLoc(entry)?.repo}
 				{@const star = repo ? stars[repo] : undefined}
 				{@const desc = localizedDescription(entry, getLang())}
-				{@const newer = have ? compareVersions(entry.version, have.package.manifest.version) > 0 : false}
+				{@const newer = have ? compareVersions(entry.version, have.version) > 0 : false}
 				<li class="item">
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
@@ -202,7 +204,7 @@
 							<span class="pair" role="img" aria-label={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })} title={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })}><Icon name="clip" /></span>
 						{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<StatusChip tone="ok">{t("설치됨")}</StatusChip>{/if}
-						{#if newer && have}<span class="ver"><VersionBump from={have.package.manifest.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
+						{#if newer && have}<span class="ver"><VersionBump from={have.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}
 					<div class="foot">

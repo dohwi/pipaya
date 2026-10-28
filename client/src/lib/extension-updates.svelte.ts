@@ -33,18 +33,24 @@ class ExtensionUpdates {
 		if (!m || have.some((s) => s.name === m.id)) return undefined;
 		return { id: m.id, name: m.name };
 	};
-	/** Ids of installed client extensions with a newer entry, per scope. */
-	clientIds = (scope: "device" | "server"): Set<string> => {
+	/** Ids, among `have`, of client extensions with a newer catalog entry. */
+	newerClients = (have: readonly { id: string; version: string }[]): Set<string> => {
 		const out = new Set<string>();
-		for (const e of extensions.installed) {
-			if (e.scope !== scope) continue;
-			const m = this.catalog?.extensions.find((x) => x.id === e.package.manifest.id && x.kind === "client");
-			if (m && compareVersions(m.version, e.package.manifest.version) > 0) out.add(e.package.manifest.id);
+		for (const e of have) {
+			const m = this.catalog?.extensions.find((x) => x.id === e.id && x.kind === "client");
+			if (m && compareVersions(m.version, e.version) > 0) out.add(e.id);
 		}
 		return out;
 	};
+	/** Ids of this device's client extensions with a newer entry. */
+	clientIds = (scope: "device" | "server", serverId?: string | null): Set<string> => {
+		if (scope === "device") return this.newerClients(extensions.installed.filter((e) => e.scope === "device").map((e) => ({ id: e.package.manifest.id, version: e.package.manifest.version })));
+		return this.newerClients(this.clientsOf(serverId).filter((e) => e.scope === "server"));
+	};
+	/** The client extensions of a server, set by whoever owns the stores (the app store): the open server's host, or an idle editor. */
+	clientsOf: (serverId: string | null | undefined) => readonly { id: string; version: string; scope: "server" | "device" }[] = () => [];
 	serverCount(serverId: string | null | undefined): number {
-		return this.serverNames(serverId).size + this.clientIds("server").size;
+		return this.serverNames(serverId).size + this.clientIds("server", serverId).size;
 	}
 	get deviceCount(): number {
 		return this.clientIds("device").size;

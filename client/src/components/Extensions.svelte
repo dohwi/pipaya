@@ -10,7 +10,8 @@
 	import { download } from "../lib/download";
 	import { tick } from "svelte";
 	import { app } from "../lib/store.svelte";
-		import { CONFIG_REQUIRED, extensions, type ExtensionScope, type InstalledExtension } from "../lib/extensions/host.svelte";
+		import { CONFIG_REQUIRED, extensions, type ExtensionScope } from "../lib/extensions/host.svelte";
+	import { hostSource, storeSource, type ExtensionRow as Installed } from "../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
 	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
@@ -37,9 +38,19 @@
 	/** The connection of the server being listed: the one picked in the settings window, else the open one. */
 	const srvApi = $derived((serverId ? app.links[serverId]?.api : null) ?? app.api);
 	const serverName = $derived(app.servers.find((s) => s.id === (serverId ?? app.serverId))?.name ?? "");
-	const list = $derived(extensions.installed.filter((e) => e.scope === view));
-	const indexed = $derived(extensions.unreadable.map((item, index) => ({ item, index })));
-	const unreadable = $derived(indexed.filter(({ item }) => (item.scope ?? "server") === view));
+	/**
+	 * Where this pane reads and writes. The open server (and this device) is the extension host. Any other saved server
+	 * is its own idle editor: its list, its connection, its sync, so nothing here can touch the open server.
+	 */
+	const store = $derived(view === "server" ? app.extensionStoreOf(serverId) : null);
+	const src = $derived(store ? storeSource(store, extensions) : hostSource(extensions));
+	/** A server other than the open one whose editor is not ready yet (its list is still being read) */
+	const pendingStore = $derived(view === "server" && !!serverId && serverId !== app.serverId && !store);
+	// Re-run when the open server changes: the one just left now needs its own editor, the one just opened has the host.
+	$effect(() => { void app.serverId; if (view === "server" && serverId) void app.attachExtensionStore(serverId); });
+	const rows = $derived((void app.extensionStoreTick, src.list(view)));
+	const list = $derived(rows);
+	const unreadable = $derived((void app.extensionStoreTick, src.unreadable(view)).map((item) => ({ item, index: item.index })));
 	let filename = $state("");
 	let market = $state(false);
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
@@ -48,7 +59,7 @@
 	let serverSettings = $state<Record<string, Record<string, unknown>>>({});
 	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
 	/** A server extension that needs a client extension this device does not have runs only half: say so. */
-	const missingClient = (companion?: string) => !!companion && !extensions.installed.some((e) => e.package.manifest.id === companion);
+	const missingClient = (companion?: string) => !!companion && !app.clientExtensionsOf(serverId ?? app.serverId).some((e) => e.id === companion);
 	async function loadServerSide() {
 		const api = srvApi;
 		if (!api) { serverSide = []; return; }
@@ -79,7 +90,7 @@
 		const e = catalog?.extensions.find((x) => x.id === id && x.kind === kind);
 		return e && have && compareVersions(e.version, have) > 0 ? e : undefined;
 	};
-	const clientUpdate = (entry: InstalledExtension) => newerEntry(entry.package.manifest.id, "client", entry.package.manifest.version);
+	const clientUpdate = (entry: Installed) => newerEntry(entry.package.manifest.id, "client", entry.package.manifest.version);
 	const serverUpdate = (ext: ServerExt) => { const e = newerEntry(ext.name, "server", ext.version); return e?.source.type === "git" ? e : undefined; };
 	/** Client: download, then the usual preview (permissions) before replacing. Server: reinstall at the catalog's commit. */
 	function update(entry: MarketEntry) {
@@ -114,12 +125,12 @@
 			for (const entry of pending) {
 				try {
 					if (entry.kind === "client") {
-						const old = extensions.installed.find((e) => e.package.manifest.id === entry.id);
+						const old = src.find(entry.id);
 						const pkg = await fetchPackage(entry);
 						if (!old || !pkg.manifest.permissions.every((p) => old.package.manifest.permissions.includes(p))) { needsConsent++; continue; }
-						const resume = extensions.canResume(pkg);
-						extensions.install(pkg, old.scope);
-						if (resume) await extensions.enable(entry.id);
+						const resume = src.canResume(pkg);
+						src.install(pkg, old.scope);
+						if (resume) await src.enable(entry.id);
 					} else {
 						const api = srvApi;
 						if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
@@ -176,9 +187,9 @@
 	}
 	const replacement = $derived.by(() => {
 		const id = preview?.manifest.id;
-		return id ? extensions.installed.find((entry) => entry.package.manifest.id === id) : undefined;
+		return id ? src.find(id) : undefined;
 	});
-	const willResume = $derived(preview ? extensions.canResume(preview) : false);
+	const willResume = $derived(preview ? src.canResume(preview) : false);
 	const run = (key: string, task: () => unknown | Promise<unknown>, failTitle?: string) => tasks.run(key, task, failTitle);
 
 	function selectFile(event: Event) {
@@ -212,8 +223,8 @@
 			if (tasks.busy[id]) throw new LocalizedError(t("이 확장의 작업이 끝난 뒤 가져오세요."));
 			const replaced = !!replacement;
 			// Same id, was running, and no new permission: swap in place and start it again without a second consent.
-			const resume = extensions.canResume(pkg);
-			extensions.install(pkg, replacement?.scope ?? target);
+			const resume = src.canResume(pkg);
+			src.install(pkg, replacement?.scope ?? target);
 			delete drafts[id];
 			if (tasks.removing === id) tasks.closeRemove();
 			preview = null;
@@ -230,7 +241,7 @@
 				return;
 			}
 			try {
-				await extensions.enable(id);
+				await src.enable(id);
 				tasks.result = { tone: "ok", title: t("확장을 교체하고 다시 실행했습니다"), detail: t("새 권한이 없어 다시 동의를 받지 않고 바로 실행했습니다."), pkg, running: true, replaced };
 			} catch (cause) {
 				const why = errorText(cause);
@@ -255,7 +266,7 @@
 		tasks.result = null;
 		if (!id) return;
 		// a client extension installed from the server tab lives on the device tab
-		if (extensions.installed.find((e) => e.package.manifest.id === id)?.scope !== view) { ongoclient?.(id); return; }
+		if (src.find(id)?.scope !== view) { ongoclient?.(id); return; }
 		selected = id;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
 	}
@@ -263,32 +274,38 @@
 	function enable(id: string) {
 		void run(id, async () => {
 			if (extensions.safeMode) throw new LocalizedError(t("안전 모드를 먼저 해제하세요."));
-			await extensions.enable(id);
+			await src.enable(id);
 		});
 	}
 
 	function disable(id: string) {
 		void run(id, () => {
-			extensions.disable(id);
+			src.disable(id);
 		});
 	}
 
 	function reload(id: string) {
 		void run(id, async () => {
-			if (extensions.safeMode || extensions.find(id).state !== "active") throw new LocalizedError(t("활성 상태의 확장만 다시 불러올 수 있습니다."));
-			await extensions.enable(id);
+			if (extensions.safeMode || src.find(id)?.state !== "active") throw new LocalizedError(t("활성 상태의 확장만 다시 불러올 수 있습니다."));
+			await src.enable(id);
 		});
 	}
 
 	function saveSettings(id: string, given?: Record<string, unknown>) {
 		void run(id, async () => {
-			const entry = extensions.find(id);
+			const entry = src.find(id);
+			if (!entry) throw new LocalizedError(t("확장을 찾을 수 없습니다"));
 			const settings: unknown = given ?? JSON.parse(drafts[id] ?? JSON.stringify(entry.settings));
-			// Local state and the cache update at once; the server copy follows in the background (see syncNotice).
-			void extensions.setSettings(id, settings);
-			drafts[id] = JSON.stringify(entry.settings, null, 2);
+			if (src.runs) {
+				// Local state and the cache update at once; the server copy follows in the background (see syncNotice).
+				void src.setSettings(id, settings as Record<string, unknown>);
+			} else {
+				// Another server: it must take them first, or the next read from it would silently undo the edit.
+				await src.setSettings(id, settings as Record<string, unknown>);
+			}
+			drafts[id] = JSON.stringify(src.find(id)?.settings ?? entry.settings, null, 2);
 			if (entry.state === "active" && !extensions.safeMode) {
-				await extensions.enable(id);
+				await src.enable(id);
 				tasks.notice = t("설정을 저장하고 확장을 다시 불러왔습니다.");
 			} else {
 				tasks.notice = t("설정을 저장했습니다. 다음 활성화 때 적용됩니다.");
@@ -298,14 +315,15 @@
 
 	function exportPackage(id: string) {
 		void run(id, () => {
-			const pkg = extensions.find(id).package;
+			const pkg = src.find(id)?.package;
+			if (!pkg) throw new LocalizedError(t("확장을 찾을 수 없습니다"));
 			download(pkg, `${pkg.manifest.id}-${pkg.manifest.version}.json`);
 		});
 	}
 
 	function exportRaw(index: number) {
 		void run(`unreadable:${index}`, () => {
-			const item = extensions.unreadable[index];
+			const item = src.unreadable(view).find((u) => u.index === index);
 			if (item) download(item.raw, `${item.id ?? "extension"}-raw.json`);
 		});
 	}
@@ -316,8 +334,8 @@
 	}
 
 	function remove(id: string, keepSettings: boolean) {
-		void run(id, () => {
-			extensions.remove(id, { keepSettings });
+		void run(id, async () => {
+			await src.remove(id, { keepSettings });
 			delete drafts[id];
 			tasks.closeRemove();
 			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
@@ -337,8 +355,8 @@
 	}
 
 	function removeUnreadable(index: number, keepSettings: boolean) {
-		void run(`unreadable:${index}`, () => {
-			extensions.removeUnreadable(index, { keepSettings });
+		void run(`unreadable:${index}`, async () => {
+			await src.removeUnreadable(index, { keepSettings });
 			tasks.closeRemove();
 			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
 		});
@@ -376,12 +394,12 @@
 	{@render needLine(t("서버 확장 ‘{name}’ 필요", { name: need.name }), disabled, () => ongoserver?.(need.id))}
 {/snippet}
 
-{#snippet installedRow(entry: InstalledExtension)}
+{#snippet installedRow(entry: Installed)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
-	{@const gated = !!fields && extensions.configRequired(id)}
-	{@const on = entry.state === "active" || entry.state === "starting"}
-	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id)}
+	{@const gated = !!fields && src.configRequired(id)}
+	{@const on = src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled}
+	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
 	{@const needServer = view === "device" && ongoserver ? extensionUpdates.missingServerFor(id, serverId ?? app.serverId) : undefined}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
@@ -409,13 +427,15 @@
 		{#if tasks.error}<Notice tone="danger" size="sm" animated>{tasks.error}</Notice>{/if}
 		{#if tasks.notice}<Notice tone="ok" size="sm" animated>{tasks.notice}</Notice>{/if}
 	</div>
-	{#if extensions.syncNotice}<Notice tone="warn" size="sm" animated role="status">{extensions.syncNotice}</Notice>{/if}
-	{#if extensions.loadError}<Notice tone="danger" size="sm" animated role="status">{extensions.loadError}</Notice>{/if}
+	{#if src.runs && extensions.syncNotice}<Notice tone="warn" size="sm" animated role="status">{extensions.syncNotice}</Notice>{/if}
+	{#if src.loadError()}<Notice tone="danger" size="sm" animated role="status">{src.loadError()}</Notice>{/if}
+	{#if pendingStore}<p class="hint" role="status">{t("목록을 불러오는 중…")}</p>{/if}
 
 	{#if openEntry}
 		{@const id = openEntry.package.manifest.id}
 		<InstalledDetail
 			entry={openEntry}
+			{src}
 			{tasks}
 			{drafts}
 			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
@@ -437,13 +457,14 @@
 	{:else if openServer}
 		<ServerDetail
 			ext={openServer}
+			{serverId}
 			settings={serverSettings[openServer.settingsId]}
 			busy={!!tasks.busy[srvKey(openServer.name)]}
 			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}
-			onopenclient={(id) => (extensions.installed.some((e) => e.package.manifest.id === id && e.scope === view) ? (selected = id) : ongoclient?.(id))}
+			onopenclient={(id) => (list.some((e) => e.package.manifest.id === id) ? (selected = id) : ongoclient?.(id))}
 			onenableclient={enable}
 			removing={tasks.removing === srvKey(openServer.name)}
 			onaskremove={(event) => askRemove(srvKey(openServer.name), event)}
@@ -520,7 +541,7 @@
 				</span>
 				<Switch checked={extensions.safeMode} label={t("모든 확장 실행 중지")} disabled={tasks.busy.$safe} onchange={setSafeMode} />
 			</div>
-			{#if extensions.installed.length}<p class="hint">{t("내보내기에는 패키지만 포함되며, 개인 설정과 확장 저장 데이터는 포함되지 않습니다.")}</p>{/if}
+			{#if extensions.installed.some((e) => e.scope === "device")}<p class="hint">{t("내보내기에는 패키지만 포함되며, 개인 설정과 확장 저장 데이터는 포함되지 않습니다.")}</p>{/if}
 		</div>
 	</Accordion>
 	{/if}
@@ -528,7 +549,7 @@
 </div>
 
 {#if market}
-	<Marketplace scope={view} api={srvApi} onchanged={async () => { await reloadServer(); }} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
+	<Marketplace scope={view} api={srvApi} {serverId} {src} onchanged={async () => { await reloadServer(); }} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
 <ImportDialogs {preview} result={tasks.result} {replacement} {willResume} {filename} {target} {serverName} busy={tasks.busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />

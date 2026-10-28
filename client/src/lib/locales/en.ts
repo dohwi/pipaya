@@ -733,6 +733,8 @@ export const en: Record<string, string> = {
 	"서버 확장 ‘{name}’과 함께 작동합니다.": "Works together with the server extension “{name}”.",
 	"서버 확장 ‘{name}’과 함께 쓰려면 이 확장을 켜야 합니다.": "Turn this extension on to use it with the server extension “{name}”.",
 	"켜기": "Turn on",
+	"이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.": "It starts when you open this server. It is not running now.",
+	"이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.": "This server is not open, so it is not running now. If you turn it on, it starts when you open the server.",
 	"서버 확장 ‘{name}’도 설치해야 동작합니다.": "The server extension “{name}” must also be installed for this to work.",
 	"서버 확장 ‘{name}’ 필요": "Server extension “{name}” required",
 	"클라이언트 확장 필요": "Client extension needed",

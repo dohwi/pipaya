@@ -2,7 +2,8 @@
 	import Button from "../Button.svelte";
 	import Notice from "../Notice.svelte";
 	import Switch from "../Switch.svelte";
-	import { CONFIG_REQUIRED, extensions, type InstalledExtension } from "../../lib/extensions/host.svelte";
+	import { CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
+	import type { ExtensionRow, ExtensionSource } from "../../lib/extensions/source";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { t } from "../../lib/i18n";
 	import ExtensionPage from "./ExtensionPage.svelte";
@@ -17,6 +18,7 @@
 	 */
 	let {
 		entry,
+		src,
 		tasks,
 		drafts,
 		bundledBy,
@@ -35,7 +37,9 @@
 		oncancelremove,
 		onremove,
 	}: {
-		entry: InstalledExtension;
+		entry: ExtensionRow;
+		/** Where the extension lives: the host (runs here) or another server's idle list (only remembers the choice) */
+		src: ExtensionSource;
 		tasks: ExtensionTasks;
 		/** Unsaved text of the raw JSON editor, by extension id */
 		drafts: Record<string, string>;
@@ -64,10 +68,10 @@
 
 	const id = $derived(entry.package.manifest.id);
 	const fields = $derived(entry.package.manifest.settings);
-	const gated = $derived(!!fields && extensions.configRequired(id));
-	const on = $derived(entry.state === "active" || entry.state === "starting");
-	const problem = $derived(on ? "" : gated ? t(CONFIG_REQUIRED) : extensions.settingsProblem(id));
-	const saveLabel = $derived(entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장"));
+	const gated = $derived(!!fields && src.configRequired(id));
+	const on = $derived(src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled);
+	const problem = $derived(on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id));
+	const saveLabel = $derived(src.runs && entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장"));
 </script>
 
 <ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
@@ -76,19 +80,20 @@
 		<Switch
 			checked={on}
 			label={t("{name} 사용", { name: entry.package.manifest.name })}
-			disabled={tasks.busy[id] || entry.state === "starting" || (!on && (extensions.safeMode || !!problem))}
+			disabled={tasks.busy[id] || entry.state === "starting" || (!on && ((src.runs && extensions.safeMode) || !!problem))}
 			describedby={problem ? `extension-blocked-${id}` : undefined}
 			onchange={(next) => (next ? onenable() : ondisable())}
 		/>
 	{/snippet}
 
+	{#if !src.runs}<Notice tone="info" size="sm" role="status">{on ? t("이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.") : t("이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.")}</Notice>{/if}
 	{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
 	{#if pairedServer && !bundledBy}
 		<Notice tone={on ? "info" : "warn"} size="sm" icon="clip" role="status">
 			{on ? t("서버 확장 ‘{name}’과 함께 작동합니다.", { name: pairedServer }) : t("서버 확장 ‘{name}’과 함께 쓰려면 이 확장을 켜야 합니다.", { name: pairedServer })}
 			{#snippet action()}
 				{#if on}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}
-				{:else}<button type="button" disabled={tasks.busy[id] || entry.state === "starting" || extensions.safeMode || !!problem} onclick={onenable}>{t("켜기")}</button>{/if}
+				{:else}<button type="button" disabled={tasks.busy[id] || entry.state === "starting" || (src.runs && extensions.safeMode) || !!problem} onclick={onenable}>{t("켜기")}</button>{/if}
 			{/snippet}
 		</Notice>
 	{/if}
@@ -120,7 +125,7 @@
 	<section class="block">
 		<h3 class="section-label">{t("관리")}</h3>
 		<div class="row">
-			<Button size="sm" disabled={extensions.safeMode || tasks.busy[id] || entry.state !== "active"} onclick={onreload}>{t("다시 불러오기")}</Button>
+			{#if src.runs}<Button size="sm" disabled={extensions.safeMode || tasks.busy[id] || entry.state !== "active"} onclick={onreload}>{t("다시 불러오기")}</Button>{/if}
 			<Button size="sm" disabled={tasks.busy[id]} onclick={onexport}>{t("내보내기")}</Button>
 			<Button variant="danger" size="sm" class="end" disabled={tasks.busy[id]} aria-expanded={tasks.removing === id} onclick={onaskremove}>{t("삭제")}</Button>
 		</div>

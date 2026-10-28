@@ -3,7 +3,6 @@
 	import { rovingKeys } from "../../lib/roving";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-		import { extensions } from "../../lib/extensions/host.svelte";
 	import { SETTINGS_TABS, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
 	import type { Server } from "../../lib/store.svelte";
@@ -54,9 +53,10 @@
 	const extsOf = (id: string): Kid[] => {
 		const sc = extScope(id);
 		if (!sc) return [];
-		const installed = extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, scope: e.scope, live: e.state === "active" || e.state === "starting" }));
+		void app.extensionStoreTick;
+		const installed = app.clientExtensionsOf(server?.id).map((e) => ({ id: e.id, name: e.name, scope: e.scope, live: e.live }));
 		return extensionRows(sc, installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, {
-			clientIds: (s) => extensionUpdates.clientIds(s),
+			clientIds: (s) => extensionUpdates.clientIds(s, server?.id),
 			serverNames: extensionUpdates.serverNames(server?.id),
 			missingServerFor: (cid) => extensionUpdates.missingServerFor(cid, server?.id),
 			clientName: (cid) => extensionUpdates.clientName(cid),
