@@ -106,9 +106,6 @@
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
 	}
-	.archive:hover .archtoggle .cbadge {
-		opacity: 0;
-	}
 	.archtoggle {
 		display: flex;
 		align-items: center;
@@ -116,7 +113,9 @@
 		width: calc(100% - 4px);
 		height: 32px; /* every row is 32px tall */
 		margin: 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
-		padding: 0 8px 0 24px; /* chevron centred under the folder icon above */
+		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
+		   its right edge 20 from the row end (button column x 244): 20 + 20 + 8 = 48 */
+		padding: 0 48px 0 24px;
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
