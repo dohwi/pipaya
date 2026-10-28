@@ -7,11 +7,17 @@
 	/** A server's conversation list: archive, restore and delete conversations by folder. Opened from the server's header in the sidebar. */
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
-	const close = () => (app.sessionsDialog = null);
+	const filter = $derived(app.sessionsFilter);
+	const close = () => {
+		app.sessionsDialog = null;
+		app.sessionsFilter = null;
+	};
+	const title = $derived(filter?.archived ? t("보관함") : t("대화 목록"));
+	const sub = $derived([server ? app.serverLabel(server) : null, filter?.cwd].filter(Boolean).join(" · ") || null);
 </script>
 
-<Modal onclose={close} label={t("대화 목록")} title={t("대화 목록")} sub={server ? app.serverLabel(server) : null} width="l" maxHeight="720px">
-	<div class="body"><SessionsPanel {serverId} /></div>
+<Modal onclose={close} label={title} {title} {sub} width="l" maxHeight="720px">
+	<div class="body"><SessionsPanel {serverId} cwd={filter?.cwd} archivedOnly={!!filter?.archived} /></div>
 </Modal>
 
 <style>

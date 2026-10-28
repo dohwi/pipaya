@@ -13,7 +13,7 @@
 	import Notice from "./Notice.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
-	let { serverId }: { serverId: string } = $props();
+	let { serverId, cwd, archivedOnly = false }: { serverId: string; cwd?: string; archivedOnly?: boolean } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
@@ -64,6 +64,8 @@
 	const groups = $derived.by(() => {
 		const map = new Map<string, Session[]>();
 		for (const s of sessions ?? []) {
+			if (cwd !== undefined && s.cwd !== cwd) continue;
+			if (archivedOnly && (!s.archived || s.closed)) continue;
 			const list = map.get(s.cwd);
 			if (list) list.push(s);
 			else map.set(s.cwd, [s]);
@@ -109,6 +111,26 @@
 		try {
 			for (const id of ids) await api.patchSession(id, { archived: on });
 			note = on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
+			const next = { ...picked };
+			for (const id of ids) delete next[id];
+			picked = next;
+			await load();
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			busy = false;
+		}
+	}
+	/** Move what is ticked in one folder to the closed sessions (out of the list and the archive, still resumable). */
+	async function close(list: Session[]) {
+		const ids = list.filter((s) => picked[s.id] && !s.closed).map((s) => s.id);
+		if (!api || !ids.length) return;
+		busy = true;
+		error = "";
+		note = "";
+		try {
+			for (const id of ids) await api.patchSession(id, { closed: true, archived: false });
+			note = t("{n}개를 닫았습니다.", { n: ids.length });
 			const next = { ...picked };
 			for (const id of ids) delete next[id];
 			picked = next;
@@ -183,7 +205,8 @@
 						</button>
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
-								<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed && !s.archived)}><Icon name="archive" /> {t("보관")}</Button>
+								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed)}><Icon name="x" /> {t("닫기")}</Button>
+								{#if !archivedOnly}<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !g.list.some((s) => picked[s.id] && !s.closed && !s.archived)}><Icon name="archive" /> {t("보관")}</Button>{/if}
 								<Button size="sm" onclick={() => void archive(g.list, false)} disabled={busy || !g.list.some((s) => picked[s.id] && s.archived)}><Icon name="undo" /> {t("복원")}</Button>
 								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>

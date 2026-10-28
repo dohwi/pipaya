@@ -104,6 +104,12 @@ class AppStore {
   }
   /** The server whose conversation list (manage / archive / delete) is open, or null. */
   sessionsDialog = $state<string | null>(null);
+  /** Narrows the open conversation list to one folder (`cwd`) and/or to its archive only. */
+  sessionsFilter = $state<{ cwd?: string; archived?: boolean } | null>(null);
+  openSessions(serverId: string, filter: { cwd?: string; archived?: boolean } | null = null) {
+    this.sessionsFilter = filter;
+    this.sessionsDialog = serverId;
+  }
   /** Workspace root on the server; every session lives in a working directory under it. */
   get workspace(): WorkspaceInfo | null {
     return this.link?.workspace ?? null;
