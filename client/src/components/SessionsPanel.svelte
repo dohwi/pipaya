@@ -238,22 +238,27 @@
 	.list {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 12px;
 	}
 	.group {
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 		overflow: hidden;
+		/* the card's outer edge is the content edge: the 1px border sits inside the buttons' right edge above */
+		margin: 0 -1px;
 	}
+	/* the checkbox, folder name and the bulk buttons share one row that wraps: on a phone the buttons drop under the name
+	   instead of covering it. Checkbox column x = 12 in the header and in every row below, so the ticks line up. */
 	.gh {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 10px;
+		gap: 8px 12px;
 		padding: 8px 12px;
 		background: var(--bg-elev);
 	}
 	.fold {
-		flex: 1;
+		flex: 1 1 160px;
 		min-width: 0;
 		display: flex;
 		align-items: center;
@@ -288,8 +293,8 @@
 	li {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 8px 12px 8px 14px;
+		gap: 12px;
+		padding: 8px 12px;
 		border-top: 1px solid var(--border);
 	}
 	li.on {
@@ -300,7 +305,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 12px;
 		cursor: pointer;
 	}
 	.title {
@@ -319,6 +324,8 @@
 	.del {
 		flex: none;
 		display: flex;
-		gap: 6px;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-left: auto;
 	}
 </style>

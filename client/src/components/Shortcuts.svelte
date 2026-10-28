@@ -149,10 +149,10 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 12px;
 	}
 	.group {
-		margin-top: 14px;
+		margin-top: 12px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
 	}
@@ -170,7 +170,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 9px 0;
+		padding: 8px 0;
 		border-top: 1px solid var(--border);
 	}
 	li:first-child {
@@ -181,7 +181,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 	}
 	.name {
 		font-size: var(--fs-md);
@@ -200,7 +200,7 @@
 	.key {
 		min-width: 108px;
 		height: var(--control-h-sm);
-		padding: 0 10px;
+		padding: 0 12px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
 		font-family: var(--mono);
@@ -285,7 +285,7 @@
 	.foot {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 6px;
+		margin-top: 4px;
 	}
 	/* phones: the description gets the full width and the key controls sit on their own line under it */
 	@media (max-width: 640px) {

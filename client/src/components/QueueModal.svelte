@@ -93,7 +93,7 @@
 	ul {
 		list-style: none;
 		margin: 0;
-		padding: 6px 10px 12px;
+		padding: 8px 12px 12px;
 		overflow-y: auto;
 	}
 	li {
@@ -101,7 +101,7 @@
 		align-items: center;
 		gap: 8px;
 		min-height: 40px;
-		padding: 0 4px 0 8px;
+		padding: 0 4px 0 12px;
 		border-radius: var(--radius);
 		font-size: var(--fs-sm);
 	}

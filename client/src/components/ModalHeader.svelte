@@ -61,18 +61,18 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 14px 14px 10px 22px;
+		gap: var(--dlg-gap-sm);
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); /* measured: the 38px close button holds a 19px glyph, 9.5px from its edge, so 10px here puts the glyph on the body's right edge (0.5px off by design: the scale has no 14.5) */
 	}
 	.mh:has(> :global(.iconbtn:first-child)) {
 		padding-left: 12px;
 	}
 	.mh.divider {
-		padding-bottom: 12px;
+		padding-bottom: var(--dlg-head-b);
 		border-bottom: 1px solid var(--border);
 	}
 	.mh.compact {
-		padding: 10px 8px 4px 18px;
+		padding: 12px 8px 4px 16px; /* compact: a list popover, tighter than a form dialog */
 	}
 	.mh-title {
 		flex: 1;
@@ -101,10 +101,10 @@
 	/* phones: the title lines up with the 16px gutter every dialog body uses there */
 	@media (max-width: 640px) {
 		.mh {
-			padding: 12px 8px 8px 16px;
+			padding: 12px calc(var(--dlg-px) - 10px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above */
 		}
 		.mh.compact {
-			padding: 10px 6px 4px 16px;
+			padding: 12px calc(var(--dlg-px) - 10px) 4px var(--dlg-px);
 		}
 	}
 </style>

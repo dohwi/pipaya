@@ -77,20 +77,20 @@
 </Modal>
 
 <style>
-	.tools { display: flex; padding: 0 24px; flex: none; }
-	.hint { margin: 8px 24px 12px; flex: none; }
-	.body { overflow-y: auto; padding: 14px 24px 24px; min-height: 80px; border-top: 1px solid var(--border); }
+	.tools { display: flex; padding: 0 var(--dlg-px); flex: none; }
+	.hint { margin: 8px var(--dlg-px) 12px; flex: none; }
+	.body { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; border-top: 1px solid var(--border); }
 	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }
 	.fam:not(:first-child) { margin-top: 16px; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.item { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); }
+	.item { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
 	.name { font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
 	.args { font-weight: 400; color: var(--text-faint); }
-	.desc { margin: 6px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-	.gap { margin-bottom: 10px; }
+	.desc { margin: 4px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+	.gap { margin-bottom: 8px; }
 	@media (max-width: 640px) {
-		.tools { padding: 0 16px; }
-		.hint { margin: 8px 16px 12px; }
-		.body { padding: 14px 16px 16px; }
+		.tools { padding: 0 var(--dlg-px); }
+		.hint { margin: 8px var(--dlg-px) 12px; }
+		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}
 </style>

@@ -420,14 +420,14 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		padding: 14px 14px 12px 22px;
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px);
 		border-bottom: 1px solid var(--border);
 	}
 	.ftitle {
 		flex: 1;
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: 8px;
 		min-width: 0;
 	}
 	.ftitle h3 {
@@ -445,7 +445,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 24px;
-		padding: 18px 22px 20px;
+		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 		overflow-y: auto;
 		min-height: 0;
 	}
@@ -455,15 +455,15 @@
 	.fform > footer {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
-		padding: 12px 18px calc(14px + var(--sab));
+		gap: 8px;
+		padding: var(--dlg-foot-t) var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab));
 		border-top: 1px solid var(--border);
 	}
 	.ferr {
 		display: flex;
 		gap: 8px;
 		align-items: flex-start;
-		padding: 9px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--danger-soft);
 		color: var(--danger);
@@ -475,7 +475,7 @@
 		flex: none;
 		width: 17px;
 		height: 17px;
-		margin-top: 1px;
+		margin-top: 0;
 		stroke-width: 1.8;
 	}
 	.fbtns {

@@ -74,6 +74,17 @@
 	--fs-xl: 18px; /* dialog titles */
 	--fs-2xl: 20px; /* big numbers, the drop-zone label */
 
+	/* Dialog spacing: every dialog's header, body and footer share one left/right edge (--dlg-px) so fields, buttons and the
+	   close button line up. 4 / 8 / 12 / 16 / 24 only; phones step the side gutter down to 16. See docs/design-system.md. */
+	--dlg-px: 24px; /* side padding of a dialog's header, body, footer and the search strip */
+	--dlg-gap: 16px; /* between fields / sections inside a dialog body */
+	--dlg-gap-sm: 8px; /* between a label and its field, between chips */
+	--dlg-head-t: 16px; /* header top */
+	--dlg-head-b: 12px; /* header bottom */
+	--dlg-body-t: 16px; /* body top */
+	--dlg-body-b: 24px; /* body bottom */
+	--dlg-foot-t: 12px; /* footer top */
+	--dlg-foot-b: 16px; /* footer bottom (plus --sab) */
 	/* dialog widths: S confirm / M form / L list+settings / XL workspace; the gutter keeps them off the screen edge */
 	--modal-gutter: 24px;
 	--modal-w-s: 420px;
@@ -116,6 +127,13 @@
 	--sidebar-w: 288px;
 	--rail-w: 56px;
 	--content-w: 760px;
+}
+
+@media (max-width: 640px) {
+	:root {
+		--dlg-px: 16px; /* phones: the same 16px side gutter every dialog body used there */
+		--dlg-body-b: 16px;
+	}
 }
 
 :root[data-theme="dark"] {
@@ -569,9 +587,9 @@ input[type="checkbox"]:disabled {
 .chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: 4px;
 	height: 22px;
-	padding: 0 9px;
+	padding: 0 8px;
 	border-radius: var(--radius-pill);
 	font-size: var(--fs-2xs);
 	font-weight: 600;
@@ -584,7 +602,7 @@ input[type="checkbox"]:disabled {
 /* A key cap in running text ("Esc 취소"): the one square-cornered label. */
 kbd {
 	display: inline-block;
-	padding: 1px 5px;
+	padding: 1px 4px;
 	border: 1px solid var(--border-strong);
 	border-bottom-width: 2px;
 	border-radius: var(--radius-xs);
@@ -601,7 +619,7 @@ kbd {
 	flex: none;
 	min-width: 18px;
 	height: 18px;
-	padding: 0 5px 2px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
+	padding: 0 4px 4px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
 	box-sizing: border-box;
 	border-radius: var(--radius-pill);
 	background: var(--bg-active);
@@ -675,6 +693,15 @@ kbd {
 	letter-spacing: 0.01em;
 	color: var(--text-dim);
 }
+/* Form label line: a whole-pixel line box (13px text on 20px) so a field's label + gap + control stack lands on the 4px scale
+   instead of picking up the body's fractional 1.55 line-height. Use on the text of a label above a field. */
+.lbl {
+	font-size: var(--fs-sm);
+	line-height: 20px;
+	font-weight: 600;
+	color: var(--text-dim);
+}
+
 /* Secondary helper text under a control or section. Components add their own margin / line-height on top. */
 .hint {
 	font-size: var(--fs-xs);
@@ -767,8 +794,8 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 .seg {
 	position: relative;
 	display: inline-flex;
-	gap: 2px;
-	padding: 3px;
+	gap: 4px;
+	padding: 4px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	background: var(--bg);
@@ -1104,11 +1131,11 @@ html .glow-working.glow-working {
 	--tb-bd: oklch(0.75 0.12 var(--th) / 0.3);
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	flex: none;
 	max-width: 100%;
 	height: 24px;
-	padding: 0 10px 0 7px;
+	padding: 0 8px 0 8px;
 	border: 1px solid var(--tb-bd);
 	border-radius: 999px;
 	background: var(--tb-bg);
@@ -1135,7 +1162,7 @@ html .glow-working.glow-working {
 /* no label next to the icon: centre the icon in the pill instead of leaving it left-aligned */
 .tbadge.bare {
 	justify-content: center;
-	padding: 0 10px;
+	padding: 0 8px;
 }
 .tbadge .tb-label {
 	overflow: hidden;
@@ -1155,7 +1182,7 @@ html .glow-working.glow-working {
 .dots {
 	display: inline-flex;
 	align-items: center;
-	gap: 3px;
+	gap: 4px;
 	height: 14px;
 	flex: none;
 }

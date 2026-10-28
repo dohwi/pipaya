@@ -38,12 +38,12 @@
 </Modal>
 
 <style>
-	.card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 24px 24px; text-align: center; }
+	.card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px var(--dlg-px); text-align: center; }
 	.mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); }
 	.mark.ok { color: var(--ok); border-color: var(--ok); }
 	.mark.bad { color: var(--danger); border-color: var(--danger); }
 	.mark :global(svg:not(.logo)) { width: 28px; height: 28px; stroke-width: 2; }
 	h2 { margin: 4px 0 0; font-size: var(--fs-xl); }
-	.card :global(.note) { margin: 2px 0 6px; font-size: var(--fs-sm); line-height: 1.55; color: var(--text-faint); word-break: keep-all; }
+	.card :global(.note) { margin: 4px 0 8px; font-size: var(--fs-sm); line-height: 1.55; color: var(--text-faint); word-break: keep-all; }
 	.card :global(.actions) { display: flex; gap: 8px; justify-content: center; }
 </style>

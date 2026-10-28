@@ -22,7 +22,7 @@
 
 <style>
 	.body {
-		padding: 4px 20px 20px;
+		padding: 4px var(--dlg-px) var(--dlg-body-b);
 		overflow-y: auto;
 		min-height: 0;
 	}

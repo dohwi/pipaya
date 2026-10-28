@@ -74,8 +74,8 @@
 </Modal>
 
 <style>
-	.cd { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 20px calc(16px + var(--sab)); text-align: center; }
-	.mark { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 6px; border-radius: 50%; }
+	.cd { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab)); text-align: center; }
+	.mark { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%; }
 	.mark :global(svg) { width: 22px; height: 22px; stroke-width: 1.8; }
 	.warn { background: var(--warn-soft); color: var(--warn); }
 	.danger { background: var(--danger-soft); color: var(--danger); }

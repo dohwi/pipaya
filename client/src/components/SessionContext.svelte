@@ -193,19 +193,19 @@
 	dialog { margin: auto; width: min(var(--modal-w-xl), calc(var(--vw) - var(--modal-gutter))); max-width: none; max-height: min(720px, calc(var(--dvh) - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
 	dialog::backdrop { background: var(--scrim); }
 	.panel { display: flex; flex-direction: column; max-height: inherit; }
-	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 16px 24px; border-bottom: 1px solid var(--border); flex: none; }
+	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); border-bottom: 1px solid var(--border); flex: none; }
 	h2 { margin: 0; font-size: var(--fs-xl); line-height: 1.4; }
-	.state { margin: 3px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
+	.state { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
 	.actions { display: flex; flex: none; }
-	.body { overflow-y: auto; padding: 18px 24px 24px; min-height: 80px; }
+	.body { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; }
 	.source { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.source + .source { margin-top: 8px; }
-	.group + .group { margin-top: 10px; }
+	.group + .group { margin-top: 8px; }
 	/* a paragraph of its own: what the system adds, apart from the AGENTS.md the user writes */
-	.part { margin: 0 0 10px 2px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
-	.rest { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
-	h3 { margin: 0 0 8px 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
-	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; overflow-wrap: anywhere; }
+	.part { margin: 0 0 8px 0; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+	.rest { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+	h3 { margin: 0 0 8px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
+	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px; text-align: left; overflow-wrap: anywhere; }
 	.fold:hover { background: var(--bg-hover); }
 	/* a full-width row must not shrink when pressed (the global 0.97 press scale is meant for small buttons): feedback is a tint */
 	.fold:active { scale: none; background: var(--bg-active); }
@@ -216,20 +216,20 @@
 	.chev.open { transform: rotate(90deg); }
 	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 	.source-name { font-size: var(--fs-xs); }
-	.meta { display: block; margin-top: 5px; color: var(--text-faint); font-size: var(--fs-2xs); }
-	pre { border-top: 1px solid var(--border); margin: 0; padding: 14px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
+	.meta { display: block; margin-top: 4px; color: var(--text-faint); font-size: var(--fs-2xs); }
+	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 	@media (max-width: 640px) {
 		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
-		header { padding: 14px 12px 14px 16px; }
+		header { padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) var(--dlg-head-b) var(--dlg-px); }
 		h2 { font-size: var(--fs-lg); }
-		.body { padding: 16px; }
+		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}
-	.gap { margin-bottom: 10px; }
-	.inner { padding: 0 10px 10px; border-top: 1px solid var(--border); }
-	.inner > .note { margin-top: 10px; }
-	.inner .source { margin-top: 6px; }
+	.gap { margin-bottom: 8px; }
+	.inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }
+	.inner > .note { margin-top: 8px; }
+	.inner .source { margin-top: 4px; }
 	/* same box as a collapsed row, so "nothing applied" reads as a muted row rather than stray body text */
-	.empty { padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); }
-	.note { margin: 0 2px 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
+	.empty { padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); }
+	.note { margin: 0 0 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
 </style>

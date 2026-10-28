@@ -36,9 +36,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 14px;
+		gap: 16px;
 		font-size: var(--fs-md);
-		line-height: 1.4;
+		line-height: 20px; /* a whole-pixel line, so a row is 20 / 40 + padding on the scale */
 		transition: opacity var(--motion-normal) var(--ease-std);
 	}
 	.row.dim {
@@ -52,11 +52,11 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		/* don't split a Korean word between syllables ("글/꼴") */
 		word-break: keep-all;
 	}
 	.hint {
-		line-height: 1.45;
+		line-height: 16px;
 	}
 </style>

@@ -155,7 +155,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 12px 8px 4px 14px;
+		padding: 12px 8px 4px 16px;
 	}
 	.ttl {
 		font-size: var(--fs-sm);
@@ -164,8 +164,8 @@
 	.x {
 		display: grid;
 		place-items: center;
-		width: 30px;
-		height: 30px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		color: var(--text-faint);
 	}
@@ -185,8 +185,8 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 6px 12px 8px;
-		padding: 0 10px;
+		margin: 8px 16px;
+		padding: 0 12px;
 		height: 36px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
@@ -203,7 +203,7 @@
 	}
 	.list {
 		overflow-y: auto;
-		padding: 0 0 6px;
+		padding: 0 8px 8px;
 		border-top: 1px solid var(--border);
 		min-height: 60px;
 	}
@@ -212,7 +212,7 @@
 		align-items: center;
 		width: 100%;
 		min-height: 44px;
-		padding: 4px 10px 4px 14px;
+		padding: 4px 8px 4px 8px; /* list 8 + row 8 = 16: row text starts on the title / search edge */
 		text-align: left;
 		color: var(--text);
 		border-radius: var(--radius-sm);
@@ -238,7 +238,7 @@
 		flex: none;
 		width: 28px;
 		height: 28px;
-		margin-left: 6px;
+		margin-left: 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 		cursor: pointer;
@@ -254,7 +254,7 @@
 		flex: none;
 		width: 9px;
 		height: 9px;
-		margin: -6px 2px 0 0;
+		margin: -4px 4px 0 0;
 		border-left: 1px solid var(--text-faint);
 		border-bottom: 1px solid var(--text-faint);
 	}
@@ -285,8 +285,8 @@
 	}
 	.foot {
 		display: flex;
-		gap: 14px;
-		padding: 8px 14px;
+		gap: 12px;
+		padding: 8px 16px;
 		border-top: 1px solid var(--border);
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);

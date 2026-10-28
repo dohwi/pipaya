@@ -223,18 +223,18 @@
 		gap: 8px;
 	}
 	.mk {
-		padding: 8px 22px;
+		padding: var(--dlg-gap-sm) var(--dlg-px);
 		border-top: 1px solid var(--border);
 	}
 	.path {
-		padding: 0 22px 10px;
+		padding: 0 var(--dlg-px) var(--dlg-gap-sm);
 	}
 	input.mono,
 	.mk input {
 		flex: 1;
 		min-width: 0;
 		height: 34px;
-		padding: 0 10px;
+		padding: 0 12px;
 		font-size: var(--fs-sm);
 		color: var(--text);
 		background: var(--bg-elev);
@@ -249,9 +249,9 @@
 	.recent {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		min-height: 36px; /* a chip row (26px + 10px gap): the empty hint keeps the same height */
-		padding: 0 22px 10px;
+		gap: var(--dlg-gap-sm);
+		min-height: 36px; /* a chip row (28px) + 8px below: the empty hint keeps the same height */
+		padding: 0 var(--dlg-px) var(--dlg-gap-sm);
 	}
 	.hint {
 		font-size: var(--fs-xs);
@@ -267,7 +267,7 @@
 	/* the scroller clips on both axes: 4px of room (taken back by the margin) keeps the chips' focus ring whole */
 	.chips {
 		display: flex;
-		gap: 6px;
+		gap: var(--dlg-gap-sm);
 		margin: -4px;
 		padding: 4px;
 		min-width: 0;
@@ -302,7 +302,7 @@
 		flex: 1;
 		min-height: 180px;
 		overflow-y: auto;
-		padding: 4px 12px;
+		padding: 4px var(--dlg-px) 4px calc(var(--dlg-px) - 12px); /* rows carry their own 12px, so row text starts on the dialog edge */
 		border-top: 1px solid var(--border);
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
@@ -312,10 +312,10 @@
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		width: 100%;
-		height: 34px;
-		padding: 0 10px;
+		height: 36px;
+		padding: 0 12px;
 		border-radius: var(--radius);
 		text-align: left;
 		font-size: var(--fs-sm);
@@ -347,7 +347,7 @@
 	}
 	.empty,
 	.err {
-		margin: 18px 10px;
+		margin: 16px 12px;
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
@@ -359,15 +359,15 @@
 		color: var(--text-dim);
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		cursor: pointer;
 	}
 	footer {
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 10px;
-		padding: 12px 22px 16px;
+		gap: var(--dlg-gap-sm);
+		padding: var(--dlg-foot-t) var(--dlg-px) var(--dlg-foot-b);
 		border-top: 1px solid var(--border);
 	}
 </style>

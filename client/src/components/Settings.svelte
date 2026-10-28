@@ -151,16 +151,16 @@
 	.searchbar {
 		flex: none;
 		position: relative;
-		padding: 0 22px 12px;
+		padding: 0 var(--dlg-px) var(--dlg-foot-t);
 	}
 	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
 	.srvbar {
 		position: relative;
 		flex: none;
 		display: flex;
-		gap: 6px;
-		margin-top: -6px;
-		padding: 8px 22px 12px;
+		gap: var(--dlg-gap-sm);
+		margin-top: -4px; /* pulls the strip up under the title: the 4px focus-ring room below is part of its 8px top padding */
+		padding: var(--dlg-gap-sm) var(--dlg-px) var(--dlg-foot-t);
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -191,7 +191,7 @@
 	.phead {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 	}
 	.phead h3 {
 		margin: 0;
@@ -204,7 +204,7 @@
 	}
 	.body {
 		min-width: 0;
-		padding: 22px 28px 28px;
+		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 		overflow-y: auto;
 		overflow-x: clip; /* the incoming pane starts a few px to the side */
 		scroll-padding-block: 12px; /* Tab scrolls the focused control in with its focus ring, not flush with the edge */
@@ -212,31 +212,21 @@
 	.pane {
 		display: flex;
 		flex-direction: column;
-		gap: 22px;
+		gap: var(--dlg-gap);
 		max-width: 680px;
 	}
 	@media (max-width: 760px) {
 
-		.searchbar {
-			padding: 0 16px 10px;
-		}
-
-		.srvbar {
-			padding: 8px 16px 10px;
-		}
 
 		.layout {
 			grid-template-columns: minmax(0, 1fr);
 			grid-template-rows: auto minmax(0, 1fr);
 		}
-		.body {
-			padding: 16px 16px 24px;
-		}
 		.phead {
 			display: none;
 		}
 		.pane {
-			gap: 18px;
+			gap: var(--dlg-gap);
 		}
 	}
 </style>

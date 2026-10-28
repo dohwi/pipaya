@@ -272,10 +272,10 @@
 	.back {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 		height: var(--control-h-sm);
 		margin: 0 8px 0 -8px;
-		padding: 0 10px 0 4px;
+		padding: 0 8px 0 4px;
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -293,12 +293,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 14px 14px 4px 22px;
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 10px) 4px var(--dlg-px);
 	}
 	.title {
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: 8px;
 		min-width: 0;
 	}
 	h2 {
@@ -315,14 +315,14 @@
 	.tabs {
 		position: relative;
 		display: flex;
-		margin-top: 6px;
-		padding: 0 22px;
+		margin-top: 4px;
+		padding: 0 var(--dlg-px);
 		border-bottom: 1px solid var(--border);
 	}
 	.tabs button {
 		flex: 1;
 		height: 40px;
-		padding: 0 14px;
+		padding: 0 12px;
 		text-align: center;
 		color: var(--text-dim);
 		border-bottom: 2px solid transparent;
@@ -344,19 +344,19 @@
 	.body {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
-		padding: 14px 22px 8px;
+		gap: var(--dlg-gap);
+		padding: var(--dlg-body-t) var(--dlg-px) 8px;
 		overflow-y: auto;
 		scroll-padding-block: 12px;
 	}
 	.body.pane {
-		padding: 18px 22px 22px;
+		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 	}
 	.wd {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 10px 12px;
+		gap: 8px;
+		padding: 8px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev, transparent);
@@ -379,8 +379,9 @@
 	label {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--dlg-gap-sm);
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel label line: label 20 + gap 8 + field 40 = 68 */
 		font-weight: 600;
 		color: var(--text-dim);
 	}
@@ -394,7 +395,7 @@
 	}
 	.tokenrow {
 		display: flex;
-		gap: 6px;
+		gap: 4px;
 	}
 	.tokenrow :global(.btn.eye) {
 		flex: none;
@@ -409,14 +410,14 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 12px 18px calc(16px + var(--sab));
+		padding: var(--dlg-foot-t) var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab));
 	}
 	.grow {
 		flex: 1;
 	}
 	@media (max-width: 640px) {
 		.body.pane {
-			padding-bottom: calc(22px + var(--sab));
+			padding-bottom: calc(var(--dlg-body-b) + var(--sab));
 		}
 	}
 </style>
