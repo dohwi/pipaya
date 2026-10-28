@@ -26,7 +26,6 @@
 	let busy = $state(false);
 	let picked = $state<Record<string, boolean>>({});
 	let folded = $state<Record<string, boolean>>({});
-	let note = $state("");
 	let now = $state(Date.now());
 
 	/** Every session of the server, newest first. The list is paged, so keep asking until it ends. */
@@ -107,9 +106,9 @@
 		if (!api || !ids.length) return;
 		busy = true;
 		error = "";
-		note = "";
 		try {
-			note = (await act(ids)) ?? "";
+			const msg = await act(ids);
+			if (msg) app.toast(msg);
 			const next = { ...picked };
 			for (const id of ids) delete next[id];
 			picked = next;
@@ -155,19 +154,18 @@
 
 <div class="sessions" data-part="sessions">
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
-	{#if note}<Notice tone="info">{note}</Notice>{/if}
 
 	<section class="list" aria-labelledby="list-h">
 		<div class="row head">
 			<div class="grow">
-				<div id="list-h" class="section-label">{t("대화 목록")}{#if sessions} <span class="n">{sessions.length}</span>{/if}</div>
+				<div id="list-h" class="section-label">{t("대화 목록")}{#if sessions} <span class="n">{groups.reduce((n, g) => n + g.list.length, 0)}</span>{/if}</div>
 			</div>
 			<Button size="sm" onclick={() => void load()} disabled={busy}>{t("새로고침")}</Button>
 		</div>
 
 		{#if !sessions && !error}
 			<EmptyState loading tone="plain" as="p" />
-		{:else if sessions && !sessions.length}
+		{:else if sessions && !groups.length}
 			<EmptyState tone="dashed" as="p">{t("이 서버에는 대화가 없습니다")}</EmptyState>
 		{:else if sessions}
 			{#each groups as g (g.cwd)}
