@@ -158,6 +158,13 @@ with `tmp`-style scripts that measure each pane's own box, not the window (a spl
   hint and the slash menu's text all start on that same line. The 38px attach button holds a 19px glyph 9.5 from its edge, so the bar's left padding is 7 (3 narrow), not 8.
 - A thing inside a bordered box (the slash menu has a 1px border) counts that border: 15 inside it to land on the same x as 16 inside the composer box.
 
+### Strips, banners and cards that are not a column
+
+Every full-width strip (toasts, session notices, version notice, the connection banner "서버에 다시 연결하는 중…" / "토큰 거부") has **16px** side padding, so a wrapped line keeps its
+distance from the edge (the banner had 12). A centred card (update card, confirmations, link card) is judged on being **centred** (left == right within 1.5px) and on its full-width
+rows (switch row, progress bar) ending at the dialog gutter. Image and file strips in the composer scroll sideways when they overflow; they never change the box width.
+Dark and light are checked the same way (the theme must be confirmed from `data-theme` on every measurement, an unconfirmed theme is not counted).
+
 ### Right-edge rule (one line, never two close ones)
 
 Everything you read in a dialog ends on **one** right line and starts on **one** left line. Two edges 2 to 16px apart are always a mistake

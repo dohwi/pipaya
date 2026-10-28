@@ -517,7 +517,7 @@
 		justify-content: center;
 		gap: 8px;
 		min-height: 44px;
-		padding: 4px 12px;
+		padding: 4px 16px; /* the same 16px side padding as every other strip (toasts, notices): a wrapped line keeps its distance from the edge */
 		font-size: var(--fs-sm);
 		line-height: 1.4;
 		background: color-mix(in srgb, var(--tone) 16%, var(--bg-elev));
