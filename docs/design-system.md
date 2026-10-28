@@ -91,6 +91,9 @@ Columns are **centres**, measured from the sidebar's left edge. Neighbouring col
 - Buttons in the right-hand columns are **20px** squares with **no margin**, so they sit edge to edge on the 20px grid. The row ends where the card ends.
 - The card is `margin: 0 8px` with 1px border and **4px** inner padding on both sides; the server header strip bleeds to the card's edge with the same 4px.
 - Search box and fold button share the card's left and right edges (8px from the sidebar edge).
+- **Do not let a spacing clean-up touch these.** Values on the sidebar's column path are alignment values, not spacing: `.dirtoggle` / `.srvtoggle`
+  `gap: 6px` (a 14px chevron + 6 = the 20px step), `.gfold` and `.archtoggle` left offset 21, `.item .open` `padding-left: 39`, group member `59`. A 4px
+  sweep once moved them to 4 and shifted the folder / tab icons to 42 / 66; `python3 scripts/ui-rulers.py x --seed` must still print 24 / 44 / 64 / 84 / 244 / 264.
 - A 14px icon inside a 16px column is centred in it (`place-items: center`), never nudged with a margin. The one `translate` in `DirBlock.svelte` (archive header) exists because the 14px svg is not the same width as the 16px logo; its comment says so.
 - Folded rows (`.dir.folded`, `.srvhead.folded`) put the `+` where the count badge was, at the same centre (x 264).
 
