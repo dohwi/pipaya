@@ -132,7 +132,7 @@
 	});
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {
-		if (!strip || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+		if (!strip || e.ctrlKey || strip.scrollWidth <= strip.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
 		strip.scrollLeft += e.deltaY;
 		e.preventDefault();
 	}

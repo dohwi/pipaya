@@ -45,7 +45,7 @@
 	}
 	function wheel(event: WheelEvent) {
 		// a vertical wheel scrolls the rail sideways, but only while it actually overflows
-		if (!rail || (!canPrev && !canNext) || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+		if (!rail || event.ctrlKey || (!canPrev && !canNext) || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 		event.preventDefault();
 		rail.scrollLeft += event.deltaY;
 	}

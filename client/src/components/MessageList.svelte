@@ -61,7 +61,11 @@
 		setStuck(false);
 	}
 	let touchY = 0;
-	const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
+	// Only a clearly upward, mostly vertical wheel unpins: trackpad sideways swipes, pinch (ctrlKey) and inertia jitter must not.
+	const onWheel = (e: WheelEvent) => {
+		if (e.ctrlKey || e.deltaY > -2 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+		release();
+	};
 	let touching = false;
 	const onTouchStart = (e: TouchEvent) => { touching = true; touchY = e.touches[0]?.clientY ?? 0; };
 	const onTouchMove = (e: TouchEvent) => {

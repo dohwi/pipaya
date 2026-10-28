@@ -59,8 +59,18 @@
 
 	function onwheel(e: WheelEvent) {
 		e.preventDefault();
+		const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1; // lines / pages -> pixels
+		const dx = e.deltaX * unit;
+		const dy = e.deltaY * unit;
+		if (!e.ctrlKey && scale > 1 && (e.deltaX !== 0 || Math.abs(dy) < 40)) {
+			// two-finger trackpad scroll while zoomed in: pan the picture
+			x -= dx;
+			y -= dy;
+			return;
+		}
 		const p = rel(e, e.currentTarget as HTMLElement);
-		zoomTo(scale * Math.exp(-e.deltaY * 0.0022), p.x, p.y);
+		// a trackpad pinch arrives as ctrl+wheel with small deltas: it needs a much larger factor than a mouse wheel
+		zoomTo(scale * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0022)), p.x, p.y);
 	}
 
 	/** Long press on the picture (touch) copies it */
