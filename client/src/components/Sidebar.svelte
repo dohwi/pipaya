@@ -419,7 +419,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 24 -> 44 -> 64) */
 		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
 		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
@@ -567,7 +567,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
-		padding-left: 41px; /* grid: the tab icon's centre is x 74 (34 / 54 / 74, 20px apart) */
+		padding-left: 39px; /* grid: the tab icon centres on x 64 (24 / 44 / 64, 20px apart) */
 	}
 	:global(:where(.side) .item:hover) {
 		background: var(--bg-hover);
@@ -773,10 +773,10 @@
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
-		padding-left: 4px; /* chevron (x 47-61) + 5: the book icon centres on x 74 like the tabs' icons */
+		padding-left: 4px; /* chevron (x 37-51, centre 44) + 4 + 6 gap: the book icon centres on x 64 like the tabs' icons */
 	}
 	:global(:where(.side) .grp .item.member .open) {
-		padding-left: 61px; /* grid: the pane icon centres on x 94, 20px past the book */
+		padding-left: 59px; /* grid: the pane icon centres on x 84, 20px past the book */
 		min-height: 32px;
 	}
 	:global(:where(.side) .grp .item.member .title) {
@@ -788,7 +788,7 @@
 	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
 	:global(:where(.side) .branch) {
 		position: absolute;
-		left: 48px; /* the book's centre (x 74) */
+		left: 47px; /* the line's 1.5px stroke is centred on the book icon's column (x 64): measured 65 at 48 */
 		top: 0;
 		bottom: 0;
 		width: 12px;
@@ -828,7 +828,7 @@
 		place-items: center;
 		width: 14px;
 		height: 24px;
-		margin-left: 24px; /* the folder row's chevron column: chevron, then the icon at the tabs' icon edge */
+		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 44) */
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grprow .lead) {

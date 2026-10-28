@@ -129,7 +129,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 6px; /* alignment, not spacing: the same column step as .dirtoggle (chevron 14 + 6 = 20) */
 		height: 32px;
 		padding: 0 4px 0 4px; /* chevron and icon sit in the folder rows' columns (same 4px as .dirtoggle) */
 		text-align: left;

@@ -115,7 +115,7 @@
 		margin: 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
 		   its right edge 20 from the row end (button column x 244): 20 + 20 + 8 = 48 */
-		padding: 0 48px 0 24px;
+		padding: 0 48px 0 21px; /* measured: the 14px chevron centres on x 44, the folder icon's column */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
@@ -125,11 +125,10 @@
 		color: var(--text);
 		background: var(--bg-hover);
 	}
-	/* the same 16px icon column as a tab's icon (centre x 74), so the archive icon and the tabs' icons share one centre */
+	/* the same 16px icon column as a tab's icon (centre x 64), so the archive icon and the tabs' icons share one centre */
 	.archtoggle :global(.dicon) {
 		width: 16px;
 		place-items: center;
-		translate: -1px 0; /* the 14px svg centres on x 74 like the tabs' icons (the chevron and the name stay put) */
 	}
 	.archname {
 		flex: 1;
