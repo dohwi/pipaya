@@ -303,7 +303,9 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		overflow: hidden;
-		transition: height var(--motion-fast) var(--ease);
+		/* no height transition: the window follows the streaming text every frame, so a transition restarts constantly and, with the
+		   pinned scroll re-placed on each resize, made the whole view shake (WebKit/macOS) */
+		contain: layout paint;
 	}
 	.pin.clip {
 		mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
