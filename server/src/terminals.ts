@@ -92,6 +92,10 @@ export function shellArgs(path: string, pty: boolean): string[] {
 	return [];
 }
 
+/** Over pipes PowerShell never draws a prompt, so the server writes one after every Enter (and once at start). Only for PowerShell. */
+export const POWERSHELL_PIPE_PROMPT = 'Write-Host -NoNewline ("PS " + (Get-Location).Path + "> ")\r\n';
+export const isPowerShell = (path: string) => /^(pwsh|powershell)$/.test(leaf(path).toLowerCase().replace(/\.exe$/, ""));
+
 /** The environment a shell gets: the server's own (the user's PATH, HOME, ...), minus every PIPAYA_* variable, with a terminal type xterm.js understands. */
 export function shellEnv(source: Record<string, string | undefined> = process.env): Record<string, string> {
 	const env: Record<string, string> = {};
@@ -254,6 +258,11 @@ export class TerminalManager {
 			};
 			void pump(proc.stdout).catch(() => {});
 			void pump(proc.stderr).catch(() => {});
+			const drawPrompt = isPowerShell(shell.path);
+			if (drawPrompt) {
+				proc.stdin.write(POWERSHELL_PIPE_PROMPT);
+				proc.stdin.flush();
+			}
 			live = {
 				info: undefined as unknown as TerminalInfo,
 				named: !!input.title?.trim(),
@@ -266,6 +275,7 @@ export class TerminalManager {
 				write: (d) => {
 					// xterm sends Enter as \r; a line-reading shell needs \r\n.
 					proc.stdin.write(d.replace(/\r(?!\n)/g, "\r\n"));
+					if (drawPrompt && d.includes("\r")) proc.stdin.write(POWERSHELL_PIPE_PROMPT);
 					proc.stdin.flush();
 				},
 				resize: () => {},

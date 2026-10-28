@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { autoTitle, detectShells, foreground, scanOscTitle, Scrollback, shellArgs, shellEnv } from "../src/terminals.ts";
+import { autoTitle, detectShells, foreground, isPowerShell, POWERSHELL_PIPE_PROMPT, scanOscTitle, Scrollback, shellArgs, shellEnv } from "../src/terminals.ts";
 
 const TOKEN = "terminal-test-token-0123456789abcdef";
 let dir: string;
@@ -71,6 +71,12 @@ describe("helpers", () => {
 		expect(shellArgs("C:\\Windows\\powershell.exe", false)).toContain("-");
 		expect(shellArgs("pwsh", true).join(" ")).toContain("UTF8Encoding");
 		expect(shellArgs("/bin/bash", true)).toEqual(["-l"]);
+	});
+	test("PowerShell over pipes gets a server-drawn prompt", () => {
+		expect(isPowerShell("C:\\Windows\\System32\\powershell.exe")).toBe(true);
+		expect(isPowerShell("pwsh")).toBe(true);
+		expect(isPowerShell("/bin/bash")).toBe(false);
+		expect(POWERSHELL_PIPE_PROMPT).toContain("Get-Location");
 	});
 	test("the server token never reaches a shell", () => {
 		const env = shellEnv({ PIPAYA_TOKEN: "x", PATH: "/bin", PIPAYA_PORT: "1" });
