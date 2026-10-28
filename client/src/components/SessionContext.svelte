@@ -93,6 +93,20 @@
 				{/each}
 				<p class="note">{t("매 요청에 실리는 크기 약 {size} — 시스템 프롬프트(AGENTS.md·스킬 포함) {a} + 도구 정의 {b} + SDK 문구 {c}", { size: bytes(requestTotal), a: bytes(encoder.encode(data.effectiveSystemPrompt).length), b: bytes(toolTotal), c: bytes(requestPromptTotal) })}</p>
 				<section class="group">
+					<h3>{t("AGENTS.md (적용 순서)")}</h3>
+					{#each data.instructions as instruction, i (instruction.path)}
+						<div class="source">
+							<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
+								<span class="label"><span class="source-name mono">{i + 1}. {instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
+								<span class="chev" class:open={opened[instruction.path]}><Icon name="chevron-right" /></span>
+							</button>
+							{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
+						</div>
+					{:else}
+						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
+					{/each}
+				</section>
+				<section class="group">
 					<div class="source">
 						<button class="fold" onclick={() => (opened.base = !opened.base)} aria-expanded={!!opened.base}>
 							<span class="label"><span class="source-name">{t("기본 프롬프트")}</span><span class="meta">{t("{n}개", { n: 1 + (data.skillsPrompt ? 1 : 0) })} · {t("읽기 전용")} · {bytes(baseBytes)}</span></span>
@@ -168,20 +182,6 @@
 							</div>
 						{/if}
 					</div>
-				</section>
-				<section class="group">
-					<h3>{t("AGENTS.md (적용 순서)")}</h3>
-					{#each data.instructions as instruction, i (instruction.path)}
-						<div class="source">
-							<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
-								<span class="label"><span class="source-name mono">{i + 1}. {instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
-								<span class="chev" class:open={opened[instruction.path]}><Icon name="chevron-right" /></span>
-							</button>
-							{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
-						</div>
-					{:else}
-						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
-					{/each}
 				</section>
 			{/if}
 		</div>
