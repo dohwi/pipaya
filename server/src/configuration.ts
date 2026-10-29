@@ -301,8 +301,6 @@ export class Configuration {
 		const p: CustomProvider = { ...input, id, name: input.name.trim(), baseUrl: url.toString().replace(/\/$/, ""), models: input.models.map((m) => ({ ...m, id: m.id.trim() })) };
 		const defaultModel = this.effectiveDefaults();
 		if (defaultModel?.provider === id && !ids.includes(defaultModel.model)) throw conflict("cannot remove the default model; change defaults first");
-		const referenced = this.db.query("SELECT DISTINCT model FROM sessions WHERE provider = $id").all({ id }) as { model: string }[];
-		if (referenced.some((r) => !ids.includes(r.model))) throw conflict("cannot remove a model referenced by a session");
 		const runtime = this.buildProvider(p); // build before writing so invalid configs never persist
 		this.db.query("INSERT INTO custom_providers (id, data) VALUES ($id, $data) ON CONFLICT(id) DO UPDATE SET data = $data")
 			.run({ id, data: JSON.stringify(p) });
