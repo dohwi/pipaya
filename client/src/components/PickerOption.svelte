@@ -10,6 +10,7 @@
 		selected = false,
 		disabled = false,
 		onclick,
+		onpreview,
 		lead,
 		name,
 		meta,
@@ -19,6 +20,8 @@
 		selected?: boolean;
 		disabled?: boolean;
 		onclick: () => void;
+		/** called when the row is pointed at or focused (a detail strip under the list follows it); touch has no hover, so a focus / tap counts */
+		onpreview?: () => void;
 		/** a logo or icon before the name */
 		lead?: Snippet;
 		name: Snippet;
@@ -29,8 +32,8 @@
 	} = $props();
 </script>
 
-<div class="pk-row" class:sel={selected}>
-	<button type="button" class="pk-opt" class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
+<div class="pk-row" class:sel={selected} onpointerenter={(e) => e.pointerType === "mouse" && onpreview?.()} role="presentation">
+	<button type="button" class="pk-opt" onfocus={() => onpreview?.()} class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
 		{#if lead}<span class="lead">{@render lead()}</span>{/if}
 		<span class="main">
 			<span class="name">{@render name()}</span>

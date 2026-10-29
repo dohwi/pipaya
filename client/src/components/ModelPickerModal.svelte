@@ -2,7 +2,6 @@
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { collapseIn, collapseOut } from "../lib/motion";
-	import { compact } from "../lib/format";
 	import Icon from "./Icon.svelte";
 	import PickerModal from "./PickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
@@ -90,6 +89,12 @@
 	const shown = $derived(groups.map((g) => ({ ...g, models: g.models.filter((m) => !isFav(m) && matches(m)) })).filter((g) => g.models.length));
 	const starred = $derived(favs.map((k) => models.find((m) => key(m.provider, m.id) === k)).filter((m): m is ModelInfo => !!m && matches(m)));
 
+	/** The model pointed at (or focused) in the list; the detail strip shows it, else the chosen one. */
+	let hovered = $state<ModelInfo | null>(null);
+	const shownInfo = $derived(hovered ?? info);
+	/** "컨텍스트 400,000 · 최대 출력 4,096" (a picture model has no context size). */
+	const limits = (m: ModelInfo) =>
+		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString() }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString() })].filter(Boolean).join(" · ");
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;
 	function apply() {
 		if (!sel) return onpick(null);
@@ -114,11 +119,10 @@
 
 {#snippet opt(m: ModelInfo, inFavs: boolean)}
 	{@const fav = isFav(m)}
-	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
+	<PickerOption selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)} onpreview={() => (hovered = m)}>
 		{#snippet lead()}<ModelLogo {conn} icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
 		{#snippet meta()}{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}{/snippet}
-		{#snippet aside()}<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />{/snippet}
 		{#snippet trailing()}
 			{#if onfav}
 				<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
@@ -130,7 +134,7 @@
 {/snippet}
 
 <!-- opened from the composer (over the page) or from settings: the top layer works for both -->
-<PickerModal title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")}>
+<PickerModal title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")} onlistleave={() => (hovered = null)}>
 	{#snippet list()}
 		{#if allowUnset}
 			<PickerOption selected={!sel} onclick={unset}>
@@ -153,6 +157,14 @@
 	{/snippet}
 
 	{#snippet after()}
+		<!-- pointing at a row shows it here; leaving the list falls back to the chosen model -->
+		<div class="detail" class:empty={!shownInfo} aria-live="polite">
+			{#if shownInfo}
+				<span class="dname">{shownInfo.name}</span>
+				<CapTags model={shownInfo} noctx />
+				<span class="dlim mono">{limits(shownInfo)}</span>
+			{/if}
+		</div>
 		{#if reasoning}
 		<div class="sec" class:gone={!sel} in:collapseIn out:collapseOut>
 			<div class="section-label">{t("추론 강도")}</div>
@@ -223,6 +235,36 @@
 		height: 12px;
 		fill: currentColor;
 		stroke-width: 1.8;
+	}
+	/* a fixed height (name 20 + tags 16 + limits 16 + 2 gaps of 4 + 2 paddings of 8 = 76, rounded to 80), so pointing at
+	   different rows never resizes the dialog */
+	.detail {
+		flex: none;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		height: 80px;
+		padding: 8px 12px;
+		border-radius: var(--radius-sm);
+		background: var(--bg-hover);
+		overflow: hidden;
+	}
+	.detail > :global(*) {
+		flex: none;
+	}
+	.detail.empty {
+		visibility: hidden;
+	}
+	.dname {
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.dlim {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
 	}
 	.sec {
 		flex: none;

@@ -413,6 +413,8 @@ export const en: Record<string, string> = {
 	"모델 검색": "Search models",
 	"키 없음": "No key",
 	"불러오지 못함": "Not available",
+	"컨텍스트 {n}": "Context {n}",
+	"최대 출력 {n}": "Max output {n}",
 	"{id} 사용": "Use {id}",
 	"꺼짐 {n}개": "{n} off",
 	"모델을 바꾸지 못했습니다: {error}": "Could not change the model: {error}",
