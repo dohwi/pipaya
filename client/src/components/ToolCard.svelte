@@ -47,6 +47,8 @@
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
 	const quiet = $derived(run.state === "done" && !exitCode);
+	/** A failed call (error, or a non-zero exit code): the whole card gets a red outline */
+	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
 		{
 			pending: t("준비 중"),
@@ -74,7 +76,7 @@
 
 </script>
 
-<div class="card" data-part="tool" class:awaiting data-state={run.state} style={badgeStyle(kind)}>
+<div class="card" data-part="tool" class:awaiting class:failed data-state={run.state} style={badgeStyle(kind)}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="ico"><Icon name={toolIcon(name, args)} /></span>
 		<span class="name">{toolLabel(name, args)}</span>
@@ -137,6 +139,9 @@
 		background: var(--bg-elev);
 		overflow: hidden;
 		transition: border-color var(--motion-fast) var(--ease-std);
+	}
+	.card.failed {
+		border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
 	}
 	.card.awaiting {
 		border-color: var(--warn);
