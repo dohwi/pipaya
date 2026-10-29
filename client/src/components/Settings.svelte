@@ -13,6 +13,7 @@
 	import ServerForm from "./ServerForm.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import Pin from "./Pin.svelte";
+	import Icon from "./Icon.svelte";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { app } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
@@ -106,6 +107,7 @@
 				{#if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
 			</span>
 		{/each}
+		<FilterChip title={t("서버 추가")} onclick={() => (app.serverForm = "new")}><Icon name="plus" /></FilterChip>
 	</div>
 
 	<div class="searchbar">

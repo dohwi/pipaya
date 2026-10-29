@@ -122,20 +122,11 @@
 					{/each}
 				</div>
 			{/if}
-			{#if x.id === "devices"}
-				<button class="addsrv" onclick={() => (app.serverForm = "new")}><Icon name="plus" /> {t("서버 추가")}</button>
-			{/if}
 		{/if}
 	{/each}
 </div>
 
 <style>
-	.nav button.addsrv {
-		gap: 8px;
-		padding: 8px 12px;
-		font-size: var(--fs-sm);
-		color: var(--text-faint);
-	}
 	.nico {
 		position: relative;
 		display: inline-flex;
@@ -366,10 +357,6 @@
 			padding: 8px 12px;
 			border-radius: var(--radius-control);
 			white-space: nowrap;
-		}
-		.nav button.addsrv {
-			padding: 8px 12px;
-			font-size: var(--fs-md);
 		}
 		.ns {
 			display: none;
