@@ -634,6 +634,19 @@ kbd {
 	background: var(--danger);
 	color: #fff;
 }
+/* a folded row's count takes the colour of the most urgent state inside (the same tones as the agent badge and the rail pin) */
+.cbadge.info {
+	background: var(--info-soft);
+	color: var(--info);
+}
+.cbadge.ok {
+	background: var(--ok-soft);
+	color: var(--ok);
+}
+.cbadge.warn {
+	background: var(--warn-soft);
+	color: var(--warn);
+}
 .chip.ok {
 	background: var(--ok-soft);
 	color: var(--ok);

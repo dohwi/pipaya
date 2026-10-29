@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
+	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../lib/activity";
 	import { type DropOpts } from "../../lib/dnd.svelte";
 	import { groupKey } from "../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
@@ -28,6 +29,7 @@
 
 	const sb = getSidebarCtx();
 	const folded = $derived(sb.isFolded(groupKey(g.id)));
+	const gstate = $derived(mostUrgent(members.map((m) => sb.stateOfId(n, m.id))));
 </script>
 
 <RowShell
@@ -49,6 +51,6 @@
 	<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} ondblclick={() => n.current && sb.startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
 		<span class="lead"><Icon name="group" /></span>
 		<RowTitle text={g.name} />
-		{#if folded}<span class="cbadge" title={t("{n}개", { n: members.length })}>{members.length}</span>{/if}
+		{#if folded}<span class="cbadge {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
 	</button>
 </RowShell>

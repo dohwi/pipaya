@@ -90,10 +90,11 @@
 	});
 	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
 	/** Activity of a session, from its own server's live state. */
-	const stateOf = (n: Node, x: Session): Activity => {
+	const stateOfId = (n: Node, id: string): Activity => {
 		const d = app.links[n.server.id]?.data;
-		return d ? activityOf(d, x.id) : "idle";
+		return d ? activityOf(d, id) : "idle";
 	};
+	const stateOf = (n: Node, x: Session): Activity => stateOfId(n, x.id);
 
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
@@ -220,6 +221,7 @@
 		},
 		isFolded,
 		stateOf,
+		stateOfId,
 		hoverMenu,
 		clickMenu,
 		rowMenuAt,

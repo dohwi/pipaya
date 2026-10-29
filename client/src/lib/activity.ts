@@ -47,6 +47,12 @@ export function activityOf(v: ActivityView, id: string): Activity {
 /** Most urgent first: what to put in front of the user when a tab/rail can only show one thing. */
 export const URGENCY: Activity[] = ["asking", "failed", "done", "working", "idle"];
 
+/** The most urgent of several states (idle when none): the colour a folded row's count badge takes. */
+export const mostUrgent = (states: Iterable<Activity>): Activity => {
+	const have = new Set(states);
+	return URGENCY.find((a) => have.has(a)) ?? "idle";
+};
+
 export function summarize(v: ActivityView, sessions: Session[]): Record<Activity, number> {
 	const out: Record<Activity, number> = { working: 0, asking: 0, done: 0, failed: 0, idle: 0 };
 	for (const s of sessions) out[activityOf(v, s.id)]++;

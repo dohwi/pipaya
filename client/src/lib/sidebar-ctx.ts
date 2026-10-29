@@ -46,6 +46,8 @@ export interface SidebarCtx {
 	isFolded(key: string): boolean;
 	/** Activity of a conversation, from its own server's live state */
 	stateOf(n: SidebarNode, x: Session): Activity;
+	/** Activity by id (a terminal or an unknown id is idle) */
+	stateOfId(n: SidebarNode, id: string): Activity;
 	/** Row menu ("more" / "+") */
 	hoverMenu(e: PointerEvent, target: MenuTarget): void;
 	clickMenu(e: MouseEvent, target: MenuTarget, member?: boolean): void;

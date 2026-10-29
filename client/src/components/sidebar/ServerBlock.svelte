@@ -2,6 +2,8 @@
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { msg, t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
+	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../lib/activity";
+	import { tabPanes } from "../../lib/nav";
 	import { unreachable } from "../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import Badge from "../Badge.svelte";
@@ -19,6 +21,8 @@
 	const sb = getSidebarCtx();
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
 	const sfold = $derived(sb.isFolded(n.server.id));
+	/** The most urgent state among the server's conversations: tints the count while folded */
+	const sstate = $derived(sfold ? mostUrgent(n.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))) : "idle");
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
 </script>
 
@@ -29,7 +33,7 @@
 				<span class="sicon {n.state}"><Icon name="server" /></span>
 				<span class="sname">{app.serverLabel(n.server)}</span>
 				{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
-				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge" title={t("{n}개", { n: n.total })}>{n.total}</span>{/if}
+				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
 			</button>
 			<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
 			<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />

@@ -2,6 +2,8 @@
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { tail } from "../../lib/fit-text";
 	import { t } from "../../lib/i18n";
+	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../lib/activity";
+	import { tabPanes } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
 	import { dropTarget } from "../../lib/dnd.svelte";
 	import type { DirBlock as Dir } from "../../lib/nav";
@@ -31,6 +33,8 @@
 	const parent = $derived(sb.pretty(n, d.path));
 	/** This folder's archived conversations: still open, but tucked away. The row is there only when there are some. */
 	const archived = $derived(n.archived[d.path] ?? []);
+	/** The most urgent state among the folder's tabs: tints the count while folded */
+	const dstate = $derived(mostUrgent(d.tabs.flatMap((x) => tabPanes(x)).map((id) => sb.stateOfId(n, id))));
 	const akey = $derived(archiveKey(n.server.id, d.path));
 	/** Archives start folded; a search opens them so its matches show. */
 	const aopen = $derived(sb.searching || app.sidebar.archiveOpen.includes(akey));
@@ -54,7 +58,7 @@
 				<span class="dname">{label}</span>
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 			</span>
-			{#if folded}<span class="cbadge" title={t("{n}개", { n: d.tabs.length })}>{d.tabs.length}</span>{/if}
+			{#if folded}<span class="cbadge {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 디렉터리의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 디렉터리에서 새 대화 또는 터미널")} />
