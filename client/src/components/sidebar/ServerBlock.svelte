@@ -47,7 +47,7 @@
 			{#if !n.loaded && !unreachable(n.state)}
 				<div class="sk skeleton-bar"></div>
 			{:else if n.total === 0}
-				{#if !unreachable(n.state) || n.loaded}
+				{#if (!unreachable(n.state) || n.loaded) && n.dirs.length === 0}
 					<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
 				{/if}
 			{/if}
