@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import Icon from "./Icon.svelte";
-	import { hoverCard, type HoverInfo } from "../lib/hover-card";
 
 	/**
 	 * One row of a PickerModal list: name, a muted meta line, a check when selected, and an optional trailing control
@@ -11,7 +10,7 @@
 		selected = false,
 		disabled = false,
 		onclick,
-		card,
+		tip,
 		lead,
 		name,
 		meta,
@@ -21,8 +20,8 @@
 		selected?: boolean;
 		disabled?: boolean;
 		onclick: () => void;
-		/** what the hover card beside the row says (a title, chips, lines); omit for no card */
-		card?: () => HoverInfo | null;
+		/** the row's native tooltip (`title`), like the status line's readouts: extra facts stay out of the row */
+		tip?: string;
 		/** a logo or icon before the name */
 		lead?: Snippet;
 		name: Snippet;
@@ -33,7 +32,7 @@
 	} = $props();
 </script>
 
-<div class="pk-row" class:sel={selected} use:hoverCard={() => card?.() ?? null}>
+<div class="pk-row" class:sel={selected} title={tip}>
 	<button type="button" class="pk-opt" class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
 		{#if lead}<span class="lead">{@render lead()}</span>{/if}
 		<span class="main">

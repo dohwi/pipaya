@@ -93,8 +93,8 @@
 	/** "컨텍스트 400,000 · 최대 출력 4,096" (a picture model has no context size). */
 	const limits = (m: ModelInfo) =>
 		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString() }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString() })].filter(Boolean).join(" · ");
-	/** What the hover card says about a model: its abilities and sizes (kept out of the row so the list stays plain). */
-	const cardOf = (m: ModelInfo) => ({ title: m.name, tags: capsOf(m).map((c) => t(c.label)), lines: [limits(m)] });
+	/** The row's tooltip: abilities, then sizes ("채팅 · 추론 · 이미지 읽기 — 컨텍스트 400,000 · 최대 출력 4,096"). */
+	const tipOf = (m: ModelInfo) => `${capsOf(m).map((c) => t(c.label)).join(" · ")}\n${limits(m)}`;
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;
 	function apply() {
 		if (!sel) return onpick(null);
@@ -119,7 +119,7 @@
 
 {#snippet opt(m: ModelInfo, inFavs: boolean)}
 	{@const fav = isFav(m)}
-	<PickerOption card={() => cardOf(m)} selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
+	<PickerOption tip={tipOf(m)} selected={same(m)} disabled={!m.configured || m.available === false} onclick={() => choose(m)}>
 		{#snippet lead()}<ModelLogo {conn} icon={m.icon} provider={m.provider} model={m.id} size={20} colored={Boolean(m.icon)} />{/snippet}
 		{#snippet name()}{m.name}{/snippet}
 		{#snippet meta()}{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}{/snippet}
