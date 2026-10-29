@@ -170,14 +170,12 @@
 		border-color: var(--ok);
 		color: var(--ok);
 	}
-	.step.on {
-		border-color: var(--text);
-		background: var(--text);
-		color: var(--bg);
-	}
+	/* where you are: filled with the card's own warn colour (the block is warn-tinted, so the current step belongs to it).
+	   An answered question you came back to keeps this fill and shows its check inside. */
+	.step.on,
 	.step.on.filled {
-		border-color: var(--ok);
-		background: var(--ok);
+		border-color: var(--warn);
+		background: var(--warn);
 		color: var(--bg);
 	}
 	.step :global(svg) {
