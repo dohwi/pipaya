@@ -19,10 +19,12 @@
 	 * How the options are laid out, always in equal columns so every button is the same width whatever it says.
 	 * Two or three short answers share one row; four short ones make a 2x2; anything long (or five and more) goes one per row.
 	 */
-	const SHORT = 10;
+	const SHORT = 8; // a cell is ~105px wide: eight Korean characters fit on a line, with the sparkle counted below
 	const cols = $derived.by(() => {
 		const o = cur.options ?? [];
-		if (o.length < 2 || o.length > 4 || !o.every((x) => [...x].length <= SHORT)) return 1;
+		// the recommended answer carries a sparkle (about 2 characters wide)
+		const width = (x: string) => [...x].length + (x === cur.recommended ? 2 : 0);
+		if (o.length < 2 || o.length > 4 || !o.every((x) => width(x) <= SHORT)) return 1;
 		return o.length === 3 ? 3 : 2;
 	});
 
@@ -68,8 +70,7 @@
 		<div class="opts" style:--cols={cols}>
 			{#each cur.options as o (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
-					<span class="txt">{o}</span>
-					{#if cur.recommended === o}<span class="rectag" title={t("추천")} role="img" aria-label={t("추천")}></span>{/if}
+					<span class="txt">{#if cur.recommended === o}<span class="rec-mark" title={t("추천")} role="img" aria-label={t("추천")}><Icon name="sparkles" /></span>{/if}{o}</span>
 					{#if items && answers[tab] === o}<Icon name="check" />{/if}
 				</Button>
 			{/each}
@@ -179,28 +180,23 @@
 	.txt {
 		min-width: 0;
 	}
-	/* the recommended answer: tinted and outlined in warn, with one small word after it (no pill, no number) */
-	.opts :global(.btn.opt.rec) {
-		border-color: var(--warn);
-		background: var(--warn-soft);
+	/* the recommended answer looks like every other button (so it never reads as "already chosen"); only a small sparkle
+	   leads its text. The sparkle is part of the text, so a long answer wraps around it and nothing is covered. */
+	.rec-mark {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		margin-right: 4px;
+		vertical-align: -2px;
+		color: var(--warn);
 	}
-	.opts :global(.btn.opt.rec:hover:not(:disabled)) {
-		background: color-mix(in srgb, var(--warn) 22%, transparent);
+	.rec-mark :global(svg) {
+		width: 14px;
+		height: 14px;
 	}
-	/* the recommended mark is a small dot in the button's top-right corner: no text, so it never takes width from the answer
-	   (the tint and border say "recommended" too; the word stays as the tooltip and for screen readers) */
-	.opts :global(.btn.opt) {
-		position: relative;
-	}
-	.rectag {
-		position: absolute;
-		top: 4px;
-		right: 4px;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--warn);
-		font-size: 0; /* the word is hidden, not removed */
+	.rec-mark :global(svg path) {
+		fill: currentColor;
+		stroke: none;
 	}
 
 	/* the answer chosen for this question: a clear border and a check */
@@ -208,7 +204,7 @@
 		border-color: var(--text);
 		box-shadow: inset 0 0 0 1px var(--text);
 	}
-	.opts :global(.btn.opt svg) {
+	.opts :global(.btn.opt > svg) {
 		flex: none;
 		width: 16px;
 		height: 16px;
