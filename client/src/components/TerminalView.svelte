@@ -359,7 +359,7 @@
 				wake();
 				toggleKeyboard?.();
 			}}
-		><Icon name={kbOpen ? "chevron-down" : "keyboard"} /></button>
+		><Icon name="keyboard" />{#if kbOpen}<span class="chev"><Icon name="chevron-down" /></span>{/if}</button>
 	{/if}
 	{#if showBar && status !== "exited"}
 		<TerminalKeybar
@@ -413,9 +413,12 @@
 		left: 50%;
 		translate: -50% 0;
 		z-index: 2;
-		display: grid;
-		place-items: center;
-		width: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		min-width: 44px;
+		padding: 0 8px;
 		height: 36px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
@@ -426,6 +429,10 @@
 		box-shadow: var(--shadow-soft);
 		opacity: 0.85;
 		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.kb .chev :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.kb.idle {
 		opacity: 0.35;
