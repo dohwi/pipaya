@@ -349,19 +349,19 @@
 <div class="term" data-terminal={terminal.id} ontouchstart={wake} onfocusin={() => (kbOpen = true)} onfocusout={() => (kbOpen = false)}>
 	<div class="screen" bind:this={host}></div>
 	{#if showBar && status !== "exited"}
-		<button
-			class="kb tap"
-			class:idle={!awake}
-			aria-label={t("키보드 접기/펴기")}
-			title={t("키보드 접기/펴기")}
-			onpointerdown={(e) => e.preventDefault()}
-			onclick={() => {
-				wake();
-				toggleKeyboard?.();
-			}}
-		><Icon name="keyboard" />{#if kbOpen}<span class="chev"><Icon name="chevron-down" /></span>{/if}</button>
-	{/if}
-	{#if showBar && status !== "exited"}
+		<div class="kb-anchor">
+			<button
+				class="kb tap"
+				class:idle={!awake}
+				aria-label={t("키보드 접기/펴기")}
+				title={t("키보드 접기/펴기")}
+				onpointerdown={(e) => e.preventDefault()}
+				onclick={() => {
+					wake();
+					toggleKeyboard?.();
+				}}
+			><Icon name="keyboard" />{#if kbOpen}<span class="chev"><Icon name="chevron-down" /></span>{/if}</button>
+		</div>
 		<TerminalKeybar
 			bind:mods
 			{appCursor}
@@ -406,10 +406,17 @@
 	.screen :global(.xterm-viewport) {
 		background: transparent !important;
 	}
-	/* Floating keyboard toggle, top centre over the output; backdrop blur keeps the text behind it quiet */
+	/* Zero-height anchor between the output and the helper keys: the toggle floats just above the Ctrl/Alt row and follows it */
+	.kb-anchor {
+		position: relative;
+		flex: none;
+		height: 0;
+		z-index: 2;
+	}
+	/* Floating keyboard toggle, bottom centre over the output; backdrop blur keeps the text behind it quiet */
 	.kb {
 		position: absolute;
-		top: 8px;
+		bottom: 8px;
 		left: 50%;
 		translate: -50% 0;
 		z-index: 2;
