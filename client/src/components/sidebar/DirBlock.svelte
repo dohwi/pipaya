@@ -67,7 +67,7 @@
 		<div class="fold" in:collapseIn out:collapseOut>
 			{#if archived.length}
 				<div class="archive">
-					<button class="archtoggle" onclick={() => app.sidebar.toggleArchive(akey)} aria-expanded={aopen}>
+					<button class="archtoggle" class:folded={!aopen} onclick={() => app.sidebar.toggleArchive(akey)} aria-expanded={aopen}>
 						<span class="chev" class:folded={!aopen}><Icon name="chevron-down" /></span>
 						<span class="dicon"><Icon name="archive" /></span>
 						<span class="archname">{t("보관함")}</span>
@@ -107,6 +107,10 @@
 		top: 4px;
 		right: 20px; /* its centre on x 244, the list-button column of the rows above */
 	}
+	/* folded: the list button takes the count's place on the "+" column (x 264) instead of sitting beside it; open, it stays on x 244 */
+	.archive:has(> .archtoggle.folded) :global(.listbtn) {
+		right: 0;
+	}
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
 	}
@@ -128,6 +132,19 @@
 	.archtoggle:hover {
 		color: var(--text);
 		background: var(--bg-hover);
+	}
+	/* mouse + folded: the count sits on the "+" column (centre x 264, like every folded row's count) and gives way to the list button on hover.
+	   The 20px badge fills the toggle's end, which is 4px before the row's: centre 264 (measured). On touch the button stays visible, so the 48px of room stays */
+	@media (hover: hover) {
+		.archtoggle.folded {
+			padding-right: 0;
+		}
+		.archtoggle.folded :global(.cbadge) {
+			transition: opacity var(--motion-fast) var(--ease-std);
+		}
+		.archive:hover .archtoggle.folded :global(.cbadge) {
+			opacity: 0;
+		}
 	}
 	/* the same 16px icon column as a tab's icon (centre x 64), so the archive icon and the tabs' icons share one centre */
 	.archtoggle :global(.dicon) {

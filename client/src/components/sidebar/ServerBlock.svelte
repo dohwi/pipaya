@@ -139,6 +139,11 @@
 		text-align: left;
 		color: var(--text-dim);
 	}
+	@media (hover: hover) {
+		:global(:where(.side) .srvhead.folded .srvtoggle) {
+			padding-right: 0; /* the count is centred on the "+" column (x 264), like the folders'; on touch the "+" stays beside it */
+		}
+	}
 	:global(:where(.side) .srv.cur .srvtoggle) {
 		color: var(--text);
 	}

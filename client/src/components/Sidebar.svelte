@@ -429,6 +429,12 @@
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
 	}
+	/* a folded row's count is centred on the "+" column (x 264): the toggle ends where the "+" does (x 274) */
+	@media (hover: hover) {
+		:global(:where(.side) .dir.folded .dirtoggle) {
+			padding-right: 0;
+		}
+	}
 	:global(:where(.side) .dir:hover .dirtoggle),
 	:global(:where(.side) .dir.cur .dirtoggle) {
 		color: var(--text);
@@ -483,8 +489,11 @@
 		font-weight: 600;
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
+	/* 20px wide, like the "+" / "⋯" / list buttons (x 254..274): one and two digits both centre on x 264, so the count and the button that replaces it share a column */
 	:global(:where(.side) .cbadge) {
 		margin-left: auto;
+		min-width: 20px;
+		padding: 0 3px 4px; /* same 2px lift under the digits as the base badge */
 	}
 	:global(:where(.side) .dirnew) {
 		display: grid;
@@ -524,6 +533,24 @@
 		}
 		:global(:where(.side) .srvhead.folded .dirnew) {
 			right: 4px; /* the strip's right padding: the same centre (x 264) */
+		}
+		/* a folded split tab: the count on the same column, the "⋯" over it while the row is hovered, focused or its menu is open */
+		:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
+			padding-right: 0;
+		}
+		:global(:where(.side) .grprow.gfolded .acts) {
+			position: absolute;
+			top: 50%;
+			right: 0;
+			translate: 0 -50%;
+		}
+		:global(:where(.side) .grprow.gfolded .cbadge) {
+			transition: opacity var(--motion-fast) var(--ease-std);
+		}
+		:global(:where(.side) .grprow.gfolded:hover .cbadge),
+		:global(:where(.side) .grprow.gfolded:focus-within .cbadge),
+		:global(:where(.side) .grprow.gfolded.menuopen .cbadge) {
+			opacity: 0;
 		}
 		:global(:where(.side) .dir.folded .cbadge),
 	:global(:where(.side) .srvhead.folded .cbadge) {

@@ -95,7 +95,7 @@ Columns are **centres**, measured from the sidebar's left edge. Neighbouring col
   `gap: 6px` (a 14px chevron + 6 = the 20px step), `.gfold` and `.archtoggle` left offset 21, `.item .open` `padding-left: 39`, group member `59`. A 4px
   sweep once moved them to 4 and shifted the folder / tab icons to 42 / 66; `python3 scripts/ui-rulers.py x --seed` must still print 24 / 44 / 64 / 84 / 244 / 264.
 - A 14px icon inside a 16px column is centred in it (`place-items: center`), never nudged with a margin. The one `translate` in `DirBlock.svelte` (archive header) exists because the 14px svg is not the same width as the 16px logo; its comment says so.
-- Folded rows (`.dir.folded`, `.srvhead.folded`) put the `+` where the count badge was, at the same centre (x 264).
+- Folded rows (`.dir.folded`, `.srvhead.folded`, a folded split tab, a folded archive) put the button where the count badge was, at the same centre (x 264): `+` on folders and servers, `⋯` on a split tab, the list button on an archive. The badge is 20px wide like those buttons, so one and two digits both centre on 264. On touch the buttons stay visible and the count keeps its room beside them.
 
 When you add an icon or a button to a sidebar row: pick the column it belongs to, give it that column's box, and **measure** (section 6) instead of eyeballing.
 
