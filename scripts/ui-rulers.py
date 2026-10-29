@@ -7,7 +7,7 @@ Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair). Writes u
   <name>.png         the same with column lines, a top ruler (gap between columns) and a left ruler
                      (teal = element height, magenta = space between), plus the numbers printed on stdout.
 --seed adds one folder with a conversation, an archived one, a terminal and a split tab, so every row type exists.
-Expected result on a clean tree: columns 24 / 44 / 64 / 244 / 264 on a 288px sidebar, every row 32px.
+Expected result on a clean tree: columns 28 / 48 / 68 / 236 / 256 on a 288px sidebar, every row 32px.
 """
 import json, pathlib, subprocess, sys, urllib.request
 

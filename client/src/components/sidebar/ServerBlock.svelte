@@ -64,7 +64,7 @@
 	/* one full-bleed band per server: a tone step instead of a card, so no space is lost to a frame. The inner 8px keeps every row where it was */
 	.srv {
 		position: relative;
-		padding: 0 4px 4px 4px; /* left 4 / right 4: the left column (chevron centre) and the right column ("+" centre) are both 24px from the sidebar's edge */
+		padding: 0 8px 4px 4px; /* inside the card the first column starts 8 from its left edge (4 here + the toggle's 4) and the last ends 8 from its right edge (8 here), so the two sides match */
 	}
 	/* where a carried server would land: a line in the gap beside its card */
 	:global(:where(.side) .srv.before::before),
@@ -83,7 +83,7 @@
 	}
 	/* every server sits in a band, even when it is the only one */
 	.srv.band {
-		margin: 0 8px;
+		margin: 0 12px; /* 12 from the sidebar's edge on both sides: the card, search box, brand row and settings row share these edges */
 		background: var(--band);
 		border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 		border-radius: var(--radius);
@@ -101,8 +101,8 @@
 	.srvhead {
 		display: flex;
 		align-items: center;
-		margin: 0 -4px 4px -4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
-		padding: 0 4px 0 4px;
+		margin: 0 -8px 4px -4px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
+		padding: 0 8px 0 4px;
 		background: var(--band-head);
 		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
 	}
@@ -141,7 +141,7 @@
 	}
 	@media (hover: hover) {
 		:global(:where(.side) .srvhead.folded .srvtoggle) {
-			padding-right: 0; /* the count is centred on the "+" column (x 264), like the folders'; on touch the "+" stays beside it */
+			padding-right: 0; /* the count is centred on the "+" column (x 256), like the folders'; on touch the "+" stays beside it */
 		}
 	}
 	:global(:where(.side) .srv.cur .srvtoggle) {
@@ -183,7 +183,7 @@
 		color: var(--warn);
 	}
 	.nosess {
-		padding: 4px 8px 4px 44px;
+		padding: 4px 8px 4px 48px;
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
 	}

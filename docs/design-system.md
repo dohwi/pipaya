@@ -73,29 +73,29 @@ grows, not the row's declared height.
 Columns are **centres**, measured from the sidebar's left edge. Neighbouring columns are **20px** apart.
 
 ```
- x=24     44        64                                   244      264    288
+ x=28     48        68                                   236      256    288
   │chevron │folder   │tab icon   … name (flexible) …       │list    │+ ⋯ ↺ │
-  24       20        20                  180               20        24
+  28       20        20                  168               20        32
 ```
 
 | Column | x (centre) | Holds |
 |---|---|---|
-| chevron | 24 | fold arrows of the server and folder rows |
-| folder icon | 44 | folder icon; the archive / group chevron |
-| tab icon | 64 | session logo, terminal, archive, group icons; archive header icon |
-| pane icon | 84 | members of a split tab (one step in, past the tree line) |
-| list button | 244 | the conversation-list button of a server, folder, archive |
-| action | 264 | `+`, `⋯`, restore ↺ |
+| chevron | 28 | fold arrows of the server and folder rows |
+| folder icon | 48 | folder icon; the archive / group chevron |
+| tab icon | 68 | session logo, terminal, archive, group icons; archive header icon |
+| pane icon | 88 | members of a split tab (one step in, past the tree line) |
+| list button | 236 | the conversation-list button of a server, folder, archive |
+| action | 256 | `+`, `⋯`, restore ↺ |
 
-- Left gutter and right gutter are both **24px** (edge → chevron centre, edge → action centre).
+- The card sits **12px** from both sidebar edges, and its content **8px** inside it, so the left gutter is 28 (edge → chevron centre) and the right gutter 32 (edge → action centre); the 20px button's right edge is 8px inside the card, the chevron's left edge 8px inside it.
 - Buttons in the right-hand columns are **20px** squares with **no margin**, so they sit edge to edge on the 20px grid. The row ends where the card ends.
-- The card is `margin: 0 8px` with 1px border and **4px** inner padding on both sides; the server header strip bleeds to the card's edge with the same 4px.
-- Search box and fold button share the card's left and right edges (8px from the sidebar edge).
+- The card is `margin: 0 12px` with a 1px border; its inner padding is **4px** left and **8px** right (the toggle adds 4 on the left), so the first and last columns both stand 8px inside the card; the server header strip bleeds to the card's edge.
+- Brand row, search box, fold button and the settings row share the card's left and right edges (12px from the sidebar edge).
 - **Do not let a spacing clean-up touch these.** Values on the sidebar's column path are alignment values, not spacing: `.dirtoggle` / `.srvtoggle`
   `gap: 6px` (a 14px chevron + 6 = the 20px step), `.gfold` and `.archtoggle` left offset 21, `.item .open` `padding-left: 39`, group member `59`. A 4px
-  sweep once moved them to 4 and shifted the folder / tab icons to 42 / 66; `python3 scripts/ui-rulers.py x --seed` must still print 24 / 44 / 64 / 84 / 244 / 264.
+  sweep once moved them to 4 and shifted the folder / tab icons to 42 / 66; `python3 scripts/ui-rulers.py x --seed` must still print 28 / 48 / 68 / 88 / 236 / 256.
 - A 14px icon inside a 16px column is centred in it (`place-items: center`), never nudged with a margin. The one `translate` in `DirBlock.svelte` (archive header) exists because the 14px svg is not the same width as the 16px logo; its comment says so.
-- Folded rows (`.dir.folded`, `.srvhead.folded`, a folded split tab, a folded archive) put the button where the count badge was, at the same centre (x 264): `+` on folders and servers, `⋯` on a split tab, the list button on an archive. The badge is 20px wide like those buttons, so one and two digits both centre on 264. On touch the buttons stay visible and the count keeps its room beside them.
+- Folded rows (`.dir.folded`, `.srvhead.folded`, a folded split tab, a folded archive) put the button where the count badge was, at the same centre (x 256): `+` on folders and servers, `⋯` on a split tab, the list button on an archive. The badge is 20px wide like those buttons, so one and two digits both centre on 264. On touch the buttons stay visible and the count keeps its room beside them.
 
 When you add an icon or a button to a sidebar row: pick the column it belongs to, give it that column's box, and **measure** (section 6) instead of eyeballing.
 
@@ -199,7 +199,7 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 
 - 간격은 **4 / 8 / 12 / 16 / 24**만 씁니다. 그 밖의 값(10, 6, 14, 22 …)은 이유를 주석으로 남깁니다. 1px(구분선, 행 사이)과 측정으로 정한 정렬 값, 안전 영역(`--sat` 등)은 예외입니다.
 - 행 높이는 **32px**, 같은 블록 안 행 사이는 **1px**, 블록 사이는 **4px**, 폴더 사이는 **12px**입니다.
-- 사이드바(288px)는 열의 **중심** 기준으로 **20px** 간격입니다: 화살표 24, 폴더 아이콘 44, 탭 아이콘 64, 분할 패널 아이콘 84, 목록 버튼 244, `+`/`⋯`/↺ 264. 좌우 가장자리는 모두 24px입니다. 우측 버튼은 20px, 마진 없음입니다.
+- 사이드바(288px)는 열의 **중심** 기준으로 **20px** 간격입니다: 화살표 28, 폴더 아이콘 48, 탭 아이콘 68, 분할 패널 아이콘 88, 목록 버튼 236, `+`/`⋯`/↺ 256. 카드는 사이드바 끝에서 12px, 카드 안쪽 첫 열·끝 열은 카드 끝에서 8px입니다. 우측 버튼은 20px, 마진 없음입니다.
 - 눈대중으로 맞추지 말고 DOM의 아이콘 중심을 재서 맞춥니다(6장). 결과 보고는 수정 전/후를 가이드 있는 것과 없는 것으로 나란히, 숫자와 함께 냅니다.
 - 공용 컴포넌트를 바꿀 때는 그것을 쓰는 모든 화면을 확인하고, 데스크톱 1440 · 태블릿 820 · 모바일 390 세 크기에서 확인합니다.
 - 맞춤용 `margin: -1px`이나 `translate`로 땜질하지 않습니다. 크기가 틀린 박스를 고칩니다.
