@@ -190,10 +190,6 @@ Everything you read in a dialog ends on **one** right line and starts on **one**
   or the action is the row's right edge like a switch.
 - A close button's hit box is wider than what you see: measure the glyph. Header padding is `calc(var(--dlg-px) - 9px)` so the glyph lands on the body's right edge.
 
-### Model rows (`CapTags` with `end`)
-
-A flush-right model row is a fixed grid: chat 44 | reasoning 44 | reads images 76 | context 36, gap 12, so one ability keeps the same x in every row (a model without it leaves the cell empty). A picture model takes the first two cells. On a narrow screen the tags go on a second line under the name (24px in: logo + gap). Measure with `getBoundingClientRect` on `.cap.chat`, `.cap.reasoning`, `.cap.vision`, `.ctx`, the test button and the switch: each must give one left/right edge for all rows.
-
 ### Alignment lint (finds the misses by itself)
 
 Walk each screen and compare the **edges** of everything that has a border or fill (inputs, buttons, cards, rows):
