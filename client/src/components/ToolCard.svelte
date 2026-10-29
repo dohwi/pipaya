@@ -79,8 +79,7 @@
 <div class="card" data-part="tool" class:awaiting class:failed data-state={run.state} style={badgeStyle(kind)}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="ico"><Icon name={toolIcon(name, args)} /></span>
-		<span class="name">{toolLabel(name, args)}</span>
-		<span class="sum mono">{summary}</span>
+		<span class="what"><span class="name">{toolLabel(name, args)}</span>{#if summary}<span class="sum mono">{summary}</span>{/if}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
 			{#if !quiet && !failed}<span class="chip {tone}">{label}</span>{/if}
@@ -187,15 +186,32 @@
 		height: 16px;
 		stroke-width: 1.8;
 	}
+	/* name and summary share one baseline: the 13px name and the 12px summary have different ascents, so centring them
+	   separately left the summary 1px high. Both lines are 20px, the pair is centred on the row like the icon and the meta. */
+	.what {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		height: 20px; /* the same line box with or without a summary (a skill has none), so the name never moves between cards */
+	}
 	.name {
+		flex: none;
+		max-width: 60%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-weight: 600;
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		color: var(--tc);
 	}
 	.sum {
 		flex: 1;
 		min-width: 0;
 		font-size: var(--fs-xs);
+		line-height: 20px;
 		color: var(--text-dim);
 		white-space: nowrap;
 		overflow: hidden;
@@ -207,12 +223,17 @@
 		gap: 8px;
 		color: var(--text-dim);
 	}
+	/* an even 16px box: the 11px text's own 17.05px height was odd, so the row's centring rounded it half a pixel up or down from row to row */
 	.dur {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.chev {
 		display: grid;
+		width: 16px;
+		height: 16px;
+		place-items: center;
 		color: var(--text-faint);
 		transition: transform var(--motion-fast) var(--ease);
 	}
@@ -220,8 +241,8 @@
 		transform: rotate(90deg);
 	}
 	.chev :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px; /* the same 16px box as the tool icon on the left, so both ends of the row are built alike */
+		height: 16px;
 		stroke-width: 2;
 	}
 	.body {
