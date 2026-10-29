@@ -56,9 +56,9 @@
 		<div class="opts">
 			{#each cur.options as o, n (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
-					<span class="num">{n + 1}.</span>
-					<span>{o}</span>
-					{#if cur.recommended === o}<span class="badge">({t("추천")})</span>{/if}
+					<span class="num" class:rec={cur.recommended === o}>{n + 1}</span>
+					<span class="txt">{o}</span>
+					{#if cur.recommended === o}<span class="badge">{t("추천")}</span>{/if}
 				</Button>
 			{/each}
 		</div>
@@ -82,17 +82,22 @@
 </div>
 
 <style>
+	/* The block under a card that waits for an answer. Every gap is on the 4/8/12/16 scale; the card's own warn tint carries "needs you". */
 	.reply {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 12px; /* question | options | free text: three groups, 12 apart */
 		padding: 12px;
 		border-top: 1px solid var(--border);
 		background: var(--warn-soft);
 	}
+	/* a question with its tabs: the tabs and the question belong together (8), the rest is 12 */
+	.reply > .tabs + .q {
+		margin-top: -4px;
+	}
 	.q {
 		font-size: var(--fs-sm);
-		line-height: 1.5;
+		line-height: 20px; /* 13px text on a 20px line, like the tool name in the header */
 		font-weight: 600;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -107,24 +112,62 @@
 		height: auto;
 		min-height: var(--control-h);
 		max-width: 100%;
-		padding: 8px 16px;
+		padding: 8px 12px;
+		gap: 8px;
+		align-items: flex-start; /* number and pill stand on the first line when an answer wraps (both boxes are 20px, like the line) */
 		justify-content: flex-start;
 		text-align: left;
-		line-height: 1.45;
+		line-height: 20px;
 		white-space: normal;
 		overflow-wrap: anywhere;
 	}
-	.opts :global(.btn.opt.rec) {
-		border: 2px solid var(--warn);
-		font-weight: 600;
-	}
+	/* the number sits in a small square so it reads as a key, not as part of the answer */
 	.num {
-		margin-right: 4px;
-		opacity: 0.7;
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-xs);
+		background: var(--bg-active);
+		color: var(--text-dim);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
+	.txt {
+		min-width: 0;
+	}
+	/* the recommended answer: the same box as the others (no thicker border that would grow it), tinted, with a pill after the text */
+	.opts :global(.btn.opt.rec) {
+		border-color: var(--warn);
+		background: var(--warn-soft);
+		font-weight: 600;
+	}
+	.opts :global(.btn.opt.rec:hover:not(:disabled)) {
+		background: color-mix(in srgb, var(--warn) 22%, transparent);
+	}
+	.num.rec {
+		background: var(--warn);
+		color: var(--bg);
+	}
+	.badge {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		height: 20px;
+		padding: 0 8px;
+		border-radius: var(--radius-pill);
+		background: var(--warn);
+		color: var(--bg);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		line-height: 1;
+	}
+	/* the answer picked for this tab: a filled border, not an outline that the neighbours' 8px gap would swallow */
 	.opts :global(.btn.opt.picked) {
-		outline: 2px solid currentColor;
+		border-color: var(--text);
+		box-shadow: inset 0 0 0 1px var(--text);
 	}
 	.free {
 		display: flex;
@@ -133,18 +176,21 @@
 	.field {
 		flex: 1;
 		min-width: 0;
+		height: var(--control-h); /* the same 40 as the send button beside it */
 	}
 	.free :global(.btn) {
 		flex: none;
-		min-width: 76px;
+		min-width: 100px; /* 보내기 with its arrow is 100 wide; 저장 takes the same, so the input does not change size between modes */
 		justify-content: center;
 	}
 	.tabs {
 		display: flex;
 		gap: 8px;
 		overflow-x: auto;
-		padding: 4px; /* room for the selected outline so it is not clipped */
-		margin: -4px;
+		scrollbar-width: none;
+	}
+	.tabs::-webkit-scrollbar {
+		display: none;
 	}
 	.tab {
 		display: flex;
@@ -153,21 +199,32 @@
 		box-sizing: border-box;
 		max-width: 200px;
 		flex: none;
-		height: 38px;
-		padding: 0 16px;
-		border: 1px solid var(--border);
+		height: 36px;
+		padding: 0 12px;
+		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-pill);
 		background: transparent;
-		color: inherit;
+		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		cursor: pointer;
 	}
+	.tab :global(svg) {
+		width: 14px;
+		height: 14px;
+		flex: none;
+	}
+	.tab .n {
+		font-size: var(--fs-2xs);
+		font-variant-numeric: tabular-nums;
+	}
 	.tab.on {
-		border-color: currentColor;
+		border-color: var(--text);
+		color: var(--text);
 		font-weight: 600;
 	}
-	.tab.filled:not(.on) {
-		opacity: 0.75;
+	/* answered tabs wear the ok colour on their check, so what is left to do stands out */
+	.tab.filled :global(svg) {
+		color: var(--ok);
 	}
 	.tt {
 		overflow: hidden;
@@ -176,7 +233,8 @@
 	}
 	.saved {
 		font-size: var(--fs-sm);
-		opacity: 0.8;
+		line-height: 20px;
+		color: var(--text-dim);
 		overflow-wrap: anywhere;
 	}
 </style>
