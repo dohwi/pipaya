@@ -140,9 +140,7 @@
 				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
 				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 			{:else}
-				{#if tools.length}
-					{#if failed}<span class="chip danger">{t("실패")} {failed}</span>{:else}<span class="chip ok">{t("완료")}</span>{/if}
-				{/if}
+				{#if failed}<span class="sr-only">{t("실패")} {failed}</span>{/if}
 				{#if total}<span class="dur">{duration(total)}</span>{/if}
 			{/if}
 			<span class="open"><Icon name="chevron-right" /></span>
@@ -219,6 +217,14 @@
 	}
 	.group.warn {
 		border-color: var(--warn);
+	}
+	/* a failure is the red outline and red time and arrow, with no pill (same as a failed tool call) */
+	.group.danger {
+		border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+	}
+	.group.danger .dur,
+	.group.danger .open {
+		color: color-mix(in srgb, var(--danger) 75%, var(--text-dim));
 	}
 	.box {
 		position: relative;
