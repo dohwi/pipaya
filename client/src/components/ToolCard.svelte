@@ -6,7 +6,7 @@
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { clip, duration } from "../lib/format";
-	import { toolIcon, toolSummary } from "../lib/tools";
+	import { badgeStyle, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
 	import type { ToolRun } from "../lib/types";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import ExtensionView from "./extensions/ExtensionView.svelte";
@@ -17,6 +17,8 @@
 	const pane = getPane();
 	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
+	/** The kind of work (read, bash, edit …) tints the icon and the name, so a list of calls reads at a glance */
+	const kind = $derived(toolKind(name, args));
 
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
@@ -43,6 +45,8 @@
 	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
 	const asked = $derived(!!run.question || !!answer);
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
+	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
+	const quiet = $derived(run.state === "done" && !exitCode);
 	const label = $derived(
 		{
 			pending: t("준비 중"),
@@ -70,14 +74,14 @@
 
 </script>
 
-<div class="card" data-part="tool" class:awaiting data-state={run.state}>
+<div class="card" data-part="tool" class:awaiting data-state={run.state} style={badgeStyle(kind)}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
-		<span class="ico"><Icon name={toolIcon(name)} /></span>
-		<span class="name">{name}</span>
+		<span class="ico"><Icon name={toolIcon(name, args)} /></span>
+		<span class="name">{toolLabel(name, args)}</span>
 		<span class="sum mono">{summary}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
-			<span class="chip {tone}">{label}</span>
+			{#if !quiet}<span class="chip {tone}">{label}</span>{/if}
 			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
 		</span>
@@ -152,9 +156,16 @@
 		outline-offset: -2px;
 		border-radius: var(--radius);
 	}
+	/* same hue as the badges in the work box (--th from badgeStyle), brighter on dark and deeper on light */
+	.card {
+		--tc: oklch(0.8 0.12 var(--th, 265));
+	}
+	:global(:root[data-theme="light"]) .card {
+		--tc: oklch(0.5 0.15 var(--th, 265));
+	}
 	.ico {
 		display: grid;
-		color: var(--text-dim);
+		color: var(--tc);
 	}
 	.ico :global(svg) {
 		width: 16px;
@@ -164,6 +175,7 @@
 	.name {
 		font-weight: 600;
 		font-size: var(--fs-sm);
+		color: var(--tc);
 	}
 	.sum {
 		flex: 1;
