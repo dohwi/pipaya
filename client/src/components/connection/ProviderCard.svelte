@@ -225,6 +225,23 @@
 		gap: 8px;
 		color: var(--text-faint);
 	}
+	/* narrow: line 1 = logo, name, test, switch (the name keeps its room); line 2 = the tags under the name, starting at the
+	   same x in every row. 24 = the 16px logo + the 8px gap, so the tags line up with the name. */
+	@media (max-width: 640px) {
+		.mtags {
+			order: 1;
+			flex: 1 0 100%;
+			flex-wrap: wrap;
+			padding-left: 24px;
+		}
+		.mtags > :global(.caps) {
+			flex-basis: 100%;
+			justify-content: start;
+		}
+		.mlist li .res {
+			order: 2;
+		}
+	}
 	.gone {
 		margin-left: 8px;
 		color: var(--danger);
