@@ -98,7 +98,7 @@
 		padding: 0 4px;
 		background: none;
 		border: 0;
-		color: var(--text);
+		color: var(--tone); /* the strip's own tone, like the reconnect link in App.svelte */
 		font: inherit;
 		font-weight: 600;
 		text-decoration: underline;
@@ -106,7 +106,7 @@
 		cursor: pointer;
 	}
 	.act:hover:not(:disabled) {
-		color: var(--tone);
+		color: color-mix(in srgb, var(--tone) 75%, var(--text));
 	}
 	.act:disabled {
 		opacity: 0.6;

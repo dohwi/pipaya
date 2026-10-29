@@ -355,7 +355,7 @@
 						<span class="spinner"></span> {t("연결하는 중…")}
 					{:else if app.net === "unauthorized"}
 						<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
-						<button onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
+						<button class="link" onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
 					{:else}
 						<Icon name="wifi-off" /> {t("서버에 다시 연결하는 중…")}
 						<button class="link" onclick={() => app.sync()}>{t("다시 연결하기")}</button>

@@ -113,6 +113,7 @@
 	.action :global(button:not(.btn)) {
 		color: inherit;
 		text-decoration: underline;
+		text-underline-offset: 3px;
 		background: none;
 		border: 0;
 		padding: 0;
