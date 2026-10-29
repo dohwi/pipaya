@@ -155,7 +155,8 @@
 		stroke-width: 1.9;
 	}
 	/* a badge's icon keeps the badge's own size and colour */
-	.mitem :global(.badge svg) {
+	/* same :not() chain as the generic icon rule above, or that rule (higher specificity) makes badge icons 16px */
+	.mitem :global(.badge svg:not(.model):not(.logo)) {
 		width: 11px;
 		height: 11px;
 		stroke: currentColor;
