@@ -4,6 +4,7 @@
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/Icon.svelte";
+	import IconButton from "./components/IconButton.svelte";
 	import Sidebar from "./components/Sidebar.svelte";
 	import Rail from "./components/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
@@ -358,7 +359,7 @@
 						<button onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
 					{:else}
 						<Icon name="wifi-off" /> {t("서버에 다시 연결하는 중…")}
-						<button onclick={() => app.sync()}>{t("지금 재시도")}</button>
+						<IconButton class="retry" icon="retry" size="sm" label={t("지금 재시도")} tip onclick={() => app.sync()} />
 					{/if}
 				</div>
 			{/if}
@@ -540,7 +541,10 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.banner button {
+	.banner :global(.iconbtn svg) {
+		color: var(--text); /* the glyph is a control, not the warning tint */
+	}
+	.banner button:not(:global(.iconbtn)) {
 		height: var(--control-h-sm);
 		padding: 0 12px;
 		border-radius: var(--radius-control);
