@@ -81,6 +81,14 @@ export function isLocalFilePath(href: string): boolean {
 const INLINE_IMAGE = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i;
 export const isImagePath = (href: string): boolean => INLINE_IMAGE.test(href.replace(/[?#].*$/, ""));
 
+/** A link to a video or audio file on the server is played inline; null for anything else. */
+export function mediaKindOf(href: string): "video" | "audio" | null {
+	const bare = href.replace(/[?#].*$/, "");
+	if (/\.(mp4|m4v|webm|ogv|mov)$/i.test(bare)) return "video";
+	if (/\.(mp3|wav|ogg|oga|m4a|aac|flac|opus)$/i.test(bare)) return "audio";
+	return null;
+}
+
 /** What the file route is asked for: the path a pipaya session can read (relative to its folder, or absolute on the server). */
 export function filePathOf(href: string): string {
 	const bare = href.replace(/^file:\/\//i, "");

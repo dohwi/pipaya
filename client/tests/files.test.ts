@@ -122,3 +122,13 @@ describe("attaching files to a message", () => {
 		expect(fileRejection({ name: "a", size: 10 }, big)).toEqual({ reason: "total", stop: false });
 	});
 });
+
+describe("mediaKindOf", () => {
+	test("video and audio links play inline", async () => {
+		const { mediaKindOf } = await import("../src/lib/files");
+		expect(mediaKindOf("tmp/test.mp4")).toBe("video");
+		expect(mediaKindOf("/a/b.WEBM?x=1")).toBe("video");
+		expect(mediaKindOf("a.mp3")).toBe("audio");
+		expect(mediaKindOf("a.png")).toBeNull();
+	});
+});

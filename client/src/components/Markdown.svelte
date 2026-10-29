@@ -61,6 +61,35 @@
 	}
 	function fillPictures(host: HTMLElement, api: NonNullable<typeof app.api>, id: string, ctl: AbortController) {
 		setupGalleries(host);
+		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-media[data-wd-src]")) {
+			const path = slot.dataset.wdSrc!;
+			const kind = slot.dataset.kind === "audio" ? "audio" : "video";
+			const show = (src: string) => {
+				if (!slot.isConnected) return;
+				const el = document.createElement(kind);
+				el.src = src;
+				el.controls = true;
+				el.preload = "metadata";
+				el.className = `wd-${kind}`;
+				if (el instanceof HTMLVideoElement) el.playsInline = true;
+				slot.replaceWith(el);
+			};
+			const key = `${id}\u0000${path}`;
+			const hit = loaded.get(key);
+			if (hit) {
+				show(hit);
+				continue;
+			}
+			api.fetchFile(id, path, ctl.signal)
+				.then((blob) => {
+					// some servers label a video application/octet-stream; the player needs the real type to pick a decoder
+					const typed = blob.type.startsWith(`${kind}/`) ? blob : new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
+					const src = URL.createObjectURL(typed);
+					loaded.set(key, src);
+					show(src);
+				})
+				.catch(() => slot.classList.add("missing"));
+		}
 		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
 			const path = slot.dataset.wdSrc!;
 			const alt = slot.dataset.alt ?? "";
@@ -298,6 +327,24 @@
 	}
 	.md :global(a.wd-file:hover) {
 		border-color: var(--border-strong);
+	}
+	.md :global(.wd-media) {
+		color: var(--text-faint);
+		font-size: var(--fs-xs);
+	}
+	.md :global(.wd-video) {
+		display: block;
+		max-width: 100%;
+		max-height: 420px;
+		margin: 0 0 0.85em;
+		border-radius: var(--radius);
+		background: #000;
+	}
+	.md :global(.wd-audio) {
+		display: block;
+		width: 100%;
+		max-width: 420px;
+		margin: 0 0 0.85em;
 	}
 	.md :global(.wd-img) {
 		color: var(--text-faint);
