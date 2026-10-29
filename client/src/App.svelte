@@ -4,7 +4,6 @@
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/Icon.svelte";
-	import IconButton from "./components/IconButton.svelte";
 	import Sidebar from "./components/Sidebar.svelte";
 	import Rail from "./components/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
@@ -359,7 +358,7 @@
 						<button onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
 					{:else}
 						<Icon name="wifi-off" /> {t("서버에 다시 연결하는 중…")}
-						<IconButton class="retry" icon="retry" size="sm" label={t("지금 재시도")} tip onclick={() => app.sync()} />
+						<button class="link" onclick={() => app.sync()}>{t("다시 연결하기")}</button>
 					{/if}
 				</div>
 			{/if}
@@ -541,18 +540,24 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	/* the retry control wears the strip's tone like the wifi glyph beside it, with a filled ring so it reads as pressable */
-	.banner :global(.iconbtn) {
-		color: var(--tone);
-		background: color-mix(in srgb, var(--tone) 18%, var(--bg-elev));
-		border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+	/* the reconnect action is an underlined text link in the strip's own colour; tap it to retry right away */
+	.banner button.link {
+		padding: 0 4px;
+		height: auto;
+		min-height: var(--control-h-sm);
+		background: none;
+		border: 0;
+		color: var(--text);
+		font-size: inherit;
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 3px;
 		cursor: pointer;
 	}
-	.banner :global(.iconbtn:hover:not(:disabled)) {
-		background: color-mix(in srgb, var(--tone) 32%, var(--bg-elev));
+	.banner button.link:hover {
 		color: var(--tone);
 	}
-	.banner button:not(:global(.iconbtn)) {
+	.banner button:not(.link) {
 		height: var(--control-h-sm);
 		padding: 0 12px;
 		border-radius: var(--radius-control);

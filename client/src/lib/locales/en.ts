@@ -13,7 +13,7 @@ export const en: Record<string, string> = {
 	"서버가 토큰을 거부했습니다.": "The server rejected the token.",
 	"토큰 수정": "Edit token",
 	"서버에 다시 연결하는 중…": "Reconnecting to the server…",
-	"지금 재시도": "Retry now",
+	"다시 연결하기": "Reconnect",
 	"설정 · 확장": "Settings · Extensions",
 
 	/* ---- trusted extension UI ---- */
