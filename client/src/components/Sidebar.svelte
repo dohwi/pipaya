@@ -312,7 +312,7 @@
 		/* same box as the header capsule (44px + 1px hairline), so the two lines meet across the sidebar edge */
 		box-sizing: content-box;
 		height: 44px;
-		padding: 0 12px; /* spacing scale: 4 / 8 / 12 / 16 / 24. The wordmark and the fold button's right edge line up with the card (12) */
+		padding: 0 8px 0 12px; /* spacing scale: 4 / 8 / 12 / 16 / 24. The wordmark sits 12 in, the fold button's right edge lines up with the card (8) */
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
@@ -321,7 +321,7 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 8px;
-		padding: 12px; /* the search box shares the card's left and right edges (12) */
+		padding: 12px 8px; /* the search box shares the card's left and right edges (8) */
 		border-bottom: 1px solid var(--border);
 	}
 	.settings :global(svg) {
@@ -421,7 +421,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 28 -> 48 -> 68) */
+		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 24 -> 44 -> 64) */
 		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
 		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
@@ -429,7 +429,7 @@
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
 	}
-	/* a folded row's count is centred on the "+" column (x 256): the toggle ends where the "+" does (x 266) */
+	/* a folded row's count is centred on the "+" column (x 264): the toggle ends where the "+" does (x 274) */
 	@media (hover: hover) {
 		:global(:where(.side) .dir.folded .dirtoggle) {
 			padding-right: 0;
@@ -489,7 +489,7 @@
 		font-weight: 600;
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
-	/* 20px wide, like the "+" / "⋯" / list buttons (x 246..266): one and two digits both centre on x 256, so the count and the button that replaces it share a column */
+	/* 20px wide, like the "+" / "⋯" / list buttons (x 254..274): one and two digits both centre on x 264, so the count and the button that replaces it share a column */
 	:global(:where(.side) .cbadge) {
 		margin-left: auto;
 		min-width: 20px;
@@ -499,9 +499,9 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 20px; /* grid: right-hand centres at x 256 and 236, 20px apart, so the buttons sit edge to edge */
+		width: 20px; /* grid: right-hand centres at x 254 and 234, 20px apart, so the buttons sit edge to edge */
 		height: 20px;
-		margin-right: 0; /* the button's right edge is the row's right edge: its centre is 32px from the sidebar's edge (x 256) */
+		margin-right: 0; /* the button's right edge is the row's right edge: its centre is 24px from the sidebar's edge (x 264) */
 		border-radius: 50%;
 		color: var(--text-faint);
 		opacity: 0;
@@ -529,10 +529,10 @@
 			translate: 0 -50%;
 		}
 		:global(:where(.side) .dir.folded .dirnew) {
-			right: 0; /* the same centre (x 256) as when unfolded */
+			right: 0; /* the same centre (x 254) as when unfolded */
 		}
 		:global(:where(.side) .srvhead.folded .dirnew) {
-			right: 8px; /* the strip's right padding: the same centre (x 256) */
+			right: 4px; /* the strip's right padding: the same centre (x 264) */
 		}
 		/* a folded split tab: the count on the same column, the "⋯" over it while the row is hovered, focused or its menu is open */
 		:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
@@ -596,7 +596,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
-		padding-left: 39px; /* grid: the tab icon centres on x 68 (28 / 48 / 68, 20px apart) */
+		padding-left: 39px; /* grid: the tab icon centres on x 64 (24 / 44 / 64, 20px apart) */
 	}
 	:global(:where(.side) .item:hover) {
 		background: var(--bg-hover);
@@ -728,7 +728,7 @@
 		flex: none;
 		width: 20px;
 		height: 20px;
-		margin-right: 0; /* tab rows end where folder rows do (no right margin), so this centres on x 256 like the "+" above */
+		margin-right: 0; /* tab rows end where folder rows do (no right margin), so this centres on x 264 like the "+" above */
 		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
 		color: var(--text-faint);
 		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
@@ -757,7 +757,7 @@
 		min-width: 0;
 	}
 	.bottom {
-		padding: 8px 12px calc(8px + var(--sab)); /* 12 at the sides: the settings row shares the card's edges */
+		padding: 8px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
 	.settings {
@@ -802,7 +802,7 @@
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grp .item.nested .open) {
-		padding-left: 4px; /* chevron (x 41-55, centre 48) + 4 + 6 gap: the book icon centres on x 68 like the tabs' icons */
+		padding-left: 4px; /* chevron (x 37-51, centre 44) + 4 + 6 gap: the book icon centres on x 64 like the tabs' icons */
 	}
 	:global(:where(.side) .grp .item.member .open) {
 		padding-left: 59px; /* grid: the pane icon centres on x 84, 20px past the book */
@@ -817,7 +817,7 @@
 	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
 	:global(:where(.side) .branch) {
 		position: absolute;
-		left: 47px; /* the line's 1.5px stroke is centred on the book icon's column (x 68): measured 69 at 48 */
+		left: 47px; /* the line's 1.5px stroke is centred on the book icon's column (x 64): measured 65 at 48 */
 		top: 0;
 		bottom: 0;
 		width: 12px;
@@ -857,7 +857,7 @@
 		place-items: center;
 		width: 14px;
 		height: 24px;
-		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 48) */
+		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 44) */
 		border-radius: var(--radius-sm);
 	}
 	:global(:where(.side) .grprow .lead) {

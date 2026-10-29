@@ -105,9 +105,9 @@
 	.archive :global(.listbtn) {
 		position: absolute;
 		top: 4px;
-		right: 20px; /* its centre on x 236, the list-button column of the rows above */
+		right: 20px; /* its centre on x 244, the list-button column of the rows above */
 	}
-	/* folded: the list button takes the count's place on the "+" column (x 256) instead of sitting beside it; open, it stays on x 236 */
+	/* folded: the list button takes the count's place on the "+" column (x 264) instead of sitting beside it; open, it stays on x 244 */
 	.archive:has(> .archtoggle.folded) :global(.listbtn) {
 		right: 0;
 	}
@@ -122,8 +122,8 @@
 		height: 32px; /* every row is 32px tall */
 		margin: 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
-		   its right edge 20 from the row end (button column x 236): 20 + 20 + 8 = 48 */
-		padding: 0 48px 0 21px; /* measured: the 14px chevron centres on x 48, the folder icon's column */
+		   its right edge 20 from the row end (button column x 244): 20 + 20 + 8 = 48 */
+		padding: 0 48px 0 21px; /* measured: the 14px chevron centres on x 44, the folder icon's column */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
@@ -133,8 +133,8 @@
 		color: var(--text);
 		background: var(--bg-hover);
 	}
-	/* mouse + folded: the count sits on the "+" column (centre x 256, like every folded row's count) and gives way to the list button on hover.
-	   The 20px badge fills the toggle's end, which is 4px before the row's: centre 256 (measured). On touch the button stays visible, so the 48px of room stays */
+	/* mouse + folded: the count sits on the "+" column (centre x 264, like every folded row's count) and gives way to the list button on hover.
+	   The 20px badge fills the toggle's end, which is 4px before the row's: centre 264 (measured). On touch the button stays visible, so the 48px of room stays */
 	@media (hover: hover) {
 		.archtoggle.folded {
 			padding-right: 0;
@@ -146,7 +146,7 @@
 			opacity: 0;
 		}
 	}
-	/* the same 16px icon column as a tab's icon (centre x 68), so the archive icon and the tabs' icons share one centre */
+	/* the same 16px icon column as a tab's icon (centre x 64), so the archive icon and the tabs' icons share one centre */
 	.archtoggle :global(.dicon) {
 		width: 16px;
 		place-items: center;
