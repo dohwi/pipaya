@@ -445,6 +445,7 @@ export const EVENTS: EventDef[] = [
 	{ type: "compaction_finished", persisted: true, description: "The summary is saved; the model now sees it instead of the older messages", data: Type.Object({ tokensBefore: Type.Integer(), context: ContextUsage, usage: Usage }) },
 	{ type: "compaction_failed", persisted: true, description: "A compaction failed or was cancelled; the context is unchanged", data: Type.Object({ aborted: Type.Boolean(), errorMessage: Type.Optional(Type.String()) }) },
 	{ type: "context_updated", persisted: true, description: "The size of what the model will see changed", data: Type.Object({ context: ContextUsage }) },
+	{ type: "run_retrying", persisted: false, description: "The model provider failed for a moment (e.g. 502); the call is retried after delayMs. Live only: cleared by the next message_start or run_finished", data: Type.Object({ attempt: Type.Integer(), maxRetries: Type.Integer(), delayMs: Type.Integer() }) },
 	{ type: "run_started", persisted: true, description: "The agent began working", data: Type.Object({ mode: Type.String() }) },
 	{
 		type: "run_finished",

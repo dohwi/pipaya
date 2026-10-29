@@ -1127,6 +1127,7 @@ export const en: Record<string, string> = {
 	"추론 단계 변경": "Change reasoning level",
 	"minimal → … → max, 끝에서 처음으로 돌아갑니다": "minimal → … → max, wrapping back to the start",
 	"지금까지의 내용을 복사한 새 대화로 갈라집니다": "Splits off a new chat with everything so far copied",
+	"연결이 불안정해 다시 시도하는 중입니다 ({attempt}/{max})": "Connection unstable, retrying ({attempt}/{max})",
 	"응답 다시 시도": "Retry reply",
 	"마지막 응답을 다시 생성합니다 (/retry)": "Regenerates the last reply (/retry)",
 	"컨텍스트 압축": "Compact context",

@@ -404,6 +404,7 @@ export const EVENT_TYPES = [
 	"run_started",
 	"run_finished",
 	"run_limit",
+	"run_retrying",
 	"compaction_started",
 	"compaction_finished",
 	"compaction_failed",

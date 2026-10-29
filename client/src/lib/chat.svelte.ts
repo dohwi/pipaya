@@ -118,6 +118,8 @@ export class ChatState {
 	running = $state(false);
 	/** When the current run started (ms), for the elapsed time in the status line; null while idle. */
 	runStartedAt = $state<number | null>(null);
+	/** Set while the server waits out a provider hiccup (502 …) before calling the model again; the chat itself stays untouched. */
+	retrying = $state<{ attempt: number; maxRetries: number } | null>(null);
 	/** Bumped when the user sends something (prompt / steer / queue): the list jumps to the bottom, even if it was scrolled up. */
 	bottomRequest = $state(0);
 	requestBottom(): void {
@@ -388,7 +390,12 @@ export class ChatState {
 				this.compactionError = d.aborted ? t("컨텍스트 압축을 취소했습니다") : (d.errorMessage || t("컨텍스트 압축에 실패했습니다"));
 				break;
 
+			case "run_retrying":
+				this.retrying = { attempt: Number(d.attempt) || 1, maxRetries: Number(d.maxRetries) || 1 };
+				break;
+
 			case "run_started":
+				this.retrying = null;
 				this.contextRevision++;
 				this.running = true;
 				this.runStartedAt = Date.now();
@@ -400,6 +407,7 @@ export class ChatState {
 				break;
 
 			case "run_finished": {
+				this.retrying = null;
 				this.running = false;
 				this.runStartedAt = null;
 				const s = this.streamItem();
@@ -418,6 +426,7 @@ export class ChatState {
 			}
 
 			case "message_start":
+				this.retrying = null;
 				if (d.message?.role === "assistant") this.ensureStream();
 				break;
 

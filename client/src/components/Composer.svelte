@@ -565,6 +565,10 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
+		{#if chat?.retrying}
+			<p class="retrying" role="status">{t("연결이 불안정해 다시 시도하는 중입니다 ({attempt}/{max})", { attempt: chat.retrying.attempt, max: chat.retrying.maxRetries })}</p>
+		{/if}
+
 		{#if chat?.waiting.length}
 			<QueuedList queued={chat.waiting} oncancel={(q) => app.cancelQueued(q, pane.id)} />
 		{/if}
@@ -633,6 +637,7 @@
 </div>
 
 <style>
+	.retrying { margin: 0; padding: 8px 12px 0; font-size: var(--fs-xs); color: var(--danger); }
 	.extension-widgets { max-height: min(40dvh, 320px); overflow-y: auto; overscroll-behavior: contain; }
 	.extension-widgets:not(:empty) { margin-bottom: 8px; }
 	.extension-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
