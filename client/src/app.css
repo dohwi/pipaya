@@ -619,7 +619,7 @@ kbd {
 	flex: none;
 	min-width: 18px;
 	height: 18px;
-	padding: 0 4px 4px; /* 2px under the digits lifts them 1px: the font leaves more room below the baseline than above */
+	padding: 0 4px 2px; /* 1px lift: the font leaves more room below the baseline than above; measured at 8x, the digits then have 5px above and below in the 18px circle */
 	box-sizing: border-box;
 	border-radius: var(--radius-pill);
 	background: var(--bg-active);
