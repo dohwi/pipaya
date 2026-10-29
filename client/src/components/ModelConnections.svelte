@@ -169,6 +169,23 @@
 		}
 	}
 
+	/** Turn one model on or off: the connection is saved again with that model's flag changed. */
+	async function toggleModel(p: CustomProvider, id: string, on: boolean) {
+		const a = api();
+		if (!a) return;
+		busy = true;
+		try {
+			const models = p.models.map(({ thinkingSource: _s, unavailable: _u, ...m }) => (m.id === id ? { ...m, disabled: on ? undefined : true } : m));
+			await a.saveCustomProvider(p.id, { name: p.name, baseUrl: p.baseUrl, api: p.api, authRequired: p.authRequired, models });
+			await load(serverId, true); // quiet: the card stays open
+			if (serverId === app.serverId) await app.refreshProviders();
+		} catch (e) {
+			app.toast(t("모델을 바꾸지 못했습니다: {error}", { error: errorText(e) }), "error");
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function saveKey(p: CustomProvider) {
 		const a = api();
 		if (!a || !keyValue.trim()) return;
@@ -271,6 +288,7 @@
 								refreshing={refreshingId === p.id}
 								anyRefreshing={refreshingId !== null}
 								ontest={(model) => test(p.id, model)}
+								ontoggle={(model, on) => void toggleModel(p, model, on)}
 								ontogglekey={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}
 								onsavekey={() => void saveKey(p)}
 								onremovekey={() => removeKey(p)}

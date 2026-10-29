@@ -176,10 +176,7 @@
 	}
 	function removeModel() {
 		if (!form || editing === null) return;
-		// A model the upstream lists would come back on the next refresh: switch it off instead of deleting it.
-		const r = form.rows[editing];
-		if (r?.fromUpstream) r.disabled = !r.disabled;
-		else form.rows.splice(editing, 1);
+		form.rows.splice(editing, 1);
 		fresh = false;
 		editing = null;
 	}

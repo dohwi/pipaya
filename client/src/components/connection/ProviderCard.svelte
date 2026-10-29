@@ -2,6 +2,7 @@
 	import { focusOnDesktop } from "../../lib/focus";
 	import Button from "../Button.svelte";
 	import Badge from "../Badge.svelte";
+	import Switch from "../Switch.svelte";
 	import Accordion from "../Accordion.svelte";
 	import ConfirmButton from "../ConfirmButton.svelte";
 	import Icon from "../Icon.svelte";
@@ -31,6 +32,7 @@
 		refreshing,
 		anyRefreshing,
 		ontest,
+		ontoggle,
 		ontogglekey,
 		onsavekey,
 		onremovekey,
@@ -47,6 +49,8 @@
 		refreshing: boolean;
 		anyRefreshing: boolean;
 		ontest: (model: string) => void;
+		/** Turn one model on or off (an off model is hidden from every picker) */
+		ontoggle: (model: string, on: boolean) => void;
 		ontogglekey: () => void;
 		onsavekey: () => void;
 		onremovekey: () => void;
@@ -74,11 +78,11 @@
 		</div>
 	{:else}
 	<Accordion variant="text">
-	{#snippet head()}{t("모델 {n}개", { n: p.models.filter((m) => !m.disabled).length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
+	{#snippet head()}{t("모델 {n}개", { n: p.models.filter((m) => !m.disabled).length })}{#if p.models.some((m) => m.disabled)}<span class="gone off">{t("꺼짐 {n}개", { n: p.models.filter((m) => m.disabled).length })}</span>{/if}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 	<ul class="mlist">
-		{#each p.models.filter((x) => !x.disabled) as m (m.id)}
+		{#each p.models as m (m.id)}
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
-			<li class:unavail={m.unavailable}>
+			<li class:unavail={m.unavailable} class:disabled={m.disabled}>
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
 				<span class="minfo">
 					<span class="mid mono">{m.name ?? m.id}</span>
@@ -88,10 +92,11 @@
 					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 					<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />
 				</span>
-				<Button variant="ghost" size="sm" disabled={probe === "running" || !p.configured || m.unavailable} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
+				<Button variant="ghost" size="sm" class={m.disabled ? "hidden" : ""} disabled={m.disabled || probe === "running" || !p.configured || m.unavailable} tabindex={m.disabled ? -1 : undefined} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
 				</Button>
-				{#if probe && probe !== "running"}
+				<Switch checked={!m.disabled} disabled={busy} label={t("{id} 사용", { id: m.name ?? m.id })} onchange={(on) => ontoggle(m.id, on)} />
+				{#if !m.disabled && probe && probe !== "running"}
 					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 				{/if}
 			</li>
@@ -223,6 +228,18 @@
 	.gone {
 		margin-left: 8px;
 		color: var(--danger);
+	}
+	/* an off model keeps the test button's slot (invisible) so the switches stay in one column */
+	.mlist li :global(.btn.hidden) {
+		visibility: hidden;
+	}
+	.gone.off {
+		color: var(--text-faint);
+	}
+	.mlist li.disabled .minfo,
+	.mlist li.disabled .mlogo,
+	.mlist li.disabled .mtags {
+		opacity: 0.45;
 	}
 	.mlist li.unavail .minfo {
 		opacity: 0.6;

@@ -130,10 +130,7 @@
 			{/if}
 		</section>
 	{/if}
-	{#if r.fromUpstream}
-		<Button variant="ghost" class={r.disabled ? "" : "danger-text"} onclick={onremove}><Icon name={r.disabled ? "check" : "x"} /> {r.disabled ? t("이 모델 다시 켜기") : t("이 모델 끄기")}</Button>
-		<small class="hint">{t("꺼진 모델은 모델 선택에 나타나지 않고, 새로고침해도 다시 켜지지 않습니다.")}</small>
-	{:else}
+	{#if !r.fromUpstream}
 		<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
 	{/if}
 
