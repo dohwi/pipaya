@@ -97,10 +97,8 @@
 		const s = steps[peekIdx];
 		return s?.kind === "tool" && isImageTool(s.name) && (runs[peekIdx]?.state === "running" || runs[peekIdx]?.state === "pending");
 	});
-	/** Pictures drawn by this box's picture tools, shown right under the header once they exist (the reply may link them too). */
-	const drawn = $derived(
-		steps.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? (runs[i]?.images ?? []) : [])),
-	);
+	/** Pictures any tool of this box returned (a drawn image, a read picture, a screenshot …), shown right under the header as soon as they exist, also while the box is live. */
+	const drawn = $derived(steps.flatMap((s, i) => (s.kind === "tool" && runs[i]?.state === "done" ? (runs[i]?.images ?? []) : [])));
 	/** Who drew them: the image model the tool reports (provider/id), by its name when the server lists it. Shown when hovering the picture. */
 	const drawnBy = $derived.by(() => {
 		const ref = steps
