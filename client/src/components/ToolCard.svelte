@@ -47,7 +47,7 @@
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
 	const quiet = $derived(run.state === "done" && !exitCode);
-	/** A failed call (error, or a non-zero exit code): the whole card gets a red outline */
+	/** A failed call (error, or a non-zero exit code): red outline and red icon, texts and arrow instead of a pill */
 	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
 		{
@@ -83,7 +83,7 @@
 		<span class="sum mono">{summary}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
-			{#if !quiet}<span class="chip {tone}">{label}</span>{/if}
+			{#if !quiet && !failed}<span class="chip {tone}">{label}</span>{/if}
 			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
 		</span>
@@ -110,7 +110,7 @@
 			{#if custom}
 				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
 			{:else if (run.output || run.images?.length) && !asked}
-				<div class="label">{t("출력")}</div>
+				<div class="label">{t("출력")}{#if failed && exitCode}<span class="why">{label}</span>{/if}</div>
 				{#if run.output}<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>{/if}
 				{#if run.images?.length}
 					<div class="pics">
@@ -142,6 +142,16 @@
 	}
 	.card.failed {
 		border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+	}
+	/* everything in a failed header turns red: the icon, the name, what it was doing, the time and the arrow */
+	.card.failed,
+	:global(:root[data-theme="light"]) .card.failed {
+		--tc: var(--danger); /* the light theme sets its own --tc above, with the same weight as the plain rule, so it needs naming too */
+	}
+	.card.failed .sum,
+	.card.failed .dur,
+	.card.failed .chev {
+		color: color-mix(in srgb, var(--danger) 75%, var(--text-dim));
 	}
 	.card.awaiting {
 		border-color: var(--warn);
@@ -216,6 +226,11 @@
 	}
 	.body {
 		padding: 0 12px 12px;
+	}
+	/* why it failed, next to "출력", in the failure colour (the pill that used to say it is gone) */
+	.label .why {
+		margin-left: 8px;
+		color: var(--danger);
 	}
 	.label {
 		margin: 8px 0 4px;
