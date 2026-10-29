@@ -47,8 +47,11 @@
 			return;
 		}
 		answers[tab] = a;
-		const next = items.findIndex((_, i) => i > tab && !answers[i]?.trim());
-		if (next >= 0) go(next);
+		// Next unanswered question after this one, else the first unanswered one before it (answers can be given in any order)
+		const open = (i: number) => !answers[i]?.trim();
+		const next = items.findIndex((_, i) => i > tab && open(i));
+		const gap = next >= 0 ? next : items.findIndex((_, i) => open(i));
+		if (gap >= 0) go(gap);
 		else {
 			typed = "";
 			// The last missing answer sends everything at once.
@@ -90,6 +93,10 @@
 				</Button>
 			{/each}
 		</div>
+	{/if}
+	{#if items && !cur.allowFreeText && items.some((it) => it.allowFreeText)}
+		<!-- an answer-by-choice question among typed ones: hold the input's 40px so the card keeps one height on every tab -->
+		<div class="free hold" aria-hidden="true"></div>
 	{/if}
 	{#if cur.allowFreeText}
 		<!-- one input with the send arrow inside it (like the composer): no separate button to sit awkwardly beside it -->
@@ -174,8 +181,9 @@
 	   An answered question you came back to keeps this fill and shows its check inside. */
 	.step.on,
 	.step.on.filled {
-		border-color: var(--warn);
-		background: var(--warn);
+		--fill: color-mix(in srgb, var(--warn) 85%, black); /* a touch deeper so the number reads (light theme: 3.99:1 -> over 4.5:1) */
+		border-color: var(--fill);
+		background: var(--fill);
 		color: var(--bg);
 	}
 	.step :global(svg) {
@@ -275,6 +283,9 @@
 	/* the free answer: the field with the send arrow inside its right end, as in the composer */
 	.free {
 		position: relative;
+	}
+	.free.hold {
+		height: var(--control-h);
 	}
 	.field {
 		padding-right: 48px; /* room for the 32px arrow + its 4px inset + 12px text gap */
