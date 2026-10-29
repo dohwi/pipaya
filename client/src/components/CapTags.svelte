@@ -6,20 +6,19 @@
 	/**
 	 * What a model can do, as small icon + word tags: chat, reasoning, reading pictures, making/editing pictures.
 	 * They flow one after another with an even gap: the context size first (when `ctx` is given), then the abilities.
-	 * `noctx`: leave the context size out (a detail view that prints it in full elsewhere).
 	 * `end`: for a list row whose tags sit flush right. The abilities come first and the context size last, in a
 	 * column of its own, so every row ends on the same line and an image model (no context) just leaves it empty.
 	 */
-	let { model, ctx, end = false, noctx = false }: { model: { reasoning: boolean; vision: boolean; imageGeneration?: boolean }; ctx?: string; end?: boolean; noctx?: boolean } = $props();
+	let { model, ctx, end = false }: { model: { reasoning: boolean; vision: boolean; imageGeneration?: boolean }; ctx?: string; end?: boolean } = $props();
 	const caps = $derived(capsOf(model));
 </script>
 
 <span class="caps" class:end>
-	{#if !end && !noctx && !model.imageGeneration}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
+	{#if !end && !model.imageGeneration}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
 	{#each caps as c (c.key)}
 		<span class="cap {c.key}" title={`${t(c.label)}: ${t(c.hint)}`}><Icon name={c.icon} /><span class="word">{t(c.label)}</span></span>
 	{/each}
-	{#if end && !noctx && !model.imageGeneration}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
+	{#if end && !model.imageGeneration}<span class="ctx slot" class:none={!ctx} title={ctx ? t("컨텍스트 크기") : undefined}>{ctx ?? "—"}</span>{/if}
 </span>
 
 <style>

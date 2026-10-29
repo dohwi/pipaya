@@ -10,7 +10,6 @@
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { ConnectionResult, CustomProvider } from "../../lib/types";
-	import CapTags from "../CapTags.svelte";
 
 	/**
 	 * One custom connection in the list: its name and address with a state chip (usable, key needed, no models), its
@@ -57,12 +56,6 @@
 		onedit: () => void;
 		onremove: () => void;
 	} = $props();
-
-	/** The model whose details (abilities, context size, output limit) are open; one at a time. */
-	let openId = $state<string | null>(null);
-	/** "컨텍스트 400,000 · 최대 출력 4,096" (a picture model has no context size). */
-	const limits = (m: CustomProvider["models"][number]) =>
-		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString() }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString() })].filter(Boolean).join(" · ");
 </script>
 
 <div class="prov" class:off={!p.models.length}>
@@ -88,21 +81,15 @@
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
 			<li class:unavail={m.unavailable} class:disabled={m.disabled}>
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
-				<button type="button" class="minfo" aria-expanded={openId === m.id} onclick={() => (openId = openId === m.id ? null : m.id)}>
+				<span class="minfo">
 					<span class="mid mono">{m.name ?? m.id}</span>
 					{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
-				</button>
+				</span>
 				{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 				<Button variant="ghost" size="sm" class={m.disabled ? "hidden" : ""} disabled={m.disabled || probe === "running" || !p.configured || m.unavailable} tabindex={m.disabled ? -1 : undefined} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
 				</Button>
 				<Switch checked={!m.disabled} disabled={busy} label={t("{id} 사용", { id: m.name ?? m.id })} onchange={(on) => ontoggle(m.id, on)} />
-				{#if openId === m.id}
-					<div class="detail" in:collapseIn out:collapseOut>
-						<CapTags model={m} noctx />
-						<span class="dlim mono">{limits(m)}</span>
-					</div>
-				{/if}
 				{#if !m.disabled && probe && probe !== "running"}
 					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 				{/if}
@@ -211,15 +198,8 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
-		min-height: 34px;
+		min-height: 34px; /* the small button's height: an off row (no test button) stays as tall as the others */
 		justify-content: center;
-		padding: 0;
-		border: 0;
-		background: none;
-		color: inherit;
-		text-align: left;
-		cursor: pointer;
 	}
 	.mid {
 		font-size: var(--fs-sm);
@@ -234,18 +214,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.detail {
-		flex: 1 0 100%;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		/* 24 = the 16px logo + the 8px gap: starts at the name's x */
-		padding: 0 0 4px 24px;
-	}
-	.dlim {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
 	}
 	.gone {
 		margin-left: 8px;
