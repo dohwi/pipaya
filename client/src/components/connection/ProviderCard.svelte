@@ -225,8 +225,8 @@
 		gap: 8px;
 		color: var(--text-faint);
 	}
-	/* narrow: line 1 = logo, name, test, switch (the name keeps its room); line 2 = the tags under the name, starting at the
-	   same x in every row. 24 = the 16px logo + the 8px gap, so the tags line up with the name. */
+	/* narrow: line 1 = logo, name, test, switch (the name keeps its room); line 2 = badge + tags under the name (24 = the 16px
+	   logo + the 8px gap, so they start at the name's x) with the context size flush right, on the switch's right edge. */
 	@media (max-width: 640px) {
 		.mtags {
 			order: 1;
@@ -235,8 +235,20 @@
 			padding-left: 24px;
 		}
 		.mtags > :global(.caps) {
-			flex-basis: 100%;
-			justify-content: start;
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		.mtags :global(.caps .ctx) {
+			margin-left: auto;
+		}
+		/* an off model has no test button: its slot is not kept, the name gets the room. The name keeps the button's height
+		   (34 = the small button) so an off row is as tall as the others. */
+		.mlist li :global(.btn.hidden) {
+			display: none;
+		}
+		.minfo {
+			min-height: 34px;
+			justify-content: center;
 		}
 		.mlist li .res {
 			order: 2;
