@@ -634,6 +634,11 @@ kbd {
 	background: var(--danger);
 	color: #fff;
 }
+/* the failed tint is as soft as the others: the solid red above is for the extension panel's "!" */
+.cbadge.tint.danger {
+	background: var(--danger-soft);
+	color: var(--danger);
+}
 /* a folded row's count takes the colour of the most urgent state inside (the same tones as the agent badge and the rail pin) */
 .cbadge.info {
 	background: var(--info-soft);

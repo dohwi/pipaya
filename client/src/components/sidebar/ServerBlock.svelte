@@ -33,7 +33,7 @@
 				<span class="sicon {n.state}"><Icon name="server" /></span>
 				<span class="sname">{app.serverLabel(n.server)}</span>
 				{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
-				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
+				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge tint {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
 			</button>
 			<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
 			<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
