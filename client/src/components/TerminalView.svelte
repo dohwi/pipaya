@@ -29,7 +29,7 @@
 	const showBar = $derived(isTouch() || viewport.narrow);
 	let mods = $state<Mods>({ ctrl: false, alt: false, shift: false });
 	let scrolledUp = $state(false);
-	/** Floating keyboard toggle: shown while the soft keyboard is up or the screen was just touched, then it fades */
+	/** Floating "open keyboard" button: shown only while the soft keyboard is down, and fades when idle */
 	let kbOpen = $state(false);
 	let awake = $state(true);
 	let fade: ReturnType<typeof setTimeout> | undefined;
@@ -220,8 +220,26 @@
 			});
 		};
 		const vv = window.visualViewport;
-		vv?.addEventListener("resize", later);
-		window.addEventListener("orientationchange", later);
+		// The soft keyboard is up when the visual viewport is much shorter than the tallest one seen (focus alone is not
+		// enough: Android's back gesture hides the keyboard but leaves the focus).
+		let tall = 0;
+		const syncKb = () => {
+			const h = vv?.height ?? window.innerHeight;
+			tall = Math.max(tall, h, window.innerHeight);
+			kbOpen = tall - h > 120;
+		};
+		const onVv = () => {
+			syncKb();
+			later();
+		};
+		const onOrient = () => {
+			tall = 0;
+			later();
+			setTimeout(syncKb, 300);
+		};
+		syncKb();
+		vv?.addEventListener("resize", onVv);
+		window.addEventListener("orientationchange", onOrient);
 
 		const syncScrolled = () => (scrolledUp = xt.buffer.active.viewportY < xt.buffer.active.baseY);
 		const onScroll = xt.onScroll(syncScrolled);
@@ -239,8 +257,10 @@
 			if (text) xt.paste(text);
 		};
 		toggleKeyboard = () => {
-			if (xt.textarea && document.activeElement === xt.textarea) xt.textarea.blur();
-			else xt.focus();
+			// Only offered while the keyboard is down. The textarea may still hold focus (Android back), so blur first
+			// or focus() would be a no-op and the keyboard would stay hidden.
+			xt.textarea?.blur();
+			xt.focus();
 		};
 
 		// Touch: drag to scroll (with a little momentum), pinch to change the font size, tap to type.
@@ -326,8 +346,8 @@
 			ro.disconnect();
 			cancelAnimationFrame(raf);
 			cancelAnimationFrame(glide);
-			vv?.removeEventListener("resize", later);
-			window.removeEventListener("orientationchange", later);
+			vv?.removeEventListener("resize", onVv);
+			window.removeEventListener("orientationchange", onOrient);
 			onScroll.dispose();
 			onWrite.dispose();
 			host?.removeEventListener("touchstart", ts, opts);
@@ -346,21 +366,23 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="term" data-terminal={terminal.id} ontouchstart={wake} onfocusin={() => (kbOpen = true)} onfocusout={() => (kbOpen = false)}>
+<div class="term" data-terminal={terminal.id} ontouchstart={wake}>
 	<div class="screen" bind:this={host}></div>
 	{#if showBar && status !== "exited"}
 		<div class="kb-anchor">
-			<button
-				class="kb tap"
-				class:idle={!awake}
-				aria-label={t("키보드 접기/펴기")}
-				title={t("키보드 접기/펴기")}
-				onpointerdown={(e) => e.preventDefault()}
-				onclick={() => {
-					wake();
-					toggleKeyboard?.();
-				}}
-			><Icon name="keyboard" />{#if kbOpen}<span class="chev"><Icon name="chevron-down" /></span>{/if}</button>
+			{#if !kbOpen}
+				<button
+					class="kb tap"
+					class:idle={!awake}
+					aria-label={t("키보드 열기")}
+					title={t("키보드 열기")}
+					onpointerdown={(e) => e.preventDefault()}
+					onclick={() => {
+						wake();
+						toggleKeyboard?.();
+					}}
+				><Icon name="keyboard" /></button>
+			{/if}
 		</div>
 		<TerminalKeybar
 			bind:mods
@@ -436,10 +458,6 @@
 		box-shadow: var(--shadow-soft);
 		opacity: 0.85;
 		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	.kb .chev :global(svg) {
-		width: 12px;
-		height: 12px;
 	}
 	.kb.idle {
 		opacity: 0.35;

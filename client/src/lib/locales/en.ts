@@ -475,7 +475,7 @@ export const en: Record<string, string> = {
 	"붙여넣기": "Paste",
 	"붙여넣을 내용": "Text to paste",
 	"화면 맞춤": "Fit to screen",
-	"키보드 접기/펴기": "Show/hide keyboard",
+	"키보드 열기": "Open keyboard",
 	"셸이 종료되었습니다": "The shell has exited",
 	"셸이 종료되었습니다 (코드 {code})": "The shell has exited (code {code})",
 	"서버의 셸을 이 폴더에서 엽니다 (Windows는 PowerShell)": "Opens the server's shell in this folder (PowerShell on Windows)",
