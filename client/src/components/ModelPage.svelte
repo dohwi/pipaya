@@ -46,7 +46,7 @@
 		<label>
 			<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
 			<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop={fresh && !r.fromUpstream} />
-			<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다. 바꾸려면 모델을 삭제하고 다시 불러오세요.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
+			<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
 		</label>
 		{#if catalogLoaded}
 			{@const hit = matched}
@@ -130,7 +130,12 @@
 			{/if}
 		</section>
 	{/if}
-	<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
+	{#if r.fromUpstream}
+		<Button variant="ghost" class={r.disabled ? "" : "danger-text"} onclick={onremove}><Icon name={r.disabled ? "check" : "x"} /> {r.disabled ? t("이 모델 다시 켜기") : t("이 모델 끄기")}</Button>
+		<small class="hint">{t("꺼진 모델은 모델 선택에 나타나지 않고, 새로고침해도 다시 켜지지 않습니다.")}</small>
+	{:else}
+		<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
+	{/if}
 
 <style>
 	.idlabel {

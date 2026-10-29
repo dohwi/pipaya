@@ -63,7 +63,7 @@
 			<span class="ptitle">{p.name}</span>
 			<span class="pid mono url">{p.baseUrl}</span>
 		</div>
-		{#if !p.models.length}<span class="chip">{t("모델 없음")}</span>{:else if p.configured}<span class="chip ok">{t("사용 가능")}</span>{:else}<span class="chip warn">{t("키 필요")}</span>{/if}
+		{#if !p.models.some((m) => !m.disabled)}<span class="chip">{t("모델 없음")}</span>{:else if p.configured}<span class="chip ok">{t("사용 가능")}</span>{:else}<span class="chip warn">{t("키 필요")}</span>{/if}
 	</div>
 
 	<div class="models">
@@ -74,9 +74,9 @@
 		</div>
 	{:else}
 	<Accordion variant="text">
-	{#snippet head()}{t("모델 {n}개", { n: p.models.length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
+	{#snippet head()}{t("모델 {n}개", { n: p.models.filter((m) => !m.disabled).length })}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 	<ul class="mlist">
-		{#each p.models as m (m.id)}
+		{#each p.models.filter((x) => !x.disabled) as m (m.id)}
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
 			<li class:unavail={m.unavailable}>
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>

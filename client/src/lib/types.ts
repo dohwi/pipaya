@@ -304,6 +304,8 @@ export interface CustomModel {
 	imageGeneration?: boolean;
 	/** Brand mark chosen for this model; absent = picked from the id */
 	icon?: string;
+	/** Switched off: hidden from the model pickers, kept here so a refresh does not add it back */
+	disabled?: boolean;
 	/** Came from the upstream's model list: the id is fixed */
 	fromUpstream?: boolean;
 	/** Reasoning strengths the model accepts; absent = the server looks the name up, else minimal..high */

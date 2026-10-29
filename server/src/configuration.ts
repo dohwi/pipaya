@@ -32,6 +32,7 @@ export const CustomProviderBody = Type.Object({
 		vision: Type.Boolean(),
 		imageGeneration: Type.Optional(Type.Boolean({ description: "The model makes pictures instead of text. It never runs a chat: set it as the image model (PUT /image-model) and agents draw with the generate_image tool." })),
 		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
+		disabled: Type.Optional(Type.Boolean({ description: "Switched off by the owner: kept in the connection (with its settings, so a refresh never brings it back) but hidden from every model picker and not offered to sessions." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
@@ -301,6 +302,8 @@ export class Configuration {
 		const p: CustomProvider = { ...input, id, name: input.name.trim(), baseUrl: url.toString().replace(/\/$/, ""), models: input.models.map((m) => ({ ...m, id: m.id.trim() })) };
 		const defaultModel = this.effectiveDefaults();
 		if (defaultModel?.provider === id && !ids.includes(defaultModel.model)) throw conflict("cannot remove the default model; change defaults first");
+		const off = input.models.find((m) => m.disabled && defaultModel?.provider === id && defaultModel.model === m.id.trim());
+		if (off) throw conflict("cannot disable the default model; change defaults first");
 		const runtime = this.buildProvider(p); // build before writing so invalid configs never persist
 		this.db.query("INSERT INTO custom_providers (id, data) VALUES ($id, $data) ON CONFLICT(id) DO UPDATE SET data = $data")
 			.run({ id, data: JSON.stringify(p) });
@@ -452,7 +455,7 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: Model<CustomProvider["api"]>[] = p.models.map((m) => ({
+		const models: Model<CustomProvider["api"]>[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the bundled OpenRouter catalog, and unknown names keep the defaults.

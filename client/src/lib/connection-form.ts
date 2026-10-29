@@ -14,6 +14,8 @@ export interface Row {
 	imageGeneration: boolean;
 	/** Chosen brand mark; undefined = automatic (from the id) */
 	icon?: string;
+	/** Switched off by the owner (hidden from the pickers) */
+	disabled?: boolean;
 	/** Listed by the upstream itself: the id is fixed and cannot be edited */
 	fromUpstream?: boolean;
 	/** Empty = automatic (looked up by name on the server) */
@@ -97,6 +99,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			imageGeneration: m.imageGeneration === true,
 			icon: m.icon,
 			fromUpstream: m.fromUpstream,
+			disabled: m.disabled,
 			thinkingLevels: m.thinkingLevels ?? [],
 			catalogId: m.catalogId,
 			thinkingSource: m.thinkingSource,
@@ -161,6 +164,7 @@ export function collectModels(
 		out.push({
 			id: r.id.trim(),
 			...(r.fromUpstream ? { fromUpstream: true } : {}),
+			...(r.disabled ? { disabled: true } : {}),
 			...(hit ? { catalogId: hit } : catalogLoaded ? { catalogId: null } : {}),
 			...(r.name.trim() ? { name: r.name.trim() } : {}),
 			contextWindow: ctx,

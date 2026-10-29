@@ -243,3 +243,20 @@ describe("where a model's reasoning strengths come from", () => {
 		expect(found.models[0].thinkingSource.catalogId).toBe("openai/gpt-5");
 	});
 });
+
+describe("disabled upstream models", () => {
+	test("a disabled model is hidden from the registry but kept in the connection", async () => {
+		const b = { ...body(), models: [
+			{ id: "keep", contextWindow: 8192, maxTokens: 1024, reasoning: false, vision: false },
+			{ id: "off", contextWindow: 8192, maxTokens: 1024, reasoning: false, vision: false, fromUpstream: true, disabled: true },
+		] };
+		expect((await api("PUT", "/configuration/providers/offtest", b)).status).toBe(200);
+		const list = (await api("GET", "/models?provider=offtest")).body as any;
+		const ids = (Array.isArray(list) ? list : list.models).map((m: any) => m.id);
+		expect(ids).toEqual(["keep"]);
+		const cfg2 = (await api("GET", "/configuration")).body as any;
+		const saved = cfg2.providers.find((p: any) => p.id === "offtest").models.map((m: any) => [m.id, m.disabled === true]);
+		expect(saved).toEqual([["keep", false], ["off", true]]);
+		await api("DELETE", "/configuration/providers/offtest");
+	});
+});
