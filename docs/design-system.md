@@ -190,6 +190,10 @@ Everything you read in a dialog ends on **one** right line and starts on **one**
   or the action is the row's right edge like a switch.
 - A close button's hit box is wider than what you see: measure the glyph. Header padding is `calc(var(--dlg-px) - 9px)` so the glyph lands on the body's right edge.
 
+### Hover card (`use:hoverCard`, `lib/hover-card.ts`)
+
+Extra facts about a list row (abilities, context size) live in a small card beside the row, not in the row: the row stays a name and its controls. The card is lifted to `<body>` at `--z-tooltip`, opens after 250ms of mouse hover or on keyboard focus (never on touch), prefers the right side, then the left, then under the row, and takes no pointer events. Its look is the global `.hovercard` in `app.css`.
+
 ### Alignment lint (finds the misses by itself)
 
 Walk each screen and compare the **edges** of everything that has a border or fill (inputs, buttons, cards, rows):

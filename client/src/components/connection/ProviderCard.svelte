@@ -56,6 +56,10 @@
 		onedit: () => void;
 		onremove: () => void;
 	} = $props();
+
+	/** Working models first, then the ones the upstream no longer lists, then the switched-off ones (each keeps its own order). */
+	const rank = (m: CustomProvider["models"][number]) => (m.disabled ? 2 : m.unavailable ? 1 : 0);
+	const ordered = $derived([...p.models].sort((a, b) => rank(a) - rank(b)));
 </script>
 
 <div class="prov" class:off={!p.models.length}>
@@ -77,7 +81,7 @@
 	<Accordion variant="text">
 	{#snippet head()}{t("모델 {n}개", { n: p.models.filter((m) => !m.disabled).length })}{#if p.models.some((m) => m.disabled)}<span class="gone off">{t("꺼짐 {n}개", { n: p.models.filter((m) => m.disabled).length })}</span>{/if}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 	<ul class="mlist">
-		{#each [...p.models.filter((x) => !x.disabled), ...p.models.filter((x) => x.disabled)] as m (m.id)}
+		{#each ordered as m (m.id)}
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
 			<li class:unavail={m.unavailable} class:disabled={m.disabled}>
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>

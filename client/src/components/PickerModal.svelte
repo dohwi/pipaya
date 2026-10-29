@@ -22,7 +22,6 @@
 		layer = 4,
 		minList = "120px",
 		list,
-		onlistleave,
 		after,
 		footerStart,
 	}: {
@@ -35,8 +34,6 @@
 		/** the list never shrinks below this, so a filter with few hits does not collapse the dialog */
 		minList?: string;
 		list: Snippet;
-		/** the pointer left the list (a detail strip falls back to the chosen row) */
-		onlistleave?: () => void;
 		/** below the list, above the footer (e.g. the reasoning strength row) */
 		after?: Snippet;
 		/** the footer's left side (e.g. "manage connections") */
@@ -80,7 +77,7 @@
 		<input bind:this={search} class="field pk-search" placeholder={placeholder ?? t("검색")} aria-label={placeholder ?? t("검색")} bind:value={query} onkeydown={searchKeys} use:focusFirst autocomplete="off" spellcheck="false" />
 		<!-- Arrow keys typed in the search field or the list move the highlight (searchKeys / listKeys); the rows are buttons. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="pk-list" bind:this={listEl} style:min-height={minList} onkeydown={listKeys} onpointerleave={() => onlistleave?.()}>
+		<div class="pk-list" bind:this={listEl} style:min-height={minList} onkeydown={listKeys}>
 			{@render list()}
 		</div>
 		{@render after?.()}

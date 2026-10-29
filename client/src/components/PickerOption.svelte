@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import Icon from "./Icon.svelte";
+	import { hoverCard, type HoverInfo } from "../lib/hover-card";
 
 	/**
 	 * One row of a PickerModal list: name, a muted meta line, a check when selected, and an optional trailing control
@@ -10,7 +11,7 @@
 		selected = false,
 		disabled = false,
 		onclick,
-		onpreview,
+		card,
 		lead,
 		name,
 		meta,
@@ -20,8 +21,8 @@
 		selected?: boolean;
 		disabled?: boolean;
 		onclick: () => void;
-		/** called when the row is pointed at or focused (a detail strip under the list follows it); touch has no hover, so a focus / tap counts */
-		onpreview?: () => void;
+		/** what the hover card beside the row says (a title, chips, lines); omit for no card */
+		card?: () => HoverInfo | null;
 		/** a logo or icon before the name */
 		lead?: Snippet;
 		name: Snippet;
@@ -32,8 +33,8 @@
 	} = $props();
 </script>
 
-<div class="pk-row" class:sel={selected} onpointerenter={(e) => e.pointerType === "mouse" && onpreview?.()} role="presentation">
-	<button type="button" class="pk-opt" onfocus={() => onpreview?.()} class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
+<div class="pk-row" class:sel={selected} use:hoverCard={() => card?.() ?? null}>
+	<button type="button" class="pk-opt" class:has-aside={!!aside} class:dim={disabled} aria-pressed={selected} aria-disabled={disabled} onclick={() => !disabled && onclick()}>
 		{#if lead}<span class="lead">{@render lead()}</span>{/if}
 		<span class="main">
 			<span class="name">{@render name()}</span>
