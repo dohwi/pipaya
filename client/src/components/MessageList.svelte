@@ -287,6 +287,9 @@
 		overscroll-behavior: contain;
 		-webkit-overflow-scrolling: touch;
 		scroll-padding-bottom: 24px;
+		/* content fades out over its last 16px instead of being cut in a straight line against the composer's rounded box */
+		-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+		mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
 		overflow-anchor: none;
 		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script). Scrolled up, anchoring must stay on:
 		   off-screen turns (content-visibility) swap their 160px estimate for the real height as they come into view, and without
@@ -316,7 +319,7 @@
 	}
 	.jump {
 		position: absolute;
-		bottom: 8px;
+		bottom: 12px; /* clears the 16px fade so the button does not sit on the composer's edge */
 		left: 50%;
 		translate: -50% 0;
 		width: 36px;
