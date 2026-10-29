@@ -14,7 +14,6 @@
 		onsend,
 		onfit,
 		onbottom,
-		onkeyboard,
 		onpaste,
 		scrolledUp,
 	}: {
@@ -23,7 +22,6 @@
 		onsend: (data: string) => void;
 		onfit: () => void;
 		onbottom: () => void;
-		onkeyboard: () => void;
 		onpaste: () => void;
 		scrolledUp: boolean;
 	} = $props();
@@ -108,8 +106,6 @@
 			{/each}
 		</div>
 	</div>
-	<span class="sep solid" aria-hidden="true"></span>
-	<button class="k icon" aria-label={t("키보드 접기/펴기")} title={t("키보드 접기/펴기")} onpointerdown={noFocus} onclick={onkeyboard}><Icon name="keyboard" /></button>
 </div>
 
 <style>
@@ -175,9 +171,6 @@
 		height: 18px;
 		margin: 0 4px;
 		background: var(--border-strong);
-	}
-	.sep.solid {
-		margin: 0;
 	}
 	.k {
 		flex: none;

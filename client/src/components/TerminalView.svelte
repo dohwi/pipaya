@@ -2,7 +2,8 @@
 	import "@xterm/xterm/css/xterm.css";
 	import { Terminal, type ITheme } from "@xterm/xterm";
 	import { FitAddon } from "@xterm/addon-fit";
-	import { onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
+	import Icon from "./Icon.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
@@ -28,6 +29,17 @@
 	const showBar = $derived(isTouch() || viewport.narrow);
 	let mods = $state<Mods>({ ctrl: false, alt: false, shift: false });
 	let scrolledUp = $state(false);
+	/** Floating keyboard toggle: shown while the soft keyboard is up or the screen was just touched, then it fades */
+	let kbOpen = $state(false);
+	let awake = $state(true);
+	let fade: ReturnType<typeof setTimeout> | undefined;
+	function wake() {
+		awake = true;
+		clearTimeout(fade);
+		fade = setTimeout(() => (awake = false), 2500);
+	}
+	onMount(wake);
+	onDestroy(() => clearTimeout(fade));
 	let sendInput: ((data: string) => void) | undefined;
 	let toggleKeyboard: (() => void) | undefined;
 	let toBottom: (() => void) | undefined;
@@ -333,8 +345,22 @@
 	});
 </script>
 
-<div class="term" data-terminal={terminal.id}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="term" data-terminal={terminal.id} ontouchstart={wake} onfocusin={() => (kbOpen = true)} onfocusout={() => (kbOpen = false)}>
 	<div class="screen" bind:this={host}></div>
+	{#if showBar && status !== "exited"}
+		<button
+			class="kb tap"
+			class:idle={!awake}
+			aria-label={t("키보드 접기/펴기")}
+			title={t("키보드 접기/펴기")}
+			onpointerdown={(e) => e.preventDefault()}
+			onclick={() => {
+				wake();
+				toggleKeyboard?.();
+			}}
+		><Icon name={kbOpen ? "chevron-down" : "keyboard"} /></button>
+	{/if}
 	{#if showBar && status !== "exited"}
 		<TerminalKeybar
 			bind:mods
@@ -343,7 +369,6 @@
 			onsend={(d) => sendInput?.(d)}
 			onfit={() => refitNow?.()}
 			onbottom={() => toBottom?.()}
-			onkeyboard={() => toggleKeyboard?.()}
 			onpaste={() => pasteClip?.()}
 		/>
 	{/if}
@@ -380,6 +405,33 @@
 	}
 	.screen :global(.xterm-viewport) {
 		background: transparent !important;
+	}
+	/* Floating keyboard toggle, top centre over the output; backdrop blur keeps the text behind it quiet */
+	.kb {
+		position: absolute;
+		top: 8px;
+		left: 50%;
+		translate: -50% 0;
+		z-index: 2;
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 36px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-control);
+		background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		color: var(--text);
+		box-shadow: var(--shadow-soft);
+		opacity: 0.85;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.kb.idle {
+		opacity: 0.35;
+	}
+	.kb:active {
+		opacity: 1;
 	}
 	.note {
 		position: absolute;
