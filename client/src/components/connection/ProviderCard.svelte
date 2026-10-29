@@ -8,7 +8,6 @@
 	import Icon from "../Icon.svelte";
 	import ModelLogo from "../ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
-	import { compact } from "../../lib/format";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { ConnectionResult, CustomProvider } from "../../lib/types";
 	import CapTags from "../CapTags.svelte";
@@ -59,6 +58,11 @@
 		onremove: () => void;
 	} = $props();
 
+	/** The model whose details (abilities, context size, output limit) are open; one at a time. */
+	let openId = $state<string | null>(null);
+	/** "컨텍스트 400,000 · 최대 출력 4,096" (a picture model has no context size). */
+	const limits = (m: CustomProvider["models"][number]) =>
+		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString() }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString() })].filter(Boolean).join(" · ");
 </script>
 
 <div class="prov" class:off={!p.models.length}>
@@ -84,18 +88,21 @@
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
 			<li class:unavail={m.unavailable} class:disabled={m.disabled}>
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
-				<span class="minfo">
+				<button type="button" class="minfo" aria-expanded={openId === m.id} onclick={() => (openId = openId === m.id ? null : m.id)}>
 					<span class="mid mono">{m.name ?? m.id}</span>
 					{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
-				</span>
-				<span class="mtags">
-					{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
-					<CapTags model={m} end ctx={m.imageGeneration ? undefined : compact(m.contextWindow)} />
-				</span>
+				</button>
+				{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 				<Button variant="ghost" size="sm" class={m.disabled ? "hidden" : ""} disabled={m.disabled || probe === "running" || !p.configured || m.unavailable} tabindex={m.disabled ? -1 : undefined} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
 				</Button>
 				<Switch checked={!m.disabled} disabled={busy} label={t("{id} 사용", { id: m.name ?? m.id })} onchange={(on) => ontoggle(m.id, on)} />
+				{#if openId === m.id}
+					<div class="detail" in:collapseIn out:collapseOut>
+						<CapTags model={m} noctx />
+						<span class="dlim mono">{limits(m)}</span>
+					</div>
+				{/if}
 				{#if !m.disabled && probe && probe !== "running"}
 					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 				{/if}
@@ -204,6 +211,15 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		align-items: stretch;
+		min-height: 34px;
+		justify-content: center;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
 	}
 	.mid {
 		font-size: var(--fs-sm);
@@ -219,40 +235,17 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.mtags {
+	.detail {
+		flex: 1 0 100%;
 		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: var(--text-faint);
+		flex-direction: column;
+		gap: 4px;
+		/* 24 = the 16px logo + the 8px gap: starts at the name's x */
+		padding: 0 0 4px 24px;
 	}
-	/* narrow: line 1 = logo, name, test, switch (the name keeps its room); line 2 = badge + tags under the name (24 = the 16px
-	   logo + the 8px gap, so they start at the name's x) with the context size flush right, on the switch's right edge. */
-	@media (max-width: 640px) {
-		.mtags {
-			order: 1;
-			flex: 1 0 100%;
-			flex-wrap: wrap;
-			padding-left: 24px;
-		}
-		.mtags > :global(.caps) {
-			flex: 1 1 0;
-			min-width: 0;
-		}
-		.mtags :global(.caps .ctx) {
-			margin-left: auto;
-		}
-		/* an off model has no test button: its slot is not kept, the name gets the room. The name keeps the button's height
-		   (34 = the small button) so an off row is as tall as the others. */
-		.mlist li :global(.btn.hidden) {
-			display: none;
-		}
-		.minfo {
-			min-height: 34px;
-			justify-content: center;
-		}
-		.mlist li .res {
-			order: 2;
-		}
+	.dlim {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
 	}
 	.gone {
 		margin-left: 8px;
@@ -266,8 +259,7 @@
 		color: var(--text-faint);
 	}
 	.mlist li.disabled .minfo,
-	.mlist li.disabled .mlogo,
-	.mlist li.disabled .mtags {
+	.mlist li.disabled .mlogo {
 		opacity: 0.45;
 	}
 	.mlist li.unavail .minfo {

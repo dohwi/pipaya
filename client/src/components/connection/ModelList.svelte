@@ -5,8 +5,7 @@
 	import ModelLogo from "../ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
-	import { ctxLabel, type Form, type Row } from "../../lib/connection-form";
-	import CapTags from "../CapTags.svelte";
+	import type { Form, Row } from "../../lib/connection-form";
 	import type { CatalogModel } from "../../lib/types";
 
 	/**
@@ -61,7 +60,6 @@
 				{:else if catalogLoaded && !matchedOf(r)}
 					<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
 				{/if}
-				<span class="mmeta"><CapTags model={r} end ctx={r.imageGeneration ? undefined : ctxLabel(r)} /></span>
 				<Icon name="chevron-right" />
 			</button>
 		{/each}
@@ -140,14 +138,6 @@
 		height: 13px;
 		stroke: var(--ok);
 		stroke-width: 2.4;
-	}
-	.mmeta {
-		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		font-size: var(--fs-xs);
-		color: var(--text-faint);
 	}
 	.mitem :global(svg:not(.model):not(.logo)) {
 		flex: none;
