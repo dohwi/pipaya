@@ -35,8 +35,15 @@ export function isPhone(): boolean {
 export function ms(token: Token): number {
 	if (reduced()) return 0;
 	if (typeof document === "undefined" || typeof getComputedStyle !== "function" || !document.documentElement) return FALLBACK[token];
-	const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--motion-${token}`));
+	const v = cssMs(getComputedStyle(document.documentElement).getPropertyValue(`--motion-${token}`));
 	return Number.isFinite(v) && v >= 0 ? v : FALLBACK[token];
+}
+
+/** A CSS <time> in ms. The production CSS minifier rewrites `360ms` to `.36s`, so the unit has to be read. */
+export function cssMs(value: string): number {
+	const m = /^\s*(-?[\d.]+(?:e-?\d+)?)\s*(ms|s)?\s*$/i.exec(value);
+	if (!m) return NaN;
+	return m[2]?.toLowerCase() === "s" ? parseFloat(m[1]) * 1000 : parseFloat(m[1]);
 }
 
 /** CSS cubic-bezier() as a function of time → progress. */

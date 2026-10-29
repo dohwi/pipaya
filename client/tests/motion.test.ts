@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bezier, dialogFrame, easeEnter, easeExit, ms, surfaceFrame } from "../src/lib/motion";
+import { bezier, cssMs, dialogFrame, easeEnter, easeExit, ms, surfaceFrame } from "../src/lib/motion";
 import { rippleSize } from "../src/lib/ripple";
 
 describe("bezier", () => {
@@ -43,6 +43,16 @@ describe("frames", () => {
 describe("ms", () => {
 	test("falls back to the Material profile outside a browser", () => {
 		expect([ms("fast"), ms("normal"), ms("slow")]).toEqual([180, 360, 460]);
+	});
+});
+
+describe("cssMs", () => {
+	test("reads ms and s (the minified build writes 360ms as .36s)", () => {
+		expect(cssMs("360ms")).toBe(360);
+		expect(cssMs(" .36s ")).toBeCloseTo(360);
+		expect(cssMs("0.18s")).toBeCloseTo(180);
+		expect(cssMs("460")).toBe(460);
+		expect(cssMs("")).toBeNaN();
 	});
 });
 
