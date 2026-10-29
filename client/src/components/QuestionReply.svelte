@@ -42,28 +42,30 @@
 
 <div class="reply">
 	{#if items}
-		<div class="tabs" role="tablist">
-			{#each items as it, i (i)}
-				<button class="tab" class:on={i === tab} class:filled={!!answers[i]?.trim()} role="tab" aria-selected={i === tab} title={it.question} onclick={() => go(i)}>
-					{#if answers[i]?.trim()}<Icon name="check" />{:else}<span class="n">{i + 1}</span>{/if}
-					<span class="tt">{it.question}</span>
-				</button>
-			{/each}
+		<!-- where you are in several questions: "2 / 3" and one thin segment per question (filled once answered) -->
+		<div class="steps" role="tablist" aria-label={t("질문 {n}개", { n: items.length })}>
+			<span class="count mono">{tab + 1} / {items.length}</span>
+			<span class="segs">
+				{#each items as it, i (i)}
+					<button class="seg" class:on={i === tab} class:filled={!!answers[i]?.trim()} role="tab" aria-selected={i === tab} aria-label={`${i + 1}. ${it.question}`} title={it.question} onclick={() => go(i)}></button>
+				{/each}
+			</span>
 		</div>
 	{/if}
 	<div class="q">{cur.question}</div>
 	{#if cur.options?.length}
 		<div class="opts">
-			{#each cur.options as o, n (o)}
+			{#each cur.options as o (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
-					<span class="num" class:rec={cur.recommended === o}>{n + 1}</span>
 					<span class="txt">{o}</span>
-					{#if cur.recommended === o}<span class="badge">{t("추천")}</span>{/if}
+					{#if cur.recommended === o}<span class="rectag">{t("추천")}</span>{/if}
+					{#if items && answers[tab] === o}<Icon name="check" />{/if}
 				</Button>
 			{/each}
 		</div>
 	{/if}
 	{#if cur.allowFreeText}
+		<!-- one input with the send arrow inside it (like the composer): no separate button to sit awkwardly beside it -->
 		<div class="free">
 			<input
 				class="field"
@@ -71,13 +73,10 @@
 				bind:value={typed}
 				onkeydown={(e) => e.key === "Enter" && !e.isComposing && reply(typed)}
 			/>
-			<Button variant="primary" disabled={!typed.trim()} onclick={() => reply(typed)}>
-				{#if items}{t("저장")}{:else}<Icon name="send" /> {t("보내기")}{/if}
-			</Button>
+			<button class="go" disabled={!typed.trim()} onclick={() => reply(typed)} aria-label={items ? t("저장") : t("보내기")} title={items ? t("저장") : t("보내기")}>
+				<Icon name={items ? "check" : "send"} />
+			</button>
 		</div>
-	{/if}
-	{#if items}
-		{#if answers[tab]}<div class="saved">{t("답변")}: {answers[tab]}</div>{/if}
 	{/if}
 </div>
 
@@ -86,14 +85,10 @@
 	.reply {
 		display: flex;
 		flex-direction: column;
-		gap: 12px; /* question | options | free text: three groups, 12 apart */
+		gap: 12px; /* progress | question | options | free text: groups 12 apart */
 		padding: 12px;
 		border-top: 1px solid var(--border);
 		background: var(--warn-soft);
-	}
-	/* a question with its tabs: the tabs and the question belong together (8), the rest is 12 */
-	.reply > .tabs + .q {
-		margin-top: -4px;
 	}
 	.q {
 		font-size: var(--fs-sm);
@@ -102,139 +97,133 @@
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
+
+	/* progress: "2 / 3" and a segment per question. Quiet: no pills, no names (the question below says what it is). */
+	.steps {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 20px; /* the same line as the question text, so 6px of a current segment never moves the rows below */
+		margin-bottom: -4px; /* the progress belongs to the question under it: 8 instead of 12 */
+	}
+	.count {
+		flex: none;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.segs {
+		flex: 1;
+		display: flex;
+		gap: 4px;
+	}
+	.seg {
+		position: relative;
+		flex: 1;
+		height: 4px;
+		padding: 0;
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--text) 16%, transparent);
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	/* the 4px bar is the picture; the tap target is the full 20px row around it */
+	.seg::after {
+		content: "";
+		position: absolute;
+		inset: -8px 0;
+	}
+	.seg.filled {
+		background: var(--ok);
+	}
+	.seg.on {
+		background: var(--text);
+	}
+	/* where you are: taller by 2px (not a halo), so it reads the same whether the question was answered or not */
+	.seg.on {
+		height: 6px;
+	}
+	.seg.on.filled {
+		background: var(--ok);
+	}
+
+	/* options: plain buttons, the text is all there is. A long answer wraps inside the button. */
 	.opts {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
 	}
-	/* An answer can be a whole sentence: the option grows with its text instead of clipping it. */
 	.opts :global(.btn.opt) {
 		height: auto;
 		min-height: var(--control-h);
 		max-width: 100%;
-		padding: 8px 12px;
+		padding: 8px 16px;
 		gap: 8px;
-		align-items: flex-start; /* number and pill stand on the first line when an answer wraps (both boxes are 20px, like the line) */
 		justify-content: flex-start;
 		text-align: left;
 		line-height: 20px;
 		white-space: normal;
 		overflow-wrap: anywhere;
 	}
-	/* the number sits in a small square so it reads as a key, not as part of the answer */
-	.num {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 20px;
-		height: 20px;
-		border-radius: var(--radius-xs);
-		background: var(--bg-active);
-		color: var(--text-dim);
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-	}
 	.txt {
 		min-width: 0;
 	}
-	/* the recommended answer: the same box as the others (no thicker border that would grow it), tinted, with a pill after the text */
+	/* the recommended answer: tinted and outlined in warn, with one small word after it (no pill, no number) */
 	.opts :global(.btn.opt.rec) {
 		border-color: var(--warn);
 		background: var(--warn-soft);
-		font-weight: 600;
 	}
 	.opts :global(.btn.opt.rec:hover:not(:disabled)) {
 		background: color-mix(in srgb, var(--warn) 22%, transparent);
 	}
-	.num.rec {
-		background: var(--warn);
-		color: var(--bg);
-	}
-	.badge {
+	.rectag {
 		flex: none;
-		display: inline-flex;
-		align-items: center;
-		height: 20px;
-		padding: 0 8px;
-		border-radius: var(--radius-pill);
-		background: var(--warn);
-		color: var(--bg);
 		font-size: var(--fs-2xs);
 		font-weight: 600;
-		line-height: 1;
+		color: var(--warn);
 	}
-	/* the answer picked for this tab: a filled border, not an outline that the neighbours' 8px gap would swallow */
+	/* the answer chosen for this question: a clear border and a check */
 	.opts :global(.btn.opt.picked) {
 		border-color: var(--text);
 		box-shadow: inset 0 0 0 1px var(--text);
 	}
-	.free {
-		display: flex;
-		gap: 8px;
-	}
-	.field {
-		flex: 1;
-		min-width: 0;
-		height: var(--control-h); /* the same 40 as the send button beside it */
-	}
-	.free :global(.btn) {
+	.opts :global(.btn.opt svg) {
 		flex: none;
-		min-width: 100px; /* 보내기 with its arrow is 100 wide; 저장 takes the same, so the input does not change size between modes */
-		justify-content: center;
-	}
-	.tabs {
-		display: flex;
-		gap: 8px;
-		overflow-x: auto;
-		scrollbar-width: none;
-	}
-	.tabs::-webkit-scrollbar {
-		display: none;
-	}
-	.tab {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		box-sizing: border-box;
-		max-width: 200px;
-		flex: none;
-		height: 36px;
-		padding: 0 12px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-pill);
-		background: transparent;
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-		cursor: pointer;
-	}
-	.tab :global(svg) {
-		width: 14px;
-		height: 14px;
-		flex: none;
-	}
-	.tab .n {
-		font-size: var(--fs-2xs);
-		font-variant-numeric: tabular-nums;
-	}
-	.tab.on {
-		border-color: var(--text);
-		color: var(--text);
-		font-weight: 600;
-	}
-	/* answered tabs wear the ok colour on their check, so what is left to do stands out */
-	.tab.filled :global(svg) {
+		width: 16px;
+		height: 16px;
 		color: var(--ok);
 	}
-	.tt {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+
+	/* the free answer: the field with the send arrow inside its right end, as in the composer */
+	.free {
+		position: relative;
 	}
-	.saved {
-		font-size: var(--fs-sm);
-		line-height: 20px;
-		color: var(--text-dim);
-		overflow-wrap: anywhere;
+	.field {
+		padding-right: 48px; /* room for the 32px arrow + its 4px inset + 12px text gap */
+	}
+	.go {
+		position: absolute;
+		top: 4px;
+		right: 4px; /* 40px field, 32px button: 4 all round */
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--radius-sm);
+		background: var(--accent);
+		color: var(--accent-fg);
+		transition:
+			opacity var(--motion-fast) var(--ease-std),
+			transform var(--motion-fast) var(--ease);
+	}
+	.go:disabled {
+		opacity: 0;
+		pointer-events: none; /* nothing to send yet: the arrow appears once there is text */
+	}
+	.go:active:not(:disabled) {
+		transform: scale(0.94);
+	}
+	.go :global(svg) {
+		width: 16px;
+		height: 16px;
 	}
 </style>

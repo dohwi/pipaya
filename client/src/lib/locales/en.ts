@@ -432,6 +432,7 @@ export const en: Record<string, string> = {
 	"업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다. 바꾸려면 모델을 삭제하고 다시 불러오세요.": "This ID came from the upstream's model list and can't be edited. To change it, delete the model and load again.",
 	"수동 입력": "Manual",
 	"매칭 없이 한도와 기능을 직접 정합니다": "Set limits and capabilities yourself, with no match",
+	"질문 {n}개": "{n} {n#question|questions}",
 	"추천": "Recommended",
 	"추론 강도: {levels}": "Reasoning strengths: {levels}",
 	"검색어를 더 입력해 좁혀 보세요 ({n}개 더 있음)": "Type more to narrow down ({n} more)",
