@@ -10,6 +10,7 @@
 	import type { Session } from "../lib/types";
 	import Badge from "./Badge.svelte";
 	import Icon from "./Icon.svelte";
+	import IconButton from "./IconButton.svelte";
 	import Notice from "./Notice.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
@@ -160,7 +161,7 @@
 			<div class="grow">
 				<div id="list-h" class="section-label">{t("대화 목록")}{#if sessions} <span class="n">{groups.reduce((n, g) => n + g.list.length, 0)}</span>{/if}</div>
 			</div>
-			<Button size="sm" onclick={() => void load()} disabled={busy}>{t("새로고침")}</Button>
+			<IconButton icon="retry" size="sm" label={t("새로고침")} tip onclick={() => void load()} disabled={busy} />
 		</div>
 
 		{#if !sessions && !error}

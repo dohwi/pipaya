@@ -296,6 +296,15 @@ button {
 button:disabled {
 	cursor: not-allowed;
 }
+/* An inline action that reads as text: underlined, same colour as the sentence around it. Components that need a
+   smaller or dimmer one set font-size / color on their own selector (e.g. ImportReview's header link). */
+.textlink {
+	padding: 0;
+	font-size: inherit;
+	color: var(--text);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
 /* Touch hit area: a small control keeps its look but answers a finger like a 44px one. `.tap` adds an invisible
    padded box (needs a positioned element); it does nothing with a mouse, where the real size is fine. */
 @media (pointer: coarse) {

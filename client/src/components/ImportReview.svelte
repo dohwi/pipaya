@@ -18,7 +18,7 @@
 	<div class="rhead">
 		<Icon name="file" />
 		<span class="rname">{filename}</span>
-		<button type="button" class="link" onclick={oncancel}>{t("다른 파일")}</button>
+		<button type="button" class="textlink" onclick={oncancel}>{t("다른 파일")}</button>
 	</div>
 
 	{#if plan.empty}
@@ -110,14 +110,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.link {
-		padding: 0;
-		font-size: inherit;
-		color: var(--text);
-		text-decoration: underline;
-		text-underline-offset: 3px;
-	}
-	.rhead .link {
+	.rhead .textlink {
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}

@@ -175,7 +175,7 @@
 	{#if applied}
 		<Notice tone="ok" size="sm">
 			<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
-			{#if appliedExtensions}{t("확장은 꺼진 상태입니다.")} <button type="button" class="link" onclick={() => app.openSettings("extensions")}>{t("확장 탭에서 켜기")}</button>{/if}
+			{#if appliedExtensions}{t("확장은 꺼진 상태입니다.")} <button type="button" class="textlink" onclick={() => app.openSettings("extensions")}>{t("확장 탭에서 켜기")}</button>{/if}
 		</Notice>
 	{/if}
 	{#if restoredNote}<Notice tone="ok" size="sm" role="status">{restoredNote}</Notice>{/if}
@@ -361,12 +361,5 @@
 		font-size: var(--fs-sm);
 		line-height: 1.5;
 		color: var(--text-dim);
-	}
-	.link {
-		padding: 0;
-		font-size: inherit;
-		color: var(--text);
-		text-decoration: underline;
-		text-underline-offset: 3px;
 	}
 </style>

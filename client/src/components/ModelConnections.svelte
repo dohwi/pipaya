@@ -3,6 +3,7 @@
 	import { t } from "../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
+	import Notice from "./Notice.svelte";
 	import ModelField from "./ModelField.svelte";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
@@ -215,10 +216,7 @@
 	{#if loading && !cfg}
 		<p class="hint note">{t("불러오는 중…")}</p>
 	{:else if loadError}
-		<div class="err" role="alert">
-			<span>{loadError}</span>
-			<Button size="sm" onclick={() => load(serverId)}><Icon name="retry" /> {t("다시 시도")}</Button>
-		</div>
+		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
 	{:else if cfg}
 		<section>
 			<div class="section-label">{t("새 대화 기본 모델")}</div>
@@ -322,21 +320,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		overflow: hidden;
-	}
-	.err {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		padding: 8px 12px;
-		border: 1px solid var(--danger);
-		border-radius: var(--radius);
-		font-size: var(--fs-sm);
-		color: var(--danger);
-		overflow-wrap: anywhere;
-	}
-	.err > :global(.btn) {
-		flex: none;
 	}
 	section {
 		display: flex;
