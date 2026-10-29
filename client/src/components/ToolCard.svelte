@@ -63,6 +63,9 @@
 		run.state === "done" && !exitCode ? "ok" : run.state === "awaiting_input" ? "warn" : run.state === "running" || run.state === "pending" ? "accent" : run.state === "skipped" ? "" : "danger",
 	);
 
+	/** A question tool that is still waiting has nothing else to show: the reply block under the card asks it (no empty body) */
+	const questionOnly = $derived(awaiting && asked && name !== "bash" && name !== "write" && name !== "edit");
+
 	// A question opens the card so what is asked is visible.
 	$effect(() => {
 		if (awaiting) open = true;
@@ -88,7 +91,7 @@
 		</span>
 	</button>
 
-	{#if open}
+	{#if open && !questionOnly}
 		<div class="body" in:collapseIn out:collapseOut>
 			{#if name === "edit"}
 				<div class="diff mono">
@@ -100,7 +103,8 @@
 			{:else if name === "write"}
 				<pre class="mono">{clip(body ?? "", 6000)}</pre>
 			{:else if asked}
-				<div class="q">{run.question?.question ?? str(args.question)}</div>
+				<!-- while it waits, the reply block under the card asks the question itself; show it here only once answered -->
+				{#if !awaiting}<div class="q">{run.question?.question ?? str(args.question)}</div>{/if}
 				{#if answer}<div class="a"><span class="label">{t("답변")}</span> {answer}</div>{/if}
 			{:else if name !== "read" && name !== "ls"}
 				<pre class="mono">{JSON.stringify(args, null, 2)}</pre>

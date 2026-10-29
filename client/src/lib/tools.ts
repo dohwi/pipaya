@@ -27,7 +27,7 @@ const LOOK: Record<ToolKind, { icon: ToolIcon; hue: number }> = {
 	grep: { icon: "search", hue: 185 },
 	write: { icon: "pencil", hue: 150 },
 	edit: { icon: "pencil", hue: 60 },
-	bash: { icon: "terminal", hue: 25 },
+	bash: { icon: "terminal", hue: 300 }, // purple: the red of a failed call (hue ~25) must not look like plain shell work
 	skill: { icon: "skill", hue: 90 },
 	think: { icon: "brain", hue: 280 },
 	other: { icon: "bolt", hue: 265 },
@@ -66,6 +66,12 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 		case "write":
 		case "edit":
 			return str(args.path);
+		case "ask_user": {
+			// the question itself, not its JSON; several questions say how many
+			const qs = Array.isArray(args.questions) ? args.questions : [];
+			const first = qs.length ? str((qs[0] as { question?: unknown }).question) : str(args.question);
+			return clip(qs.length > 1 ? `${first} (+${qs.length - 1})` : first, 90);
+		}
 		default:
 			return clip(JSON.stringify(args), 90);
 	}
