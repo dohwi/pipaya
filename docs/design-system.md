@@ -107,6 +107,20 @@ When you add an icon or a button to a sidebar row: pick the column it belongs to
 - Dialog widths: `--modal-w-s/m/l/xl` = 420 / 480 / 560 / 720, with `--modal-gutter` 24 to the screen edge.
 - Stacking: `--z-modal-1..5`, `--z-scrim-1..5`, `--z-notice`, `--z-toast`, `--z-lightbox`. Do not add a raw `z-index`.
 
+### Question and tool-call blocks (chat)
+
+Applies to `ToolCard`, `QuestionReply` and the work box. Measured on 320 / 390 / 820 px; all values below are on the 4/8/12/16 scale.
+
+- **Header** of a tool call: 44px high. Icon, name and summary sit on one row; the icon and the chevron are the same 16px box, so their centres match the row's centre. Name and summary share one baseline (`align-items: baseline`, both lines 20px).
+- **Colour is the status.** A tool call's icon and name take the colour of its kind (`--th` from `badgeStyle`, no kind within 25° of the failure red, hue ~25). A failed call gets a red outline and a red icon, name, summary, time and chevron, and **no pill**. A call that is waiting is shown by the warn border and the block under it, never by a pill. Only *running*, *preparing* and *skipped* keep a pill.
+- **Question block** (`.reply`): padding 12, groups 12 apart, left and right edges of the question, options and input all on the same 12px line.
+- **Options** are equal-width buttons, 40px high (a long answer wraps to 58): two or three short answers (8 characters or fewer, the recommended one counts 2 more) share a row, four short ones make a 2x2, anything else is one per row. No numbers, no pills.
+- **Recommended** answer: a 14px sparkle leading its text, in the warn colour. The button itself looks like the others, so it never reads as "already chosen". **Chosen** answer: a 2px text-colour border and a green check.
+- **Input**: 40px high with the send arrow *inside* its right end (32px, 4px inset on three sides), hidden until there is text. The same control for typing and for "save" (check icon) in a multi-question block.
+- **Steps** (several questions): up to 4 are numbered 28px circles joined by 16x2px lines, centred; answered = green outline and check, current = filled with the warn colour (a touch darker, 5:1 contrast), ahead = grey outline. From 5 questions on it is `‹ 3 / 8 ›` between two 28px arrows. Every circle and arrow carries `.tap`. The row is 28px and 12px above the question.
+- **One height.** In a multi-question block the card keeps the same height on every tab (a question without an input holds the input's 40px).
+- **Answers can be given in any order**: after an answer the block goes to the next unanswered question, else the first unanswered one before it; it sends only when every question has an answer.
+
 ## 5. Breakpoints and touch
 
 | Query | Meaning |
@@ -203,3 +217,4 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 - 눈대중으로 맞추지 말고 DOM의 아이콘 중심을 재서 맞춥니다(6장). 결과 보고는 수정 전/후를 가이드 있는 것과 없는 것으로 나란히, 숫자와 함께 냅니다.
 - 공용 컴포넌트를 바꿀 때는 그것을 쓰는 모든 화면을 확인하고, 데스크톱 1440 · 태블릿 820 · 모바일 390 세 크기에서 확인합니다.
 - 맞춤용 `margin: -1px`이나 `translate`로 땜질하지 않습니다. 크기가 틀린 박스를 고칩니다.
+- 질문·도구 호출 블록: 상태는 색으로 말하고 칩은 쓰지 않습니다(실행 중·준비 중·실행 안 됨만 칩). 실패는 빨간 테두리와 빨간 글씨, 대기는 주황 테두리. 보기는 같은 폭의 40px 버튼, 추천은 글자 앞 반짝이, 고른 답은 굵은 테두리와 체크, 입력창 안에 보내기 화살표. 여러 질문은 28px 번호 원(4개까지)을 선으로 이은 단계 표시, 5개부터는 `‹ 3 / 8 ›`. 어느 탭에서도 카드 높이는 같습니다.
