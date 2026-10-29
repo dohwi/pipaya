@@ -541,8 +541,16 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.banner :global(.iconbtn svg) {
-		color: var(--text); /* the glyph is a control, not the warning tint */
+	/* the retry control wears the strip's tone like the wifi glyph beside it, with a filled ring so it reads as pressable */
+	.banner :global(.iconbtn) {
+		color: var(--tone);
+		background: color-mix(in srgb, var(--tone) 18%, var(--bg-elev));
+		border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+		cursor: pointer;
+	}
+	.banner :global(.iconbtn:hover:not(:disabled)) {
+		background: color-mix(in srgb, var(--tone) 32%, var(--bg-elev));
+		color: var(--tone);
 	}
 	.banner button:not(:global(.iconbtn)) {
 		height: var(--control-h-sm);
