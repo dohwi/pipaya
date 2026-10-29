@@ -85,8 +85,9 @@
 		<span class="what"><span class="name">{toolLabel(name, args)}</span>{#if summary}<span class="sum mono">{summary}</span>{/if}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
-			{#if !quiet && !failed}<span class="chip {tone}">{label}</span>{/if}
+			{#if !quiet && !failed && !awaiting}<span class="chip {tone}">{label}</span>{/if}
 			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
+			{#if awaiting}<span class="sr-only">{label}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
 		</span>
 	</button>
@@ -228,6 +229,14 @@
 		color: var(--text-dim);
 	}
 	/* an even 16px box: the 11px text's own 17.05px height was odd, so the row's centring rounded it half a pixel up or down from row to row */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
 	.dur {
 		font-size: var(--fs-2xs);
 		line-height: 16px;

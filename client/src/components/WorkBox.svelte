@@ -137,7 +137,7 @@
 
 		<span class="meta">
 			{#if awaitingIdx >= 0}
-				<span class="chip warn">{t("답변 필요")}</span>
+				<span class="sr-only">{t("답변 필요")}</span>
 			{:else if active}
 				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
 				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
@@ -203,6 +203,14 @@
 {/if}
 
 <style>
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
 	.group {
 		margin: 8px 0;
 		border: 1px solid var(--border);

@@ -15,6 +15,17 @@
 	let answers = $state<string[]>([]);
 	const cur = $derived(items ? items[tab]! : question);
 
+	/**
+	 * How the options are laid out, always in equal columns so every button is the same width whatever it says.
+	 * Two or three short answers share one row; four short ones make a 2x2; anything long (or five and more) goes one per row.
+	 */
+	const SHORT = 10;
+	const cols = $derived.by(() => {
+		const o = cur.options ?? [];
+		if (o.length < 2 || o.length > 4 || !o.every((x) => [...x].length <= SHORT)) return 1;
+		return o.length === 3 ? 3 : 2;
+	});
+
 	// Show the saved answer of the tab being opened in the text field.
 	function go(i: number) {
 		tab = i;
@@ -54,11 +65,11 @@
 	{/if}
 	<div class="q">{cur.question}</div>
 	{#if cur.options?.length}
-		<div class="opts">
+		<div class="opts" style:--cols={cols}>
 			{#each cur.options as o (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
 					<span class="txt">{o}</span>
-					{#if cur.recommended === o}<span class="rectag">{t("추천")}</span>{/if}
+					{#if cur.recommended === o}<span class="rectag" title={t("추천")} role="img" aria-label={t("추천")}></span>{/if}
 					{#if items && answers[tab] === o}<Icon name="check" />{/if}
 				</Button>
 			{/each}
@@ -147,19 +158,20 @@
 	}
 
 	/* options: plain buttons, the text is all there is. A long answer wraps inside the button. */
+	/* equal columns (or one per row): the buttons are all the same width, so the block reads as one even grid */
 	.opts {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
 		gap: 8px;
 	}
 	.opts :global(.btn.opt) {
 		height: auto;
 		min-height: var(--control-h);
-		max-width: 100%;
-		padding: 8px 16px;
+		min-width: 0;
+		padding: 8px 12px;
 		gap: 8px;
-		justify-content: flex-start;
-		text-align: left;
+		justify-content: center;
+		text-align: center;
 		line-height: 20px;
 		white-space: normal;
 		overflow-wrap: anywhere;
@@ -175,12 +187,22 @@
 	.opts :global(.btn.opt.rec:hover:not(:disabled)) {
 		background: color-mix(in srgb, var(--warn) 22%, transparent);
 	}
-	.rectag {
-		flex: none;
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		color: var(--warn);
+	/* the recommended mark is a small dot in the button's top-right corner: no text, so it never takes width from the answer
+	   (the tint and border say "recommended" too; the word stays as the tooltip and for screen readers) */
+	.opts :global(.btn.opt) {
+		position: relative;
 	}
+	.rectag {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--warn);
+		font-size: 0; /* the word is hidden, not removed */
+	}
+
 	/* the answer chosen for this question: a clear border and a check */
 	.opts :global(.btn.opt.picked) {
 		border-color: var(--text);
