@@ -6,7 +6,6 @@
 	import { tabPanes } from "../../lib/nav";
 	import { unreachable } from "../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
-	import Badge from "../Badge.svelte";
 	import Icon from "../Icon.svelte";
 	import DirBlockView from "./DirBlock.svelte";
 	import ListButton from "./ListButton.svelte";
@@ -20,34 +19,34 @@
 
 	const sb = getSidebarCtx();
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
-	const sfold = $derived(sb.isFolded(n.server.id));
+	/** Cannot be read: the header stays but is locked, folded and dimmed (the sidebar also lists it last) */
+	const off = $derived(unreachable(n.state));
+	const sfold = $derived(off || sb.isFolded(n.server.id));
 	/** The most urgent state among the server's conversations: tints the count while folded */
 	const sstate = $derived(sfold ? mostUrgent(n.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))) : "idle");
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
 </script>
 
-	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off={n.state === "offline" || n.state === "unauthorized" || n.state === "incompatible"}>
-		<div class="srvhead grabbable" class:folded={sfold} use:sb.dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: single, menu: (pt) => sb.headMenuAt(pt, n, null, n.server.id) }}>
-			<button class="srvtoggle" onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl}>
+	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off>
+		<div class="srvhead grabbable" class:folded={sfold} use:sb.dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: single || off, menu: (pt) => sb.headMenuAt(pt, n, null, n.server.id) }}>
+			<button class="srvtoggle" disabled={off} onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={(n.state === "online" ? "" : `${t(statusText[n.state])}\n`) + (n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl)}>
 				<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 				<span class="sicon {n.state}"><Icon name="server" /></span>
 				<span class="sname">{app.serverLabel(n.server)}</span>
-				{#if n.state !== "online"}<Badge size="sm" variant="outline" tone={n.state === "offline" ? "danger" : n.state === "checking" ? "neutral" : "warn"}>{t(statusText[n.state])}</Badge>{/if}
-				{#if sfold && (n.state === "online" || n.loaded)}<span class="cbadge tint {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
+				{#if sfold && !off && (n.state === "online" || n.loaded)}<span class="cbadge tint {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
 			</button>
-			<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
-			<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
+			{#if !off}
+				<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
+				<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
+			{/if}
 		</div>
 
 		{#if !sfold}
 		<div class="fold" in:collapseIn out:collapseOut>
-			{#if unreachable(n.state)}
-				{#if n.loaded}<div class="nosess warnline">{t("마지막으로 확인된 목록")}</div>{/if}
-			{/if}
-			{#if !n.loaded && !unreachable(n.state)}
+			{#if !n.loaded}
 				<div class="sk skeleton-bar"></div>
 			{:else if n.total === 0}
-				{#if (!unreachable(n.state) || n.loaded) && n.dirs.length === 0}
+				{#if n.dirs.length === 0}
 					<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
 				{/if}
 			{/if}
@@ -91,8 +90,12 @@
 	:global(:where(.side) .srv.band + .srv.band) {
 		margin-top: 8px;
 	}
-	:global(:where(.side) .srv.off .fold) {
-		opacity: 0.45;
+	/* unreachable: the header is dimmed and locked (the icon's colour still says why) */
+	:global(:where(.side) .srv.off .srvhead) {
+		opacity: 0.55;
+	}
+	.srvtoggle:disabled {
+		cursor: default;
 	}
 	/* several servers: the folders hang under their server: the folder icon sits under its status dot and the name under the server name; the right edge stays put, so every "+" keeps one column */
 	:global(:where(.side) .srv > .fold) {
@@ -178,9 +181,6 @@
 		white-space: nowrap;
 		font-size: var(--fs-md);
 		font-weight: 600;
-	}
-	.warnline {
-		color: var(--warn);
 	}
 	.nosess {
 		padding: 4px 8px 4px 48px;

@@ -29,7 +29,7 @@
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../lib/sidebar-model";
+	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
@@ -69,7 +69,7 @@
 
 	const nodes = $derived.by<Node[]>(() => {
 		const q = query.trim().toLowerCase();
-		return app.servers.map((server) => {
+		const list = app.servers.map((server) => {
 			const current = server.id === app.serverId;
 			const link = app.links[server.id];
 			const state = link ? connectionState(link.net) : "checking";
@@ -78,6 +78,8 @@
 			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], d?.terminals ?? [], d?.archived ?? []);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
+		// Servers that cannot be reached sink to the bottom (shown only; the saved order is untouched). The sort is stable.
+		return list.sort((a, b) => Number(unreachable(a.state)) - Number(unreachable(b.state)));
 	});
 
 	const searching = $derived(query.trim().length > 0);

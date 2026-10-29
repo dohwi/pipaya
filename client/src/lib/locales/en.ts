@@ -647,7 +647,6 @@ export const en: Record<string, string> = {
 	"닫기 (/resume 으로 다시 열기)": "Close (reopen with /resume)",
 	"사이드바 접기": "Collapse sidebar",
 	"대화 검색": "Search chats",
-	"마지막으로 확인된 목록": "last known list",
 	"검색 결과 없음": "No results",
 	"활성 대화 없음": "No active chats",
 	"{name} · 더블 클릭으로 이름 바꾸기": "{name} · double-click to rename",
