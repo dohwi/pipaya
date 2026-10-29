@@ -77,7 +77,6 @@ export interface BarKey {
 	/** Sticky modifier: on/off toggle, released after the next key */
 	mod?: "ctrl" | "alt";
 	/** Not a key: what the button does */
-	action?: "paste" | "fit" | "bottom";
 	repeat?: boolean;
 	/** Icon name (components/Icon.svelte) drawn instead of the label */
 	icon?: string;
@@ -89,16 +88,20 @@ export interface BarKey {
 const sym = (c: string): BarKey => ({ id: `s${c.charCodeAt(0)}`, label: c, text: c, title: c });
 const ctl = (c: string): BarKey => ({ id: `c${c}`, label: `^${c.toUpperCase()}`, text: ctrlChar(c)!, title: `Ctrl+${c.toUpperCase()}` });
 
-/** The bar: one scrolling row. Kept short on purpose: modifiers, navigation, a few symbols and the usual Ctrl combos. */
+/** The bar's scrolling part: modifiers, navigation, a few symbols and the usual Ctrl combos. The arrows stay pinned beside the keyboard button. */
+/** Pinned at the right end of the bar, next to the keyboard button: never scrolled out of reach */
+export const ARROW_KEYS: readonly BarKey[] = [
+	{ id: "left", label: "←", send: "left", repeat: true, icon: "arrow-left", title: "Left" },
+	{ id: "down", label: "↓", send: "down", repeat: true, icon: "arrow-down", title: "Down" },
+	{ id: "up", label: "↑", send: "up", repeat: true, icon: "arrow-up", title: "Up" },
+	{ id: "right", label: "→", send: "right", repeat: true, icon: "arrow-right", title: "Right" },
+];
+
 export const BAR_KEYS: readonly BarKey[] = [
 	{ id: "esc", label: "Esc", send: "esc", title: "Escape" },
 	{ id: "tab", label: "Tab", send: "tab", title: "Tab" },
 	{ id: "ctrl", label: "Ctrl", mod: "ctrl", title: "Ctrl", gap: true },
 	{ id: "alt", label: "Alt", mod: "alt", title: "Alt" },
-	{ id: "left", label: "←", send: "left", repeat: true, icon: "arrow-left", title: "Left", gap: true },
-	{ id: "down", label: "↓", send: "down", repeat: true, icon: "arrow-down", title: "Down" },
-	{ id: "up", label: "↑", send: "up", repeat: true, icon: "arrow-up", title: "Up" },
-	{ id: "right", label: "→", send: "right", repeat: true, icon: "arrow-right", title: "Right" },
 	{ id: "home", label: "Home", send: "home", title: "Home", gap: true },
 	{ id: "end", label: "End", send: "end", title: "End" },
 	{ id: "pgup", label: "PgUp", send: "pgup", repeat: true, title: "Page up" },
@@ -107,6 +110,4 @@ export const BAR_KEYS: readonly BarKey[] = [
 	...[..."-|~_\\$"].map(sym),
 	{ ...ctl("c"), gap: true },
 	...[..."dzlrawu"].map(ctl),
-	{ id: "paste", label: "Paste", action: "paste", icon: "clip", title: "Paste", gap: true },
-	{ id: "fit", label: "Fit", action: "fit", icon: "expand", title: "Fit" },
 ];

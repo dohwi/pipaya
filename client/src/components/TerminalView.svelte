@@ -31,7 +31,6 @@
 	let sendInput: ((data: string) => void) | undefined;
 	let toggleKeyboard: (() => void) | undefined;
 	let toBottom: (() => void) | undefined;
-	let pasteClip: (() => void) | undefined;
 	const appCursor = () => !!term?.modes.applicationCursorKeysMode;
 
 	function css(name: string, fallback: string) {
@@ -215,17 +214,6 @@
 		const onScroll = xt.onScroll(syncScrolled);
 		const onWrite = xt.onWriteParsed(syncScrolled);
 		toBottom = () => xt.scrollToBottom();
-		pasteClip = async () => {
-			let text = "";
-			try {
-				text = await navigator.clipboard.readText();
-			} catch {
-				// Plain http (no clipboard access): ask for the text in the app's own dialog (window.prompt is blocked or ugly in the apps)
-				const asked = await app.askExtension({ owner: "", ownerName: "", kind: "input", title: t("붙여넣을 내용"), multiline: true });
-				text = typeof asked === "string" ? asked : "";
-			}
-			if (text) xt.paste(text);
-		};
 		toggleKeyboard = () => {
 			if (xt.textarea && document.activeElement === xt.textarea) xt.textarea.blur();
 			else xt.focus();
@@ -322,7 +310,7 @@
 			host?.removeEventListener("touchmove", tm, opts);
 			host?.removeEventListener("touchend", te, opts);
 			host?.removeEventListener("touchcancel", te, opts);
-			sendInput = toggleKeyboard = toBottom = pasteClip = undefined;
+			sendInput = toggleKeyboard = toBottom = undefined;
 			onData.dispose();
 			onResize.dispose();
 			ws?.close();
@@ -341,10 +329,8 @@
 			{appCursor}
 			{scrolledUp}
 			onsend={(d) => sendInput?.(d)}
-			onfit={() => refitNow?.()}
 			onbottom={() => toBottom?.()}
 			onkeyboard={() => toggleKeyboard?.()}
-			onpaste={() => pasteClip?.()}
 		/>
 	{/if}
 	{#if status === "offline" || status === "connecting"}

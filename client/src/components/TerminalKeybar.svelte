@@ -2,7 +2,7 @@
 	import { onDestroy } from "svelte";
 	import { t } from "../lib/i18n";
 	import Icon, { type IconName } from "./Icon.svelte";
-	import { applyMods, BAR_KEYS, keySequence, type BarKey, type Mods } from "../lib/terminal-keys";
+	import { applyMods, ARROW_KEYS, BAR_KEYS, keySequence, type BarKey, type Mods } from "../lib/terminal-keys";
 
 	/**
 	 * Helper keys above the soft keyboard (Esc, Tab, arrows, Ctrl/Alt, ...). The buttons never take focus, so the
@@ -12,19 +12,15 @@
 		mods = $bindable(),
 		appCursor,
 		onsend,
-		onfit,
 		onbottom,
 		onkeyboard,
-		onpaste,
 		scrolledUp,
 	}: {
 		mods: Mods;
 		appCursor: () => boolean;
 		onsend: (data: string) => void;
-		onfit: () => void;
 		onbottom: () => void;
 		onkeyboard: () => void;
-		onpaste: () => void;
 		scrolledUp: boolean;
 	} = $props();
 
@@ -84,6 +80,12 @@
 	});
 </script>
 
+{#snippet key(k: BarKey)}
+	<button class="k" class:icon={k.icon} title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={() => up(k)} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>
+		{#if k.icon}<Icon name={k.icon as IconName} />{:else}{k.label}{/if}
+	</button>
+{/snippet}
+
 <div class="bar" role="toolbar" aria-label={t("터미널 보조 키")}>
 	<div class="strip" class:fade-l={more.left} class:fade-r={more.right}>
 		<div class="keys" bind:this={strip} onscroll={measure}>
@@ -95,19 +97,16 @@
 				{#if k.mod}
 					{@const on = mods[k.mod]}
 					<button class="k mod" class:on aria-pressed={on} title={k.title} onpointerdown={noFocus} onclick={() => (mods = { ...mods, [k.mod!]: !on })}>{k.label}</button>
-				{:else if k.action}
-					{@const label = k.action === "paste" ? t("붙여넣기") : t("화면 맞춤")}
-					<button class="k" class:icon={k.icon} title={label} aria-label={label} onpointerdown={noFocus} onclick={k.action === "paste" ? onpaste : onfit}>
-						{#if k.icon}<Icon name={k.icon as IconName} />{:else}{k.label}{/if}
-					</button>
 				{:else}
-					<button class="k" class:icon={k.icon} title={k.title} aria-label={k.title} onpointerdown={(e) => down(e, k)} onpointerup={() => up(k)} onpointercancel={stop} onpointerleave={stop} onclick={noFocus}>
-						{#if k.icon}<Icon name={k.icon as IconName} />{:else}{k.label}{/if}
-					</button>
+					{@render key(k)}
 				{/if}
 			{/each}
 		</div>
 	</div>
+	<span class="sep solid" aria-hidden="true"></span>
+	{#each ARROW_KEYS as k (k.id)}
+		{@render key(k)}
+	{/each}
 	<span class="sep solid" aria-hidden="true"></span>
 	<button class="k icon" aria-label={t("키보드 접기/펴기")} title={t("키보드 접기/펴기")} onpointerdown={noFocus} onclick={onkeyboard}><Icon name="keyboard" /></button>
 </div>
