@@ -11,6 +11,10 @@
 
 	// Several questions: one tab each. Answers stay editable until the final submit.
 	const items = $derived(question.items && question.items.length > 1 ? question.items : null);
+
+	/** Up to this many questions get numbered circles; more would not fit a phone, so they page with arrows instead. */
+	const MAX_CIRCLES = 4;
+	const paged = $derived(!!items && items.length > MAX_CIRCLES);
 	let tab = $state(0);
 	let answers = $state<string[]>([]);
 	const cur = $derived(items ? items[tab]! : question);
@@ -53,18 +57,29 @@
 	}
 </script>
 
-<div class="reply">
-	{#if items}
-		<!-- where you are in several questions: "2 / 3" and one thin segment per question (filled once answered) -->
-		<div class="steps" role="tablist" aria-label={t("질문 {n}개", { n: items.length })}>
-			<span class="count mono">{tab + 1} / {items.length}</span>
-			<span class="segs">
-				{#each items as it, i (i)}
-					<button class="seg" class:on={i === tab} class:filled={!!answers[i]?.trim()} role="tab" aria-selected={i === tab} aria-label={`${i + 1}. ${it.question}`} title={it.question} onclick={() => go(i)}></button>
-				{/each}
-			</span>
+{#snippet stepper()}
+	{#if paged}
+		<!-- many questions: "3 / 8" between two arrows (a row of circles would not fit a phone) -->
+		<div class="pager" role="group" aria-label={t("질문 {n}개", { n: items!.length })}>
+			<button class="nav tap" disabled={tab === 0} aria-label={t("이전 질문")} onclick={() => go(tab - 1)}><Icon name="chevron-left" /></button>
+			<span class="where mono" class:done={!!answers[tab]?.trim()}>{tab + 1} / {items!.length}</span>
+			<button class="nav tap" disabled={tab === items!.length - 1} aria-label={t("다음 질문")} onclick={() => go(tab + 1)}><Icon name="chevron-right" /></button>
+		</div>
+	{:else}
+		<!-- a few questions: numbered circles joined by a line, centred. Answered = green check, here = filled, ahead = outline. -->
+		<div class="stepper" role="tablist" aria-label={t("질문 {n}개", { n: items!.length })}>
+			{#each items! as it, i (i)}
+				{#if i > 0}<span class="link" class:done={!!answers[i - 1]?.trim()} aria-hidden="true"></span>{/if}
+				<button class="step tap" class:on={i === tab} class:filled={!!answers[i]?.trim()} role="tab" aria-selected={i === tab} aria-label={`${i + 1}. ${it.question}`} title={it.question} onclick={() => go(i)}>
+					{#if answers[i]?.trim()}<Icon name="check" />{:else}{i + 1}{/if}
+				</button>
+			{/each}
 		</div>
 	{/if}
+{/snippet}
+
+<div class="reply">
+	{#if items}{@render stepper()}{/if}
 	<div class="q">{cur.question}</div>
 	{#if cur.options?.length}
 		<div class="opts" style:--cols={cols}>
@@ -110,52 +125,100 @@
 		overflow-wrap: anywhere;
 	}
 
-	/* progress: "2 / 3" and a segment per question. Quiet: no pills, no names (the question below says what it is). */
-	.steps {
+	/* step indicator: circles joined by a line, centred. Each circle is the tap target (28px, wider with .tap on touch). */
+	.stepper {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		height: 20px; /* the same line as the question text, so 6px of a current segment never moves the rows below */
-		margin-bottom: -4px; /* the progress belongs to the question under it: 8 instead of 12 */
+		justify-content: center;
+		gap: 0;
+		height: 28px;
 	}
-	.count {
-		flex: none;
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-		font-variant-numeric: tabular-nums;
-	}
-	.segs {
-		flex: 1;
-		display: flex;
-		gap: 4px;
-	}
-	.seg {
+	.step {
 		position: relative;
-		flex: 1;
-		height: 4px;
-		padding: 0;
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border: 1px solid var(--border-strong);
+		border-radius: 50%;
+		background: transparent;
+		color: var(--text-dim);
+		font-family: var(--mono);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			border-color var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
+	}
+	/* the line between two circles: 16px long, green once the question before it is answered */
+	.link {
+		flex: none;
+		width: 16px;
+		height: 2px;
+		margin: 0 4px;
 		border-radius: var(--radius-pill);
 		background: color-mix(in srgb, var(--text) 16%, transparent);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	/* the 4px bar is the picture; the tap target is the full 20px row around it */
-	.seg::after {
-		content: "";
-		position: absolute;
-		inset: -8px 0;
-	}
-	.seg.filled {
+	.link.done {
 		background: var(--ok);
 	}
-	.seg.on {
+	.step.filled {
+		border-color: var(--ok);
+		color: var(--ok);
+	}
+	.step.on {
+		border-color: var(--text);
 		background: var(--text);
+		color: var(--bg);
 	}
-	/* where you are: taller by 2px (not a halo), so it reads the same whether the question was answered or not */
-	.seg.on {
-		height: 6px;
-	}
-	.seg.on.filled {
+	.step.on.filled {
+		border-color: var(--ok);
 		background: var(--ok);
+		color: var(--bg);
+	}
+	.step :global(svg) {
+		width: 14px;
+		height: 14px;
+	}
+
+	/* many questions: the same 28px row as the circles, "3 / 8" between two arrows */
+	.pager {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 28px;
+	}
+	.nav {
+		position: relative;
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-sm);
+		color: var(--text-dim);
+	}
+	.nav :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.nav:disabled {
+		opacity: 0.3;
+	}
+	.where {
+		min-width: 48px;
+		text-align: center;
+		font-size: var(--fs-xs);
+		font-variant-numeric: tabular-nums;
+		color: var(--text);
+	}
+	.where.done {
+		color: var(--ok);
 	}
 
 	/* options: plain buttons, the text is all there is. A long answer wraps inside the button. */
