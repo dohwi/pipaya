@@ -2,8 +2,7 @@
 	import "@xterm/xterm/css/xterm.css";
 	import { Terminal, type ITheme } from "@xterm/xterm";
 	import { FitAddon } from "@xterm/addon-fit";
-	import { onDestroy, onMount } from "svelte";
-	import Icon from "./Icon.svelte";
+	import { onMount } from "svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { copyText } from "../lib/clipboard";
@@ -29,17 +28,6 @@
 	const showBar = $derived(isTouch() || viewport.narrow);
 	let mods = $state<Mods>({ ctrl: false, alt: false, shift: false });
 	let scrolledUp = $state(false);
-	/** Floating "open keyboard" button: shown only while the soft keyboard is down, and fades when idle */
-	let kbOpen = $state(false);
-	let awake = $state(true);
-	let fade: ReturnType<typeof setTimeout> | undefined;
-	function wake() {
-		awake = true;
-		clearTimeout(fade);
-		fade = setTimeout(() => (awake = false), 2500);
-	}
-	onMount(wake);
-	onDestroy(() => clearTimeout(fade));
 	let sendInput: ((data: string) => void) | undefined;
 	let toggleKeyboard: (() => void) | undefined;
 	let toBottom: (() => void) | undefined;
@@ -220,26 +208,8 @@
 			});
 		};
 		const vv = window.visualViewport;
-		// The soft keyboard is up when the visual viewport is much shorter than the tallest one seen (focus alone is not
-		// enough: Android's back gesture hides the keyboard but leaves the focus).
-		let tall = 0;
-		const syncKb = () => {
-			const h = vv?.height ?? window.innerHeight;
-			tall = Math.max(tall, h, window.innerHeight);
-			kbOpen = tall - h > 120;
-		};
-		const onVv = () => {
-			syncKb();
-			later();
-		};
-		const onOrient = () => {
-			tall = 0;
-			later();
-			setTimeout(syncKb, 300);
-		};
-		syncKb();
-		vv?.addEventListener("resize", onVv);
-		window.addEventListener("orientationchange", onOrient);
+		vv?.addEventListener("resize", later);
+		window.addEventListener("orientationchange", later);
 
 		const syncScrolled = () => (scrolledUp = xt.buffer.active.viewportY < xt.buffer.active.baseY);
 		const onScroll = xt.onScroll(syncScrolled);
@@ -257,10 +227,8 @@
 			if (text) xt.paste(text);
 		};
 		toggleKeyboard = () => {
-			// Only offered while the keyboard is down. The textarea may still hold focus (Android back), so blur first
-			// or focus() would be a no-op and the keyboard would stay hidden.
-			xt.textarea?.blur();
-			xt.focus();
+			if (xt.textarea && document.activeElement === xt.textarea) xt.textarea.blur();
+			else xt.focus();
 		};
 
 		// Touch: drag to scroll (with a little momentum), pinch to change the font size, tap to type.
@@ -346,8 +314,8 @@
 			ro.disconnect();
 			cancelAnimationFrame(raf);
 			cancelAnimationFrame(glide);
-			vv?.removeEventListener("resize", onVv);
-			window.removeEventListener("orientationchange", onOrient);
+			vv?.removeEventListener("resize", later);
+			window.removeEventListener("orientationchange", later);
 			onScroll.dispose();
 			onWrite.dispose();
 			host?.removeEventListener("touchstart", ts, opts);
@@ -365,25 +333,9 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="term" data-terminal={terminal.id} ontouchstart={wake}>
+<div class="term" data-terminal={terminal.id}>
 	<div class="screen" bind:this={host}></div>
 	{#if showBar && status !== "exited"}
-		<div class="kb-anchor">
-			{#if !kbOpen}
-				<button
-					class="kb tap"
-					class:idle={!awake}
-					aria-label={t("키보드 열기")}
-					title={t("키보드 열기")}
-					onpointerdown={(e) => e.preventDefault()}
-					onclick={() => {
-						wake();
-						toggleKeyboard?.();
-					}}
-				><Icon name="keyboard" /></button>
-			{/if}
-		</div>
 		<TerminalKeybar
 			bind:mods
 			{appCursor}
@@ -391,6 +343,7 @@
 			onsend={(d) => sendInput?.(d)}
 			onfit={() => refitNow?.()}
 			onbottom={() => toBottom?.()}
+			onkeyboard={() => toggleKeyboard?.()}
 			onpaste={() => pasteClip?.()}
 		/>
 	{/if}
@@ -427,43 +380,6 @@
 	}
 	.screen :global(.xterm-viewport) {
 		background: transparent !important;
-	}
-	/* Zero-height anchor between the output and the helper keys: the toggle floats just above the Ctrl/Alt row and follows it */
-	.kb-anchor {
-		position: relative;
-		flex: none;
-		height: 0;
-		z-index: 2;
-	}
-	/* Floating keyboard toggle, bottom centre over the output; backdrop blur keeps the text behind it quiet */
-	.kb {
-		position: absolute;
-		bottom: 8px;
-		left: 50%;
-		translate: -50% 0;
-		z-index: 2;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 4px;
-		min-width: 44px;
-		padding: 0 8px;
-		height: 36px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-control);
-		background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		color: var(--text);
-		box-shadow: var(--shadow-soft);
-		opacity: 0.85;
-		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	.kb.idle {
-		opacity: 0.35;
-	}
-	.kb:active {
-		opacity: 1;
 	}
 	.note {
 		position: absolute;
