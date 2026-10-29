@@ -547,7 +547,7 @@
 		min-height: var(--control-h-sm);
 		background: none;
 		border: 0;
-		color: var(--text);
+		color: var(--tone); /* the same warning tone as the wifi glyph beside it */
 		font-size: inherit;
 		font-weight: 600;
 		text-decoration: underline;
@@ -555,7 +555,7 @@
 		cursor: pointer;
 	}
 	.banner button.link:hover {
-		color: var(--tone);
+		color: color-mix(in srgb, var(--tone) 75%, var(--text));
 	}
 	.banner button:not(.link) {
 		height: var(--control-h-sm);
