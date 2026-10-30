@@ -2,13 +2,14 @@
 	import { t } from "../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../lib/motion";
 	import Icon from "./Icon.svelte";
+	import ToolChip from "./ToolChip.svelte";
 	import Modal from "./Modal.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { duration } from "../lib/format";
-	import { badgeStyle, isImageTool, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
+	import { isImageTool, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
 	import PaintingCanvas from "./message/PaintingCanvas.svelte";
 	import type { Step, ToolRun } from "../lib/types";
 
@@ -124,10 +125,7 @@
 		<span class="roll" aria-live="polite">
 			{#key line.key}
 				<span class="line" in:rollIn out:rollOut>
-					<span class="tbadge {line.kind}" class:bare={!line.name} style={badgeStyle(line.kind)}>
-						<Icon name={line.icon} />
-						{#if line.name}<span class="tb-label" class:shimmer={line.shimmer}>{line.name}</span>{/if}
-					</span>
+					<ToolChip kind={line.kind} icon={line.icon} label={line.name} shimmer={line.shimmer} />
 					{#if line.sum}<span class="sum mono">{line.sum}</span>{/if}
 				</span>
 			{/key}
@@ -140,7 +138,7 @@
 				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
 				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 			{:else}
-				{#if failed}<span class="sr-only">{t("실패")} {failed}</span>{/if}
+				{#if failed}<span class="fail-dot" title={t("실패")}></span><span class="sr-only">{t("실패")} {failed}</span>{/if}
 				{#if total}<span class="dur">{duration(total)}</span>{/if}
 			{/if}
 			<span class="open"><Icon name="chevron-right" /></span>
@@ -218,14 +216,6 @@
 	.group.warn {
 		border-color: var(--warn);
 	}
-	/* a failure is the red outline and red time and arrow, with no pill (same as a failed tool call) */
-	.group.danger {
-		border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
-	}
-	.group.danger .dur,
-	.group.danger .open {
-		color: color-mix(in srgb, var(--danger) 75%, var(--text-dim));
-	}
 	.box {
 		position: relative;
 		display: flex;
@@ -290,8 +280,10 @@
 		color: var(--text-dim);
 	}
 	.count,
+	/* an even 16px box like the dot (8) and the arrow (16): the 11px text's own 17.05px height is odd, so the row's centring rounded it a pixel low */
 	.dur {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.open {

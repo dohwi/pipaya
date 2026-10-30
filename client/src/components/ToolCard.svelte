@@ -2,11 +2,12 @@
 	import { t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import Icon from "./Icon.svelte";
+	import ToolChip from "./ToolChip.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../lib/store.svelte";
 	import { getPane } from "../lib/pane";
 	import { clip, duration } from "../lib/format";
-	import { badgeStyle, toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
+	import { toolIcon, toolKind, toolLabel, toolSummary } from "../lib/tools";
 	import type { ToolRun } from "../lib/types";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import ExtensionView from "./extensions/ExtensionView.svelte";
@@ -47,7 +48,7 @@
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
 	const quiet = $derived(run.state === "done" && !exitCode);
-	/** A failed call (error, or a non-zero exit code): red outline and red icon, texts and arrow instead of a pill */
+	/** A failed call (error, or a non-zero exit code): a red dot by the time instead of a pill */
 	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
 		{
@@ -79,13 +80,14 @@
 
 </script>
 
-<div class="card" data-part="tool" class:awaiting class:failed data-state={run.state} style={badgeStyle(kind)}>
+<div class="card" data-part="tool" class:awaiting class:failed data-state={run.state}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
-		<span class="ico"><Icon name={toolIcon(name, args)} /></span>
-		<span class="what"><span class="name">{toolLabel(name, args)}</span>{#if summary}<span class="sum mono">{summary}</span>{/if}</span>
+		<ToolChip {kind} icon={toolIcon(name, args)} label={toolLabel(name, args)} shimmer={run.state === "running" || run.state === "pending"} />
+		<span class="what">{#if summary}<span class="sum mono">{summary}</span>{/if}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
 			{#if !quiet && !failed && !awaiting}<span class="chip {tone}">{label}</span>{/if}
+			{#if failed}<span class="fail-dot" title={label}></span>{/if}
 			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
 			{#if awaiting}<span class="sr-only">{label}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
@@ -144,19 +146,6 @@
 		overflow: hidden;
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
-	.card.failed {
-		border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
-	}
-	/* everything in a failed header turns red: the icon, the name, what it was doing, the time and the arrow */
-	.card.failed,
-	:global(:root[data-theme="light"]) .card.failed {
-		--tc: var(--danger); /* the light theme sets its own --tc above, with the same weight as the plain rule, so it needs naming too */
-	}
-	.card.failed .sum,
-	.card.failed .dur,
-	.card.failed .chev {
-		color: color-mix(in srgb, var(--danger) 75%, var(--text-dim));
-	}
 	.card.awaiting {
 		border-color: var(--warn);
 		box-shadow: 0 0 0 3px var(--warn-soft);
@@ -175,42 +164,13 @@
 		outline-offset: -2px;
 		border-radius: var(--radius);
 	}
-	/* same hue as the badges in the work box (--th from badgeStyle), brighter on dark and deeper on light */
-	.card {
-		--tc: oklch(0.8 0.12 var(--th, 265));
-	}
-	:global(:root[data-theme="light"]) .card {
-		--tc: oklch(0.5 0.15 var(--th, 265));
-	}
-	.ico {
-		display: grid;
-		color: var(--tc);
-	}
-	.ico :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke-width: 1.8;
-	}
-	/* name and summary share one baseline: the 13px name and the 12px summary have different ascents, so centring them
-	   separately left the summary 1px high. Both lines are 20px, the pair is centred on the row like the icon and the meta. */
 	.what {
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
-		height: 20px; /* the same line box with or without a summary (a skill has none), so the name never moves between cards */
-	}
-	.name {
-		flex: none;
-		max-width: 60%;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-weight: 600;
-		font-size: var(--fs-sm);
-		line-height: 20px;
-		color: var(--tc);
+		height: 24px; /* the chip's height, with or without a summary (a skill has none) */
 	}
 	.sum {
 		flex: 1;

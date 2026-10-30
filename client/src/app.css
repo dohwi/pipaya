@@ -1172,9 +1172,10 @@ html .glow-working.glow-working {
 	white-space: nowrap;
 }
 :root[data-theme="light"] .tbadge {
-	--tb-fg: oklch(0.45 0.14 var(--th));
-	--tb-bg: oklch(0.65 0.14 var(--th) / 0.12);
-	--tb-bd: oklch(0.6 0.14 var(--th) / 0.3);
+	/* lighter and more chromatic than before (L .45 / C .14 read as near-black), still above 4.5:1 on the tinted pill */
+	--tb-fg: oklch(0.52 0.18 var(--th));
+	--tb-bg: oklch(0.65 0.16 var(--th) / 0.14);
+	--tb-bd: oklch(0.6 0.16 var(--th) / 0.35);
 }
 .tbadge svg {
 	width: 14px;
@@ -1200,9 +1201,9 @@ html .glow-working.glow-working {
 	--sh-base: var(--tb-fg);
 	--sh-hi: var(--text);
 }
-/* skills are not plain file/shell work: a dashed outline */
-.tbadge.skill {
-	border-style: dashed;
+/* on the light theme --text is near black, so the band would be a black streak; use a lighter tone of the chip's own hue instead */
+:root[data-theme="light"] .tbadge .tb-label.shimmer {
+	--sh-hi: oklch(0.78 0.14 var(--th));
 }
 
 /* Three dots that rise in turn: the quiet "working" mark for the work box (the round spinner stays for buttons and forms). */
@@ -1282,4 +1283,13 @@ html.dnd * {
 }
 html.dnd {
 	overscroll-behavior: none;
+}
+
+/* a failed tool call or work box: one small red dot beside the time, nothing else changes colour */
+.fail-dot {
+	width: 8px;
+	height: 8px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--danger);
 }
