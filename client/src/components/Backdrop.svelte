@@ -211,12 +211,20 @@
 			class="charge"
 			class:full={press.p >= 1}
 			style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}"
-		></div>
+		>
+			<div class="spin a"></div>
+			<div class="spin b"></div>
+		</div>
 	{/if}
 	{#each bursts as b (b.id)}
 		<div
 			class="wave"
 			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;--band:{b.band}px;opacity:{b.a.toFixed(3)}"
+		></div>
+		<!-- the pop of light that leaves with the wave, as wide and as quick as the charge made it -->
+		<div
+			class="flash"
+			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.5)}ms"
 		></div>
 	{/each}
 </div>
@@ -263,41 +271,80 @@
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
 	}
-	/* the gauge that fills while the pointer is held down on empty space */
+	/* the light gathering under the pointer while it is held down on empty space */
 	.charge {
 		position: absolute;
-		width: 48px;
-		height: 48px;
+		width: 240px;
+		height: 240px;
 		translate: -50% -50%;
-		border-radius: 50%;
+		--p: 0;
 	}
-	/* the ring: an arc that sweeps clockwise from the top as the hold goes on */
-	.charge::before {
-		content: "";
+	/* two counter-turning rings of thin spokes, pulled inward: the lit ring shrinks onto the point as the gauge fills */
+	.spin {
 		position: absolute;
 		inset: 0;
-		border-radius: 50%;
-		background: conic-gradient(from -90deg, var(--grid-wave) calc(var(--p) * 360deg), transparent 0);
-		-webkit-mask-image: radial-gradient(closest-side, transparent 78%, #000 80%);
-		mask-image: radial-gradient(closest-side, transparent 78%, #000 80%);
+		--inner: calc(60% - 57% * var(--p));
+		--outer: calc(92% - 78% * var(--p));
+		-webkit-mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 5%), #000 var(--outer), transparent calc(var(--outer) + 8%));
+		mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 5%), #000 var(--outer), transparent calc(var(--outer) + 8%));
 	}
-	/* the core brightens and widens with the charge, so the gauge reads even before the ring closes */
+	.spin.a {
+		background: repeating-conic-gradient(from 0deg, var(--grid-wave) 0deg 0.9deg, transparent 0.9deg 8deg);
+		opacity: calc(0.3 + var(--p) * 0.5);
+		animation: gather 2.4s linear infinite;
+	}
+	.spin.b {
+		background: repeating-conic-gradient(from 4deg, var(--grid-wave) 0deg 1.4deg, transparent 1.4deg 13deg);
+		opacity: calc(0.2 + var(--p) * 0.6);
+		animation: gather 3.6s linear infinite reverse;
+	}
+	@keyframes gather {
+		to {
+			rotate: 1turn;
+		}
+	}
+	/* the core: squeezed tighter and brighter until it is a small hot point */
 	.charge::after {
 		content: "";
 		position: absolute;
-		inset: 0;
+		inset: 30%;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave), transparent 70%);
-		opacity: calc(0.18 + var(--p) * 0.5);
-		scale: calc(0.45 + var(--p) * 0.55);
+		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 75%);
+		opacity: calc(0.2 + var(--p) * 0.8);
+		scale: calc(1.7 - var(--p) * 1.1);
 	}
-	/* at full charge the ring breathes, so the ceiling is visible without a number */
-	.charge.full::before {
-		animation: charged 900ms var(--ease-std) infinite;
+	/* a full gauge breathes, so the ceiling is visible without a number */
+	.charge.full::after {
+		animation: charged 1100ms var(--ease-std) infinite;
 	}
 	@keyframes charged {
 		50% {
-			opacity: 0.45;
+			opacity: 0.72;
+		}
+	}
+	/* the burst that flies out with the wave: a soft ball of light that widens and dies */
+	.flash {
+		position: absolute;
+		left: var(--cx);
+		top: var(--cy);
+		width: 420px;
+		height: 420px;
+		translate: -50% -50%;
+		border-radius: 50%;
+		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 72%);
+		animation: burst var(--fd) var(--ease-std) both;
+	}
+	@keyframes burst {
+		0% {
+			scale: 0.2;
+			opacity: 0;
+		}
+		25% {
+			opacity: var(--k);
+		}
+		100% {
+			scale: 2.6;
+			opacity: 0;
 		}
 	}
 	.lit::after {
