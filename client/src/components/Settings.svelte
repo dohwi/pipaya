@@ -17,7 +17,7 @@
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { app } from "../lib/store.svelte";
 	import { serverUpdater } from "../lib/server-update.svelte";
-	import { SETTINGS_TABS, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
+	import { SETTINGS_TABS, needsOnlineServer, queryWords, searchSettings, type Hit, type SettingsTabId } from "../lib/settings-search";
 	import { t } from "../lib/i18n";
 	import { srvKey } from "../lib/server-extension";
 	import { backLayer } from "../lib/dialog";
@@ -66,6 +66,11 @@
 	$effect(() => {
 		if (!server && current.server) tab = "general";
 	});
+	/** The shown server does not answer: its sections are off, only "정보" stays so the address or token can be fixed. */
+	const serverOnline = $derived(!server || app.links[server.id]?.net === "online");
+	$effect(() => {
+		if (!serverOnline && needsOnlineServer(tab)) { extId = null; tab = "info"; }
+	});
 
 
 	/* ---------- search: settings sections and shortcuts in one list ---------- */
@@ -76,6 +81,7 @@
 	const hits = $derived(
 		searchSettings(words, {
 			hasServer: !!server,
+			serverOnline,
 			shortcuts: ACTIONS.map((a) => {
 				const combo = app.prefs.bindings[a.id];
 				return { id: a.id, label: a.label, hint: a.hint, combo, shown: formatCombo(combo) };
@@ -115,7 +121,7 @@
 	</div>
 
 	<div class="layout">
-		<SettingsNav bind:tab bind:extId bind:dir bind:installFor {scoped} {server} />
+		<SettingsNav bind:tab bind:extId bind:dir bind:installFor {scoped} {server} {serverOnline} />
 
 		<div class="body">
 			{#if words.length}

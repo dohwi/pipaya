@@ -3,7 +3,7 @@
 	import { rovingKeys } from "../../lib/roving";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { SETTINGS_TABS, type SettingsTabId } from "../../lib/settings-search";
+	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../Icon.svelte";
@@ -22,6 +22,7 @@
 		installFor = $bindable(null),
 		scoped,
 		server,
+		serverOnline = true,
 	}: {
 		tab: string;
 		extId: string | null;
@@ -30,6 +31,8 @@
 		installFor?: string | null;
 		scoped: readonly (typeof SETTINGS_TABS)[number][];
 		server: Server | null;
+		/** False while the server does not answer: its sections (all but "정보") are greyed out and cannot be opened. */
+		serverOnline?: boolean;
 	} = $props();
 
 	type TabId = SettingsTabId;
@@ -90,10 +93,11 @@
 >
 	{#each scoped as x (x.id)}
 		{#if !x.server || server}
-			{@const kids = extsOf(x.id)}
+			{@const off = !serverOnline && needsOnlineServer(x.id)}
+			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
-				<button role="tab" class:srvtab={x.server} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
+				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
 					<span class="nico"><Icon name={x.icon} />{#if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
@@ -295,7 +299,11 @@
 		text-align: left;
 		color: var(--text-dim);
 	}
-	.nav button:hover {
+	.nav button:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.nav button:not(:disabled):hover {
 		background: var(--bg-hover);
 		color: var(--text);
 	}

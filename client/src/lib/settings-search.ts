@@ -14,6 +14,9 @@ export const SETTINGS_TABS = [
 ] as const;
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
+/** A server's own sections need the server to answer; only "정보" (address, token) stays open while it is offline. */
+export const needsOnlineServer = (id: string) => SETTINGS_TABS.some((x) => x.id === id && x.server) && id !== "info";
+
 /** Settings that are not a tab of their own; `words` are what a person may type to find them (any language). */
 export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string }[] = [
 	{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
@@ -54,15 +57,17 @@ export interface ShortcutEntry {
 }
 
 /** One list for the search box: sections, loose settings and shortcuts that match. */
-export function searchSettings(words: readonly string[], opts: { hasServer: boolean; shortcuts: readonly ShortcutEntry[] }): Hit[] {
+export function searchSettings(words: readonly string[], opts: { hasServer: boolean; serverOnline?: boolean; shortcuts: readonly ShortcutEntry[] }): Hit[] {
 	if (!words.length) return [];
 	const out: Hit[] = [];
 	const tabName = (id: SettingsTabId) => t(SETTINGS_TABS.find((x) => x.id === id)!.label);
 	for (const x of SETTINGS_TABS) {
 		if (x.server && !opts.hasServer) continue;
+		if (opts.serverOnline === false && needsOnlineServer(x.id)) continue;
 		if (matches(words, `${t(x.label)} ${x.label} ${x.sub ? t(x.sub) : ""}`)) out.push({ key: `tab:${x.id}`, title: t(x.label), where: x.sub ? t(x.sub) : t("설정"), target: { tab: x.id } });
 	}
 	for (const x of SETTINGS_ITEMS) {
+		if (opts.serverOnline === false && needsOnlineServer(x.tab)) continue;
 		if (matches(words, `${t(x.label)} ${x.label} ${x.words}`)) out.push({ key: `item:${x.label}`, title: t(x.label), where: tabName(x.tab), target: { tab: x.tab } });
 	}
 	for (const a of opts.shortcuts) {

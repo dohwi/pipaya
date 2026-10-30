@@ -47,3 +47,12 @@ describe("tabs and tool labels", () => {
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");
 	});
 });
+
+describe("offline server", () => {
+	test("only the info section of a server stays searchable", () => {
+		const ids = (q: string) => searchSettings(queryWords(q), { hasServer: true, serverOnline: false, shortcuts: keys }).map((h) => h.target.tab);
+		expect(ids("정보")).toContain("info");
+		expect(ids("에이전트")).not.toContain("agent");
+		expect(ids("자동 삭제")).not.toContain("sessions");
+	});
+});
