@@ -5,7 +5,7 @@
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { compact } from "../lib/format";
 	import type { AssistantItem } from "../lib/types";
-	import Icon from "./Icon.svelte";
+	import StatusItem from "./StatusItem.svelte";
 	import SessionContext from "./SessionContext.svelte";
 	import { getPane } from "../lib/pane";
 	import { cacheLevel, contextLevel, speedLevel } from "../lib/status-level";
@@ -208,54 +208,35 @@
 <!-- Reserve room before the first reply; allow narrow screens to wrap without clipping. -->
 <div class="statusline mono" data-part="statusline" aria-label={t("세션 통계")}>
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
-		<span class="b" title={item.owner}>{item.text}</span>
+		<StatusItem title={item.owner}>{item.text}</StatusItem>
 	{/each}
 	{#if elapsed}
-		<span class="b elapsed" title={t("작업 경과 시간")}>
-			<Icon name="clock" />
-			<span class="v">{elapsed}</span>
-		</span>
+		<StatusItem icon="clock" title={t("작업 경과 시간")}>{elapsed}</StatusItem>
 	{/if}
 	{#if ctxFiles !== null}
-		<button class="b files tap" class:empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} aria-haspopup="dialog" aria-label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>
-			<Icon name="prompt" />
-			<span class="v">{t("{n}개", { n: ctxFiles })}</span>
-		</button>
+		<StatusItem icon="prompt" empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>{t("{n}개", { n: ctxFiles })}</StatusItem>
 	{/if}
 	{#if skillCount !== null}
-		<button class="b skills tap" class:empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} aria-haspopup="dialog" aria-label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>
-			<Icon name="skill" />
-			<span class="v">{t("{n}개", { n: skillCount })}</span>
-		</button>
+		<StatusItem icon="skill" empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>{t("{n}개", { n: skillCount })}</StatusItem>
 	{/if}
 	{#if mcpHere}
-		<button class="b mcp tap" class:empty={mcpHere.ready === 0 && !mcpHere.failed} class:danger={mcpHere.failed > 0} onclick={() => app.openMcp()} aria-haspopup="dialog" aria-label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>
-			<Icon name="plug" />
-			<span class="v">{t("{n}개", { n: mcpHere.ready })}</span>
-		</button>
+		<StatusItem icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
 	{/if}
 	{#if tplNames !== null}
-		<button class="b commands tap" class:empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} aria-haspopup="dialog" aria-label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>
-			<Icon name="list" />
-			<span class="v">{t("{n}개", { n: tplNames.length })}</span>
-		</button>
+		<StatusItem icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>
 	{/if}
 	<!-- Always shown, so the line does not jump when the first reply arrives; "—" until there is a figure. -->
-	<span class="b ctx {level}" class:empty={ctx === null} title={ctxTip}>
+	<StatusItem level={level} empty={ctx === null} title={ctxTip}>
+		{#snippet mark()}
 			<svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
 				<circle cx="9" cy="9" r="7" class="track" />
 				<circle cx="9" cy="9" r="7" class="fill" stroke-dasharray={ring} stroke-dashoffset={ring * (1 - Math.min(100, ctxPct) / 100)} />
 			</svg>
-			<span class="v">{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}</span>
-	</span>
-	<span class="b hit {hitLevel}" class:empty={hit === null} title={hitTip}>
-		<Icon name="cache" />
-		<span class="v">{hit === null ? "—" : `${pct(hit)}%`}</span>
-	</span>
-	<span class="b tps {tpsLevel}" class:empty={tps === null} title={tpsTip}>
-		<Icon name="gauge" />
-		<span class="v">{tps === null ? "—" : speed(tps)}</span><span class="unit wide">tps</span>
-	</span>
+		{/snippet}
+		{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}
+	</StatusItem>
+	<StatusItem icon="cache" level={hitLevel} empty={hit === null} title={hitTip}>{hit === null ? "—" : `${pct(hit)}%`}</StatusItem>
+	<StatusItem icon="gauge" level={tpsLevel} empty={tps === null} unit="tps" title={tpsTip}>{tps === null ? "—" : speed(tps)}</StatusItem>
 </div>
 
 {#if openKey && openKey === ctxKey && app.api}
@@ -265,7 +246,7 @@
 {/if}
 
 <style>
-	/* Plain text and icons under the input: no pills. Only the context ring turns amber/red as it fills. */
+	/* Plain text and icons under the input: no pills. Only the context ring turns amber/red as it fills. Items are StatusItem. */
 	.statusline {
 		display: flex;
 		justify-content: center;
@@ -280,94 +261,33 @@
 		color: var(--text-faint);
 		user-select: none;
 	}
-	.b {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		padding: 4px 0;
-		font: inherit;
-		color: inherit;
-		white-space: nowrap;
-		cursor: default;
-		transition: color var(--motion-fast) var(--ease);
-	}
-	button.b {
-		cursor: pointer;
-		border-radius: var(--radius-sm);
-	}
-	button.b:hover {
-		color: var(--text);
-	}
-	button.b:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.b.empty {
-		opacity: 0.6;
-	}
-	.b.warn {
-		color: var(--warn);
-	}
-	.b.danger {
-		color: var(--danger);
-	}
-	.v {
-		font-variant-numeric: tabular-nums;
-	}
-	.unit {
-		font-size: var(--fs-2xs);
-		opacity: 0.75;
-	}
-	.ring {
+	.statusline :global(.ring) {
 		width: 13px;
 		height: 13px;
 		transform: rotate(-90deg);
 		flex: none;
 	}
-	.ring circle {
+	.statusline :global(.ring circle) {
 		fill: none;
 		stroke-width: 2.2;
 	}
-	.ring .track {
+	.statusline :global(.ring .track) {
 		stroke: color-mix(in srgb, currentColor 25%, transparent);
 	}
-	.ring .fill {
+	.statusline :global(.ring .fill) {
 		stroke: currentColor;
 		stroke-linecap: round;
 		transition: stroke-dashoffset var(--motion-slow) var(--ease);
 	}
-	.b :global(svg:not(.ring)) {
-		width: 13px;
-		height: 13px;
-		flex: none;
-		stroke: currentColor;
-		fill: none;
-		stroke-width: 1.7;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-	}
-	@media (max-width: 640px) {
-		.wide {
-			display: none;
-		}
-	}
-	/* narrow pane: tighter spacing and smaller type so the line stays on as few rows as possible */
+	/* narrow pane: tighter spacing so the line stays on as few rows as possible */
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;
 			padding: 4px 16px 0;
-			font-size: var(--fs-2xs);
 		}
-		.b {
-			gap: 4px;
-		}
-		.b :global(svg:not(.ring)),
-		.ring {
+		.statusline :global(.ring) {
 			width: 11px;
 			height: 11px;
-		}
-		.wide {
-			display: none;
 		}
 	}
 </style>

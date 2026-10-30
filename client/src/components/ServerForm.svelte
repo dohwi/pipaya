@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
+	import FormField from "./FormField.svelte";
 	import Notice from "./Notice.svelte";
 	import { t, tc } from "../lib/i18n";
 	import { paneIn } from "../lib/motion";
@@ -172,12 +173,10 @@
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">
-				<label>
-					<span>{t("이름")} <em>({tc("optional", "선택")})</em></span>
+				<FormField label={`${t("이름")} (${tc("optional", "선택")})`}>
 					<input class="field" bind:value={name} placeholder={t("예: 집 서버")} autocomplete="off" maxlength="40" />
-				</label>
-				<label>
-					<span>{t("서버 주소")}</span>
+				</FormField>
+				<FormField label={t("서버 주소")}>
 					<input
 						class="field mono"
 						bind:value={url}
@@ -187,9 +186,8 @@
 						autocomplete="off"
 						spellcheck="false"
 					/>
-				</label>
-				<label>
-					<span>{t("액세스 토큰")}</span>
+				</FormField>
+				<FormField label={t("액세스 토큰")}>
 					<div class="tokenrow">
 						<input
 							class="field mono"
@@ -204,7 +202,7 @@
 							{showToken ? t("숨기기") : t("보기")}
 						</Button>
 					</div>
-				</label>
+				</FormField>
 
 				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
@@ -376,20 +374,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: var(--dlg-gap-sm);
-		font-size: var(--fs-sm);
-		line-height: 20px; /* whole-pixel label line: label 20 + gap 8 + field 40 = 68 */
-		font-weight: 600;
-		color: var(--text-dim);
-	}
-	label em {
-		font-style: normal;
-		font-weight: 400;
-		color: var(--text-faint);
 	}
 	.mono {
 		font-size: var(--fs-md);

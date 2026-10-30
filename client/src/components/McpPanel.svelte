@@ -5,6 +5,8 @@
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import EmptyState from "./EmptyState.svelte";
 	import IconButton from "./IconButton.svelte";
+	import FormField from "./FormField.svelte";
+	import ListItem from "./ListItem.svelte";
 	import Notice from "./Notice.svelte";
 	import Segmented from "./Segmented.svelte";
 	import Switch from "./Switch.svelte";
@@ -110,48 +112,39 @@
 </script>
 
 <div class="body" aria-busy={loading}>
-	{#if error}
-		<div class="gap"><Notice tone="warn">{error}</Notice></div>
-	{/if}
+	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 	<p class="hint">{t("MCP 서버의 도구는 연결되어 있는 동안 이 서버의 모든 대화에서 mcp_서버이름_도구이름 으로 쓸 수 있습니다. stdio 서버는 이 서버 컴퓨터에서 명령을 실행하니 믿을 수 있는 것만 추가하세요.")}</p>
 
 	{#if form}
 		<form class="form" onsubmit={submit}>
-			<label class="f">
-				<span>{t("이름")}</span>
+			<FormField label={t("이름")}>
 				<input class="field mono" bind:value={form.name} placeholder="github" maxlength="32" autocomplete="off" required />
-			</label>
-			<div class="f">
-				<span>{t("연결 방식")}</span>
+			</FormField>
+			<FormField label={t("연결 방식")} group>
 				<Segmented
 					label={t("연결 방식")}
 					value={form.transport}
 					options={[{ id: "stdio", label: t("로컬 명령 (stdio)") }, { id: "http", label: "HTTP" }]}
 					onchange={(id) => { if (form) form.transport = id; }}
 				/>
-			</div>
+			</FormField>
 			{#if form.transport === "stdio"}
-				<label class="f">
-					<span>{t("실행할 명령")}</span>
+				<FormField label={t("실행할 명령")}>
 					<input class="field mono" bind:value={form.command} placeholder="npx" autocomplete="off" autocapitalize="off" spellcheck="false" required />
-				</label>
-				<label class="f">
-					<span>{t("인자 (한 줄에 하나)")}</span>
+				</FormField>
+				<FormField label={t("인자 (한 줄에 하나)")}>
 					<textarea class="field mono area" bind:value={form.args} rows="3" placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/home"} spellcheck="false"></textarea>
-				</label>
-				<label class="f">
-					<span>{t("환경 변수 (KEY=값, 한 줄에 하나)")}</span>
+				</FormField>
+				<FormField label={t("환경 변수 (KEY=값, 한 줄에 하나)")}>
 					<textarea class="field mono area" bind:value={form.env} rows="2" placeholder="API_TOKEN=..." spellcheck="false"></textarea>
-				</label>
+				</FormField>
 			{:else}
-				<label class="f">
-					<span>URL</span>
+				<FormField label="URL">
 					<input class="field mono" bind:value={form.url} placeholder="https://example.com/mcp" autocomplete="off" autocapitalize="off" spellcheck="false" required />
-				</label>
-				<label class="f">
-					<span>{t("헤더 (이름: 값, 한 줄에 하나)")}</span>
+				</FormField>
+				<FormField label={t("헤더 (이름: 값, 한 줄에 하나)")}>
 					<textarea class="field mono area" bind:value={form.headers} rows="2" placeholder="Authorization: Bearer ..." spellcheck="false"></textarea>
-				</label>
+				</FormField>
 			{/if}
 			<p class="hint">{t("저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.")}</p>
 			<div class="actions">
@@ -159,64 +152,45 @@
 				<Button variant="primary" type="submit" disabled={busy}>{t("저장")}</Button>
 			</div>
 		</form>
-	{:else}
-		{#if !data && loading}
-			<EmptyState loading />
-		{:else if data}
-			<ul class="list">
-				{#each data.servers as s (s.name)}
-					<li class="item" class:off={!s.enabled} animate:reflow in:rowIn out:rowOut>
-						<span class="switch">
-							<Switch checked={s.enabled} disabled={busy} onchange={on => toggle(s, on)} label={s.name} />
-						</span>
-						<div class="info">
-							<div class="line">
-								<span class="name mono">{s.name}</span>
-								<Badge size="sm" tone={statusTone(s.status)}>{statusText(s.status)}</Badge>
-								{#if s.status === "ready"}<Badge size="sm" variant="outline">{t("도구 {n}개", { n: s.tools.length })}</Badge>{/if}
-								<Badge size="sm" variant="outline">{s.transport === "stdio" ? "stdio" : "HTTP"}</Badge>
-							</div>
-							<p class="path mono">{target(s)}</p>
-							{#if s.error}<p class="err">{s.error}</p>{/if}
-							{#if s.tools.length}<p class="tools mono">{s.tools.map(x => x.tool).join(", ")}</p>{/if}
-						</div>
-						<div class="side">
+	{:else if !data && loading}
+		<EmptyState loading />
+	{:else if data}
+		<ul class="list">
+			{#each data.servers as s (s.name)}
+				<li animate:reflow in:rowIn out:rowOut>
+					<ListItem off={!s.enabled}>
+						{#snippet lead()}<Switch checked={s.enabled} disabled={busy} onchange={on => toggle(s, on)} label={s.name} />{/snippet}
+						{#snippet title()}
+							<span class="name mono">{s.name}</span>
+							<Badge size="sm" tone={statusTone(s.status)}>{statusText(s.status)}</Badge>
+							{#if s.status === "ready"}<Badge size="sm" variant="outline">{t("도구 {n}개", { n: s.tools.length })}</Badge>{/if}
+							<Badge size="sm" variant="outline">{s.transport === "stdio" ? "stdio" : "HTTP"}</Badge>
+						{/snippet}
+						{#snippet actions()}
 							{#if s.enabled}<IconButton icon="retry" size="sm" label={t("다시 연결")} tip onclick={() => reconnect(s)} />{/if}
 							<Button size="sm" onclick={() => edit(s)}>{t("수정")}</Button>
 							<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={busy}>{t("삭제")}</ConfirmButton>
-						</div>
-					</li>
-				{:else}
-					<EmptyState as="li">{t("등록된 MCP 서버가 없습니다.")}</EmptyState>
-				{/each}
-			</ul>
-			<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>
-		{/if}
+						{/snippet}
+						<p class="meta mono">{target(s)}</p>
+						{#if s.error}<p class="meta err">{s.error}</p>{/if}
+						{#if s.tools.length}<p class="meta tools mono">{s.tools.map(x => x.tool).join(", ")}</p>{/if}
+					</ListItem>
+				</li>
+			{:else}
+				<EmptyState as="li">{t("등록된 MCP 서버가 없습니다.")}</EmptyState>
+			{/each}
+		</ul>
+		<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>
 	{/if}
 </div>
 
 <style>
 	.body { display: flex; flex-direction: column; gap: var(--dlg-gap); }
-	.gap { margin: 0; }
 	.hint { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-dim); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.item.off .info { opacity: 0.55; }
-	.info { min-width: 0; flex: 1; transition: opacity var(--motion-fast) var(--ease); }
-	.line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-	.name { font-size: var(--fs-sm); font-weight: 600; }
-	.path, .tools, .err { margin: 4px 0 0; font-size: var(--fs-2xs); overflow-wrap: anywhere; }
-	.path, .tools { color: var(--text-faint); }
 	.tools { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 	.err { color: var(--danger); }
-	.side { display: flex; align-items: center; gap: 4px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
-	.f { display: flex; flex-direction: column; gap: var(--dlg-gap-sm); }
-	.f > span { line-height: 20px; font-size: var(--fs-sm); }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
 	.actions { display: flex; justify-content: flex-end; gap: 8px; }
-	@media (max-width: 640px) {
-		.item { flex-wrap: wrap; }
-		.side { width: 100%; justify-content: flex-start; }
-	}
 </style>

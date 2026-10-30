@@ -9,6 +9,8 @@
 	import { app } from "../lib/store.svelte";
 	import { errorText, type Api } from "../lib/api";
 	import type { CommandFamily } from "../lib/types";
+	import DialogBody from "./DialogBody.svelte";
+	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
 
 	/** Every `/prefix:name` command the server's extensions offer for one folder (`pi.registerCommands`), e.g. prompt files. */
@@ -52,7 +54,7 @@
 	{/if}
 	<p class="hint">{t("서버 확장이 이 폴더에서 제공하는 명령입니다. 입력창에 /접두어:이름 [내용]을 쓰면 서버가 실행합니다.")}</p>
 
-	<div class="body" aria-busy={loading}>
+	<DialogBody busy={loading}>
 		{#if error}
 			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 		{/if}
@@ -63,9 +65,11 @@
 				<h3 class="fam">{f.label ?? f.prefix} <Badge size="sm">{f.extension}</Badge></h3>
 				<ul class="list">
 					{#each f.entries as e (e.name)}
-						<li class="item">
-							<span class="name mono">/{f.prefix}:{e.name}{#if e.args}<span class="args"> {e.args}</span>{/if}</span>
-							{#if e.description}<p class="desc">{e.description}</p>{/if}
+						<li>
+							<ListItem>
+								{#snippet title()}<span class="name mono">/{f.prefix}:{e.name}{#if e.args}<span class="args"> {e.args}</span>{/if}</span>{/snippet}
+								{#if e.description}<p class="desc">{e.description}</p>{/if}
+							</ListItem>
 						</li>
 					{/each}
 				</ul>
@@ -73,24 +77,19 @@
 				<EmptyState>{total ? t("일치하는 명령이 없습니다.") : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다.")}</EmptyState>
 			{/each}
 		{/if}
-	</div>
+	</DialogBody>
 </Modal>
 
 <style>
 	.tools { display: flex; padding: 0 var(--dlg-px); flex: none; }
 	.hint { margin: 8px var(--dlg-px) 12px; flex: none; }
-	.body { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; border-top: 1px solid var(--border); }
 	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }
 	.fam:not(:first-child) { margin-top: 16px; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.item { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.name { font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
 	.args { font-weight: 400; color: var(--text-faint); }
-	.desc { margin: 4px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 	.gap { margin-bottom: 8px; }
 	@media (max-width: 640px) {
 		.tools { padding: 0 var(--dlg-px); }
 		.hint { margin: 8px var(--dlg-px) 12px; }
-		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}
 </style>

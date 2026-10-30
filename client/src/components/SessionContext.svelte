@@ -10,6 +10,7 @@
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext } from "../lib/types";
+	import DialogBody from "./DialogBody.svelte";
 	import Icon from "./Icon.svelte";
 	import { nativeModal } from "../lib/dialog";
 
@@ -78,7 +79,7 @@
 				<IconButton icon="x" label={t("닫기")} onclick={onclose} />
 			</div>
 		</header>
-		<div class="body" aria-busy={loading}>
+		<DialogBody rule={false} busy={loading}>
 			{#if error}
 				<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 			{/if}
@@ -184,7 +185,7 @@
 				</section>
 				</div>
 			{/if}
-		</div>
+		</DialogBody>
 	</div>
 </dialog>
 
@@ -197,7 +198,6 @@
 	h2 { margin: 0; font-size: var(--fs-xl); line-height: 1.4; }
 	.state { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
 	.actions { display: flex; flex: none; }
-	.body { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; }
 	.source { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.source + .source { margin-top: 8px; }
 	.group + .group { margin-top: 8px; }
@@ -222,7 +222,6 @@
 		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
 		header { padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); }
 		h2 { font-size: var(--fs-lg); }
-		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}
 	.gap { margin-bottom: 8px; }
 	.inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }

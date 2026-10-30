@@ -12,6 +12,8 @@
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext, SkillInfo, SkillList } from "../lib/types";
+	import DialogBody from "./DialogBody.svelte";
+	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
 
 	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null }; api: Api; onclose: () => void } = $props();
@@ -99,17 +101,19 @@
 	<ul class="list">
 		{#each shown as s (s.name)}
 {@const on = effective(s, mode)}
-<li class="item" class:off={!on || !s.modelInvocable} animate:reflow in:rowIn out:rowOut>
-	<span class="switch" title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다")}>
-		<Switch
-			checked={on && s.modelInvocable}
-			disabled={!s.modelInvocable || saving[mode + s.name]}
-			onchange={next => toggle(s, next, mode)}
-			label="{s.name} {mode === 'project' ? t('이 프로젝트') : t('모든 프로젝트')}"
-		/>
-	</span>
-	<div class="info">
-		<div class="line">
+<li animate:reflow in:rowIn out:rowOut>
+	<ListItem off={!on || !s.modelInvocable}>
+		{#snippet lead()}
+			<span title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다")}>
+				<Switch
+					checked={on && s.modelInvocable}
+					disabled={!s.modelInvocable || saving[mode + s.name]}
+					onchange={next => toggle(s, next, mode)}
+					label="{s.name} {mode === 'project' ? t('이 프로젝트') : t('모든 프로젝트')}"
+				/>
+			</span>
+		{/snippet}
+		{#snippet title()}
 			<span class="name mono">{s.name}</span>
 			<Badge size="sm">{s.scope === "project" ? t("프로젝트") : s.scope === "builtin" ? t("기본 내장") : t("전역")}</Badge>
 			{#if !s.modelInvocable}<Badge size="sm" variant="outline">{t("수동 전용")}</Badge>{/if}
@@ -120,10 +124,10 @@
 				<Badge size="sm" variant="outline">{t("프로젝트 설정 있음")}</Badge>
 			{/if}
 			{#if used.has(s.name)}<Badge size="sm" tone="ok">{t("이 대화에서 사용 중")}</Badge>{/if}
-		</div>
+		{/snippet}
 		<p class="desc">{s.description}</p>
-		<p class="path mono">{home(s.path)}</p>
-	</div>
+		<p class="meta mono">{home(s.path)}</p>
+	</ListItem>
 </li>
 		{:else}
 <EmptyState as="li">
@@ -148,7 +152,7 @@
 		</div>
 	{/if}
 
-	<div class="body" aria-busy={loading}>
+	<DialogBody busy={loading}>
 		{#if error}
 			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 		{/if}
@@ -176,7 +180,7 @@
 				{@render list("global")}
 			</section>
 		{/if}
-	</div>
+	</DialogBody>
 </Modal>
 
 <style>
@@ -185,24 +189,14 @@
 	.hint { margin: 4px 0 8px; }
 	.section + .section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 	h3 { margin: 0; font-size: var(--fs-md, 1rem); font-weight: 600; }
-	.body { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; border-top: 1px solid var(--border); }
 	.note { margin-bottom: 12px; padding: 8px 12px; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-dim); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 	.note b { color: var(--text); font-weight: 600; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.item.off .info { opacity: 0.55; }
-	.info { min-width: 0; flex: 1; transition: opacity var(--motion-fast) var(--ease); }
-	.line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-	.name { font-size: var(--fs-sm); font-weight: 600; }
-	.desc { margin: 4px 0 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-	.path { margin: 4px 0 0; font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.link { padding: 0; font: inherit; font-size: var(--fs-xs); color: var(--text-dim); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 	.link.small { font-size: var(--fs-2xs); }
 	.link:hover:not(:disabled) { color: var(--text); }
-	.switch { flex: none; display: inline-flex; margin-top: 4px; }
 	@media (max-width: 640px) {
 		.tools { padding: 0 var(--dlg-px); }
-		.body { padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); }
 	}
 	.gap { margin-bottom: 8px; }
 </style>

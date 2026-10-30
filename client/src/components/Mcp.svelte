@@ -1,5 +1,6 @@
 <script lang="ts">
 	import IconButton from "./IconButton.svelte";
+	import DialogBody from "./DialogBody.svelte";
 	import McpPanel from "./McpPanel.svelte";
 	import Modal from "./Modal.svelte";
 	import type { Api } from "../lib/api";
@@ -16,9 +17,5 @@
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
-	<div class="wrap"><McpPanel {api} bind:data bind:loading {refresh} /></div>
+	<DialogBody busy={loading}><McpPanel {api} bind:data bind:loading {refresh} /></DialogBody>
 </Modal>
-
-<style>
-	.wrap { overflow-y: auto; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); min-height: 80px; border-top: 1px solid var(--border); }
-</style>

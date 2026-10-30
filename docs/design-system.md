@@ -50,6 +50,14 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - A list of bordered cards (`SessionsPanel`): the card's 1px border sits inside the buttons' right edge (`margin: 0 -1px`), checkbox column x = 12 in the header and in every row.
 - A header action row that can be too wide for a phone wraps (`flex-wrap`), it never overlaps the name (bulk buttons of the conversation list).
 
+### Shared dialog parts (use these, do not re-write the CSS)
+
+- `DialogBody`: the scrolling body of a dialog (`--dlg-px` gutters, body top/bottom, rule under the header). Skills, commands, MCP and the context view all use it.
+- `ListItem`: one card row (12px padding, 12px gap): optional leading `Switch`, title line (name + `Badge size="sm"`), body lines (`.meta`, `.desc`), trailing actions. The first row shares one centre line (22px with a switch, 34px with action buttons; actions drop below on a phone). Animate the keyed `<li>` around it (`animate:reflow in:rowIn out:rowOut`).
+- `FormField`: label (20px line) + 8px + control = 68px with a 40px field. `group` for a control that is not one input (`Segmented`).
+- `StatusItem`: one item under the input (icon or mark + value + tooltip), a 21px box (19px in a narrow pane) with a 4px gap. A button when it has `onclick` (add `empty` when there is nothing to show, `level` for warn/danger).
+- Check by measuring: every item in a row must have the same top, height and icon/text centre (`getBoundingClientRect`), at 1440, 820 and 390.
+
 ## 2. Vertical rhythm
 
 | Thing | Value |
