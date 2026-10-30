@@ -4,16 +4,15 @@
 	import { abortable } from "../lib/abortable";
 	import Notice from "./Notice.svelte";
 	import { msg, t } from "../lib/i18n";
-	import { collapseIn, collapseOut, holdClosing } from "../lib/motion";
-	import { sheetPull } from "../lib/sheet";
-	import { untrack } from "svelte";
+	import { collapseIn, collapseOut } from "../lib/motion";
+		import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext } from "../lib/types";
 	import DialogBody from "./DialogBody.svelte";
 	import Icon from "./Icon.svelte";
-	import { nativeModal } from "../lib/dialog";
-
+	import Modal from "./Modal.svelte";
+	
 	/** sessionId null: preview of a new conversation in `cwd`. */
 	let { sessionId, cwd = "", api, onclose }: { sessionId: string | null; cwd?: string; api: Api; onclose: () => void } = $props();
 	let data = $state<SessionContext | null>(null);
@@ -62,24 +61,19 @@
 		});
 	});
 
+
+	const subText = $derived(
+		data
+			? (data.state === "applied" ? t("이 세션에 적용 중") : sessionId ? t("아직 적용 전 · 다음 메시지부터 적용됩니다") : t("새 대화에 적용될 내용"))
+			: null,
+	);
 </script>
 
-<!-- Native modal provides focus trapping, Escape, background inertness and focus restoration. -->
-<dialog out:holdClosing|global oncancel={onclose} use:nativeModal={{ onclose }} aria-labelledby="session-context-title">
-	<div class="panel">
-		<header use:sheetPull={{ onclose }}>
-			<div>
-				<h2 id="session-context-title">{t("적용된 컨텍스트")}</h2>
-				{#if data}
-					<p class="state">{data.state === "applied" ? t("이 세션에 적용 중") : sessionId ? t("아직 적용 전 · 다음 메시지부터 적용됩니다") : t("새 대화에 적용될 내용")}</p>
-				{/if}
-			</div>
-			<div class="actions">
-				<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
-				<IconButton icon="x" label={t("닫기")} onclick={onclose} />
-			</div>
-		</header>
-		<DialogBody rule={false} busy={loading}>
+<Modal {onclose} title={t("적용된 컨텍스트")} sub={subText} width="xl" maxHeight="720px" safeArea>
+	{#snippet headerActions()}
+		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
+	{/snippet}
+	<DialogBody busy={loading}>
 			{#if error}
 				<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
 			{/if}
@@ -185,19 +179,11 @@
 				</section>
 				</div>
 			{/if}
-		</DialogBody>
-	</div>
-</dialog>
+	</DialogBody>
+</Modal>
 
 <style>
-	/* The global `* { margin: 0 }` reset removes the modal's default auto margin, so center explicitly. */
-	dialog { margin: auto; width: min(var(--modal-w-xl), calc(var(--vw) - var(--modal-gutter))); max-width: none; max-height: min(720px, calc(var(--dvh) - 40px)); padding: 0; color: var(--text); background: var(--bg-side); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
-	dialog::backdrop { background: var(--scrim); }
-	.panel { display: flex; flex-direction: column; max-height: inherit; }
-	header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); border-bottom: 1px solid var(--border); flex: none; }
-	h2 { margin: 0; font-size: var(--fs-xl); line-height: 1.4; }
-	.state { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
-	.actions { display: flex; flex: none; }
+
 	.source { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.source + .source { margin-top: 8px; }
 	.group + .group { margin-top: 8px; }
@@ -218,11 +204,7 @@
 	.source-name { font-size: var(--fs-xs); }
 	.meta { display: block; margin-top: 4px; color: var(--text-faint); font-size: var(--fs-2xs); }
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
-	@media (max-width: 640px) {
-		dialog { width: var(--vw); max-height: calc(var(--dvh) * 0.9); margin: auto 0 0; border-radius: var(--radius-panel) var(--radius-panel) 0 0; padding-bottom: var(--sab); }
-		header { padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); }
-		h2 { font-size: var(--fs-lg); }
-	}
+
 	.gap { margin-bottom: 8px; }
 	.inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }
 	.inner > .note { margin-top: 8px; }
