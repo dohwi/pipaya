@@ -121,7 +121,7 @@ const DESCRIPTION =
 	"To edit or build on existing pictures, pass their paths in `images` (files in the working directory, e.g. one this tool made).";
 
 /** Shown with the saved path: the model reads it right when it decides what to write next. */
-const SHOWN_NOTE = "(the user already sees the picture here; embed it in your reply only if they ask to see it again, otherwise just describe it briefly)";
+const SHOWN_NOTE = "(the user does not see the picture in the tool box; embed it in your reply with ![description](path), then add a brief description)";
 
 /** The `generate_image` tool, given while an image model is set. */
 export function imageTool(registry: ModelRegistry, settings: ImageModelSettings): ToolDef {
