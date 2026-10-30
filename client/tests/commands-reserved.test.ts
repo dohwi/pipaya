@@ -8,5 +8,7 @@ test("the server reserves exactly the client's built-in command names", () => {
 	const list = (src: string, re: RegExp) => JSON.parse(re.exec(src)![1]!.replace(/'/g, '"')) as string[];
 	const builtIn = list(client, /const DEFAULT_ORDER = (\[[^\]]*\])/);
 	const reserved = list(server, /RESERVED_COMMANDS = Object\.freeze\((\[[^\]]*\])\)/);
-	expect([...reserved].sort()).toEqual([...builtIn].sort());
+	// An alias is as reserved as the name it stands for.
+	const aliases = [...client.matchAll(/aliases: (\[[^\]]*\])/g)].flatMap((m) => JSON.parse(m[1]!) as string[]);
+	expect([...reserved].sort()).toEqual([...builtIn, ...aliases].sort());
 });

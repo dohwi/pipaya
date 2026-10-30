@@ -87,14 +87,22 @@ describe("default commands", () => {
 
 	test("uses one English name per command with a stable default order", () => {
 		const names = commands.COMMANDS.map((c) => c.name);
-		expect(names).toEqual(["new", "clear", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
+		expect(names).toEqual(["new", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
 		expect(new Set(names).size).toBe(names.length);
 		for (const cmd of commands.COMMANDS) {
 			expect(cmd.name).toMatch(/^[a-z]+$/);
-			expect("aliases" in cmd).toBe(false);
+			for (const alias of cmd.aliases ?? []) expect(alias).toMatch(/^[a-z]+$/);
 			expect(commands.commandText(cmd)).toBe(`/${cmd.name}`);
 			expect(commands.parseSlash(commands.commandText(cmd))?.cmd.name).toBe(cmd.name);
 		}
+	});
+
+	test("an alias reaches its command: /clear parses as /new and suggests it first", () => {
+		expect(commands.COMMANDS.some((c) => c.name === "clear")).toBe(false);
+		expect(commands.parseSlash("/clear")?.cmd.name).toBe("new");
+		expect(commands.matchCommands("clear")[0]?.name).toBe("new");
+		expect(commands.matchCommands("cle")[0]?.name).toBe("new");
+		expect(commands.matchCommands("new")[0]?.name).toBe("new");
 	});
 
 	test("there is no /skills command: skills are managed from the footer badge", () => {

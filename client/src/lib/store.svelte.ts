@@ -1675,17 +1675,15 @@ class AppStore {
   }
 
   /**
-   * `/new`: start a fresh conversation in the focused pane only. Inside a group the pane's session is swapped for a new
-   * one (same working directory and model settings) and the rest of the group stays as it is; the old session is closed
-   * (off the sidebar, reachable only through /resume). Outside a group this is a plain `newChat`.
-   * `/clear` (`retire: "archive"`) does the same everywhere, but the old chat goes to the archive instead of being closed.
+   * `/new` (alias `/clear`): start a fresh conversation in the focused pane only. The pane's session is swapped for a new
+   * one (same working directory and model settings), in a group as well as outside one, and the rest of the group stays
+   * as it is. The old chat goes to the archive. Without an open chat this is a plain `startChat`.
    */
-  async newChatInPane(retire: "close" | "archive" = "close"): Promise<void> {
+  async newChatInPane(): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);
-    // `/new` outside a group is a plain new chat; `/clear` always carries the old chat's directory and model over.
-    if (!api || !from || (!g && retire === "close")) return this.startChat();
+    if (!api || !from) return this.startChat();
     let made: Session;
     try {
       made = await api.createSession({
@@ -1698,7 +1696,7 @@ class AppStore {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
     if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
-    // Swap layout and focus in the same tick, and only then close the old session: the screen never passes through a
+    // Swap layout and focus in the same tick, and only then archive the old session: the screen never passes through a
     // state where the focused session is gone or outside its group (that made the whole app flash).
     const saving = g ? this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id)) : Promise.resolve();
     const opening = this.openSession(made.id);
@@ -1706,14 +1704,14 @@ class AppStore {
     if (g) void this.refreshGroups(); // the server is the authority on who is in which group
     // The replaced session leaves the active list instead of dropping out of the group as a loose session.
     try {
-      const old = await api.patchSession(from.id, retire === "archive" ? { archived: true } : { closed: true });
-      if (retire === "archive") this.archived = [old, ...this.archived.filter((x) => x.id !== from.id)];
+      const old = await api.patchSession(from.id, { archived: true });
+      this.archived = [old, ...this.archived.filter((x) => x.id !== from.id)];
       this.sessions = this.sessions.filter((x) => x.id !== from.id);
       this.running[from.id] = false;
       this.awaiting[from.id] = 0;
       delete this.unread[from.id];
     } catch (e) {
-      this.fail(e, retire === "archive" ? t("보관하지 못했습니다") : t("닫지 못했습니다"), from.id);
+      this.fail(e, t("보관하지 못했습니다"), from.id);
     }
   }
 
