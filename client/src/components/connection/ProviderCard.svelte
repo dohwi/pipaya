@@ -89,7 +89,7 @@
 					<span class="mid mono">{m.name ?? m.id}</span>
 					{#if m.name && m.name !== m.id}<span class="msub mono">{m.id}</span>{/if}
 				</span>
-				{#if m.unavailable}<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
+				{#if m.unavailable}<Badge tone="neutral" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>{/if}
 				<Button variant="ghost" size="sm" class={m.disabled ? "hidden" : ""} disabled={m.disabled || probe === "running" || !p.configured || m.unavailable} tabindex={m.disabled ? -1 : undefined} onclick={() => ontest(m.id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
 					{probe === "running" ? t("확인 중…") : t("테스트")}
 				</Button>
@@ -221,7 +221,7 @@
 	}
 	.gone {
 		margin-left: 8px;
-		color: var(--danger);
+		color: var(--text-faint);
 	}
 	/* an off model keeps the test button's slot (invisible) so the switches stay in one column */
 	.mlist li :global(.btn.hidden) {
@@ -231,11 +231,10 @@
 		color: var(--text-faint);
 	}
 	.mlist li.disabled .minfo,
-	.mlist li.disabled .mlogo {
+	.mlist li.disabled .mlogo,
+	.mlist li.unavail .minfo,
+	.mlist li.unavail .mlogo {
 		opacity: 0.45;
-	}
-	.mlist li.unavail .minfo {
-		opacity: 0.6;
 	}
 	.spinwrap {
 		display: inline-flex;

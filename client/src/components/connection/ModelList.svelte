@@ -48,13 +48,13 @@
 	{#if note}<p class="hint note" role="status" in:collapseIn out:collapseOut>{note}</p>{/if}
 	<div class="mpick">
 		{#each form.rows as r, i (i)}
-			<button type="button" class="mitem" class:off={r.disabled} onclick={() => onopen(i)}>
+			<button type="button" class="mitem" class:off={r.disabled || r.unavailable} onclick={() => onopen(i)}>
 				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 				<span class="mname" title={r.name.trim() || r.id.trim()}>{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream && !r.unavailable}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
 				{#if r.disabled}
 					<Badge tone="neutral" size="sm">{t("꺼짐")}</Badge>
 				{:else if r.unavailable}
-					<Badge tone="danger" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
+					<Badge tone="neutral" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
 				{:else if !r.id.trim()}
 					<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
 				{:else if catalogLoaded && !matchedOf(r)}
