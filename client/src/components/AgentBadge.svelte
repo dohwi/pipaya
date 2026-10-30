@@ -3,25 +3,19 @@
 	import { app } from "../lib/store.svelte";
 	import { syncAnim } from "../lib/syncAnim";
 	import { ACTIVITY_LABEL, type Activity } from "../lib/activity";
+	import { logoModelOf } from "../lib/agent-logo";
 
-	/** A session's agent: the (monochrome) logo of the model that did its last work; the logo itself takes the state colour and animation. */
+	/** A session's agent: the (monochrome) logo of its current model; the logo itself takes the state colour and animation. */
 	/** `server`: the server the session lives on (the open one when left out). */
 	let { id, state = "idle", size = 20, server }: { id: string; state?: Activity; size?: number; server?: string } = $props();
 	const link = $derived(app.links[server ?? app.serverId ?? ""]);
 
-	/** The model that wrote the last reply; a session with no reply yet (or not loaded) uses its current model. */
+	/** The session's current model: the logo follows a model change at once (see lib/agent-logo). */
 	const logoModel = $derived.by(() => {
-		const items = !server || server === app.serverId ? app.chatOf(id)?.items : undefined;
-		if (items) {
-			for (let i = items.length - 1; i >= 0; i--) {
-				const it = items[i]!;
-				if (it.kind === "assistant" && it.model) return { provider: it.provider, model: it.model };
-			}
-		}
 		const s = link?.data.sessions.find((x) => x.id === id) ?? link?.data.archived.find((x) => x.id === id);
-		if (s) return { provider: s.provider, model: s.model };
+		const items = !server || server === app.serverId ? app.chatOf(id)?.items : undefined;
 		const e = app.effectiveOf(id);
-		return { provider: e.provider, model: e.model };
+		return logoModelOf(s, items, { provider: e.provider, model: e.model });
 	});
 	const icon = $derived((link?.models ?? []).find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
 </script>
