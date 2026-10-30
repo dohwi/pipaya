@@ -130,7 +130,8 @@
 			{/if}
 		</section>
 	{/if}
-	{#if !r.fromUpstream}
+	<!-- an upstream model that the upstream no longer lists can only be dropped here -->
+	{#if !r.fromUpstream || r.unavailable}
 		<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
 	{/if}
 
