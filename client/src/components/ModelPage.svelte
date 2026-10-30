@@ -39,14 +39,16 @@
 		onremove: () => void;
 	} = $props();
 
+	/** An upstream model keeps its fixed id, unless the upstream stopped listing it: then it is just a typed-in model. */
+	const locked = $derived(!!r.fromUpstream && !r.unavailable);
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 </script>
 
 	<section class="fsec">
 		<label>
-			<span class="idlabel">{t("모델 ID")}{#if r.fromUpstream}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
-			<input class="field mono" bind:value={r.id} readonly={r.fromUpstream} aria-readonly={r.fromUpstream} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop={fresh && !r.fromUpstream} />
-			<small class="hint">{r.fromUpstream ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
+			<span class="idlabel">{t("모델 ID")}{#if locked}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
+			<input class="field mono" bind:value={r.id} readonly={locked} aria-readonly={locked} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop={fresh && !locked} />
+			<small class="hint">{locked ? t("업스트림 모델 목록에서 불러온 ID라 수정할 수 없습니다.") : t("업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.")}</small>
 		</label>
 		{#if catalogLoaded}
 			{@const hit = matched}
@@ -130,8 +132,7 @@
 			{/if}
 		</section>
 	{/if}
-	<!-- an upstream model that the upstream no longer lists can only be dropped here -->
-	{#if !r.fromUpstream || r.unavailable}
+	{#if !locked}
 		<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>
 	{/if}
 

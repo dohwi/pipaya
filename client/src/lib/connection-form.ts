@@ -163,7 +163,7 @@ export function collectModels(
 		const hit = matchedId(r);
 		out.push({
 			id: r.id.trim(),
-			...(r.fromUpstream ? { fromUpstream: true } : {}),
+			...(r.fromUpstream && !r.unavailable ? { fromUpstream: true } : {}),
 			...(r.disabled ? { disabled: true } : {}),
 			...(hit ? { catalogId: hit } : catalogLoaded ? { catalogId: null } : {}),
 			...(r.name.trim() ? { name: r.name.trim() } : {}),

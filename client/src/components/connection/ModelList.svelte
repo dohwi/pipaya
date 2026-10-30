@@ -50,7 +50,7 @@
 		{#each form.rows as r, i (i)}
 			<button type="button" class="mitem" class:off={r.disabled} onclick={() => onopen(i)}>
 				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
-				<span class="mname" title={r.name.trim() || r.id.trim()}>{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
+				<span class="mname" title={r.name.trim() || r.id.trim()}>{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream && !r.unavailable}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
 				{#if r.disabled}
 					<Badge tone="neutral" size="sm">{t("꺼짐")}</Badge>
 				{:else if r.unavailable}
