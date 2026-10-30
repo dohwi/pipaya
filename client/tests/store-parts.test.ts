@@ -12,6 +12,7 @@ import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 let Feedback: typeof FeedbackModule.Feedback;
 let NOTICE_MAX: number;
 let reorder: typeof SidebarModule.reorder;
+let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let dir: string;
 
@@ -36,7 +37,7 @@ beforeAll(async () => {
 	({ Feedback, NOTICE_MAX } = await loadRunes("feedback"));
 	// sidebar.svelte.ts reads localStorage at construction only; reorder is a pure function
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };
-	({ reorder } = await loadRunes("sidebar"));
+	({ reorder, SidebarState } = await loadRunes("sidebar"));
 	({ ServerPrefs } = await loadRunes("server-prefs"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
@@ -49,6 +50,15 @@ describe("sidebar reorder", () => {
 	test("no change when dropped on itself or on something not listed", () => {
 		expect(reorder(["a", "b"], "a", "a", true)).toBeNull();
 		expect(reorder(["a", "b"], "a", "z", true)).toBeNull();
+	});
+});
+
+describe("sidebar moveDir", () => {
+	test("keeps the rank of folders that are not listed while dragging", () => {
+		const sb = new SidebarState();
+		sb.dirOrder = { s1: ["/a", "/hidden", "/b", "/c"] };
+		sb.moveDir("s1", ["/a", "/b", "/c"], "/c", "/a", false);
+		expect(sb.dirOrder.s1).toEqual(["/c", "/a", "/b", "/hidden"]);
 	});
 });
 

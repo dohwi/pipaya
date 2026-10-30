@@ -58,7 +58,9 @@ export class SidebarState {
   moveDir(serverId: string, visible: string[], path: string, target: string, after: boolean) {
     const list = reorder(visible, path, target, after);
     if (!list) return;
-    this.dirOrder = { ...this.dirOrder, [serverId]: list };
+    // keep the rank of folders not listed now (filtered out, or without tabs) so they don't fall back to the age rule
+    const rest = (this.dirOrder[serverId] ?? []).filter((x) => !list.includes(x));
+    this.dirOrder = { ...this.dirOrder, [serverId]: [...list, ...rest] };
     write(K.dirOrder, this.dirOrder);
   }
 
