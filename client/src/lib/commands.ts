@@ -155,9 +155,9 @@ function pickList<T extends string>(title: string, items: { id: T; title: string
 }
 
 const DEFINITIONS: SlashCommand[] = [
-	{ name: "resume", desc: msg("닫은 대화 다시 열기"), run: () => resume() },
+	{ name: "resume", aliases: ["reopen"], desc: msg("닫은 대화 다시 열기"), run: () => resume() },
 	{ name: "tree", desc: msg("대화 분기 트리"), run: () => tree() },
-	{ name: "fork", args: "[last]", desc: msg("대화 분기"), needsChat: true, run: (a) => fork(a) },
+	{ name: "fork", aliases: ["branch"], args: "[last]", desc: msg("대화 분기"), needsChat: true, run: (a) => fork(a) },
 	{
 		name: "close",
 		desc: msg("대화 닫기 · 기록 유지"),
@@ -199,6 +199,7 @@ const DEFINITIONS: SlashCommand[] = [
 	},
 	{
 		name: "cd",
+		aliases: ["cwd"],
 		args: "[path]",
 		desc: msg("작업 디렉터리 변경"),
 		run: (a) => {
@@ -228,13 +229,14 @@ const DEFINITIONS: SlashCommand[] = [
 	},
 	{
 		name: "compact",
+		aliases: ["compress"],
 		args: "[instructions]",
 		desc: msg("컨텍스트 압축 · 요약 호출 비용 발생"),
 		needsChat: true,
 		run: async (a) => { await app.compact(a); },
 	},
-	{ name: "retry", desc: msg("응답 재시도"), needsChat: true, run: () => void app.retry() },
-	{ name: "stop", desc: msg("진행 중인 작업 중지"), needsChat: true, run: () => void app.abort() },
+	{ name: "retry", aliases: ["regenerate"], desc: msg("응답 재시도"), needsChat: true, run: () => void app.retry() },
+	{ name: "stop", aliases: ["abort"], desc: msg("진행 중인 작업 중지"), needsChat: true, run: () => void app.abort() },
 	{ name: "cancel", desc: msg("대기열 / 끼워 넣기 취소"), needsChat: true, run: () => app.openQueue() },
 	{
 		name: "copy",
@@ -252,6 +254,7 @@ const DEFINITIONS: SlashCommand[] = [
 	},
 	{
 		name: "delete",
+		aliases: ["remove", "rm"],
 		desc: msg("대화 영구 삭제 · 복구 불가"),
 		needsChat: true,
 		run: () => {

@@ -105,13 +105,30 @@ describe("default commands", () => {
 		expect(commands.matchCommands("new")[0]?.name).toBe("new");
 	});
 
+	test("aliases: each reaches its command, suggests it first, and no name is used twice", () => {
+		const table: Record<string, string[]> = { new: ["clear"], resume: ["reopen"], fork: ["branch"], retry: ["regenerate"], stop: ["abort"], cd: ["cwd"], compact: ["compress"], delete: ["remove", "rm"] };
+		const seen = new Set(commands.COMMANDS.map((c) => c.name));
+		for (const [name, aliases] of Object.entries(table)) {
+			expect(commands.COMMANDS.find((c) => c.name === name)?.aliases).toEqual(aliases);
+			for (const alias of aliases) {
+				expect(seen.has(alias)).toBe(false);
+				seen.add(alias);
+				expect(commands.parseSlash(`/${alias}`)?.cmd.name).toBe(name);
+				expect(commands.matchCommands(alias)[0]?.name).toBe(name);
+			}
+		}
+		expect(commands.COMMANDS.flatMap((c) => c.aliases ?? [])).toHaveLength(seen.size - commands.COMMANDS.length);
+		// "stop" and "cancel" stay apart: abort means stop, not cancel the queue.
+		expect(commands.parseSlash("/abort")?.cmd.name).not.toBe("cancel");
+	});
+
 	test("there is no /skills command: skills are managed from the footer badge", () => {
 		expect(commands.COMMANDS.some((c) => c.name === "skills")).toBe(false);
 		expect(commands.parseSlash("/skills")).toBeNull();
 	});
 
 	test("does not parse translated, duplicate, or legacy command names", () => {
-		for (const name of ["압축", "새대화", "재개", "모델", "추론", "도움말", "open", "think", "abort", "branch", "rm", "?"]) {
+		for (const name of ["압축", "새대화", "재개", "모델", "추론", "도움말", "open", "think", "?"]) {
 			expect(commands.parseSlash(`/${name}`)).toBeNull();
 		}
 		expect(commands.parseSlash("./compact")).toBeNull();
