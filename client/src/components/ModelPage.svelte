@@ -4,7 +4,7 @@
 	import { t, tc } from "../lib/i18n";
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
-	import { ALL_LEVELS, type Row } from "../lib/connection-form";
+	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
 	import type { Api } from "../lib/api";
 	import type { CatalogModel } from "../lib/types";
 	import Icon from "./Icon.svelte";
@@ -67,9 +67,7 @@
 			</div>
 			{#if hit && r.imageGeneration}
 				<p class="hint note src ok"><Icon name="check" /> {t("이미지를 만드는 모델입니다")}</p>
-			{:else if hit}
-				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") || "-" })}</p>
-			{:else if r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
+			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
 			{/if}
 		{/if}
@@ -102,27 +100,33 @@
 	<section class="fsec">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
-			{#if !r.imageGeneration}<button type="button" class="cap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
-			<button type="button" class="cap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 읽기")}</button>
-			<button type="button" class="cap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
+			{#if !r.imageGeneration}<button type="button" class="cap tap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
+			<button type="button" class="cap tap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 읽기")}</button>
+			<button type="button" class="cap tap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
 		</div>
 		<p class="hint note">{r.imageGeneration ? t("그림만 그리는 모델입니다. 에이전트 설정에서 이미지 모델로 고르세요.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
 	</section>
-	{#if r.reasoning && !r.imageGeneration && !matched}
+	{#if r.reasoning && !r.imageGeneration}
+		{@const shown = shownLevels(r, matched)}
 		<section class="fsec">
 			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 			<div class="caps" role="group" aria-label={t("추론 강도")}>
 				{#each ALL_LEVELS as l (l)}
-					<button
-						type="button"
-						class="cap"
-						aria-pressed={r.thinkingLevels.includes(l)}
-						onclick={() => (r.thinkingLevels = r.thinkingLevels.includes(l) ? r.thinkingLevels.filter((x) => x !== l) : [...r.thinkingLevels, l])}
-					>{l}</button>
+					<button type="button" class="cap tap" aria-pressed={shown.includes(l)} onclick={() => toggleLevel(r, matched, l)}>{l}</button>
 				{/each}
 			</div>
-			<p class="hint note">{r.thinkingLevels.length ? t("고른 강도만 이 모델에서 선택할 수 있습니다.") : t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}</p>
-			{#if r.thinkingSource}
+			<p class="hint note">
+				{#if r.thinkingLevels.length}
+					{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
+				{:else if shown.length}
+					{t("매칭된 OpenRouter 모델의 강도를 그대로 씁니다. 눌러서 직접 고를 수도 있습니다.")}
+				{:else}
+					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
+				{/if}
+			</p>
+			{#if matched}
+				<p class="hint note mono src ok"><Icon name="check" /> {t("OpenRouter {id}와 일치: {levels}", { id: matched.id, levels: matched.levels.join(", ") || "-" })}</p>
+			{:else if r.thinkingSource}
 				{@const s = r.thinkingSource}
 				{#if s.catalogId}
 					<p class="hint note mono src ok"><Icon name="check" /> {t("OpenRouter {id}와 일치: {levels}", { id: s.catalogId, levels: s.levels.join(", ") })}{s.kind === "custom" ? ` (${t("직접 지정")})` : ""}</p>

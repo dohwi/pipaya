@@ -43,6 +43,25 @@ export interface Form {
 
 export const ALL_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
+/** The strengths an OpenRouter catalog entry offers, cut down to the ones we know. */
+export const catalogLevels = (c: CatalogModel | null | undefined): ThinkingLevel[] =>
+	(c?.levels ?? []).filter((l): l is ThinkingLevel => ALL_LEVELS.includes(l as ThinkingLevel));
+
+/** The strengths the reasoning chips show as pressed: the owner's own list, else the matched catalog's. */
+export const shownLevels = (r: Row, matched: CatalogModel | null | undefined): ThinkingLevel[] =>
+	r.thinkingLevels.length ? ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) : catalogLevels(matched);
+
+/**
+ * Turn one strength on or off. The owner's own list wins over the catalog, so a matched model can be narrowed too;
+ * picking exactly the catalog's levels again (or none) means "follow the catalog", which is an empty list.
+ */
+export function toggleLevel(r: Row, matched: CatalogModel | null | undefined, level: ThinkingLevel) {
+	const shown = shownLevels(r, matched);
+	const next = ALL_LEVELS.filter((l) => (l === level ? !shown.includes(l) : shown.includes(l)));
+	const catalog = catalogLevels(matched);
+	r.thinkingLevels = next.length === catalog.length && next.every((l) => catalog.includes(l)) ? [] : next;
+}
+
 /** Local runtimes that speak the OpenAI-compatible API without a key. The URL is reached from the server, so localhost means the server's machine. */
 export const localPresets = [
 	{ name: "Ollama", id: "ollama", baseUrl: "http://localhost:11434/v1" },

@@ -12,7 +12,7 @@ import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Thinking } from "./schemas.ts";
-import { catalogEntries, catalogMatch, catalogThinkingLevelMap } from "./thinking-catalog.ts";
+import { catalogEntries, catalogMatch } from "./thinking-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
@@ -38,14 +38,23 @@ export const CustomProviderBody = Type.Object({
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
+/**
+ * The catalog entry a saved model points at: the OpenRouter model it was matched to, else a match by id.
+ * `catalogId: null` means "manual", so nothing is looked up for it.
+ */
+function catalogFor(m: { id: string; catalogId?: string | null }) {
+	if (m.catalogId === null) return undefined;
+	return (m.catalogId ? catalogMatch(m.catalogId) : undefined) ?? catalogMatch(m.id);
+}
+
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
-function thinkingMapFor(m: { id: string; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
+function thinkingMapFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
 	if (m.thinkingLevels?.length) {
 		const map: Record<string, string | null> = {};
 		for (const level of THINKING_LEVELS) map[level] = m.thinkingLevels.includes(level) ? level : null;
 		return { thinkingLevelMap: map };
 	}
-	const found = catalogThinkingLevelMap(m.id);
+	const found = catalogFor(m)?.map;
 	return found ? { thinkingLevelMap: found } : {};
 }
 export const DiscoverBody = Type.Object({
@@ -276,7 +285,7 @@ export class Configuration {
 		const live = this.registry.models.getModel(providerId, m.id);
 		const levels = live ? getSupportedThinkingLevels(live).filter((l): l is ThinkingLevel => l !== "off") : [];
 		if (!m.reasoning) return { kind: "default", levels: [] };
-		const match = catalogMatch(m.id);
+		const match = catalogFor(m);
 		if (m.thinkingLevels?.length) return { kind: "custom", ...(match ? { catalogId: match.id } : {}), levels };
 		return match ? { kind: "catalog", catalogId: match.id, levels } : { kind: "default", levels };
 	}

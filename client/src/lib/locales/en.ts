@@ -460,7 +460,7 @@ export const en: Record<string, string> = {
 	"다음 질문": "Next question",
 	"질문 {n}개": "{n} {n#question|questions}",
 	"추천": "Recommended",
-	"추론 강도: {levels}": "Reasoning strengths: {levels}",
+	"매칭된 OpenRouter 모델의 강도를 그대로 씁니다. 눌러서 직접 고를 수도 있습니다.": "Follows the matched OpenRouter model's efforts. Click to pick your own.",
 	"검색어를 더 입력해 좁혀 보세요 ({n}개 더 있음)": "Type more to narrow down ({n} more)",
 	"업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.": "The ID the upstream provides. It is sent as-is and never changed by the OpenRouter choice.",
 	"자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.": "No automatic match. Pick a matching model or enter the values below by hand.",

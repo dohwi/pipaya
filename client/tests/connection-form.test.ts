@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, slug, snapshot, type Form } from "../src/lib/connection-form";
+import { applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
@@ -99,5 +99,35 @@ describe("image generation models", () => {
 	test("a text model's payload has no flag", () => {
 		const out = collectModels(filled({ rows: [row()] }), true, none, true);
 		expect("out" in out && "imageGeneration" in out.out[0]!).toBe(false);
+	});
+});
+
+describe("reasoning strengths of a matched model", () => {
+	const c = { id: "anthropic/claude-haiku-5.5", name: "Haiku 5.5", contextWindow: 1e6, maxTokens: 1e5, reasoning: true, vision: true, image: false, levels: ["low", "medium", "high", "xhigh", "max"] } as CatalogModel;
+	test("no own list: the matched catalog's strengths are shown", () => {
+		expect(shownLevels(row(), c)).toEqual(["low", "medium", "high", "xhigh", "max"]);
+		expect(shownLevels(row(), null)).toEqual([]);
+	});
+	test("the own list wins over the catalog, in canonical order", () => {
+		expect(shownLevels(row({ thinkingLevels: ["high", "low"] }), c)).toEqual(["low", "high"]);
+	});
+	test("narrowing a matched model records the owner's own list", () => {
+		const r = row();
+		toggleLevel(r, c, "xhigh");
+		expect(r.thinkingLevels).toEqual(["low", "medium", "high", "max"]);
+		toggleLevel(r, c, "max");
+		expect(r.thinkingLevels).toEqual(["low", "medium", "high"]);
+	});
+	test("picking the catalog's levels again means 'follow the catalog' (an empty list)", () => {
+		const r = row({ thinkingLevels: ["low", "medium", "high", "max"] });
+		toggleLevel(r, c, "xhigh");
+		expect(r.thinkingLevels).toEqual([]);
+	});
+	test("an unmatched model keeps today's behaviour: on/off, and empty when none is left", () => {
+		const r = row();
+		toggleLevel(r, null, "max");
+		expect(r.thinkingLevels).toEqual(["max"]);
+		toggleLevel(r, null, "max");
+		expect(r.thinkingLevels).toEqual([]);
 	});
 });
