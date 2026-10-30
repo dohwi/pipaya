@@ -111,6 +111,11 @@
 				}
 			}
 			// Paste: leave the browser's own paste alone; xterm receives it as a paste event (works on plain http too).
+			// Except Ctrl+Win+V (Windows clipboard history): the webview does not paste for it, so read the clipboard ourselves.
+			if (action === "paste" && e.ctrlKey && e.metaKey) {
+				e.preventDefault();
+				void navigator.clipboard?.readText().then((text) => text && xt.paste(text), () => {});
+			}
 			return false;
 		});
 		let ws: WebSocket | null = null;

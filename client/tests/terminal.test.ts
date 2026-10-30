@@ -8,7 +8,7 @@ import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt, title: id }) as Session;
 const term = (id: string, cwd: string, createdAt = 0) => ({ id, cwd, createdAt, title: id }) as TerminalInfo;
-const key = (code: string, m: { ctrl?: boolean; alt?: boolean; shift?: boolean } = {}) => ({ code, ctrlKey: !!m.ctrl, metaKey: false, altKey: !!m.alt, shiftKey: !!m.shift });
+const key = (code: string, m: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean } = {}) => ({ code, ctrlKey: !!m.ctrl, metaKey: !!m.meta, altKey: !!m.alt, shiftKey: !!m.shift });
 
 describe("terminal ids and urls", () => {
 	test("terminal ids are told apart by their prefix", () => {
@@ -64,6 +64,10 @@ describe("copy and paste keys in a terminal", () => {
 		expect(clipboardKey(key("KeyC", { ctrl: true, shift: true }), false)).toBe("copy");
 		expect(clipboardKey(key("KeyV", { ctrl: true }), false)).toBe("paste");
 		expect(clipboardKey(key("KeyV", { ctrl: true, shift: true }), false)).toBe("paste");
+	});
+	test("Ctrl+Win+V (Windows clipboard history) pastes", () => {
+		expect(clipboardKey(key("KeyV", { ctrl: true, meta: true }), false)).toBe("paste");
+		expect(clipboardKey(key("KeyC", { ctrl: true, meta: true }), true)).toBe(null);
 	});
 	test("other keys are not clipboard keys", () => {
 		expect(clipboardKey(key("KeyC"), true)).toBe(null);

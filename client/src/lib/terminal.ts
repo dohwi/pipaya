@@ -75,9 +75,11 @@ export function appTakesKey(e: { code: string; ctrlKey: boolean; metaKey: boolea
  * selected (otherwise Ctrl+C stays the shell's interrupt), and plain Ctrl/⌘+V pastes.
  */
 export function clipboardKey(e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, hasSelection: boolean): "copy" | "paste" | null {
-	if (e.altKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
-	if (e.code === "KeyC") return e.shiftKey || hasSelection ? "copy" : null;
+	if (e.altKey || !(e.ctrlKey || e.metaKey)) return null;
+	// The Windows clipboard history (Win+V) pastes by sending Ctrl+V while Win is still held: Ctrl+Meta+V is a paste too.
 	if (e.code === "KeyV") return "paste";
+	if (e.ctrlKey && e.metaKey) return null;
+	if (e.code === "KeyC") return e.shiftKey || hasSelection ? "copy" : null;
 	return null;
 }
 
