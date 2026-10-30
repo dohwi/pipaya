@@ -50,7 +50,7 @@
 		<div class="warn">
 			<Notice tone="warn" icon="key">
 				{t("사용할 수 있는 모델이 아직 없습니다.")}
-				{#snippet action()}<button type="button" onclick={() => app.openSettings("agent")}>{t("모델 연결")}</button>{/snippet}
+				{#snippet action()}<button type="button" class="tap" onclick={() => app.openSettings("agent")}>{t("모델 연결")}</button>{/snippet}
 			</Notice>
 		</div>
 	{/if}

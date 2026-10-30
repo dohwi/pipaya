@@ -131,8 +131,8 @@
 						<button class="key" class:none={!combo} onclick={() => start(a.id)}>
 							{#if combo}{formatCombo(combo)}{:else}{t("없음")}{/if}
 						</button>
-						<button class="reset" disabled={!combo} onclick={() => bind(a.id, "")} title={t("단축키 없애기")} aria-label={t("{name} 단축키 없애기", { name: t(a.label) })}><Icon name="x" /></button>
-						<button class="reset" disabled={combo === DEFAULT_BINDINGS[a.id]} onclick={() => app.prefs.resetBindings(a.id)} title={t("기본값으로")} aria-label={t("{name} 기본값으로", { name: t(a.label) })}><Icon name="undo" /></button>
+						<button class="reset tap" disabled={!combo} onclick={() => bind(a.id, "")} title={t("단축키 없애기")} aria-label={t("{name} 단축키 없애기", { name: t(a.label) })}><Icon name="x" /></button>
+						<button class="reset tap" disabled={combo === DEFAULT_BINDINGS[a.id]} onclick={() => app.prefs.resetBindings(a.id)} title={t("기본값으로")} aria-label={t("{name} 기본값으로", { name: t(a.label) })}><Icon name="undo" /></button>
 					{/if}
 				{/if}
 			</li>

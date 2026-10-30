@@ -38,12 +38,12 @@
 {#if group && items.length}
 	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
 		{#if viewport.narrow}
-			<button class="back" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
+			<button class="back tap" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
 		{/if}
 		<span class="name" title={group.name}>{group.name}</span>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
-			<button class="chip" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} use:pressMenu={(pt) => chipMenu(pt, x.id)} title="{x.title} · {ACTIVITY_LABEL[st]}">
+			<button class="chip tap" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} use:pressMenu={(pt) => chipMenu(pt, x.id)} title="{x.title} · {ACTIVITY_LABEL[st]}">
 				{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 				<span class="t">{x.title}</span>
 			</button>
