@@ -89,6 +89,28 @@
 				].join("\n")
 			: "",
 	);
+	// MCP servers connected to this server and the tools they add. Shown dimmed when none is connected, like the other items.
+	let mcp = $state<{ key: string; ready: number; tools: number; failed: number; total: number } | null>(null);
+	$effect(() => {
+		const key = app.serverId ?? "";
+		const api = app.api;
+		app.mcpTick;
+		if (!api) return;
+		return abortable((signal) => api.mcp(signal), {
+			ok: (r) => (mcp = { key, ready: r.ready, tools: r.tools, failed: r.servers.filter(s => s.status === "error").length, total: r.servers.length }),
+			fail: () => { if (mcp?.key === key) mcp = null; },
+		});
+	});
+	const mcpHere = $derived(mcp && mcp.key === (app.serverId ?? "") ? mcp : null);
+	const mcpTip = $derived(
+		mcpHere
+			? [
+					mcpHere.total ? t("연결된 MCP 서버 {n}개 · 도구 {tools}개", { n: mcpHere.ready, tools: mcpHere.tools }) : t("등록된 MCP 서버가 없습니다"),
+					mcpHere.failed ? t("연결에 실패한 서버 {n}개", { n: mcpHere.failed }) : "",
+					t("눌러서 관리"),
+				].filter(Boolean).join("\n")
+			: "",
+	);
 	const skillNames = $derived(pane.id ? (here ? here.skills : null) : (fresh && fresh.key === cwdKey ? fresh.names : null));
 	const skillCount = $derived(skillNames ? skillNames.length : null);
 	const base = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
@@ -204,6 +226,12 @@
 		<button class="b skills tap" class:empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} aria-haspopup="dialog" aria-label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>
 			<Icon name="skill" />
 			<span class="v">{t("{n}개", { n: skillCount })}</span>
+		</button>
+	{/if}
+	{#if mcpHere}
+		<button class="b mcp tap" class:empty={mcpHere.ready === 0 && !mcpHere.failed} class:danger={mcpHere.failed > 0} onclick={() => app.openMcp()} aria-haspopup="dialog" aria-label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>
+			<Icon name="plug" />
+			<span class="v">{t("{n}개", { n: mcpHere.ready })}</span>
 		</button>
 	{/if}
 	{#if tplNames !== null}

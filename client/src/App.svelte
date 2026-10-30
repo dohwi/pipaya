@@ -64,6 +64,7 @@
 		settings: () => import("./components/Settings.svelte"),
 		skills: () => import("./components/Skills.svelte"),
 		commands: () => import("./components/CommandFamilies.svelte"),
+		mcp: () => import("./components/Mcp.svelte"),
 		lightbox: () => import("./components/Lightbox.svelte"),
 		queue: () => import("./components/QueueModal.svelte"),
 		filePreview: () => import("./components/FilePreview.svelte"),
@@ -389,6 +390,9 @@
 {#if app.sessionsDialog}<Lazy load={load.sessions} serverId={app.sessionsDialog} />{/if}
 {#if app.skillsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.skills} dialog={app.skillsDialog} api={app.api} onclose={() => (app.skillsDialog = null)} />{/key}
+{/if}
+{#if app.mcpDialog && app.api}
+	{#key app.serverId}<Lazy load={load.mcp} api={app.api} onclose={() => (app.mcpDialog = false)} />{/key}
 {/if}
 {#if app.commandsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.commands} dialog={app.commandsDialog} api={app.api} onclose={() => (app.commandsDialog = null)} />{/key}

@@ -408,6 +408,11 @@ export const EVENTS: EventDef[] = [
 		data: Type.Object({ name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]), project: Type.String(), source: Type.Optional(Type.Literal("files")) }),
 	},
 	{
+		type: "mcp_updated", persisted: false,
+		description: "An MCP server was added, changed, removed, connected or lost its connection (refetch GET /mcp)",
+		data: Type.Object({}),
+	},
+	{
 		type: "extension_settings_updated", persisted: true,
 		description: "An extension's settings were saved or deleted (sessionId is null; refetch GET /extensions/settings)",
 		data: Type.Object({ id: Type.String(), action: Type.Union([Type.Literal("saved"), Type.Literal("deleted")]) }),

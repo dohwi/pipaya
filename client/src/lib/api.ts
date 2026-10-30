@@ -22,6 +22,8 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	SessionDetail,
 	SessionContext,
 	SkillList,
+	McpInfo,
+	McpServer,
 	CommandFamily,
 	ToolInfo,
 	Usage,
@@ -282,6 +284,10 @@ export class Api {
 	/** scope "project"/"session": enabled null removes the override. "session" needs sessionId. */
 	setSkill = (name: string, body: { scope: "global" | "project" | "session"; enabled: boolean | null; cwd?: string; sessionId?: string }) =>
 		this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}`, body);
+	mcp = (signal?: AbortSignal) => this.req<McpInfo>("GET", "/mcp", undefined, signal);
+	/** Saves the whole list. A secret sent back as the mask keeps its stored value. */
+	setMcp = (servers: McpServer[]) => this.req<McpInfo>("PUT", "/mcp", { servers });
+	reloadMcp = (name?: string) => this.req<McpInfo>("POST", "/mcp/reload", name ? { name } : {});
 	/** Commands server extensions find at run time (`/prefix:name`), for `cwd`. */
 	commandFamilies = (cwd?: string, signal?: AbortSignal) =>
 		this.req<{ cwd: string; families: CommandFamily[] }>("GET", `/server-extensions/commands${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`, undefined, signal);
@@ -426,6 +432,7 @@ export const EVENT_TYPES = [
 	"provider_updated",
 	"configuration_updated",
 	"skills_updated",
+	"mcp_updated",
 	"locales_updated",
 	"client_settings_updated",
 	"extensions_updated",

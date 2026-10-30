@@ -43,6 +43,8 @@ import { AccountEmails } from "./account-email.ts";
 import { deviceId, ProviderLogins } from "./provider-login.ts";
 import * as S from "./schemas.ts";
 import { SessionManager } from "./sessions.ts";
+import { McpManager } from "./mcp.ts";
+import { registerMcpRoutes } from "./mcp-routes.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
@@ -130,7 +132,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
-	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel);
+	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
@@ -594,6 +597,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		})();
 	});
 	registerSkillRoutes(server, skills, bus);
+	registerMcpRoutes(server, mcp);
 	registerExtensionSettingsRoutes(server, extensionSettings, bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);
 	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
@@ -602,6 +606,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerTerminalRoutes(server, terminals);
 
 	await extensions.load();
+	mcp.start();
 	// Skills, AGENTS.md and whatever extensions read from those folders live in plain files: tell open clients when they change on disk.
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
@@ -614,6 +619,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		clearInterval(prune);
 		retention.stop();
 		configuration.close();
+		await mcp.close();
 		agentsWatch.stop();
 		unread.dispose();
 		await notifications.close();

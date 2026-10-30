@@ -5,6 +5,25 @@
  * `node scripts/extract-i18n.cjs` lists keys that are used but missing here, and keys that are here but unused.
  */
 export const en: Record<string, string> = {
+	/* ---- MCP ---- */
+	"MCP 서버": "MCP servers",
+	"MCP 서버 {n}개": "{n} MCP {n#server|servers}",
+	"연결된 MCP 서버 {n}개 · 도구 {tools}개": "{n} MCP {n#server|servers} connected · {tools} {tools#tool|tools}",
+	"연결된 서버 {n}개 · 도구 {tools}개": "{n} {n#server|servers} connected · {tools} {tools#tool|tools}",
+	"등록된 MCP 서버가 없습니다": "No MCP servers added",
+	"등록된 MCP 서버가 없습니다.": "No MCP servers added.",
+	"연결에 실패한 서버 {n}개": "{n} {n#server|servers} failed to connect",
+	"눌러서 관리": "Click to manage",
+	"MCP 서버의 도구는 연결되어 있는 동안 이 서버의 모든 대화에서 mcp_서버이름_도구이름 으로 쓸 수 있습니다. stdio 서버는 이 서버 컴퓨터에서 명령을 실행하니 믿을 수 있는 것만 추가하세요.": "While connected, an MCP server's tools are available in every chat on this server as mcp_servername_toolname. A stdio server runs a command on this server's computer, so add only ones you trust.",
+	"로컬 명령 (stdio)": "Local command (stdio)",
+	"실행할 명령": "Command to run",
+	"인자 (한 줄에 하나)": "Arguments (one per line)",
+	"환경 변수 (KEY=값, 한 줄에 하나)": "Environment variables (KEY=value, one per line)",
+	"헤더 (이름: 값, 한 줄에 하나)": "Headers (Name: value, one per line)",
+	"저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.": "Saved secret values show as ••••••••. Leave them as they are to keep the stored value.",
+	"꺼져 있음": "Off",
+	"다시 연결": "Reconnect",
+	"MCP 서버 추가": "Add MCP server",
 	/* ---- app shell ---- */
 	"서버에 연결해 주세요": "Connect to a server first",
 	"사이드바 너비 조절": "Resize sidebar",

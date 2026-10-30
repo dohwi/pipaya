@@ -174,6 +174,31 @@ export interface SkillInfo {
 	sessionOverride: boolean | null;
 }
 
+export interface McpServer {
+	name: string;
+	enabled: boolean;
+	transport: "stdio" | "http";
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+	url?: string;
+	headers?: Record<string, string>;
+}
+
+export interface McpServerInfo extends McpServer {
+	status: "off" | "connecting" | "ready" | "error";
+	error?: string;
+	tools: { name: string; tool: string; description: string }[];
+}
+
+export interface McpInfo {
+	servers: McpServerInfo[];
+	/** Servers connected right now */
+	ready: number;
+	/** Tools the connected servers offer */
+	tools: number;
+}
+
 export interface SkillList {
 	cwd: string;
 	project: string;

@@ -14,6 +14,7 @@ import type { EventBus } from "./events.ts";
 import type { ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
+import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
 import { PeerService, type GroupRef } from "./peers.ts";
@@ -99,6 +100,8 @@ export class SessionManager {
 		private systemModel?: SystemModelSettings,
 		/** The image model; while one is set every session gets the generate_image tool. */
 		private imageModel?: ImageModelSettings,
+		/** MCP servers; the tools of the connected ones reach every session. */
+		private mcp?: McpManager,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -825,7 +828,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -902,7 +905,8 @@ export class SessionManager {
 
 	/** Built-in tools plus whatever server extensions add or replace. */
 	toolDefs(): Record<string, ToolDef> {
-		const defs = this.ext ? this.ext.toolDefs() : TOOL_DEFS;
+		const base = this.ext ? this.ext.toolDefs() : TOOL_DEFS;
+		const defs = this.mcp ? { ...this.mcp.toolDefs(), ...base } : base;
 		// Only while an image model is set; an extension tool of the same name wins.
 		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
 	}

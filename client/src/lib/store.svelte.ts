@@ -253,6 +253,13 @@ class AppStore {
     if (!this.api) return;
     this.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
   }
+  /** MCP servers dialog (opened from the footer badge). */
+  mcpDialog = $state(false);
+  /** Bumped when an MCP server is changed or connects/disconnects, so footers and the dialog re-read it. */
+  mcpTick = $state(0);
+  openMcp() {
+    if (this.api) this.mcpDialog = true;
+  }
   /** Extension commands dialog (`/prefix:name`, opened from the footer badge). cwd decides which folder's commands are listed. */
   commandsDialog = $state<{ cwd: string } | null>(null);
   openCommands(sessionId: string | null = this.activeId) {
@@ -746,6 +753,7 @@ class AppStore {
     this.palette = null;
     this.skillsDialog = null;
     this.commandsDialog = null;
+    this.mcpDialog = false;
     this.queueDialog = null;
     this.activeId = null;
     this.chats = {};
@@ -1048,6 +1056,9 @@ class AppStore {
         break;
       case "skills_updated":
         this.skillsTick++;
+        break;
+      case "mcp_updated":
+        this.mcpTick++;
         break;
       case "locales_updated":
         void this.syncLocales();
