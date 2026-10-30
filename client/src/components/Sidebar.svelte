@@ -495,7 +495,7 @@
 	:global(:where(.side) .cbadge) {
 		margin-left: auto;
 		min-width: 20px;
-		padding: 0 3px 4px; /* same 2px lift under the digits as the base badge */
+		padding: 0 3px 2px; /* same 1px lift as the base badge (measured at 3x: digits centred in the circle; 4px sat them 1px high) */
 	}
 	:global(:where(.side) .dirnew) {
 		display: grid;
