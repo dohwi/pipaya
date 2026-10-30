@@ -1210,6 +1210,7 @@ export const en: Record<string, string> = {
 	"알림음 켜기 / 끄기": "Turn notification sound on / off",
 	"설정 열기": "Open settings",
 	"라이트 / 다크 전환": "Switch light / dark",
+	"전체 화면": "Full screen",
 	"전체 화면 전환": "Toggle full screen",
 	"화면 배율 키우기": "Zoom in app",
 	"화면 배율 줄이기": "Zoom out app",

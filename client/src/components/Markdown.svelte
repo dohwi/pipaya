@@ -7,6 +7,7 @@
 	import { copyText } from "../lib/clipboard";
 	import { openExternal } from "../lib/tauri";
 	import { patchHtml } from "../lib/patch-html";
+	import { closeVideoView, videoPlayer } from "../lib/video-view";
 
 	let { text, streaming = false, sessionId = null }: { text: string; streaming?: boolean; sessionId?: string | null } = $props();
 	let root: HTMLElement | undefined = $state();
@@ -32,6 +33,8 @@
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
 	// Only once the reply has settled: while streaming, the path may still be half written.
 	const loaded = new Map<string, string>();
+	/** the video players this message drew: a player left on the whole screen goes away with the message */
+	const videos: HTMLDivElement[] = [];
 	$effect(() => {
 		// read `html` for real: a bare `html;` is not a dependency, so the pictures were looked for only before the text was in the DOM
 		const rendered = html;
@@ -66,12 +69,17 @@
 			const kind = slot.dataset.kind === "audio" ? "audio" : "video";
 			const show = (src: string) => {
 				if (!slot.isConnected) return;
-				const el = document.createElement(kind);
+				if (kind === "video") {
+					const player = videoPlayer(src);
+					videos.push(player);
+					slot.replaceWith(player);
+					return;
+				}
+				const el = document.createElement("audio");
 				el.src = src;
 				el.controls = true;
 				el.preload = "metadata";
-				el.className = `wd-${kind}`;
-				if (el instanceof HTMLVideoElement) el.playsInline = true;
+				el.className = "wd-audio";
 				slot.replaceWith(el);
 			};
 			const key = `${id}\u0000${path}`;
@@ -120,6 +128,8 @@
 	onDestroy(() => {
 		for (const src of loaded.values()) URL.revokeObjectURL(src);
 		loaded.clear();
+		for (const player of videos) closeVideoView(player);
+		videos.length = 0;
 	});
 
 	function onClick(e: MouseEvent) {
@@ -332,13 +342,53 @@
 		color: var(--text-faint);
 		font-size: var(--fs-xs);
 	}
+	/* A video player: the video and the two buttons of its own (built in lib/video-view.ts). The buttons sit over the
+	   top-right corner, where the native controls never are, and the player is handed the whole screen from there. */
+	.md :global(.wd-video-wrap) {
+		position: relative;
+		display: block;
+		width: fit-content;
+		max-width: 100%;
+		margin: 0 0 0.85em;
+	}
 	.md :global(.wd-video) {
 		display: block;
 		max-width: 100%;
 		max-height: 420px;
-		margin: 0 0 0.85em;
+		margin: 0;
 		border-radius: var(--radius);
 		background: #000;
+	}
+	.md :global(.wd-video-full),
+	.md :global(.wd-video-close) {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		color: #fff;
+		background: color-mix(in srgb, #000 55%, transparent);
+		border-radius: var(--radius-control);
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.md :global(.wd-video-full:hover),
+	.md :global(.wd-video-close:hover) {
+		background: color-mix(in srgb, #000 80%, transparent);
+	}
+	/* the close button belongs to the whole screen: lib/video-view.ts shows it there */
+	.md :global(.wd-video-close) {
+		display: none;
+	}
+	.md :global(.wd-video-wrap svg) {
+		width: 18px;
+		height: 18px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.md :global(.wd-audio) {
 		display: block;
