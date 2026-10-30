@@ -66,7 +66,7 @@
 	{#if !folded}
 		<div class="fold" in:collapseIn out:collapseOut>
 			{#if archived.length}
-				<div class="archive">
+				<div class="archive grp">
 					<button class="archtoggle" class:folded={!aopen} onclick={() => app.sidebar.toggleArchive(akey)} aria-expanded={aopen}>
 						<span class="chev" class:folded={!aopen}><Icon name="chevron-down" /></span>
 						<span class="dicon"><Icon name="archive" /></span>
@@ -75,7 +75,7 @@
 					</button>
 					<ListButton serverId={n.server.id} filter={{ cwd: d.path, archived: true }} name={t("보관함 비우기")} tip={t("보관함 관리 (선택해서 닫은 대화로 이동)")} />
 					{#if aopen}
-						<div class="fold" in:collapseIn out:collapseOut>
+						<div class="members fold" in:collapseIn out:collapseOut>
 							{#each archived as s (s.id)}
 								<ArchivedRow {n} x={s} />
 							{/each}

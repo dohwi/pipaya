@@ -5,6 +5,7 @@
 	import { pressMenu, type Point } from "../../lib/press-menu";
 	import type { Session } from "../../lib/types";
 	import Icon from "../Icon.svelte";
+	import AgentBadge from "../AgentBadge.svelte";
 	import RowTitle from "./RowTitle.svelte";
 	import { type SidebarNode } from "../../lib/sidebar-ctx";
 
@@ -23,9 +24,10 @@
 	}
 </script>
 
-<div class="item nested archived" use:pressMenu={menu}>
+<div class="item nested member archived" use:pressMenu={menu}>
+	<span class="branch" aria-hidden="true"></span>
 	<button class="open wide" onclick={() => void app.unarchive(n.server.id, x.id, true)} title={t("{title} · 눌러서 복원하고 열기", { title: x.title })}>
-		<span class="lead"><Icon name="archive" /></span>
+		<span class="lead"><AgentBadge id={x.id} server={n.server.id} size={16} /></span>
 		<RowTitle text={x.title} />
 	</button>
 	<div class="acts">
