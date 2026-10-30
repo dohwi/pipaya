@@ -1678,17 +1678,14 @@ class AppStore {
    * `/new`: start a fresh conversation in the focused pane only. Inside a group the pane's session is swapped for a new
    * one (same working directory and model settings) and the rest of the group stays as it is; the old session is closed
    * (off the sidebar, reachable only through /resume). Outside a group this is a plain `newChat`.
+   * `/clear` (`retire: "archive"`) does the same everywhere, but the old chat goes to the archive instead of being closed.
    */
   async newChatInPane(retire: "close" | "archive" = "close"): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);
-    if (!api || !from || !g) {
-      await this.startChat();
-      // `/clear` outside a group: the new chat is open now, so the old one can go to the archive.
-      if (retire === "archive" && from && this.activeId !== from.id) await this.archive(from.id);
-      return;
-    }
+    // `/new` outside a group is a plain new chat; `/clear` always carries the old chat's directory and model over.
+    if (!api || !from || (!g && retire === "close")) return this.startChat();
     let made: Session;
     try {
       made = await api.createSession({
@@ -1703,10 +1700,10 @@ class AppStore {
     if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
     // Swap layout and focus in the same tick, and only then close the old session: the screen never passes through a
     // state where the focused session is gone or outside its group (that made the whole app flash).
-    const saving = this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id));
+    const saving = g ? this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id)) : Promise.resolve();
     const opening = this.openSession(made.id);
     await Promise.all([saving, opening]);
-    void this.refreshGroups(); // the server is the authority on who is in which group
+    if (g) void this.refreshGroups(); // the server is the authority on who is in which group
     // The replaced session leaves the active list instead of dropping out of the group as a loose session.
     try {
       const old = await api.patchSession(from.id, retire === "archive" ? { archived: true } : { closed: true });
