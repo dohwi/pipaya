@@ -221,10 +221,10 @@
 			class="wave"
 			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;--band:{b.band}px;opacity:{b.a.toFixed(3)}"
 		></div>
-		<!-- the pop of light that leaves with the wave, as wide and as quick as the charge made it -->
+		<!-- the halo that leaves with the wave, as wide and as quick as the charge made it -->
 		<div
 			class="flash"
-			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.5)}ms"
+			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.65)}ms"
 		></div>
 	{/each}
 </div>
@@ -279,71 +279,74 @@
 		translate: -50% -50%;
 		--p: 0;
 	}
-	/* two counter-turning rings of thin spokes, pulled inward: the lit ring shrinks onto the point as the gauge fills */
+	/* two counter-turning veils of hairlines, drifting inward: the lit ring settles onto the point as the gauge fills */
 	.spin {
 		position: absolute;
 		inset: 0;
-		--inner: calc(60% - 57% * var(--p));
-		--outer: calc(92% - 78% * var(--p));
-		-webkit-mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 5%), #000 var(--outer), transparent calc(var(--outer) + 8%));
-		mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 5%), #000 var(--outer), transparent calc(var(--outer) + 8%));
+		--inner: calc(66% - 62% * var(--p));
+		--outer: calc(88% - 74% * var(--p));
+		-webkit-mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 9%), #000 var(--outer), transparent calc(var(--outer) + 10%));
+		mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 9%), #000 var(--outer), transparent calc(var(--outer) + 10%));
+		filter: blur(0.6px);
 	}
 	.spin.a {
-		background: repeating-conic-gradient(from 0deg, var(--grid-wave) 0deg 0.9deg, transparent 0.9deg 8deg);
-		opacity: calc(0.3 + var(--p) * 0.5);
-		animation: gather 2.4s linear infinite;
+		background: repeating-conic-gradient(from 0deg, var(--grid-wave) 0deg 0.7deg, transparent 0.7deg 14deg);
+		opacity: calc(0.1 + var(--p) * 0.22);
+		animation: gather 9s linear infinite;
 	}
 	.spin.b {
-		background: repeating-conic-gradient(from 4deg, var(--grid-wave) 0deg 1.4deg, transparent 1.4deg 13deg);
-		opacity: calc(0.2 + var(--p) * 0.6);
-		animation: gather 3.6s linear infinite reverse;
+		background: repeating-conic-gradient(from 5deg, var(--grid-wave) 0deg 1deg, transparent 1deg 22deg);
+		opacity: calc(0.08 + var(--p) * 0.18);
+		animation: gather 14s linear infinite reverse;
 	}
 	@keyframes gather {
 		to {
 			rotate: 1turn;
 		}
 	}
-	/* the core: squeezed tighter and brighter until it is a small hot point */
+	/* the core: a soft bloom that warms and settles a little tighter as the gauge fills */
 	.charge::after {
 		content: "";
 		position: absolute;
-		inset: 30%;
+		inset: 32%;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 75%);
-		opacity: calc(0.2 + var(--p) * 0.8);
-		scale: calc(1.7 - var(--p) * 1.1);
+		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 78%);
+		opacity: calc(0.08 + var(--p) * 0.42);
+		scale: calc(1.5 - var(--p) * 0.55);
+		filter: blur(2px);
 	}
 	/* a full gauge breathes, so the ceiling is visible without a number */
 	.charge.full::after {
-		animation: charged 1100ms var(--ease-std) infinite;
+		animation: charged 2600ms var(--ease-std) infinite;
 	}
 	@keyframes charged {
 		50% {
-			opacity: 0.72;
+			opacity: 0.34;
 		}
 	}
-	/* the burst that flies out with the wave: a soft ball of light that widens and dies */
+	/* the burst that leaves with the wave: a soft halo that widens and thins out */
 	.flash {
 		position: absolute;
 		left: var(--cx);
 		top: var(--cy);
-		width: 420px;
-		height: 420px;
+		width: 380px;
+		height: 380px;
 		translate: -50% -50%;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 72%);
+		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 78%);
+		filter: blur(3px);
 		animation: burst var(--fd) var(--ease-std) both;
 	}
 	@keyframes burst {
 		0% {
-			scale: 0.2;
+			scale: 0.35;
 			opacity: 0;
 		}
-		25% {
-			opacity: var(--k);
+		30% {
+			opacity: calc(var(--k) * 0.45);
 		}
 		100% {
-			scale: 2.6;
+			scale: 1.9;
 			opacity: 0;
 		}
 	}
