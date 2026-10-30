@@ -69,7 +69,7 @@ describe("default commands", () => {
 	});
 
 	test("removed UI commands are absent from the registry, autocomplete, and argument suggestions", () => {
-		for (const name of ["sidebar", "model", "thinking", "help"]) {
+		for (const name of ["sidebar", "thinking", "help"]) {
 			expect(commands.COMMANDS.some((cmd) => cmd.name === name)).toBe(false);
 			expect(commands.matchCommands("").some((cmd) => cmd.name === name)).toBe(false);
 			expect(commands.matchCommands(name)).toEqual([]);
@@ -87,7 +87,7 @@ describe("default commands", () => {
 
 	test("uses one English name per command with a stable default order", () => {
 		const names = commands.COMMANDS.map((c) => c.name);
-		expect(names).toEqual(["new", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
+		expect(names).toEqual(["new", "clear", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
 		expect(new Set(names).size).toBe(names.length);
 		for (const cmd of commands.COMMANDS) {
 			expect(cmd.name).toMatch(/^[a-z]+$/);

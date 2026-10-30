@@ -103,7 +103,7 @@ const METHOD_NAME = /^[A-Za-z0-9_-]{1,80}$/;
  * The app's own slash commands (client `COMMANDS` in client/src/lib/commands.ts). An extension cannot take these names:
  * built-in commands are never overridden. client/tests/commands-reserved.test.ts keeps the two lists equal.
  */
-export const RESERVED_COMMANDS = Object.freeze(["new", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
+export const RESERVED_COMMANDS = Object.freeze(["new", "clear", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
 /** A method a client waits on must answer: the client gives up after 15 s, so the server stops waiting a little later. */
 const METHOD_TIMEOUT_MS = 20_000;
 const MAX_ENTRY_PAGE = 1000;

@@ -168,6 +168,41 @@ const DEFINITIONS: SlashCommand[] = [
 		run: () => app.newChatInPane(),
 	},
 	{
+		name: "clear",
+		desc: msg("현재 대화를 보관하고 새 대화 시작"),
+		needsChat: true,
+		run: () => {
+			if (!app.current) return void app.toast(t("보관할 수 있는 대화가 아닙니다"), "error");
+			return app.newChatInPane("archive");
+		},
+	},
+	{
+		name: "model",
+		args: "[model]",
+		desc: msg("모델 선택"),
+		argumentOptions: () => {
+			const usable = app.models.filter((m) => m.configured && m.available !== false && !m.imageGeneration);
+			const cur = app.effectiveModel;
+			return usable.map((m) => ({
+				value: usable.some((o) => o !== m && o.id === m.id) ? `${m.provider}/${m.id}` : m.id,
+				desc: m.name,
+				current: !!cur && cur.provider === m.provider && cur.id === m.id,
+			}));
+		},
+		argumentEmpty: msg("사용할 수 있는 모델이 없습니다"),
+		run: async (a) => {
+			const q = a.trim().toLowerCase();
+			if (!q) return void app.modelPickerTick++;
+			const usable = app.models.filter((m) => m.configured && m.available !== false && !m.imageGeneration);
+			const hit =
+				usable.find((m) => `${m.provider}/${m.id}`.toLowerCase() === q) ??
+				usable.filter((m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q)[0];
+			if (!hit) return void app.toast(t("모델을 찾을 수 없습니다: {name}", { name: a.trim() }), "error", app.activeId);
+			if (await app.configure({ provider: hit.provider, model: hit.id }))
+				app.toast(t("모델을 {name}(으)로 바꿨습니다", { name: hit.name }), "ok", app.activeId);
+		},
+	},
+	{
 		name: "cd",
 		args: "[path]",
 		desc: msg("작업 디렉터리 변경"),
@@ -235,7 +270,7 @@ const DEFINITIONS: SlashCommand[] = [
 ];
 
 // Stable default order: conversations → settings → execution → history → utilities.
-const DEFAULT_ORDER = ["new", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"];
+const DEFAULT_ORDER = ["new", "clear", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"];
 export const COMMANDS: SlashCommand[] = DEFAULT_ORDER.map((name) => DEFINITIONS.find((c) => c.name === name)!);
 
 /** Run a built-in command by name, as a shortcut would: with its "needs an open chat" rule applied. */

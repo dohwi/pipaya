@@ -1679,11 +1679,16 @@ class AppStore {
    * one (same working directory and model settings) and the rest of the group stays as it is; the old session is closed
    * (off the sidebar, reachable only through /resume). Outside a group this is a plain `newChat`.
    */
-  async newChatInPane(): Promise<void> {
+  async newChatInPane(retire: "close" | "archive" = "close"): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);
-    if (!api || !from || !g) return this.startChat();
+    if (!api || !from || !g) {
+      await this.startChat();
+      // `/clear` outside a group: the new chat is open now, so the old one can go to the archive.
+      if (retire === "archive" && from && this.activeId !== from.id) await this.archive(from.id);
+      return;
+    }
     let made: Session;
     try {
       made = await api.createSession({
@@ -1704,13 +1709,14 @@ class AppStore {
     void this.refreshGroups(); // the server is the authority on who is in which group
     // The replaced session leaves the active list instead of dropping out of the group as a loose session.
     try {
-      await api.patchSession(from.id, { closed: true });
+      const old = await api.patchSession(from.id, retire === "archive" ? { archived: true } : { closed: true });
+      if (retire === "archive") this.archived = [old, ...this.archived.filter((x) => x.id !== from.id)];
       this.sessions = this.sessions.filter((x) => x.id !== from.id);
       this.running[from.id] = false;
       this.awaiting[from.id] = 0;
       delete this.unread[from.id];
     } catch (e) {
-      this.fail(e, t("닫지 못했습니다"));
+      this.fail(e, retire === "archive" ? t("보관하지 못했습니다") : t("닫지 못했습니다"), from.id);
     }
   }
 
