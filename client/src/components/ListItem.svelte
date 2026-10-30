@@ -77,21 +77,24 @@
 		flex: none;
 		justify-content: flex-end;
 	}
+	/* whole-pixel line boxes (the body's 1.55 would make 13px text 20.15px tall) so a list's height stays an integer */
 	.item :global(.name) {
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		font-weight: 600;
 		overflow-wrap: anywhere;
 	}
 	.item :global(.meta) {
 		margin: 4px 0 0;
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow-wrap: anywhere;
 	}
 	.item :global(.desc) {
 		margin: 4px 0 0;
 		font-size: var(--fs-xs);
-		line-height: 1.55;
+		line-height: 18px;
 		color: var(--text-dim);
 		display: -webkit-box;
 		-webkit-line-clamp: 3;

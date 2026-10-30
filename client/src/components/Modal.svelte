@@ -87,6 +87,36 @@
 	const tokens = ["s", "m", "l", "xl"];
 	const w = $derived(tokens.includes(width) ? `var(--modal-w-${width})` : width);
 	const dismiss = () => dismissible && onclose();
+
+	/**
+	 * Keeps a centred panel on whole pixels. `left/top: 50%` + `translate: -50% -50%` puts the panel on a half pixel whenever the window
+	 * or the panel has an odd size (557px in 900px: y = 171.5): its text blurs and the same badge is painted 0.5px higher in one dialog than
+	 * in the next. The panel is placed by absolute pixel offsets instead: the window's whole-pixel middle minus the panel's whole half-size.
+	 * `ResizeObserver` reports the border-box size without the enter animation's transform (getBoundingClientRect has it).
+	 * A phone's bottom sheet is pinned to the bottom edge by CSS and only needs its sideways centring.
+	 */
+	function whole(node: HTMLElement) {
+		const place = (w: number, h: number) => {
+			const zoom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
+			const vw = window.innerWidth / zoom, vh = window.innerHeight / zoom;
+			// computed `top` is never "auto" (it resolves to px), so ask the same media query the CSS uses
+			const sheet = node.classList.contains("sheet") && window.matchMedia("(max-width: 640px)").matches;
+			node.style.left = `${Math.round((vw - w) / 2)}px`;
+			node.style.top = sheet ? "" : `${Math.round((vh - h) / 2)}px`;
+			node.style.translate = "none";
+		};
+		let size: [number, number] | null = null;
+		const ro = new ResizeObserver(([e]) => {
+			const box = e?.borderBoxSize?.[0];
+			if (!box) return;
+			size = [box.inlineSize, box.blockSize];
+			place(...size);
+		});
+		const onResize = () => size && place(...size);
+		ro.observe(node, { box: "border-box" });
+		window.addEventListener("resize", onResize);
+		return { destroy: () => { ro.disconnect(); window.removeEventListener("resize", onResize); } };
+	}
 	// Before any child mounts and focuses itself: this is where focus goes back to on close.
 	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 </script>
@@ -113,6 +143,7 @@
 		style:--modal-h={height}
 		style:--modal-max-h={maxHeight}
 		style:--modal-gut={gutter}
+		use:whole
 		use:modalLayer={{ onclose: onescape ?? onclose, dismissible, opener }}
 		in:modalIn|global
 		out:modalOut|global

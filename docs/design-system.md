@@ -58,6 +58,14 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - `StatusItem`: one item under the input (icon or mark + value + tooltip), a 21px box (19px in a narrow pane) with a 4px gap. A button when it has `onclick` (add `empty` when there is nothing to show, `level` for warn/danger).
 - Check by measuring: every item in a row must have the same top, height and icon/text centre (`getBoundingClientRect`), at 1440, 820 and 390.
 
+### Text inside pills (measure the ink, not the box)
+
+- A box can be centred and its text still look off: the fonts (Manrope, SUIT, JetBrains Mono) leave more room under the baseline than above. Measured at 8x on Hangul, Latin and digits, centred text sits **+1.0px low at 11px** (Badge, `.chip`), +0.66 at 12px, +0.3 at 13px, ~0 in mono.
+- So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new pill style gets its own measured value, never a guess.
+- Dialogs sit on whole pixels (`Modal` places the panel by pixel offsets, not `top: 50%` + `translate`), otherwise a panel with the other parity than the window lands on x.5 and its badges are painted 0.5px higher than in the next dialog. Header title/subtitle have whole-pixel line boxes (28 / 18).
+- A small label next to bigger text in a centred row (the `@name` handle before a conversation title) is aligned on the **baseline**, not the centre: the handle is lowered 1.5px.
+- Audit: render at `device_scale_factor` 4-8, find the painted pixels inside each pill and compare their centre with the box centre; flag anything over 0.4px (`tmp/` scripts, not committed).
+
 ## 2. Vertical rhythm
 
 | Thing | Value |

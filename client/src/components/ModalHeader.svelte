@@ -80,19 +80,25 @@
 		display: flex;
 		flex-direction: column;
 	}
+	/* Whole-pixel line boxes. The body's 1.55 made the title 27.9px and the subtitle 18.6px, so a dialog was 564.81px tall and, centred
+	   with translate, sat on a fraction: its text blurred and the badges inside were rounded up in one row and down in the next
+	   (measured: 0.5px jumps between rows of one list). 28 + 18 keeps the header, and the dialog around it, on whole pixels. */
 	h2 {
 		margin: 0;
 		font-size: var(--fs-xl);
+		line-height: 28px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.compact h2 {
 		font-size: var(--fs-lg);
+		line-height: 24px;
 		font-weight: 600;
 	}
 	.mh-sub {
 		font-size: var(--fs-xs);
+		line-height: 18px;
 		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;

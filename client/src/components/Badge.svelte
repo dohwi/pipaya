@@ -47,15 +47,17 @@
 		--badge-fg: var(--text-dim);
 		--badge-bg: var(--bg-active);
 	}
+	/* The font leaves more room below the baseline than above, so centred text sits ~0.5px low in a pill: 1px of bottom padding lifts it
+	   by half that (measured at 8x on Hangul, Latin and digits: ink centre within 0.2px of the box centre). */
 	.md {
 		height: 22px;
-		padding: 0 8px;
+		padding: 0 8px 1px;
 		font-size: var(--fs-2xs);
 		letter-spacing: 0.01em;
 	}
 	.sm {
 		height: 18px;
-		padding: 0 8px;
+		padding: 0 8px 1px;
 		font-size: var(--fs-2xs);
 	}
 	/* an icon inside a badge follows its text size */

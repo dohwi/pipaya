@@ -598,7 +598,7 @@ input[type="checkbox"]:disabled {
 	align-items: center;
 	gap: 4px;
 	height: 22px;
-	padding: 0 8px;
+	padding: 0 8px 1px; /* 1px lift, the same as Badge: this font sits ~0.5px low when centred (measured at 8x on Hangul, Latin, digits) */
 	border-radius: var(--radius-pill);
 	font-size: var(--fs-2xs);
 	font-weight: 600;
