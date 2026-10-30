@@ -67,6 +67,8 @@
 			</div>
 			{#if hit && r.imageGeneration}
 				<p class="hint note src ok"><Icon name="check" /> {t("이미지를 만드는 모델입니다")}</p>
+			{:else if hit && hit.reasoning && r.reasoning}
+				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") })}</p>
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.")}</p>
 			{/if}
@@ -119,21 +121,11 @@
 				{#if r.thinkingLevels.length}
 					{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
 				{:else if shown.length}
-					{t("매칭된 OpenRouter 모델의 강도를 그대로 씁니다. 눌러서 직접 고를 수도 있습니다.")}
+					{t("매칭된 모델의 강도를 그대로 씁니다.")}
 				{:else}
 					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
-			{#if matched}
-				<p class="hint note mono src ok"><Icon name="check" /> {t("OpenRouter {id}와 일치: {levels}", { id: matched.id, levels: matched.levels.join(", ") || "-" })}</p>
-			{:else if r.thinkingSource}
-				{@const s = r.thinkingSource}
-				{#if s.catalogId}
-					<p class="hint note mono src ok"><Icon name="check" /> {t("OpenRouter {id}와 일치: {levels}", { id: s.catalogId, levels: s.levels.join(", ") })}{s.kind === "custom" ? ` (${t("직접 지정")})` : ""}</p>
-				{:else}
-					<p class="hint note mono src off"><Icon name="unlink" /> {t("OpenRouter 모델과 연결되지 않음: {levels}", { levels: s.levels.join(", ") })}</p>
-				{/if}
-			{/if}
 		</section>
 	{/if}
 	{#if !locked}
@@ -156,9 +148,6 @@
 		height: 14px;
 		flex: none;
 		stroke-width: 2;
-	}
-	.src.off {
-		color: var(--text-faint);
 	}
 	.matchrow {
 		display: flex;
