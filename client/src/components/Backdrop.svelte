@@ -81,9 +81,36 @@
 	};
 
 	/** Holding the pointer down on empty space charges the gauge; the wave only leaves when it is released. */
+	/** Inside a pane the backdrop reaches the pane's bottom edge (under the input and the stats line), not just the message area. */
 	$effect(() => {
 		const el = host;
-		const parent = el?.parentElement;
+		const pane = el?.closest<HTMLElement>(".pane");
+		const body = el?.parentElement;
+		if (!el || !pane || !body) return;
+		el.style.zIndex = "-1"; // behind the input and the stats line, which the grid now runs under
+		// fixed, so the scrolling .empty cannot clip it; placed from the pane's rect (body top .. pane bottom)
+		el.style.position = "fixed";
+		const fit = () => {
+			const p = pane.getBoundingClientRect();
+			const t = body.getBoundingClientRect().top;
+			el.style.inset = `${t}px auto auto ${p.left}px`;
+			el.style.width = `${p.width}px`;
+			el.style.height = `${Math.max(0, p.bottom - t)}px`;
+		};
+		fit();
+		const ro = new ResizeObserver(fit);
+		ro.observe(pane);
+		ro.observe(body);
+		addEventListener("resize", fit);
+		return () => {
+			ro.disconnect();
+			removeEventListener("resize", fit);
+		};
+	});
+
+	$effect(() => {
+		const el = host;
+		const parent = el?.closest<HTMLElement>(".pane") ?? el?.parentElement;
 		if (!el || !parent || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
 		const step = (now: number) => {
@@ -129,7 +156,7 @@
 		if (!el) return;
 		if (!matchMedia("(hover: hover) and (pointer: fine)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-		const parent = el.parentElement;
+		const parent = el.closest<HTMLElement>(".pane") ?? el.parentElement;
 		if (!parent) return;
 		let tx = 0;
 		let ty = 0;
@@ -213,11 +240,6 @@
 			linear-gradient(to bottom, transparent calc(100% - 1px), var(--line, var(--grid-line)) 100%);
 		background-size: 2rem 2rem;
 		background-position: center top;
-	}
-	/* the resting grid fades out downward, like the hero band it replaces */
-	.grid {
-		-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent min(30rem, 70%));
-		mask-image: linear-gradient(to bottom, #000 0%, transparent min(30rem, 70%));
 	}
 	/* the same grid, brighter, shown only through a soft circle around the pointer */
 	.lit {

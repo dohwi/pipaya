@@ -155,6 +155,7 @@
 		flex-direction: column;
 		position: relative;
 		container-type: inline-size;
+		isolation: isolate; /* the empty-state grid sits at z-index -1 inside it: above the pane background, below the content */
 		background: var(--bg);
 	}
 	.pane.grouped {
