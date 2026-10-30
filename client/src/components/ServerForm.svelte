@@ -11,6 +11,7 @@
 	import ConfirmButton from "./ConfirmButton.svelte";
 	import ModelConnections from "./ModelConnections.svelte";
 	import ToolSettings from "./ToolSettings.svelte";
+	import McpSettings from "./McpSettings.svelte";
 	import DirPicker from "./DirPicker.svelte";
 	import DevicesPanel from "./DevicesPanel.svelte";
 	import RetentionSection from "./RetentionSection.svelte";
@@ -167,7 +168,7 @@
 			{#key editing.id}<RetentionSection serverId={editing.id} />{/key}
 		</div>
 	{:else if editing && tab === "agent"}
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<ModelConnections serverId={editing.id} /><ToolSettings serverId={editing.id} />{/key}</div>
+		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<ModelConnections serverId={editing.id} /><ToolSettings serverId={editing.id} /><McpSettings serverId={editing.id} />{/key}</div>
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">

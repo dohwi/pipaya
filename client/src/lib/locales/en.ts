@@ -470,7 +470,7 @@ export const en: Record<string, string> = {
 	"고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.": "If none is selected, it is set automatically from the model name; if not found, minimal to high are shown.",
 	"연결 관리": "Manage connections",
 	"모델 연결": "Model connections",
-	"모델 연결 · 에이전트 도구": "Model connections · agent tools",
+	"모델 연결 · 에이전트 도구 · MCP": "Model connections · agent tools · MCP",
 	"기본 폴더 · 자동 삭제": "Default folder · auto-delete",
 	"자동 삭제": "Auto-delete",
 	"오래된 대화 자동 삭제": "Delete old chats automatically",
