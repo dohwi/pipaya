@@ -101,7 +101,12 @@
 
 <section>
 	<span class="hint">
-		{t("키 버튼을 누르고 새 조합을 입력한 뒤 ✓로 저장합니다.")} <kbd>Esc</kbd> {t("취소")} · <kbd>Backspace</kbd> {t("한 키 지우기")}
+		<span class="how">{t("키 버튼을 누르고 새 조합을 입력한 뒤 ✓로 저장합니다.")}</span>
+		<!-- each key with its meaning is one unit, so a narrow window breaks between the units, never inside one or after a lone "·" -->
+		<span class="keys">
+			<span class="unit"><kbd>Esc</kbd>{t("취소")}</span>
+			<span class="unit"><kbd>Backspace</kbd>{t("한 키 지우기")}</span>
+		</span>
 	</span>
 
 	<SearchField label={t("단축키 검색")} bind:value={filter} />
@@ -157,7 +162,22 @@
 		font-weight: 600;
 	}
 	.hint {
-		line-height: 1.5;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 12px;
+		line-height: 20px; /* an even line box: the key caps no longer stretch a line taller than the text next to it */
+	}
+	.keys {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 12px;
+	}
+	.unit {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		white-space: nowrap;
 	}
 	ul {
 		list-style: none;
