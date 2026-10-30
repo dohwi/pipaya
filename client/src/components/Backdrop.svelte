@@ -9,18 +9,20 @@
 		a: number;
 		pk: number; // peak opacity: how bright this wave gets (a tap is faint, a full charge is not)
 		band: number; // px: width of the lit band that travels with the front
+		dur: number; // ms this wave takes to travel: a charged wave bursts out much faster
 	};
-	export const DUR = 1200; // ms: how long a wave travels
 	/** ms of holding the pointer down on empty space for a full gauge. */
 	export const CHARGE = 900;
 	/** Lit band width, from a quick tap to a full charge. */
 	const BAND = { min: 150, max: 340 };
 	/** Peak opacity of the wave, from a quick tap to a full charge. */
 	const PEAK = { min: 0.72, max: 1 };
+	/** Travel time, from a quick tap (the slowest wave) to a full charge (the fastest). */
+	const DUR = { tap: 1100, full: 600 };
 	const EASE = 1.7; // radius = reach * (1 - (1 - p) ** EASE)
-	/** ms after the click at which the wave front reaches a point `dist` px from the click. */
-	export function arrival(reach: number, dist: number): number {
-		return (1 - (1 - Math.min(1, dist / reach)) ** (1 / EASE)) * DUR;
+	/** ms after the release at which the wave front reaches a point `dist` px from it. */
+	export function arrival(b: Burst, dist: number): number {
+		return (1 - (1 - Math.min(1, dist / b.reach)) ** (1 / EASE)) * b.dur;
 	}
 </script>
 
@@ -43,14 +45,14 @@
 	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
 	const tick = (now: number) => {
 		for (const b of bursts) {
-			const p = Math.min(1, (now - b.t0) / DUR);
+			const p = Math.min(1, (now - b.t0) / b.dur);
 			b.r = b.reach * (1 - (1 - p) ** EASE);
 			// ease in over the first 12%, hold, then fade out smoothly
 			const fin = Math.min(1, p / 0.12);
 			const fout = p < 0.45 ? 1 : 1 - (p - 0.45) / 0.55;
 			b.a = fin * fin * (3 - 2 * fin) * fout * fout * (3 - 2 * fout) * b.pk;
 		}
-		bursts = bursts.filter((b) => now - b.t0 < DUR);
+		bursts = bursts.filter((b) => now - b.t0 < b.dur);
 		ripRaf = bursts.length ? requestAnimationFrame(tick) : 0;
 	};
 	$effect(() => () => {
@@ -72,7 +74,9 @@
 		// a tap stops short of the farthest corner, a full charge crosses the whole screen
 		const reach = far * (0.7 + 0.3 * c.p) + band;
 		const pk = PEAK.min + (PEAK.max - PEAK.min) * c.p;
-		bursts.push({ id: seq++, x: c.x, y: c.y, reach, t0: performance.now(), r: 0, a: pk, pk, band });
+		// the fuller the gauge, the harder it bursts: a full charge crosses the screen twice as fast as a tap
+		const dur = DUR.tap + (DUR.full - DUR.tap) * c.p;
+		bursts.push({ id: seq++, x: c.x, y: c.y, reach, dur, t0: performance.now(), r: 0, a: pk, pk, band });
 		if (!ripRaf) ripRaf = requestAnimationFrame(tick);
 	};
 
