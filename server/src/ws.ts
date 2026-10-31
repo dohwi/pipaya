@@ -51,6 +51,8 @@ export const HEARTBEAT_MS = 30_000;
  * replay cursor, instead of buffering every token of every session in memory.
  */
 export const MAX_BUFFERED = 8 * 1024 * 1024;
+/** Most events replayed to a client that reconnects with a cursor (the same bound as the SSE stream). */
+const REPLAY_LIMIT = 5000;
 
 export interface WebSocketOptions {
 	heartbeatMs?: number;
@@ -115,9 +117,12 @@ export async function registerWebSocket(
 				let cursor = after;
 				for (;;) {
 					const batch = deps.bus.history({ sessionId, after: cursor, limit: 500 });
-					batch.forEach(emit);
-					if (batch.length < 500) break;
+					// One stored event can be megabytes. Stop as soon as the client is cut off for being too slow, instead of
+					// serialising the rest of the backlog into a socket nobody reads.
+					for (const e of batch) { if (socket.readyState !== socket.OPEN) break; emit(e); }
+					if (socket.readyState !== socket.OPEN || batch.length < 500) break;
 					cursor = batch[batch.length - 1]!.id;
+					if (cursor - after > REPLAY_LIMIT) break; // like SSE: a client that far behind resyncs from a snapshot
 				}
 				replaying = false;
 				buffered.splice(0).forEach(emit);

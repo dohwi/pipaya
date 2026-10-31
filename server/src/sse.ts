@@ -73,8 +73,8 @@ export function streamEvents(
 		let cursor = after;
 		for (;;) {
 			const batch = bus.history({ sessionId: opts.sessionId, after: cursor, limit: 500 });
-			for (const e of batch) send(e);
-			if (batch.length < 500) break;
+			for (const e of batch) { if (closed) break; send(e); } // one event can be megabytes: stop as soon as the client is cut off
+			if (closed || batch.length < 500) break;
 			cursor = batch[batch.length - 1]!.id;
 			if (cursor - after > REPLAY_LIMIT) break;
 		}

@@ -98,6 +98,28 @@ describe("websocket heartbeat", () => {
 	});
 });
 
+describe("websocket replay", () => {
+	test("stops reading the backlog once the client is cut off, and caps how far back it goes", async () => {
+		const dir3 = mkdtempSync(join(tmpdir(), "pipaya-ws-replay-"));
+		const cfg: Config = { host: "127.0.0.1", port: 0, dataDir: dir3, dbPath: join(dir3, "db.sqlite"), token: TOKEN, workspaceRoot: dir3, logLevel: "silent" };
+		const a = await buildApp(cfg, { websocket: {} });
+		const addr = await a.server.listen({ host: "0.0.0.0", port: 0 });
+		const first = a.bus.publish(null, "ping", { n: 0 }).id;
+		for (let i = 1; i < 6500; i++) a.bus.publish(null, "ping", { n: i });
+		const ws = new WebSocket(`ws://127.0.0.1:${new URL(addr).port}/ws?token=${TOKEN}`);
+		await new Promise((r) => (ws.onopen = r));
+		let events = 0;
+		ws.onmessage = (m) => { if (JSON.parse(String(m.data)).type === "event") events++; };
+		ws.send(JSON.stringify({ id: 1, op: "subscribe", after: first - 1 }));
+		await Bun.sleep(1500);
+		expect(events).toBeGreaterThan(4000);
+		expect(events).toBeLessThanOrEqual(5500); // not the whole 6500
+		ws.close();
+		await a.close();
+		rmSync(dir3, { recursive: true, force: true });
+	});
+});
+
 describe("websocket slow clients", () => {
 	test("a client whose queue is over the limit is closed with 1013 so it reconnects and replays", async () => {
 		const dir2 = mkdtempSync(join(tmpdir(), "pipaya-ws-slow-"));
