@@ -207,14 +207,7 @@
 	<div class="grid"></div>
 	<div class="lit"></div>
 	{#if press}
-		<div
-			class="charge"
-			class:full={press.p >= 1}
-			style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}"
-		>
-			<div class="spin a"></div>
-			<div class="spin b"></div>
-		</div>
+		<div class="charge" style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}"></div>
 	{/if}
 	{#each bursts as b (b.id)}
 		<div
@@ -271,58 +264,16 @@
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
 	}
-	/* the light gathering under the pointer while it is held down on empty space */
+	/* the light under the held pointer: one soft bloom that whitens and widens as the charge builds */
 	.charge {
 		position: absolute;
 		width: 240px;
 		height: 240px;
 		translate: -50% -50%;
-		--p: 0;
-	}
-	/* two counter-turning veils of hairlines, drifting inward: the lit ring settles onto the point as the gauge fills */
-	.spin {
-		position: absolute;
-		inset: 0;
-		--inner: calc(66% - 62% * var(--p));
-		--outer: calc(88% - 74% * var(--p));
-		-webkit-mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 9%), #000 var(--outer), transparent calc(var(--outer) + 10%));
-		mask-image: radial-gradient(closest-side, transparent var(--inner), #000 calc(var(--inner) + 9%), #000 var(--outer), transparent calc(var(--outer) + 10%));
-		filter: blur(0.6px);
-	}
-	.spin.a {
-		background: repeating-conic-gradient(from 0deg, var(--grid-wave) 0deg 0.7deg, transparent 0.7deg 14deg);
-		opacity: calc(0.1 + var(--p) * 0.22);
-		animation: gather 9s linear infinite;
-	}
-	.spin.b {
-		background: repeating-conic-gradient(from 5deg, var(--grid-wave) 0deg 1deg, transparent 1deg 22deg);
-		opacity: calc(0.08 + var(--p) * 0.18);
-		animation: gather 14s linear infinite reverse;
-	}
-	@keyframes gather {
-		to {
-			rotate: 1turn;
-		}
-	}
-	/* the core: a soft bloom that warms and settles a little tighter as the gauge fills */
-	.charge::after {
-		content: "";
-		position: absolute;
-		inset: 32%;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 78%);
-		opacity: calc(0.08 + var(--p) * 0.42);
-		scale: calc(1.5 - var(--p) * 0.55);
-		filter: blur(2px);
-	}
-	/* a full gauge breathes, so the ceiling is visible without a number */
-	.charge.full::after {
-		animation: charged 2600ms var(--ease-std) infinite;
-	}
-	@keyframes charged {
-		50% {
-			opacity: 0.34;
-		}
+		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 72%);
+		opacity: calc(0.1 + var(--p) * 0.75);
+		scale: calc(0.55 + var(--p) * 0.6);
 	}
 	/* the burst that leaves with the wave: a soft halo that widens and thins out */
 	.flash {
