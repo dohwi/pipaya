@@ -77,7 +77,6 @@
 			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(pane, titleNow()) },
 			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
-			...(group ? [{ icon: "unlink" as const, label: t("그룹 해제 (대화는 그대로 남습니다)"), title: "", run: () => void app.deleteGroup(group.id) }] : []),
 			isTerm
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(pane) }
 				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(pane) },
