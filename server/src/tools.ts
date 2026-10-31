@@ -31,6 +31,8 @@ export interface ToolContext {
 	imageLimits?(): Partial<ResizeLimits> | undefined;
 	/** Ask the user and wait for the answer (`ask_user`). Rejects when the run is aborted. */
 	ask?(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
+	/** Run a one-off helper and return its answer (`delegate`). Rejects with a conflict when a limit is hit; the signal stops the helper. */
+	delegate?(toolCallId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void): Promise<AgentToolResult<any>>;
 	/** Other sessions of this server (`peer_send`, `peer_read`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
@@ -705,14 +707,41 @@ const peerGroupTool: ToolDef = {
 	},
 };
 
+export const DELEGATE_TOOL = "delegate";
+const DELEGATE_DESCRIPTION =
+	"Hand a self-contained task to a short-lived helper (a sub-agent role defined in ~/.agents/subagents or the project's .agents/subagents) and get its final answer back as text. " +
+	"The helper does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer_create for a lasting chat) and cannot delegate further or ask the user. " +
+	"Use it to save your own context on searches or noisy commands; limits apply (concurrent helpers, calls per run). An unknown role is rejected with the list of roles.";
+
+const delegateTool: ToolDef = {
+	name: DELEGATE_TOOL,
+	description: "Run a one-off helper (sub-agent) and return its answer.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: DELEGATE_TOOL,
+			label: "Delegate to a helper",
+			description: DELEGATE_DESCRIPTION,
+			parameters: Type.Object({
+				role: Type.String({ minLength: 1, maxLength: 60, description: "Helper role, the file name without .md (e.g. explore, runner)" }),
+				task: Type.String({ minLength: 1, maxLength: 12000, description: "Everything the helper needs: goal, paths, symbols, the question, and the answer format you want" }),
+				model: Type.Optional(Type.String({ minLength: 3, maxLength: 200, description: "provider/model to use instead of the role's own model" })),
+			}),
+			async execute(id, p, signal, onUpdate) {
+				if (!ctx?.delegate) throw new Error("delegate is not available in this session");
+				return ctx.delegate(id, { role: p.role, task: p.task, model: p.model }, signal, (t) => onUpdate?.(text(t, { running: true })));
+			},
+		});
+	},
+};
+
 const PEER_DEFS = [peerSendTool, peerReadTool, peerListTool, peerArchiveTool, peerAbortTool, peerAnswerTool, peerCreateTool, peerManageTool, peerGroupTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name)];
+export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
 export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

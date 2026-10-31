@@ -565,6 +565,7 @@ export const en: Record<string, string> = {
 	"새 대화를 만들어 작업 맡기기 (peer_create)": "Start a new chat with a task (peer_create)",
 	"다른 대화 닫기·재개·삭제·이름 변경 (peer_manage)": "Close, resume, delete or rename another chat (peer_manage)",
 	"대화들을 그룹으로 묶기 (peer_group)": "Put chats into a group (peer_group)",
+	"일회성 도우미에게 작업 위임 (delegate)": "Hand a task to a one-off helper (delegate)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */

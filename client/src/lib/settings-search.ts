@@ -97,6 +97,7 @@ export function toolLabel(name: string): string {
 		case "peer_create": return t("새 대화를 만들어 작업 맡기기 (peer_create)");
 		case "peer_manage": return t("다른 대화 닫기·재개·삭제·이름 변경 (peer_manage)");
 		case "peer_group": return t("대화들을 그룹으로 묶기 (peer_group)");
+		case "delegate": return t("일회성 도우미에게 작업 위임 (delegate)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;
 	}

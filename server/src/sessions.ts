@@ -2,6 +2,7 @@ import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-ag
 import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
@@ -15,7 +16,7 @@ import { modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
-import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
 import { PeerService, type GroupOps, type GroupRef } from "./peers.ts";
 import type { QuestionRequest } from "./questions.ts";
@@ -25,6 +26,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, runawayReason } from "./run-guard.ts";
+import { DelegateLimits, finalText, loadSubagents, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -73,6 +75,8 @@ export class SessionManager {
 	private describeFailedAt = new Map<string, number>();
 	private pendingDescribes = new Set<Promise<void>>();
 	private backfilling = false;
+	/** `delegate` use per session: calls in the current run and helpers running right now. */
+	private delegates = new DelegateLimits();
 	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
 	/** Names, messages between sessions and `@name` hints. */
@@ -103,6 +107,8 @@ export class SessionManager {
 		private imageModel?: ImageModelSettings,
 		/** MCP servers; the tools of the connected ones reach every session. */
 		private mcp?: McpManager,
+		/** Home directory whose `.agents/subagents` holds the global helper roles; defaults to the OS user home. */
+		private home: string = homedir(),
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -775,6 +781,7 @@ export class SessionManager {
 
 	private run(id: string, live: Live, mode: string, start: () => Promise<void>): void {
 		this.peers.resetRun(id);
+		this.delegates.resetRun(id);
 		live.running = true;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
@@ -928,7 +935,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -945,7 +952,7 @@ export class SessionManager {
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, peers: {
+		const ctx: ToolContext = { sessionId, delegate: (toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), peers: {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),
@@ -976,6 +983,56 @@ export class SessionManager {
 		return ctx;
 	}
 
+
+	/**
+	 * `delegate`: a one-off helper run. The helper is a bare Agent that is never stored, so it is no session and shows in no list;
+	 * only its final text goes back to the parent. Limits are enforced here and reported as conflicts, never dropped silently.
+	 */
+	private async delegate(sessionId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void) {
+		const rec = this.store.get(sessionId);
+		if (!rec) throw notFound("session");
+		const defs = loadSubagents(rec.cwd, this.home);
+		const def = defs.get(input.role.replace(/\.md$/, ""));
+		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents)"}`);
+		const spec = input.model ?? def.model;
+		let provider = rec.provider, modelId = rec.model;
+		if (spec) {
+			const i = spec.indexOf("/");
+			[provider, modelId] = i > 0 ? [spec.slice(0, i), spec.slice(i + 1)] : [rec.provider, spec];
+		}
+		const model = this.registry.models.getModel(provider, modelId);
+		if (!model || this.registry.isImageModel?.(provider, modelId)) throw badRequest(`model ${provider}/${modelId} is not available for helpers`);
+		const defs2 = this.toolDefs();
+		const off = this.disabledTools();
+		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
+		const tools = buildTools(names, rec.cwd, this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
+		const release = this.delegates.acquire(sessionId);
+		let turns = 0, limited = false;
+		const agent = new Agent({
+			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: def.thinking ?? "off", tools, messages: [] },
+			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), DEFAULT_UPSTREAM_RETRY),
+			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
+			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
+		});
+		const stop = () => agent.abort();
+		signal?.addEventListener("abort", stop, { once: true });
+		agent.subscribe((e) => {
+			if (e.type === "tool_execution_start") progress(`${def.name}: ${e.toolName}`);
+			if (e.type === "turn_end" && ++turns >= def.maxTurns) { limited = true; agent.abort(); }
+		});
+		try {
+			if (signal?.aborted) stop();
+			else await agent.prompt(input.task);
+			if (signal?.aborted) throw new Error("delegate aborted");
+			const { text: answer, error } = finalText(agent.state.messages as any);
+			if (error && !limited) throw new Error(`helper ${def.name} failed: ${error}`);
+			const note = limited ? `\n\n[helper stopped after ${def.maxTurns} model calls (maxTurns); the answer may be incomplete]` : "";
+			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, turns, limited, task: input.task.slice(0, 500) } };
+		} finally {
+			signal?.removeEventListener("abort", stop);
+			release();
+		}
+	}
 
 	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */
 	private guardRunaway(sessionId: string, live: Live, event: Extract<AgentEvent, { type: "turn_end" }>): void {
