@@ -118,27 +118,6 @@
 		};
 	});
 
-	// A system dialog from the keyboard app (e.g. delete in its clipboard panel) takes window focus away and the phone
-	// hides the keyboard while the textarea stays "focused". When the window returns, re-focus so the keyboard comes back.
-	$effect(() => {
-		if (!pane.focused || !isTouch()) return;
-		let hadFocus = false;
-		const onBlur = () => { hadFocus = document.activeElement === ta; };
-		const onFocus = () => {
-			if (!hadFocus || !ta) return;
-			hadFocus = false;
-			// blur first: focus() on an element that is already active does not ask the IME to show again
-			ta.blur();
-			ta.focus({ preventScroll: true });
-		};
-		window.addEventListener("blur", onBlur);
-		window.addEventListener("focus", onFocus);
-		return () => {
-			window.removeEventListener("blur", onBlur);
-			window.removeEventListener("focus", onFocus);
-		};
-	});
-
 	// Each conversation has its own input: stash the one being left, restore the one being entered.
 	let draftKey: string | null | undefined;
 	function stash() {
