@@ -86,6 +86,12 @@
 
 		</ExtensionPart>
 
+		{#if group && (app.isFull(group.id) || app.zoomId)}
+			<!-- enlarged: the tab bar shows only the group's sessions, so dissolving the group lives here next to its name -->
+			<button class="tool ungroup" onclick={() => void app.deleteGroup(group.id)} aria-label={t("그룹 해제 (대화는 그대로 남습니다)")} title={t("그룹 해제 (대화는 그대로 남습니다)")}>
+				<Icon name="unlink" />
+			</button>
+		{/if}
 		<NavbarItems />
 		<ExtensionMount slot="header.end" />
 

@@ -213,8 +213,11 @@
 				<!-- one pane of the open group is enlarged (always, on phones): the group's tab and its sessions share one box -->
 				{#if boxed}
 					<div class="gbox">
-						{@render tabItem(x, on, st, true)}
-						<span class="gsep" aria-hidden="true"></span>
+						<!-- wide screens: the page header carries the group's name, count and unlink; phones' header names the session, so the group's tab stays here -->
+						{#if viewport.narrow}
+							{@render tabItem(x, on, st, true)}
+							<span class="gsep" aria-hidden="true"></span>
+						{/if}
 						<SessionStrip />
 					</div>
 				{:else}
@@ -271,8 +274,8 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the open group as one bordered unit: its tab (name, count, unlink) and its sessions. It gives way before the other
-	   tabs do, so with many sessions only the chips scroll inside it and the group's own tab stays in view. */
+	/* the open group as one bordered unit of its sessions (on phones with its own tab in front). It gives way before the other
+	   tabs do, so with many sessions only the chips scroll inside it and the other tabs stay in view. */
 	.gbox {
 		flex: 0 1 auto;
 		min-width: 0;
