@@ -66,7 +66,7 @@
 
 {#if settings && (imageModels.length || settings.model)}
 	{@const s = settings}
-	<section>
+	<section class="set-group">
 		<div class="section-label">{t("이미지 모델")}</div>
 		<ModelField
 			conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}

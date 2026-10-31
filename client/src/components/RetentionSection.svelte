@@ -85,7 +85,7 @@
 
 {#if info}
 	{@const s = info.settings}
-	<section class="retention">
+	<section class="retention set-group">
 		<div class="section-label">{t("자동 삭제")}</div>
 		<SettingRow label={t("오래된 대화 자동 삭제")} hint={t("한 시간마다 확인합니다. 실행 중이거나 답을 기다리는 대화는 지우지 않습니다.")}>
 			<Switch checked={s.enabled} disabled={busy} label={t("오래된 대화 자동 삭제")} onchange={(on) => void save({ ...s, enabled: on })} />

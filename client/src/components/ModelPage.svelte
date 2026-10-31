@@ -49,7 +49,7 @@
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
 
-	<section class="fsec">
+	<section class="fsec set-group">
 		<label>
 			<span class="idlabel">{t("모델 ID")}{#if locked}<Badge tone="neutral" size="sm"><Icon name="server" />{t("업스트림 제공")}</Badge>{/if}</span>
 			<input class="field mono" bind:value={r.id} readonly={locked} aria-readonly={locked} placeholder="upstream-model-id" autocomplete="off" autocapitalize="off" spellcheck="false" use:focusOnDesktop={fresh && !locked} />
@@ -90,7 +90,7 @@
 		</div>
 	</section>
 	{#if !r.imageGeneration}
-	<section class="fsec">
+	<section class="fsec set-group">
 		<div class="section-label">{t("제한")}</div>
 		<div class="grid2">
 			<label>
@@ -104,7 +104,7 @@
 		</div>
 	</section>
 	{/if}
-	<section class="fsec">
+	<section class="fsec set-group">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
 			{#if !r.imageGeneration}<button type="button" class="cap tap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
@@ -115,7 +115,7 @@
 	</section>
 	{#if r.reasoning && !r.imageGeneration}
 		{@const shown = shownLevels(r, matched)}
-		<section class="fsec">
+		<section class="fsec set-group">
 			{#if !matched}
 				<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 				<div class="caps" role="group" aria-label={t("추론 강도")}>
@@ -140,6 +140,7 @@
 					{/if}
 				</p>
 			{/if}
+
 			<div class="defsec">
 				<div class="section-label">{t("새 대화 기본 강도")}</div>
 				<div

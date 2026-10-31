@@ -235,7 +235,7 @@
 	{:else if loadError}
 		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
 	{:else if cfg}
-		<section>
+		<section class="set-group">
 			<div class="section-label">{t("새 대화 기본 모델")}</div>
 			<ModelField
 				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
@@ -271,7 +271,7 @@
 
 		<ImageModelSection {serverId} {models} providers={providerList} />
 
-		<section>
+		<section class="set-group">
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
 			{#if cfg.providers.length}

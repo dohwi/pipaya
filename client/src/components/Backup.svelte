@@ -127,7 +127,7 @@
 		new Date(ts).toLocaleString(localeTag(), { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 </script>
 
-<section aria-labelledby="bk-export">
+<section class="set-group" aria-labelledby="bk-export">
 	<h3 id="bk-export" class="section-label">{t("내보내기")}</h3>
 	<p class="hint">{t("고른 항목을 파일 하나로 저장해 다른 기기에서 가져올 수 있습니다.")}</p>
 	<div class="list">
@@ -148,7 +148,7 @@
 	<p class="note"><Icon name="shield" /><span>{t("토큰·비밀번호는 빠지지만, 공유하기 전에 한 번 확인하세요.")}</span></p>
 </section>
 
-<section aria-labelledby="bk-import">
+<section class="set-group" aria-labelledby="bk-import">
 	<h3 id="bk-import" class="section-label">{t("가져오기")}</h3>
 
 	{#if !loaded}
@@ -181,7 +181,7 @@
 	{#if restoredNote}<Notice tone="ok" size="sm" role="status">{restoredNote}</Notice>{/if}
 </section>
 
-<section aria-labelledby="bk-restore">
+<section class="set-group" aria-labelledby="bk-restore">
 	<h3 id="bk-restore" class="section-label">{t("되돌리기")}</h3>
 	{#if canRestore}
 		<div class="restore">

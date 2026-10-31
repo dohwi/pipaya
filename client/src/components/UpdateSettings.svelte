@@ -51,7 +51,7 @@
 {/if}
 
 <style>
-	.card { margin-top: 12px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+	.card { margin-top: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.item { display: flex; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; }
 	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
 	.name { font-size: var(--fs-sm); font-weight: 500; }

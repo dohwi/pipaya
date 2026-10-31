@@ -66,7 +66,7 @@
 
 {#if settings}
 	{@const s = settings}
-	<section>
+	<section class="set-group">
 		<div class="section-label">{t("시스템 모델")}</div>
 		<ModelField
 				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}

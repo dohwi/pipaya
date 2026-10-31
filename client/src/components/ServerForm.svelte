@@ -173,6 +173,7 @@
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">
+				<div class="set-group fields">
 				<FormField label={`${t("이름")} (${tc("optional", "선택")})`}>
 					<input class="field" bind:value={name} placeholder={t("예: 집 서버")} autocomplete="off" maxlength="40" />
 				</FormField>
@@ -207,8 +208,9 @@
 				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
 				{#if error}<Notice tone="danger">{error}</Notice>{/if}
 				<p class="hint">{t("토큰은 이 기기에만 저장됩니다.")}</p>
-				{#if editing && isOpen}<ServerUpdate />{/if}
-				{#if editing?.local}<LocalServerSettings />{/if}
+				</div>
+				{#if editing && isOpen}<section class="set-group"><ServerUpdate /></section>{/if}
+				{#if editing?.local}<section class="set-group"><LocalServerSettings /></section>{/if}
 			</div>
 
 			<footer>
@@ -378,6 +380,7 @@
 	.mono {
 		font-size: var(--fs-md);
 	}
+	.fields { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.tokenrow {
 		display: flex;
 		gap: 4px;

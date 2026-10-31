@@ -22,7 +22,7 @@
 	const langOptions = $derived([{ tag: "system", name: t("시스템") }, ...languages()]);
 </script>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("언어")}</div>
 	<Segmented variant="cards" columns={3} label={t("언어")} value={getLangPref()} onchange={setLangPref} options={langOptions.map((l) => ({ id: l.tag, label: l.name, lang: l.tag === "system" ? undefined : l.tag }))} />
 	{#if getLangPref() === "system"}
@@ -30,14 +30,14 @@
 	{/if}
 </section>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("테마")}</div>
 	<Segmented variant="cards" label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
 		{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
 	</Segmented>
 </section>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("화면 배율")}</div>
 	<RangeField label={t("배율")} ariaLabel={t("화면 배율")} min={50} max={200} step={10} value={app.prefs.uiScale} oninput={(v) => app.prefs.setUiScale(v)}>
 		{#snippet trailing()}<Button size="sm" variant="ghost" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
@@ -45,16 +45,16 @@
 	<span class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</span>
 </section>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("알림음")}</div>
 	<SettingRow label={t("소리 재생")} hint={t("작업 완료 · 확인 필요 · 실패 때. 보고 있는 대화는 승인 요청만 울립니다")}>
 		<Switch checked={app.prefs.soundOn} label={t("알림음")} onchange={(on) => app.prefs.setSound(on)} />
 	</SettingRow>
 	<RangeField label={t("크기")} ariaLabel={t("알림음 크기")} min={0} max={200} step={5} value={app.prefs.soundVolume} disabled={!app.prefs.soundOn} oninput={(v) => app.prefs.setSoundVolume(v)} onchange={() => app.prefs.previewSound()} alignAction />
 </section>
-<section><NotificationSettings /></section>
-<section><TerminalSettings /></section>
-<section><UpdateSettings /></section>
+<section class="set-group"><NotificationSettings /></section>
+<section class="set-group"><TerminalSettings /></section>
+<section class="set-group"><UpdateSettings /></section>
 
 
 <style>

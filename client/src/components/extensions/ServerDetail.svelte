@@ -88,7 +88,7 @@
 		</Notice>
 	{/if}
 
-	<section class="block">
+	<section class="block set-group">
 		<h3 class="section-label">{t("확장 설정")}</h3>
 		{#if form.fields}
 			<SettingsForm id={ext.settingsId} fields={form.fields} value={settings ?? {}} disabled={busy} saveLabel={t("설정 저장")} {onsave} />
@@ -100,7 +100,7 @@
 	</section>
 
 	{#if ext.tools.length || ext.commands.length || ext.flags.length}
-		<section class="block">
+		<section class="block set-group">
 			<h3 class="section-label">{t("제공 기능")}</h3>
 			{#if provides.length}<p class="brief">{provides.join(", ")}</p>{/if}
 			{#each ext.flags as flag (flag.name)}
@@ -109,7 +109,7 @@
 		</section>
 	{/if}
 
-	<section class="block">
+	<section class="block set-group">
 		<h3 class="section-label">{t("관리")}</h3>
 		<div class="row">
 			<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>
@@ -128,5 +128,5 @@
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-	.block { gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+	.block { gap: 8px; }
 </style>

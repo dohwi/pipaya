@@ -70,7 +70,7 @@
 
 {#if settings}
 	{@const s = settings}
-	<section>
+	<section class="set-group">
 		<div class="section-label">{t("컨텍스트 압축 모델")}</div>
 		<div class="crow">
 			<div class="cfield">

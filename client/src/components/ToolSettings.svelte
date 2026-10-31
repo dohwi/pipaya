@@ -48,7 +48,7 @@
 	}
 </script>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("에이전트 도구")}</div>
 	{#if shown?.tools}
 		{@const info = shown.tools}

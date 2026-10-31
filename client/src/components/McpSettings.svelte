@@ -12,7 +12,7 @@
 	});
 </script>
 
-<section>
+<section class="set-group">
 	<div class="section-label">{t("MCP 서버")}</div>
 	{#if api}{#key serverId}<McpPanel {api} />{/key}{/if}
 </section>

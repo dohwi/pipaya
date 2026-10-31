@@ -113,8 +113,9 @@
 	{#if !visible.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
 
 	{#each GROUPS.filter((g) => visible.some((x) => x.group === g.id)) as g (g.id)}
-	<div class="group">{t(g.title)}</div>
-	<ul>
+	<section class="set-group shortcut">
+		<div class="group">{t(g.title)}</div>
+		<ul>
 		{#each visible.filter((x) => x.group === g.id) as a (a.id)}
 			{@const combo = app.prefs.bindings[a.id]}
 			<li>
@@ -143,6 +144,7 @@
 			</li>
 		{/each}
 	</ul>
+	</section>
 	{/each}
 
 	<div class="foot">
@@ -156,8 +158,10 @@
 		flex-direction: column;
 		gap: 12px;
 	}
+	.shortcut {
+		gap: 8px;
+	}
 	.group {
-		margin-top: 12px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
 	}
