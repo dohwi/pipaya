@@ -61,10 +61,13 @@
 	.open.wide:has(> .tpin) {
 		padding-right: 0;
 	}
-	:global(.item:hover) .tpin,
-	:global(.item:focus-within) .tpin,
-	:global(.item.menuopen) .tpin {
-		display: none;
+	/* only where a pointer hovers: touch keeps the pin (its open row shows the "⋯" permanently, the pin sits beside it) and a tap's sticky :hover must not hide it */
+	@media (hover: hover) {
+		:global(.item:hover) .tpin,
+		:global(.item:focus-within) .tpin,
+		:global(.item.menuopen) .tpin {
+			display: none;
+		}
 	}
 	.tpin {
 		display: grid;
