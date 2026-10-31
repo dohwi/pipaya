@@ -28,6 +28,7 @@ export const K = {
   groupDir: "pipaya.groupdir", // folder a group is listed under, fixed once seen: { <serverId>: { <groupId>: cwd } }
   pinnedTabs: "pipaya.pinnedtabs", // tabs pinned to the top of their folder: { <serverId>: [groupId | sessionId | terminalId, ...] }
   pinnedDirs: "pipaya.pinneddirs", // folders pinned to the sidebar, kept even with no tabs: { <serverId>: [cwd, ...] }
+  dirNames: "pipaya.dirnames", // names given to pinned folders, shown instead of the path's tail: { <serverId>: { <cwd>: name } }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
 };
 

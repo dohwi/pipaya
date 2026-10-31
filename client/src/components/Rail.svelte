@@ -39,7 +39,7 @@
 	);
 	const multi = $derived(sections.length > 1);
 	const home = (sec: Section) => app.links[sec.server.id]?.workspace?.home;
-	const dirName = (sec: Section, path: string) => shortName(path, home(sec));
+	const dirName = (sec: Section, path: string) => app.sidebar.dirName(sec.server.id, path) ?? shortName(path, home(sec));
 	/** The most urgent thing going on in a folder's tabs. */
 	function dirState(sec: Section, d: DirBlock): Activity {
 		const ids = d.tabs.flatMap((x) => tabPanes(x));

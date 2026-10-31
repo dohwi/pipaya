@@ -699,6 +699,7 @@ export const en: Record<string, string> = {
 	"다른 대화와 묶기": "Group with another chat",
 	"지금 보는 대화에 합치기": "Add to the chat you're viewing",
 	"이름 바꾸기": "Rename",
+	"고정한 폴더에 경로 대신 보일 이름을 붙입니다": "Give the pinned folder a name to show in place of its path",
 	"더 보기": "More",
 	"닫기 (/resume 으로 다시 열기)": "Close (reopen with /resume)",
 	"사이드바 접기": "Collapse sidebar",

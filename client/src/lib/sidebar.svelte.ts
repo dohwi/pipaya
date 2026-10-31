@@ -29,6 +29,8 @@ export class SidebarState {
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
+  /** Names given to pinned folders per server, shown in place of the path's tail (the path still sits beside it). Dropped on unpin. */
+  dirNames = $state<Record<string, Record<string, string>>>(read<Record<string, Record<string, string>>>(K.dirNames, {}));
   /** Tabs pinned per server: they sit at the top of their folder, in their own order. A split tab is pinned as a whole. */
   pinnedTabs = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedTabs, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
@@ -61,6 +63,19 @@ export class SidebarState {
     const list = this.pinned[serverId] ?? [];
     this.pinned = { ...this.pinned, [serverId]: list.includes(path) ? list.filter((p) => p !== path) : [...list, path] };
     write(K.pinnedDirs, this.pinned);
+    if (!this.isPinned(serverId, path)) this.setDirName(serverId, path, "");
+  }
+
+  dirName(serverId: string, path: string): string | undefined {
+    return this.isPinned(serverId, path) ? this.dirNames[serverId]?.[path] : undefined;
+  }
+
+  /** Name a pinned folder; a blank name goes back to the default label. */
+  setDirName(serverId: string, path: string, name: string) {
+    const { [path]: _, ...rest } = this.dirNames[serverId] ?? {};
+    const next = name.trim() ? { ...rest, [path]: name.trim() } : rest;
+    this.dirNames = { ...this.dirNames, [serverId]: next };
+    write(K.dirNames, this.dirNames);
   }
 
   isTabPinned(serverId: string, id: string): boolean {

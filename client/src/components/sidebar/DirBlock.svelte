@@ -26,6 +26,10 @@
 	let { n, d, searching }: { n: SidebarNode; d: Dir; searching: boolean } = $props();
 
 	const sb = getSidebarCtx();
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
 	const key = $derived(dirKey(n.server.id, d.path));
 	const folded = $derived(sb.isFolded(key));
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
@@ -56,7 +60,25 @@
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 			<span class="dicon" class:pinned title={pinned ? t("고정됨") : undefined}><Icon name={pinned ? "pin" : "folder"} /></span>
 			<span class="dlabel">
-				<span class="dname">{label}</span>
+				{#if sb.dirRename.is(key)}
+					<!-- svelte-ignore a11y_autofocus -->
+					<input
+						class="dnameinput"
+						value={sb.dirRename.draft}
+						maxlength="60"
+						oninput={(e) => (sb.dirRename.draft = e.currentTarget.value)}
+						use:focusSelect
+						onclick={(e) => e.stopPropagation()}
+						onblur={() => sb.commitDirRename(n, d.path)}
+						onkeydown={(e) => {
+							e.stopPropagation();
+							if (e.key === "Enter") sb.commitDirRename(n, d.path);
+							if (e.key === "Escape") sb.dirRename.cancel();
+						}}
+					/>
+				{:else}
+					<span class="dname" role="presentation" ondblclick={pinned ? (e) => (e.preventDefault(), sb.dirRename.start(key, label)) : undefined} title={pinned ? t("{name} · 더블 클릭으로 이름 바꾸기", { name: label }) : undefined}>{label}</span>
+				{/if}
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
@@ -102,6 +124,19 @@
 	/* a pinned folder's pin is stuck in at a slant; only the glyph turns (the 14px box and its centre on x 48 stay put) */
 	.dicon.pinned :global(svg) {
 		transform: rotate(35deg);
+	}
+	.dnameinput {
+		flex: 1;
+		min-width: 0;
+		height: 24px;
+		padding: 0 4px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--accent);
+		background: var(--bg);
+		outline: 0;
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		color: var(--text);
 	}
 	.archive {
 		position: relative;

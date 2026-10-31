@@ -39,6 +39,9 @@ export interface SidebarCtx {
 	readonly marks: DragMarks;
 	readonly rename: InlineRename;
 	readonly groupRename: InlineRename;
+	/** The pinned folder being renamed (its dir key) */
+	readonly dirRename: InlineRename;
+	commitDirRename(n: SidebarNode, path: string): void;
 	/** Id the "more" / "+" menu is open for (its button stays highlighted) */
 	readonly menuId: string | null;
 	readonly searching: boolean;

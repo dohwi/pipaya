@@ -29,7 +29,7 @@
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
@@ -40,6 +40,14 @@
 	/** The conversation or terminal being renamed in place, and the split tab (group) being renamed. */
 	const rename = new InlineRename();
 	const groupRename = new InlineRename();
+	const dirRename = new InlineRename();
+	/** Save the folder's new name; blank goes back to the default label */
+	function commitDirRename(n: Node, path: string) {
+		if (!dirRename.is(dirKey(n.server.id, path))) return;
+		const name = dirRename.draft;
+		dirRename.cancel();
+		app.sidebar.setDirName(n.server.id, path, name);
+	}
 	/** What the sidebar draws while something is dragged (the row pulled onto, the drop lines, the carried block). */
 	const marks = new DragMarks();
 
@@ -67,7 +75,7 @@
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
 	/** A folder's label on server `n` (see sidebar-model). */
-	const shortLabel = (n: Node, path: string) => shortName(path, n.home);
+	const shortLabel = (n: Node, path: string) => app.sidebar.dirName(n.server.id, path) ?? shortName(path, n.home);
 
 	const nodes = $derived.by<Node[]>(() => {
 		const q = query.trim().toLowerCase();
@@ -227,6 +235,7 @@
 			toggle: () => app.sidebar.toggleFolded(key),
 			togglePin: path === null ? undefined : () => app.sidebar.togglePinned(n.server.id, path),
 			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
+			rename: path !== null && app.sidebar.isPinned(n.server.id, path) ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
 			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 		});
 		rowMenu?.openAt(pt, id, items);
@@ -237,6 +246,8 @@
 		marks,
 		rename,
 		groupRename,
+		dirRename,
+		commitDirRename,
 		get menuId() {
 			return menuId;
 		},

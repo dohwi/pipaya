@@ -145,6 +145,8 @@ export interface HeadActions extends NewActions {
 	/** Pin or unpin the folder (servers cannot be pinned); `pinned` says which the entry offers */
 	togglePin?(): void;
 	pinned?: boolean;
+	/** Rename the folder in place (pinned folders only) */
+	rename?(): void;
 }
 
 /** A folder or server header's context menu: what its "+" offers, then copying the path and folding. */
@@ -154,6 +156,7 @@ export function headMenuEntries(os: string | undefined, folded: boolean, act: He
 	return [
 		...newMenuEntries(os, act),
 		...(pin ? [{ icon: "pin", label: act.pinned ? t("고정 해제") : t("폴더 고정"), title: t("고정하면 안에 대화가 없어도 사이드바에 남습니다"), tilt: act.pinned ? 0 : 35, /* pinning drives the pin in at the same slant as a pinned folder's icon; unpinning stands it upright */ run: pin } satisfies MenuEntry] : []),
+		...(act.rename ? [{ icon: "pencil", label: t("이름 바꾸기"), title: t("고정한 폴더에 경로 대신 보일 이름을 붙입니다"), run: act.rename } satisfies MenuEntry] : []),
 		...(copy ? [{ icon: "copy", label: t("경로 복사"), title: "", run: copy } satisfies MenuEntry] : []),
 		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];
