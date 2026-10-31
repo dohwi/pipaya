@@ -49,7 +49,7 @@ export interface SidebarCtx {
 	/** Activity by id (a terminal or an unknown id is idle) */
 	stateOfId(n: SidebarNode, id: string): Activity;
 	/** Row menu ("more" / "+") */
-	hoverMenu(e: PointerEvent, target: MenuTarget): void;
+	hoverMenu(e: PointerEvent, target: MenuTarget, member?: boolean): void;
 	clickMenu(e: MouseEvent, target: MenuTarget, member?: boolean): void;
 	/** Context menu (right click / long press) of a row, and of a folder (`path`) or server (`path` null) header; each returns how to close it */
 	rowMenuAt(pt: Point, target: MenuTarget, member: boolean): () => void;

@@ -19,6 +19,7 @@
 	import { closeContextMenu, openContextMenu, type MenuItem } from "../lib/context-menu";
 	import type { Point } from "../lib/press-menu";
 	import { marquee } from "../lib/fit-text";
+	import { memberMenu } from "../lib/member-menu";
 	import { setPane } from "../lib/pane";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { app } from "../lib/store.svelte";
@@ -73,14 +74,10 @@
 	function paneMenu(pt: Point) {
 		if (!id) return;
 		const pane = id;
-		const items: MenuItem[] = [
-			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(pane, titleNow()) },
+		// the sidebar's entries for a pane, plus this bar's own zoom
+		const items: MenuItem[] = memberMenu(pane, titleNow(), (tid, name) => rename.start(tid, name), [
 			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
-			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
-			isTerm
-				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(pane) }
-				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(pane) },
-		];
+		]);
 		openContextMenu(pt, `pane:${pane}`, items);
 		return closeContextMenu;
 	}

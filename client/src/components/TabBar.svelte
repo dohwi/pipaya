@@ -79,12 +79,13 @@
 		},
 	};
 
+	/** A group's tab has no close button: dissolving a group is the sidebar's menu alone. */
 	function close(x: Tab) {
-		if (x.kind === "group") void app.deleteGroup(x.id);
-		else if (x.kind === "terminal") void app.closeTerminal(x.id);
+		if (x.kind === "group") return;
+		if (x.kind === "terminal") void app.closeTerminal(x.id);
 		else void app.close(x.id);
 	}
-	const closeLabel = (x: Tab) => (x.kind === "group" ? t("그룹 해제 (대화는 그대로 남습니다)") : x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : t("닫기 (/resume 으로 다시 열기)"));
+	const closeLabel = (x: Tab) => (x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : t("닫기 (/resume 으로 다시 열기)"));
 
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
 	let menuId = $state<string | null>(null);
@@ -107,7 +108,6 @@
 			closeSession: (id) => void app.close(id),
 			archiveSession: (id) => void app.archive(id),
 			closeTerminal: (id) => void app.closeTerminal(id),
-			dissolveGroup: (id) => void app.deleteGroup(id),
 		});
 	function tabMenu(pt: Point, x: Tab) {
 		menu?.openAt(pt, x.id, tabItems(x));
@@ -198,7 +198,7 @@
 					<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
-				<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
+				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
 			</div>
 {/snippet}
 

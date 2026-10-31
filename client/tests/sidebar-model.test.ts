@@ -103,6 +103,23 @@ describe("row menu", () => {
 	test("a split tab can be renamed or dissolved", () => {
 		expect(run({ kind: "group", g: { id: "g1", name: "Work" } })).toEqual({ icons: ["pencil", "unlink"], calls: ["renameGroup g1", "dissolve g1"] });
 	});
+	test("a menu that cannot dissolve (the tab bar, chips, pane bars) never offers it, for a split tab or its panes", () => {
+		const { dissolveGroup: _, ...plain } = act;
+		expect(rowMenuEntries({ kind: "group", g: { id: "g1", name: "Work" } }, plain).map((e) => e.icon)).toEqual(["pencil"]);
+		const pane = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...plain, leaveGroup: () => {}, groupIdOf: () => "g1" }, true);
+		expect(pane.map((e) => e.label)).not.toContain("그룹 해제");
+	});
+	test("in the sidebar a pane of a split tab also dissolves the tab it is in, after leaving it", () => {
+		calls.length = 0;
+		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, leaveGroup: (id) => calls.push(`leave ${id}`), groupIdOf: () => "g1" }, true);
+		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "unlink", "unlink", "x"]);
+		entries[3]!.run();
+		expect(calls).toEqual(["dissolve g1"]);
+	});
+	test("a pane whose tab is unknown offers no dissolve", () => {
+		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, leaveGroup: () => {}, groupIdOf: () => undefined }, true);
+		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "unlink", "x"]);
+	});
 	test("the target id is the group's own, else the tab's", () => {
 		expect(targetId({ kind: "group", g: { id: "g1", name: "" } })).toBe("g1");
 		expect(targetId({ kind: "session", x: { id: "s1", title: "" } })).toBe("s1");

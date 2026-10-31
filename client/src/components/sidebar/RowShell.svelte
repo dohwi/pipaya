@@ -86,7 +86,7 @@
 		{@render children()}
 		<div class="acts">
 			{#if current}
-				<button class="more" class:on={sb.menuId === id} onpointerenter={(e) => sb.hoverMenu(e, target)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickMenu(e, target, member)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={sb.menuId === id}><Icon name="more" /></button>
+				<button class="more" class:on={sb.menuId === id} onpointerenter={(e) => sb.hoverMenu(e, target, member)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickMenu(e, target, member)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={sb.menuId === id}><Icon name="more" /></button>
 			{/if}
 		</div>
 	{/if}

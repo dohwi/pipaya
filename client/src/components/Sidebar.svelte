@@ -185,6 +185,7 @@
 		closeTerminal: (id) => void app.closeTerminal(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
 		leaveGroup: (id) => void app.leaveGroup(id),
+		groupIdOf: (id) => app.groupOf(id)?.id,
 		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
 	};
@@ -192,7 +193,7 @@
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	/** Id of the session or group whose menu is open (its button stays highlighted). */
 	let menuId = $state<string | null>(null);
-	const hoverMenu = (e: PointerEvent, target: MenuTarget) => rowMenu?.hover(e, targetId(target), menuItems(target));
+	const hoverMenu = (e: PointerEvent, target: MenuTarget, member = false) => rowMenu?.hover(e, targetId(target), menuItems(target, member));
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
 	const clickMenu = (e: MouseEvent, target: MenuTarget, member = false) => rowMenu?.click(e, targetId(target), menuItems(target, member));
 	/** Right click / long press on a row: the same entries as its "more" button, where the pointer is. */

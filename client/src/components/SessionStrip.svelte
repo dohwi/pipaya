@@ -10,6 +10,7 @@
 	import { app } from "../lib/store.svelte";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
+	import { memberMenu } from "../lib/member-menu";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 
 	/** The chip being renamed in place (double click, or "이름 바꾸기" in its menu). */
@@ -24,16 +25,9 @@
 		node.select();
 	}
 
-	/** Long press / right click on a chip: take it out of the group, or close it. */
+	/** Long press / right click on a chip: the same entries as the sidebar's row for it, except the ones that dissolve the group. */
 	function chipMenu(pt: Point, id: string, title: string) {
-		const term = !!app.terminal(id);
-		openContextMenu(pt, `chip:${id}`, [
-			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(id, title) },
-			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(id) },
-			term
-				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(id) }
-				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(id) },
-		]);
+		openContextMenu(pt, `chip:${id}`, memberMenu(id, title, (tid, name) => rename.start(tid, name)));
 		return closeContextMenu;
 	}
 
