@@ -10,11 +10,26 @@
 	import type { Session } from "../lib/types";
 	import Badge from "./Badge.svelte";
 	import Icon from "./Icon.svelte";
-	import IconButton from "./IconButton.svelte";
 	import Notice from "./Notice.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../lib/motion";
 
-	let { serverId, cwd, archivedOnly = false }: { serverId: string; cwd?: string; archivedOnly?: boolean } = $props();
+	let {
+		serverId,
+		cwd,
+		archivedOnly = false,
+		count = $bindable(null),
+		reload = $bindable(),
+		busy = $bindable(false),
+	}: {
+		serverId: string;
+		cwd?: string;
+		archivedOnly?: boolean;
+		/** how many chats are listed (null until loaded): the dialog shows it next to its title */
+		count?: number | null;
+		/** reloads the list: the dialog's refresh button calls it */
+		reload?: () => void;
+		busy?: boolean;
+	} = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
@@ -24,7 +39,6 @@
 	let sessions = $state<Session[] | null>(null);
 	let home = $state<string | null>(null);
 	let error = $state("");
-	let busy = $state(false);
 	let picked = $state<Record<string, boolean>>({});
 	let folded = $state<Record<string, boolean>>({});
 	let now = $state(Date.now());
@@ -57,6 +71,10 @@
 		}
 	}
 	onMount(() => void load());
+	reload = () => void load();
+	$effect(() => {
+		count = sessions ? groups.reduce((n, g) => n + g.list.length, 0) : null;
+	});
 
 	/** A folder shows as `~/work/x` when it is under the server user's home. */
 	const label = (cwd: string): string => tilde(cwd, home);
@@ -157,14 +175,7 @@
 <div class="sessions" data-part="sessions">
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 
-	<section class="list" aria-labelledby="list-h">
-		<div class="row head">
-			<div class="grow">
-				<div id="list-h" class="section-label">{t("대화 목록")}{#if sessions} <span class="n">{groups.reduce((n, g) => n + g.list.length, 0)}</span>{/if}</div>
-			</div>
-			<IconButton icon="retry" size="sm" label={t("새로고침")} tip onclick={() => void load()} disabled={busy} />
-		</div>
-
+	<section class="list">
 		{#if !sessions && !error}
 			<EmptyState loading tone="plain" as="p" />
 		{:else if sessions && !groups.length}
@@ -220,21 +231,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
-	}
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-	/* ONE right line for everything you read in this list: the toolbar ("대화 목록 3 / 새로고침") sits on the cards' inner edge (12px padding +
-	   1px border), so the refresh button ends on the same line as the bulk buttons, the folder count and every row's age; its label starts
-	   on the same line as the checkboxes. Only the card boxes themselves reach out to the dialog gutter. */
-	.row.head {
-		padding: 0 13px;
-	}
-	.grow {
-		flex: 1;
-		min-width: 0;
 	}
 	.n {
 		margin-left: 4px;

@@ -41,6 +41,7 @@
 		compact = false,
 		onback,
 		headerActions,
+		titleExtra,
 		children,
 	}: {
 		onclose: () => void;
@@ -82,6 +83,8 @@
 		onback?: () => void;
 		/** icon buttons placed before the header's close button */
 		headerActions?: Snippet;
+		/** inline after the title (a count) */
+		titleExtra?: Snippet;
 		children: Snippet;
 	} = $props();
 
@@ -151,7 +154,7 @@
 		out:modalOut|global
 	>
 		{#if title}
-			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} closeDisabled={!dismissible} actions={headerActions} />
+			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} closeDisabled={!dismissible} actions={headerActions} {titleExtra} />
 		{/if}
 		{@render children()}
 	</div>
