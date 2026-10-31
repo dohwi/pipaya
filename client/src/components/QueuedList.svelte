@@ -16,10 +16,16 @@
 	// Which edges still hide rows: those edges fade out, so a half-cut row (and its ✕) never reads as a button.
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
+	// A slim thumb in the right gutter (outside the ✕ column) shows there is more, also on touch where native bars hide.
+	let thumb = $state<{ top: number; height: number } | null>(null);
 	function syncFade() {
 		if (!ul) return;
 		fadeTop = ul.scrollTop > 1;
 		fadeBottom = ul.scrollTop + ul.clientHeight < ul.scrollHeight - 1;
+		const { scrollTop, clientHeight, scrollHeight } = ul;
+		if (scrollHeight <= clientHeight + 1) return void (thumb = null);
+		const height = Math.max(16, (clientHeight * clientHeight) / scrollHeight);
+		thumb = { top: (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - height), height };
 	}
 	$effect(() => {
 		void queued.length;
@@ -48,6 +54,9 @@
 </script>
 
 <div class="queued-wrap">
+{#if thumb}<p class="count" role="status">{t("{n}개 대기 중", { n: queued.length })}</p>{/if}
+<div class="scroll">
+{#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
 <ul class="queued" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
@@ -58,19 +67,41 @@
 	{/each}
 </ul>
 </div>
+</div>
 
 <style>
 	/* The gap above lives outside the scroller so the first row never touches the box edge, scrolled or not. */
 	.queued-wrap {
+		position: relative;
 		padding: 8px 12px 0;
+	}
+	/* Shown only while the list scrolls: the total, since the cut-off rows hide the rest. */
+	.count {
+		margin: 0 0 4px;
+		font-size: var(--fs-xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.scroll {
+		position: relative;
+	}
+	/* Track = the scroller; right: -8px puts the 4px thumb mid-gutter of the wrap's 12px side padding. */
+	.thumb {
+		position: absolute;
+		right: -8px;
+		width: 4px;
+		border-radius: 2px;
+		background: var(--text-faint);
+		opacity: 0.6;
+		pointer-events: none;
 	}
 	.queued {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		/* Two rows (22px + 4px gap) plus a peek of the third so it reads as scrollable.
-		   On a short window (phone with the keyboard open) one row and a peek. */
-		max-height: 64px;
+		/* Three whole rows (22px each, 4px gaps = 74px) and half of the fourth (4 + 11), so it reads as scrollable.
+		   On a short window (phone with the keyboard open) one whole row and half of the second: the count line already costs 20px. */
+		max-height: 89px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		cursor: grab;
