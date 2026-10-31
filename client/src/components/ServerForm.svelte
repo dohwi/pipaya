@@ -154,18 +154,19 @@
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<DevicesPanel serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "sessions"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
+			<section class="set-group">
 				<div class="section-label">{t("기본 작업 디렉터리")}</div>
-		{#if wdError && !shownWd}
+	{#if wdError && !shownWd}
 			<Notice tone="danger">{wdError}</Notice>
-		{:else}
+	{:else}
 			<div class="wd">
 				<Icon name="folder" />
 				<span class="mono wdpath" title={shownWd?.effective}>{shownWd?.effective ?? "…"}</span>
 				<Button size="sm" disabled={!shownWd} onclick={() => (pickDir = true)}>{t("변경")}</Button>
 			</div>
 			<p class="hint">{t("새 대화가 시작되는 폴더입니다. 바꾸면 바로 저장됩니다.")}</p>
-		{/if}
-	
+	{/if}
+			</section>
 			{#key editing.id}<RetentionSection serverId={editing.id} />{/key}
 		</div>
 	{:else if editing && tab === "agent"}
@@ -360,7 +361,7 @@
 		padding: 8px 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		background: var(--bg-elev, transparent);
+		background: var(--bg);
 	}
 	.wd > :global(svg) {
 		flex: none;
