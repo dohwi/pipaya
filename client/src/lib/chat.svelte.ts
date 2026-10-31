@@ -212,7 +212,7 @@ export class ChatState {
 			this.items = [...items, ...this.items];
 			this.tools = { ...tools, ...this.tools };
 			if (msgs.length) this.firstSeq = msgs[0]!.seq;
-			this.hasEarlier = msgs.length > 0 && this.firstSeq > 0;
+			this.hasEarlier = msgs.length > 0 && msgs.length <= EARLIER_PAGE && this.firstSeq > 0;
 			this.earlierRevision++;
 		} catch {
 			/* offline: the button stays and tries again */
@@ -277,7 +277,8 @@ export class ChatState {
 			this.tools = tools;
 			this.lastSeq = msgs.length ? msgs[msgs.length - 1]!.seq : -1;
 			this.firstSeq = msgs.length ? msgs[0]!.seq : 0;
-			this.hasEarlier = msgs.length > 0 && this.firstSeq > 0;
+			// A server from before `tail` ignores it and sends everything: more than a page back means nothing is left to fetch.
+			this.hasEarlier = msgs.length > 0 && msgs.length <= FIRST_PAGE && this.firstSeq > 0;
 			this.running = st.running;
 			// Joined mid-run: the best guess for its start is the last prompt.
 			this.runStartedAt = st.running ? (this.runStartedAt ?? [...items].reverse().find((i) => i.kind === "user")?.ts ?? Date.now()) : null;

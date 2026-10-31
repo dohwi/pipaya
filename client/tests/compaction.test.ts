@@ -240,3 +240,40 @@ describe("ask_user questions", () => {
 		expect(chat.tools.c2).toBeUndefined();
 	});
 });
+
+describe("paged transcript", () => {
+	const stored = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => ({ seq: from + i, role: "user", createdAt: 1, message: { role: "user", content: `m${from + i}`, timestamp: 1 } }));
+	test("opens on the newest page and loads earlier ones in front", async () => {
+		const calls: (number | undefined)[] = [];
+		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => { calls.push(before); return before === undefined ? stored(300, 420) : stored(100, 300); } });
+		await chat.load();
+		expect(chat.items).toHaveLength(120);
+		expect(chat.hasEarlier).toBe(true);
+		await chat.loadEarlier();
+		expect(calls).toEqual([undefined, 300]);
+		expect(chat.items).toHaveLength(320);
+		expect(chat.items[0]!.seq).toBe(100);
+		expect(chat.hasEarlier).toBe(true);
+	});
+	test("a short conversation has nothing earlier", async () => {
+		const { chat } = setup({ tailMessages: async () => stored(0, 5) });
+		await chat.load();
+		expect(chat.hasEarlier).toBe(false);
+	});
+	test("an old server that ignores tail and sends everything shows no earlier button", async () => {
+		const { chat } = setup({ tailMessages: async () => stored(0, 1900) });
+		await chat.load();
+		expect(chat.items).toHaveLength(1900);
+		expect(chat.hasEarlier).toBe(false);
+	});
+	test("a failed earlier fetch keeps the loaded messages and the button", async () => {
+		let fail = false;
+		const { chat } = setup({ tailMessages: async () => { if (fail) throw new Error("offline"); return stored(300, 420); } });
+		await chat.load();
+		fail = true;
+		await chat.loadEarlier();
+		expect(chat.items).toHaveLength(120);
+		expect(chat.hasEarlier).toBe(true);
+		expect(chat.loadingEarlier).toBe(false);
+	});
+});
