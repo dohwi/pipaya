@@ -5,6 +5,8 @@
 		label: string;
 		/** Tooltip; "" for none */
 		title: string;
+		/** Turn the icon by this many degrees (a pin shown leaning one way or the other) */
+		tilt?: number;
 		run: () => void;
 	}
 </script>
@@ -124,7 +126,7 @@
 		onkeydown={keys}
 	>
 		{#each shown.items as it (it.label)}
-			<button class="mi wide" role="menuitem" title={it.title || undefined} onclick={() => pick(it.run)}><Icon name={it.icon} /><span>{it.label}</span></button>
+			<button class="mi wide" role="menuitem" title={it.title || undefined} style:--tilt={it.tilt ? `${it.tilt}deg` : undefined} onclick={() => pick(it.run)}><Icon name={it.icon} /><span>{it.label}</span></button>
 		{/each}
 	</div>
 {/if}
@@ -164,5 +166,6 @@
 		flex: none;
 		stroke: var(--text-dim);
 		stroke-width: 1.9;
+		transform: rotate(var(--tilt, 0deg));
 	}
 </style>

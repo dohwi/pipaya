@@ -49,6 +49,8 @@ export interface MenuEntry {
 	label: string;
 	/** Tooltip; "" for none */
 	title: string;
+	/** Degrees to turn the icon (see RowMenuItem) */
+	tilt?: number;
 	run: () => void;
 }
 
@@ -136,7 +138,7 @@ export function headMenuEntries(os: string | undefined, folded: boolean, act: He
 	const pin = act.togglePin;
 	return [
 		...newMenuEntries(os, act),
-		...(pin ? [{ icon: "pin", label: act.pinned ? t("고정 해제") : t("폴더 고정"), title: t("고정하면 안에 대화가 없어도 사이드바에 남습니다"), run: pin } satisfies MenuEntry] : []),
+		...(pin ? [{ icon: "pin", label: act.pinned ? t("고정 해제") : t("폴더 고정"), title: t("고정하면 안에 대화가 없어도 사이드바에 남습니다"), tilt: act.pinned ? -35 : 0, run: pin } satisfies MenuEntry] : []),
 		...(copy ? [{ icon: "copy", label: t("경로 복사"), title: "", run: copy } satisfies MenuEntry] : []),
 		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];
