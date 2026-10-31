@@ -13,6 +13,9 @@
 	import { pressMenu, type Point } from "../lib/press-menu";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 
+	/** `inline`: the chips sit in the tab bar behind the group's tab (wide screens), without a row of their own. */
+	let { inline = false }: { inline?: boolean } = $props();
+
 	/** The chip being renamed in place (double click, or "이름 바꾸기" in its menu). */
 	const rename = new InlineRename();
 	function commitRename() {
@@ -61,11 +64,13 @@
 </script>
 
 {#if group && items.length}
-	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
-		{#if viewport.narrow}
+	<nav class="strip" class:inline bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
+		{#if viewport.narrow && !inline}
 			<button class="back tap" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
 		{/if}
-		{#if rename.is(group.id)}
+		{#if inline}
+			<!-- the header already names the group -->
+		{:else if rename.is(group.id)}
 			<input
 				class="rename"
 				value={rename.draft}
@@ -133,6 +138,23 @@
 			opacity: 0;
 			transform: translateX(12px);
 		}
+	}
+	/* in the tab bar, right after the open group's tab */
+	/* the group's chips read as one unit hanging off the group's tab: a bordered box, not loose tabs */
+	.strip.inline {
+		flex: none;
+		height: 28px;
+		margin-right: 8px;
+		padding: 0 4px;
+		gap: 4px;
+		overflow: visible;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--bg-group);
+		animation: none;
+	}
+	.strip.inline .chip {
+		height: 22px;
 	}
 	.strip::-webkit-scrollbar {
 		display: none;

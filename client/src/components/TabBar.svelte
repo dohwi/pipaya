@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
 	import Icon from "./Icon.svelte";
+	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Pin from "./Pin.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
@@ -201,6 +202,8 @@
 					{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 					<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
 				</div>
+				<!-- one pane of the open group is enlarged: its sessions follow the group's tab as chips, so no row of their own -->
+				{#if x.kind === "group" && on && !viewport.narrow && (app.isFull(x.id) || app.zoomId)}<SessionStrip inline />{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>

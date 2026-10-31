@@ -25,6 +25,7 @@
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import Lazy from "./Lazy.svelte";
 	import { isTerminalId, platformName } from "../lib/terminal";
+	import { viewport } from "../lib/viewport.svelte";
 
 	const loadTerminal = () => import("./TerminalView.svelte");
 
@@ -92,7 +93,8 @@
 <!-- Only listens (capture) to move focus to this pane when something inside it is pressed or focused; it is not itself a control. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
-	{#if grouped && id}
+	<!-- zoomed: the session strip above carries the title, path and shrink button, so this bar would only repeat it -->
+	{#if grouped && id && (!zoomed || viewport.narrow)}
 		<header
 			class="bar"
 			tabindex="-1"
@@ -144,6 +146,15 @@
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
 			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
 		</header>
+	{/if}
+
+	{#if zoomed && !viewport.narrow && id}
+		<!-- the title bar is hidden while zoomed: the path and the shrink button float in the pane's top-right corner -->
+		{@const dir = term?.cwd ?? session?.cwd ?? ""}
+		<div class="corner">
+			{#if dir}<span class="cwd mono" title={dir}>{dir.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
+			<button class="x tap" onclick={toggleZoom} aria-label={t("작게 보기")} title={full ? t("작게 보기") : t("작게 보기 (Esc)")}><Icon name="shrink" /></button>
+		</div>
 	{/if}
 
 	{#if isTerm}
@@ -382,6 +393,27 @@
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.9;
+	}
+	.corner {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		z-index: 5;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding-left: 8px;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--bg) 85%, transparent);
+		backdrop-filter: blur(4px);
+	}
+	.corner .cwd {
+		max-width: 240px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
 	}
 	.body {
 		flex: 1;
