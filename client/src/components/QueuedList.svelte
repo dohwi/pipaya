@@ -13,6 +13,18 @@
 	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
 	let ul = $state<HTMLUListElement>();
 	let drag: { y: number; top: number; moved: boolean } | null = null;
+	// Which edges still hide rows: those edges fade out, so a half-cut row (and its ✕) never reads as a button.
+	let fadeTop = $state(false);
+	let fadeBottom = $state(false);
+	function syncFade() {
+		if (!ul) return;
+		fadeTop = ul.scrollTop > 1;
+		fadeBottom = ul.scrollTop + ul.clientHeight < ul.scrollHeight - 1;
+	}
+	$effect(() => {
+		void queued.length;
+		syncFade();
+	});
 	const THRESHOLD = 4; // px of travel before a press counts as a drag
 
 	function onDown(e: PointerEvent) {
@@ -36,7 +48,7 @@
 </script>
 
 <div class="queued-wrap">
-<ul class="queued" bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
+<ul class="queued" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
 			<QueueBadge {q} />
@@ -66,6 +78,16 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
+	}
+	/* 16px ramps: the cut row is mostly gone by the edge. Only the edge that hides rows fades. */
+	.fade-bottom {
+		mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+	}
+	.fade-top {
+		mask-image: linear-gradient(to top, #000 calc(100% - 16px), transparent);
+	}
+	.fade-top.fade-bottom {
+		mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 	}
 	@media (max-height: 600px) {
 		.queued {
