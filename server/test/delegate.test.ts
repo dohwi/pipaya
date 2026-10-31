@@ -150,6 +150,21 @@ describe("delegate tool", () => {
 		expect(await call(id, { role: "short", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("helper stopped after 1 model calls");
 	});
 
+	test("aborting the parent stops the helper and what it started", async () => {
+		def(join(dir, "home", ".agents", "subagents"), "shell", `model: echo/${ECHO_MODEL.id}\ntools: [bash]\nmaxTurns: 3`);
+		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
+		const started = Date.now();
+		await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify({ role: "shell", task: `!bash ${JSON.stringify({ command: "sleep 987" })}` })}` });
+		const alive = () => Bun.spawnSync(["pgrep", "-x", "-f", "sleep 987"]).stdout.toString().trim() !== "";
+		for (let i = 0; i < 100 && !alive(); i++) await Bun.sleep(50);
+		expect(alive()).toBe(true);
+		await api("POST", `/sessions/${id}/abort`);
+		await idle(id);
+		expect(Date.now() - started).toBeLessThan(20_000);
+		for (let i = 0; i < 60 && alive(); i++) await Bun.sleep(100);
+		expect(alive()).toBe(false);
+	}, 30_000);
+
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const out = await call(id, { role: "ghost", task: "x" });
