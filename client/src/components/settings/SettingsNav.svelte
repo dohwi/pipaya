@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { slidingIndicator } from "../../lib/sliding-indicator";
+	import { treePath } from "../../lib/tree-path";
 	import { rovingKeys } from "../../lib/roving";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
@@ -109,7 +110,7 @@
 				{/if}
 			</div>
 			{#if open}
-				<div class="tree" role="group" aria-label={t(x.label)}>
+				<div class="tree" role="group" aria-label={t(x.label)} use:treePath={{ row: ".item:has(button.sub.on)", lead: 10 }}>
 					{#each kids as e (e.id)}
 						{@const link = e.link}
 						<div class="item" class:end={e.end}>
@@ -226,20 +227,27 @@
 		border-bottom: 1.5px solid var(--border-strong);
 		border-bottom-left-radius: 3px;
 	}
-	/* the open extension's path reads one step darker: the trunk from the section down to it, then its branch. Rows below keep the quiet trunk */
-	.nav .item:has(~ .item button.sub.on)::after {
-		border-left-color: var(--text-dim);
+	/* the open extension's path: one element from the section down to its branch, one step darker than the quiet trunk. Only its
+	   height moves (lib/tree-path), on the selection marker's time and curve, so the two travel together */
+	.nav .tree {
+		position: relative;
 	}
-	.nav .item:has(button.sub.on)::before {
-		z-index: 1; /* above the row's own light trunk, which is drawn after it */
-		top: -2px; /* the branch's left edge runs up to the row's top so the dark trunk meets the one above it */
-		height: calc(50% + 2px);
-		border-left-color: var(--text-dim);
-		border-bottom-color: var(--text-dim);
+	.nav .tree :global(.tree-path) {
+		position: absolute;
+		left: -2px; /* the trunk's column: the rows' trunks sit 18px left of the rows, which start 16px in */
+		top: -10px; /* up to the section row, where the first trunk starts */
+		z-index: 1; /* above the rows' quiet trunks */
+		width: 18px;
+		height: calc(var(--path-h, 0px) + 10px);
+		box-sizing: border-box;
+		border-left: 1.5px solid var(--text-dim);
+		border-bottom: 1.5px solid var(--text-dim);
+		border-bottom-left-radius: 3px;
+		pointer-events: none;
+		transition: height var(--motion-normal) var(--ease), opacity var(--motion-fast) var(--ease-std);
 	}
-	.nav .item:first-child:has(button.sub.on)::before {
-		top: -10px; /* the first row also reaches up to the section row */
-		height: calc(50% + 10px);
+	.nav .tree :global(.tree-path[data-empty]) {
+		opacity: 0;
 	}
 	.nav .clip {
 		flex: none;

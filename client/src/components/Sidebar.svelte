@@ -855,21 +855,28 @@
 		border-bottom: 1.5px solid var(--border-strong, var(--border));
 		border-bottom-left-radius: 3px;
 	}
-	/* the open pane's path reads one step darker: the rule from the group down to it, then its elbow. Rows below it keep the quiet rule */
-	:global(:where(.side) .members .item:has(~ .item.active) .branch::before) {
-		border-left-color: var(--text-dim);
-		z-index: 1; /* each row's rule overlaps its neighbour's by 1px; the dark ones go on top so the later light one never cuts them */
+	/* the open pane's path: one element from the group down to its elbow, one step darker than the quiet rule. Only its height
+	   moves (lib/tree-path), on the selection marker's time and curve, so the two travel together */
+	:global(:where(.side) .members) {
+		position: relative;
 	}
-	:global(:where(.side) .members .item.active .branch::after) {
-		z-index: 1;
-		top: -1px; /* the elbow's left edge runs up to the row's top so the dark rule meets the one above it */
-		height: calc(50% + 1px);
-		border-left-color: var(--text-dim);
-		border-bottom-color: var(--text-dim);
+	:global(:where(.side) .members .tree-path) {
+		position: absolute;
+		left: 51px; /* the rule's column: x 68 like .branch (47px from a row's left, x 21); .members starts 4px further left, at x 17 */
+		top: -2px; /* up into the gap under the group row, where the first pane's rule starts */
+		z-index: 1; /* above the rows' quiet rules, which overlap each other by 1px */
+		width: 12px;
+		height: calc(var(--path-h, 0px) + 2px);
+		box-sizing: border-box;
+		border-left: 1.5px solid var(--text-dim);
+		border-bottom: 1.5px solid var(--text-dim);
+		border-bottom-left-radius: 3px;
+		opacity: 1;
+		pointer-events: none;
+		transition: height var(--motion-normal) var(--ease), opacity var(--motion-fast) var(--ease-std);
 	}
-	:global(:where(.side) .members .item.active:first-child .branch::after) {
-		top: -2px; /* the first pane also reaches up into the gap under the group row */
-		height: calc(50% + 2px);
+	:global(:where(.side) .members .tree-path[data-empty]) {
+		opacity: 0;
 	}
 	:global(:where(.side) .members .item:last-child .branch::before) {
 		bottom: calc(50% + 8px);
