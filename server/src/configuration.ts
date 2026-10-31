@@ -17,6 +17,7 @@ import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
+import Value from "typebox/value";
 
 export const CustomProviderBody = Type.Object({
 	name: Type.String({ minLength: 1, maxLength: 100 }),
@@ -111,7 +112,17 @@ export const WorkdirInfo = Type.Object({
 });
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
 export const ToolsBody = Type.Object({ disabled: Type.Array(Type.String(), { description: "Switchable tools to withhold from every session. Unknown or locked names are rejected" }) }, { additionalProperties: false });
+export const DelegatePolicy = Type.Object({
+	policy: Type.Union([Type.Literal("defined"), Type.Literal("allowlist"), Type.Literal("any")], { description: "defined: helpers use the model their role file names (a `model` argument is refused); allowlist: the `model` argument may pick only from `models`; any: any model" }),
+	models: Type.Array(Type.String({ minLength: 3, maxLength: 200 }), { maxItems: 50, description: "provider/model entries the allowlist permits" }),
+	maxConcurrent: Type.Integer({ minimum: 1, maximum: 8, description: "Helpers running at once per session" }),
+	maxCalls: Type.Integer({ minimum: 1, maximum: 50, description: "delegate calls per run of the calling session" }),
+	maxTurns: Type.Integer({ minimum: 1, maximum: 50, description: "Upper bound on a helper's model calls, whatever its role file asks for" }),
+}, { additionalProperties: false });
+export type DelegatePolicyValue = Static<typeof DelegatePolicy>;
+export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 };
 export const ToolsInfo = Type.Object({
+	delegate: Type.Optional(DelegatePolicy),
 	toggleable: Type.Array(Type.String(), { description: "Tools that can be switched off" }),
 	locked: Type.Array(Type.String(), { description: "Built-in tools that always stay on" }),
 	disabled: Type.Array(Type.String()),
@@ -232,9 +243,27 @@ export class Configuration {
 		return this.toolsInfo();
 	}
 
+	delegatePolicy(): DelegatePolicyValue {
+		const row = this.db.query("SELECT data FROM settings WHERE key = 'delegate_policy'").get() as { data: string } | null;
+		try {
+			const v = row ? JSON.parse(row.data) : null;
+			return Value.Check(DelegatePolicy, v) ? v : DEFAULT_DELEGATE_POLICY;
+		} catch { return DEFAULT_DELEGATE_POLICY; }
+	}
+
+	setDelegatePolicy(p: DelegatePolicyValue) {
+		const models = [...new Set(p.models)];
+		const bad = models.find((m) => !m.includes("/") || !this.registry.models.getModel(m.slice(0, m.indexOf("/")), m.slice(m.indexOf("/") + 1)));
+		if (bad) throw badRequest(`unknown model ${bad}; use provider/model of a configured model`);
+		if (p.policy === "allowlist" && !models.length) throw badRequest("the allowlist policy needs at least one model");
+		const data = JSON.stringify({ ...p, models });
+		this.db.query("INSERT INTO settings (key, data) VALUES ('delegate_policy', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data });
+		return this.toolsInfo();
+	}
+
 	toolsInfo() {
 		const can = this.toggleable();
-		return { toggleable: can, locked: DEFAULT_TOOLS.filter((n) => !can.includes(n)), disabled: this.disabledTools().filter((n) => can.includes(n)) };
+		return { delegate: this.delegatePolicy(), toggleable: can, locked: DEFAULT_TOOLS.filter((n) => !can.includes(n)), disabled: this.disabledTools().filter((n) => can.includes(n)) };
 	}
 
 	list(): CustomProvider[] {

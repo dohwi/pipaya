@@ -419,7 +419,19 @@ export interface ConfigurationInfo {
 	tools: ToolsInfo;
 }
 
+export type DelegateMode = "defined" | "allowlist" | "any";
+/** How the delegate tool picks models and how much it may run */
+export interface DelegatePolicy {
+	policy: DelegateMode;
+	/** provider/model entries the allowlist permits */
+	models: string[];
+	maxConcurrent: number;
+	maxCalls: number;
+	maxTurns: number;
+}
+
 export interface ToolsInfo {
+	delegate?: DelegatePolicy;
 	toggleable: string[];
 	locked: string[];
 	disabled: string[];

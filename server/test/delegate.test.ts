@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
-import { DelegateLimits, loadSubagents } from "../src/subagents.ts";
+import { chooseModel, DelegateLimits, loadSubagents } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -54,6 +54,19 @@ describe("DelegateLimits", () => {
 	});
 });
 
+describe("chooseModel", () => {
+	test("defined: the role's model only; allowlist: listed models only; any: whatever is asked", () => {
+		const d = { policy: "defined" as const, models: [] };
+		expect(chooseModel(d, undefined, "a/b")).toBe("a/b");
+		expect(() => chooseModel(d, "x/y", "a/b")).toThrow(/switched off/);
+		const l = { policy: "allowlist" as const, models: ["x/y", "x/z"] };
+		expect(chooseModel(l, "x/z", "a/b")).toBe("x/z");
+		expect(() => chooseModel(l, "q/r", "a/b")).toThrow(/not allowed.*x\/y, x\/z/);
+		expect(() => chooseModel(l, "q/r", "a/b")).toThrow(expect.objectContaining({ status: 409 }));
+		expect(chooseModel({ policy: "any", models: [] }, "q/r", undefined)).toBe("q/r");
+	});
+});
+
 describe("delegate tool", () => {
 	let app: Awaited<ReturnType<typeof buildApp>>, base = "", dir = "", upstream: ReturnType<typeof startEchoUpstream>;
 	const api = async (method: string, path: string, body?: unknown) => {
@@ -89,7 +102,26 @@ describe("delegate tool", () => {
 		expect((await api("GET", "/sessions")).json.length).toBe(before.length);
 	});
 
+	test("the model policy is saved, validated, and decides whether `model` is honoured", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const m = `echo/${ECHO_MODEL.id}`;
+		const put = (b: object) => api("PUT", "/configuration/delegate", { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30, ...b });
+		expect((await api("GET", "/configuration")).json.tools.delegate).toMatchObject({ policy: "defined", maxTurns: 30 });
+		expect(await call(id, { role: "explore", task: "a", model: m })).toContain("switched off in the settings");
+		expect((await put({ policy: "allowlist", models: [] })).status).toBe(400);
+		expect((await put({ policy: "allowlist", models: ["echo/nope"] })).status).toBe(400);
+		expect((await put({ maxTurns: 0 })).status).toBe(400);
+		expect((await put({ policy: "allowlist", models: [m] })).json.delegate.models).toEqual([m]);
+		expect(await call(id, { role: "explore", task: "b", model: m })).toContain("Echo: b");
+		expect(await call(id, { role: "explore", task: "c", model: "echo/other" })).toContain("not allowed for helpers");
+		expect((await put({ policy: "any", maxCalls: 1 })).json.delegate.policy).toBe("any");
+		expect(await call(id, { role: "explore", task: "d", model: m })).toContain("Echo: d");
+		expect(await call(id, { role: "explore", task: "e" })).toContain("Echo: e"); // a new message is a new run: the allowance is full again
+		await put({});
+	});
+
 	test("an explicit model overrides the role's model; a bad one is an error", async () => {
+		await api("PUT", "/configuration/delegate", { policy: "any", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		expect(await call(id, { role: "explore", task: "hi", model: `echo/${ECHO_MODEL.id}` })).toContain("Echo: hi");
 		expect(await call(id, { role: "explore", task: "hi", model: "echo/nope" })).toContain("echo/nope is not available");

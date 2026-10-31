@@ -4,6 +4,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ActivityInfo,
 	ConfigurationInfo,
 	ToolsInfo,
+	DelegatePolicy,
 	LoginState,
 	CompactionResult,
 	ConnectionResult,
@@ -238,6 +239,7 @@ export class Api {
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
 	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
+	setDelegatePolicy = (p: DelegatePolicy) => this.req<ToolsInfo>("PUT", "/configuration/delegate", p);
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
 	listDirs = (path?: string, hidden = false, signal?: AbortSignal) =>
 		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`, undefined, signal);

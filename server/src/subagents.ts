@@ -89,13 +89,14 @@ export function finalText(messages: readonly { role: string; content?: unknown; 
 /** Per-session bookkeeping of the limits: calls in the current run and helpers running now. Throws a conflict when one is hit. */
 export class DelegateLimits {
 	private use = new Map<string, { calls: number; running: number }>();
-	constructor(private max = { calls: MAX_DELEGATES_PER_RUN, running: MAX_CONCURRENT_SUBAGENTS }) {}
-	/** Takes a slot; the returned function gives it back. */
-	acquire(id: string): () => void {
+	constructor(private defaults = { calls: MAX_DELEGATES_PER_RUN, running: MAX_CONCURRENT_SUBAGENTS }) {}
+	/** Takes a slot; the returned function gives it back. `limits` (the user's settings) replace the defaults. */
+	acquire(id: string, limits?: { calls: number; running: number }): () => void {
+		const max = limits ?? this.defaults;
 		const u = this.use.get(id) ?? { calls: 0, running: 0 };
 		this.use.set(id, u);
-		if (u.calls >= this.max.calls) throw conflict(`at most ${this.max.calls} delegate calls per run; do the rest yourself or report to the user`);
-		if (u.running >= this.max.running) throw conflict(`at most ${this.max.running} helpers can run at the same time; wait for one to finish`);
+		if (u.calls >= max.calls) throw conflict(`at most ${max.calls} delegate calls per run; do the rest yourself or report to the user`);
+		if (u.running >= max.running) throw conflict(`at most ${max.running} helpers can run at the same time; wait for one to finish`);
 		u.calls++;
 		u.running++;
 		let done = false;
@@ -107,4 +108,17 @@ export class DelegateLimits {
 		if (u) u.calls = 0;
 	}
 	forget(id: string): void { this.use.delete(id); }
+}
+
+export type ModelPolicy = { policy: "defined" | "allowlist" | "any"; models: string[] };
+
+/** Which model a helper runs on, or a conflict explaining why the request is refused. `requested` is the call's `model` argument. */
+export function chooseModel(policy: ModelPolicy, requested: string | undefined, defined: string | undefined): string | undefined {
+	if (!requested) return defined;
+	if (policy.policy === "any") return requested;
+	if (policy.policy === "allowlist") {
+		if (policy.models.includes(requested)) return requested;
+		throw conflict(`model ${requested} is not allowed for helpers; allowed: ${policy.models.join(", ")}. Omit \`model\` to use the role's own`);
+	}
+	throw conflict("choosing a helper model is switched off in the settings; omit `model` to use the role's own");
 }

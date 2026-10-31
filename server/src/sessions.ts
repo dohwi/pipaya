@@ -26,10 +26,11 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, runawayReason } from "./run-guard.ts";
-import { DelegateLimits, finalText, loadSubagents, subagentSystem } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, loadSubagents, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
+import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
@@ -109,6 +110,8 @@ export class SessionManager {
 		private mcp?: McpManager,
 		/** Home directory whose `.agents/subagents` holds the global helper roles; defaults to the OS user home. */
 		private home: string = homedir(),
+		/** The user's rules for helpers: which models `delegate` may pick and the limits. */
+		private delegatePolicy: () => DelegatePolicyValue = () => DEFAULT_DELEGATE_POLICY,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -994,7 +997,8 @@ export class SessionManager {
 		const defs = loadSubagents(rec.cwd, this.home);
 		const def = defs.get(input.role.replace(/\.md$/, ""));
 		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents)"}`);
-		const spec = input.model ?? def.model;
+		const pol = this.delegatePolicy();
+		const spec = chooseModel(pol, input.model, def.model);
 		let provider = rec.provider, modelId = rec.model;
 		if (spec) {
 			const i = spec.indexOf("/");
@@ -1006,7 +1010,8 @@ export class SessionManager {
 		const off = this.disabledTools();
 		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
 		const tools = buildTools(names, rec.cwd, this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
-		const release = this.delegates.acquire(sessionId);
+		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
+		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		let turns = 0, limited = false;
 		const agent = new Agent({
 			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: def.thinking ?? "off", tools, messages: [] },
@@ -1018,7 +1023,7 @@ export class SessionManager {
 		signal?.addEventListener("abort", stop, { once: true });
 		agent.subscribe((e) => {
 			if (e.type === "tool_execution_start") progress(`${def.name}: ${e.toolName}`);
-			if (e.type === "turn_end" && ++turns >= def.maxTurns) { limited = true; agent.abort(); }
+			if (e.type === "turn_end" && ++turns >= cap) { limited = true; agent.abort(); }
 		});
 		try {
 			if (signal?.aborted) stop();
@@ -1026,7 +1031,7 @@ export class SessionManager {
 			if (signal?.aborted) throw new Error("delegate aborted");
 			const { text: answer, error } = finalText(agent.state.messages as any);
 			if (error && !limited) throw new Error(`helper ${def.name} failed: ${error}`);
-			const note = limited ? `\n\n[helper stopped after ${def.maxTurns} model calls (maxTurns); the answer may be incomplete]` : "";
+			const note = limited ? `\n\n[helper stopped after ${cap} model calls (maxTurns); the answer may be incomplete]` : "";
 			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, turns, limited, task: input.task.slice(0, 500) } };
 		} finally {
 			signal?.removeEventListener("abort", stop);
