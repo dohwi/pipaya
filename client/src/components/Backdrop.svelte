@@ -208,9 +208,7 @@
 	<div class="lit"></div>
 	{#if press}
 		<div class="charge" style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}">
-			<div class="inhale"></div>
-			<div class="inhale"></div>
-			<div class="inhale"></div>
+			<div class="ring"></div>
 			<div class="dot"></div>
 		</div>
 	{/if}
@@ -222,7 +220,7 @@
 		<!-- the halo that leaves with the wave, as wide and as quick as the charge made it -->
 		<div
 			class="flash"
-			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.65)}ms"
+			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.5)}ms"
 		></div>
 	{/each}
 </div>
@@ -269,42 +267,26 @@
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
 	}
-	/* the light under the held pointer: soft rings drawn in from around, condensing into one white point */
+	/* one continuous pull: a single ring slides all the way in over the charge and hands over to the point */
 	.charge {
 		position: absolute;
 		width: 240px;
 		height: 240px;
 		translate: -50% -50%;
-		opacity: calc(0.35 + var(--p) * 0.65);
+		opacity: calc(0.4 + var(--p) * 0.6);
 	}
-	/* each ring appears at the edge and slides all the way in, brightening as it goes */
-	.inhale {
+	.ring {
 		position: absolute;
 		inset: 0;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, transparent 52%, var(--grid-wave) 70%, transparent 86%);
-		animation: inhale 1050ms var(--ease) infinite;
+		background: radial-gradient(closest-side, transparent 54%, var(--grid-wave) 72%, transparent 88%);
+		filter: blur(1px);
+		/* squared progress: it drifts, accelerates as it is pulled in, and dims once it arrives */
+		scale: calc(1 - var(--p) * var(--p) * 0.92);
+		/* fades in over the first 15% so the ring never just appears */
+		opacity: calc(min(1, var(--p) * 6.5) * (0.85 - var(--p) * 0.6));
 	}
-	.inhale:nth-child(2) {
-		animation-delay: -350ms;
-	}
-	.inhale:nth-child(3) {
-		animation-delay: -700ms;
-	}
-	@keyframes inhale {
-		from {
-			scale: 1;
-			opacity: 0;
-		}
-		25% {
-			opacity: 0.5;
-		}
-		to {
-			scale: 0.05;
-			opacity: 0.95;
-		}
-	}
-	/* the point they gather into: a small white dot that only whitens as the charge fills */
+	/* the point it sinks into: a small white dot that whitens over the same pull */
 	.dot {
 		position: absolute;
 		inset: 42%;
@@ -313,7 +295,7 @@
 			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%),
 			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%);
 		opacity: calc(var(--p) * var(--p));
-		scale: calc(0.6 + var(--p) * 0.5);
+		scale: calc(0.5 + var(--p) * 0.7);
 	}
 	/* the burst that leaves with the wave: a soft halo that widens and thins out */
 	.flash {
@@ -333,11 +315,11 @@
 			scale: 0.35;
 			opacity: 0;
 		}
-		30% {
-			opacity: calc(var(--k) * 0.45);
+		28% {
+			opacity: calc(var(--k) * 0.55);
 		}
 		100% {
-			scale: 1.9;
+			scale: 2.3;
 			opacity: 0;
 		}
 	}
