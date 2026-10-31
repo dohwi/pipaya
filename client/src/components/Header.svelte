@@ -9,12 +9,36 @@
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
+	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
+	import { pressMenu, type Point } from "../lib/press-menu";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
 	const term = $derived(app.terminal(app.activeId));
 	// Wide screens show the whole group at once, so the header names the group rather than one session.
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
+	/** The title being renamed in place: the group's, the terminal's or the conversation's (double click or right click). */
+	const rename = new InlineRename();
+	/** What the title is about, for renaming: nothing for a chat that has no session yet. */
+	const target = $derived(group ? { id: group.id, name: group.name } : term ? { id: term.id, name: term.title } : s ? { id: s.id, name: s.title } : null);
+	function commitRename() {
+		const done = rename.commit();
+		if (!done) return;
+		if (group?.id === done.id) void app.renameGroup(done.id, done.name);
+		else if (app.terminal(done.id)) void app.renameTerminal(done.id, done.name);
+		else void app.rename(done.id, done.name);
+	}
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+	function titleMenu(pt: Point) {
+		if (!target) return;
+		const { id, name } = target;
+		openContextMenu(pt, `title:${id}`, [{ icon: "pencil", label: group ? t("그룹 이름 바꾸기") : t("이름 바꾸기"), title: "", run: () => rename.start(id, name) }]);
+		return closeContextMenu;
+	}
 	/** What the title shows, also handed to an extension that replaces it. */
 	const heading = $derived(
 		group ? { title: group.name, sub: t("대화 {n}개", { n: panesOf(group.layout).length }) }
@@ -31,8 +55,23 @@
 		</button>
 
 		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
-		<div class="title" data-part="header.title">
-			{#if group}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="title" data-part="header.title" ondblclick={() => target && rename.start(target.id, target.name)} use:pressMenu={titleMenu}>
+			{#if target && rename.is(target.id)}
+				<input
+					class="rename"
+					value={rename.draft}
+					maxlength={group ? 100 : undefined}
+					aria-label={group ? t("그룹 이름 바꾸기") : t("이름 바꾸기")}
+					use:focusSelect
+					oninput={(e) => (rename.draft = e.currentTarget.value)}
+					onblur={commitRename}
+					onkeydown={(e) => {
+						if (e.key === "Enter") commitRename();
+						if (e.key === "Escape") rename.cancel();
+					}}
+				/>
+			{:else if group}
 				<span class="t">{group.name}</span>
 				<span class="sub mono">{t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
 			{:else if term}
@@ -92,6 +131,18 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		line-height: 1.2;
+	}
+	.rename {
+		width: min(100%, 360px);
+		min-width: 0;
+		height: 28px;
+		padding: 0 8px;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-sm);
+		background: var(--bg);
+		color: var(--text);
+		font-size: var(--fs-md);
+		outline: 0;
 	}
 	.sub {
 		font-size: var(--fs-2xs);
