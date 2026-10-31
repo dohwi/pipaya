@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { schedule, unschedule } from "../lib/frame";
 	import type { Snippet } from "svelte";
 	import { fadeIn, fadeOut, modalIn, modalOut } from "../lib/motion";
 	import { modalLayer, portal as lift } from "../lib/dialog";
@@ -112,10 +113,11 @@
 			size = [box.inlineSize, box.blockSize];
 			place(...size);
 		});
-		const onResize = () => size && place(...size);
+		// window resizes arrive many times per frame: place once per frame
+		const onResize = () => size && schedule(node, () => { if (size) place(...size); });
 		ro.observe(node, { box: "border-box" });
 		window.addEventListener("resize", onResize);
-		return { destroy: () => { ro.disconnect(); window.removeEventListener("resize", onResize); } };
+		return { destroy: () => { ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
 	}
 	// Before any child mounts and focuses itself: this is where focus goes back to on close.
 	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
