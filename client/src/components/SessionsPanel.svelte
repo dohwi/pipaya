@@ -325,25 +325,18 @@
 		color: var(--text-faint);
 		font-variant-numeric: tabular-nums;
 	}
+	/* the bulk buttons take their own row under the folder name and share it, left edge on the checkbox column and right edge on the
+	   card's inner edge, at every width (a phone wraps the last one onto a second row) */
 	.del {
-		flex: 0 1 auto;
+		flex: 1 1 100%;
 		min-width: 0;
-		max-width: 100%;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		margin-left: auto;
 	}
-	/* phones: the bulk buttons take their own full row and share it, so they never reach past the card's right edge */
-	@media (max-width: 640px) {
-		.del {
-			flex: 1 1 100%;
-			margin-left: 0;
-		}
-		.del > :global(*) {
-			flex: 1 1 auto;
-			min-width: 0;
-			justify-content: center;
-		}
+	.del > :global(*) {
+		flex: 1 1 auto;
+		min-width: 0;
+		justify-content: center;
 	}
 </style>
