@@ -224,7 +224,7 @@
 		height: 9px;
 		border-left: 1.5px solid var(--border-strong);
 		border-bottom: 1.5px solid var(--border-strong);
-		border-bottom-left-radius: 9px;
+		border-bottom-left-radius: 3px;
 	}
 	.nav .clip {
 		flex: none;

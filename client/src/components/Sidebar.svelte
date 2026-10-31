@@ -826,7 +826,7 @@
 	:global(:where(.side) .grp .item.member.active .title) {
 		color: var(--text);
 	}
-	/* tree line: a rule down from the book's centre; each pane gets a short rounded elbow (the last one ends the rule) */
+	/* tree line: a rule down from the book's centre; each pane gets a short elbow with a 3px corner (near right angle) (the last one ends the rule) */
 	:global(:where(.side) .branch) {
 		position: absolute;
 		left: 47px; /* the line's 1.5px stroke is centred on the book icon's column (x 68): measured 69 at 48 */
@@ -852,7 +852,7 @@
 		height: 8px;
 		border-left: 1.5px solid var(--border-strong, var(--border));
 		border-bottom: 1.5px solid var(--border-strong, var(--border));
-		border-bottom-left-radius: 8px;
+		border-bottom-left-radius: 3px;
 	}
 	:global(:where(.side) .members .item:last-child .branch::before) {
 		bottom: calc(50% + 8px);
