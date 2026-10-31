@@ -9,7 +9,7 @@
 	import { app } from "../lib/store.svelte";
 	import { viewport } from "../lib/viewport.svelte";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
-	import { pressMenu, type Point } from "../lib/press-menu";
+	import { pressMenu, recentTouch, type Point } from "../lib/press-menu";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 
 	/** The chip being renamed in place (double click, or "이름 바꾸기" in its menu). */
@@ -24,8 +24,15 @@
 		node.select();
 	}
 
-	/** Long press / right click on a chip: take it out of the group, or close it. */
+	/**
+	 * A mouse right click on a chip renames it in place. A long press (touch) or the menu key opens the menu:
+	 * rename, take it out of the group, or close it.
+	 */
 	function chipMenu(pt: Point, id: string, title: string) {
+		if (!pt.key && !recentTouch()) {
+			rename.start(id, title);
+			return;
+		}
 		const term = !!app.terminal(id);
 		openContextMenu(pt, `chip:${id}`, [
 			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(id, title) },
