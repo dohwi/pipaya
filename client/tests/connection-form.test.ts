@@ -81,6 +81,27 @@ describe("catalog match and editing", () => {
 	});
 });
 
+describe("a model's starting strength", () => {
+	test("is sent only for a reasoning chat model", () => {
+		const f = filled({ rows: [row({ reasoning: true, defaultThinkingLevel: "high" }), row({ id: "m2", reasoning: false, defaultThinkingLevel: "low" }), row({ id: "m3", reasoning: true, imageGeneration: true, defaultThinkingLevel: "low" })] });
+		const out = (collectModels(f, true, none, true) as any).out;
+		expect(out.map((m: any) => m.defaultThinkingLevel)).toEqual(["high", undefined, undefined]);
+	});
+	test("is dropped when the model's own strengths do not include it", () => {
+		const f = filled({ rows: [row({ reasoning: true, thinkingLevels: ["low", "high"] as any, defaultThinkingLevel: "max" })] });
+		expect("defaultThinkingLevel" in (collectModels(f, true, none, true) as any).out[0]).toBe(false);
+	});
+	test("survives a round trip through the dialog's form", () => {
+		const p = { id: "p", name: "P", baseUrl: "http://x", api: "openai-completions", authRequired: false, models: [{ id: "m", contextWindow: 4096, maxTokens: 512, reasoning: true, vision: false, defaultThinkingLevel: "low" }] } as unknown as CustomProvider;
+		expect(formFromProvider(p).rows[0]!.defaultThinkingLevel).toBe("low");
+	});
+	test("is dropped when a match is picked whose catalog does not offer it", () => {
+		const r = row({ reasoning: true, defaultThinkingLevel: "minimal" as const });
+		applyMatch(r, { id: "a/b", name: "b", contextWindow: 1000, maxTokens: 500, reasoning: true, vision: true, image: false, levels: ["low", "high"] } as CatalogModel);
+		expect(r.defaultThinkingLevel).toBeUndefined();
+	});
+});
+
 describe("image generation models", () => {
 	const img: CatalogModel = { id: "google/gemini-3.1-flash-image", name: "Gemini Image", contextWindow: 65536, maxTokens: 32768, reasoning: false, vision: true, image: true, levels: [] };
 	test("matching an image model in the catalog turns image generation on, and a text model turns it off", () => {
@@ -122,6 +143,14 @@ describe("reasoning strengths of a matched model", () => {
 		const r = row({ thinkingLevels: ["low", "medium", "high", "max"] });
 		toggleLevel(r, c, "xhigh");
 		expect(r.thinkingLevels).toEqual([]);
+	});
+	test("switching a level off drops a default that lives on it", () => {
+		const r = row({ defaultThinkingLevel: "max" as const });
+		toggleLevel(r, c, "max");
+		expect(r.defaultThinkingLevel).toBeUndefined();
+		const kept = row({ defaultThinkingLevel: "high" as const });
+		toggleLevel(kept, c, "max");
+		expect(kept.defaultThinkingLevel).toBe("high");
 	});
 	test("an unmatched model keeps today's behaviour: on/off, and empty when none is left", () => {
 		const r = row();

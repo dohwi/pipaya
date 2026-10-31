@@ -291,6 +291,7 @@ export const ModelInfo = Type.Object({
 	vision: Type.Boolean(),
 	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text. It cannot run a chat (409 image_model_not_chat); set it as the image model (GET/PUT /image-model) and agents draw with the generate_image tool" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
+	defaultThinkingLevel: Type.Optional(Thinking),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),
 });

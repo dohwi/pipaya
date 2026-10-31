@@ -255,6 +255,22 @@ describe("where a model's reasoning strengths come from", () => {
 		expect(r.body.models[0].thinkingSource).toEqual({ kind: "default", levels: ["minimal", "low", "medium", "high"] });
 		expect(await levelsOf("src-manual")).toEqual(["minimal", "low", "medium", "high"]);
 	});
+	test("a model can name the strength a new chat starts at", async () => {
+		const r = await put("src-default", [{ id: "gpt-5", reasoning: true, defaultThinkingLevel: "high" }]);
+		expect(r.status).toBe(200);
+		const list = await api("GET", "/models?provider=src-default");
+		expect(list.body.models[0].defaultThinkingLevel).toBe("high");
+		const made = await api("POST", "/sessions", { title: "starter", provider: "src-default", model: "gpt-5" });
+		expect(made.status).toBe(201);
+		expect(made.body.thinkingLevel).toBe("high");
+		const asked = await api("POST", "/sessions", { title: "asked", provider: "src-default", model: "gpt-5", thinkingLevel: "low" });
+		expect(asked.body.thinkingLevel).toBe("low");
+	});
+	test("a default the model does not offer, or on a model without reasoning, is refused", async () => {
+		expect((await put("src-default-bad", [{ id: "unknown-model-xyz", reasoning: true, defaultThinkingLevel: "ultra" }])).status).toBe(400);
+		expect((await put("src-default-bad2", [{ id: "unknown-model-xyz", reasoning: true, thinkingLevels: ["low", "high"], defaultThinkingLevel: "max" }])).status).toBe(400);
+		expect((await put("src-default-bad3", [{ id: "unknown-model-xyz", reasoning: false, defaultThinkingLevel: "low" }])).status).toBe(400);
+	});
 	test("GET /configuration reports the same", async () => {
 		const found = (await api("GET", "/configuration")).body.providers.find((p: any) => p.id === "src-cat");
 		expect(found.models[0].thinkingSource.catalogId).toBe("openai/gpt-5");

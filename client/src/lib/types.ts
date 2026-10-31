@@ -262,6 +262,8 @@ export interface ModelInfo {
 	reasoning: boolean;
 	/** Reasoning strengths the model accepts, weakest first; empty without reasoning. */
 	thinkingLevels: ThinkingLevel[];
+	/** Where a new chat with this model starts, when its owner chose one */
+	defaultThinkingLevel?: ThinkingLevel;
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -337,6 +339,8 @@ export interface CustomModel {
 	thinkingLevels?: ThinkingLevel[];
 	/** The OpenRouter model this one corresponds to. null = none (manual values); absent = matched by name. */
 	catalogId?: string | null;
+	/** Where a new chat with this model starts; absent = this device's last choice */
+	defaultThinkingLevel?: ThinkingLevel;
 	/** Response only: the upstream's model list no longer contains this model */
 	unavailable?: boolean;
 	/** Response only: where the strengths come from. */

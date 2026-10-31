@@ -11,9 +11,9 @@ import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type Skill
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
-import type { ModelRegistry } from "./models.ts";
+import { modelDefaultLevel, type ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
-import { type SessionPatch, type SessionRecord, type SessionStore, } from "./store.ts";
+import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
@@ -138,7 +138,7 @@ export class SessionManager {
 			cwd,
 			provider,
 			model,
-			thinkingLevel: input.thinkingLevel ?? this.registry.defaultSelection?.()?.thinkingLevel ?? "medium",
+			thinkingLevel: input.thinkingLevel ?? this.defaultThinkingLevel(provider, model),
 			systemPrompt: input.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
 			tools,
 			parentId,
@@ -373,6 +373,18 @@ export class SessionManager {
 	}
 
 	/** An image model only draws (through the generate_image tool); a chat never runs on it. */
+	/**
+	 * Where a new chat with this model starts: the model's own default (chosen in its connection settings), else the
+	 * saved default model's strength when it is this very model, else "medium".
+	 */
+	private defaultThinkingLevel(provider: string, model: string): ThinkingLevel {
+		const live = this.registry.models.getModel(provider, model);
+		const own = live ? modelDefaultLevel(live) : undefined;
+		if (own) return own;
+		const saved = this.registry.defaultSelection?.();
+		return saved && saved.provider === provider && saved.model === model && saved.thinkingLevel ? saved.thinkingLevel : "medium";
+	}
+
 	private assertChatModel(provider: string, model: string): void {
 		if (this.registry.isImageModel?.(provider, model)) throw new HttpError(409, "image_model_not_chat", IMAGE_MODEL_IN_CHAT);
 	}

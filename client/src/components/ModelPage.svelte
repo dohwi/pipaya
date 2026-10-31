@@ -6,10 +6,12 @@
 	import { isImageIcon } from "../lib/model-icon-image";
 	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
 	import type { Api } from "../lib/api";
-	import type { CatalogModel } from "../lib/types";
+	import type { CatalogModel, ThinkingLevel } from "../lib/types";
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
+	import SettingRow from "./SettingRow.svelte";
+	import Select from "./Select.svelte";
 
 	/**
 	 * One model's page inside the connection dialog: id, OpenRouter match, display name and icon, limits, capabilities
@@ -42,6 +44,10 @@
 	/** An upstream model keeps its fixed id, unless the upstream stopped listing it: then it is just a typed-in model. */
 	const locked = $derived(!!r.fromUpstream && !r.unavailable);
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
+	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
+	const levels = $derived(shownLevels(r, matched));
+	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
+	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
 
 	<section class="fsec">
@@ -126,6 +132,18 @@
 					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
+			<SettingRow
+				label={t("새 대화 기본 강도")}
+				hint={r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}
+			>
+				<Select
+					size="sm"
+					width="auto"
+					value={fallbackLevel}
+					options={[{ value: "auto", label: t("자동") }, ...levels.map((l) => ({ value: l, label: l }))]}
+					onchange={(v) => (r.defaultThinkingLevel = v === "auto" ? undefined : v)}
+				/>
+			</SettingRow>
 		</section>
 	{/if}
 	{#if !locked}

@@ -36,6 +36,7 @@ export const CustomProviderBody = Type.Object({
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
+		defaultThinkingLevel: Type.Optional(Thinking),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
 /**
@@ -45,6 +46,14 @@ export const CustomProviderBody = Type.Object({
 function catalogFor(m: { id: string; catalogId?: string | null }) {
 	if (m.catalogId === null) return undefined;
 	return (m.catalogId ? catalogMatch(m.catalogId) : undefined) ?? catalogMatch(m.id);
+}
+
+/** The strengths a saved model ends up offering: the owner's own list, else the catalog's, else pi-ai's minimal..high. */
+function supportedLevelsFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): ThinkingLevel[] {
+	if (m.thinkingLevels?.length) return THINKING_LEVELS.filter((l) => m.thinkingLevels!.includes(l));
+	const map = catalogFor(m)?.map;
+	if (map) return THINKING_LEVELS.filter((l) => map[l] !== null && map[l] !== undefined);
+	return THINKING_LEVELS.filter((l) => l === "minimal" || l === "low" || l === "medium" || l === "high");
 }
 
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
@@ -308,6 +317,11 @@ export class Configuration {
 		if (input.models.some((m) => m.maxTokens > m.contextWindow)) throw badRequest("maxTokens must not exceed contextWindow");
 		if (!input.name.trim()) throw badRequest("name must not be blank");
 		if (input.models.some((m) => m.icon?.startsWith("img:") && !this.images.has(m.icon))) throw badRequest("icon image not found: upload it first");
+		for (const m of input.models) {
+			if (!m.defaultThinkingLevel) continue;
+			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
+			if (!supportedLevelsFor(m).includes(m.defaultThinkingLevel)) throw badRequest(`${m.id.trim()}: the default thinking level must be one of ${supportedLevelsFor(m).join(", ")}`);
+		}
 		const p: CustomProvider = { ...input, id, name: input.name.trim(), baseUrl: url.toString().replace(/\/$/, ""), models: input.models.map((m) => ({ ...m, id: m.id.trim() })) };
 		const defaultModel = this.effectiveDefaults();
 		if (defaultModel?.provider === id && !ids.includes(defaultModel.model)) throw conflict("cannot remove the default model; change defaults first");
@@ -464,11 +478,13 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: Model<CustomProvider["api"]>[] = p.models.filter((m) => !m.disabled).map((m) => ({
+		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the bundled OpenRouter catalog, and unknown names keep the defaults.
 			...(m.reasoning && !m.imageGeneration ? thinkingMapFor(m) : {}),
+			// pi-ai has no slot for "where a new chat starts", so the owner's choice travels on the model object (see modelDefaultLevel).
+			...(m.reasoning && !m.imageGeneration && m.defaultThinkingLevel ? { defaultThinkingLevel: m.defaultThinkingLevel } : {}),
 			contextWindow: m.contextWindow, maxTokens: m.maxTokens,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		}));

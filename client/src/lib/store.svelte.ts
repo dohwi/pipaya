@@ -62,6 +62,7 @@ export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
 import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
+import type { ThinkingLevel } from "./types";
 
 class AppStore {
   servers = $state<Server[]>(loadServers());
@@ -892,8 +893,18 @@ class AppStore {
     if (pick) this.updateDraft({ provider: pick.provider, model: pick.id });
   }
 
+  /** The strength a connection names for this model as its starting point, if it names one. */
+  private modelDefaultLevel(provider: string, id: string): ThinkingLevel | undefined {
+    const m = this.models.find((x) => x.provider === provider && x.id === id);
+    return m?.reasoning ? m.defaultThinkingLevel : undefined;
+  }
+
   updateDraft(patch: Partial<Draft>) {
-    this.draft = { ...this.draft, ...patch };
+    const next = { ...this.draft, ...patch };
+    // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
+    if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
+      next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
+    this.draft = next;
     write(K.draft, this.draft);
   }
 

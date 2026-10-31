@@ -1,6 +1,6 @@
 import { getSupportedThinkingLevels, type Api, type CredentialStore, type Model, type MutableModels } from "@earendil-works/pi-ai";
 import { builtinModels, builtinProviders } from "@earendil-works/pi-ai/providers/all";
-import type { ThinkingLevel } from "./store.ts";
+import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
 export interface ModelRegistry {
 	models: MutableModels;
@@ -8,6 +8,15 @@ export interface ModelRegistry {
 	/** Whether this model makes pictures (image generation) instead of writing text. */
 	isImageModel?: (provider: string, id: string) => boolean;
 	defaultSelection?: () => { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null;
+}
+
+/**
+ * The strength a new chat with this model starts at, when its owner chose one. pi-ai's `Model` has no slot for it, so
+ * the configuration carries it on the model object it registers.
+ */
+export function modelDefaultLevel(m: Model<Api>): ThinkingLevel | undefined {
+	const v = (m as Model<Api> & { defaultThinkingLevel?: unknown }).defaultThinkingLevel;
+	return typeof v === "string" && (THINKING_LEVELS as readonly string[]).includes(v) ? (v as ThinkingLevel) : undefined;
 }
 
 /** Starts with every pi-ai built-in provider (OpenAI, Anthropic, Google, OpenRouter, Copilot …); Configuration adds the user's own endpoints on top. */
@@ -35,6 +44,8 @@ export interface ModelInfo {
 	imageGeneration: boolean;
 	/** Brand mark chosen in the connection settings; absent = picked from the id */
 	icon?: string;
+	/** Where a new chat with this model starts, when its owner chose a strength (absent = the device's last choice) */
+	defaultThinkingLevel?: ThinkingLevel;
 	configured: boolean;
 	/** false = the connection's own model list no longer contains this model */
 	available: boolean;
@@ -54,6 +65,7 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		vision: m.input.includes("image"),
 		imageGeneration: reg.isImageModel?.(m.provider, m.id) ?? false,
 		...(icons.has(`${m.provider}/${m.id}`) ? { icon: icons.get(`${m.provider}/${m.id}`) } : {}),
+		...(m.reasoning && modelDefaultLevel(m) ? { defaultThinkingLevel: modelDefaultLevel(m)! } : {}),
 		configured: available.has(`${m.provider}/${m.id}`),
 		available: !unavailable(m.provider, m.id),
 	}));

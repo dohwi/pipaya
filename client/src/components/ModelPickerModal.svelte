@@ -69,8 +69,8 @@
 	const available = $derived<ThinkingLevel[]>(info?.thinkingLevels.length ? levels.filter((l) => info.thinkingLevels.includes(l)) : levels);
 	/** The highlighted strength, moved to the nearest supported one when the model does not accept it. */
 	const shownLvl = $derived.by<ThinkingLevel | null>(() => {
-		// A model with reasoning always has a strength selected: when none was chosen yet, start at the default.
-		const want = lvl ?? (info?.reasoning ? "medium" : null);
+		// A model with reasoning always has a strength selected: when none was chosen yet, start at the model's own default.
+		const want = lvl ?? (info?.reasoning ? (info.defaultThinkingLevel ?? "medium") : null);
 		if (!want || available.includes(want)) return want;
 		const i = levels.indexOf(want);
 		return available.find((l) => levels.indexOf(l) >= i) ?? available[available.length - 1] ?? null;
@@ -103,6 +103,8 @@
 	function choose(m: ModelInfo) {
 		if (!m.configured || m.available === false || same(m)) return;
 		sel = { provider: m.provider, model: m.id };
+		// A model that names its own starting strength starts there; one that does not keeps the choice made here.
+		if (m.defaultThinkingLevel) lvl = null;
 		apply();
 	}
 	function unset() {

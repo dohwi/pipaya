@@ -22,6 +22,8 @@ export interface Row {
 	thinkingLevels: ThinkingLevel[];
 	/** OpenRouter model this upstream model is matched to. null = manual; undefined = not chosen yet (matched by name). */
 	catalogId?: string | null;
+	/** Where a new chat with this model starts; undefined = this device's last choice */
+	defaultThinkingLevel?: ThinkingLevel;
 	/** What the server matched this model to, for display only */
 	thinkingSource?: CustomModel["thinkingSource"];
 	/** The upstream's model list no longer contains it */
@@ -60,6 +62,8 @@ export function toggleLevel(r: Row, matched: CatalogModel | null | undefined, le
 	const next = ALL_LEVELS.filter((l) => (l === level ? !shown.includes(l) : shown.includes(l)));
 	const catalog = catalogLevels(matched);
 	r.thinkingLevels = next.length === catalog.length && next.every((l) => catalog.includes(l)) ? [] : next;
+	// The starting strength must stay reachable: switching its level off drops it back to "this device's last choice".
+	if (r.defaultThinkingLevel && !next.includes(r.defaultThinkingLevel)) r.defaultThinkingLevel = undefined;
 }
 
 /** Local runtimes that speak the OpenAI-compatible API without a key. The URL is reached from the server, so localhost means the server's machine. */
@@ -121,6 +125,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			disabled: m.disabled,
 			thinkingLevels: m.thinkingLevels ?? [],
 			catalogId: m.catalogId,
+			defaultThinkingLevel: m.defaultThinkingLevel,
 			thinkingSource: m.thinkingSource,
 			unavailable: m.unavailable,
 		})),
@@ -140,6 +145,7 @@ export function applyMatch(r: Row, c: CatalogModel | null) {
 	r.reasoning = c.reasoning;
 	r.imageGeneration = c.image;
 	r.thinkingLevels = [];
+	if (r.defaultThinkingLevel && !catalogLevels(c).includes(r.defaultThinkingLevel)) r.defaultThinkingLevel = undefined;
 }
 
 /** "128k": the context size under a model's name. */
@@ -180,6 +186,8 @@ export function collectModels(
 		if (!Number.isInteger(max) || max < 1) return bad(t("{id}: 최대 출력은 1 이상의 정수여야 합니다.", { id: r.id }));
 		if (max > ctx) return bad(t("{id}: 최대 출력은 컨텍스트 크기를 넘을 수 없습니다.", { id: r.id }));
 		const hit = matchedId(r);
+		// A default the model does not offer would never be reachable, so it is dropped along with the strengths.
+		const def = r.reasoning && !r.imageGeneration && r.defaultThinkingLevel && (!r.thinkingLevels.length || r.thinkingLevels.includes(r.defaultThinkingLevel)) ? r.defaultThinkingLevel : undefined;
 		out.push({
 			id: r.id.trim(),
 			...(r.fromUpstream && !r.unavailable ? { fromUpstream: true } : {}),
@@ -193,6 +201,8 @@ export function collectModels(
 			...(r.imageGeneration ? { imageGeneration: true } : {}),
 			...(r.icon ? { icon: r.icon } : {}),
 			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
+			// A default outside the strengths this model offers would never be reachable, so it is dropped with them.
+			...(def ? { defaultThinkingLevel: def } : {}),
 		} as CustomModel);
 	}
 	if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };
