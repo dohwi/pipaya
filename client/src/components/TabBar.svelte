@@ -66,8 +66,13 @@
 		accepts: (id: string) => takes(id) && !acrossPins(id, x.id),
 		hover: (pt: Point | null) => {
 			if (pt && drag.id === x.id) slot = null;
-			else if (pt) slot = { id: x.id, after: sideOf(pt, document.querySelector(`[data-tab="${CSS.escape(x.id)}"]`)) };
-			else if (slot?.id === x.id) slot = null;
+			else if (pt) {
+				const after = sideOf(pt, document.querySelector(`[data-tab="${CSS.escape(x.id)}"]`));
+				// right beside the carried tab is where it already is: no gap
+				const i = drag.id ? ids.indexOf(drag.id) : -1;
+				const j = ids.indexOf(x.id);
+				slot = i >= 0 && (after ? j === i - 1 : j === i + 1) ? null : { id: x.id, after };
+			} else if (slot?.id === x.id) slot = null;
 		},
 		drop: (id: string, pt: Point) => {
 			slot = null;

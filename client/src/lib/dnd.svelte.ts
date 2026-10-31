@@ -101,9 +101,9 @@ class Drag {
 			// lifted off the list: opaque (a see-through copy over rows reads as a smear), the row's own corner, the theme's
 			// lifted shadow and a hairline so it separates from a background of the same colour
 			opacity: "1",
-			background: "var(--bg)",
+			background: "var(--bg-lift)",
 			borderRadius: getComputedStyle(node).borderRadius,
-			boxShadow: "var(--shadow), 0 0 0 1px var(--border)",
+			boxShadow: "var(--shadow), 0 0 0 1px var(--border-strong)",
 			transition: "none",
 		});
 		// the copy shows the thing, not its state in the list (selected, hovered, a drop line)
@@ -117,10 +117,12 @@ class Drag {
 		shell.inner.append(g);
 		document.body.append(shell.outer);
 		this.ghost = shell.outer;
-		// Keep the spot it was grabbed by across, but hang the copy just off the pointer instead of over it, so the row or tab
+		// Keep the spot it was grabbed by across, but hang the copy off the pointer instead of over it, so the row or tab
 		// being aimed at and the line where it would land stay visible: under the pointer with a mouse, above the finger on
 		// touch (where under it would be hidden by the hand).
-		this.grab = { x: at.x - r.left, y: touch ? r.height + 12 : -12 };
+		// Mouse: 24px below. A drop "after" a row is picked in the bottom 28% of it (9px of a 32px row) and its line is drawn
+		// 12px below the row, in the middle of the 24px gap, so the copy's top (at least 24 - 9 = 15px below the row) clears it.
+		this.grab = { x: at.x - r.left, y: touch ? r.height + 12 : -24 };
 		document.documentElement.classList.add("dnd");
 		this.move(x, y);
 		this.raf = requestAnimationFrame(this.loop);

@@ -136,9 +136,16 @@
 	 */
 	const acrossPins = (n: Node, d: DirBlock, x: string, carried: string | null) =>
 		!!carried && d.tabs.some((t) => t.id === carried) && app.sidebar.isTabPinned(n.server.id, carried) !== app.sidebar.isTabPinned(n.server.id, x);
+	/** The slot right before / after the carried tab is where it already is: no gap there, letting go does nothing. */
+	const inPlace = (d: DirBlock, x: string, carried: string | null, edge: "before" | "after") => {
+		const ids = d.tabs.map((t) => t.id);
+		const i = carried ? ids.indexOf(carried) : -1;
+		const j = ids.indexOf(x);
+		return i >= 0 && j >= 0 && (edge === "before" ? j === i + 1 : j === i - 1);
+	};
 	const tabHover = (n: Node, d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
 		const raw = pt ? reorderEdge(d, x.id, pt) : null;
-		const blocked = !!raw && acrossPins(n, d, x.id, drag.id);
+		const blocked = !!raw && (acrossPins(n, d, x.id, drag.id) || inPlace(d, x.id, drag.id, raw));
 		const edge = blocked ? null : raw;
 		marks.setTab(x.id, edge);
 		const pairs = !!pt && !raw && !isGroupId(drag.id) && !(x.kind === "group" && x.members.some((m) => m.id === drag.id));
@@ -148,7 +155,7 @@
 		// drag.id is already cleared when drop runs, so pass the dropped id explicitly
 		const edge = reorderEdge(d, x.id, pt, id);
 		marks.tab = null;
-		if (edge && acrossPins(n, d, x.id, id)) return;
+		if (edge && (acrossPins(n, d, x.id, id) || inPlace(d, x.id, id, edge))) return;
 		if (edge) {
 			if (!d.tabs.some((t) => t.id === id)) await app.leaveGroup(id); // a pane steps out of its group into a tab
 			const now = app.dirs.find((y) => y.path === d.path)?.tabs.map((t) => t.id) ?? d.tabs.map((t) => t.id);
@@ -953,7 +960,8 @@
 		bottom: -24px;
 	}
 	/* the row in the air: it keeps its place, faded (dropping it on itself does nothing) */
-	:global(:where(.side) .item.carried) {
+	:global(:where(.side) .item.carried),
+	:global(:where(.side) .grp:has(> .item.carried) .members .item) {
 		opacity: 0.45;
 	}
 	/* the row being pulled onto: pairs up with whatever is dropped */
