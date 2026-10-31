@@ -869,7 +869,7 @@
 		left: 0;
 		top: -1px; /* rows are 1px apart (their margin): run the rule across that gap so it never breaks */
 		bottom: -1px;
-		border-left: 1.5px solid var(--border-strong, var(--border));
+		border-left: 1.5px solid var(--tree-line);
 	}
 	:global(:where(.side) .branch::after) {
 		content: "";
@@ -878,8 +878,8 @@
 		top: calc(50% - 8px);
 		width: 100%;
 		height: 8px;
-		border-left: 1.5px solid var(--border-strong, var(--border));
-		border-bottom: 1.5px solid var(--border-strong, var(--border));
+		border-left: 1.5px solid var(--tree-line);
+		border-bottom: 1.5px solid var(--tree-line);
 		border-bottom-left-radius: 3px;
 	}
 	/* the open pane's path: one element from the group down to its elbow, one step darker than the quiet rule. Only its height

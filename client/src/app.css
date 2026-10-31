@@ -149,6 +149,7 @@
 	--bg-code: #121212;
 	--border: #2e2e2e;
 	--border-strong: #3f3f3f;
+	--tree-line: #5a5a5a; /* sidebar tree rule: between --border-strong and --text-dim so it reads on the dark rows */
 	--text: #ededed;
 	--text-dim: #a0a0a0;
 	--text-faint: #8b8b93;
@@ -200,6 +201,7 @@
 	--bg-code: #f4f4f5;
 	--border: #ededed;
 	--border-strong: #d4d4d8;
+	--tree-line: #a1a1aa; /* sidebar tree rule */
 	--text: #0a0a0b;
 	--text-dim: #52525b;
 	--text-faint: #71717a;
