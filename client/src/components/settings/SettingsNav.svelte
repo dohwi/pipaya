@@ -238,7 +238,7 @@
 		top: -10px; /* up to the section row, where the first trunk starts */
 		z-index: 1; /* above the rows' quiet trunks */
 		width: 18px;
-		height: calc(var(--path-h, 0px) + 10px);
+		height: var(--path-h, 0px); /* already counts the 10px lead above the first row (lib/tree-path) */
 		box-sizing: border-box;
 		border-left: 1.5px solid var(--text-dim);
 		border-bottom: 1.5px solid var(--text-dim);

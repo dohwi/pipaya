@@ -866,7 +866,7 @@
 		top: -2px; /* up into the gap under the group row, where the first pane's rule starts */
 		z-index: 1; /* above the rows' quiet rules, which overlap each other by 1px */
 		width: 12px;
-		height: calc(var(--path-h, 0px) + 2px);
+		height: var(--path-h, 0px); /* already counts the 2px lead above the first row (lib/tree-path) */
 		box-sizing: border-box;
 		border-left: 1.5px solid var(--text-dim);
 		border-bottom: 1.5px solid var(--text-dim);
