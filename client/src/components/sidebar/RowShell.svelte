@@ -3,7 +3,7 @@
 	import type { Snippet } from "svelte";
 	import type { ClassValue } from "svelte/elements";
 	import { t } from "../../lib/i18n";
-	import { dragSource, dropTarget, type DropOpts } from "../../lib/dnd.svelte";
+	import { drag, dragSource, dropTarget, type DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type MenuTarget } from "../../lib/sidebar-ctx";
 	import Icon from "../Icon.svelte";
 	import RenameInput from "./RenameInput.svelte";
@@ -73,6 +73,7 @@
 	class:over
 	class:before={sb.marks.tabLine(id) === "before"}
 	class:after={sb.marks.tabLine(id) === "after"}
+	class:carried={drag.id === id}
 	class:grabbable={current && !renaming}
 	class:menuopen={sb.menuId === id}
 	use:dragSource={{ id, disabled: !current || renaming, menu: current ? (pt) => sb.rowMenuAt(pt, target, member) : undefined }}

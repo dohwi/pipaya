@@ -913,17 +913,39 @@
 		border-color: var(--accent);
 		background: var(--accent-soft);
 	}
-	/* the line where a carried session would land among its siblings */
+	/* Where a carried session would land among its siblings: the neighbours step aside (the row grows a 24px gap on that
+	   side, animated) and the line sits in the middle of it. The pseudo-element fills the whole gap and takes the pointer,
+	   so the row under the pointer stays the same one while it moves (otherwise the gap would push the row away and the
+	   hover would flicker); its line is a 2px gradient. */
+	:global(:where(.side) .item) {
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			margin var(--motion-fast) var(--ease-std);
+	}
+	:global(:where(.side) .item.before) {
+		margin-top: 25px; /* 24 gap + the usual 1px between rows */
+	}
+	:global(:where(.side) .item.after) {
+		margin-bottom: 25px;
+	}
 	:global(:where(.side) .item.before::before),
 	:global(:where(.side) .item.after::after) {
 		left: 8px;
 		right: 16px; /* 8 from where the content ends (the row's highlight runs 8px past it) */
+		height: 24px;
+		border-radius: 0;
+		background: linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat;
+		pointer-events: auto;
 	}
 	:global(:where(.side) .item.before::before) {
-		top: -1px;
+		top: -24px;
 	}
 	:global(:where(.side) .item.after::after) {
-		bottom: -1px;
+		bottom: -24px;
+	}
+	/* the row in the air: it keeps its place, faded (dropping it on itself does nothing) */
+	:global(:where(.side) .item.carried) {
+		opacity: 0.45;
 	}
 	/* the row being pulled onto: pairs up with whatever is dropped */
 	:global(:where(.side) .item.over) {

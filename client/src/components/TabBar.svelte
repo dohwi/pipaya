@@ -342,8 +342,37 @@
 	.tab.carried {
 		opacity: 0.45;
 	}
+	/* the neighbours step aside: the tab grows a 24px gap (4 of the strip's own + 20) on the side where the carried one
+	   would land, animated, with the line in the middle of it. The pseudo-element fills the gap and takes the pointer,
+	   so the tab under it stays the same one while the gap opens (no flicker). */
+	.tab {
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std),
+			margin var(--motion-fast) var(--ease-std);
+	}
+	.tab.before {
+		margin-left: 20px;
+	}
+	.tab.after {
+		margin-right: 20px;
+	}
 	.tab.before::before,
-	.tab.after::after,
+	.tab.after::after {
+		content: "";
+		position: absolute;
+		top: 4px;
+		bottom: 4px;
+		width: 24px; /* the 20px margin plus the strip's 4px gap */
+		background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
+		z-index: 2;
+	}
+	.tab.before::before {
+		left: -24px;
+	}
+	.tab.after::after {
+		right: -24px;
+	}
 	.tail.over::before {
 		content: "";
 		position: absolute;
@@ -354,12 +383,6 @@
 		background: var(--accent);
 		z-index: 2;
 		pointer-events: none;
-	}
-	.tab.before::before {
-		left: -2px;
-	}
-	.tab.after::after {
-		right: -2px;
 	}
 	.tail {
 		position: relative;
