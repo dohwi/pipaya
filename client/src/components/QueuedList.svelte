@@ -12,6 +12,27 @@
 	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
 	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
 	let ul = $state<HTMLUListElement>();
+	// How many rows show depends on the room left: a row is 22px + 4px gap, and the last visible one is cut in half
+	// (n rows + 4 gap + 11) so it reads as scrollable. visualViewport shrinks when the phone keyboard opens.
+	const ROW = 22;
+	const GAP = 4;
+	const viewH = () => window.visualViewport?.height ?? window.innerHeight;
+	let vh = $state(viewH());
+	const rows = $derived(vh < 500 ? 1 : vh < 680 ? 2 : 3); // whole rows; a half row follows
+	const listH = $derived(rows * ROW + (rows - 1) * GAP + GAP + ROW / 2);
+	$effect(() => {
+		const sync = () => (vh = viewH());
+		window.addEventListener("resize", sync);
+		window.visualViewport?.addEventListener("resize", sync);
+		return () => {
+			window.removeEventListener("resize", sync);
+			window.visualViewport?.removeEventListener("resize", sync);
+		};
+	});
+	$effect(() => {
+		void listH;
+		syncFade();
+	});
 	let drag: { y: number; top: number; moved: boolean } | null = null;
 	// Which edges still hide rows: those edges fade out, so a half-cut row (and its ✕) never reads as a button.
 	let fadeTop = $state(false);
@@ -57,7 +78,7 @@
 {#if thumb}<p class="count" role="status">{t("{n}개 대기 중", { n: queued.length })}</p>{/if}
 <div class="scroll">
 {#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
-<ul class="queued" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
+<ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
 			<QueueBadge {q} />
@@ -99,9 +120,7 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		/* Three whole rows (22px each, 4px gaps = 74px) and half of the fourth (4 + 11), so it reads as scrollable.
-		   On a short window (phone with the keyboard open) one whole row and half of the second: the count line already costs 20px. */
-		max-height: 89px;
+		/* max-height comes from the script (1.5, 2.5 or 3.5 rows, by the room left). */
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		cursor: grab;
@@ -119,11 +138,6 @@
 	}
 	.fade-top.fade-bottom {
 		mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
-	}
-	@media (max-height: 600px) {
-		.queued {
-			max-height: 38px;
-		}
 	}
 	.queued li {
 		display: flex;
