@@ -5,7 +5,6 @@
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
 	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
-	import { slidingIndicator } from "../lib/sliding-indicator";
 	import type { Api } from "../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../lib/types";
 	import Icon from "./Icon.svelte";
@@ -143,28 +142,24 @@
 
 			<div class="defsec">
 				<div class="section-label">{t("새 대화 기본 강도")}</div>
-				<div
-					class="seg full"
-					role="group"
-					aria-label={t("새 대화 기본 강도")}
-					use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}
-				>
+				<div class="caps" role="group" aria-label={t("새 대화 기본 강도")}>
 					<button
 						type="button"
-						class="tap"
-						class:on={fallbackLevel === "auto"}
+						class="cap tap"
 						aria-pressed={fallbackLevel === "auto"}
 						onclick={() => (r.defaultThinkingLevel = undefined)}
 					>{t("자동")}</button>
 					{#each levels as l (l)}
 						<button
 							type="button"
-							class="tap"
-							class:on={fallbackLevel === l}
-							aria-pressed={fallbackLevel === l}
+							class="cap tap"
 							data-level={l}
+							aria-pressed={fallbackLevel === l}
 							onclick={() => (r.defaultThinkingLevel = l)}
-						>{l}</button>
+						>
+							<span class="dot"></span>
+							<span>{l}</span>
+						</button>
 					{/each}
 				</div>
 				<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
@@ -334,39 +329,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		margin-top: 4px;
-	}
-	.defsec .seg {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: minmax(0, 1fr);
-	}
-	.defsec .seg button {
-		padding: 0 2px;
-		font-size: var(--fs-2xs);
-		white-space: nowrap;
-		letter-spacing: -0.01em;
-	}
-	.defsec .seg button[data-level]:not(.on):not(:disabled)::before {
-		content: "";
-		display: inline-block;
-		width: 4px;
-		height: 4px;
-		margin-right: 3px;
-		border-radius: 50%;
-		background: var(--lv);
-		opacity: 0.55;
-		vertical-align: 1px;
-	}
-	.defsec .seg button.on {
-		background: var(--lv-soft, var(--bg-active));
-		color: var(--lv, var(--text));
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv, var(--border-strong)) 45%, transparent);
-		font-weight: 600;
-	}
-	.defsec .seg:global([data-indicator-ready]) button.on {
-		background: transparent;
-		box-shadow: none;
 	}
 	.field[readonly] {
 		color: var(--text-dim);
