@@ -10,7 +10,6 @@
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
-	import SettingRow from "./SettingRow.svelte";
 	import Select from "./Select.svelte";
 
 	/**
@@ -132,18 +131,15 @@
 					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
-			<SettingRow
-				label={t("새 대화 기본 강도")}
-				hint={r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}
-			>
+			<label>
+				<span>{t("새 대화 기본 강도")}</span>
 				<Select
-					size="sm"
-					width="auto"
 					value={fallbackLevel}
 					options={[{ value: "auto", label: t("자동") }, ...levels.map((l) => ({ value: l, label: l }))]}
 					onchange={(v) => (r.defaultThinkingLevel = v === "auto" ? undefined : v)}
 				/>
-			</SettingRow>
+			</label>
+			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 		</section>
 	{/if}
 	{#if !locked}
@@ -302,7 +298,8 @@
 		gap: 4px;
 		min-width: 0;
 	}
-	label em {
+	label em,
+	.section-label em {
 		font-style: normal;
 		font-weight: 400;
 		color: var(--text-faint);
