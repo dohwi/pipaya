@@ -54,7 +54,7 @@
 	>
 		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon" title={pinned ? t("고정됨") : undefined}><Icon name={pinned ? "pin" : "folder"} /></span>
+			<span class="dicon" class:pinned title={pinned ? t("고정됨") : undefined}><Icon name={pinned ? "pin" : "folder"} /></span>
 			<span class="dlabel">
 				<span class="dname">{label}</span>
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
@@ -99,6 +99,10 @@
 </div>
 
 <style>
+	/* a pinned folder's pin is stuck in at a slant; only the glyph turns (the 14px box and its centre on x 48 stay put) */
+	.dicon.pinned :global(svg) {
+		transform: rotate(35deg);
+	}
 	.archive {
 		position: relative;
 		margin: 1px 0; /* 1px between rows, like the tab rows */
