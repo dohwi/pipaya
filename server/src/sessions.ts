@@ -26,7 +26,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, runawayReason } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, loadSubagents, subagentSystem } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, helperUsage, loadSubagents, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -1032,7 +1032,7 @@ export class SessionManager {
 			const { text: answer, error } = finalText(agent.state.messages as any);
 			if (error && !limited) throw new Error(`helper ${def.name} failed: ${error}`);
 			const note = limited ? `\n\n[helper stopped after ${cap} model calls (maxTurns); the answer may be incomplete]` : "";
-			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, turns, limited, task: input.task.slice(0, 500) } };
+			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, turns, limited, usage: helperUsage(agent.state.messages as any), task: input.task.slice(0, 500) } };
 		} finally {
 			signal?.removeEventListener("abort", stop);
 			release();

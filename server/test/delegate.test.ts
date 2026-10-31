@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
-import { chooseModel, DelegateLimits, loadSubagents } from "../src/subagents.ts";
+import { chooseModel, DelegateLimits, helperUsage, loadSubagents } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -67,6 +67,14 @@ describe("chooseModel", () => {
 	});
 });
 
+describe("helperUsage", () => {
+	test("sums assistant usage only", () => {
+		const u = (n: number) => ({ input: n, output: n, cacheRead: 1, cacheWrite: 2, totalTokens: 2 * n + 3, cost: { total: 0.5 } });
+		expect(helperUsage([{ role: "user" }, { role: "assistant", usage: u(4) }, { role: "toolResult" }, { role: "assistant", usage: u(6) }]))
+			.toEqual({ input: 10, output: 10, cacheRead: 2, cacheWrite: 4, totalTokens: 26, cost: 1 });
+	});
+});
+
 describe("delegate tool", () => {
 	let app: Awaited<ReturnType<typeof buildApp>>, base = "", dir = "", upstream: ReturnType<typeof startEchoUpstream>;
 	const api = async (method: string, path: string, body?: unknown) => {
@@ -79,6 +87,7 @@ describe("delegate tool", () => {
 
 	beforeAll(async () => {
 		dir = mkdtempSync(join(tmpdir(), "pipaya-delegate-"));
+		mkdirSync(join(dir, "ws"), { recursive: true });
 		def(join(dir, "home", ".agents", "subagents"), "explore", `description: finds\nmodel: echo/${ECHO_MODEL.id}\ntools: [read]\nmaxTurns: 3`);
 		upstream = startEchoUpstream();
 		app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), logLevel: "silent" }, { strictResponses: true, extensionDirs: [], home: join(dir, "home") });
@@ -127,6 +136,20 @@ describe("delegate tool", () => {
 		expect(await call(id, { role: "explore", task: "hi", model: "echo/nope" })).toContain("echo/nope is not available");
 	});
 
+	test("a helper can use its tools; one outside its tool list cannot", async () => {
+		writeFileSync(join(dir, "ws", "note.txt"), "secret-marker-42");
+		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
+		expect(await call(id, { role: "explore", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("secret-marker-42");
+		const denied = await call(id, { role: "explore", task: `!bash ${JSON.stringify({ command: "echo hi" })}` });
+		expect(denied).not.toContain("\\nhi");
+	});
+
+	test("a helper that keeps calling tools is stopped at maxTurns and says so", async () => {
+		def(join(dir, "home", ".agents", "subagents"), "short", `model: echo/${ECHO_MODEL.id}\ntools: [read]\nmaxTurns: 1`);
+		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
+		expect(await call(id, { role: "short", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("helper stopped after 1 model calls");
+	});
+
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const out = await call(id, { role: "ghost", task: "x" });
@@ -142,5 +165,36 @@ describe("delegate tool", () => {
 		await api("PUT", "/configuration/tools", { disabled: [] });
 		const again = (await api("GET", `/sessions/${id}/context`)).json.toolSpecs as { name: string; enabled: boolean }[];
 		expect(again.find((t) => t.name === "delegate")!.enabled).toBe(true);
+	});
+});
+
+describe("delegate usage in the session totals", () => {
+	test("the helper's tokens are added to the calling session", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pipaya-delegate-usage-"));
+		def(join(dir, "home", ".agents", "subagents"), "explore", `model: echo/${ECHO_MODEL.id}\ntools: [read]`);
+		const upstream = startEchoUpstream();
+		const app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), logLevel: "silent" }, { strictResponses: true, extensionDirs: [], home: join(dir, "home") });
+		try {
+			await app.server.listen({ host: "0.0.0.0", port: 0 });
+			const base = `http://127.0.0.1:${(app.server.server.address() as { port: number }).port}`;
+			const api = async (method: string, path: string, body?: unknown) => {
+				const res = await fetch(base + path, { method, headers: { authorization: "Bearer t", "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
+				return { json: (await res.json()) as any };
+			};
+			await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));
+			await api("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id });
+			const id = (await api("POST", "/sessions", {})).json.id as string;
+			await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify({ role: "explore", task: "count me" })}` });
+			for (let i = 0; i < 200 && (await api("GET", `/sessions/${id}/status`)).json.running; i++) await Bun.sleep(25);
+			const msgs = ((await api("GET", `/sessions/${id}/messages`)).json.messages as any[]).map((m) => m.message);
+			const result = msgs.find((m) => m.role === "toolResult" && m.toolName === "delegate");
+			expect(result.details.usage.totalTokens).toBeGreaterThan(0);
+			const mainOnly = msgs.filter((m) => m.role === "assistant").reduce((a, m) => a + (m.usage?.totalTokens ?? 0), 0);
+			expect((await api("GET", `/sessions/${id}`)).json.usage.totalTokens).toBe(mainOnly + result.details.usage.totalTokens);
+		} finally {
+			await app.close();
+			upstream.stop();
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

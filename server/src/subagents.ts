@@ -122,3 +122,14 @@ export function chooseModel(policy: ModelPolicy, requested: string | undefined, 
 	}
 	throw conflict("choosing a helper model is switched off in the settings; omit `model` to use the role's own");
 }
+
+/** What a helper's model calls used, summed over its assistant messages (stored on the `delegate` result so the session's totals include it). */
+export function helperUsage(messages: readonly { role: string; usage?: any }[]) {
+	const sum = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: 0 };
+	for (const m of messages) {
+		if (m.role !== "assistant" || !m.usage) continue;
+		for (const k of ["input", "output", "cacheRead", "cacheWrite", "totalTokens"] as const) sum[k] += Number(m.usage[k]) || 0;
+		sum.cost += Number(m.usage.cost?.total) || 0;
+	}
+	return sum;
+}
