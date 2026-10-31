@@ -17,6 +17,7 @@
 	function commitRename() {
 		const done = rename.commit();
 		if (!done) return;
+		if (done.id === group?.id) return void app.renameGroup(done.id, done.name);
 		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
 	}
 	function focusSelect(node: HTMLInputElement) {
@@ -33,6 +34,15 @@
 			term
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(id) }
 				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(id) },
+		]);
+		return closeContextMenu;
+	}
+
+	/** Right click / long press on the group's name: rename it, or dissolve the group. */
+	function groupMenu(pt: Point, id: string, name: string) {
+		openContextMenu(pt, `group:${id}`, [
+			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => rename.start(id, name) },
+			{ icon: "unlink", label: t("그룹 해제 (대화는 그대로 남습니다)"), title: "", run: () => void app.deleteGroup(id) },
 		]);
 		return closeContextMenu;
 	}
@@ -54,7 +64,23 @@
 		{#if viewport.narrow}
 			<button class="back tap" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
 		{/if}
-		<span class="name" title={group.name}>{group.name}</span>
+		{#if rename.is(group.id)}
+			<input
+				class="rename"
+				value={rename.draft}
+				maxlength={100}
+				aria-label={t("그룹 이름 바꾸기")}
+				use:focusSelect
+				oninput={(e) => (rename.draft = e.currentTarget.value)}
+				onblur={commitRename}
+				onkeydown={(e) => {
+					if (e.key === "Enter") commitRename();
+					if (e.key === "Escape") rename.cancel();
+				}}
+			/>
+		{:else}
+			<span class="name" title={group.name} role="presentation" ondblclick={() => rename.start(group.id, group.name)} use:pressMenu={(pt) => groupMenu(pt, group.id, group.name)}>{group.name}</span>
+		{/if}
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{#if rename.is(x.id)}

@@ -19,6 +19,7 @@
 	import type { Point } from "../lib/press-menu";
 	import { marquee } from "../lib/fit-text";
 	import { setPane } from "../lib/pane";
+	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { app } from "../lib/store.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import Lazy from "./Lazy.svelte";
@@ -53,11 +54,25 @@
 	/** A label an extension put on this session. */
 	const tag = $derived(id ? (peerLabel(session) ?? extensions.labelOf(id)) : undefined);
 
+	/** The title being renamed in place (double click on it, or "이름 바꾸기" in the menu). */
+	const rename = new InlineRename();
+	const titleNow = () => (term ? term.title : (session?.title ?? ""));
+	function commitRename() {
+		const done = rename.commit();
+		if (!done) return;
+		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
+	}
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+
 	/** Right click / long press on the title bar: what its buttons do, with renaming and closing. */
 	function paneMenu(pt: Point) {
 		if (!id) return;
 		const pane = id;
 		const items: MenuItem[] = [
+			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(pane, titleNow()) },
 			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(pane) },
 			isTerm
@@ -79,10 +94,10 @@
 	{#if grouped && id}
 		<header
 			class="bar"
-			use:dragSource={{ id, menu: paneMenu }}
+			use:dragSource={{ id, menu: paneMenu, disabled: rename.is(id) }}
 			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 전체 화면 전환")}
 			ondblclick={(e) => {
-				if ((e.target as HTMLElement).closest("button")) return;
+				if ((e.target as HTMLElement).closest("button, input, .t")) return;
 				if (group) app.toggleFull(group.id);
 			}}
 		>
@@ -91,7 +106,22 @@
 			{:else}
 				<AgentBadge {id} {state} size={16} />
 			{/if}
-			<span class="tt">
+			{#if rename.is(id)}
+				<input
+					class="rename"
+					value={rename.draft}
+					aria-label={t("이름 바꾸기")}
+					use:focusSelect
+					oninput={(e) => (rename.draft = e.currentTarget.value)}
+					onblur={commitRename}
+					onpointerdown={(e) => e.stopPropagation()}
+					onkeydown={(e) => {
+						if (e.key === "Enter") commitRename();
+						if (e.key === "Escape") rename.cancel();
+					}}
+				/>
+			{:else}
+			<span class="tt" role="presentation" ondblclick={() => id && rename.start(id, titleNow())}>
 				{#if term}
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
@@ -101,6 +131,7 @@
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>
+			{/if}
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
 			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
 			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
@@ -246,6 +277,18 @@
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--text-dim);
+	}
+	.rename {
+		flex: 1;
+		min-width: 0;
+		height: 28px;
+		padding: 0 8px;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-sm);
+		background: var(--bg);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		outline: 0;
 	}
 	.who {
 		margin-right: 4px;
