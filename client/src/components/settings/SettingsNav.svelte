@@ -211,7 +211,7 @@
 	.nav .item::after {
 		top: -2px;
 		bottom: -2px;
-		border-left: 1.5px solid var(--border-strong);
+		border-left: 1.5px solid var(--tree-line);
 	}
 	.nav .item:first-child::after {
 		top: -10px;
@@ -223,8 +223,8 @@
 		top: calc(50% - 9px);
 		width: 18px;
 		height: 9px;
-		border-left: 1.5px solid var(--border-strong);
-		border-bottom: 1.5px solid var(--border-strong);
+		border-left: 1.5px solid var(--tree-line);
+		border-bottom: 1.5px solid var(--tree-line);
 		border-bottom-left-radius: 3px;
 	}
 	/* the open extension's path: one element from the section down to its branch, one step darker than the quiet trunk. Only its
