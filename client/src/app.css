@@ -901,8 +901,12 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .slide-ind[data-variant="level"] {
-	background: var(--lv-soft);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
+	background: var(--lv-soft, var(--bg-active));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv, var(--border-strong)) 45%, transparent);
+}
+.slide-ind[data-variant="level"]:not([data-level]) {
+	background: var(--bg-active);
+	box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .slide-ind[data-variant="underline"] {
 	border-radius: 0;

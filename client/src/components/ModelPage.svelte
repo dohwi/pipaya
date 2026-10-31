@@ -5,12 +5,12 @@
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
 	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
+	import { slidingIndicator } from "../lib/sliding-indicator";
 	import type { Api } from "../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../lib/types";
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
-	import Select from "./Select.svelte";
 
 	/**
 	 * One model's page inside the connection dialog: id, OpenRouter match, display name and icon, limits, capabilities
@@ -119,7 +119,16 @@
 			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
 			<div class="caps" role="group" aria-label={t("추론 강도")}>
 				{#each ALL_LEVELS as l (l)}
-					<button type="button" class="cap tap" aria-pressed={shown.includes(l)} onclick={() => toggleLevel(r, matched, l)}>{l}</button>
+					<button
+						type="button"
+						class="cap tap"
+						data-level={l}
+						aria-pressed={shown.includes(l)}
+						onclick={() => toggleLevel(r, matched, l)}
+					>
+						<span class="dot"></span>
+						<span>{l}</span>
+					</button>
 				{/each}
 			</div>
 			<p class="hint note">
@@ -131,15 +140,34 @@
 					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
-			<label>
-				<span>{t("새 대화 기본 강도")}</span>
-				<Select
-					value={fallbackLevel}
-					options={[{ value: "auto", label: t("자동") }, ...levels.map((l) => ({ value: l, label: l }))]}
-					onchange={(v) => (r.defaultThinkingLevel = v === "auto" ? undefined : v)}
-				/>
-			</label>
-			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+			<div class="defsec">
+				<div class="section-label">{t("새 대화 기본 강도")}</div>
+				<div
+					class="seg full"
+					role="group"
+					aria-label={t("새 대화 기본 강도")}
+					use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}
+				>
+					<button
+						type="button"
+						class="tap"
+						class:on={fallbackLevel === "auto"}
+						aria-pressed={fallbackLevel === "auto"}
+						onclick={() => (r.defaultThinkingLevel = undefined)}
+					>{t("자동")}</button>
+					{#each levels as l (l)}
+						<button
+							type="button"
+							class="tap"
+							class:on={fallbackLevel === l}
+							aria-pressed={fallbackLevel === l}
+							data-level={l}
+							onclick={() => (r.defaultThinkingLevel = l)}
+						>{l}</button>
+					{/each}
+				</div>
+				<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+			</div>
 		</section>
 	{/if}
 	{#if !locked}
@@ -275,6 +303,69 @@
 		border-color: var(--border-strong);
 		color: var(--text);
 		font-weight: 600;
+	}
+	.cap[data-level] {
+		gap: 6px;
+	}
+	.cap[data-level] .dot {
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--lv);
+		opacity: 0.45;
+		transition: opacity var(--motion-fast) var(--ease-std), scale var(--motion-fast) var(--ease-std);
+	}
+	.cap[data-level]:hover .dot {
+		opacity: 0.8;
+	}
+	.cap[data-level][aria-pressed="true"] {
+		background: var(--lv-soft);
+		border-color: color-mix(in srgb, var(--lv) 45%, transparent);
+		color: var(--lv);
+		font-weight: 600;
+	}
+	.cap[data-level][aria-pressed="true"] .dot {
+		opacity: 1;
+		scale: 1.15;
+	}
+	.defsec {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 4px;
+	}
+	.defsec .seg {
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(0, 1fr);
+	}
+	.defsec .seg button {
+		padding: 0 2px;
+		font-size: var(--fs-2xs);
+		white-space: nowrap;
+		letter-spacing: -0.01em;
+	}
+	.defsec .seg button[data-level]:not(.on):not(:disabled)::before {
+		content: "";
+		display: inline-block;
+		width: 4px;
+		height: 4px;
+		margin-right: 3px;
+		border-radius: 50%;
+		background: var(--lv);
+		opacity: 0.55;
+		vertical-align: 1px;
+	}
+	.defsec .seg button.on {
+		background: var(--lv-soft, var(--bg-active));
+		color: var(--lv, var(--text));
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv, var(--border-strong)) 45%, transparent);
+		font-weight: 600;
+	}
+	.defsec .seg:global([data-indicator-ready]) button.on {
+		background: transparent;
+		box-shadow: none;
 	}
 	.field[readonly] {
 		color: var(--text-dim);
