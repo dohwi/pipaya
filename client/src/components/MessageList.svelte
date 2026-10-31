@@ -250,6 +250,8 @@
 	</div>
 </div>
 
+{#if chat.ready && chat.items.length > 0}<div class="fade" aria-hidden="true"></div>{/if}
+
 {#if showJump}
 	<button class="jump" onclick={() => toBottom(true)} in:fadeIn out:fadeOut aria-label={t("최신 메시지로 이동")}>
 		<Icon name="arrow-down" />
@@ -282,18 +284,22 @@
 		overscroll-behavior: contain;
 		-webkit-overflow-scrolling: touch;
 		scroll-padding-bottom: 24px;
-		/* content fades out over its last 24px instead of being cut in a straight line against the composer's rounded box */
-		-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
-		mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 		overflow-anchor: none;
 		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script); scrolled up, anchoring is on.
 		   No content-visibility on turns: its 160px estimate for off-screen turns was swapped for the real height mid-flick,
 		   and that correction made a fast scroll up stutter. */
 	}
-	/* the mask re-rasterises the whole list on every resized frame; pause it while the window is being dragged */
-	:global(html[data-resizing]) .scroller {
-		-webkit-mask-image: none;
-		mask-image: none;
+	/* The content fades out over its last 24px instead of being cut in a straight line against the composer's rounded box.
+	   A gradient of the pane colour on top, not mask-image: a mask forces the whole scrolling list through an offscreen
+	   layer that is redrawn on every scroll and resize frame (stutter in WebKit). */
+	.fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 24px;
+		background: linear-gradient(to bottom, transparent, var(--bg));
+		pointer-events: none;
 	}
 	.inner {
 		max-width: calc(var(--content-w) + 32px);

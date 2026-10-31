@@ -29,7 +29,7 @@ export function unschedule(key: object) {
 	jobs.delete(key);
 }
 
-/** `<html data-resizing>` while the window is being resized, so heavy paint effects (masks) can pause meanwhile. */
+/** `<html data-resizing>` while the window is being resized, so heavy paint effects can pause meanwhile. */
 if (typeof window !== "undefined") {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	window.addEventListener("resize", () => {
