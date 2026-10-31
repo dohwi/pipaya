@@ -20,6 +20,7 @@
 		oninput,
 		onchange,
 		trailing,
+		alignAction = false,
 	}: {
 		label: string;
 		value: number;
@@ -32,10 +33,12 @@
 		oninput?: (v: number) => void;
 		onchange?: (v: number) => void;
 		trailing?: Snippet;
+		/** keep the 88px action column so sibling sliders with and without actions share one track width */
+		alignAction?: boolean;
 	} = $props();
 </script>
 
-<div class="range" class:off={disabled} class:act={!!trailing}>
+<div class="range" class:off={disabled} class:act={!!trailing || alignAction}>
 	<label>
 		<span class="name">{label}</span>
 		<input type="range" {min} {max} {step} {value} {disabled} aria-label={ariaLabel ?? label} oninput={(e) => oninput?.(e.currentTarget.valueAsNumber)} onchange={(e) => onchange?.(e.currentTarget.valueAsNumber)} />

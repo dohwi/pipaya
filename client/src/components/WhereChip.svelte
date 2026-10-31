@@ -23,7 +23,7 @@
 		gap: 8px;
 		max-width: 100%;
 		height: 28px;
-		margin: 0 0 8px 4px;
+		margin: 0 0 8px 0; /* aligned with the composer box's left edge */
 		padding: 0 8px 0 8px;
 		font-size: var(--fs-xs);
 		color: var(--text-dim);

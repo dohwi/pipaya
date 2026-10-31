@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
+	import Icon from "./Icon.svelte";
 	import type { Snippet } from "svelte";
 	import { t } from "../lib/i18n";
 	import { isPhone } from "../lib/motion";
@@ -74,7 +75,10 @@
 
 <Modal {onclose} {title} compact {width} {layer} elevated portal>
 	<div class="pk-body">
-		<input bind:this={search} class="field pk-search" placeholder={placeholder ?? t("검색")} aria-label={placeholder ?? t("검색")} bind:value={query} onkeydown={searchKeys} use:focusFirst autocomplete="off" spellcheck="false" />
+		<div class="pk-search-wrap">
+			<Icon name="search" />
+			<input bind:this={search} class="field pk-search" placeholder={placeholder ?? t("검색")} aria-label={placeholder ?? t("검색")} bind:value={query} onkeydown={searchKeys} use:focusFirst autocomplete="off" spellcheck="false" />
+		</div>
 		<!-- Arrow keys typed in the search field or the list move the highlight (searchKeys / listKeys); the rows are buttons. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="pk-list" bind:this={listEl} style:min-height={minList} onkeydown={listKeys}>
@@ -99,9 +103,25 @@
 		overflow: hidden;
 		padding: 4px 12px 12px;
 	}
-	.pk-search {
+	.pk-search-wrap {
+		position: relative;
+		display: flex;
+		align-items: center;
 		flex: none;
+	}
+	.pk-search-wrap :global(svg) {
+		position: absolute;
+		left: 12px;
+		width: 16px;
+		height: 16px;
+		stroke: var(--text-faint);
+		stroke-width: 2;
+		pointer-events: none;
+	}
+	.pk-search {
+		width: 100%;
 		height: 38px;
+		padding: 0 12px 0 36px;
 	}
 	.pk-list {
 		display: flex;
@@ -116,7 +136,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 8px 4px;
+		padding: 8px 12px 4px;
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		font-weight: 500;

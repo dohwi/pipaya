@@ -40,15 +40,16 @@
 			{#if meta}<span class="meta">{@render meta()}</span>{/if}
 		</span>
 		{#if aside}<span class="aside">{@render aside()}</span>{/if}
-		<span class="check" class:on={selected} aria-hidden="true"><Icon name="check" /></span>
 	</button>
 	{@render trailing?.()}
+	<span class="check" class:on={selected} aria-hidden="true" onclick={() => !disabled && onclick()}><Icon name="check" /></span>
 </div>
 
 <style>
 	.pk-row {
 		display: flex;
 		align-items: center;
+		padding: 0 12px;
 		border-radius: var(--radius);
 		transition: background-color var(--motion-fast) var(--ease-std);
 	}
@@ -64,7 +65,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 8px;
+		padding: 8px 0;
 		min-height: 44px;
 		border-radius: var(--radius);
 		text-align: left;
@@ -109,14 +110,14 @@
 		display: inline-flex;
 		align-items: center;
 	}
-	/* narrow: the tags drop under the name; the check centres on the whole two-line row, level with the star */
+	/* narrow: the tags drop under the name */
 	@media (max-width: 640px) {
 		.pk-opt.has-aside {
 			display: grid;
-			grid-template-columns: auto minmax(0, 1fr) auto;
+			grid-template-columns: auto minmax(0, 1fr);
 			grid-template-areas:
-				"lead main check"
-				". aside check";
+				"lead main"
+				". aside";
 			column-gap: 8px;
 			align-items: start;
 		}
@@ -130,14 +131,14 @@
 			grid-area: aside;
 			margin-top: 4px;
 		}
-		.pk-opt.has-aside .check {
-			grid-area: check;
-			align-self: center;
-		}
 	}
-	/* the check pops in instead of appearing */
+	/* the check sits on the far-right edge (12px padding) and pops in on selection */
 	.check {
 		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		margin-left: 8px;
 		flex: none;
 		opacity: 0;
 		scale: 0.6;

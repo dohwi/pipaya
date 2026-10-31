@@ -769,7 +769,7 @@
 	/* narrow pane (split group, small window): tighter paddings and smaller type instead of wrapping or overlapping */
 	@container (max-width: 480px) {
 		.wrap {
-			padding: 0 16px calc(8px + var(--sab)); /* the same 16px as the conversation column above it, at every width */
+			padding: 0 16px max(16px, calc(10px + var(--sab))); /* safe bottom spacing on mobile so statusline never clips */
 		}
 		.bar {
 			gap: 4px;

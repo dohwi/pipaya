@@ -295,14 +295,34 @@
 	ul {
 		list-style: none;
 		margin: 0;
-		padding: 0;
+		padding: 0 0 0 26px; /* 26px indent: lines up the session title text exactly with the folder path text (x 554) */
+		position: relative;
+	}
+	ul::before {
+		content: "";
+		position: absolute;
+		left: 21px; /* aligns under the parent checkbox/toggle */
+		top: 0;
+		bottom: 14px;
+		width: 1px;
+		background: var(--border);
 	}
 	li {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		padding: 8px 12px;
 		border-top: 1px solid var(--border);
+	}
+	li::before {
+		content: "";
+		position: absolute;
+		left: -5px;
+		top: 50%;
+		width: 10px;
+		height: 1px;
+		background: var(--border);
 	}
 	li.on {
 		background: var(--accent-soft);
