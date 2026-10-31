@@ -1,7 +1,7 @@
 import { mount } from "svelte";
 import "./app.css";
 import "./lib/i18n.svelte";
-import App from "./App.svelte";
+import Root from "./Root.svelte";
 import { installNoContextMenu } from "./lib/no-context-menu";
 import { installRipple } from "./lib/ripple";
 
@@ -13,4 +13,4 @@ const syncHidden = () => document.documentElement.classList.toggle("page-hidden"
 document.addEventListener("visibilitychange", syncHidden);
 syncHidden();
 
-mount(App, { target: document.getElementById("app")! });
+mount(Root, { target: document.getElementById("app")! });

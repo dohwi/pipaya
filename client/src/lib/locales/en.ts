@@ -595,6 +595,7 @@ export const en: Record<string, string> = {
 	"아직 적용 전 · 다음 메시지부터 적용됩니다": "Not applied yet · takes effect from the next message",
 	"새 대화에 적용될 내용": "Applies to the new conversation",
 	"새로고침": "Refresh",
+	"화면을 그리다 문제가 생겼습니다": "Something went wrong while drawing the screen",
 	"이 세션 기본": "Session default",
 	"새 대화 기본": "New chat default",
 	"기본 프롬프트": "Default prompts",
