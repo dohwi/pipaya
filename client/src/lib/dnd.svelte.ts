@@ -81,7 +81,8 @@ class Drag {
 	private pt: Point = { x: 0, y: 0 };
 	private raf = 0;
 
-	begin(id: string, node: HTMLElement, x: number, y: number, touch: boolean) {
+	/** `at`: where the pointer went down, so the copy stays where it was grabbed (the pointer has moved a few px since). */
+	begin(id: string, node: HTMLElement, x: number, y: number, touch: boolean, at: Point = { x, y }) {
 		this.id = id;
 		const r = node.getBoundingClientRect();
 		// a copy of what is being carried follows the pointer; on touch it rides above the finger so it stays visible
@@ -97,25 +98,29 @@ class Drag {
 			height: `${r.height}px`,
 			margin: "0",
 			pointerEvents: "none",
-			zIndex: "10000",
-			opacity: "0.92",
-			background: "var(--bg-side)",
-			borderRadius: "var(--radius)",
-			boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
-			willChange: "transform",
+			// lifted off the list: opaque (a see-through copy over rows reads as a smear), the row's own corner, the theme's
+			// lifted shadow and a hairline so it separates from a background of the same colour
+			opacity: "1",
+			background: "var(--bg)",
+			borderRadius: getComputedStyle(node).borderRadius,
+			boxShadow: "var(--shadow), 0 0 0 1px var(--border)",
+			transition: "none",
 		});
+		// the copy shows the thing, not its state in the list (selected, hovered, a drop line)
+		g.classList.remove("active", "on", "menuopen", "over", "before", "after", "carried", "focused");
 		// Styles of a row hang off where it lives (`.side .item .open`, `.tabs .tab`, ...): put the copy in a shell with the
 		// same ancestors' classes, otherwise its icon, title and the hidden second copy of the title (marquee) lose their rules.
 		const shell = scope(node);
 		Object.assign(shell.outer.style, { position: "fixed", left: "0", top: "0", pointerEvents: "none", zIndex: "10000", willChange: "transform" });
 		shell.outer.setAttribute("aria-hidden", "true");
 		g.style.position = "relative";
-		g.style.zIndex = "";
-		g.style.willChange = "";
 		shell.inner.append(g);
 		document.body.append(shell.outer);
 		this.ghost = shell.outer;
-		this.grab = { x: x - r.left, y: y - r.top + (touch ? r.height / 2 + 12 : 0) };
+		// Keep the spot it was grabbed by across, but hang the copy just off the pointer instead of over it, so the row or tab
+		// being aimed at and the line where it would land stay visible: under the pointer with a mouse, above the finger on
+		// touch (where under it would be hidden by the hand).
+		this.grab = { x: at.x - r.left, y: touch ? r.height + 12 : -12 };
 		document.documentElement.classList.add("dnd");
 		this.move(x, y);
 		this.raf = requestAnimationFrame(this.loop);
@@ -187,7 +192,7 @@ export const drag = new Drag();
 /** Makes an element pick-up-able: it carries session `id`. */
 export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	let opts = initial;
-	let st: { pid: number; touch: boolean; x: number; y: number; timer: number; held: boolean; unmenu?: (() => void) | void } | null = null;
+	let st: { pid: number; touch: boolean; x: number; y: number; ox: number; oy: number; timer: number; held: boolean; unmenu?: (() => void) | void } | null = null;
 	let active = false;
 
 	function style() {
@@ -204,7 +209,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		clearTimeout(st.timer);
 		if (!st.held) buzz();
 		st.unmenu?.();
-		drag.begin(opts.id, node, st.x, st.y, st.touch);
+		drag.begin(opts.id, node, st.x, st.y, st.touch, { x: st.ox, y: st.oy });
 	}
 	/** The hold is up: the menu, if there is one; otherwise the session is picked up. */
 	function hold() {
@@ -217,7 +222,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	function down(e: PointerEvent) {
 		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
 		const touch = e.pointerType === "touch";
-		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, timer: 0, held: false };
+		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, timer: 0, held: false };
 		if (touch) st.timer = window.setTimeout(hold, HOLD_MS);
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
