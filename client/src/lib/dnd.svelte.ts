@@ -45,6 +45,28 @@ export function dropTarget(node: HTMLElement, opts: DropOpts) {
 	};
 }
 
+/**
+ * Empty boxes with the same classes and nesting as `node`'s ancestors (outermost first), so descendant selectors such as
+ * `.side .list .item .open` still match a copy placed in the innermost one. Layout properties are reset so the boxes
+ * add no size of their own; only their classes matter.
+ */
+function scope(node: HTMLElement): { outer: HTMLElement; inner: HTMLElement } {
+	const chain: HTMLElement[] = [];
+	for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) chain.unshift(el);
+	let outer: HTMLElement | null = null;
+	let inner: HTMLElement | null = null;
+	for (const el of chain) {
+		const box = document.createElement("div");
+		box.className = [...el.classList].join(" ");
+		Object.assign(box.style, { display: "block", position: "static", width: "auto", height: "auto", margin: "0", padding: "0", border: "0", background: "none", overflow: "visible", transform: "none", opacity: "1", boxShadow: "none" });
+		if (inner) inner.append(box);
+		else outer = box;
+		inner = box;
+	}
+	if (!outer || !inner) outer = inner = document.createElement("div");
+	return { outer, inner };
+}
+
 const EDGE = 48; // px from a scroller's edge where dragging starts to scroll it
 const HOLD_MS = 380;
 const SLOP_TOUCH = 10;
@@ -82,8 +104,17 @@ class Drag {
 			boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
 			willChange: "transform",
 		});
-		document.body.append(g);
-		this.ghost = g;
+		// Styles of a row hang off where it lives (`.side .item .open`, `.tabs .tab`, ...): put the copy in a shell with the
+		// same ancestors' classes, otherwise its icon, title and the hidden second copy of the title (marquee) lose their rules.
+		const shell = scope(node);
+		Object.assign(shell.outer.style, { position: "fixed", left: "0", top: "0", pointerEvents: "none", zIndex: "10000", willChange: "transform" });
+		shell.outer.setAttribute("aria-hidden", "true");
+		g.style.position = "relative";
+		g.style.zIndex = "";
+		g.style.willChange = "";
+		shell.inner.append(g);
+		document.body.append(shell.outer);
+		this.ghost = shell.outer;
 		this.grab = { x: x - r.left, y: y - r.top + (touch ? r.height / 2 + 12 : 0) };
 		document.documentElement.classList.add("dnd");
 		this.move(x, y);
