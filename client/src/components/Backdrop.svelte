@@ -207,7 +207,12 @@
 	<div class="grid"></div>
 	<div class="lit"></div>
 	{#if press}
-		<div class="charge" style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}"></div>
+		<div class="charge" style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}">
+			<div class="inhale"></div>
+			<div class="inhale"></div>
+			<div class="inhale"></div>
+			<div class="dot"></div>
+		</div>
 	{/if}
 	{#each bursts as b (b.id)}
 		<div
@@ -264,16 +269,51 @@
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
 	}
-	/* the light under the held pointer: one soft bloom that whitens and widens as the charge builds */
+	/* the light under the held pointer: soft rings drawn in from around, condensing into one white point */
 	.charge {
 		position: absolute;
 		width: 240px;
 		height: 240px;
 		translate: -50% -50%;
+		opacity: calc(0.35 + var(--p) * 0.65);
+	}
+	/* each ring appears at the edge and slides all the way in, brightening as it goes */
+	.inhale {
+		position: absolute;
+		inset: 0;
 		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 72%);
-		opacity: calc(0.1 + var(--p) * 0.75);
-		scale: calc(0.55 + var(--p) * 0.6);
+		background: radial-gradient(closest-side, transparent 52%, var(--grid-wave) 70%, transparent 86%);
+		animation: inhale 1050ms var(--ease) infinite;
+	}
+	.inhale:nth-child(2) {
+		animation-delay: -350ms;
+	}
+	.inhale:nth-child(3) {
+		animation-delay: -700ms;
+	}
+	@keyframes inhale {
+		from {
+			scale: 1;
+			opacity: 0;
+		}
+		25% {
+			opacity: 0.5;
+		}
+		to {
+			scale: 0.05;
+			opacity: 0.95;
+		}
+	}
+	/* the point they gather into: a small white dot that only whitens as the charge fills */
+	.dot {
+		position: absolute;
+		inset: 42%;
+		border-radius: 50%;
+		background:
+			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%),
+			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%);
+		opacity: calc(var(--p) * var(--p));
+		scale: calc(0.6 + var(--p) * 0.5);
 	}
 	/* the burst that leaves with the wave: a soft halo that widens and thins out */
 	.flash {
