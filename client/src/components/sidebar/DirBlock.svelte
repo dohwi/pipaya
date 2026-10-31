@@ -29,6 +29,7 @@
 	const key = $derived(dirKey(n.server.id, d.path));
 	const folded = $derived(sb.isFolded(key));
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
+	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
 	/** This folder's archived conversations: still open, but tucked away. The row is there only when there are some. */
@@ -53,12 +54,12 @@
 	>
 		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon"><Icon name="folder" /></span>
+			<span class="dicon" title={pinned ? t("고정됨") : undefined}><Icon name={pinned ? "pin" : "folder"} /></span>
 			<span class="dlabel">
 				<span class="dname">{label}</span>
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 			</span>
-			{#if folded}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
+			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 디렉터리의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 디렉터리에서 새 대화 또는 터미널")} />

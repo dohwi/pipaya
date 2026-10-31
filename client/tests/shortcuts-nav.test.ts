@@ -68,6 +68,15 @@ describe("sessionOrder / stepFrom", () => {
 		expect(sessionOrder(two, gs, ["/p/one", "/p/two"], ["z", "x"])).toEqual(["z", "x", "y", "g1", "g2", "h1", "h2"]);
 	});
 
+	test("a pinned folder stays listed with no tabs, in its place", () => {
+		const ss = [sess("a", "/p/one", 1), sess("b", "/p/two", 2)];
+		const paths = (o: Parameters<typeof sidebarDirs>[3]) => sidebarDirs(ss, [], [], o).map((d) => d.path);
+		expect(paths({ keep: ["/p/empty"] })).toEqual(["/p/one", "/p/two", "/p/empty"]);
+		expect(paths({ keep: ["/p/empty"], dirOrder: ["/p/empty", "/p/one"] })).toEqual(["/p/empty", "/p/one", "/p/two"]);
+		expect(sidebarDirs(ss, [], [], { keep: ["/p/one"] }).find((d) => d.path === "/p/one")!.tabs).toHaveLength(1);
+		expect(sidebarDirs([], [], [], { keep: ["/p/empty"] })).toEqual([{ path: "/p/empty", tabs: [] }]);
+	});
+
 	test("a group stays in the folder it was first listed under while a pane still works there", () => {
 		const ss = [sess("a", "/p/one", 1), sess("b", "/p/two", 2), sess("c", "/p/two", 3)];
 		const g = [grp("G", pair("a", "b"))];

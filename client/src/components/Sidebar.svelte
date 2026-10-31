@@ -46,7 +46,7 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, terminals: TerminalInfo[], archived: Session[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, terminals: TerminalInfo[], archived: Session[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
 		const dirs = sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || x.title.toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
@@ -54,6 +54,7 @@
 			dirOrder: order,
 			tabOrder: torder,
 			groupDir: gdir,
+			keep: q ? [] : keep, // a search lists matches only
 		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		// Archived conversations hang under their folder; a folder with only archived ones still shows, after the others.
@@ -75,7 +76,7 @@
 			const state = link ? connectionState(link.net) : "checking";
 			const ws = link?.workspace ?? null;
 			const d = link?.data;
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], d?.terminals ?? [], d?.archived ?? []);
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], d?.terminals ?? [], d?.archived ?? []);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// Servers that cannot be reached sink to the bottom (shown only; the saved order is untouched). The sort is stable.
@@ -205,6 +206,8 @@
 			chat: () => app.openIn(n.server.id, { workdir }),
 			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
 			toggle: () => app.sidebar.toggleFolded(key),
+			togglePin: path === null ? undefined : () => app.sidebar.togglePinned(n.server.id, path),
+			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
 			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 		});
 		rowMenu?.openAt(pt, id, items);

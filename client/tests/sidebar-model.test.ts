@@ -140,3 +140,11 @@ describe("the header context menu", () => {
 		expect(headMenuEntries(undefined, true, act).map((e) => e.icon)).toEqual(["chat", "terminal", "chevron-down"]);
 	});
 });
+
+describe("pinning a folder", () => {
+	const act = { chat: () => {}, terminal: () => {}, toggle: () => {} };
+	test("the entry is offered for folders only and says which way it goes", () => {
+		expect(headMenuEntries(undefined, false, act).some((e) => e.icon === "pin")).toBe(false);
+		expect(headMenuEntries(undefined, false, { ...act, togglePin: () => {} }).some((e) => e.icon === "pin")).toBe(true);
+	});
+});

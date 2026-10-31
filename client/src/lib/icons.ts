@@ -6,11 +6,12 @@ export type IconName =
 	| "menu" | "plus" | "send" | "stop" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 	| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 	| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
-	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "archive" | "plug";
+	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "archive" | "plug" | "pin";
 
 export const ICON_PATHS: Record<IconName, string> = {
 	menu: "M4 7h16M4 12h16M4 17h16",
 	archive: "M3 5h18v4H3zM5 9v10h14V9M10 13h4",
+	pin: "M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7",
 	plus: "M12 5v14M5 12h14",
 	send: "M12 19V5M5 12l7-7 7 7",
 	stop: "M7 7h10v10H7z",

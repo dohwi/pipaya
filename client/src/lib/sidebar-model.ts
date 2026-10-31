@@ -41,7 +41,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "archive";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "archive" | "pin";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -125,13 +125,18 @@ export interface HeadActions extends NewActions {
 	toggle(): void;
 	/** Copy the folder's path (servers have none) */
 	copyPath?(): void;
+	/** Pin or unpin the folder (servers cannot be pinned); `pinned` says which the entry offers */
+	togglePin?(): void;
+	pinned?: boolean;
 }
 
 /** A folder or server header's context menu: what its "+" offers, then copying the path and folding. */
 export function headMenuEntries(os: string | undefined, folded: boolean, act: HeadActions): MenuEntry[] {
 	const copy = act.copyPath;
+	const pin = act.togglePin;
 	return [
 		...newMenuEntries(os, act),
+		...(pin ? [{ icon: "pin", label: act.pinned ? t("고정 해제") : t("폴더 고정"), title: t("고정하면 안에 대화가 없어도 사이드바에 남습니다"), run: pin } satisfies MenuEntry] : []),
 		...(copy ? [{ icon: "copy", label: t("경로 복사"), title: "", run: copy } satisfies MenuEntry] : []),
 		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];

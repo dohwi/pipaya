@@ -31,7 +31,7 @@
 			const sessions = ov?.sessions ?? [];
 			const terminals = ov?.terminals ?? [];
 			if (!sessions.length && !terminals.length) return [];
-			const dirs = sidebarDirs(sessions, ov?.groups ?? [], terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id] });
+			const dirs = sidebarDirs(sessions, ov?.groups ?? [], terminals, { dirOrder: app.sidebar.dirOrder[server.id], tabOrder: app.sidebar.tabOrder[server.id], groupDir: app.sidebar.groupDir[server.id], keep: app.sidebar.pinned[server.id] });
 			const state: Record<string, Activity> = {};
 			if (ov) for (const x of sessions) state[x.id] = activityOf(ov, x.id);
 			return [{ server, current, dirs, state }];

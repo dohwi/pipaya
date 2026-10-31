@@ -27,6 +27,8 @@ export class SidebarState {
   /** Archives (one per folder) that are open; the others stay folded. */
   archiveOpen = $state<string[]>(read<string[]>(K.archiveOpen, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
+  /** Folders pinned per server: they stay listed with no tabs in them. */
+  pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
   tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
 
@@ -47,6 +49,16 @@ export class SidebarState {
   toggleFolded(key: string) {
     this.folded = this.folded.includes(key) ? this.folded.filter((p) => p !== key) : [...this.folded, key];
     write(K.folded, this.folded);
+  }
+
+  isPinned(serverId: string, path: string): boolean {
+    return (this.pinned[serverId] ?? []).includes(path);
+  }
+
+  togglePinned(serverId: string, path: string) {
+    const list = this.pinned[serverId] ?? [];
+    this.pinned = { ...this.pinned, [serverId]: list.includes(path) ? list.filter((p) => p !== path) : [...list, path] };
+    write(K.pinnedDirs, this.pinned);
   }
 
   toggleArchive(key: string) {

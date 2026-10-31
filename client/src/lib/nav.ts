@@ -34,6 +34,8 @@ export interface BlockOpts {
 	tabOrder?: readonly string[];
 	/** the folder each group was first listed under (group id -> cwd); kept while one of its panes still works there */
 	groupDir?: Readonly<Record<string, string>>;
+	/** pinned directories: listed even with no tab in them (an empty block) */
+	keep?: readonly string[];
 }
 
 /** The folder a group belongs to: the one most of its panes work in (ties: the first pane's). */
@@ -91,6 +93,8 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 		if (d) (d.tabs.push(x.tab), (d.first = Math.min(d.first, x.created)));
 		else by.set(x.cwd, { tabs: [x.tab], first: x.created });
 	}
+	// a pinned folder with nothing open (or nothing matching) still gets its block; a new one sorts after the others until placed
+	for (const p of o.keep ?? []) if (!by.has(p)) by.set(p, { tabs: [], first: Number.MAX_SAFE_INTEGER });
 	const dirOrder = o.dirOrder ?? [];
 	const rank = (p: string) => dirOrder.indexOf(p);
 	return [...by.entries()]
