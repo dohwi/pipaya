@@ -71,13 +71,12 @@
 {/if}
 
 <style>
-	/* the open group's sessions as one bordered unit hanging off the group's tab in the tab bar: it gives way before the
-	   tabs do, so with many sessions the chips scroll inside their box instead of pushing the other tabs off the screen */
-	/* the sessions of the open group, the scrolling part of the group's box in the tab bar (TabBar's .gbox draws the border) */
+	/* the open group's sessions, laid out inside the group's box in the tab bar (TabBar's .gbox draws the border and decides its
+	   width). Only a box wider than the bar itself scrolls its chips. */
 	.strip {
 		position: relative;
-		flex: 1 1 auto;
-		min-width: 96px;
+		flex: 0 1 auto;
+		min-width: 0;
 		height: 100%;
 		display: flex;
 		align-items: center;
@@ -88,14 +87,6 @@
 	}
 	.strip::-webkit-scrollbar {
 		display: none;
-	}
-	/* phones: no room for a second scroller, so the box keeps its natural width and the whole tab bar scrolls (same breakpoint as lib/viewport) */
-	@media (max-width: 860px) {
-		.strip {
-			flex: none;
-			min-width: 0;
-			overflow: visible;
-		}
 	}
 	.tico {
 		display: inline-grid;

@@ -274,11 +274,13 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the open group as one bordered unit of its sessions (on phones with its own tab in front). It gives way before the other
-	   tabs do, so with many sessions only the chips scroll inside it and the other tabs stay in view. */
+	/* the open group as one bordered unit of its sessions (on phones with its own tab in front). The sessions are what picks the
+	   pane while the group is enlarged, so the box keeps its whole width and the bar scrolls past it: the other tabs are
+	   the ones that make way, never a chip hidden behind a narrow box. */
 	.gbox {
-		flex: 0 1 auto;
+		flex: none;
 		min-width: 0;
+		max-width: 100%;
 		display: flex;
 		align-items: center;
 		gap: 4px;
@@ -299,12 +301,6 @@
 		width: 1px;
 		height: 12px; /* a hairline between the group's name and its sessions */
 		background: var(--border-strong);
-	}
-	@media (max-width: 860px) {
-		/* phones: the whole tab bar scrolls instead (same breakpoint as lib/viewport) */
-		.gbox {
-			flex: none;
-		}
 	}
 	.tab {
 		position: relative;
