@@ -199,7 +199,7 @@ export class ChatState {
 	earlierRevision = $state(0);
 
 	/** Fetch the page before the oldest loaded message and put it in front. */
-	async loadEarlier(): Promise<void> {
+	async loadEarlier(beforeInsert?: () => void): Promise<void> {
 		if (!this.hasEarlier || this.loadingEarlier || this.syncing) return;
 		const token = this.token;
 		this.loadingEarlier = true;
@@ -209,6 +209,7 @@ export class ChatState {
 			const items: ChatItem[] = [];
 			const tools: Record<string, ToolRun> = {};
 			for (const { seq, message, createdAt } of msgs) this.ingest(items, tools, seq, message, createdAt);
+			beforeInsert?.(); // the reader may have moved while the page was on its way: measure now, not when the request left
 			this.items = [...items, ...this.items];
 			this.tools = { ...tools, ...this.tools };
 			if (msgs.length) this.firstSeq = msgs[0]!.seq;

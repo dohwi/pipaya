@@ -276,4 +276,17 @@ describe("paged transcript", () => {
 		expect(chat.hasEarlier).toBe(true);
 		expect(chat.loadingEarlier).toBe(false);
 	});
+	test("the reader's position is measured when the page lands, not when the request left", async () => {
+		let release!: () => void;
+		const gate = new Promise<void>((r) => { release = r; });
+		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => { if (before === undefined) return stored(300, 420); await gate; return stored(100, 300); } });
+		await chat.load();
+		const order: string[] = [];
+		const pending = chat.loadEarlier(() => order.push(`insert@${chat.items.length}`));
+		order.push("scrolled meanwhile");
+		release();
+		await pending;
+		expect(order).toEqual(["scrolled meanwhile", "insert@120"]);
+		expect(chat.items).toHaveLength(320);
+	});
 });

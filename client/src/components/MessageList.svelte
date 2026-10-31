@@ -65,10 +65,12 @@
 	/** Put the next older page in front without moving what the reader is looking at (Safari has no scroll anchoring). */
 	async function loadEarlier() {
 		if (!scroller || !chat.hasEarlier || chat.loadingEarlier) return;
-		const below = scroller.scrollHeight - scroller.scrollTop;
-		await chat.loadEarlier();
+		let below = -1;
+		await chat.loadEarlier(() => {
+			if (scroller) below = scroller.scrollHeight - scroller.scrollTop;
+		});
 		await tick();
-		if (scroller) {
+		if (scroller && below >= 0) {
 			scroller.scrollTop = scroller.scrollHeight - below;
 			lastTop = scroller.scrollTop;
 		}
