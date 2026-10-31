@@ -15,6 +15,7 @@
 	import { abortable } from "../lib/abortable";
 	import { DebouncedList } from "../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../lib/prompt-history";
+	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../lib/caret-line";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import IconButton from "./IconButton.svelte";
@@ -435,6 +436,8 @@
 	function browseHistory(e: KeyboardEvent): boolean {
 		if (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || composing || e.isComposing || !ta) return false;
 		if (ta.selectionStart !== ta.selectionEnd || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return false;
+		// soft-wrapped text: the caret may be below/above the first/last visual line even without a "\n"
+		if (e.key === "ArrowUp" ? !caretOnFirstVisualLine(ta) : !caretOnLastVisualLine(ta)) return false;
 		const step = stepHistory(history, e.key, text, text.slice(0, ta.selectionStart), text.slice(ta.selectionEnd), sentPrompts);
 		if (step.used && step.text !== undefined) {
 			const value = step.text;
