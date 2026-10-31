@@ -207,7 +207,7 @@
 				{:else}
 					<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
 				{/if}
-				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
+				{#if x.kind === "group" && !boxed}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
 			</div>
 {/snippet}
@@ -220,14 +220,11 @@
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
 				{@const boxed = x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || !!app.zoomId)}
-				<!-- one pane of the open group is enlarged (always, on phones): the group's tab and its sessions share one box -->
+				<!-- one pane of the open group is enlarged (always, on phones): the box reads as a path, "group › its sessions" -->
 				{#if boxed}
 					<div class="gbox">
-						<!-- wide screens: the page header carries the group's name, count and unlink; phones' header names the session, so the group's tab stays here -->
-						{#if viewport.narrow}
-							{@render tabItem(x, on, st, true)}
-							<span class="gsep" aria-hidden="true"></span>
-						{/if}
+						{@render tabItem(x, on, st, true)}
+						<span class="gsep" aria-hidden="true"><Icon name="chevron-right" /></span>
 						<SessionStrip />
 					</div>
 				{:else}
@@ -306,11 +303,18 @@
 	.tabs:global([data-indicator-ready]) .tab.boxed.on {
 		background: transparent;
 	}
+	/* "group › session": the chevron of a path, between the group's name and its sessions */
 	.gsep {
 		flex: none;
-		width: 1px;
-		height: 12px; /* a hairline between the group's name and its sessions */
-		background: var(--border-strong);
+		display: grid;
+		place-items: center;
+		width: 12px;
+		color: var(--text-faint);
+	}
+	.gsep :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 2;
 	}
 	.tab {
 		position: relative;
