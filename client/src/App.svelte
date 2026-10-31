@@ -11,7 +11,6 @@
 	import Header from "./components/Header.svelte";
 	import Pane from "./components/Pane.svelte";
 	import GroupView from "./components/GroupView.svelte";
-	import SessionStrip from "./components/SessionStrip.svelte";
 	import TabBar from "./components/TabBar.svelte";
 	import Palette from "./components/Palette.svelte";
 	import NoServer from "./components/NoServer.svelte";
@@ -51,10 +50,6 @@
 	$effect(() => {
 		const ids = app.visibleIds;
 		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
-	});
-	// Leaving the group the user backed out of (to another tab, or via the sidebar) forgets it, so opening it again shows its sessions.
-	$effect(() => {
-		if (viewport.backedOut && app.activeGroup?.id !== viewport.backedOut) viewport.backedOut = null;
 	});
 	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
@@ -348,7 +343,6 @@
 		<main>
 			<Header />
 			<TabBar />
-			{#if viewport.inGroup(app.activeGroup?.id)}<SessionStrip />{/if}
 
 			{#if app.net !== "online"}
 				<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>

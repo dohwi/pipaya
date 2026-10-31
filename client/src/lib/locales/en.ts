@@ -1232,7 +1232,6 @@ export const en: Record<string, string> = {
 	"접기": "Collapse",
 	"펼치기": "Expand",
 	"탭": "Tabs",
-	"탭 목록으로": "Back to tabs",
 	"새 대화 또는 터미널": "New conversation or terminal",
 	"눌러서 목록 보기": "Click to see the list",
 	"이전 워크스페이스로 이동": "Go to previous workspace",

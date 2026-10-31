@@ -129,7 +129,10 @@
 	let strip: HTMLElement | undefined = $state();
 	$effect(() => {
 		void activeTab;
+		void app.activeId;
+		// the open group's tab and, inside its box of chips, the session being looked at (phones show one session at a time)
 		strip?.querySelector<HTMLElement>(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+		strip?.querySelector<HTMLElement>('.chip[aria-current="true"]')?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
 	});
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {
@@ -139,7 +142,7 @@
 	}
 </script>
 
-{#if app.serverId && app.net !== "idle" && !viewport.inGroup(app.activeGroup?.id)}
+{#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
@@ -162,7 +165,6 @@
 					use:dropTarget={tabTarget(x)}
 					onclick={() => {
 						if (rename.is(x.id)) return;
-						if (x.kind === "group") viewport.backedOut = null;
 						app.openTab(x.id);
 					}}
 					onauxclick={(e) => e.button === 1 && close(x)}
@@ -203,7 +205,7 @@
 					<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
 				</div>
 				<!-- one pane of the open group is enlarged: its sessions follow the group's tab as chips, so no row of their own -->
-				{#if x.kind === "group" && on && !viewport.narrow && (app.isFull(x.id) || app.zoomId)}<SessionStrip inline />{/if}
+				{#if x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || app.zoomId)}<SessionStrip />{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>

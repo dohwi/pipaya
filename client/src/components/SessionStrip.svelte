@@ -8,20 +8,15 @@
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
 	import { panesOf } from "../lib/layout";
 	import { app } from "../lib/store.svelte";
-	import { viewport } from "../lib/viewport.svelte";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
 	import { InlineRename } from "../lib/inline-rename.svelte";
-
-	/** `inline`: the chips sit in the tab bar behind the group's tab (wide screens), without a row of their own. */
-	let { inline = false }: { inline?: boolean } = $props();
 
 	/** The chip being renamed in place (double click, or "이름 바꾸기" in its menu). */
 	const rename = new InlineRename();
 	function commitRename() {
 		const done = rename.commit();
 		if (!done) return;
-		if (done.id === group?.id) return void app.renameGroup(done.id, done.name);
 		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
 	}
 	function focusSelect(node: HTMLInputElement) {
@@ -42,16 +37,7 @@
 		return closeContextMenu;
 	}
 
-	/** Right click / long press on the group's name: rename it, or dissolve the group. */
-	function groupMenu(pt: Point, id: string, name: string) {
-		openContextMenu(pt, `group:${id}`, [
-			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => rename.start(id, name) },
-			{ icon: "unlink", label: t("그룹 해제 (대화는 그대로 남습니다)"), title: "", run: () => void app.deleteGroup(id) },
-		]);
-		return closeContextMenu;
-	}
-
-	/** Phones: the sessions of the open group as a strip under the header; a tap switches to that session. */
+	/** The sessions of the open group as chips after its tab; a tap switches to that session. */
 	const group = $derived(app.activeGroup);
 	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
 
@@ -64,29 +50,7 @@
 </script>
 
 {#if group && items.length}
-	<nav class="strip" class:inline bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
-		{#if viewport.narrow && !inline}
-			<button class="back tap" onclick={() => (viewport.backedOut = group.id)} aria-label={t("탭 목록으로")} title={t("탭 목록으로")}><Icon name="chevron-left" /></button>
-		{/if}
-		{#if inline}
-			<!-- the header already names the group -->
-		{:else if rename.is(group.id)}
-			<input
-				class="rename"
-				value={rename.draft}
-				maxlength={100}
-				aria-label={t("그룹 이름 바꾸기")}
-				use:focusSelect
-				oninput={(e) => (rename.draft = e.currentTarget.value)}
-				onblur={commitRename}
-				onkeydown={(e) => {
-					if (e.key === "Enter") commitRename();
-					if (e.key === "Escape") rename.cancel();
-				}}
-			/>
-		{:else}
-			<span class="name" title={group.name} role="presentation" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(group.id, group.name))} ondblclick={() => rename.start(group.id, group.name)} use:pressMenu={(pt) => groupMenu(pt, group.id, group.name)}>{group.name}</span>
-		{/if}
+	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{#if rename.is(x.id)}
@@ -113,81 +77,35 @@
 {/if}
 
 <style>
-	/* same shape as the tab bar above it: rounded rectangles, a soft fill for the selection */
+	/* the open group's sessions as one bordered unit hanging off the group's tab in the tab bar: it gives way before the
+	   tabs do, so with many sessions the chips scroll inside their box instead of pushing the other tabs off the screen */
 	.strip {
 		position: relative;
-		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		height: 38px;
-		padding: 0 8px 0 max(8px, var(--sal));
-		padding-right: max(8px, var(--sar));
-		overflow-x: auto;
-		overscroll-behavior-x: contain;
-		scrollbar-width: none;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg-group);
-	}
-	/* going into a group: the tab opens up into the group's sessions */
-	.strip {
-		animation: into-group var(--motion-fast) var(--ease-std);
-	}
-	@keyframes into-group {
-		from {
-			opacity: 0;
-			transform: translateX(12px);
-		}
-	}
-	/* in the tab bar, right after the open group's tab */
-	/* the group's chips read as one unit hanging off the group's tab: a bordered box, not loose tabs */
-	.strip.inline {
-		/* gives way before the tabs do: with many tabs the chips scroll inside their box instead of leaving the screen */
 		flex: 0 1 auto;
 		min-width: 160px;
 		height: 28px;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		margin-right: 8px;
 		padding: 0 4px;
-		gap: 4px;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
-		animation: none;
-	}
-	.strip.inline .chip {
-		height: 22px;
 	}
 	.strip::-webkit-scrollbar {
 		display: none;
 	}
-	.name {
-		flex: none;
-		max-width: 28vw;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		padding: 0 4px 0 4px;
-		font-size: var(--fs-sm);
-		font-weight: 700;
-		color: var(--text);
-	}
-	.back {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-	}
-	.back:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.back :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke-width: 2;
+	/* phones: no room for a second scroller, so the box keeps its natural width and the whole tab bar scrolls (same breakpoint as lib/viewport) */
+	@media (max-width: 860px) {
+		.strip {
+			flex: none;
+			min-width: 0;
+			overflow: visible;
+		}
 	}
 	.tico {
 		display: inline-grid;
@@ -204,7 +122,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		height: 28px;
+		height: 22px;
 		max-width: 46vw;
 		padding: 0 8px;
 		border-radius: var(--radius-sm);
