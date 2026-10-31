@@ -226,6 +226,21 @@
 		border-bottom: 1.5px solid var(--border-strong);
 		border-bottom-left-radius: 3px;
 	}
+	/* the open extension's path reads one step darker: the trunk from the section down to it, then its branch. Rows below keep the quiet trunk */
+	.nav .item:has(~ .item button.sub.on)::after {
+		border-left-color: var(--text-dim);
+	}
+	.nav .item:has(button.sub.on)::before {
+		z-index: 1; /* above the row's own light trunk, which is drawn after it */
+		top: -2px; /* the branch's left edge runs up to the row's top so the dark trunk meets the one above it */
+		height: calc(50% + 2px);
+		border-left-color: var(--text-dim);
+		border-bottom-color: var(--text-dim);
+	}
+	.nav .item:first-child:has(button.sub.on)::before {
+		top: -10px; /* the first row also reaches up to the section row */
+		height: calc(50% + 10px);
+	}
 	.nav .clip {
 		flex: none;
 		display: inline-flex;

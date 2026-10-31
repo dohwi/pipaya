@@ -855,6 +855,22 @@
 		border-bottom: 1.5px solid var(--border-strong, var(--border));
 		border-bottom-left-radius: 3px;
 	}
+	/* the open pane's path reads one step darker: the rule from the group down to it, then its elbow. Rows below it keep the quiet rule */
+	:global(:where(.side) .members .item:has(~ .item.active) .branch::before) {
+		border-left-color: var(--text-dim);
+		z-index: 1; /* each row's rule overlaps its neighbour's by 1px; the dark ones go on top so the later light one never cuts them */
+	}
+	:global(:where(.side) .members .item.active .branch::after) {
+		z-index: 1;
+		top: -1px; /* the elbow's left edge runs up to the row's top so the dark rule meets the one above it */
+		height: calc(50% + 1px);
+		border-left-color: var(--text-dim);
+		border-bottom-color: var(--text-dim);
+	}
+	:global(:where(.side) .members .item.active:first-child .branch::after) {
+		top: -2px; /* the first pane also reaches up into the gap under the group row */
+		height: calc(50% + 2px);
+	}
 	:global(:where(.side) .members .item:last-child .branch::before) {
 		bottom: calc(50% + 8px);
 	}
