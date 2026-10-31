@@ -35,6 +35,7 @@
 	}
 </script>
 
+<div class="queued-wrap">
 <ul class="queued" bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
@@ -44,15 +45,20 @@
 		</li>
 	{/each}
 </ul>
+</div>
 
 <style>
+	/* The gap above lives outside the scroller so the first row never touches the box edge, scrolled or not. */
+	.queued-wrap {
+		padding: 8px 12px 0;
+	}
 	.queued {
 		list-style: none;
 		margin: 0;
-		padding: 8px 12px 0;
-		/* Two rows (22px + 4px gap) under 8px of padding, plus a peek of the third so it reads as scrollable.
+		padding: 0;
+		/* Two rows (22px + 4px gap) plus a peek of the third so it reads as scrollable.
 		   On a short window (phone with the keyboard open) one row and a peek. */
-		max-height: 72px;
+		max-height: 64px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		cursor: grab;
@@ -63,7 +69,7 @@
 	}
 	@media (max-height: 600px) {
 		.queued {
-			max-height: 46px;
+			max-height: 38px;
 		}
 	}
 	.queued li {
