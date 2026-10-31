@@ -10,6 +10,7 @@
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
+	import Select from "./Select.svelte";
 
 	/**
 	 * One model's page inside the connection dialog: id, OpenRouter match, display name and icon, limits, capabilities
@@ -115,55 +116,40 @@
 	{#if r.reasoning && !r.imageGeneration}
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
-			{#if !matched}
-				<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
-				<div class="caps" role="group" aria-label={t("추론 강도")}>
-					{#each ALL_LEVELS as l (l)}
-						<button
-							type="button"
-							class="cap tap"
-							data-level={l}
-							aria-pressed={shown.includes(l)}
-							onclick={() => toggleLevel(r, matched, l)}
-						>
-							<span class="dot"></span>
-							<span>{l}</span>
-						</button>
-					{/each}
-				</div>
-				<p class="hint note">
-					{#if r.thinkingLevels.length}
-						{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
-					{:else}
-						{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
-					{/if}
-				</p>
-			{/if}
-
-			<div class="defsec">
-				<div class="section-label">{t("새 대화 기본 강도")}</div>
-				<div class="caps" role="group" aria-label={t("새 대화 기본 강도")}>
+			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
+			<div class="caps" role="group" aria-label={t("선택 가능한 추론 강도")}>
+				{#each ALL_LEVELS as l (l)}
 					<button
 						type="button"
 						class="cap tap"
-						aria-pressed={fallbackLevel === "auto"}
-						onclick={() => (r.defaultThinkingLevel = undefined)}
-					>{t("자동")}</button>
-					{#each levels as l (l)}
-						<button
-							type="button"
-							class="cap tap"
-							data-level={l}
-							aria-pressed={fallbackLevel === l}
-							onclick={() => (r.defaultThinkingLevel = l)}
-						>
-							<span class="dot"></span>
-							<span>{l}</span>
-						</button>
-					{/each}
-				</div>
-				<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+						data-level={l}
+						aria-pressed={shown.includes(l)}
+						onclick={() => toggleLevel(r, matched, l)}
+					>
+						<span class="dot"></span>
+						<span>{l}</span>
+					</button>
+				{/each}
 			</div>
+			<p class="hint note">
+				{#if r.thinkingLevels.length}
+					{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
+				{:else if matched}
+					{t("매칭된 모델의 기본 지원 강도를 따릅니다. 눌러서 제외할 수 있습니다.")}
+				{:else}
+					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
+				{/if}
+			</p>
+
+			<label>
+				<span>{t("새 대화 기본 강도")}</span>
+				<Select
+					value={fallbackLevel}
+					options={[{ value: "auto", label: t("자동") }, ...levels.map((l) => ({ value: l, label: l }))]}
+					onchange={(v) => (r.defaultThinkingLevel = v === "auto" ? undefined : v)}
+				/>
+			</label>
+			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 		</section>
 	{/if}
 	{#if !locked}
@@ -325,11 +311,6 @@
 		opacity: 1;
 		scale: 1.15;
 	}
-	.defsec {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
 	.field[readonly] {
 		color: var(--text-dim);
 		background: var(--bg-elev);
@@ -352,8 +333,7 @@
 		gap: 4px;
 		min-width: 0;
 	}
-	label em,
-	.section-label em {
+	label em {
 		font-style: normal;
 		font-weight: 400;
 		color: var(--text-faint);
