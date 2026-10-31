@@ -159,6 +159,7 @@
 	--grid-lit: rgba(255, 255, 255, 0.2);
 	--grid-wave: rgba(255, 255, 255, 0.5);
 	--glow: rgba(255, 255, 255, 0.045);
+	--lv-off: #a1a1aa;
 	--lv-minimal: #94a3b8;
 	--lv-low: #38bdf8;
 	--lv-medium: #a78bfa;
@@ -207,6 +208,7 @@
 	--grid-lit: rgba(0, 0, 0, 0.16);
 	--grid-wave: rgba(0, 0, 0, 0.3);
 	--glow: rgba(0, 0, 0, 0.018);
+	--lv-off: #a1a1aa;
 	--lv-minimal: #64748b;
 	--lv-low: #0284c7;
 	--lv-medium: #7c4dff;
@@ -678,7 +680,11 @@ kbd {
 	color: var(--text);
 }
 /* Reasoning level: each strength has its own colour, cool and quiet at the bottom, warm and loud at the top.
-   Set data-level on an element and it (and anything inside) reads --lv / --lv-soft. */
+   Set data-level on an element and it (and anything inside) reads --lv / --lv-soft. "off" (no reasoning asked for)
+   keeps the quietest, fully neutral one. */
+[data-level="off"] {
+	--lv: var(--lv-off);
+}
 [data-level="minimal"] {
 	--lv: var(--lv-minimal);
 }

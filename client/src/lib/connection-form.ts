@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import { compact } from "./format";
-import type { ApiFormat, CatalogModel, CustomModel, CustomProvider, ThinkingLevel } from "./types";
+import { THINKING_LEVELS, type ApiFormat, type CatalogModel, type CustomModel, type CustomProvider, type ThinkingLevel } from "./types";
 
 /** One model line of the connection dialog, as typed (numbers are strings until validated). */
 export interface Row {
@@ -43,7 +43,7 @@ export interface Form {
 	rows: Row[];
 }
 
-export const ALL_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+export const ALL_LEVELS: ThinkingLevel[] = [...THINKING_LEVELS];
 
 /** The strengths an OpenRouter catalog entry offers, cut down to the ones we know. */
 export const catalogLevels = (c: CatalogModel | null | undefined): ThinkingLevel[] =>

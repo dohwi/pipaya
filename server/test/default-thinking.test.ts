@@ -52,12 +52,12 @@ describe("server default model carries a thinking level", () => {
 		expect(cfg.effectiveDefaults.thinkingLevel).toBe("high");
 	});
 
-	test("every real level is accepted; 'off' and anything else is refused and changes nothing", async () => {
-		for (const level of ["minimal", "low", "medium", "high", "xhigh", "max"]) {
+	test("every real level is accepted; anything else is refused and changes nothing", async () => {
+		for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
 			expect((await api("PUT", "/configuration/defaults", { ...model, thinkingLevel: level })).status).toBe(200);
 		}
 		await api("PUT", "/configuration/defaults", { ...model, thinkingLevel: "low" });
-		for (const bad of ["off", "extreme", "", null, 3]) {
+		for (const bad of ["none", "ultra", "extreme", "", null, 3]) {
 			expect((await api("PUT", "/configuration/defaults", { ...model, thinkingLevel: bad })).status).toBe(400);
 		}
 		expect((await api("PUT", "/configuration/defaults", { ...model, other: 1 })).status).toBe(400);

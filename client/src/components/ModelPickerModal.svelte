@@ -7,7 +7,7 @@
 	import ModelLogo from "./ModelLogo.svelte";
 	import PickerOption from "./PickerOption.svelte";
 	import { capsOf } from "../lib/model-caps";
-	import type { ModelInfo, ProviderInfo, ThinkingLevel } from "../lib/types";
+	import { THINKING_LEVELS, type ModelInfo, type ProviderInfo, type ThinkingLevel } from "../lib/types";
 
 	/**
 	 * The one place a model is chosen. A model and its reasoning strength are a pair: the list picks the model, the
@@ -49,7 +49,7 @@
 		onclose: () => void;
 	} = $props();
 
-	const levels: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+	const levels: ThinkingLevel[] = [...THINKING_LEVELS];
 
 	let filter = $state("");
 	/** What is chosen now. Every click (model, strength, unset) is applied at once through `onpick`; the dialog stays open. */

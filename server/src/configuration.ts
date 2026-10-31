@@ -53,7 +53,8 @@ function supportedLevelsFor(m: { id: string; catalogId?: string | null; thinking
 	if (m.thinkingLevels?.length) return THINKING_LEVELS.filter((l) => m.thinkingLevels!.includes(l));
 	const map = catalogFor(m)?.map;
 	if (map) return THINKING_LEVELS.filter((l) => map[l] !== null && map[l] !== undefined);
-	return THINKING_LEVELS.filter((l) => l === "minimal" || l === "low" || l === "medium" || l === "high");
+	// A model with no map at all keeps pi-ai's own default set: off through high (xhigh and max need a mapping).
+	return THINKING_LEVELS.filter((l) => l !== "xhigh" && l !== "max");
 }
 
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
@@ -292,7 +293,7 @@ export class Configuration {
 
 	private thinkingSource(providerId: string, m: CustomProvider["models"][number]): { kind: "custom" | "catalog" | "default"; catalogId?: string; levels: ThinkingLevel[] } {
 		const live = this.registry.models.getModel(providerId, m.id);
-		const levels = live ? getSupportedThinkingLevels(live).filter((l): l is ThinkingLevel => l !== "off") : [];
+		const levels = live ? getSupportedThinkingLevels(live).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [];
 		if (!m.reasoning) return { kind: "default", levels: [] };
 		const match = catalogFor(m);
 		if (m.thinkingLevels?.length) return { kind: "custom", ...(match ? { catalogId: match.id } : {}), levels };

@@ -1,7 +1,7 @@
 /** Plain types and helpers for the app store: no reactive state, so they can be read (and tested) on their own. */
 import { K, read } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
-import type { DefaultModelSelection, ThinkingLevel } from "./types";
+import { THINKING_LEVELS, type DefaultModelSelection, type ThinkingLevel } from "./types";
 
 export interface PaletteItem {
   id: string;
@@ -46,17 +46,9 @@ export function loadServers(): Server[] {
   return list;
 }
 
-const THINKING_LEVELS: readonly ThinkingLevel[] = [
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
 const DEFAULT_THINKING: ThinkingLevel = "medium";
 
-/** Old/missing/invalid values (including the removed "off") fall back to the default. */
+/** Old/missing/invalid values fall back to the default. */
 export function normalizeThinking(v: unknown): ThinkingLevel {
   return THINKING_LEVELS.find((l) => l === v) ?? DEFAULT_THINKING;
 }

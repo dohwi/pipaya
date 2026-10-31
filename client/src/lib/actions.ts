@@ -19,18 +19,11 @@ import {
 } from "./keys";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
-import type { ThinkingLevel } from "./types";
+import { THINKING_LEVELS, type ThinkingLevel } from "./types";
 import { t } from "./i18n";
 
 
-const LEVELS: ThinkingLevel[] = [
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
+const LEVELS: ThinkingLevel[] = [...THINKING_LEVELS];
 /** Step to the next entry (wrapping), or the first entry when `current` is not in the list. */
 function next<T>(
   list: readonly T[],

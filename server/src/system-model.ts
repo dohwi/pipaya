@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import Type, { type Static } from "typebox";
 import Value from "typebox/value";
 import { badRequest } from "./errors.ts";
-import type { ModelRegistry } from "./models.ts";
+import { reasoningOption, type ModelRegistry } from "./models.ts";
 import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
 
 /**
@@ -55,7 +55,7 @@ export class SystemModelSettings {
 			const reply = await this.registry.models.completeSimple(
 				model,
 				{ systemPrompt: system, messages: [{ role: "user", content: user, timestamp: Date.now() }] },
-				{ maxTokens, signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
+				{ maxTokens, signal, ...reasoningOption(target.thinkingLevel, model) },
 			);
 			if (reply.stopReason === "error" || reply.stopReason === "aborted") return null;
 			return reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");

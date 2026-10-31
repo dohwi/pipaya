@@ -17,6 +17,7 @@ import { PANEL_PLACEMENTS, parsePanelLayout, parsePanelSpec, parseView, validate
 
 import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ToolRenderInput } from "./sdk";
 import { splitCombo } from "../keys";
+import { THINKING_LEVELS } from "../types";
 import type { PaneAdapter } from "./panes";
 import { parseLayout } from "./layout-spec";
 import type { WorkspaceAdapter } from "./workspace";
@@ -1183,7 +1184,7 @@ export class ExtensionHost {
             if (o.title !== undefined) out.title = string(o.title, 200);
             if (o.provider !== undefined) out.provider = string(o.provider, 80);
             if (o.model !== undefined) out.model = string(o.model, 200);
-            if (o.thinkingLevel !== undefined) { if (!["minimal", "low", "medium", "high", "xhigh", "max"].includes(o.thinkingLevel as string)) throw new LocalizedError(t("잘못된 추론 강도")); out.thinkingLevel = o.thinkingLevel as string; }
+            if (o.thinkingLevel !== undefined) { if (!(THINKING_LEVELS as readonly string[]).includes(o.thinkingLevel as string)) throw new LocalizedError(t("잘못된 추론 강도")); out.thinkingLevel = o.thinkingLevel as string; }
             if (!Object.keys(out).length) throw new LocalizedError(t("바꿀 설정이 없습니다"));
             return panes.configure(pid(args[0]), out).then(() => {});
           }

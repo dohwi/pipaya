@@ -210,9 +210,9 @@ const levelsOf = async (id: string) => (await api("GET", `/models?provider=${id}
 describe("reasoning strengths of a custom model", () => {
 	const reasoning = (extra: object) => ({ ...body(), models: [{ id: "unknown-model-xyz", contextWindow: 8192, maxTokens: 1024, reasoning: true, vision: false, ...extra }] });
 
-	test("not set: the default minimal..high", async () => {
+	test("not set: the default off..high", async () => {
 		expect((await api("PUT", "/configuration/providers/lv-auto", reasoning({}))).status).toBe(200);
-		expect(await levelsOf("lv-auto")).toEqual(["minimal", "low", "medium", "high"]);
+		expect(await levelsOf("lv-auto")).toEqual(["off", "minimal", "low", "medium", "high"]);
 	});
 	test("set by the owner: exactly those, even beyond the default", async () => {
 		expect((await api("PUT", "/configuration/providers/lv-own", reasoning({ thinkingLevels: ["low", "high", "max"] }))).status).toBe(200);
@@ -235,15 +235,15 @@ describe("where a model's reasoning strengths come from", () => {
 		const r = await put("src-other", [{ id: "unknown-model-xyz", reasoning: true, thinkingLevels: ["low", "max"] }, { id: "unknown-model-abc", reasoning: true }, { id: "plain", reasoning: false }]);
 		expect(r.body.models.map((m: any) => m.thinkingSource)).toEqual([
 			{ kind: "custom", levels: ["low", "max"] },
-			{ kind: "default", levels: ["minimal", "low", "medium", "high"] },
+			{ kind: "default", levels: ["off", "minimal", "low", "medium", "high"] },
 			{ kind: "default", levels: [] },
 		]);
 	});
 	test("an explicit OpenRouter match decides the strengths, not the name", async () => {
 		const r = await put("src-pick", [{ id: "my-haiku", reasoning: true, catalogId: "anthropic/claude-haiku-5.5" }]);
 		expect(r.status).toBe(200);
-		expect(r.body.models[0].thinkingSource).toEqual({ kind: "catalog", catalogId: "anthropic/claude-haiku-5.5", levels: ["low", "medium", "high", "xhigh", "max"] });
-		expect(await levelsOf("src-pick")).toEqual(["low", "medium", "high", "xhigh", "max"]);
+		expect(r.body.models[0].thinkingSource).toEqual({ kind: "catalog", catalogId: "anthropic/claude-haiku-5.5", levels: ["off", "low", "medium", "high", "xhigh", "max"] });
+		expect(await levelsOf("src-pick")).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
 	});
 	test("a matched model keeps the owner's own strengths", async () => {
 		const r = await put("src-pick-own", [{ id: "my-haiku-2", reasoning: true, catalogId: "anthropic/claude-haiku-5.5", thinkingLevels: ["low", "high"] }]);
@@ -252,8 +252,8 @@ describe("where a model's reasoning strengths come from", () => {
 	});
 	test("catalogId null means manual: the name is not looked up", async () => {
 		const r = await put("src-manual", [{ id: "claude-sonnet-5", reasoning: true, catalogId: null }]);
-		expect(r.body.models[0].thinkingSource).toEqual({ kind: "default", levels: ["minimal", "low", "medium", "high"] });
-		expect(await levelsOf("src-manual")).toEqual(["minimal", "low", "medium", "high"]);
+		expect(r.body.models[0].thinkingSource).toEqual({ kind: "default", levels: ["off", "minimal", "low", "medium", "high"] });
+		expect(await levelsOf("src-manual")).toEqual(["off", "minimal", "low", "medium", "high"]);
 	});
 	test("a model can name the strength a new chat starts at", async () => {
 		const r = await put("src-default", [{ id: "gpt-5", reasoning: true, defaultThinkingLevel: "high" }]);

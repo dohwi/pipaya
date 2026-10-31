@@ -4,7 +4,11 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import type { ContextSnapshot } from "./context.ts";
 
-export const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+/**
+ * Every strength a model can be asked for, weakest first. `off` means "ask for no reasoning at all": pi-ai sends no
+ * effort (or the provider's "none"), so a model that always reasons keeps its own default.
+ */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export interface SessionRecord {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
+import { ALL_LEVELS, applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
@@ -158,5 +158,12 @@ describe("reasoning strengths of a matched model", () => {
 		expect(r.thinkingLevels).toEqual(["max"]);
 		toggleLevel(r, null, "max");
 		expect(r.thinkingLevels).toEqual([]);
+	});
+});
+
+describe("thinking levels", () => {
+	test("every strength the server accepts is offered on the chips, weakest first", () => {
+		// The server pins this list to pi-ai's own set (server/test/thinking.test.ts); a new level there lands here.
+		expect(ALL_LEVELS).toEqual(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 	});
 });

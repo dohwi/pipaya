@@ -11,7 +11,7 @@ import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type Skill
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
-import { modelDefaultLevel, type ModelRegistry } from "./models.ts";
+import { modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
@@ -287,7 +287,7 @@ export class SessionManager {
 			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await this.registry.models.completeSimple(
 				model,
 				{ systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user", content: summaryRequest(stored.summary, toSummarize.map((m) => m.message), instructions), timestamp: Date.now() }] },
-				{ maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
+				{ maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) },
 			);
 			if (reply.stopReason === "aborted") throw Object.assign(new Error("compaction cancelled"), { aborted: true });
 			if (reply.stopReason === "error") throw new Error(reply.errorMessage || "the summary model failed");
@@ -520,7 +520,7 @@ export class SessionManager {
 				const reply = await this.registry.models.completeSimple(
 					model,
 					{ systemPrompt: DESCRIBE_SYSTEM, messages: [{ role: "user", content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }] },
-					{ maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...(target.thinkingLevel && model.reasoning ? { reasoning: target.thinkingLevel } : {}) },
+					{ maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) },
 				);
 				if (controller.signal.aborted) return;
 				if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage || reply.stopReason);

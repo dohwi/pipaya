@@ -11,6 +11,14 @@ export interface ModelRegistry {
 }
 
 /**
+ * The `reasoning` option for a model call: "off" means "ask for no reasoning at all" (the provider keeps its own
+ * default), so nothing is sent — passing it on would turn thinking *on* for providers that read a level as a switch.
+ */
+export function reasoningOption(level: ThinkingLevel | undefined, model: Model<Api> | undefined): { reasoning?: Exclude<ThinkingLevel, "off"> } {
+	return level && level !== "off" && model?.reasoning ? { reasoning: level } : {};
+}
+
+/**
  * The strength a new chat with this model starts at, when its owner chose one. pi-ai's `Model` has no slot for it, so
  * the configuration carries it on the model object it registers.
  */
@@ -59,7 +67,8 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		name: m.name,
 		api: m.api,
 		reasoning: m.reasoning,
-		thinkingLevels: getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => l !== "off"),
+		// Every strength the model accepts, `off` included: "empty" means the model has no reasoning at all.
+		thinkingLevels: m.reasoning ? getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [],
 		contextWindow: m.contextWindow,
 		maxTokens: m.maxTokens,
 		vision: m.input.includes("image"),

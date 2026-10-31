@@ -77,7 +77,7 @@ export function catalogEntries(): CatalogEntry[] {
 			reasoning: Boolean(m.reasoning),
 			vision: m.input.includes("image"),
 			image: false,
-			levels: m.reasoning ? getSupportedThinkingLevels(m).filter((l) => l !== "off") : [],
+			levels: m.reasoning ? getSupportedThinkingLevels(m) : [],
 		});
 	}
 	// A model listed as both chat and image keeps its chat entry (it has real limits).

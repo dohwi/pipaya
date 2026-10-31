@@ -311,7 +311,7 @@ describe("working directories", () => {
 
 describe("sessions", () => {
 	test("create validates input", async () => {
-		for (const thinkingLevel of ["ultra", "off"]) {
+		for (const thinkingLevel of ["ultra", "none", "extreme"]) {
 			expect((await api("POST", "/sessions", { thinkingLevel })).status).toBe(400);
 		}
 		const badModel = await api("POST", "/sessions", { provider: "echo", model: "nope" });
@@ -376,8 +376,9 @@ describe("sessions", () => {
 		const patched = await api("PATCH", `/sessions/${id}`, { title: "renamed", thinkingLevel: "low" });
 		expect(patched.json.title).toBe("renamed");
 		expect(patched.json.thinkingLevel).toBe("low");
-		expect((await api("PATCH", `/sessions/${id}`, { thinkingLevel: "off" })).status).toBe(400);
-		expect((await api("GET", `/sessions/${id}`)).json.thinkingLevel).toBe("low");
+		expect((await api("PATCH", `/sessions/${id}`, { thinkingLevel: "off" })).json.thinkingLevel).toBe("off");
+		expect((await api("GET", `/sessions/${id}`)).json.thinkingLevel).toBe("off");
+		expect((await api("PATCH", `/sessions/${id}`, { thinkingLevel: "ultra" })).status).toBe(400);
 		// tools are frozen once history exists
 		expect((await api("PATCH", `/sessions/${id}`, { tools: ["read"] })).status).toBe(409);
 

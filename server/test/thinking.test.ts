@@ -4,10 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MIGRATIONS, openDb } from "../src/db.ts";
 import { SessionStore, THINKING_LEVELS, type SessionRecord } from "../src/store.ts";
+import { reasoningOption } from "../src/models.ts";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 
 describe("thinking levels", () => {
-	test("supported strengths exclude off", () => {
-		expect([...THINKING_LEVELS]).toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
+	test("'off' asks for no reasoning: nothing is sent, so the provider keeps its own default", () => {
+		const model = { reasoning: true } as any;
+		expect(reasoningOption("off", model)).toEqual({});
+		expect(reasoningOption(undefined, model)).toEqual({});
+		expect(reasoningOption("high", { reasoning: false } as any)).toEqual({});
+		expect(reasoningOption("high", model)).toEqual({ reasoning: "high" });
+	});
+
+	test("covers every strength the engine knows, in its order", () => {
+		// A new level upstream (an "ultra", say) makes this fail: add it here and in the client's THINKING_LEVELS.
+		expect([...THINKING_LEVELS]).toEqual([...MODEL_THINKING_LEVELS]);
 	});
 
 	test("v3 sessions with off migrate to medium without changing other strengths or settings", () => {

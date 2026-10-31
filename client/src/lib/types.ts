@@ -9,7 +9,12 @@ export interface Group {
 	updatedAt: number;
 }
 
-export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+/**
+ * Every strength a model can be asked for, weakest first. `off` asks for no reasoning at all (the server sends no
+ * effort, or the provider's "none"), so a model that always reasons keeps its own default.
+ */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 /** A model with the reasoning strength to run it at; the two are always chosen together. */
