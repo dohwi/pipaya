@@ -127,6 +127,7 @@ class Drag {
 	private loop = () => {
 		if (this.id === null) return;
 		const { x, y } = this.pt;
+		let scrolled = false;
 		for (let el = document.elementFromPoint(x, y); el; el = el.parentElement) {
 			if (el.scrollHeight <= el.clientHeight + 1 || !/auto|scroll/.test(getComputedStyle(el).overflowY)) continue;
 			const r = el.getBoundingClientRect();
@@ -136,10 +137,16 @@ class Drag {
 			if (dy) {
 				const before = el.scrollTop;
 				el.scrollTop += dy;
-				if (el.scrollTop !== before) this.move(x, y); // what is under the pointer changed
+				if (el.scrollTop !== before) {
+					scrolled = true;
+					this.move(x, y); // what is under the pointer changed
+				}
 			}
 			break;
 		}
+		// Rows step aside while a drag hovers them, so what is under a motionless pointer can change: look again every frame
+		// (a scroll above already did, hence no second pass then).
+		if (!scrolled) this.move(x, y);
 		this.raf = requestAnimationFrame(this.loop);
 	};
 }
