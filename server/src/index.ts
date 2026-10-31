@@ -1,6 +1,7 @@
 import { registerBunOAuthFlows } from "@earendil-works/pi-ai/bun-oauth";
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
+import { installCrashGuard } from "./crash-guard.ts";
 
 // pi-ai loads its OAuth flows with a dynamic import, which a compiled single binary (the desktop sidecar) cannot resolve.
 // Registering them statically embeds the flows; it is harmless when running from source.
@@ -8,6 +9,7 @@ registerBunOAuthFlows();
 
 const cfg = loadConfig();
 const app = await buildApp(cfg);
+installCrashGuard(app.server.log);
 
 let stopping = false;
 const stop = async (signal: string) => {
