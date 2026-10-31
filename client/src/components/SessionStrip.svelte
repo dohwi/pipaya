@@ -79,22 +79,18 @@
 <style>
 	/* the open group's sessions as one bordered unit hanging off the group's tab in the tab bar: it gives way before the
 	   tabs do, so with many sessions the chips scroll inside their box instead of pushing the other tabs off the screen */
+	/* the sessions of the open group, the scrolling part of the group's box in the tab bar (TabBar's .gbox draws the border) */
 	.strip {
 		position: relative;
-		flex: 0 1 auto;
-		min-width: 160px;
-		height: 28px;
+		flex: 1 1 auto;
+		min-width: 96px;
+		height: 100%;
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		margin-right: 8px;
-		padding: 0 4px;
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		background: var(--bg-group);
 	}
 	.strip::-webkit-scrollbar {
 		display: none;

@@ -142,6 +142,65 @@
 	}
 </script>
 
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="tab"
+				class:on
+				class:before={slot?.id === x.id && !slot.after}
+				class:after={slot?.id === x.id && slot.after}
+				class:carried={drag.id === x.id}
+				class:menuopen={menuId === x.id}
+				data-tab={x.id}
+				role="tab"
+				tabindex={on ? 0 : -1}
+				aria-selected={on}
+				title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
+				use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
+				use:dropTarget={tabTarget(x)}
+				onclick={() => {
+					if (rename.is(x.id)) return;
+					app.openTab(x.id);
+				}}
+				onauxclick={(e) => e.button === 1 && close(x)}
+				onkeydown={(e) => {
+					// Enter / Space open the tab (arrows are handled by rovingKeys); a rename field or the close button keep their own keys.
+					if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+						e.preventDefault();
+						e.currentTarget.click();
+					}
+				}}
+			>
+				{#if x.kind === "group"}
+					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
+				{:else if x.kind === "terminal"}
+					<span class="ico"><Icon name="terminal" /></span>
+				{:else}
+					<AgentBadge id={x.id} state={st} size={16} />
+				{/if}
+				{#if rename.is(x.id)}
+					<input
+						class="rename"
+						value={rename.draft}
+						maxlength={x.kind === "group" ? 100 : undefined}
+						aria-label={t("이름 바꾸기")}
+						use:focusSelect
+						oninput={(e) => (rename.draft = e.currentTarget.value)}
+						onblur={commitRename}
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => {
+							if (e.key === "Enter") commitRename();
+							if (e.key === "Escape") rename.cancel();
+						}}
+					/>
+				{:else}
+					<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
+				{/if}
+				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
+				<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
+			</div>
+{/snippet}
+
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -149,63 +208,16 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				<div
-					class="tab"
-					class:on
-					class:before={slot?.id === x.id && !slot.after}
-					class:after={slot?.id === x.id && slot.after}
-					class:carried={drag.id === x.id}
-					class:menuopen={menuId === x.id}
-					data-tab={x.id}
-					role="tab"
-					tabindex={on ? 0 : -1}
-					aria-selected={on}
-					title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
-					use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
-					use:dropTarget={tabTarget(x)}
-					onclick={() => {
-						if (rename.is(x.id)) return;
-						app.openTab(x.id);
-					}}
-					onauxclick={(e) => e.button === 1 && close(x)}
-					onkeydown={(e) => {
-						// Enter / Space open the tab (arrows are handled by rovingKeys); a rename field or the close button keep their own keys.
-						if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-							e.preventDefault();
-							e.currentTarget.click();
-						}
-					}}
-				>
-					{#if x.kind === "group"}
-						<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
-					{:else if x.kind === "terminal"}
-						<span class="ico"><Icon name="terminal" /></span>
-					{:else}
-						<AgentBadge id={x.id} state={st} size={16} />
-					{/if}
-					{#if rename.is(x.id)}
-						<input
-							class="rename"
-							value={rename.draft}
-							maxlength={x.kind === "group" ? 100 : undefined}
-							aria-label={t("이름 바꾸기")}
-							use:focusSelect
-							oninput={(e) => (rename.draft = e.currentTarget.value)}
-							onblur={commitRename}
-							onclick={(e) => e.stopPropagation()}
-							onkeydown={(e) => {
-								if (e.key === "Enter") commitRename();
-								if (e.key === "Escape") rename.cancel();
-							}}
-						/>
-					{:else}
-						<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
-					{/if}
-					{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
-					<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name={x.kind === "group" ? "unlink" : "x"} /></button>
-				</div>
-				<!-- one pane of the open group is enlarged: its sessions follow the group's tab as chips, so no row of their own -->
-				{#if x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || app.zoomId)}<SessionStrip />{/if}
+				{@const boxed = x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || !!app.zoomId)}
+				<!-- one pane of the open group is enlarged (always, on phones): the group's tab and its sessions share one box -->
+				{#if boxed}
+					<div class="gbox">
+						{@render tabItem(x, on, st)}
+						<SessionStrip />
+					</div>
+				{:else}
+					{@render tabItem(x, on, st)}
+				{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
@@ -256,6 +268,27 @@
 	}
 	.tabs::-webkit-scrollbar {
 		display: none;
+	}
+	/* the open group as one bordered unit: its tab (name, count, unlink) and its sessions. It gives way before the other
+	   tabs do, so with many sessions only the chips scroll inside it and the group's own tab stays in view. */
+	.gbox {
+		flex: 0 1 auto;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 28px;
+		padding-right: 4px;
+		margin-right: 8px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--bg-group);
+	}
+	@media (max-width: 860px) {
+		/* phones: the whole tab bar scrolls instead (same breakpoint as lib/viewport) */
+		.gbox {
+			flex: none;
+		}
 	}
 	.tab {
 		position: relative;
