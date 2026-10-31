@@ -102,4 +102,12 @@ describe("Android launcher icons", () => {
 		expect(kt).toContain("WindowInsetsCompat.CONSUMED"); // consumed here, so the page's own safe-area padding is not added a second time
 		expect(kt.split("{").length).toBe(kt.split("}").length); // balanced braces: a typo here only shows up in CI otherwise
 	});
+	test("the keyboard comes back after a system dialog takes the window focus (WebView 155-157 hides it)", () => {
+		const kt = mainActivity("work.pipaya.app");
+		expect(kt).toContain("override fun onWindowFocusChanged(hasFocus: Boolean)");
+		expect(kt).toContain("isVisible(WindowInsetsCompat.Type.ime())");
+		expect(kt).toContain("showSoftInput(view, 0)");
+		// leaving the app must not bring the keyboard back on return
+		expect(kt).toMatch(/override fun onPause\(\) \{\s+\/\/[^\n]*\n\s+keyboardBeforeBlur = false/);
+	});
 });

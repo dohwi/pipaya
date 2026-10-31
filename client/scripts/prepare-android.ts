@@ -38,17 +38,57 @@ export function configureAndroid(source: string): string {
  * The app is drawn edge to edge, but the WebView's `env(safe-area-inset-*)` is not reliable on every Android
  * version, so the page's top bar ended up under the status bar. The system bar heights are applied as padding
  * to the activity's root view instead, and the page then needs no inset of its own on Android.
+ *
+ * Keyboard after a system dialog: Android System WebView 155-157 hides the soft keyboard whenever the window loses
+ * focus (Chromium f04844f7e0, fixed in 158 by 37d5228c9e, b/560321831). A dialog from the keyboard app itself (delete
+ * in its clipboard panel), the notification shade or the power menu takes the focus while the app stays resumed, so
+ * the keyboard vanished and did not come back. When the focus returns without the app having been paused, the
+ * keyboard is shown again if it was up before.
  */
 export function mainActivity(packageName: string): string {
 	return `package ${packageName}
 
 import android.os.Bundle
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
+  /** The soft keyboard was up when a dialog/overlay took the window focus (see restoreKeyboard). */
+  private var keyboardBeforeBlur = false
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    // Runs before the WebView hears of the change, so the keyboard is still visible here.
+    if (!hasFocus) keyboardBeforeBlur = ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus && keyboardBeforeBlur) {
+      keyboardBeforeBlur = false
+      currentFocus?.let { restoreKeyboard(it, 0) }
+    }
+  }
+
+  override fun onPause() {
+    // Leaving the app (home, app switch): coming back should not pop the keyboard up, as in any other app.
+    keyboardBeforeBlur = false
+    super.onPause()
+  }
+
+  /** The WebView re-learns its focused field asynchronously after regaining focus, so try a few times. */
+  private fun restoreKeyboard(view: View, attempt: Int) {
+    view.postDelayed({
+      if (!hasWindowFocus() || !view.isFocused) return@postDelayed
+      if (ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true) return@postDelayed
+      if (view.onCheckIsTextEditor()) {
+        getSystemService(InputMethodManager::class.java)?.showSoftInput(view, 0)
+      } else if (attempt < 4) {
+        restoreKeyboard(view, attempt + 1)
+      }
+    }, 100L)
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
