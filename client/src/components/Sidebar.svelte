@@ -860,11 +860,15 @@
 	:global(:where(.side) .members) {
 		position: relative;
 	}
+	/* the quiet rules draw above the selection wash, so the open row no longer tints the rule that runs behind it */
+	:global(:where(.side) .members .item .branch) {
+		z-index: 2;
+	}
 	:global(:where(.side) .members .tree-path) {
 		position: absolute;
 		left: 51px; /* the rule's column: x 68 like .branch (47px from a row's left, x 21); .members starts 4px further left, at x 17 */
 		top: -2px; /* up into the gap under the group row, where the first pane's rule starts */
-		z-index: 1; /* above the rows' quiet rules, which overlap each other by 1px */
+		z-index: 3; /* above the rows' quiet rules (z 2, which overlap each other by 1px), which are above the selection wash (z 1) */
 		width: 12px;
 		height: var(--path-h, 0px); /* already counts the 2px lead above the first row (lib/tree-path) */
 		box-sizing: border-box;
