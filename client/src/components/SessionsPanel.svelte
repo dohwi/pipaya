@@ -122,14 +122,15 @@
 	}
 	const can = (list: Session[], keep: (s: Session) => boolean) => list.some((s) => picked[s.id] && keep(s));
 	const canArchive = (s: Session) => !s.closed && !s.archived;
-	const canRestore = (s: Session) => !!s.archived && !s.closed;
+	/** Restore brings back what was tucked away (archived) and reopens what was closed. */
+	const canRestore = (s: Session) => !!s.archived || s.closed;
 	const canClose = (s: Session) => !s.closed;
 	const any = () => true;
 
 	/** Archive (or, with `on` false, restore) what is ticked in one folder; closed ones are left as they are. */
 	const archive = (list: Session[], on: boolean) =>
 		bulk(list, on ? canArchive : canRestore, async (ids) => {
-			for (const id of ids) await api!.patchSession(id, { archived: on });
+			for (const id of ids) await api!.patchSession(id, on ? { archived: true } : { archived: false, closed: false });
 			return on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
 		});
 	/** Move what is ticked to the closed sessions (out of the list and the archive, still resumable). */
@@ -329,10 +330,24 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.del {
-		flex: none;
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 100%;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
 		margin-left: auto;
+	}
+	/* phones: the bulk buttons take their own full row and share it, so they never reach past the card's right edge */
+	@media (max-width: 640px) {
+		.del {
+			flex: 1 1 100%;
+			margin-left: 0;
+		}
+		.del > :global(*) {
+			flex: 1 1 auto;
+			min-width: 0;
+			justify-content: center;
+		}
 	}
 </style>
