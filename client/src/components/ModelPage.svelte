@@ -116,30 +116,30 @@
 	{#if r.reasoning && !r.imageGeneration}
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec">
-			<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
-			<div class="caps" role="group" aria-label={t("추론 강도")}>
-				{#each ALL_LEVELS as l (l)}
-					<button
-						type="button"
-						class="cap tap"
-						data-level={l}
-						aria-pressed={shown.includes(l)}
-						onclick={() => toggleLevel(r, matched, l)}
-					>
-						<span class="dot"></span>
-						<span>{l}</span>
-					</button>
-				{/each}
-			</div>
-			<p class="hint note">
-				{#if r.thinkingLevels.length}
-					{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
-				{:else if shown.length}
-					{t("매칭된 모델의 강도를 그대로 씁니다.")}
-				{:else}
-					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
-				{/if}
-			</p>
+			{#if !matched}
+				<div class="section-label">{t("추론 강도")} <em>({tc("optional", "선택")})</em></div>
+				<div class="caps" role="group" aria-label={t("추론 강도")}>
+					{#each ALL_LEVELS as l (l)}
+						<button
+							type="button"
+							class="cap tap"
+							data-level={l}
+							aria-pressed={shown.includes(l)}
+							onclick={() => toggleLevel(r, matched, l)}
+						>
+							<span class="dot"></span>
+							<span>{l}</span>
+						</button>
+					{/each}
+				</div>
+				<p class="hint note">
+					{#if r.thinkingLevels.length}
+						{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
+					{:else}
+						{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
+					{/if}
+				</p>
+			{/if}
 			<div class="defsec">
 				<div class="section-label">{t("새 대화 기본 강도")}</div>
 				<div
