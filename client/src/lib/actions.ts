@@ -237,6 +237,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     if (app.chat?.running) void app.abort();
   },
   steer: () => {}, // fixed to Enter: handled by the composer itself
+  renameTab: () => {}, // fixed to F2: handled by whatever has focus (row, pane title, chip, header), see RENAME_KEY
   queueMessage: () => void app.queueSendTick++,
   cancelQueue: () => app.openQueue(),
   settings: () => {

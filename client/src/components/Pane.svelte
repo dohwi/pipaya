@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RENAME_KEY } from "../lib/keys";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
@@ -98,7 +99,7 @@
 			use:dragSource={{ id, menu: paneMenu, disabled: rename.is(id) }}
 			onkeydown={(e) => {
 				// F2 renames while the title bar has focus; the terminal and the input below keep F2 for themselves
-				if (e.key !== "F2" || rename.is(id) || (e.target as Element).closest("input")) return;
+				if (e.key !== RENAME_KEY || rename.is(id) || (e.target as Element).closest("input")) return;
 				e.preventDefault();
 				rename.start(id, titleNow());
 			}}

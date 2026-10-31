@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RENAME_KEY } from "../lib/keys";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { dragScroll } from "../lib/drag-scroll";
@@ -79,7 +80,7 @@
 				}}
 			/>
 		{:else}
-			<span class="name" title={group.name} role="presentation" tabindex="-1" onkeydown={(e) => e.key === "F2" && (e.preventDefault(), rename.start(group.id, group.name))} ondblclick={() => rename.start(group.id, group.name)} use:pressMenu={(pt) => groupMenu(pt, group.id, group.name)}>{group.name}</span>
+			<span class="name" title={group.name} role="presentation" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(group.id, group.name))} ondblclick={() => rename.start(group.id, group.name)} use:pressMenu={(pt) => groupMenu(pt, group.id, group.name)}>{group.name}</span>
 		{/if}
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
@@ -97,7 +98,7 @@
 					}}
 				/>
 			{:else}
-				<button class="chip tap" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === "F2" && (e.preventDefault(), rename.start(x.id, x.title))} use:pressMenu={(pt) => chipMenu(pt, x.id, x.title)} title="{x.title} · {ACTIVITY_LABEL[st]}">
+				<button class="chip tap" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} use:pressMenu={(pt) => chipMenu(pt, x.id, x.title)} title="{x.title} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					<span class="t">{x.title}</span>
 				</button>

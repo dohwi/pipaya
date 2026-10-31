@@ -3,7 +3,7 @@
  * mirror); a settings file or backup carries them through `capture` / `apply`.
  */
 import { MAX_VOLUME, play, volumeGain, type Cue } from "./sound";
-import { ACTIONS, DEFAULT_BINDINGS, isActionId, type ActionId } from "./keys";
+import { ACTIONS, DEFAULT_BINDINGS, fixedActionFor, isActionId, type ActionId } from "./keys";
 import { extensions } from "./extensions/host.svelte";
 import { syncSystemBars, syncWindowTheme } from "./native-push";
 import { setDurableSetting } from "./durable-storage";
@@ -166,6 +166,8 @@ export class Preferences {
   /** Bind `combo` to `id`. A combo can only do one thing, so another action holding it is unbound and returned. */
   setBinding(id: ActionId, combo: string): ActionId | null {
     if (ACTIONS.find((a) => a.id === id)?.fixed) return null;
+    // a fixed shortcut (Esc, Enter, F2) stays with its action
+    if (fixedActionFor(combo)) return null;
     let taken: ActionId | null = null;
     const next = { ...this.bindings, [id]: combo };
     if (combo) {

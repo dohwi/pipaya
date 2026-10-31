@@ -10,6 +10,7 @@ import { msg } from "./i18n";
 
 export type ActionId =
   | "toggleSidebar"
+  | "renameTab"
   | "newChat"
   | "closeSession"
   | "archiveSession"
@@ -75,12 +76,22 @@ export interface ActionDef {
   group: "general" | "chat" | "model" | "layout" | "pane";
 }
 
+/** The key that renames what has focus (a sidebar row, a pane title, a chip, the header title). Fixed, see `renameTab`. */
+export const RENAME_KEY = "F2";
+
 const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "toggleSidebar",
     label: msg("사이드바 접기 / 펼치기"),
     hint: msg("좁은 화면에서는 사이드바 서랍을 열고 닫습니다"),
     default: "Mod+B+B",
+  },
+  {
+    id: "renameTab",
+    label: msg("이름 바꾸기"),
+    hint: msg("포커스가 있는 사이드바 행, 창 제목, 칩, 위쪽 제목의 이름을 바꿉니다. 터미널 안에서는 셸이 F2를 받습니다"),
+    default: RENAME_KEY,
+    fixed: true,
   },
   {
     id: "newChat",
@@ -469,6 +480,10 @@ export function hasLongerBinding(combo: string, bindings: Record<string, string>
     );
   });
 }
+
+/** The fixed action that owns `combo` (Esc, Enter, F2): it cannot be given to another action. */
+export const fixedActionFor = (combo: string): ActionId | undefined =>
+  combo ? ACTIONS.find((a) => a.fixed && a.default === combo)?.id : undefined;
 
 /** The action bound to exactly this combo (`fixed` ones such as Esc are handled elsewhere). */
 export function actionFor(combo: string, bindings: Record<string, string>, anyOrder = false): ActionId | undefined {

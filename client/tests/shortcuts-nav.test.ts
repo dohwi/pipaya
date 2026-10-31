@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, actionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -137,7 +137,18 @@ describe("shortcut catalogue", () => {
 		expect(stop.default).toBe("Escape");
 		expect(stop.fixed).toBe(true);
 		expect(ACTIONS.filter((a) => a.id !== "stop" && a.default === "Escape")).toEqual([]);
-		expect(ACTIONS.filter((a) => a.fixed).map((a) => a.id)).toEqual(["stop", "steer"]);
+		expect(ACTIONS.filter((a) => a.fixed).map((a) => a.id)).toEqual(["renameTab", "stop", "steer"]);
+	});
+
+	test("renaming is fixed to F2, shown in Settings, and no other action can take it", () => {
+		const rename = ACTIONS.find((a) => a.id === "renameTab")!;
+		expect(rename.default).toBe(RENAME_KEY);
+		expect(rename.fixed).toBe(true);
+		expect(ACTIONS.filter((a) => a.id !== "renameTab" && a.default === RENAME_KEY)).toEqual([]);
+		expect(fixedActionFor("F2")).toBe("renameTab");
+		expect(fixedActionFor("Escape")).toBe("stop");
+		expect(fixedActionFor("Mod+B")).toBeUndefined();
+		expect(fixedActionFor("")).toBeUndefined();
 	});
 
 	test("steering is fixed to Enter; queueing is rebindable (Alt+Enter by default)", () => {

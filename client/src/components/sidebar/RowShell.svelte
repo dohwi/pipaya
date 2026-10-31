@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RENAME_KEY } from "../../lib/keys";
 	import type { Snippet } from "svelte";
 	import type { ClassValue } from "svelte/elements";
 	import { t } from "../../lib/i18n";
@@ -58,7 +59,7 @@
 	const sb = getSidebarCtx();
 	/** F2 renames the focused row, as in a file manager. */
 	function keys(e: KeyboardEvent) {
-		if (e.key !== "F2" || !current || renaming || (e.target as Element).closest("input")) return;
+		if (e.key !== RENAME_KEY || !current || renaming || (e.target as Element).closest("input")) return;
 		e.preventDefault();
 		if (target.kind === "group") sb.startGroupRename(target.g);
 		else sb.startRename(target.x.id, target.x.title);

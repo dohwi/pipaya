@@ -5,7 +5,7 @@
 	import { onDestroy } from "svelte";
 	import { app } from "../lib/store.svelte";
 	import Icon from "./Icon.svelte";
-	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../lib/keys";
+	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../lib/keys";
 
 	/** `filter` narrows the list by name, hint or key; the Settings search hands it over when a shortcut result is opened. */
 	let { filter = $bindable("") }: { filter?: string } = $props();
@@ -50,6 +50,11 @@
 	}
 
 	function bind(id: ActionId, combo: string) {
+		const owner = fixedActionFor(combo);
+		if (owner) {
+			note = { id, text: t('"{name}"에 고정된 단축키입니다', { name: label(owner) }), bad: true };
+			return;
+		}
 		const taken = app.prefs.setBinding(id, combo);
 		note = taken ? { id, text: t('"{name}"에서 이 단축키를 가져왔습니다', { name: label(taken) }) } : null;
 	}
