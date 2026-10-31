@@ -152,11 +152,10 @@
 	}
 </script>
 
-{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>, boxed = false)}
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="tab"
-				class:boxed
 				class:on
 				class:before={slot?.id === x.id && !slot.after}
 				class:after={slot?.id === x.id && slot.after}
@@ -207,7 +206,7 @@
 				{:else}
 					<span class="t" ondblclick={() => rename.start(x.id, titleOf(x))}>{titleOf(x)}</span>
 				{/if}
-				{#if x.kind === "group" && !boxed}<span class="n mono">{x.members.length}</span>{/if}
+				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
 			</div>
 {/snippet}
@@ -215,16 +214,15 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on:not(.boxed)", radius: "var(--radius-sm)" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
 				{@const boxed = x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || !!app.zoomId)}
-				<!-- one pane of the open group is enlarged (always, on phones): the box reads as a path, "group › its sessions" -->
+				<!-- one pane of the open group is enlarged (always, on phones): the group's tab becomes a box of its sessions; the
+				     group's name is the first step of the page header's "group › session" -->
 				{#if boxed}
 					<div class="gbox">
-						{@render tabItem(x, on, st, true)}
-						<span class="gsep" aria-hidden="true"><Icon name="chevron-right" /></span>
 						<SessionStrip />
 					</div>
 				{:else}
@@ -297,24 +295,6 @@
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
-	}
-	/* the box is the group's selection, so its own tab carries no fill and the session being looked at is the only marked one */
-	.tab.boxed.on,
-	.tabs:global([data-indicator-ready]) .tab.boxed.on {
-		background: transparent;
-	}
-	/* "group › session": the chevron of a path, between the group's name and its sessions */
-	.gsep {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 12px;
-		color: var(--text-faint);
-	}
-	.gsep :global(svg) {
-		width: 12px;
-		height: 12px;
-		stroke-width: 2;
 	}
 	.tab {
 		position: relative;

@@ -17,12 +17,18 @@
 
 	const s = $derived(app.current);
 	const term = $derived(app.terminal(app.activeId));
-	// Wide screens show the whole group at once, so the header names the group rather than one session.
-	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
+	/** The open group: the header reads as a path, "group › the session being looked at" (on every screen size). */
+	const group = $derived(app.activeGroup);
+	/** The session in the group shown alone (a phone, or one pane enlarged), named after the group; none while all panes show. */
+	const crumb = $derived(group && (viewport.narrow || app.isFull(group.id) || app.zoomId) ? (term ?? s) : undefined);
+	const crumbTitle = $derived(crumb ? ("shell" in crumb ? crumb.title : (crumb.title ?? t("대화"))) : "");
 	/** The title being renamed in place: the group's, the terminal's or the conversation's (double click or right click). */
 	const rename = new InlineRename();
-	/** What the title is about, for renaming: nothing for a chat that has no session yet. */
-	const target = $derived(group ? { id: group.id, name: group.name } : term ? { id: term.id, name: term.title } : s ? { id: s.id, name: s.title } : null);
+	/** What the title is about, for renaming: nothing for a chat that has no session yet. With a "group › session" path the
+	 *  session is the current step, so the keyboard and a double click on it rename the session; the group's name renames the group. */
+	const sessionTarget = $derived(term ? { id: term.id, name: term.title } : s ? { id: s.id, name: s.title } : null);
+	const groupTarget = $derived(group ? { id: group.id, name: group.name } : null);
+	const target = $derived(group && !crumb ? groupTarget : sessionTarget);
 	function commitRename() {
 		const done = rename.commit();
 		if (!done) return;
@@ -37,12 +43,15 @@
 	function titleMenu(pt: Point) {
 		if (!target) return;
 		const { id, name } = target;
-		openContextMenu(pt, `title:${id}`, [{ icon: "pencil", label: group ? t("그룹 이름 바꾸기") : t("이름 바꾸기"), title: "", run: () => rename.start(id, name) }]);
+		const items = [{ icon: "pencil" as const, label: group && !crumb ? t("그룹 이름 바꾸기") : t("이름 바꾸기"), title: "", run: () => rename.start(id, name) }];
+		// on a path both steps can be renamed from here
+		if (group && crumb && groupTarget) items.push({ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => rename.start(groupTarget.id, groupTarget.name) });
+		openContextMenu(pt, `title:${id}`, items);
 		return closeContextMenu;
 	}
 	/** What the title shows, also handed to an extension that replaces it. */
 	const heading = $derived(
-		group ? { title: group.name, sub: t("대화 {n}개", { n: panesOf(group.layout).length }) }
+		group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? crumb.cwd.split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
 		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
 		: { title: s?.title ?? t("새 대화"), sub: s ? s.cwd.split(/[\\/]/).slice(-2).join("/") : "" },
 	);
@@ -57,13 +66,18 @@
 
 		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} ondblclick={() => target && rename.start(target.id, target.name)} use:pressMenu={titleMenu}>
-			{#if target && rename.is(target.id)}
+		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} ondblclick={(e) => {
+			// the group's name on a path renames the group; anywhere else the title's own subject
+			const t0 = (e.target as Element).closest(".gname") && groupTarget ? groupTarget : target;
+			if (t0) rename.start(t0.id, t0.name);
+		}} use:pressMenu={titleMenu}>
+			{#if (target && rename.is(target.id)) || (groupTarget && rename.is(groupTarget.id))}
+				{@const renamingGroup = !!groupTarget && rename.is(groupTarget.id)}
 				<input
 					class="rename"
 					value={rename.draft}
-					maxlength={group ? 100 : undefined}
-					aria-label={group ? t("그룹 이름 바꾸기") : t("이름 바꾸기")}
+					maxlength={renamingGroup ? 100 : undefined}
+					aria-label={renamingGroup ? t("그룹 이름 바꾸기") : t("이름 바꾸기")}
 					use:focusSelect
 					oninput={(e) => (rename.draft = e.currentTarget.value)}
 					onblur={commitRename}
@@ -73,8 +87,11 @@
 					}}
 				/>
 			{:else if group}
-				<span class="t">{group.name}</span>
-				<span class="sub mono">{t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
+				<span class="t crumbs">
+					<span class="gname">{group.name}</span>
+					{#if crumb}<span class="sep" aria-hidden="true"><Icon name="chevron-right" /></span><span class="cur">{crumbTitle}</span>{/if}
+				</span>
+				<span class="sub mono">{crumb ? crumb.cwd.split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
 			{:else if term}
 				<span class="t">{term.title}</span>
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
@@ -124,6 +141,38 @@
 		flex-direction: column;
 		justify-content: center;
 		padding: 0 12px; /* with the 4px capsule padding the title text starts at 16: the tab label's and the conversation column's line */
+	}
+	/* "group › session": the group's name is the dimmer first step, the session the current one */
+	.crumbs {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+	}
+	.crumbs .gname {
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 50%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--text-dim);
+	}
+	.crumbs .sep {
+		flex: none;
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+	}
+	.crumbs .sep :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 2;
+	}
+	.crumbs .cur {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.t {
 		font-weight: 600;
