@@ -85,7 +85,7 @@
 				</div>
 			{/if}
 			{#each d.tabs as tab (tab.id)}
-				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: sb.tabHover(d, tab), drop: sb.tabDropAt(n, d, tab) }}
+				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: sb.tabHover(n, d, tab), drop: sb.tabDropAt(n, d, tab) }}
 				{#if tab.kind === "session"}
 					<SessionRow {n} x={tab.session} {drop} />
 				{:else if tab.kind === "terminal"}

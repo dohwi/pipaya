@@ -130,16 +130,25 @@
 	/** The edge a drag over tab `x` means, when it is a reorder. */
 	const reorderEdge = (d: DirBlock, x: string, pt: { x: number; y: number }, carried: string | null = drag.id) =>
 		!searching && carried && carried !== x && ofDir(d, carried) ? edgeAt(pt, isGroupId(carried)) : null;
-	const tabHover = (d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
-		const edge = pt ? reorderEdge(d, x.id, pt) : null;
+	/**
+	 * A pinned tab always leads its folder, so a reorder across that border cannot happen (the list would sort it right
+	 * back): dragging a lone tab to the edge of a row of the other kind opens no gap and drops nothing.
+	 */
+	const acrossPins = (n: Node, d: DirBlock, x: string, carried: string | null) =>
+		!!carried && d.tabs.some((t) => t.id === carried) && app.sidebar.isTabPinned(n.server.id, carried) !== app.sidebar.isTabPinned(n.server.id, x);
+	const tabHover = (n: Node, d: DirBlock, x: Tab) => (pt: { x: number; y: number } | null) => {
+		const raw = pt ? reorderEdge(d, x.id, pt) : null;
+		const blocked = !!raw && acrossPins(n, d, x.id, drag.id);
+		const edge = blocked ? null : raw;
 		marks.setTab(x.id, edge);
-		const pairs = !!pt && !edge && !isGroupId(drag.id) && !(x.kind === "group" && x.members.some((m) => m.id === drag.id));
+		const pairs = !!pt && !raw && !isGroupId(drag.id) && !(x.kind === "group" && x.members.some((m) => m.id === drag.id));
 		marks.hover(x.id, pairs);
 	};
 	const tabDropAt = (n: Node, d: DirBlock, x: Tab) => async (id: string, pt: { x: number; y: number }) => {
 		// drag.id is already cleared when drop runs, so pass the dropped id explicitly
 		const edge = reorderEdge(d, x.id, pt, id);
 		marks.tab = null;
+		if (edge && acrossPins(n, d, x.id, id)) return;
 		if (edge) {
 			if (!d.tabs.some((t) => t.id === id)) await app.leaveGroup(id); // a pane steps out of its group into a tab
 			const now = app.dirs.find((y) => y.path === d.path)?.tabs.map((t) => t.id) ?? d.tabs.map((t) => t.id);

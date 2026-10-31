@@ -64,7 +64,7 @@ export interface SidebarCtx {
 	commitGroupRename(): void;
 	/** Dropping */
 	memberTarget(n: SidebarNode, m: { id: string }): DropOpts;
-	tabHover(d: DirBlock, x: Tab): (pt: { x: number; y: number } | null) => void;
+	tabHover(n: SidebarNode, d: DirBlock, x: Tab): (pt: { x: number; y: number } | null) => void;
 	tabDropAt(n: SidebarNode, d: DirBlock, x: Tab): (id: string, pt: { x: number; y: number }) => Promise<void>;
 	hover(key: string): (pt: unknown) => void;
 	dropOnDir(id: string): void;

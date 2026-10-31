@@ -58,8 +58,11 @@
 		if (anchor) app.sidebar.moveTab(serverId, now, id, anchor, target ? after : true);
 		app.openTab(id);
 	}
+	/** A pinned tab leads the strip, so a lone tab cannot be put across that border (the list would sort it straight back). */
+	const acrossPins = (id: string | null, x: string) =>
+		!!app.serverId && !!id && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) !== app.sidebar.isTabPinned(app.serverId, x);
 	const tabTarget = (x: Tab) => ({
-		accepts: takes,
+		accepts: (id: string) => takes(id) && !acrossPins(id, x.id),
 		hover: (pt: Point | null) => {
 			if (pt && drag.id === x.id) slot = null;
 			else if (pt) slot = { id: x.id, after: sideOf(pt, document.querySelector(`[data-tab="${CSS.escape(x.id)}"]`)) };
@@ -71,7 +74,8 @@
 		},
 	});
 	const stripTarget = {
-		accepts: takes,
+		// the end of the strip is behind every unpinned tab: a pinned one cannot go there
+		accepts: (id: string) => takes(id) && !(!!app.serverId && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) && tabs.some((t) => !app.sidebar.isTabPinned(app.serverId!, t.id))),
 		hover: (pt: Point | null) => (end = !!pt),
 		drop: (id: string) => {
 			end = false;
