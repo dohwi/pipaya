@@ -2,7 +2,7 @@
 	import { t } from "../lib/i18n";
 	import QueueBadge from "./QueueBadge.svelte";
 	import Icon from "./Icon.svelte";
-	import { orderQueued } from "../lib/queue";
+	import { orderQueued, queuedLabel, queuedTone } from "../lib/queue";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 
 	type Queued = { mode: "steer" | "follow_up"; text: string };
@@ -39,10 +39,30 @@
 	let fadeBottom = $state(false);
 	// A slim thumb in the right gutter (outside the ✕ column) shows there is more, also on touch where native bars hide.
 	let thumb = $state<{ top: number; height: number } | null>(null);
+	// Per-mode totals for the summary line, and how many rows are cut off above / below right now. Worked out from the
+	// scroll position and the fixed row pitch (22 + 4), not from measured rows: rows sliding in or out are mid-animation.
+	// A row counts as hidden once less than half of it shows, so the half-visible one is not counted twice.
+	const steerN = $derived(queued.filter((q) => q.mode === "steer").length);
+	const followN = $derived(queued.length - steerN);
+	let hiddenAbove = $state(0);
+	let hiddenBelow = $state(0);
+	function countHidden() {
+		if (!ul) return;
+		const pitch = ROW + GAP;
+		const top = ul.scrollTop;
+		const view = ul.clientHeight;
+		let above = 0;
+		while (above < queued.length && above * pitch - top + ROW < ROW / 2) above++;
+		let below = 0;
+		for (let i = queued.length - 1; i >= above && view - (i * pitch - top) < ROW / 2; i--) below++;
+		hiddenAbove = above;
+		hiddenBelow = below;
+	}
 	function syncFade() {
 		if (!ul) return;
 		fadeTop = ul.scrollTop > 1;
 		fadeBottom = ul.scrollTop + ul.clientHeight < ul.scrollHeight - 1;
+		countHidden();
 		const { scrollTop, clientHeight, scrollHeight } = ul;
 		if (scrollHeight <= clientHeight + 1) return void (thumb = null);
 		const height = Math.max(16, (clientHeight * clientHeight) / scrollHeight);
@@ -50,6 +70,7 @@
 	}
 	$effect(() => {
 		void queued.length;
+		void listH;
 		syncFade();
 	});
 	const THRESHOLD = 4; // px of travel before a press counts as a drag
@@ -75,7 +96,16 @@
 </script>
 
 <div class="queued-wrap">
-{#if thumb}<p class="count" role="status">{t("{n}개 대기 중", { n: queued.length })}</p>{/if}
+{#if thumb}
+	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: queued.length })}>
+		{#if steerN}<span class="c {queuedTone("steer")}" title={queuedLabel({ mode: "steer", text: "", n: steerN })}><Icon name="bolt" />{steerN}</span>{/if}
+		{#if followN}<span class="c {queuedTone("follow_up")}" title={queuedLabel({ mode: "follow_up", text: "", n: followN })}><Icon name="list" />{followN}</span>{/if}
+		<span class="more">
+			{#if hiddenAbove}<span class="m"><span class="flip"><Icon name="chevron-down" /></span>{hiddenAbove}</span>{/if}
+			{#if hiddenBelow}<span class="m"><Icon name="chevron-down" />{hiddenBelow}</span>{/if}
+		</span>
+	</p>
+{/if}
 <div class="scroll">
 {#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
 <ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
@@ -96,12 +126,42 @@
 		position: relative;
 		padding: 8px 12px 0;
 	}
-	/* Shown only while the list scrolls: the total, since the cut-off rows hide the rest. */
+	/* Shown only while the list scrolls: per-mode totals on the left, rows cut off above/below on the right. */
 	.count {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		margin: 0 0 4px;
 		font-size: var(--fs-xs);
 		line-height: 16px;
 		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.c,
+	.m {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.c.warn {
+		color: var(--warn);
+	}
+	.c.info {
+		color: var(--info);
+	}
+	.count :global(svg) {
+		width: 11px;
+		height: 11px;
+		stroke-width: 2.2;
+	}
+	.flip {
+		display: inline-flex;
+		transform: scaleY(-1); /* chevron-down turned up */
+	}
+	.more {
+		margin-left: auto;
+		display: inline-flex;
+		gap: 8px;
 	}
 	.scroll {
 		position: relative;
