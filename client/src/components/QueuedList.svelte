@@ -12,10 +12,11 @@
 	// The list scrolls inside a capped height instead of pushing the input down; the grip above resizes the cap.
 	const MIN_H = 48;
 	const STEP = 24;
-	let height = $state(96);
-	let drag: { y: number; h: number } | null = null;
-	const maxH = () => Math.max(MIN_H, Math.round(window.innerHeight * 0.4));
+	// Caps scale with the window so a short one (phone with the keyboard open) keeps most of its height for the chat.
+	const maxH = () => Math.max(MIN_H, Math.round(window.innerHeight * 0.25));
 	const clamp = (h: number) => Math.min(maxH(), Math.max(MIN_H, h));
+	let height = $state(clamp(Math.min(96, Math.round(window.innerHeight * 0.15))));
+	let drag: { y: number; h: number } | null = null;
 
 	function onDown(e: PointerEvent) {
 		drag = { y: e.clientY, h: height };
