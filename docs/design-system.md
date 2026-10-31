@@ -104,7 +104,7 @@ Columns are **centres**, measured from the sidebar's left edge. Neighbouring col
 | action | 256 | `+`, `⋯`, restore ↺ |
 
 - The card stays **8px** from the sidebar edges and its content stands **12px** inside it (the card's padding, left and right alike), so the left gutter is 28 (edge → chevron centre) and the right gutter 32 (edge → action centre).
-- Buttons in the right-hand columns are **20px** squares with **no margin**, so they sit edge to edge on the 20px grid. The row ends where the card ends.
+- Buttons in the right-hand columns are **20px** squares with **no margin**, so they sit edge to edge on the 20px grid. Folder and server rows end where the card's content ends. A **tab row's highlight** (hover, open, drag) runs **8px past** that edge (`margin-right: -8px` with `padding-right: 8px`), so its `⋯` / pin stay on x 256 but are 8px inside the highlight instead of touching it. The drop line ends 16px before the row's edge for the same reason.
 - The card is `margin: 0 8px` with a 1px border; its inner padding is **8px** left and **12px** right (the toggle adds 4 on the left), so the first and last columns both stand 12px inside the card; the server header strip bleeds to the card's edge.
 - Search box and fold button share the card's left and right edges (8px from the sidebar edge).
 - **Do not let a spacing clean-up touch these.** Values on the sidebar's column path are alignment values, not spacing: `.dirtoggle` / `.srvtoggle`

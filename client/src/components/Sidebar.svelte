@@ -553,7 +553,7 @@
 		:global(:where(.side) .grprow.gfolded .acts) {
 			position: absolute;
 			top: 50%;
-			right: 0;
+			right: 8px; /* the row's own right padding: keeps the "⋯" on x 256 */
 			translate: 0 -50%;
 		}
 		:global(:where(.side) .grprow.gfolded .cbadge) {
@@ -604,7 +604,8 @@
 		display: flex;
 		align-items: center;
 		border-radius: var(--radius-control);
-		margin: 1px 0 1px 4px; /* no right margin: the row's button column is the folder row's */
+		margin: 1px -8px 1px 4px; /* the row's highlight runs 8px past its content (the padding below gives it back), so the "⋯" and pin keep their column (x 256) yet are not glued to the highlight's edge */
+		padding-right: 8px;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	:global(:where(.side) .list .item.nested .open) {
@@ -889,7 +890,7 @@
 	:global(:where(.side) .item.before::before),
 	:global(:where(.side) .item.after::after) {
 		left: 8px;
-		right: 8px;
+		right: 16px; /* 8 from where the content ends (the row's highlight runs 8px past it) */
 	}
 	:global(:where(.side) .item.before::before) {
 		top: -1px;
