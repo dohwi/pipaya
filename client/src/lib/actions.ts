@@ -15,6 +15,7 @@ import {
   keyName,
   MAX_KEYS,
   nextChord,
+  OVERLAY_SELECTOR,
   type ActionId,
 } from "./keys";
 import { chord } from "./chord.svelte";
@@ -345,8 +346,11 @@ export function onShortcut(e: KeyboardEvent) {
   // (it closes them), and so does a text field other than the composer. Handlers that already used the key
   // (e.g. the composer's slash menu) called preventDefault, which returned above.
   if (e.key === "Escape" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+    // An open dialog or menu (a row's or chip's context menu) takes this Esc to close itself: it must not also shrink
+    // the zoomed pane or stop the agent behind it.
+    const overlayOpen = !!document.querySelector(OVERLAY_SELECTOR);
     // A zoomed pane shrinks back first; the next Esc is the usual "stop the agent".
-    if (app.zoomId && !document.querySelector('dialog[open], [role="dialog"], [role="alertdialog"]')) {
+    if (app.zoomId && !overlayOpen) {
       e.preventDefault();
       app.zoomId = null;
       return;
@@ -354,7 +358,7 @@ export function onShortcut(e: KeyboardEvent) {
     const chat = app.chat;
     const stop = escapeShouldStop({
       busy: !!chat && (chat.running || chat.compacting || !!(app.activeId && app.running[app.activeId])),
-      overlayOpen: !!document.querySelector('dialog[open], [role="dialog"], [role="alertdialog"]'),
+      overlayOpen,
       target: e.target as HTMLElement | null,
     });
     if (stop) {

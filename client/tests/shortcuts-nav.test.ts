@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -180,6 +180,11 @@ describe("shortcut catalogue", () => {
 		expect(escapeShouldStop({ ...base, target: { tagName: "INPUT" } })).toBe(false); // rename field, search box
 		expect(escapeShouldStop({ ...base, target: { tagName: "TEXTAREA", dataset: {} } })).toBe(false);
 		expect(escapeShouldStop({ ...base, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
+	});
+
+	test("an open context menu counts as an overlay: its Esc closes it, not the zoomed pane or the agent", () => {
+		expect(OVERLAY_SELECTOR).toContain('[role="menu"]');
+		expect(OVERLAY_SELECTOR).toContain('[role="dialog"]');
 	});
 });
 
