@@ -3,6 +3,7 @@
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { dragScroll } from "../lib/drag-scroll";
+	import { edgeFade } from "../lib/edge-fade";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "./Icon.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
@@ -44,7 +45,7 @@
 </script>
 
 {#if group && items.length}
-	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll>
+	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll use:edgeFade>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{#if rename.is(x.id)}
@@ -104,7 +105,7 @@
 		align-items: center;
 		gap: 4px;
 		height: 22px;
-		max-width: 46vw;
+		max-width: 220px; /* the same cap as a tab of the bar it sits in */
 		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);

@@ -886,6 +886,17 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	opacity: 0.4;
 }
 
+/* lib/edge-fade: a sideways scroller fades only the edge that hides content (16px, like the queued list's ramps) */
+.edge-fade[data-fade-end] {
+	mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.edge-fade[data-fade-start] {
+	mask-image: linear-gradient(to left, #000 calc(100% - 16px), transparent);
+}
+.edge-fade[data-fade-start][data-fade-end] {
+	mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
 /* Sliding selection marker (lib/sliding-indicator.ts, Tabs). Only a change of target animates:
    the action snaps the marker with an inline `transition: none` for first placement and layout reflow. */
 .slide-ind {

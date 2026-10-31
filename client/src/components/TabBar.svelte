@@ -11,6 +11,7 @@
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
 	import { dragScroll } from "../lib/drag-scroll";
+	import { edgeFade } from "../lib/edge-fade";
 	import { rovingKeys } from "../lib/roving";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../lib/nav";
@@ -209,7 +210,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:slidingIndicator={{ selector: ".tab.on:not(.boxed)", radius: "var(--radius-sm)" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on:not(.boxed)", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
