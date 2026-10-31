@@ -69,6 +69,17 @@ export interface RowActions {
 	dissolveGroup(id: string): void;
 	/** Take a pane out of its split tab (only offered for a `member`) */
 	leaveGroup?(id: string): void;
+	/** Pin or unpin a tab (a conversation, terminal or whole split tab; the panes of a split tab follow it); `isPinned` says which the entry offers */
+	togglePin?(id: string): void;
+	isPinned?(id: string): boolean;
+}
+
+/** The pin entry of a tab's menu: a pinned tab stands upright, pinning drives the pin in at the slant a pinned folder's icon has. */
+function pinEntry(id: string, act: RowActions): MenuEntry[] {
+	const pin = act.togglePin;
+	if (!pin) return [];
+	const on = !!act.isPinned?.(id);
+	return [{ icon: "pin", label: on ? t("고정 해제") : t("탭 고정"), title: t("고정하면 폴더의 맨 위에 남습니다"), tilt: on ? 0 : 35, run: () => pin(id) }];
 }
 
 /** The id the menu is open for, so the row's "more" button can stay highlighted. */
@@ -82,6 +93,7 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 	if (target.kind === "group") {
 		const g = target.g;
 		return [
+			...pinEntry(g.id, act),
 			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => act.renameGroup(g) },
 			{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => act.dissolveGroup(g.id) },
 		];
@@ -94,6 +106,8 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 	const leave = act.leaveGroup;
 	const archive = act.archiveSession;
 	return [
+		// a pane of a split tab is pinned with its tab, not alone
+		...(member ? [] : pinEntry(x.id, act)),
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),

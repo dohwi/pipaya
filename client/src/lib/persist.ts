@@ -26,6 +26,7 @@ export const K = {
   tabOrder: "pipaya.taborder", // tab order set by dragging (sidebar and tab bar): { <serverId>: [groupId | sessionId | terminalId, ...] }
   fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
   groupDir: "pipaya.groupdir", // folder a group is listed under, fixed once seen: { <serverId>: { <groupId>: cwd } }
+  pinnedTabs: "pipaya.pinnedtabs", // tabs pinned to the top of their folder: { <serverId>: [groupId | sessionId | terminalId, ...] }
   pinnedDirs: "pipaya.pinneddirs", // folders pinned to the sidebar, kept even with no tabs: { <serverId>: [cwd, ...] }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
 };

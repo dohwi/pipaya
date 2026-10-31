@@ -29,6 +29,7 @@
 
 	const sb = getSidebarCtx();
 	const folded = $derived(sb.isFolded(groupKey(g.id)));
+	const pinned = $derived(app.sidebar.isTabPinned(n.server.id, g.id));
 	const gstate = $derived(mostUrgent(members.map((m) => sb.stateOfId(n, m.id))));
 </script>
 
@@ -51,6 +52,32 @@
 	<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} ondblclick={() => n.current && sb.startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
 		<span class="lead"><Icon name="group" /></span>
 		<RowTitle text={g.name} />
+		{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
 	</button>
 </RowShell>
+
+<style>
+	/* same pin mark as a lone tab's: the "⋯" column (centre x 256), given way to the "⋯" on hover */
+	.open.wide:has(> .tpin) {
+		padding-right: 0;
+	}
+	:global(.item:hover) .tpin,
+	:global(.item:focus-within) .tpin,
+	:global(.item.menuopen) .tpin {
+		display: none;
+	}
+	.tpin {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 20px;
+		height: 20px;
+		color: var(--text-faint);
+	}
+	.tpin :global(svg) {
+		width: 14px;
+		height: 14px;
+		transform: rotate(35deg);
+	}
+</style>

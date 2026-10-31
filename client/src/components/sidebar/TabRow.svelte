@@ -3,6 +3,8 @@
 	import { app } from "../../lib/store.svelte";
 	import { type DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
+	import { t } from "../../lib/i18n";
+	import Icon from "../Icon.svelte";
 	import RowShell from "./RowShell.svelte";
 
 	/**
@@ -29,6 +31,8 @@
 	} = $props();
 
 	const sb = getSidebarCtx();
+	/** A pinned tab sits at the top of its folder; the panes of a split tab are pinned with it, so only a lone tab shows the mark */
+	const pinned = $derived(!member && app.sidebar.isTabPinned(n.server.id, x.id));
 </script>
 
 <RowShell
@@ -48,5 +52,31 @@
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && sb.startRename(x.id, x.title)} title={tip}>
 		{@render body()}
+		{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
 	</button>
 </RowShell>
+
+<style>
+	/* the pin mark sits on the "+" / "⋯" column (centre x 256) like a folded row's count: the open button gives up its right padding, and the "⋯" takes the place while the row is hovered, focused or its menu is open */
+	.open.wide:has(> .tpin) {
+		padding-right: 0;
+	}
+	:global(.item:hover) .tpin,
+	:global(.item:focus-within) .tpin,
+	:global(.item.menuopen) .tpin {
+		display: none;
+	}
+	.tpin {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 20px;
+		height: 20px;
+		color: var(--text-faint);
+	}
+	.tpin :global(svg) {
+		width: 14px;
+		height: 14px;
+		transform: rotate(35deg); /* the slant of a pinned folder's icon */
+	}
+</style>

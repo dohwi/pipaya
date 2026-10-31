@@ -34,6 +34,8 @@ export interface BlockOpts {
 	tabOrder?: readonly string[];
 	/** the folder each group was first listed under (group id -> cwd); kept while one of its panes still works there */
 	groupDir?: Readonly<Record<string, string>>;
+	/** pinned tabs: they come first in their folder, each group in its own hand-set / creation order */
+	pinnedTabs?: readonly string[];
 	/** pinned directories: listed even with no tab in them (an empty block) */
 	keep?: readonly string[];
 }
@@ -86,7 +88,10 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 		return i < 0 ? Number.MAX_SAFE_INTEGER : i;
 	};
 	// placed tabs keep their place; new ones go after them, oldest first (a new tab lands at the end, like an editor's)
-	all.sort((a, b) => trank(a.tab.id) - trank(b.tab.id) || a.created - b.created);
+	// pinned tabs lead their folder; within each part the rule above applies
+	const pinnedTabs = new Set(o.pinnedTabs ?? []);
+	const pin = (id: string) => (pinnedTabs.has(id) ? 0 : 1);
+	all.sort((a, b) => pin(a.tab.id) - pin(b.tab.id) || trank(a.tab.id) - trank(b.tab.id) || a.created - b.created);
 	const by = new Map<string, { tabs: Tab[]; first: number }>();
 	for (const x of all) {
 		const d = by.get(x.cwd);
@@ -118,10 +123,10 @@ export function tabOf(dirs: readonly DirBlock[], id: string | null | undefined):
 }
 
 /** Session and terminal ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
-export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = []): string[] {
+export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = [], pinnedTabs: readonly string[] = []): string[] {
 	const out: string[] = [];
 	const seen = new Set<string>();
-	for (const d of sidebarDirs(sessions, groups, terminals, { dirOrder, tabOrder }))
+	for (const d of sidebarDirs(sessions, groups, terminals, { dirOrder, tabOrder, pinnedTabs }))
 		for (const t of d.tabs) for (const id of tabPanes(t)) if (!seen.has(id)) (seen.add(id), out.push(id));
 	return out;
 }

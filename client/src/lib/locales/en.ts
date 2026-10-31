@@ -988,6 +988,8 @@ export const en: Record<string, string> = {
 	"폴더 고정": "Pin folder",
 	"고정하면 안에 대화가 없어도 사이드바에 남습니다": "A pinned folder stays in the sidebar even with no chats in it",
 	"고정됨": "Pinned",
+	"탭 고정": "Pin tab",
+	"고정하면 폴더의 맨 위에 남습니다": "A pinned tab stays at the top of its folder",
 	"경로를 복사했습니다": "Copied the path",
 	"대화 영구 삭제 · 복구 불가": "Delete chat permanently · can't be undone",
 	"정말 삭제할까요? 복구할 수 없습니다": "Delete it? This can't be undone",

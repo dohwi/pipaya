@@ -29,6 +29,8 @@ export class SidebarState {
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
+  /** Tabs pinned per server: they sit at the top of their folder, in their own order. A split tab is pinned as a whole. */
+  pinnedTabs = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedTabs, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
   tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
 
@@ -59,6 +61,16 @@ export class SidebarState {
     const list = this.pinned[serverId] ?? [];
     this.pinned = { ...this.pinned, [serverId]: list.includes(path) ? list.filter((p) => p !== path) : [...list, path] };
     write(K.pinnedDirs, this.pinned);
+  }
+
+  isTabPinned(serverId: string, id: string): boolean {
+    return (this.pinnedTabs[serverId] ?? []).includes(id);
+  }
+
+  toggleTabPinned(serverId: string, id: string) {
+    const list = this.pinnedTabs[serverId] ?? [];
+    this.pinnedTabs = { ...this.pinnedTabs, [serverId]: list.includes(id) ? list.filter((p) => p !== id) : [...list, id] };
+    write(K.pinnedTabs, this.pinnedTabs);
   }
 
   toggleArchive(key: string) {

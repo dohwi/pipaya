@@ -1360,9 +1360,13 @@ class AppStore {
     return (this.serverId && this.sidebar.tabOrder[this.serverId]) || [];
   }
 
+  get currentPinnedTabs(): string[] {
+    return (this.serverId && this.sidebar.pinnedTabs[this.serverId]) || [];
+  }
+
   /** The open server's working directories and their tabs, in sidebar order. */
   get dirs(): DirBlock[] {
-    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined, keep: this.serverId ? this.sidebar.pinned[this.serverId] : undefined });
+    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined, keep: this.serverId ? this.sidebar.pinned[this.serverId] : undefined, pinnedTabs: this.serverId ? this.sidebar.pinnedTabs[this.serverId] : undefined });
   }
 
   /** The tab the focused pane is in, and its directory. */
@@ -1397,7 +1401,7 @@ class AppStore {
   openDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
     const dirs = ov
-      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId], keep: this.sidebar.pinned[serverId] })
+      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId], keep: this.sidebar.pinned[serverId], pinnedTabs: this.sidebar.pinnedTabs[serverId] })
       : this.dirs;
     const dir = dirs.find((d) => d.path === path);
     if (!dir) return;
@@ -1556,7 +1560,7 @@ class AppStore {
       const pane = sib && (this.lastPane[sib.id] && this.shows(this.lastPane[sib.id]) ? this.lastPane[sib.id] : tabPanes(sib)[0]);
       if (pane) return pane;
     }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals);
+    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals, this.currentPinnedTabs);
     const i = order.indexOf(id);
     return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
   }
