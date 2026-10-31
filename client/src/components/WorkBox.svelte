@@ -98,6 +98,31 @@
 		const s = steps[peekIdx];
 		return s?.kind === "tool" && isImageTool(s.name) && (runs[peekIdx]?.state === "running" || runs[peekIdx]?.state === "pending");
 	});
+	/**
+	 * The picture of the step that just finished (a read picture, a screenshot, a drawn image), shown under the header
+	 * only while the box is live: one at a time, replaced by the next step's. When the box settles it goes away, so
+	 * pictures never pile up here; a generated picture reaches the user through the agent's reply.
+	 */
+	const drawn = $derived.by(() => {
+		if (!active) return [];
+		for (let i = steps.length - 1; i >= 0; i--) {
+			if (steps[i].kind === "tool" && runs[i]?.state === "done" && runs[i]?.images?.length) return runs[i]!.images!;
+			if (steps[i].kind === "tool" && runs[i]?.state !== "done") break; // a step is still running: do not show an older picture next to it
+		}
+		return [];
+	});
+	/** Who drew them: the image model the tool reports (provider/id), by its name when the server lists it. Shown when hovering the picture. */
+	const drawnBy = $derived.by(() => {
+		const ref = steps
+			.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? [runs[i]!] : []))
+			.map((r) => (typeof r.details?.model === "string" ? (r.details.model as string) : ""))
+			.find(Boolean);
+		if (!ref) return null;
+		const cut = ref.indexOf("/");
+		const provider = cut < 0 ? "" : ref.slice(0, cut);
+		const id = cut < 0 ? ref : ref.slice(cut + 1);
+		return app.models.find((m) => m.provider === provider && m.id === id)?.name ?? id;
+	});
 	const awaitingCall = $derived(awaitingIdx >= 0 ? (steps[awaitingIdx] as Extract<Step, { kind: "tool" }>) : null);
 	/** The question the waiting call asks the user (ctx.ask); it is answered right here. */
 	const question = $derived(awaitingIdx >= 0 ? runs[awaitingIdx]?.question : undefined);
@@ -144,6 +169,17 @@
 					{/each}
 				</div>
 			</div>
+		</div>
+	{/if}
+
+	{#if drawn.length}
+		<div class="drawn" in:collapseIn out:collapseOut>
+			{#each drawn as img, i (i)}
+				<button class="zoom" onclick={() => app.openImage(drawn.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
+					<img src={`data:${img.mimeType};base64,${img.data}`} alt={t("이미지")} />
+					{#if drawnBy}<span class="by">{drawnBy}</span>{/if}
+				</button>
+			{/each}
 		</div>
 	{/if}
 
@@ -305,10 +341,76 @@
 		font-style: italic;
 	}
 
-	/* the canvas sits under the header inside the same frame while the picture is drawn; the finished picture goes in the reply, not here */
+	/* the canvas and the latest live picture sit under the header inside the same frame, so the box visibly grows to hold them */
 	.canvas {
 		padding: 4px 12px 12px;
 	}
+	.drawn {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		padding: 4px 12px 12px;
+	}
+	.drawn .zoom {
+		position: relative;
+		display: block;
+		overflow: hidden;
+		padding: 0;
+		border-radius: var(--radius);
+		cursor: zoom-in;
+		animation: develop var(--motion-slow) var(--ease) both;
+	}
+	.drawn img {
+		display: block;
+		max-width: 100%;
+		max-height: 320px;
+		border-radius: var(--radius);
+	}
+	/* who drew it: a caption over the picture's lower edge, shown while the pointer is on it (always on touch screens, which cannot hover) */
+	.drawn .by {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		padding: 24px 8px 8px;
+		background: linear-gradient(to top, rgb(0 0 0 / 0.62), transparent);
+		color: #fff;
+		font-size: var(--fs-xs);
+		line-height: 1.3;
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		opacity: 0;
+		transform: translateY(4px);
+		pointer-events: none;
+		transition: opacity var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
+	}
+	.drawn .zoom:hover .by,
+	.drawn .zoom:focus-visible .by {
+		opacity: 1;
+		transform: none;
+	}
+	@media (pointer: coarse) {
+		.drawn .by {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	/* the picture develops: it comes in sharp from a soft, slightly zoomed-in state, like the canvas resolving */
+	@keyframes develop {
+		from {
+			opacity: 0;
+			filter: blur(14px);
+			transform: scale(1.04);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.drawn .zoom {
+			animation: none;
+		}
+	}
+
 	.list {
 		padding: 4px 16px 16px;
 		overflow-y: auto;
