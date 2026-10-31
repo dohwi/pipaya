@@ -55,16 +55,25 @@ export const shownLevels = (r: Row, matched: CatalogModel | null | undefined): T
 
 /**
  * Turn one strength on or off. The owner's own list wins over the catalog, so a matched model can be narrowed too;
- * picking exactly the catalog's levels again (or none) means "follow the catalog", which is an empty list.
+ * picking exactly the catalog's levels again means "follow the catalog", which is an empty list.
+ * A matched model keeps at least one strength: switching off the last one would read as "no list", i.e. everything
+ * back on, which is the opposite of what the tap meant. (Without a match, none left means "look it up by name".)
  */
 export function toggleLevel(r: Row, matched: CatalogModel | null | undefined, level: ThinkingLevel) {
 	const shown = shownLevels(r, matched);
 	const next = ALL_LEVELS.filter((l) => (l === level ? !shown.includes(l) : shown.includes(l)));
+	if (matched && !next.length) return;
 	const catalog = catalogLevels(matched);
 	r.thinkingLevels = next.length === catalog.length && next.every((l) => catalog.includes(l)) ? [] : next;
 	// The starting strength must stay reachable: switching its level off drops it back to "this device's last choice".
 	if (r.defaultThinkingLevel && !next.includes(r.defaultThinkingLevel)) r.defaultThinkingLevel = undefined;
 }
+
+/** True when this strength is the only one left on a matched model, so its chip cannot be switched off. */
+export const isLastLevel = (r: Row, matched: CatalogModel | null | undefined, level: ThinkingLevel): boolean => {
+	const shown = shownLevels(r, matched);
+	return !!matched && shown.length === 1 && shown[0] === level;
+};
 
 /** Local runtimes that speak the OpenAI-compatible API without a key. The URL is reached from the server, so localhost means the server's machine. */
 export const localPresets = [

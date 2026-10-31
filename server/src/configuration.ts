@@ -48,13 +48,16 @@ function catalogFor(m: { id: string; catalogId?: string | null }) {
 	return (m.catalogId ? catalogMatch(m.catalogId) : undefined) ?? catalogMatch(m.id);
 }
 
-/** The strengths a saved model ends up offering: the owner's own list, else the catalog's, else pi-ai's minimal..high. */
+/**
+ * The strengths a saved model really offers: the owner's own list, else what pi-ai derives from its catalog map. That is
+ * the same rule the model picker lists by, so a strength the picker shows is never refused here. A model with no map
+ * keeps pi-ai's own default set (off through high).
+ */
 function supportedLevelsFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): ThinkingLevel[] {
 	if (m.thinkingLevels?.length) return THINKING_LEVELS.filter((l) => m.thinkingLevels!.includes(l));
 	const map = catalogFor(m)?.map;
-	if (map) return THINKING_LEVELS.filter((l) => map[l] !== null && map[l] !== undefined);
-	// A model with no map at all keeps pi-ai's own default set: off through high (xhigh and max need a mapping).
-	return THINKING_LEVELS.filter((l) => l !== "xhigh" && l !== "max");
+	return getSupportedThinkingLevels({ reasoning: true, ...(map ? { thinkingLevelMap: map } : {}) } as Model<any>)
+		.filter((l): l is ThinkingLevel => (THINKING_LEVELS as readonly string[]).includes(l));
 }
 
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */

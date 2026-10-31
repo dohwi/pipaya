@@ -465,6 +465,7 @@ export const en: Record<string, string> = {
 	"자동으로 찾지 못했습니다. 매칭 모델을 고르거나 아래 값을 직접 입력하세요.": "No automatic match. Pick a matching model or enter the values below by hand.",
 	"추론 강도: {levels}": "Reasoning strengths: {levels}",
 	"선택 가능한 추론 강도": "Available reasoning efforts",
+	"하나는 남겨 두어야 합니다": "At least one must stay on",
 	"매칭된 모델의 기본 지원 강도를 따릅니다. 눌러서 제외할 수 있습니다.": "Follows the matched model's supported efforts. Click to exclude.",
 	"고른 강도만 이 모델에서 선택할 수 있습니다.": "Only the selected efforts can be chosen for this model.",
 	"새 대화 기본 강도": "Default effort for new chats",

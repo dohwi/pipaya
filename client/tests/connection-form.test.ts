@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ALL_LEVELS, applyMatch, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
+import { ALL_LEVELS, applyMatch, isLastLevel, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
@@ -151,6 +151,14 @@ describe("reasoning strengths of a matched model", () => {
 		const kept = row({ defaultThinkingLevel: "high" as const });
 		toggleLevel(kept, c, "max");
 		expect(kept.defaultThinkingLevel).toBe("high");
+	});
+	test("a matched model keeps its last strength: it cannot be switched off into 'everything back on'", () => {
+		const r = row({ thinkingLevels: ["high"] as any });
+		expect(isLastLevel(r, c, "high")).toBe(true);
+		expect(isLastLevel(r, c, "low")).toBe(false);
+		toggleLevel(r, c, "high");
+		expect(r.thinkingLevels).toEqual(["high"]);
+		expect(isLastLevel(row({ thinkingLevels: ["high"] as any }), null, "high")).toBe(false);
 	});
 	test("an unmatched model keeps today's behaviour: on/off, and empty when none is left", () => {
 		const r = row();

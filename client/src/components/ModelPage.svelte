@@ -4,7 +4,7 @@
 	import { t, tc } from "../lib/i18n";
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
-	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
+	import { ALL_LEVELS, isLastLevel, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import type { Api } from "../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../lib/types";
@@ -46,11 +46,32 @@
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
 	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
-	/** Svelte action: when the row scrolls sideways (a phone with many strengths), keep the chosen one in view. */
-	function keepChosenInView(row: HTMLElement, _value: unknown) {
-		const reveal = () => row.querySelector<HTMLElement>("button.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	/**
+	 * Svelte action for the starting-strength row: keeps the chosen strength in view when the row scrolls sideways
+	 * (a phone with many strengths) and marks which edge still has more behind it (`data-more="start end"`), which the
+	 * CSS turns into a soft fade, so a half-cut label reads as "scroll" rather than as a broken layout.
+	 */
+	function sideScroll(row: HTMLElement, _value: unknown) {
+		const mark = () => {
+			const more = [row.scrollLeft > 1 && "start", row.scrollLeft + row.clientWidth < row.scrollWidth - 1 && "end"].filter(Boolean).join(" ");
+			if (more) row.dataset.more = more;
+			else delete row.dataset.more;
+		};
+		const reveal = () => {
+			row.querySelector<HTMLElement>("button.on")?.scrollIntoView({ block: "nearest", inline: "center" });
+			mark();
+		};
+		row.addEventListener("scroll", mark, { passive: true });
+		const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(mark);
+		ro?.observe(row);
 		reveal();
-		return { update: reveal };
+		return {
+			update: reveal,
+			destroy() {
+				row.removeEventListener("scroll", mark);
+				ro?.disconnect();
+			},
+		};
 	}
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
@@ -130,6 +151,8 @@
 						class="cap lv tap"
 						data-level={l}
 						aria-pressed={shown.includes(l)}
+						disabled={isLastLevel(r, matched, l)}
+						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
 						{#if shown.includes(l)}<Icon name="check" />{:else}<span class="dot"></span>{/if}
@@ -153,7 +176,7 @@
 				role="group"
 				aria-label={t("새 대화 기본 강도")}
 				use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}
-				use:keepChosenInView={fallbackLevel}
+				use:sideScroll={fallbackLevel}
 			>
 				<button type="button" class="tap" class:on={fallbackLevel === "auto"} aria-pressed={fallbackLevel === "auto"} onclick={() => (r.defaultThinkingLevel = undefined)}>{t("자동")}</button>
 				{#each levels as l (l)}
@@ -341,10 +364,18 @@
 	}
 	.dseg button {
 		flex: 1 0 auto;
-		min-width: 56px;
-		padding: 0 12px;
+		padding: 0 8px;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
+	}
+	.dseg:global([data-more~="start"]) {
+		mask-image: linear-gradient(to right, transparent, #000 24px);
+	}
+	.dseg:global([data-more~="end"]) {
+		mask-image: linear-gradient(to left, transparent, #000 24px);
+	}
+	.dseg:global([data-more="start end"]) {
+		mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
 	}
 	.dseg button[data-level]:not(.on)::before {
 		content: "";
@@ -368,15 +399,14 @@
 		box-shadow: none;
 	}
 	@media (max-width: 640px) {
-		/* a phone: tighter sides so the usual four or five strengths fit without scrolling */
 		.dseg button {
-			min-width: 0;
-			padding: 0 8px;
 			font-size: var(--fs-xs);
 		}
-		.dseg button[data-level]:not(.on)::before {
-			margin-right: 4px;
-		}
+	}
+	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
+	.cap.lv:disabled {
+		cursor: default;
+		pointer-events: none;
 	}
 	.field[readonly] {
 		color: var(--text-dim);

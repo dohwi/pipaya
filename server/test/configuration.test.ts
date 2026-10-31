@@ -271,6 +271,12 @@ describe("where a model's reasoning strengths come from", () => {
 		expect((await put("src-default-bad2", [{ id: "unknown-model-xyz", reasoning: true, thinkingLevels: ["low", "high"], defaultThinkingLevel: "max" }])).status).toBe(400);
 		expect((await put("src-default-bad3", [{ id: "unknown-model-xyz", reasoning: false, defaultThinkingLevel: "low" }])).status).toBe(400);
 	});
+	test("a default that the picker lists for a catalog model is accepted, even when its map leaves the level out", async () => {
+		// aion-3.0 has no minimal..high in its catalog map: pi-ai still offers them, so the default may be one of them
+		const ok = await put("src-default-implied", [{ id: "aion-3.0", reasoning: true, catalogId: "aion-labs/aion-3.0", defaultThinkingLevel: "medium" }]);
+		expect(ok.status).toBe(200);
+		expect((await api("GET", "/models?provider=src-default-implied")).body.models[0].defaultThinkingLevel).toBe("medium");
+	});
 	test("GET /configuration reports the same", async () => {
 		const found = (await api("GET", "/configuration")).body.providers.find((p: any) => p.id === "src-cat");
 		expect(found.models[0].thinkingSource.catalogId).toBe("openai/gpt-5");
