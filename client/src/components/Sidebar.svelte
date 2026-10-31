@@ -185,7 +185,6 @@
 		closeTerminal: (id) => void app.closeTerminal(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
 		leaveGroup: (id) => void app.leaveGroup(id),
-		groupIdOf: (id) => app.groupOf(id)?.id,
 		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
 	};

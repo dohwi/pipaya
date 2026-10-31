@@ -66,22 +66,13 @@ export interface RowActions {
 	closeTerminal(id: string): void;
 	/** Tuck a conversation into the folder's archive (it stays open; a new message brings it back) */
 	archiveSession?(id: string): void;
-	/** Dissolve a split tab. Only the sidebar passes it, so the tab bar, the chips and the pane bars never offer it. */
+	/** Dissolve a split tab. Only the sidebar passes it, and only the split tab's own row offers it: not its panes, the tab bar, the chips or the pane bars. */
 	dissolveGroup?(id: string): void;
-	/** The split tab a pane belongs to (only for a `member`), what "dissolve" acts on */
-	groupIdOf?(id: string): string | undefined;
 	/** Take a pane out of its split tab (only offered for a `member`) */
 	leaveGroup?(id: string): void;
 	/** Pin or unpin a tab (a conversation, terminal or whole split tab; the panes of a split tab follow it); `isPinned` says which the entry offers */
 	togglePin?(id: string): void;
 	isPinned?(id: string): boolean;
-}
-
-/** The dissolve entry of a split tab's menu, and of its panes' (which dissolve the tab they are in); nothing where `act` cannot dissolve. */
-function dissolveEntry(groupId: string | undefined, act: RowActions): MenuEntry[] {
-	const dissolve = act.dissolveGroup;
-	if (!dissolve || !groupId) return [];
-	return [{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => dissolve(groupId) }];
 }
 
 /** The pin entry of a tab's menu: a pinned tab stands upright, pinning drives the pin in at the slant a pinned folder's icon has. */
@@ -105,7 +96,7 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 		return [
 			...pinEntry(g.id, act),
 			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => act.renameGroup(g) },
-			...dissolveEntry(g.id, act),
+			...(act.dissolveGroup ? [{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => act.dissolveGroup!(g.id) } satisfies MenuEntry] : []),
 		];
 	}
 	const x = target.x;
@@ -121,7 +112,6 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
-		...(member ? dissolveEntry(act.groupIdOf?.(x.id), act) : []),
 		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
 		close,
 	];
