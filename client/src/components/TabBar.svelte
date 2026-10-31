@@ -142,10 +142,11 @@
 	}
 </script>
 
-{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>, boxed = false)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="tab"
+				class:boxed
 				class:on
 				class:before={slot?.id === x.id && !slot.after}
 				class:after={slot?.id === x.id && slot.after}
@@ -204,7 +205,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:slidingIndicator={{ selector: ".tab.on:not(.boxed)", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -212,7 +213,8 @@
 				<!-- one pane of the open group is enlarged (always, on phones): the group's tab and its sessions share one box -->
 				{#if boxed}
 					<div class="gbox">
-						{@render tabItem(x, on, st)}
+						{@render tabItem(x, on, st, true)}
+						<span class="gsep" aria-hidden="true"></span>
 						<SessionStrip />
 					</div>
 				{:else}
@@ -278,11 +280,22 @@
 		align-items: center;
 		gap: 4px;
 		height: 28px;
-		padding-right: 4px;
+		padding: 0 4px;
 		margin-right: 8px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
+	}
+	/* the box is the group's selection, so its own tab carries no fill and the session being looked at is the only marked one */
+	.tab.boxed.on,
+	.tabs:global([data-indicator-ready]) .tab.boxed.on {
+		background: transparent;
+	}
+	.gsep {
+		flex: none;
+		width: 1px;
+		height: 12px; /* a hairline between the group's name and its sessions */
+		background: var(--border-strong);
 	}
 	@media (max-width: 860px) {
 		/* phones: the whole tab bar scrolls instead (same breakpoint as lib/viewport) */
