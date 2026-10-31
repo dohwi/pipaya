@@ -90,6 +90,9 @@ export function toolLabel(name: string): string {
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
 		case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
 		case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
+		case "peer_list": return t("다른 대화 목록과 상태 보기 (peer_list)");
+		case "peer_archive": return t("다른 대화를 보관함으로 이동 (peer_archive)");
+		case "peer_abort": return t("다른 대화의 작업 중단 (peer_abort)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;
 	}

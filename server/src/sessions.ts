@@ -111,6 +111,13 @@ export class SessionManager {
 			isRunning: (id) => this.isRunning(id),
 			deliver: (id, text, mode) => this.send(id, { text, mode }),
 			rename: (id, name) => void this.update(id, { name }),
+			archive: (id, archived) => void this.update(id, { archived }),
+			abort: (id) => this.abort(id),
+			onRunFinished: (fn) => {
+				this.bus.subscribe((e) => {
+					if (e.type === "run_finished" && e.sessionId) fn(e.sessionId, e.data as { status?: string; error?: string | null });
+				});
+			},
 		});
 	}
 
@@ -857,7 +864,13 @@ export class SessionManager {
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, peers: { send: (to, message) => this.peers.send(sessionId, to, message), read: (from, count) => this.peers.read(sessionId, from, count) } };
+		const ctx: ToolContext = { sessionId, peers: {
+			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
+			read: (from, count) => this.peers.read(sessionId, from, count),
+			list: () => this.peers.list(sessionId),
+			archive: (name, archived) => this.peers.archive(sessionId, name, archived),
+			abort: (name) => this.peers.abort(sessionId, name),
+		} };
 		if (q) {
 			ctx.ask = async (toolCallId, req, signal) => {
 				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));

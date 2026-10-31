@@ -108,6 +108,32 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		const g = (await api("POST", "/groups", { name: taken, layout: split(pane(a), pane(b)) })).json;
 		expect(g.name.toLowerCase()).not.toBe(taken.toLowerCase());
 	});
+
+	test("peer_list, notify report and peer_archive let a session manage the others", async () => {
+		const [boss, worker] = [await mk(), await mk()];
+		const wName = await nameOf(worker);
+		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
+		await call("peer_list", {});
+		expect(await said(boss)).toContain(`@${wName}`);
+		// notify: the worker's run ends, the boss gets one report without asking
+		await call("peer_send", { to: wName, message: "do the thing", notify: true });
+		await idle(worker);
+		await Bun.sleep(300);
+		await idle(boss);
+		expect(await said(boss)).toContain(`@${wName} finished its run`);
+		// archive: the finished worker is tucked away, then restored
+		await call("peer_archive", { name: wName });
+		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(true);
+		await call("peer_archive", { name: wName, archived: false });
+		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(false);
+		// a session that was not asked to notify does not report
+		const before = (await said(boss)).split("finished its run").length;
+		await call("peer_send", { to: wName, message: "again" });
+		await idle(worker);
+		await Bun.sleep(300);
+		await idle(boss);
+		expect((await said(boss)).split("finished its run").length).toBe(before);
+	});
 });
 
 describe("old copies of the replaced extensions", () => {

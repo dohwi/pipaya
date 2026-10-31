@@ -32,8 +32,11 @@ export interface ToolContext {
 	ask?(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 	/** Other sessions of this server (`peer_send`, `peer_read`). */
 	peers?: {
-		send(to: string, message: string): Promise<string>;
+		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
 		read(from: string, count: number): string;
+		list(): string;
+		archive(name: string, archived: boolean): string;
+		abort(name: string): string;
 	};
 }
 
@@ -507,10 +510,12 @@ const peerSendTool: ToolDef = {
 			parameters: Type.Object({
 				to: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
 				message: Type.String({ minLength: 1, maxLength: 8000, description: "What to tell or ask; include all context it needs" }),
+				mode: Type.Optional(Type.Union([Type.Literal("follow_up"), Type.Literal("steer")], { description: "Only matters when the target is working. follow_up (default): delivered after its current run. steer: injected into the current run to change its course now." })),
+				notify: Type.Optional(Type.Boolean({ description: "true: the server reports to you once when the target ends its run (no polling needed)" })),
 			}),
 			async execute(_id, params) {
 				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
-				return text(await ctx.peers.send(params.to, params.message), { to: params.to });
+				return text(await ctx.peers.send(params.to, params.message, { mode: params.mode, notify: params.notify }), { to: params.to });
 			},
 		});
 	},
@@ -536,13 +541,67 @@ const peerReadTool: ToolDef = {
 	},
 };
 
+const peerListTool: ToolDef = {
+	name: "peer_list",
+	description: "List the other open sessions on this server with their state.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_list",
+			label: "List sessions",
+			description: "List every other open session (agent) on this server: name, working or idle, archived, title, branch and directory. Use it to see which sessions are done before archiving them.",
+			parameters: Type.Object({}),
+			async execute() {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.list());
+			},
+		});
+	},
+};
+
+const peerArchiveTool: ToolDef = {
+	name: "peer_archive",
+	description: "Archive (or restore) another session on this server.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_archive",
+			label: "Archive a session",
+			description: "Tuck a finished session away in the archive (it stays open; a new message brings it back), or restore it. Only archive sessions whose work is done and merged; a working session is refused. Never archive one that stopped on a problem: report it instead." + PEER_NOTE,
+			parameters: Type.Object({
+				name: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				archived: Type.Optional(Type.Boolean({ description: "true (default) archives, false restores" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.archive(params.name, params.archived ?? true), { name: params.name });
+			},
+		});
+	},
+};
+
+const peerAbortTool: ToolDef = {
+	name: "peer_abort",
+	description: "Stop the current run of another session on this server.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_abort",
+			label: "Stop a session",
+			description: "Stop what another session is doing right now (like the user pressing stop). Use only when it is stuck or going the wrong way; prefer peer_send with mode steer first." + PEER_NOTE,
+			parameters: Type.Object({ name: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }) }),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.abort(params.name), { name: params.name });
+			},
+		});
+	},
+};
+
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, peerSendTool.name, peerReadTool.name];
+export const TOGGLEABLE_TOOLS = [askUserTool.name, peerSendTool.name, peerReadTool.name, peerListTool.name, peerArchiveTool.name, peerAbortTool.name];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
-export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name];
+export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name, peerListTool.name, peerArchiveTool.name, peerAbortTool.name];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, peerSendTool, peerReadTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, peerSendTool, peerReadTool, peerListTool, peerArchiveTool, peerAbortTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

@@ -181,7 +181,7 @@ describe("context API and application", () => {
 			const specs = preview.toolSpecs as { name: string; description: string; parameters: any; source: string; enabled: boolean; bytes: number }[];
 			const bySource = (src: string) => specs.filter((t) => t.source === src).map((t) => t.name);
 			expect(bySource("session")).toEqual(["read"]);
-			expect(bySource("always")).toEqual(["peer_send", "peer_read"]);
+			expect(bySource("always")).toEqual(["peer_send", "peer_read", "peer_list", "peer_archive", "peer_abort"]);
 			expect(specs.every((t) => t.enabled && t.description && t.bytes > t.description.length)).toBe(true);
 			expect(specs.find((t) => t.name === "read")!.parameters).toMatchObject({ type: "object" });
 			// The system's own wording is listed too, each entry with when it applies and its text.

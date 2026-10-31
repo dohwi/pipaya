@@ -100,16 +100,43 @@ export interface PeerHost {
 	groups(): GroupRef[];
 	isRunning(id: string): boolean;
 	/** Queue a user message: `follow_up` while the session works, otherwise `prompt`. */
-	deliver(id: string, text: string, mode: "prompt" | "follow_up"): Promise<unknown>;
+	deliver(id: string, text: string, mode: "prompt" | "steer" | "follow_up"): Promise<unknown>;
 	/** Change a session's name and tell the clients. */
 	rename(id: string, name: string): void;
+	/** Tuck a session away in the archive (or bring it back). */
+	archive(id: string, archived: boolean): void;
+	/** Stop a session's current run; false when there was nothing to stop. */
+	abort(id: string): boolean;
+	/** Calls `fn` whenever any session's run ends. */
+	onRunFinished(fn: (id: string, result: { status?: string; error?: string | null }) => void): void;
 }
 
 export class PeerService {
 	/** `peer_send` calls in each session's current run. */
 	private sends = new Map<string, number>();
 
-	constructor(private host: PeerHost) {}
+	/** Sessions whose end a sender asked to hear about (`peer_send` with notify): target id -> sender ids. One report each, then forgotten. */
+	private watchers = new Map<string, Set<string>>();
+
+	constructor(private host: PeerHost) {
+		host.onRunFinished((id, result) => this.finished(id, result));
+	}
+
+	/** A watched session ended its run: tell each watcher once. The report asks for no reply, so it cannot start a loop. */
+	private finished(id: string, result: { status?: string; error?: string | null }): void {
+		const watching = this.watchers.get(id);
+		if (!watching) return;
+		this.watchers.delete(id);
+		const b = this.brief(id);
+		const name = b?.name ?? this.host.store.get(id)?.name ?? "session";
+		const state = result.status === "ok" || !result.status ? "finished its run" : `ended its run (${result.status}${result.error ? `: ${oneLine(result.error, 200)}` : ""})`;
+		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer_read for more, peer_send for follow-up work, peer_archive when it is done.`;
+		for (const w of watching) {
+			const r = this.host.store.get(w);
+			if (!r || r.closed) continue;
+			void this.host.deliver(w, body, this.host.isRunning(w) ? "follow_up" : "prompt").catch(() => {});
+		}
+	}
 
 	/** Starts a new run of this session: its send allowance is full again. */
 	resetRun(id: string): void {
@@ -176,7 +203,7 @@ export class PeerService {
 	// ── tools ───────────────────────────────────────────────────────────────
 
 	/** `peer_send`: to one session by name, or to every other session of a group by its handle. */
-	async send(selfId: string, to: string, message: string): Promise<string> {
+	async send(selfId: string, to: string, message: string, opts: { mode?: "steer" | "follow_up"; notify?: boolean } = {}): Promise<string> {
 		const name = to.replace(/^@/, "");
 		const all = this.others(selfId);
 		const isSession = all.some((p) => p.name.toLowerCase() === name.toLowerCase());
@@ -190,10 +217,47 @@ export class PeerService {
 		const body = peerMessage(self, message);
 		const done = await Promise.all(targets.map(async (t) => {
 			const busy = this.host.isRunning(t.id);
-			await this.host.deliver(t.id, body, busy ? "follow_up" : "prompt");
-			return `@${t.name}${busy ? " (busy; waits for its turn to end)" : ""}`;
+			const watch = opts.notify ? (this.watchers.get(t.id) ?? new Set<string>()).add(selfId) : undefined;
+			if (watch) this.watchers.set(t.id, watch);
+			try {
+				await this.host.deliver(t.id, body, busy ? (opts.mode ?? "follow_up") : "prompt");
+			} catch (e) {
+				watch?.delete(selfId);
+				if (watch && !watch.size) this.watchers.delete(t.id);
+				throw e;
+			}
+			return `@${t.name}${busy ? (opts.mode === "steer" ? " (busy; steered into its current run)" : " (busy; waits for its turn to end)") : ""}`;
 		}));
-		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; use peer_read to check on them later.`;
+		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; ${opts.notify ? "you get one report when each ends its run" : "use peer_read to check on them later"}.`;
+	}
+
+	/** `peer_list`: every other open session with its state, so an orchestrator sees who is working, idle or archived. */
+	list(selfId: string): string {
+		const rows = this.others(selfId);
+		if (!rows.length) return "No other sessions.";
+		return rows.map((r) => {
+			const parts = [`@${r.name}`, this.host.isRunning(r.id) ? "working" : "idle"];
+			if (r.archived) parts.push("archived");
+			if (r.title) parts.push(`"${oneLine(r.title, 60)}"`);
+			const branch = branchOf(r.cwd);
+			if (branch) parts.push(`branch ${branch}`);
+			parts.push(r.cwd);
+			return `- ${parts.join(" · ")}`;
+		}).join("\n");
+	}
+
+	/** `peer_archive`: tuck a finished session away (or bring it back). A working session is refused: stop it first. */
+	archive(selfId: string, name: string, archived: boolean): string {
+		const peer = this.find(selfId, name.replace(/^@/, ""));
+		if (archived && this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; wait for its report or stop it with peer_abort first`);
+		this.host.archive(peer.id, archived);
+		return `@${peer.name} ${archived ? "archived" : "restored"}.`;
+	}
+
+	/** `peer_abort`: stop the current run of another session. */
+	abort(selfId: string, name: string): string {
+		const peer = this.find(selfId, name.replace(/^@/, ""));
+		return this.host.abort(peer.id) ? `Stopped @${peer.name}.` : `@${peer.name} was not working.`;
 	}
 
 	/** `peer_read`: the latest messages of another session, text only. */

@@ -557,6 +557,9 @@ export const en: Record<string, string> = {
 	"사용자에게 질문하고 답을 기다림 (ask_user)": "Ask you a question and wait (ask_user)",
 	"다른 대화에 메시지 보내기 (peer_send)": "Message another chat (peer_send)",
 	"다른 대화의 최근 내용 읽기 (peer_read)": "Read another chat's recent activity (peer_read)",
+	"다른 대화 목록과 상태 보기 (peer_list)": "List other chats and their state (peer_list)",
+	"다른 대화를 보관함으로 이동 (peer_archive)": "Move another chat to the archive (peer_archive)",
+	"다른 대화의 작업 중단 (peer_abort)": "Stop another chat's work (peer_abort)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */
