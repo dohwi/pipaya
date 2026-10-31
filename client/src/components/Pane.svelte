@@ -94,7 +94,14 @@
 	{#if grouped && id}
 		<header
 			class="bar"
+			tabindex="-1"
 			use:dragSource={{ id, menu: paneMenu, disabled: rename.is(id) }}
+			onkeydown={(e) => {
+				// F2 renames while the title bar has focus; the terminal and the input below keep F2 for themselves
+				if (e.key !== "F2" || rename.is(id) || (e.target as Element).closest("input")) return;
+				e.preventDefault();
+				rename.start(id, titleNow());
+			}}
 			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 전체 화면 전환")}
 			ondblclick={(e) => {
 				if ((e.target as HTMLElement).closest("button, input, .t")) return;

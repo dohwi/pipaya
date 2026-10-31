@@ -56,7 +56,7 @@
 
 		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="title" data-part="header.title" ondblclick={() => target && rename.start(target.id, target.name)} use:pressMenu={titleMenu}>
+		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === "F2" && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} ondblclick={() => target && rename.start(target.id, target.name)} use:pressMenu={titleMenu}>
 			{#if target && rename.is(target.id)}
 				<input
 					class="rename"
