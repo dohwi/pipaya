@@ -12,7 +12,7 @@ import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
-import { estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
+import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
@@ -223,15 +223,15 @@ export class SessionManager {
 		};
 	}
 
-	/** Tokens the next model request will carry (estimated) against the current model's window. */
+	/** Tokens the next model request will carry (last real usage + estimate of what followed) against the model's window. */
 	contextUsage(id: string): { tokens: number | null; contextWindow: number } | null {
 		const record = this.get(id);
 		const model = this.registry.models.getModel(record.provider, record.model);
 		if (!model) return null;
 		const live = this.live.get(id);
 		const messages = live ? live.agent.state.messages : this.projectedMessages(id);
-		const system = live ? live.agent.state.systemPrompt.length / 4 : 0;
-		return { tokens: Math.ceil(system + messages.reduce((n, m) => n + estimateTokens(m), 0)), contextWindow: model.contextWindow };
+		const systemChars = live ? live.agent.state.systemPrompt.length : 0;
+		return { tokens: contextTokens(messages, systemChars, this.store.latestCompaction(id)?.createdAt), contextWindow: model.contextWindow };
 	}
 
 	/** What the model sees for a session: the latest summary, then everything after it. */

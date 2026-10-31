@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { CompactionSettings, estimateTokens, pickCut, thresholdFor } from "../src/compaction.ts";
+import { CompactionSettings, contextTokens, estimateTokens, pickCut, thresholdFor } from "../src/compaction.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -223,5 +223,31 @@ describe("cut selection", () => {
 		expect(estimateTokens(user("abcd".repeat(100)))).toBe(100);
 		expect(thresholdFor(1_000_000)).toBe(900_000);
 		expect(thresholdFor(8192, 50)).toBe(4096);
+	});
+
+	describe("contextTokens", () => {
+		const reply = (total: number, timestamp = 100, extra: object = {}) =>
+			({ role: "assistant", content: [{ type: "text", text: "x" }], timestamp, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: total }, ...extra }) as any;
+
+		test("anchors on the last real usage and adds only what came after it", () => {
+			const msgs = [user("a"), reply(5000), user("abcd".repeat(100))];
+			expect(contextTokens(msgs, 4000)).toBe(5000 + 100);
+		});
+
+		test("sums components when totalTokens is missing; skips aborted and errored replies", () => {
+			const parts = { role: "assistant", content: [], timestamp: 1, usage: { input: 10, output: 5, cacheRead: 20, cacheWrite: 1 } } as any;
+			expect(contextTokens([user("a"), parts], 0)).toBe(36);
+			expect(contextTokens([user("a"), reply(9000, 100, { stopReason: "error" })], 0)).toBe(2);
+		});
+
+		test("estimates everything when no reply has reported usage yet", () => {
+			expect(contextTokens([user("abcd".repeat(100))], 400)).toBe(200);
+		});
+
+		test("ignores usage from before the latest compaction; unknown until a newer reply", () => {
+			const msgs = [user("s"), reply(90_000, 100), user("n")];
+			expect(contextTokens(msgs, 0, 200)).toBeNull();
+			expect(contextTokens([...msgs, reply(12_000, 300)], 0, 200)).toBe(12_000);
+		});
 	});
 });

@@ -90,6 +90,28 @@ export function estimateTokens(m: AgentMessage): number {
 }
 
 /**
+ * What the next request will carry. Anchors on the last real provider usage (input + output + cache, which
+ * covers the system prompt and tool declarations) and adds a chars/4 estimate only for what came after it.
+ * `since` is the latest compaction time: usage reported before it described the pre-compaction context, so it is
+ * ignored, and with no newer reply the size is unknown (null) rather than a misleading estimate.
+ */
+export function contextTokens(messages: AgentMessage[], systemChars: number, since?: number): number | null {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i] as { role?: string; stopReason?: string; timestamp?: number; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number } };
+		if (m.role !== "assistant" || m.stopReason === "aborted" || m.stopReason === "error" || !m.usage) continue;
+		if (since !== undefined && !((m.timestamp ?? 0) > since)) continue;
+		const u = m.usage;
+		const used = u.totalTokens || (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+		if (used <= 0) continue;
+		let trailing = 0;
+		for (let j = i + 1; j < messages.length; j++) trailing += estimateTokens(messages[j]!);
+		return used + trailing;
+	}
+	if (since !== undefined) return null;
+	return Math.ceil(systemChars / 4 + messages.reduce((n, m) => n + estimateTokens(m), 0));
+}
+
+/**
  * Where to cut `messages`: everything before the returned index is summarized, the rest is kept as is. The cut
  * always lands on a user message, so a tool call is never separated from its result. Returns null when there is
  * no earlier user message to cut at (nothing worth summarizing).
