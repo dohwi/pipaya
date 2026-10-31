@@ -152,8 +152,8 @@ describe("pinning a folder", () => {
 describe("the pin entry's lean", () => {
 	const act = { chat: () => {}, terminal: () => {}, toggle: () => {}, togglePin: () => {} };
 	const pin = (pinned: boolean) => headMenuEntries(undefined, false, { ...act, pinned }).find((e) => e.icon === "pin")!;
-	test("pinning stands upright; unpinning leans away from the pinned row's tilt", () => {
-		expect(pin(false).tilt).toBe(0);
-		expect(pin(true).tilt).toBeLessThan(0);
+	test("pinning leans like the pinned folder's icon; unpinning stands upright", () => {
+		expect(pin(false).tilt).toBe(35);
+		expect(pin(true).tilt).toBe(0);
 	});
 });
