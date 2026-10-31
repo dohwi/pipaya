@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent } from "@earendil-works/pi-ai";
+import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -788,6 +788,14 @@ export class SessionManager {
 			} catch (e) {
 				error = e instanceof Error ? e.message : String(e);
 			}
+			// The provider rejected the request because the context is too big: compact once and carry on.
+			if (!error && !live.forceStopped && (await this.recoverFromOverflow(id, live))) {
+				try {
+					await live.agent.continue();
+				} catch (e) {
+					error = e instanceof Error ? e.message : String(e);
+				}
+			}
 			if (live.forceStopped) return; // run_finished was already published when it was cut loose
 			live.running = false;
 			live.lastActive = Date.now();
@@ -805,6 +813,32 @@ export class SessionManager {
 		live.settled = settled;
 		this.pendingRuns.add(settled);
 		void settled.finally(() => this.pendingRuns.delete(settled));
+	}
+
+	/**
+	 * After a run that ended with a context-overflow error from the provider (the automatic threshold check missed it,
+	 * e.g. an estimate that was too low): compact, drop the failed reply and report true so the caller continues.
+	 * Only with automatic compaction on, and never twice in a row (a failed compaction leaves the error as it was).
+	 */
+	private async recoverFromOverflow(id: string, live: Live): Promise<boolean> {
+		if (!this.compaction?.get().auto) return false;
+		const messages = live.agent.state.messages;
+		const last = messages[messages.length - 1];
+		if (last?.role !== "assistant" || last.stopReason !== "error") return false;
+		const window = live.agent.state.model?.contextWindow;
+		if (!isContextOverflow(last, window)) return false;
+		try {
+			await this.compact(id, undefined, "threshold");
+		} catch { return false; } // compact() already published why
+		const after = live.agent.state.messages;
+		const tail = after[after.length - 1];
+		if (tail?.role === "assistant" && tail.stopReason === "error") {
+			this.store.deleteLastMessage(id);
+			live.nextSeq--;
+			live.agent.state.messages = after.slice(0, -1);
+		}
+		const next = live.agent.state.messages[live.agent.state.messages.length - 1];
+		return !!next && next.role !== "assistant" && next.role !== "system";
 	}
 
 	private ensureLive(record: SessionRecord): Live {

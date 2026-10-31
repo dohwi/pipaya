@@ -6,6 +6,7 @@
  *   "hello"            -> streams "Echo: hello"
  *   "!bash <command>"  -> streams a bash tool call, then summarises the tool result
  *   "!<tool> {json}"   -> streams a call to any other tool with JSON args
+ *   "!overflow ..."    -> 400 "maximum context length" until the request carries a compaction summary
  */
 export interface UpstreamRequest {
 	path: string;
@@ -99,6 +100,10 @@ export function startEchoUpstream(): EchoUpstream {
 			if (!path.endsWith("/chat/completions") || !body) return new Response("not found", { status: 404 });
 			// An image request (image models): one JSON answer with a picture and a short note.
 			if (Array.isArray(body.modalities)) return Response.json({ id: "img-echo", choices: [{ message: { content: "Drew it", images: [{ image_url: { url: `data:image/png;base64,${ECHO_PNG}` } }] } }], usage: { prompt_tokens: 5, completion_tokens: 7 } });
+			const msgs: any[] = body.messages ?? [];
+			if (textOf(msgs[msgs.length - 1]?.content).startsWith("!overflow") && !msgs.some((m) => textOf(m.content).includes("was compacted"))) {
+				return Response.json({ error: { message: "This model's maximum context length is 8192 tokens. However, your messages resulted in 9000 tokens.", type: "invalid_request_error", code: "context_length_exceeded" } }, { status: 400 });
+			}
 			const frames = chunks(plan(body.messages ?? []), `call_echo_${++calls}`);
 			let cancelled = false;
 			const enc = new TextEncoder();

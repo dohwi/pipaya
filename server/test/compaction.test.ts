@@ -202,6 +202,29 @@ describe("POST /sessions/:id/compact", () => {
 		expect((await api("POST", `/sessions/${id}/compact`, {})).status).toBe(200);
 	});
 
+	test("a provider context-overflow error triggers one compaction and the run continues", async () => {
+		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 95 });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		await say(id, "!overflow please");
+		const types = app.bus.history({ sessionId: id, after: 0, limit: 500 }).map((e) => e.type);
+		expect(types).toContain("compaction_finished");
+		const fin = app.bus.history({ sessionId: id, after: 0, limit: 500 }).filter((e) => e.type === "run_finished").at(-1)!;
+		expect((fin.data as any).status).toBe("ok");
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json;
+		expect(JSON.stringify(msgs)).not.toContain("maximum context length");
+		await api("PUT", "/compaction", { auto: false, model: null });
+	});
+
+	test("with automatic compaction off, an overflow error is reported as is", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		await say(id, "!overflow please");
+		const fin = app.bus.history({ sessionId: id, after: 0, limit: 500 }).filter((e) => e.type === "run_finished").at(-1)!;
+		expect((fin.data as any).status).toBe("error");
+	});
+
 	test("a prompt sent during a compaction waits for it and is then accepted", async () => {
 		await api("PUT", "/compaction", { auto: false, model: null });
 		const id = await newSession();
