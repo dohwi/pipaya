@@ -189,9 +189,6 @@
 		return undefined;
 	});
 
-	/** The newest units may still be streaming or glowing; everything older can be skipped by the browser while off-screen. */
-	const SETTLED_TAIL = 2;
-
 </script>
 
 <svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} onkeydown={onKeyDown} />
@@ -224,7 +221,7 @@
 			</div>
 		{:else}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
-				<div class="unit" class:settled={n < units.length - SETTLED_TAIL && !(u.kind === "user" && u.item.key === lastUserKey)} class:live={chat.running && n === units.length - 1}>
+				<div class="unit" class:live={chat.running && n === units.length - 1}>
 					{#if u.kind === "notice"}
 						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
 					{:else if u.kind === "entry"}
@@ -253,15 +250,6 @@
 {/if}
 
 <style>
-	/* Long sessions: off-screen turns skip layout and paint. `auto` remembers each turn's last real height.
-	   Only where scroll anchoring exists: a turn swaps its 160px estimate for its real height as it scrolls into view, and
-	   WebKit (macOS Safari / Tauri) cannot anchor that shift, so scrolling up flickered there. */
-	@supports (overflow-anchor: auto) {
-		.unit.settled {
-			content-visibility: auto;
-			contain-intrinsic-size: auto 160px;
-		}
-	}
 	/* The reply being written is rebuilt every frame and only grows at its end. As a scroll anchor it made a reader above the
 	   bottom creep down with the stream (the browser kept "correcting" for nodes that were replaced), so it is left out. */
 	.unit.live {
@@ -291,9 +279,9 @@
 		-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 		mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 		overflow-anchor: none;
-		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script). Scrolled up, anchoring must stay on:
-		   off-screen turns (content-visibility) swap their 160px estimate for the real height as they come into view, and without
-		   anchoring that shifts everything under the reader's eyes, so the list seemed to wobble up and down. */
+		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script); scrolled up, anchoring is on.
+		   No content-visibility on turns: its 160px estimate for off-screen turns was swapped for the real height mid-flick,
+		   and that correction made a fast scroll up stutter. */
 	}
 	.inner {
 		max-width: calc(var(--content-w) + 32px);
