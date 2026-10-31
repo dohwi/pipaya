@@ -30,6 +30,8 @@
 		openContextMenu(pt, `chip:${id}`, [
 			{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => rename.start(id, title) },
 			{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => void app.leaveGroup(id) },
+			// the enlarged group's own tab (with its unlink button) is hidden on wide screens, so the whole group is dissolved from here
+			...(group ? [{ icon: "unlink" as const, label: t("그룹 해제 (대화는 그대로 남습니다)"), title: "", run: () => void app.deleteGroup(group.id) }] : []),
 			term
 				? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => void app.closeTerminal(id) }
 				: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => void app.close(id) },
