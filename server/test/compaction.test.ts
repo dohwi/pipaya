@@ -150,6 +150,38 @@ describe("POST /sessions/:id/compact", () => {
 		expect(types).toContain("context_updated");
 	});
 
+	test("context size follows the last real usage, is unknown right after compaction, and recovers on the next reply", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as { message: any }[];
+		const lastUsage = [...msgs].reverse().find((m) => m.message.role === "assistant")!.message.usage.totalTokens as number;
+		expect(lastUsage).toBeGreaterThan(0);
+		expect((await api("GET", `/sessions/${id}`)).json.context.tokens).toBe(lastUsage);
+		// A reload (no live agent) must give the same figure as the live one.
+		const live = (app.sessions as any).live as Map<string, unknown>;
+		live.delete(id);
+		expect((await api("GET", `/sessions/${id}`)).json.context.tokens).toBe(lastUsage);
+
+		expect((await api("POST", `/sessions/${id}/compact`, {})).status).toBe(200);
+		expect((await api("GET", `/sessions/${id}`)).json.context.tokens).toBeNull();
+		await say(id, "d");
+		const after = (await api("GET", `/sessions/${id}`)).json.context.tokens as number;
+		expect(after).toBeGreaterThan(0);
+	});
+
+	test("kept pre-compaction replies never count as post-compaction usage, even after a reload", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		await api("POST", `/sessions/${id}/compact`, {});
+		const kept = (await api("GET", `/sessions/${id}/messages`)).json.messages as { message: any }[];
+		// The recent exchanges stay in the projection, so a stale reply with usage is still there to be mistaken.
+		expect(kept.some((m) => m.message.role === "assistant" && m.message.usage?.totalTokens > 0)).toBe(true);
+		((app.sessions as any).live as Map<string, unknown>).delete(id);
+		expect((await api("GET", `/sessions/${id}`)).json.context.tokens).toBeNull();
+	});
+
 	test("a summary failure leaves the context alone and reports compaction_failed", async () => {
 		await api("PUT", "/compaction", { auto: false, model: null });
 		const id = await newSession();
