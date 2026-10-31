@@ -1,18 +1,19 @@
 /**
- * A video on the whole screen, played by the page itself.
+ * The video player of a message and of the file preview: the page's own controls over a bare <video>, and a full
+ * screen of its own.
  *
  * The phone app runs in an Android WebView, and wry's `RustWebChromeClient` there cancels HTML5 video fullscreen
- * (`onShowCustomView` hides the custom view again instead of showing it), so the player's own fullscreen button does
- * nothing on a phone. The Fullscreen API is not available in a WebView either. So the player comes with a button of
- * ours that fills the viewport with CSS: it is the same <video> element, so playback carries on and the native
- * controls stay where the user expects them. Desktop browsers get the same button, so there is one way everywhere.
+ * (`onShowCustomView` hides the custom view again instead of showing it), so the native player's fullscreen button does
+ * nothing on a phone, and the Fullscreen API is not available in a WebView either. So the native controls are off and
+ * the player draws its own bar (play, time, seek, mute, full screen). "Full screen" fills the viewport with CSS: it is the
+ * same <video> element, so playback carries on. The look is in `app.css` (`.wd-video*`), one place for every caller.
  *
- * The player leaves the message while it is open (a transformed ancestor would otherwise trap `position: fixed`), so
- * its open state is written as inline styles: the message's scoped rules no longer reach it.
+ * The player leaves the message while it is open (a transformed ancestor would otherwise trap `position: fixed`) and goes
+ * back to where the message drew it on close.
  */
 import { backLayer } from "./dialog";
 import { t } from "./i18n";
-import { ICON_PATHS, type IconName } from "./icons";
+import { ICON_PATHS } from "./icons";
 
 type Shown = {
 	wrap: HTMLDivElement;
@@ -22,80 +23,162 @@ type Shown = {
 	key: (e: KeyboardEvent) => void;
 	/** the body overflow the page had before the video hid it */
 	overflow: string;
-	/** the inline styles the player had before it took the screen, to put back on close */
-	saved: Map<Element, string>;
 };
 
 /** At most one player owns the screen. */
 let shown: Shown | null = null;
 
-const FULL = {
-	wrap: "position: fixed; inset: 0; z-index: var(--z-lightbox); margin: 0; max-width: none; max-height: none; background: #000; border-radius: 0;",
-	// fixed too: a percentage size inside the wrapper would follow the video's own ratio rather than the viewport
-	video: "position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; object-fit: contain; border-radius: 0;",
-	button:
-		"position: absolute; top: 8px; right: 8px; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; color: #fff; background: color-mix(in srgb, #000 55%, transparent); border-radius: var(--radius-control);",
-	icon: "width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round;",
-};
+/** How long the bar stays after the last touch or move while the video plays. */
+const IDLE_MS = 2500;
 
-function icon(name: IconName): SVGElement {
-	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	svg.setAttribute("viewBox", "0 0 24 24");
-	svg.setAttribute("aria-hidden", "true");
-	const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-	path.setAttribute("d", ICON_PATHS[name]);
-	svg.append(path);
-	return svg;
+/** Shapes the line icons lack. Drawn with the same stroke as `ICON_PATHS` (see `.wd-video svg`). */
+const PLAYER_PATHS = {
+	play: "M8 5.5v13l10.5-6.5z",
+	pause: "M8.5 5.5v13M15.5 5.5v13",
+	volume: "M11 5 6.5 9H3.5v6h3L11 19zM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12",
+	muted: "M11 5 6.5 9H3.5v6h3L11 19zM16 9.5l5 5M21 9.5l-5 5",
+} as const;
+
+type Glyph = keyof typeof PLAYER_PATHS | "expand" | "shrink";
+
+function glyph(name: Glyph): string {
+	return name === "expand" || name === "shrink" ? ICON_PATHS[name] : PLAYER_PATHS[name];
 }
 
-function button(className: string, name: IconName, label: string, onpress: () => void): HTMLButtonElement {
+function svg(name: Glyph): SVGSVGElement {
+	const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	el.setAttribute("viewBox", "0 0 24 24");
+	el.setAttribute("aria-hidden", "true");
+	const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+	path.setAttribute("d", glyph(name));
+	el.append(path);
+	return el;
+}
+
+function setGlyph(button: HTMLElement, name: Glyph) {
+	button.querySelector("path")?.setAttribute("d", glyph(name));
+}
+
+function button(className: string, name: Glyph, onpress: () => void): HTMLButtonElement {
 	const el = document.createElement("button");
 	el.type = "button";
-	el.className = `${className} tap`;
-	el.setAttribute("aria-label", label);
-	el.title = label;
-	el.append(icon(name));
+	el.className = `wd-video-btn ${className} tap`;
+	el.append(svg(name));
 	el.addEventListener("click", onpress);
 	return el;
 }
 
-/** The video as a message shows it: the player, our fullscreen button, and the button that leaves the screen. */
+function label(el: HTMLElement, text: string) {
+	el.setAttribute("aria-label", text);
+	el.title = text;
+}
+
+/** 83 → "1:23", 3725 → "1:02:05" */
+export function clock(seconds: number): string {
+	const s = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const ss = String(s % 60).padStart(2, "0");
+	return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+/** The video as a message shows it: a bare <video> under the page's own bar. */
 export function videoPlayer(src: string): HTMLDivElement {
 	const wrap = document.createElement("div");
 	wrap.className = "wd-video-wrap";
 	const video = document.createElement("video");
 	video.src = src;
-	video.controls = true;
+	video.controls = false;
 	video.preload = "metadata";
 	video.playsInline = true;
-	// The browser's own fullscreen button is a dead end on a phone: the player has one, ours, on every platform.
-	video.setAttribute("controlslist", "nofullscreen");
 	video.className = "wd-video";
-	const open = button("wd-video-full", "expand", t("전체 화면"), () => expand(wrap));
-	const close = button("wd-video-close", "x", t("닫기"), () => closeVideoView(wrap));
-	wrap.append(video, open, close);
+
+	const bar = document.createElement("div");
+	bar.className = "wd-video-bar";
+	const play = button("wd-video-play", "play", () => toggle());
+	const time = document.createElement("span");
+	time.className = "wd-video-time";
+	const seek = document.createElement("input");
+	seek.type = "range";
+	seek.className = "wd-video-seek";
+	seek.min = "0";
+	seek.max = "1000";
+	seek.step = "1";
+	seek.value = "0";
+	label(seek, t("재생 위치"));
+	const mute = button("wd-video-mute", "volume", () => (video.muted = !video.muted));
+	const full = button("wd-video-full", "expand", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
+	bar.append(play, time, seek, mute, full);
+	wrap.append(video, bar);
+
+	// ── state → bar
+	let dragging = false;
+	let idle: ReturnType<typeof setTimeout> | undefined;
+	const toggle = () => {
+		if (video.paused || video.ended) void video.play().catch(() => {});
+		else video.pause();
+	};
+	const wake = () => {
+		wrap.classList.remove("idle");
+		clearTimeout(idle);
+		// a paused video keeps its bar; a playing one hides it a moment after the last touch
+		if (!video.paused && !dragging) idle = setTimeout(() => wrap.classList.add("idle"), IDLE_MS);
+	};
+	const paint = () => {
+		const d = video.duration;
+		const known = Number.isFinite(d) && d > 0;
+		if (!dragging) seek.value = known ? String(Math.round((video.currentTime / d) * 1000)) : "0";
+		seek.style.setProperty("--p", `${Number(seek.value) / 10}%`);
+		time.textContent = `${clock(video.currentTime)} / ${clock(known ? d : 0)}`;
+	};
+	const sync = () => {
+		const playing = !video.paused && !video.ended;
+		setGlyph(play, playing ? "pause" : "play");
+		label(play, playing ? t("일시정지") : t("재생"));
+		setGlyph(mute, video.muted || video.volume === 0 ? "muted" : "volume");
+		label(mute, video.muted ? t("소리 켜기") : t("음소거"));
+		const open = shown?.wrap === wrap;
+		setGlyph(full, open ? "shrink" : "expand");
+		label(full, open ? t("전체 화면 닫기") : t("전체 화면"));
+		wrap.classList.toggle("playing", playing);
+		wake();
+	};
+	label(full, t("전체 화면"));
+	for (const ev of ["play", "pause", "ended", "volumechange", "emptied"]) video.addEventListener(ev, sync);
+	for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) video.addEventListener(ev, paint);
+	video.addEventListener("click", () => {
+		// the first tap on a hidden bar only brings it back
+		if (wrap.classList.contains("idle")) wake();
+		else toggle();
+	});
+	video.addEventListener("dblclick", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
+	wrap.addEventListener("pointermove", wake);
+	wrap.addEventListener("pointerdown", wake);
+	wrap.addEventListener("focusin", wake);
+	seek.addEventListener("pointerdown", () => (dragging = true));
+	const drop = () => {
+		dragging = false;
+		wake();
+	};
+	seek.addEventListener("pointerup", drop);
+	seek.addEventListener("pointercancel", drop);
+	seek.addEventListener("input", () => {
+		const d = video.duration;
+		if (Number.isFinite(d) && d > 0) video.currentTime = (Number(seek.value) / 1000) * d;
+		paint();
+	});
+	// the bar follows the full screen state: expand/close call this after they change it
+	wrap.addEventListener("wd-video-state", sync);
+	paint();
+	sync();
 	return wrap;
 }
 
 function expand(wrap: HTMLDivElement) {
 	closeVideoView(); // one at a time
-	const video = wrap.querySelector("video");
-	const open = wrap.querySelector<HTMLElement>(".wd-video-full");
-	const close = wrap.querySelector<HTMLElement>(".wd-video-close");
-	if (!video || !open || !close) return;
 	const mark = document.createComment("video");
 	wrap.replaceWith(mark);
-	/** The open state is inline: the player has left the message, so the message's scoped rules no longer reach it. */
-	const saved = new Map<Element, string>();
-	const set = (el: Element, css: string) => {
-		saved.set(el, el.getAttribute("style") ?? "");
-		el.setAttribute("style", css);
-	};
-	set(wrap, FULL.wrap);
-	set(video, FULL.video);
-	set(open, `${FULL.button} display: none;`);
-	set(close, FULL.button);
-	for (const glyph of wrap.querySelectorAll("svg")) set(glyph, FULL.icon);
+	wrap.classList.add("open");
 	// the page behind stays put while the video has the screen
 	const overflow = document.body.style.overflow;
 	document.body.style.overflow = "hidden";
@@ -109,8 +192,9 @@ function expand(wrap: HTMLDivElement) {
 	};
 	window.addEventListener("keydown", key, true);
 	const flow = backLayer({ onclose: () => closeVideoView(wrap) });
-	shown = { wrap, mark, flow, key, overflow, saved };
-	close.focus({ preventScroll: true });
+	shown = { wrap, mark, flow, key, overflow };
+	wrap.dispatchEvent(new Event("wd-video-state"));
+	wrap.querySelector<HTMLElement>(".wd-video-full")?.focus({ preventScroll: true });
 }
 
 /**
@@ -123,10 +207,11 @@ export function closeVideoView(wrap?: HTMLDivElement) {
 	shown = null;
 	it.flow();
 	window.removeEventListener("keydown", it.key, true);
-	for (const [el, css] of it.saved) el.setAttribute("style", css);
+	it.wrap.classList.remove("open");
 	document.body.style.overflow = it.overflow;
 	// back where the message drew it, unless the message was re-rendered meanwhile (then it is gone for good)
 	if (it.mark.isConnected) it.mark.replaceWith(it.wrap);
 	else it.wrap.remove();
+	it.wrap.dispatchEvent(new Event("wd-video-state"));
 	it.wrap.querySelector<HTMLElement>(".wd-video-full")?.focus({ preventScroll: true });
 }

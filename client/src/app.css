@@ -1321,3 +1321,142 @@ html.dnd {
 	border-radius: 50%;
 	background: var(--danger);
 }
+
+/* The video player (lib/video-view.ts): a bare <video> under a bar of our own. The bar floats over the bottom edge and
+   hides a moment after the last touch while the video plays. Open (`.open`), the player fills the viewport. */
+.wd-video-wrap {
+	position: relative;
+	display: block;
+	width: fit-content;
+	max-width: 100%;
+	overflow: hidden;
+	border-radius: var(--radius);
+	background: #000;
+	color: #fff;
+}
+.wd-video {
+	display: block;
+	max-width: 100%;
+	max-height: 420px;
+	margin: 0;
+	background: #000;
+}
+.wd-video-bar {
+	position: absolute;
+	inset: auto 0 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 24px 8px 8px;
+	background: linear-gradient(transparent, color-mix(in srgb, #000 70%, transparent));
+	transition: opacity var(--motion-fast) var(--ease-std);
+}
+.wd-video-wrap.idle .wd-video-bar {
+	opacity: 0;
+	pointer-events: none;
+}
+.wd-video-wrap.idle {
+	cursor: none;
+}
+.wd-video-btn {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 32px;
+	height: 32px;
+	color: #fff;
+	border-radius: var(--radius-control);
+	transition: background var(--motion-fast) var(--ease-std);
+}
+.wd-video-btn:hover {
+	background: color-mix(in srgb, #fff 20%, transparent);
+}
+.wd-video-wrap svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.wd-video-play svg path {
+	fill: currentColor; /* the play triangle is solid; the pause bars are strokes, a fill adds nothing to them */
+}
+.wd-video-time {
+	flex: none;
+	font-size: var(--fs-xs);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.wd-video-seek {
+	flex: 1;
+	min-width: 0;
+	height: 32px;
+	margin: 0;
+	background: transparent;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+}
+.wd-video-seek::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: var(--radius-pill);
+	background: linear-gradient(to right, #fff var(--p, 0%), color-mix(in srgb, #fff 30%, transparent) var(--p, 0%));
+}
+.wd-video-seek::-moz-range-track {
+	height: 4px;
+	border-radius: var(--radius-pill);
+	background: color-mix(in srgb, #fff 30%, transparent);
+}
+.wd-video-seek::-moz-range-progress {
+	height: 4px;
+	border-radius: var(--radius-pill);
+	background: #fff;
+}
+.wd-video-seek::-webkit-slider-thumb {
+	width: 12px;
+	height: 12px;
+	margin-top: -4px; /* centres the 12px thumb on the 4px track */
+	border: 0;
+	border-radius: 50%;
+	background: #fff;
+	appearance: none;
+	-webkit-appearance: none;
+}
+.wd-video-seek::-moz-range-thumb {
+	width: 12px;
+	height: 12px;
+	border: 0;
+	border-radius: 50%;
+	background: #fff;
+}
+.wd-video-seek:focus-visible {
+	outline: none;
+}
+.wd-video-btn:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: -2px;
+}
+/* open: the wrapper and the video are both fixed, so the video's own ratio never sizes the screen */
+.wd-video-wrap.open {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-lightbox);
+	width: auto;
+	max-width: none;
+	margin: 0;
+	border-radius: 0;
+}
+.wd-video-wrap.open .wd-video {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	max-height: none;
+	object-fit: contain;
+}
+.wd-video-wrap.open .wd-video-bar {
+	padding: 24px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+}

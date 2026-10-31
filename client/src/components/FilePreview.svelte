@@ -201,44 +201,12 @@
 		max-height: calc(var(--dvh) * 0.70);
 		border-radius: var(--radius);
 	}
-	/* the player is built by hand (lib/video-view.ts), so its rules reach it as globals */
-	.videohost :global(.wd-video-wrap) {
-		position: relative;
-		width: fit-content;
-		max-width: 100%;
-		margin: 0 auto;
+	.videohost {
+		display: grid;
+		justify-items: center;
 	}
 	.videohost :global(.wd-video) {
-		display: block;
-		max-width: 100%;
 		max-height: calc(var(--dvh) * 0.70);
-		border-radius: var(--radius);
-		background: #000;
-	}
-	.videohost :global(.wd-video-full),
-	.videohost :global(.wd-video-close) {
-		position: absolute;
-		top: 8px;
-		right: 8px;
-		display: grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		color: #fff;
-		background: color-mix(in srgb, #000 55%, transparent);
-		border-radius: var(--radius-control);
-	}
-	.videohost :global(.wd-video-close) {
-		display: none;
-	}
-	.videohost :global(.wd-video-wrap svg) {
-		width: 18px;
-		height: 18px;
-		fill: none;
-		stroke: currentColor;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	.tablewrap {
 		overflow: auto;

@@ -342,53 +342,9 @@
 		color: var(--text-faint);
 		font-size: var(--fs-xs);
 	}
-	/* A video player: the video and the two buttons of its own (built in lib/video-view.ts). The buttons sit over the
-	   top-right corner, where the native controls never are, and the player is handed the whole screen from there. */
+	/* the video player (lib/video-view.ts) is styled in app.css; a message only gives it room */
 	.md :global(.wd-video-wrap) {
-		position: relative;
-		display: block;
-		width: fit-content;
-		max-width: 100%;
 		margin: 0 0 0.85em;
-	}
-	.md :global(.wd-video) {
-		display: block;
-		max-width: 100%;
-		max-height: 420px;
-		margin: 0;
-		border-radius: var(--radius);
-		background: #000;
-	}
-	.md :global(.wd-video-full),
-	.md :global(.wd-video-close) {
-		position: absolute;
-		top: 8px;
-		right: 8px;
-		display: grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		color: #fff;
-		background: color-mix(in srgb, #000 55%, transparent);
-		border-radius: var(--radius-control);
-		transition: background var(--motion-fast) var(--ease-std);
-	}
-	.md :global(.wd-video-full:hover),
-	.md :global(.wd-video-close:hover) {
-		background: color-mix(in srgb, #000 80%, transparent);
-	}
-	/* the close button belongs to the whole screen: lib/video-view.ts shows it there */
-	.md :global(.wd-video-close) {
-		display: none;
-	}
-	.md :global(.wd-video-wrap svg) {
-		width: 18px;
-		height: 18px;
-		fill: none;
-		stroke: currentColor;
-		stroke-width: 1.9;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 	.md :global(.wd-audio) {
 		display: block;
