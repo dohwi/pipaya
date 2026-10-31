@@ -5,12 +5,12 @@
 	import { ICON_LABEL } from "../lib/brand";
 	import { isImageIcon } from "../lib/model-icon-image";
 	import { ALL_LEVELS, shownLevels, toggleLevel, type Row } from "../lib/connection-form";
+	import { slidingIndicator } from "../lib/sliding-indicator";
 	import type { Api } from "../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../lib/types";
 	import Icon from "./Icon.svelte";
 	import Badge from "./Badge.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
-	import Select from "./Select.svelte";
 
 	/**
 	 * One model's page inside the connection dialog: id, OpenRouter match, display name and icon, limits, capabilities
@@ -46,6 +46,12 @@
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
 	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
+	/** Svelte action: when the row scrolls sideways (a phone with many strengths), keep the chosen one in view. */
+	function keepChosenInView(row: HTMLElement, _value: unknown) {
+		const reveal = () => row.querySelector<HTMLElement>("button.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		reveal();
+		return { update: reveal };
+	}
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
 
@@ -121,12 +127,12 @@
 				{#each ALL_LEVELS as l (l)}
 					<button
 						type="button"
-						class="cap tap"
+						class="cap lv tap"
 						data-level={l}
 						aria-pressed={shown.includes(l)}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						<span class="dot"></span>
+						{#if shown.includes(l)}<Icon name="check" />{:else}<span class="dot"></span>{/if}
 						<span>{l}</span>
 					</button>
 				{/each}
@@ -141,14 +147,19 @@
 				{/if}
 			</p>
 
-			<label>
-				<span>{t("새 대화 기본 강도")}</span>
-				<Select
-					value={fallbackLevel}
-					options={[{ value: "auto", label: t("자동") }, ...levels.map((l) => ({ value: l, label: l }))]}
-					onchange={(v) => (r.defaultThinkingLevel = v === "auto" ? undefined : v)}
-				/>
-			</label>
+			<div class="section-label">{t("새 대화 기본 강도")}</div>
+			<div
+				class="seg dseg"
+				role="group"
+				aria-label={t("새 대화 기본 강도")}
+				use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}
+				use:keepChosenInView={fallbackLevel}
+			>
+				<button type="button" class="tap" class:on={fallbackLevel === "auto"} aria-pressed={fallbackLevel === "auto"} onclick={() => (r.defaultThinkingLevel = undefined)}>{t("자동")}</button>
+				{#each levels as l (l)}
+					<button type="button" class="tap" class:on={fallbackLevel === l} aria-pressed={fallbackLevel === l} data-level={l} onclick={() => (r.defaultThinkingLevel = l)}>{l}</button>
+				{/each}
+			</div>
 			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 		</section>
 	{/if}
@@ -286,30 +297,86 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	.cap[data-level] {
+	/* the strengths this model offers: on = its own colour + a check, off = faded with a hollow dot */
+	.cap.lv {
 		gap: 6px;
 	}
-	.cap[data-level] .dot {
-		display: inline-block;
+	.cap.lv .dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: var(--lv);
-		opacity: 0.45;
-		transition: opacity var(--motion-fast) var(--ease-std), scale var(--motion-fast) var(--ease-std);
+		border: 1px solid var(--lv);
+		opacity: 0.6;
 	}
-	.cap[data-level]:hover .dot {
-		opacity: 0.8;
+	.cap.lv:not([aria-pressed="true"]) {
+		background: transparent;
+		border-style: dashed;
+		color: var(--text-faint);
+		font-weight: 450;
 	}
-	.cap[data-level][aria-pressed="true"] {
+	.cap.lv:not([aria-pressed="true"]):hover {
+		background: var(--bg-hover);
+		color: var(--text-dim);
+	}
+	.cap.lv[aria-pressed="true"] {
 		background: var(--lv-soft);
 		border-color: color-mix(in srgb, var(--lv) 45%, transparent);
 		color: var(--lv);
 		font-weight: 600;
 	}
-	.cap[data-level][aria-pressed="true"] .dot {
-		opacity: 1;
-		scale: 1.15;
+	.cap.lv[aria-pressed="true"] :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 2.4;
+	}
+	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
+	.dseg {
+		display: flex;
+		width: 100%;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.dseg::-webkit-scrollbar {
+		display: none;
+	}
+	.dseg button {
+		flex: 1 0 auto;
+		min-width: 56px;
+		padding: 0 12px;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+	}
+	.dseg button[data-level]:not(.on)::before {
+		content: "";
+		display: inline-block;
+		width: 5px;
+		height: 5px;
+		margin-right: 6px;
+		border-radius: 50%;
+		background: var(--lv);
+		opacity: 0.55;
+		vertical-align: 1px;
+	}
+	.dseg button.on {
+		background: var(--lv-soft, var(--bg-active));
+		color: var(--lv, var(--text));
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv, var(--border-strong)) 45%, transparent);
+		font-weight: 600;
+	}
+	.dseg:global([data-indicator-ready]) button.on {
+		background: transparent;
+		box-shadow: none;
+	}
+	@media (max-width: 640px) {
+		/* a phone: tighter sides so the usual four or five strengths fit without scrolling */
+		.dseg button {
+			min-width: 0;
+			padding: 0 8px;
+			font-size: var(--fs-xs);
+		}
+		.dseg button[data-level]:not(.on)::before {
+			margin-right: 4px;
+		}
 	}
 	.field[readonly] {
 		color: var(--text-dim);
