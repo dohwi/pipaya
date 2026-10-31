@@ -9,6 +9,7 @@
 	import Markdown from "./Markdown.svelte";
 	import Modal from "./Modal.svelte";
 	import { saveFile } from "../lib/save-file";
+	import { closeVideoView, videoPlayer } from "../lib/video-view";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
 	const open = $derived(app.filePreview);
@@ -27,6 +28,16 @@
 	let htmlUrl = $state<string | null>(null);
 	/** The browser could not play the audio/video (broken file, or a codec it lacks such as HEVC) */
 	let mediaFailed = $state(false);
+
+	/** where the video player (lib/video-view.ts) is drawn: it has a full-screen button of its own, which a phone WebView lacks natively */
+	let videoHost = $state<HTMLElement>();
+	$effect(() => {
+		if (kind !== "video" || !url || mediaFailed || !videoHost) return;
+		const player = videoPlayer(url);
+		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
+		videoHost.replaceChildren(player);
+		return () => closeVideoView(player);
+	});
 
 	const kind = $derived(open ? previewKind(open.file.name, open.file.mimeType) : "other");
 
@@ -118,8 +129,7 @@
 				<!-- svelte-ignore a11y_media_has_caption -->
 				<audio class="media" src={url} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
 			{:else if kind === "video" && url}
-				<!-- svelte-ignore a11y_media_has_caption -->
-				<video class="media" src={url} controls preload="metadata" playsinline onerror={() => (mediaFailed = true)}></video>
+				<div class="videohost" bind:this={videoHost}></div>
 			{:else if kind === "html" && htmlUrl && !source}
 				<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
 				<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={open.file.name}></iframe>
@@ -190,6 +200,45 @@
 		width: 100%;
 		max-height: calc(var(--dvh) * 0.70);
 		border-radius: var(--radius);
+	}
+	/* the player is built by hand (lib/video-view.ts), so its rules reach it as globals */
+	.videohost :global(.wd-video-wrap) {
+		position: relative;
+		width: fit-content;
+		max-width: 100%;
+		margin: 0 auto;
+	}
+	.videohost :global(.wd-video) {
+		display: block;
+		max-width: 100%;
+		max-height: calc(var(--dvh) * 0.70);
+		border-radius: var(--radius);
+		background: #000;
+	}
+	.videohost :global(.wd-video-full),
+	.videohost :global(.wd-video-close) {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		color: #fff;
+		background: color-mix(in srgb, #000 55%, transparent);
+		border-radius: var(--radius-control);
+	}
+	.videohost :global(.wd-video-close) {
+		display: none;
+	}
+	.videohost :global(.wd-video-wrap svg) {
+		width: 18px;
+		height: 18px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.9;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.tablewrap {
 		overflow: auto;
