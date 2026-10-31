@@ -10,6 +10,7 @@ import {
   actionFor,
   buildCombo,
   escapeShouldStop,
+  escapeShouldUnzoom,
   hasLongerBinding,
   isBareCombo,
   keyName,
@@ -349,8 +350,8 @@ export function onShortcut(e: KeyboardEvent) {
     // An open dialog or menu (a row's or chip's context menu) takes this Esc to close itself: it must not also shrink
     // the zoomed pane or stop the agent behind it.
     const overlayOpen = !!document.querySelector(OVERLAY_SELECTOR);
-    // A zoomed pane shrinks back first; the next Esc is the usual "stop the agent".
-    if (app.zoomId && !overlayOpen) {
+    // A zoomed pane shrinks back first; the next Esc is the usual "stop the agent". A rename field's Esc only cancels it.
+    if (app.zoomId && escapeShouldUnzoom({ overlayOpen, target: e.target as HTMLElement | null })) {
       e.preventDefault();
       app.zoomId = null;
       return;
