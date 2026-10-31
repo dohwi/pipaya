@@ -192,6 +192,12 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id: s.id, name });
 		}
 	},
+	// v27: sessions that asked to hear about another session's end or question (peer_send notify / peer_create); survives restarts.
+	`CREATE TABLE IF NOT EXISTS peer_watch (
+		target_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		watcher_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		PRIMARY KEY (target_id, watcher_id)
+	);`,
 ];
 
 export function openDb(path: string): Database {

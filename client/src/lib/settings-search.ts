@@ -93,6 +93,10 @@ export function toolLabel(name: string): string {
 		case "peer_list": return t("다른 대화 목록과 상태 보기 (peer_list)");
 		case "peer_archive": return t("다른 대화를 보관함으로 이동 (peer_archive)");
 		case "peer_abort": return t("다른 대화의 작업 중단 (peer_abort)");
+		case "peer_answer": return t("다른 대화가 기다리는 질문에 답하기 (peer_answer)");
+		case "peer_create": return t("새 대화를 만들어 작업 맡기기 (peer_create)");
+		case "peer_manage": return t("다른 대화 닫기·재개·삭제·이름 변경 (peer_manage)");
+		case "peer_group": return t("대화들을 그룹으로 묶기 (peer_group)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;
 	}

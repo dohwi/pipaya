@@ -134,6 +134,101 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		await idle(boss);
 		expect((await said(boss)).split("finished its run").length).toBe(before);
 	});
+
+	test("peer_create starts a session on a task and reports back; peer_manage closes, renames and deletes it", async () => {
+		const boss = await mk();
+		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
+		const before = (await api("GET", "/sessions")).json.sessions.map((x: any) => x.id);
+		await call("peer_create", { message: "build the thing", title: "built", purpose: "builder" });
+		const kid = (await api("GET", "/sessions")).json.sessions.find((x: any) => !before.includes(x.id));
+		expect(kid.title).toBe("built");
+		expect(kid.purpose).toBe("builder");
+		expect(kid.parentId).toBe(boss);
+		await idle(kid.id);
+		await Bun.sleep(300);
+		await idle(boss);
+		expect(await said(kid.id)).toContain("build the thing");
+		expect(await said(boss)).toContain(`@${kid.name} finished its run`); // notify defaults on
+		// rename: a free name works, a taken or invalid one is refused
+		await call("peer_manage", { name: kid.name, action: "rename", newName: "builder-1" });
+		expect(await nameOf(kid.id)).toBe("builder-1");
+		await call("peer_manage", { name: "builder-1", action: "rename", newName: "bad name!" });
+		expect(await nameOf(kid.id)).toBe("builder-1");
+		await call("peer_manage", { name: "builder-1", action: "set", purpose: "reviewer" });
+		expect((await api("GET", `/sessions/${kid.id}`)).json.purpose).toBe("reviewer");
+		// close and resume
+		await call("peer_manage", { name: "builder-1", action: "close" });
+		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(true);
+		await call("peer_manage", { name: "builder-1", action: "resume" });
+		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(false);
+		// delete works on what the boss created, and only on that
+		const other = await mk();
+		await call("peer_manage", { name: await nameOf(other), action: "delete" });
+		expect((await api("GET", `/sessions/${other}`)).status).toBe(200);
+		await call("peer_manage", { name: "builder-1", action: "delete" });
+		expect((await api("GET", `/sessions/${kid.id}`)).status).toBe(404);
+	});
+
+	test("a watcher hears a question and answers it with peer_answer", async () => {
+		const [boss, worker] = [await mk(), await mk()];
+		const wName = await nameOf(worker);
+		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
+		// the boss watches the worker, then the worker asks its user something
+		await call("peer_send", { to: wName, message: "hi", notify: true });
+		await idle(worker);
+		await Bun.sleep(300);
+		await idle(boss);
+		await call("peer_send", { to: wName, message: "again", notify: true });
+		await idle(worker);
+		await Bun.sleep(300);
+		await idle(boss);
+		await api("POST", `/sessions/${worker}/messages`, { text: `!ask_user ${JSON.stringify({ question: "which color?", options: ["red", "blue"], allowFreeText: false })}` });
+		for (let i = 0; i < 100 && !(await api("GET", `/questions?sessionId=${worker}`)).json.questions.length; i++) await Bun.sleep(25);
+		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toHaveLength(1);
+		await call("peer_read", { from: wName });
+		expect(await said(boss)).toContain("waits for an answer");
+		// a wrong answer is refused, the right one releases the worker
+		await call("peer_answer", { name: wName, answer: "green" });
+		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toHaveLength(1);
+		await call("peer_answer", { name: wName, answer: "blue" });
+		await idle(worker);
+		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toEqual([]);
+		expect(await said(worker)).toContain("blue");
+	});
+
+	test("peer_read detail shows tool calls and errors; cancel_queued lists what waits; a deleted watcher leaves no trace", async () => {
+		const [boss, worker] = [await mk(), await mk()];
+		const wName = await nameOf(worker);
+		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
+		await api("POST", `/sessions/${worker}/messages`, { text: "!bash echo detail-marker" });
+		await idle(worker);
+		await call("peer_read", { from: wName });
+		expect(await said(boss)).not.toContain("tool result bash");
+		await call("peer_read", { from: wName, detail: true });
+		expect(await said(boss)).toContain("tool result bash");
+		await call("peer_manage", { name: wName, action: "cancel_queued" });
+		expect(await said(boss)).toContain(`Nothing is queued for @${wName}`);
+		// watching a session and then deleting the watcher must not break the target's next run end
+		await call("peer_send", { to: wName, message: "x", notify: true });
+		await api("DELETE", `/sessions/${boss}`);
+		await idle(worker);
+		await Bun.sleep(200);
+		expect((await api("GET", `/sessions/${worker}/status`)).status).toBe(200);
+	});
+
+	test("peer_group builds, extends and dissolves a group", async () => {
+		const [boss, a, b] = [await mk(), await mk(), await mk()];
+		const call = async (args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!peer_group ${JSON.stringify(args)}` }); await idle(boss); };
+		await call({ action: "create", name: "crew", members: [await nameOf(a), await nameOf(b)] });
+		let groups = (await api("GET", "/groups")).json.groups;
+		expect(groups.map((g: any) => g.name)).toContain("crew");
+		await call({ action: "add", group: "crew", members: [await nameOf(boss)] });
+		const g = (await api("GET", "/groups")).json.groups.find((x: any) => x.name === "crew");
+		expect(JSON.stringify(g.layout)).toContain(boss);
+		await call({ action: "dissolve", group: "crew" });
+		groups = (await api("GET", "/groups")).json.groups;
+		expect(groups.map((x: any) => x.name)).not.toContain("crew");
+	});
 });
 
 describe("old copies of the replaced extensions", () => {

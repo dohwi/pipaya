@@ -157,6 +157,20 @@ export class SessionStore {
 		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
 	}
 
+	/** `watcher` wants a report about `target` (its end, its questions). */
+	watch(target: string, watcher: string): void {
+		this.db.query("INSERT OR IGNORE INTO peer_watch (target_id, watcher_id) VALUES ($target, $watcher)").run({ target, watcher });
+	}
+
+	unwatch(target: string, watcher?: string): void {
+		if (watcher) this.db.query("DELETE FROM peer_watch WHERE target_id = $target AND watcher_id = $watcher").run({ target, watcher });
+		else this.db.query("DELETE FROM peer_watch WHERE target_id = $target").run({ target });
+	}
+
+	watchers(target: string): string[] {
+		return (this.db.query("SELECT watcher_id FROM peer_watch WHERE target_id = $target").all({ target }) as { watcher_id: string }[]).map((r) => r.watcher_id);
+	}
+
 	activeCount(): number {
 		return (this.db.query("SELECT COUNT(*) AS n FROM sessions WHERE closed = 0").get() as { n: number }).n;
 	}

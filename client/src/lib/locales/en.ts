@@ -560,6 +560,10 @@ export const en: Record<string, string> = {
 	"다른 대화 목록과 상태 보기 (peer_list)": "List other chats and their state (peer_list)",
 	"다른 대화를 보관함으로 이동 (peer_archive)": "Move another chat to the archive (peer_archive)",
 	"다른 대화의 작업 중단 (peer_abort)": "Stop another chat's work (peer_abort)",
+	"다른 대화가 기다리는 질문에 답하기 (peer_answer)": "Answer a question another chat is waiting on (peer_answer)",
+	"새 대화를 만들어 작업 맡기기 (peer_create)": "Start a new chat with a task (peer_create)",
+	"다른 대화 닫기·재개·삭제·이름 변경 (peer_manage)": "Close, resume, delete or rename another chat (peer_manage)",
+	"대화들을 그룹으로 묶기 (peer_group)": "Put chats into a group (peer_group)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */

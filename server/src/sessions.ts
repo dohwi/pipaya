@@ -17,7 +17,8 @@ import { type SessionPatch, type SessionRecord, type SessionStore, type Thinking
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
-import { PeerService, type GroupRef } from "./peers.ts";
+import { PeerService, type GroupOps, type GroupRef } from "./peers.ts";
+import type { QuestionRequest } from "./questions.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
@@ -118,7 +119,53 @@ export class SessionManager {
 					if (e.type === "run_finished" && e.sessionId) fn(e.sessionId, e.data as { status?: string; error?: string | null });
 				});
 			},
+			onQuestion: (fn) => {
+				this.bus.subscribe((e) => {
+					if (e.type === "question_requested" && e.sessionId) fn(e.sessionId, e.data as QuestionRequest);
+				});
+			},
+			questions: (id) => this.questions?.list(id) ?? [],
+			answer: (id, toolCallId, a) => this.questions?.answer(id, toolCallId, a) ?? "not_found",
+			create: (input, parentId) => this.create(input, parentId),
+			update: (id, patch) => void this.update(id, patch),
+			remove: (id) => this.delete(id),
+			cancelQueued: (id, mode, text) => this.cancelQueued(id, mode, text),
+			queued: (id) => this.queuedOf(id),
+			groupOps: {
+				create: (name, ids) => this.groupOps.create(name, ids),
+				add: (g, ids) => this.groupOps.add(g, ids),
+				remove: (g, ids) => this.groupOps.remove(g, ids),
+				dissolve: (g) => this.groupOps.dissolve(g),
+			},
 		});
+	}
+
+	/** Group changes for `peer_group`, wired by the app once the group manager exists. */
+	private groupOps: GroupOps = {
+		create: () => { throw conflict("groups are not available"); },
+		add: () => { throw conflict("groups are not available"); },
+		remove: () => { throw conflict("groups are not available"); },
+		dissolve: () => { throw conflict("groups are not available"); },
+	};
+
+	setGroupOps(ops: GroupOps): void {
+		this.groupOps = ops;
+	}
+
+	/** Messages still waiting in a session's steer / follow-up queues (pi-agent-core keeps them in plain arrays). */
+	private queuedOf(id: string): { mode: "steer" | "follow_up"; text: string }[] {
+		const live = this.live.get(id);
+		if (!live) return [];
+		const out: { mode: "steer" | "follow_up"; text: string }[] = [];
+		for (const mode of ["steer", "follow_up"] as const) {
+			const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
+			for (const m of Array.isArray(queue?.messages) ? queue.messages : []) {
+				const c = (m as { content?: unknown }).content;
+				const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
+				out.push({ mode, text });
+			}
+		}
+		return out;
 	}
 
 	// ── CRUD ────────────────────────────────────────────────────────────────
@@ -866,10 +913,14 @@ export class SessionManager {
 		const q = this.questions;
 		const ctx: ToolContext = { sessionId, peers: {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
-			read: (from, count) => this.peers.read(sessionId, from, count),
+			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),
 			archive: (name, archived) => this.peers.archive(sessionId, name, archived),
 			abort: (name) => this.peers.abort(sessionId, name),
+			answer: (name, a) => this.peers.answer(sessionId, name, a),
+			create: (input) => this.peers.create(sessionId, input),
+			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
+			group: (action, a) => this.peers.group(sessionId, action, a),
 		} };
 		if (q) {
 			ctx.ask = async (toolCallId, req, signal) => {

@@ -7,6 +7,7 @@ import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "
 import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resize-core.ts";
 import { resizeImage } from "./image-resize.ts";
 import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
+import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
@@ -33,10 +34,14 @@ export interface ToolContext {
 	/** Other sessions of this server (`peer_send`, `peer_read`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
-		read(from: string, count: number): string;
+		read(from: string, count: number, detail?: boolean): string;
 		list(): string;
 		archive(name: string, archived: boolean): string;
 		abort(name: string): string;
+		answer(name: string, a: { answer?: string; answers?: string[]; toolCallId?: string }): string;
+		create(input: PeerCreateInput): Promise<string>;
+		manage(name: string, action: ManageAction, a?: ManageArgs): string;
+		group(action: "create" | "add" | "remove" | "dissolve", a: { group?: string; members?: string[]; name?: string }): string;
 	};
 }
 
@@ -532,10 +537,11 @@ const peerReadTool: ToolDef = {
 			parameters: Type.Object({
 				from: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
 				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "How many recent messages (default 10)" })),
+				detail: Type.Optional(Type.Boolean({ description: "true also shows the arguments of tool calls and the tool results, errors included" })),
 			}),
 			async execute(_id, params) {
 				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
-				return text(ctx.peers.read(params.from, params.count ?? 10), { from: params.from });
+				return text(ctx.peers.read(params.from, params.count ?? 10, params.detail), { from: params.from });
 			},
 		});
 	},
@@ -595,13 +601,118 @@ const peerAbortTool: ToolDef = {
 	},
 };
 
+const peerAnswerTool: ToolDef = {
+	name: "peer_answer",
+	description: "Answer the question another session is waiting on.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_answer",
+			label: "Answer a session's question",
+			description: "Answer the ask_user question another session is waiting on (it does nothing until answered). Answer only what you can decide with what you know; anything that needs the user's judgment goes back to the user. For several questions asked together pass `answers`, one per question in order." + PEER_NOTE,
+			parameters: Type.Object({
+				name: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				answer: Type.Optional(Type.String({ maxLength: 8000, description: "The answer (one of its options when it offers only options)" })),
+				answers: Type.Optional(Type.Array(Type.String({ maxLength: 8000 }), { maxItems: 20, description: "One answer per question, when it asked several at once" })),
+				toolCallId: Type.Optional(Type.String({ description: "Which question, when several wait (default: the oldest)" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.answer(params.name, { answer: params.answer, answers: params.answers, toolCallId: params.toolCallId }), { name: params.name });
+			},
+		});
+	},
+};
+
+const peerCreateTool: ToolDef = {
+	name: "peer_create",
+	description: "Start a new session (agent) with a task.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_create",
+			label: "Start a new session",
+			description: "Start a new session that works on `message` on its own, and get its @name back. Include all the context it needs; it sees nothing else. By default you get a report when it ends its run or asks a question. The directory defaults to yours; for code changes give each session its own git worktree.",
+			parameters: Type.Object({
+				message: Type.String({ minLength: 1, maxLength: 8000, description: "The task, with all context" }),
+				title: Type.Optional(Type.String({ maxLength: 100 })),
+				purpose: Type.Optional(Type.String({ maxLength: 200, description: "Its role in a few words (shown in @mention hints)" })),
+				cwd: Type.Optional(Type.String({ description: "Working directory (default: yours)" })),
+				provider: Type.Optional(Type.String()),
+				model: Type.Optional(Type.String({ description: "Model id; omit for the default" })),
+				thinkingLevel: Type.Optional(Type.String({ description: "off, minimal, low, medium, high, xhigh or max" })),
+				notify: Type.Optional(Type.Boolean({ description: "Report to you when it ends or asks (default true)" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(await ctx.peers.create({ ...params, thinkingLevel: params.thinkingLevel as PeerCreateInput["thinkingLevel"] }));
+			},
+		});
+	},
+};
+
+const peerManageTool: ToolDef = {
+	name: "peer_manage",
+	description: "Close, resume, delete, rename or reconfigure another session; take back a queued message.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_manage",
+			label: "Manage a session",
+			description: [
+				"Manage another session like the user does in the app. action:",
+				"close (stops its work, hides it; keeps the transcript), resume (reopens a closed one),",
+				"delete (erases the transcript for good; only sessions you made with peer_create, not working),",
+				"cancel_queued (lists steer/follow_up messages not yet delivered; with `text` takes one back),",
+				"rename (newName), set (purpose, provider, model, thinkingLevel).",
+			].join(" ") + PEER_NOTE,
+			parameters: Type.Object({
+				name: Type.String({ minLength: 1, maxLength: 60, description: "Member name, without @" }),
+				action: Type.Union(["close", "resume", "delete", "cancel_queued", "rename", "set"].map((a) => Type.Literal(a))),
+				mode: Type.Optional(Type.Union([Type.Literal("steer"), Type.Literal("follow_up")], { description: "cancel_queued: which queue" })),
+				text: Type.Optional(Type.String({ maxLength: 500, description: "cancel_queued: a piece of the message to take back" })),
+				newName: Type.Optional(Type.String({ maxLength: 30 })),
+				purpose: Type.Optional(Type.String({ maxLength: 200 })),
+				provider: Type.Optional(Type.String()),
+				model: Type.Optional(Type.String()),
+				thinkingLevel: Type.Optional(Type.String()),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				const { name, action, ...rest } = params;
+				return text(ctx.peers.manage(name, action as ManageAction, { ...rest, thinkingLevel: rest.thinkingLevel as ManageArgs["thinkingLevel"] }), { name, action });
+			},
+		});
+	},
+};
+
+const peerGroupTool: ToolDef = {
+	name: "peer_group",
+	description: "Create or change a tagged group of sessions.",
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: "peer_group",
+			label: "Arrange a group",
+			description: "Put sessions side by side in a named group (tag them all with @group, or peer_send to the group name). A session is in one group at a time; a group of fewer than 2 dissolves. action: create (members, optional name), add / remove (group, members), dissolve (group)." + PEER_NOTE,
+			parameters: Type.Object({
+				action: Type.Union(["create", "add", "remove", "dissolve"].map((a) => Type.Literal(a))),
+				group: Type.Optional(Type.String({ maxLength: 100, description: "Group name (add, remove, dissolve)" })),
+				members: Type.Optional(Type.Array(Type.String({ maxLength: 60 }), { maxItems: 8, description: "Session names, without @ (yourself may be one)" })),
+				name: Type.Optional(Type.String({ maxLength: 100, description: "create: the group's name" })),
+			}),
+			async execute(_id, params) {
+				if (!ctx?.peers) throw new Error("messaging other sessions is not available in this session");
+				return text(ctx.peers.group(params.action as "create" | "add" | "remove" | "dissolve", params));
+			},
+		});
+	},
+};
+
+const PEER_DEFS = [peerSendTool, peerReadTool, peerListTool, peerArchiveTool, peerAbortTool, peerAnswerTool, peerCreateTool, peerManageTool, peerGroupTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, peerSendTool.name, peerReadTool.name, peerListTool.name, peerArchiveTool.name, peerAbortTool.name];
+export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name)];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
-export const PEER_TOOLS = [peerSendTool.name, peerReadTool.name, peerListTool.name, peerArchiveTool.name, peerAbortTool.name];
+export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, peerSendTool, peerReadTool, peerListTool, peerArchiveTool, peerAbortTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

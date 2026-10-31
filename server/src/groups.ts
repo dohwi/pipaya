@@ -254,3 +254,52 @@ export class GroupManager {
 		this.bus.publish(null, "group_updated", this.get(g.id));
 	}
 }
+
+/* ---------- group changes for sessions (peer_group) ---------- */
+
+/** Rows of panes side by side, as the app lays out a new group by default. */
+export function rowLayout(ids: string[]): Layout {
+	const pane = (id: string): Layout => ({ type: "pane", sessionId: id });
+	return ids.slice(1).reduce<Layout>((acc, id, i) => ({ type: "split", dir: "row", ratio: (i + 1) / (i + 2), a: acc, b: pane(id) }), pane(ids[0]!));
+}
+
+/** What `peer_group` may do, expressed with the same group manager the app uses (its checks and events apply). */
+export function peerGroupOps(groups: GroupManager): import("./peers.ts").GroupOps {
+	const find = (handle: string): GroupRecord => {
+		const h = groupHandle(handle).toLowerCase();
+		const g = groups.list().find((x) => groupHandle(x.name).toLowerCase() === h || x.name.toLowerCase() === handle.toLowerCase());
+		if (!g) throw notFound(`group @${handle} (groups: ${groups.list().map((x) => `@${groupHandle(x.name)}`).join(", ") || "none"})`);
+		return g;
+	};
+	return {
+		create: (name, ids) => {
+			const g = groups.create({ name, layout: rowLayout(ids) });
+			return `Group @${groupHandle(g.name)} created with ${panesOf(g.layout).length} sessions.`;
+		},
+		add: (group, ids) => {
+			const g = find(group);
+			const have = panesOf(g.layout);
+			const fresh = ids.filter((id) => !have.includes(id));
+			let layout = g.layout;
+			for (const id of fresh) layout = { type: "split", dir: "row", ratio: 0.5, a: layout, b: { type: "pane", sessionId: id } };
+			const u = groups.update(g.id, { layout });
+			return `Group @${groupHandle(u.name)} now has ${panesOf(u.layout).length} sessions.`;
+		},
+		remove: (group, ids) => {
+			const g = find(group);
+			let layout: Layout | null = g.layout;
+			for (const id of ids) layout = layout && withoutSession(layout, id);
+			if (!layout || panesOf(layout).length < MIN_PANES) {
+				groups.delete(g.id);
+				return `Group @${groupHandle(g.name)} had fewer than ${MIN_PANES} sessions left and was dissolved.`;
+			}
+			const u = groups.update(g.id, { layout });
+			return `Group @${groupHandle(u.name)} now has ${panesOf(u.layout).length} sessions.`;
+		},
+		dissolve: (group) => {
+			const g = find(group);
+			groups.delete(g.id);
+			return `Group @${groupHandle(g.name)} dissolved (its sessions stay open).`;
+		},
+	};
+}
