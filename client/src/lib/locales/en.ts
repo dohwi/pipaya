@@ -1248,6 +1248,7 @@ export const en: Record<string, string> = {
 	"전체 화면": "Full screen",
 	"전체 화면 닫기": "Exit full screen",
 	"재생 위치": "Seek",
+	"재생 속도": "Playback speed",
 	"일시정지": "Pause",
 	"재생": "Play",
 	"소리 켜기": "Unmute",

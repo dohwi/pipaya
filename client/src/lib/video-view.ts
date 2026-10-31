@@ -73,6 +73,20 @@ function label(el: HTMLElement, text: string) {
 	el.title = text;
 }
 
+/** The speeds the speed button steps through, one tap at a time. */
+export const SPEEDS = [1, 1.25, 1.5, 2, 0.5] as const;
+
+/** The speed after `rate`: the next one in `SPEEDS`, and back to 1× after the last (an unknown rate also goes to 1×). */
+export function nextSpeed(rate: number): number {
+	const i = SPEEDS.indexOf(rate as (typeof SPEEDS)[number]);
+	return i < 0 ? 1 : SPEEDS[(i + 1) % SPEEDS.length];
+}
+
+/** 1 → "1×", 1.25 → "1.25×" */
+export function speedLabel(rate: number): string {
+	return `${rate}×`;
+}
+
 /** 83 → "1:23", 3725 → "1:02:05" */
 export function clock(seconds: number): string {
 	const s = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
@@ -106,9 +120,13 @@ export function videoPlayer(src: string): HTMLDivElement {
 	seek.step = "1";
 	seek.value = "0";
 	label(seek, t("재생 위치"));
+	const speed = document.createElement("button");
+	speed.type = "button";
+	speed.className = "wd-video-btn wd-video-speed tap";
+	speed.addEventListener("click", () => (video.playbackRate = nextSpeed(video.playbackRate)));
 	const mute = button("wd-video-mute", "volume", () => (video.muted = !video.muted));
 	const full = button("wd-video-full", "expand", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
-	bar.append(play, time, seek, mute, full);
+	bar.append(play, time, seek, speed, mute, full);
 	wrap.append(video, bar);
 
 	// ── state → bar
@@ -137,6 +155,8 @@ export function videoPlayer(src: string): HTMLDivElement {
 		label(play, playing ? t("일시정지") : t("재생"));
 		setGlyph(mute, video.muted || video.volume === 0 ? "muted" : "volume");
 		label(mute, video.muted ? t("소리 켜기") : t("음소거"));
+		speed.textContent = speedLabel(video.playbackRate);
+		label(speed, t("재생 속도"));
 		const open = shown?.wrap === wrap;
 		setGlyph(full, open ? "shrink" : "expand");
 		label(full, open ? t("전체 화면 닫기") : t("전체 화면"));
@@ -144,7 +164,7 @@ export function videoPlayer(src: string): HTMLDivElement {
 		wake();
 	};
 	label(full, t("전체 화면"));
-	for (const ev of ["play", "pause", "ended", "volumechange", "emptied"]) video.addEventListener(ev, sync);
+	for (const ev of ["play", "pause", "ended", "volumechange", "ratechange", "emptied"]) video.addEventListener(ev, sync);
 	for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) video.addEventListener(ev, paint);
 	video.addEventListener("click", () => {
 		// the first tap on a hidden bar only brings it back
