@@ -123,12 +123,12 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		width: calc(100% - 4px);
+		width: calc(100% + 4px); /* 4px inset on the left, and the highlight runs 8px past the content on the right like a tab row's (the padding below gives it back) */
 		height: 32px; /* every row is 32px tall */
-		margin: 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
+		margin: 0 -8px 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
 		   its right edge 20 from the row end (button column x 236): 20 + 20 + 8 = 48 */
-		padding: 0 48px 0 21px; /* measured: the 14px chevron centres on x 48, the folder icon's column */
+		padding: 0 56px 0 21px; /* 48 + the 8px the highlight runs past; measured: the 14px chevron centres on x 48, the folder icon's column */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
@@ -142,7 +142,7 @@
 	   The 20px badge fills the toggle's end, which is 4px before the row's: centre 256 (measured). On touch the button stays visible, so the 48px of room stays */
 	@media (hover: hover) {
 		.archtoggle.folded {
-			padding-right: 0;
+			padding-right: 8px; /* the highlight's extra 8px: the count stays on x 256 */
 		}
 		.archtoggle.folded :global(.cbadge) {
 			transition: opacity var(--motion-fast) var(--ease-std);
