@@ -397,7 +397,7 @@
 	.corner {
 		position: absolute;
 		top: 8px;
-		right: 8px;
+		right: 16px; /* clear of the message list's scrollbar */
 		z-index: 5;
 		display: flex;
 		align-items: center;

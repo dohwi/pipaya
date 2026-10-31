@@ -142,12 +142,13 @@
 	/* in the tab bar, right after the open group's tab */
 	/* the group's chips read as one unit hanging off the group's tab: a bordered box, not loose tabs */
 	.strip.inline {
-		flex: none;
+		/* gives way before the tabs do: with many tabs the chips scroll inside their box instead of leaving the screen */
+		flex: 0 1 auto;
+		min-width: 160px;
 		height: 28px;
 		margin-right: 8px;
 		padding: 0 4px;
 		gap: 4px;
-		overflow: visible;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
