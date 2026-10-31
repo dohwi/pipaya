@@ -72,8 +72,8 @@ describe("image models", () => {
 		expect(path).toMatch(/^\.pipaya\/generated\/.+\.png$/);
 		expect(readFileSync(join(ws, path)).toString("base64")).toBe(ECHO_PNG);
 		expect(result.content.map((c: any) => c.type)).toEqual(["text", "image"]);
-		// the result line itself tells the model not to embed the picture again
-		expect(result.content[0].text).toContain(`Saved ${path} (the user sees the picture in the tool box only while you work, and it disappears when you finish; show it in your reply with ![description](path)`);
+		// the result line itself tells the model to embed the picture in its reply
+		expect(result.content[0].text).toContain(`Saved ${path} (show it in your reply with ![description](path), then describe it briefly)`);
 		const sent = upstream.requests.filter((r) => Array.isArray(r.body?.modalities)).at(-1)!;
 		expect(sent.body.model).toBe(IMG.id);
 		expect(sent.body.messages[0].content.map((c: any) => c.type)).toEqual(["text", "image_url"]);
