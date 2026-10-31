@@ -86,6 +86,22 @@ export class ServerLink {
 		this.retryDelay = Math.min(this.retryDelay * 2, 15_000);
 	}
 
+	/**
+	 * The app came back to the foreground. A mobile OS may have killed the stream without telling us, so a link that
+	 * still says "online" is checked with a short ping and resynced if it does not answer. Backoff starts over.
+	 */
+	async resume(forceSync: boolean): Promise<void> {
+		if (this.stopped) return;
+		this.retryDelay = 1000;
+		if (forceSync || !this.online) return this.sync();
+		const token = this.token;
+		try {
+			await this.api.health(AbortSignal.timeout(3000));
+		} catch {
+			if (token === this.token) void this.sync();
+		}
+	}
+
 	/** (Re)load everything and (re)open the event stream. Safe to call repeatedly. */
 	async sync(): Promise<void> {
 		if (this.stopped) return;
@@ -97,16 +113,9 @@ export class ServerLink {
 		if (this.net === "idle") this.net = "connecting";
 		const api = this.api;
 		try {
-			const health = await api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
-			if (token !== this.token) return;
-			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
-			if (compat(this.versions) === "update-app") {
-				// Every other call would be refused (426) or answered in a shape this app cannot read: say why instead.
-				this.net = "incompatible";
-				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
-				return;
-			}
-			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await Promise.all([
+			// Health and the lists go out together (one round trip over a slow link, not two); health is judged first.
+			const healthReq = api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
+			const listsReq = Promise.all([
 				api.listSessions(200, false),
 				api.models(),
 				api.providers(),
@@ -119,6 +128,17 @@ export class ServerLink {
 				api.terminalSupport().catch(() => null),
 				api.activity().catch(() => null),
 			]);
+			listsReq.catch(() => {}); // judged below; a failure before that point must not go unhandled
+			const health = await healthReq;
+			if (token !== this.token) return;
+			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
+			if (compat(this.versions) === "update-app") {
+				// Every other call would be refused (426) or answered in a shape this app cannot read: say why instead.
+				this.net = "incompatible";
+				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
+				return;
+			}
+			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await listsReq;
 			if (token !== this.token) return;
 			const running: Record<string, boolean> = {};
 			const awaiting: Record<string, number> = {};

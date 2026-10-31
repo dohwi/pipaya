@@ -255,7 +255,8 @@ export class ChatState {
 		} catch (e) {
 			if (token !== this.token) return;
 			this.notFound = e instanceof ApiError && e.status === 404;
-			this.loadError = errorText(e) || t("불러오지 못했습니다");
+			// Already showing a transcript (a background refresh failed): keep it instead of replacing it with an error.
+			if (!this.ready || this.notFound) this.loadError = errorText(e) || t("불러오지 못했습니다");
 		} finally {
 			if (token === this.token) {
 				this.syncing = false;

@@ -819,7 +819,7 @@ class AppStore {
 
   /** Reconnect every server that is not live (the window was away, or the network came back). */
   private resyncLinks(onlyDown: boolean) {
-    for (const l of Object.values(this.links)) if (!onlyDown || !l.online) void l.sync();
+    for (const l of Object.values(this.links)) void l.resume(!onlyDown);
   }
 
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
@@ -1755,6 +1755,21 @@ class AppStore {
     const api = this.api;
     if (!api) return;
     if (this.chats[id] && !fresh) return;
+    // Coming back to a conversation already on screen: reload it in place so the old transcript stays visible
+    // (no skeleton) until the new one replaces it.
+    const shown = this.chats[id];
+    if (shown?.ready) {
+      await shown.load();
+      if (this.chats[id] !== shown) return;
+      if (shown.notFound) {
+        const { [id]: _gone, ...rest } = this.chats;
+        this.chats = rest;
+        if (this.activeId === id) this.newChat();
+        return;
+      }
+      this.awaiting[id] = Object.values(shown.tools).filter((t) => t.state === "awaiting_input").length;
+      return;
+    }
     const chat = new ChatState(id, api);
     this.chats = { ...this.chats, [id]: chat };
     await chat.load();
