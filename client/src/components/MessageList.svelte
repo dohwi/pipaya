@@ -59,7 +59,28 @@
 		}
 		lastTop = scroller.scrollTop;
 		showJump = gap() >= NEAR;
+		if (scroller.scrollTop < 600 && chat.hasEarlier) void loadEarlier();
 	}
+
+	/** Put the next older page in front without moving what the reader is looking at (Safari has no scroll anchoring). */
+	async function loadEarlier() {
+		if (!scroller || !chat.hasEarlier || chat.loadingEarlier) return;
+		const below = scroller.scrollHeight - scroller.scrollTop;
+		await chat.loadEarlier();
+		await tick();
+		if (scroller) {
+			scroller.scrollTop = scroller.scrollHeight - below;
+			lastTop = scroller.scrollTop;
+		}
+	}
+
+	// A short transcript that does not fill the view has nothing to scroll: fetch the older page right away.
+	$effect(() => {
+		if (!chat.ready || !chat.hasEarlier || chat.loadingEarlier || !scroller) return;
+		void tick().then(() => {
+			if (scroller && scroller.scrollHeight <= scroller.clientHeight + 40) void loadEarlier();
+		});
+	});
 
 	function release() {
 		smoothing = false;
@@ -227,6 +248,11 @@
 				<Button onclick={() => chat.load()}>{t("다시 시도")}</Button>
 			</div>
 		{:else}
+			{#if chat.hasEarlier}
+				<div class="earlier">
+					<Button onclick={loadEarlier} disabled={chat.loadingEarlier}>{chat.loadingEarlier ? t("불러오는 중…") : t("이전 대화 더 보기")}</Button>
+				</div>
+			{/if}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
 				<div class="unit" class:live={chat.running && n === units.length - 1}>
 					{#if u.kind === "notice"}
@@ -263,6 +289,11 @@
 	   bottom creep down with the stream (the browser kept "correcting" for nodes that were replaced), so it is left out. */
 	.unit.live {
 		overflow-anchor: none;
+	}
+	.earlier {
+		display: flex;
+		justify-content: center;
+		padding: 8px 0;
 	}
 	.row.wait {
 		display: flex;

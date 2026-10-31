@@ -105,6 +105,10 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
  * Transcript + live state for one session. Persisted messages come from REST; SSE events keep it current.
  * Events that arrive while a (re)load is in flight are buffered and replayed afterwards; `seq` de-duplicates.
  */
+/** Messages fetched when a conversation opens, and per step when scrolling back. */
+const FIRST_PAGE = 120;
+const EARLIER_PAGE = 200;
+
 export class ChatState {
 	items = $state<ChatItem[]>([]);
 	tools = $state<Record<string, ToolRun>>({});
@@ -186,6 +190,36 @@ export class ChatState {
 	}
 
 	private lastSeq = -1;
+	/** seq of the oldest message loaded; anything below it is still on the server. */
+	private firstSeq = 0;
+	/** Older messages exist on the server than the ones loaded (only the newest page is fetched on open). */
+	hasEarlier = $state(false);
+	loadingEarlier = $state(false);
+	/** Bumped after older messages were put in front, so the list can keep the reader where they were. */
+	earlierRevision = $state(0);
+
+	/** Fetch the page before the oldest loaded message and put it in front. */
+	async loadEarlier(): Promise<void> {
+		if (!this.hasEarlier || this.loadingEarlier || this.syncing) return;
+		const token = this.token;
+		this.loadingEarlier = true;
+		try {
+			const msgs = await this.api.tailMessages(this.id, EARLIER_PAGE, this.firstSeq);
+			if (token !== this.token) return;
+			const items: ChatItem[] = [];
+			const tools: Record<string, ToolRun> = {};
+			for (const { seq, message, createdAt } of msgs) this.ingest(items, tools, seq, message, createdAt);
+			this.items = [...items, ...this.items];
+			this.tools = { ...tools, ...this.tools };
+			if (msgs.length) this.firstSeq = msgs[0]!.seq;
+			this.hasEarlier = msgs.length > 0 && this.firstSeq > 0;
+			this.earlierRevision++;
+		} catch {
+			/* offline: the button stays and tries again */
+		} finally {
+			this.loadingEarlier = false;
+		}
+	}
 	private syncing = false;
 	private buffer: PipayaEvent[] = [];
 	private token = 0;
@@ -216,7 +250,7 @@ export class ChatState {
 		this.notFound = false;
 		try {
 			const [msgs, detail, questions, entries] = await Promise.all([
-				this.api.messages(this.id),
+				this.api.tailMessages(this.id, FIRST_PAGE),
 				this.api.getSession(this.id),
 				this.api.questions(),
 				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
@@ -242,6 +276,8 @@ export class ChatState {
 			this.items = items;
 			this.tools = tools;
 			this.lastSeq = msgs.length ? msgs[msgs.length - 1]!.seq : -1;
+			this.firstSeq = msgs.length ? msgs[0]!.seq : 0;
+			this.hasEarlier = msgs.length > 0 && this.firstSeq > 0;
 			this.running = st.running;
 			// Joined mid-run: the best guess for its start is the last prompt.
 			this.runStartedAt = st.running ? (this.runStartedAt ?? [...items].reverse().find((i) => i.kind === "user")?.ts ?? Date.now()) : null;

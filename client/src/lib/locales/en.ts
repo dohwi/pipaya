@@ -301,6 +301,7 @@ export const en: Record<string, string> = {
 	"답장": "Reply",
 	"답장 취소": "Cancel reply",
 	"다시 시도": "Retry",
+	"이전 대화 더 보기": "Show earlier messages",
 	"{n} 토큰": "{n} tokens",
 	"최신 메시지로 이동": "Jump to latest message",
 

@@ -233,7 +233,15 @@ export class SessionStore {
 		return row.n;
 	}
 
-	messages(sessionId: string, opts: { after?: number; limit?: number } = {}): StoredMessage[] {
+	messages(sessionId: string, opts: { after?: number; limit?: number; tail?: number; before?: number } = {}): StoredMessage[] {
+		// `tail`: only the newest N (with seq below `before`), oldest first. Opening a long conversation needs just the end of it.
+		if (opts.tail) {
+			return this.db
+				.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n")
+				.all({ sid: sessionId, after: opts.after ?? -1, before: opts.before ?? Number.MAX_SAFE_INTEGER, n: opts.tail })
+				.reverse()
+				.map((r) => toStored(r as MessageRow));
+		}
 		return this.db
 			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit")
 			.all({ sid: sessionId, after: opts.after ?? -1, limit: opts.limit ?? -1 })

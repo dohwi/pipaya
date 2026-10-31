@@ -273,3 +273,21 @@ describe("context API and application", () => {
 		} finally { await app.close(); upstream.stop(); f.cleanup(); }
 	});
 });
+
+describe("tail paging of messages", () => {
+	test("newest N come oldest-first and `before` pages back without gaps", () => {
+		const f = fixture();
+		const db = openDb(join(f.root, "tail.db"));
+		try {
+			const store = new SessionStore(db);
+			store.create(record("s", f.cwd));
+			for (let i = 0; i < 10; i++) store.appendMessage("s", i, { role: "user", content: `m${i}`, timestamp: i } as AgentMessage);
+			const last = store.messages("s", { tail: 3 });
+			expect(last.map((m) => m.seq)).toEqual([7, 8, 9]);
+			const earlier = store.messages("s", { tail: 3, before: 7 });
+			expect(earlier.map((m) => m.seq)).toEqual([4, 5, 6]);
+			expect(store.messages("s", { tail: 50, before: 4 }).map((m) => m.seq)).toEqual([0, 1, 2, 3]);
+			expect(store.messages("s")).toHaveLength(10);
+		} finally { db.close(); f.cleanup(); }
+	});
+});

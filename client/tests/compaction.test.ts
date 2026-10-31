@@ -36,7 +36,7 @@ const context = { tokens: 1000, contextWindow: 128000 };
 const result = { tokensBefore: 80000, context };
 function setup(overrides: Record<string, unknown> = {}) {
 	const api = {
-		messages: async () => [], approvals: async () => [], questions: async () => [],
+		messages: async () => [], tailMessages: async () => [], approvals: async () => [], questions: async () => [],
 		getSession: async () => ({ status: { running: false, pendingToolCalls: [], streamingMessage: null, compacting: false }, context, compaction: { supported: true, autoEnabled: true }, usage: {} }),
 		compactSession: async () => result,
 		...overrides,

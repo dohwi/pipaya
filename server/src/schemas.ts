@@ -241,6 +241,8 @@ export const SendResult = Type.Object({ accepted: PromptMode });
 export const MessagesQuery = Type.Object({
 	after: Type.Optional(Type.Integer({ minimum: -1, description: "Return messages with seq greater than this" })),
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000, default: 1000 })),
+	tail: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000, description: "Return only the newest N messages (oldest first); with `before`, the newest N below it" })),
+	before: Type.Optional(Type.Integer({ minimum: 0, description: "With `tail`: only messages with seq below this (paging back)" })),
 });
 export const StoredMessage = Type.Object({
 	seq: Type.Integer(),
