@@ -155,7 +155,7 @@
 						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						{#if shown.includes(l)}<Icon name="check" />{:else}<span class="dot"></span>{/if}
+						<span class="dot"></span>
 						<span>{l}</span>
 					</button>
 				{/each}
@@ -320,22 +320,29 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	/* the strengths this model offers: on = its own colour + a check, off = faded with a hollow dot */
+	/* the strengths this model offers: on = its own colour with a filled dot, off = faded with a hollow one.
+	   The dot is the same 8px box either way, so switching a chip never changes its width (no re-wrapping). */
 	.cap.lv {
 		gap: 6px;
 	}
 	.cap.lv .dot {
-		width: 6px;
-		height: 6px;
+		flex: none;
+		width: 8px;
+		height: 8px;
+		box-sizing: border-box;
 		border-radius: 50%;
-		border: 1px solid var(--lv);
-		opacity: 0.6;
+		border: 1.5px solid var(--lv);
+		background: transparent;
+		transition: background var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
 	}
 	.cap.lv:not([aria-pressed="true"]) {
 		background: transparent;
 		border-style: dashed;
 		color: var(--text-faint);
 		font-weight: 450;
+	}
+	.cap.lv:not([aria-pressed="true"]) .dot {
+		opacity: 0.55;
 	}
 	.cap.lv:not([aria-pressed="true"]):hover {
 		background: var(--bg-hover);
@@ -347,10 +354,8 @@
 		color: var(--lv);
 		font-weight: 600;
 	}
-	.cap.lv[aria-pressed="true"] :global(svg) {
-		width: 14px;
-		height: 14px;
-		stroke-width: 2.4;
+	.cap.lv[aria-pressed="true"] .dot {
+		background: var(--lv);
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
