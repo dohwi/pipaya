@@ -1,3 +1,5 @@
+import { schedule, unschedule } from "./frame";
+
 /**
  * Svelte actions that fit a line of text into its row: `tail` elides the start of a path, `marquee` lets an overlong
  * title scroll past on hover. Both re-measure when the row is resized.
@@ -26,7 +28,7 @@ export function tail(node: HTMLElement, text: string) {
 		}
 		node.textContent = `…${full.slice(full.length - lo)}`;
 	};
-	const ro = new ResizeObserver(fit);
+	const ro = new ResizeObserver(() => schedule(node, () => fit()));
 	ro.observe(node);
 	fit();
 	return {
@@ -34,7 +36,7 @@ export function tail(node: HTMLElement, text: string) {
 			full = next;
 			fit();
 		},
-		destroy: () => ro.disconnect(),
+		destroy: () => (ro.disconnect(), unschedule(node)),
 	};
 }
 
@@ -54,8 +56,8 @@ export function marquee(node: HTMLElement, _text: string) {
 			node.style.setProperty("--mq-d", `${Math.max(6, (mq.offsetWidth + 32) / 40)}s`);
 		} else delete node.dataset.over;
 	};
-	const ro = new ResizeObserver(measure);
+	const ro = new ResizeObserver(() => schedule(node, () => { measure(); }));
 	ro.observe(node);
 	measure();
-	return { update: () => queueMicrotask(measure), destroy: () => ro.disconnect() };
+	return { update: () => queueMicrotask(measure), destroy: () => (ro.disconnect(), unschedule(node)) };
 }

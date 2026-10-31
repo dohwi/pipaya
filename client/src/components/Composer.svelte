@@ -6,6 +6,7 @@
 </script>
 
 <script lang="ts">
+	import { schedule, unschedule } from "../lib/frame";
 	import Button from "./Button.svelte";
 	import { errorText } from "../lib/api";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
@@ -99,13 +100,19 @@
 		if (!wrapEl || !pane.focused) return;
 		const el = wrapEl;
 		const root = document.documentElement;
-		const update = () => root.style.setProperty("--composer-top", `${Math.max(0, root.clientHeight - el.getBoundingClientRect().top)}px`);
-		update();
+		const key = {};
+		const read = () => {
+			const v = `${Math.max(0, root.clientHeight - el.getBoundingClientRect().top)}px`;
+			return () => root.style.setProperty("--composer-top", v);
+		};
+		read()();
+		const update = () => schedule(key, read);
 		const ro = new ResizeObserver(update);
 		ro.observe(el);
 		window.addEventListener("resize", update);
 		return () => {
 			ro.disconnect();
+			unschedule(key);
 			window.removeEventListener("resize", update);
 			root.style.removeProperty("--composer-top");
 		};

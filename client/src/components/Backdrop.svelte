@@ -9,6 +9,7 @@
 </script>
 
 <script lang="ts">
+	import { schedule, unschedule } from "../lib/frame";
 	/**
 	 * The empty-state background: the blueprint grid, plus a soft light that follows the pointer and
 	 * brings the grid up around it. Pure decoration — pointer-events none, off for touch and reduced motion.
@@ -44,21 +45,27 @@
 		el.style.zIndex = "-1"; // behind the input and the stats line, which the grid now runs under
 		// fixed, so the scrolling .empty cannot clip it; placed from the pane's rect (body top .. pane bottom)
 		el.style.position = "fixed";
+		// reads and writes of all panes are batched per frame (see lib/frame.ts)
+		const key = {};
 		const fit = () => {
 			const p = pane.getBoundingClientRect();
 			const t = body.getBoundingClientRect().top;
-			el.style.inset = `${t}px auto auto ${p.left}px`;
-			el.style.width = `${p.width}px`;
-			el.style.height = `${Math.max(0, p.bottom - t)}px`;
+			return () => {
+				el.style.inset = `${t}px auto auto ${p.left}px`;
+				el.style.width = `${p.width}px`;
+				el.style.height = `${Math.max(0, p.bottom - t)}px`;
+			};
 		};
-		fit();
-		const ro = new ResizeObserver(fit);
+		fit()();
+		const queue = () => schedule(key, fit);
+		const ro = new ResizeObserver(queue);
 		ro.observe(pane);
 		ro.observe(body);
-		addEventListener("resize", fit);
+		addEventListener("resize", queue);
 		return () => {
 			ro.disconnect();
-			removeEventListener("resize", fit);
+			unschedule(key);
+			removeEventListener("resize", queue);
 		};
 	});
 

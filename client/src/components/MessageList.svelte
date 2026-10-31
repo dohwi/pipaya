@@ -150,8 +150,15 @@
 	let content: HTMLDivElement | undefined = $state();
 	$effect(() => {
 		if (!content || !scroller) return;
+		// RO callbacks already run after layout; one pin per frame is enough
+		let queued = false;
 		const ro = new ResizeObserver(() => {
-			if (stuck && !touching) pin();
+			if (!stuck || touching || queued) return;
+			queued = true;
+			queueMicrotask(() => {
+				queued = false;
+				if (stuck && !touching) pin();
+			});
 		});
 		ro.observe(content);
 		ro.observe(scroller);
@@ -282,6 +289,11 @@
 		/* Pinned at the bottom we scroll ourselves (overflow-anchor: none, set from script); scrolled up, anchoring is on.
 		   No content-visibility on turns: its 160px estimate for off-screen turns was swapped for the real height mid-flick,
 		   and that correction made a fast scroll up stutter. */
+	}
+	/* the mask re-rasterises the whole list on every resized frame; pause it while the window is being dragged */
+	:global(html[data-resizing]) .scroller {
+		-webkit-mask-image: none;
+		mask-image: none;
 	}
 	.inner {
 		max-width: calc(var(--content-w) + 32px);
