@@ -63,6 +63,9 @@ import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION,
 import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
 import { join, resolve } from "node:path";
 
+/** How long persisted events are kept for a client that reconnects with a cursor. */
+export const EVENT_RETENTION_MS = 3 * 24 * 3600_000;
+
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
 // A message may carry images and files (up to 100 MB of files, as base64: x1.34) alongside each other.
 export const IMAGE_BODY_LIMIT = 192 * 1024 * 1024;
@@ -612,7 +615,12 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	// Skills, AGENTS.md and whatever extensions read from those folders live in plain files: tell open clients when they change on disk.
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
-	const prune = setInterval(() => bus.prune(7 * 24 * 3600_000), 6 * 3600_000);
+	// The events table holds a copy of every message (the messages table is the record), so it is the bulk of the database. Clients
+	// resume from the latest id, not from old ones: keep a few days for reconnects. Also at startup: a server restarted more often
+	// than the 6 hour timer would otherwise never prune.
+	const pruneEvents = () => { try { bus.prune(EVENT_RETENTION_MS); } catch (e) { server.log.warn({ err: e }, "pruning old events failed"); } };
+	pruneEvents();
+	const prune = setInterval(pruneEvents, 6 * 3600_000);
 	prune.unref?.();
 	retention.start();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.

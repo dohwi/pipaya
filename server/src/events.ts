@@ -47,7 +47,8 @@ export class EventBus {
 		this.selectSession = db.query(
 			"SELECT * FROM events WHERE session_id = $sessionId AND id > $after ORDER BY id LIMIT $limit",
 		);
-		this.selectLatest = db.query("SELECT COALESCE(MAX(id), 0) AS id FROM events");
+		// The sequence, not MAX(id): after every row was pruned the cursor must still be the last id handed out.
+		this.selectLatest = db.query("SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'events'), 0) AS id");
 	}
 
 	publish(sessionId: string | null, type: string, data: unknown, opts: { ephemeral?: boolean } = {}): PipayaEvent {
