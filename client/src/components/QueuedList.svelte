@@ -9,92 +9,62 @@
 	/** Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it). */
 	let { queued, oncancel }: { queued: Queued[]; oncancel: (q: Queued) => void } = $props();
 
-	// The list scrolls inside a capped height instead of pushing the input down; the grip above resizes the cap.
-	// A row is 22px + 4px gap under 8px of padding: 34 shows one row, 60 two. Starts small; the grip opens it up.
-	const MIN_H = 34;
-	const STEP = 26;
-	// Caps scale with the window so a short one (phone with the keyboard open) keeps most of its height for the chat.
-	const maxH = () => Math.max(MIN_H, Math.round(window.innerHeight * 0.25));
-	const clamp = (h: number) => Math.min(maxH(), Math.max(MIN_H, h));
-	let height = $state(clamp(window.innerHeight < 600 ? MIN_H : 60));
-	let drag: { y: number; h: number } | null = null;
+	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
+	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
+	let ul = $state<HTMLUListElement>();
+	let drag: { y: number; top: number; moved: boolean } | null = null;
+	const THRESHOLD = 4; // px of travel before a press counts as a drag
 
 	function onDown(e: PointerEvent) {
-		drag = { y: e.clientY, h: height };
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		if (e.pointerType !== "mouse" || e.button !== 0 || !ul || ul.scrollHeight <= ul.clientHeight) return;
+		drag = { y: e.clientY, top: ul.scrollTop, moved: false };
 	}
 	function onMove(e: PointerEvent) {
-		if (drag) height = clamp(drag.h + (drag.y - e.clientY)); // drag up = taller
+		if (!drag || !ul) return;
+		const dy = e.clientY - drag.y;
+		if (!drag.moved) {
+			if (Math.abs(dy) < THRESHOLD) return;
+			drag.moved = true;
+			ul.setPointerCapture(e.pointerId);
+		}
+		ul.scrollTop = drag.top - dy;
 	}
-	function onUp() {
+	function onUp(e: PointerEvent) {
+		if (drag?.moved && ul?.hasPointerCapture(e.pointerId)) ul.releasePointerCapture(e.pointerId);
 		drag = null;
-	}
-	function onKey(e: KeyboardEvent) {
-		if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-		e.preventDefault();
-		height = clamp(height + (e.key === "ArrowUp" ? STEP : -STEP));
 	}
 </script>
 
-<div class="queued-wrap">
-	{#if queued.length > 2}
-		<div
-			class="grip tap"
-			role="slider"
-			aria-label={t("대기열 높이 조절")}
-			aria-valuenow={height}
-			aria-valuemin={MIN_H}
-			aria-valuemax={maxH()}
-			tabindex="0"
-			onpointerdown={onDown}
-			onpointermove={onMove}
-			onpointerup={onUp}
-			onpointercancel={onUp}
-			onkeydown={onKey}
-		><span></span></div>
-	{/if}
-	<ul class="queued" style:max-height="{height}px" aria-label={t("전달 대기 중인 메시지")}>
-		{#each orderQueued(queued) as q (q.mode + q.n)}
-			<li animate:reflow in:rowIn out:rowOut>
-				<QueueBadge {q} />
-				<span class="qt">{q.text}</span>
-				<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
-			</li>
-		{/each}
-	</ul>
-</div>
+<ul class="queued" bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
+	{#each orderQueued(queued) as q (q.mode + q.n)}
+		<li animate:reflow in:rowIn out:rowOut>
+			<QueueBadge {q} />
+			<span class="qt">{q.text}</span>
+			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
+		</li>
+	{/each}
+</ul>
 
 <style>
-	.queued-wrap {
-		min-height: 0;
-	}
-	.grip {
-		display: grid;
-		place-items: center;
-		height: 12px;
-		cursor: ns-resize;
-		touch-action: none;
-	}
-	.grip span {
-		width: 32px;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--text-faint);
-		opacity: 0.5;
-	}
-	.grip:hover span,
-	.grip:focus-visible span {
-		opacity: 1;
-	}
 	.queued {
 		list-style: none;
 		margin: 0;
 		padding: 8px 12px 0;
+		/* Two rows (22px + 4px gap) under 8px of padding, plus a peek of the third so it reads as scrollable.
+		   On a short window (phone with the keyboard open) one row and a peek. */
+		max-height: 72px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		cursor: grab;
+		user-select: none;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
+	}
+	@media (max-height: 600px) {
+		.queued {
+			max-height: 46px;
+		}
 	}
 	.queued li {
 		display: flex;
@@ -113,6 +83,9 @@
 		margin-left: auto;
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
+	}
+	.qx {
+		cursor: pointer;
 	}
 	.qx:hover {
 		color: var(--text);
