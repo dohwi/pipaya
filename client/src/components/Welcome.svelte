@@ -21,7 +21,7 @@
 			const h = host?.getBoundingClientRect();
 			const cx = f.left + f.width / 2 - (h?.left ?? 0);
 			const cy = f.top + f.height / 2 - (h?.top ?? 0);
-			const delay = Math.round(arrival(b, Math.hypot(b.x - cx, b.y - cy)));
+			const delay = Math.round(arrival(b.reach, Math.hypot(b.x - cx, b.y - cy)));
 			glows.push({ id: b.id, delay });
 			setTimeout(() => {
 				glows = glows.filter((g) => g.id !== b.id);

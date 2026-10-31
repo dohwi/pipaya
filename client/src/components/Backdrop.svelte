@@ -1,28 +1,10 @@
 <script lang="ts" module>
-	export type Burst = {
-		id: number;
-		x: number;
-		y: number;
-		reach: number;
-		t0: number;
-		r: number;
-		a: number;
-		pk: number; // peak opacity: how bright this wave gets (a tap is faint, a full charge is not)
-		band: number; // px: width of the lit band that travels with the front
-		dur: number; // ms this wave takes to travel: a charged wave bursts out much faster
-	};
-	/** ms of holding the pointer down on empty space for a full gauge. */
-	export const CHARGE = 900;
-	/** Lit band width, from a quick tap to a full charge. */
-	const BAND = { min: 150, max: 340 };
-	/** Peak opacity of the wave, from a quick tap to a full charge. */
-	const PEAK = { min: 0.72, max: 1 };
-	/** Travel time, from a quick tap (the slowest wave) to a full charge (the fastest). */
-	const DUR = { tap: 1100, full: 600 };
+	export type Burst = { id: number; x: number; y: number; reach: number; t0: number; r: number; a: number };
+	export const DUR = 1200; // ms: how long a wave travels (faster than the first 1900ms spread)
 	const EASE = 1.7; // radius = reach * (1 - (1 - p) ** EASE)
-	/** ms after the release at which the wave front reaches a point `dist` px from it. */
-	export function arrival(b: Burst, dist: number): number {
-		return (1 - (1 - Math.min(1, dist / b.reach)) ** (1 / EASE)) * b.dur;
+	/** ms after the click at which the wave front reaches a point `dist` px from the click. */
+	export function arrival(reach: number, dist: number): number {
+		return (1 - (1 - Math.min(1, dist / reach)) ** (1 / EASE)) * DUR;
 	}
 </script>
 
@@ -35,52 +17,24 @@
 	let { bursts = $bindable([]) }: { bursts?: Burst[] } = $props();
 	let host: HTMLDivElement | undefined = $state();
 	let seq = 0;
-
-	/** The pointer held down on empty space: where it went down and how full the gauge is (0..1). */
-	let press: { x: number; y: number; p: number } | null = $state(null);
-	let chargeRaf = 0;
-	let chargeT0 = 0;
+	const RING = 220; // px: width of the lit band
 
 	let ripRaf = 0;
 	// Drives every wave's radius by hand (like the hover light), so it does not depend on animating custom properties.
 	const tick = (now: number) => {
 		for (const b of bursts) {
-			const p = Math.min(1, (now - b.t0) / b.dur);
+			const p = Math.min(1, (now - b.t0) / DUR);
 			b.r = b.reach * (1 - (1 - p) ** EASE);
 			// ease in over the first 12%, hold, then fade out smoothly
 			const fin = Math.min(1, p / 0.12);
 			const fout = p < 0.45 ? 1 : 1 - (p - 0.45) / 0.55;
-			b.a = fin * fin * (3 - 2 * fin) * fout * fout * (3 - 2 * fout) * b.pk;
+			b.a = fin * fin * (3 - 2 * fin) * fout * fout * (3 - 2 * fout);
 		}
-		bursts = bursts.filter((b) => now - b.t0 < b.dur);
+		bursts = bursts.filter((b) => now - b.t0 < DUR);
 		ripRaf = bursts.length ? requestAnimationFrame(tick) : 0;
 	};
-	$effect(() => () => {
-		cancelAnimationFrame(ripRaf);
-		cancelAnimationFrame(chargeRaf);
-	});
+	$effect(() => () => cancelAnimationFrame(ripRaf));
 
-	/** The pointer went up: send a wave whose size, brightness and speed follow how long it was held. */
-	const release = () => {
-		const el = host;
-		const c = press;
-		cancelAnimationFrame(chargeRaf);
-		chargeRaf = 0;
-		press = null;
-		if (!el || !c) return;
-		const r = el.getBoundingClientRect();
-		const far = Math.hypot(Math.max(c.x, r.width - c.x), Math.max(c.y, r.height - c.y));
-		const band = BAND.min + (BAND.max - BAND.min) * c.p;
-		// a tap stops short of the farthest corner, a full charge crosses the whole screen
-		const reach = far * (0.7 + 0.3 * c.p) + band;
-		const pk = PEAK.min + (PEAK.max - PEAK.min) * c.p;
-		// the fuller the gauge, the harder it bursts: a full charge crosses the screen twice as fast as a tap
-		const dur = DUR.tap + (DUR.full - DUR.tap) * c.p;
-		bursts.push({ id: seq++, x: c.x, y: c.y, reach, dur, t0: performance.now(), r: 0, a: pk, pk, band });
-		if (!ripRaf) ripRaf = requestAnimationFrame(tick);
-	};
-
-	/** Holding the pointer down on empty space charges the gauge; the wave only leaves when it is released. */
 	/** Inside a pane the backdrop reaches the pane's bottom edge (under the input and the stats line), not just the message area. */
 	$effect(() => {
 		const el = host;
@@ -108,47 +62,23 @@
 		};
 	});
 
+	// A click on empty space sends a wave of lit grid lines out from the pointer.
 	$effect(() => {
 		const el = host;
 		const parent = el?.closest<HTMLElement>(".pane") ?? el?.parentElement;
 		if (!el || !parent || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-		const step = (now: number) => {
-			if (!press) {
-				chargeRaf = 0;
-				return;
-			}
-			press.p = Math.min(1, (now - chargeT0) / CHARGE);
-			chargeRaf = press.p < 1 ? requestAnimationFrame(step) : 0;
-		};
 		const down = (e: PointerEvent) => {
-			if (e.button !== 0 || press) return;
+			if (e.button !== 0) return;
 			if ((e.target as Element | null)?.closest("button, a, input, textarea, select, summary, [contenteditable], [role=button]")) return;
 			const r = el.getBoundingClientRect();
-			chargeT0 = performance.now();
-			press = { x: e.clientX - r.left, y: e.clientY - r.top, p: 0 };
-			if (!chargeRaf) chargeRaf = requestAnimationFrame(step);
-		};
-		const up = (e: PointerEvent) => {
-			if (e.button === 0) release();
-		};
-		const abort = () => {
-			cancelAnimationFrame(chargeRaf);
-			chargeRaf = 0;
-			press = null;
+			const x = e.clientX - r.left;
+			const y = e.clientY - r.top;
+			const far = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y));
+			bursts.push({ id: seq++, x, y, reach: far + RING, t0: performance.now(), r: 0, a: 1 });
+			if (!ripRaf) ripRaf = requestAnimationFrame(tick);
 		};
 		parent.addEventListener("pointerdown", down, { passive: true });
-		// the release can happen anywhere (dragged off the empty space first), so listen on the window
-		window.addEventListener("pointerup", up, { passive: true });
-		window.addEventListener("pointercancel", abort);
-		parent.addEventListener("pointerleave", abort);
-		return () => {
-			parent.removeEventListener("pointerdown", down);
-			window.removeEventListener("pointerup", up);
-			window.removeEventListener("pointercancel", abort);
-			parent.removeEventListener("pointerleave", abort);
-			abort();
-		};
+		return () => parent.removeEventListener("pointerdown", down);
 	});
 
 	$effect(() => {
@@ -206,21 +136,10 @@
 <div class="backdrop" bind:this={host} aria-hidden="true">
 	<div class="grid"></div>
 	<div class="lit"></div>
-	{#if press}
-		<div class="charge" style="left:{press.x}px;top:{press.y}px;--p:{press.p.toFixed(3)}">
-			<div class="ring"></div>
-			<div class="dot"></div>
-		</div>
-	{/if}
 	{#each bursts as b (b.id)}
 		<div
 			class="wave"
-			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;--band:{b.band}px;opacity:{b.a.toFixed(3)}"
-		></div>
-		<!-- the halo that leaves with the wave, as wide and as quick as the charge made it -->
-		<div
-			class="flash"
-			style="--cx:{b.x}px;--cy:{b.y}px;--k:{b.pk.toFixed(2)};--fd:{Math.round(b.dur * 0.5)}ms"
+			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;opacity:{b.a.toFixed(3)}"
 		></div>
 	{/each}
 </div>
@@ -263,65 +182,9 @@
 			linear-gradient(to bottom, transparent calc(100% - 1px), var(--line) 100%);
 		background-size: 2rem 2rem;
 		background-position: center top;
-		--mask: radial-gradient(circle at var(--cx) var(--cy), transparent calc(var(--r) - var(--band)), #000 calc(var(--r) - var(--band) * 0.18), transparent var(--r));
+		--mask: radial-gradient(circle at var(--cx) var(--cy), transparent calc(var(--r) - 220px), #000 calc(var(--r) - 40px), transparent var(--r));
 		-webkit-mask-image: var(--mask);
 		mask-image: var(--mask);
-	}
-	/* one continuous pull: a single ring slides all the way in over the charge and hands over to the point */
-	.charge {
-		position: absolute;
-		width: 240px;
-		height: 240px;
-		translate: -50% -50%;
-		opacity: calc(0.4 + var(--p) * 0.6);
-	}
-	.ring {
-		position: absolute;
-		inset: 0;
-		border-radius: 50%;
-		background: radial-gradient(closest-side, transparent 54%, var(--grid-wave) 72%, transparent 88%);
-		filter: blur(1px);
-		/* squared progress: it drifts, accelerates as it is pulled in, and dims once it arrives */
-		scale: calc(1 - var(--p) * var(--p) * 0.92);
-		/* fades in over the first 15% so the ring never just appears */
-		opacity: calc(min(1, var(--p) * 6.5) * (0.85 - var(--p) * 0.6));
-	}
-	/* the point it sinks into: a small white dot that whitens over the same pull */
-	.dot {
-		position: absolute;
-		inset: 42%;
-		border-radius: 50%;
-		background:
-			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%),
-			radial-gradient(closest-side, var(--grid-wave) 0%, transparent 62%);
-		opacity: calc(var(--p) * var(--p));
-		scale: calc(0.5 + var(--p) * 0.7);
-	}
-	/* the burst that leaves with the wave: a soft halo that widens and thins out */
-	.flash {
-		position: absolute;
-		left: var(--cx);
-		top: var(--cy);
-		width: 380px;
-		height: 380px;
-		translate: -50% -50%;
-		border-radius: 50%;
-		background: radial-gradient(closest-side, var(--grid-wave) 0%, transparent 78%);
-		filter: blur(3px);
-		animation: burst var(--fd) var(--ease-std) both;
-	}
-	@keyframes burst {
-		0% {
-			scale: 0.35;
-			opacity: 0;
-		}
-		28% {
-			opacity: calc(var(--k) * 0.55);
-		}
-		100% {
-			scale: 2.3;
-			opacity: 0;
-		}
 	}
 	.lit::after {
 		content: "";
