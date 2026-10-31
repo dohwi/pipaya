@@ -662,8 +662,6 @@
 		border: 1px solid var(--border-strong);
 		border-radius: 22px;
 		background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
-		-webkit-backdrop-filter: blur(14px) saturate(135%);
-		backdrop-filter: blur(14px) saturate(135%);
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
 			box-shadow var(--motion-fast) var(--ease-std),
