@@ -1,7 +1,7 @@
 /**
  * Context menus on things that are not text: a right click (or the keyboard's menu key) with a mouse, a long press on
- * touch. Rows that can also be dragged time their own hold in `dnd` / `block-drag` (a hold opens the menu, moving on
- * from it lifts the row); everything else uses the `pressMenu` action here.
+ * touch. A hold buzzes, and the menu opens when the finger lifts. Rows that can also be dragged time their own hold in
+ * `dnd` / `block-drag` (moving on from the hold lifts the row instead); everything else uses the `pressMenu` action here.
  */
 import { isEditable } from "./no-context-menu";
 
@@ -11,7 +11,7 @@ export interface Point {
 	/** Opened from the keyboard (menu key / Shift+F10): focus goes into the menu */
 	key?: boolean;
 }
-/** Opens a menu at `pt`; may return how to close it again (a long press that goes on to drag drops the menu). */
+/** Opens a menu at `pt`; may return how to close it again. */
 export type MenuOpener = (pt: Point) => (() => void) | void;
 
 export const HOLD_MS = 380;
@@ -60,7 +60,6 @@ export function pressMenu(node: HTMLElement, initial: MenuOpener | undefined) {
 			if (!st || !open) return;
 			st.held = true;
 			buzz();
-			open({ x: st.x, y: st.y });
 		}, HOLD_MS);
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
@@ -71,8 +70,11 @@ export function pressMenu(node: HTMLElement, initial: MenuOpener | undefined) {
 	};
 	const up = (e: PointerEvent) => {
 		if (!st || e.pointerId !== st.pid) return;
-		if (st.held) swallowClick();
+		const at = st.held ? { x: st.x, y: st.y } : null;
+		if (at) swallowClick();
 		end();
+		// a hold opens its menu once the finger lifts, so it is not under it
+		if (at) open?.(at);
 	};
 	function end() {
 		if (st) clearTimeout(st.timer);

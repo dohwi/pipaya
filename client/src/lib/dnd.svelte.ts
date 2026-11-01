@@ -197,7 +197,7 @@ const taken = new WeakSet<Event>();
 /** Makes an element pick-up-able: it carries session `id`. */
 export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	let opts = initial;
-	let st: { pid: number; touch: boolean; x: number; y: number; ox: number; oy: number; timer: number; held: boolean; unmenu?: (() => void) | void } | null = null;
+	let st: { pid: number; touch: boolean; x: number; y: number; ox: number; oy: number; timer: number; held: boolean } | null = null;
 	let active = false;
 
 	function style() {
@@ -213,16 +213,14 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		active = true;
 		clearTimeout(st.timer);
 		if (!st.held) buzz();
-		st.unmenu?.();
 		drag.begin(opts.id, node, st.x, st.y, st.touch, { x: st.ox, y: st.oy });
 	}
-	/** The hold is up: the menu, if there is one; otherwise the session is picked up. */
+	/** The hold is up: with a menu, a buzz says so and the finger decides (let go: the menu; move on: the session is picked up); without one, picked up at once. */
 	function hold() {
 		if (!st) return;
 		if (!opts.menu || opts.disabled) return activate();
 		st.held = true;
 		buzz();
-		st.unmenu = opts.menu({ x: st.x, y: st.y });
 	}
 	function down(e: PointerEvent) {
 		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || taken.has(e)) return;
@@ -257,7 +255,10 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		if (active) drag.end(true);
 		// the click that follows letting go (or the long press that opened the menu) is not a click on the row
 		if (active || st.held) swallowClick();
+		// held and let go in place: the menu opens now, where the finger was (not under it while it is still down)
+		const menuAt = !active && st.held && opts.menu ? { x: st.x, y: st.y } : null;
 		cleanup();
+		if (menuAt) opts.menu?.(menuAt);
 	}
 	function cancel(e: PointerEvent) {
 		if (!st || e.pointerId !== st.pid) return;

@@ -4,7 +4,7 @@
  * The drop slot is the block of the same kind under the pointer (`[data-block="<kind>:<key>"]` on the same server),
  * before or after it by which half the pointer is in. Near the list's edges the list scrolls.
  * The component draws the state it is given through `set` and applies the move in `move`.
- * With a `menu`, a right click opens it, and so does a touch hold (moving on from there drags the block, closing it).
+ * With a `menu`, a right click opens it, and so does a touch hold once the finger lifts (moving on from the hold drags the block instead).
  */
 import { buzz, contextAt, swallowClick, type MenuOpener } from "./press-menu";
 
@@ -28,7 +28,7 @@ export interface BlockDragHost {
 export function blockDrag(h: BlockDragHost) {
 	return function dirSource(node: HTMLElement, initial: DirSrc) {
 		let o = initial;
-		let st: { pid: number; touch: boolean; x: number; y: number; timer: number; held: boolean; unmenu?: (() => void) | void } | null = null;
+		let st: { pid: number; touch: boolean; x: number; y: number; timer: number; held: boolean } | null = null;
 		let active = false;
 		const at = (x: number, y: number) => {
 			const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(`[data-block^="${o.kind}:"]`);
@@ -41,7 +41,6 @@ export function blockDrag(h: BlockDragHost) {
 			active = true;
 			clearTimeout(st.timer);
 			if (!st.held) buzz();
-			st.unmenu?.();
 			h.set(h.key(o.kind, o.path), null);
 			document.documentElement.classList.add("dnd");
 		};
@@ -50,7 +49,6 @@ export function blockDrag(h: BlockDragHost) {
 			if (!o.menu) return activate();
 			st.held = true;
 			buzz();
-			st.unmenu = o.menu({ x: st.x, y: st.y });
 		};
 		function down(e: PointerEvent) {
 			if ((o.disabled && !o.menu) || st || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || (e.target as Element).closest(".dirnew, .more, input")) return;
@@ -86,7 +84,10 @@ export function blockDrag(h: BlockDragHost) {
 				if (d) h.move(o, d.id.slice(o.kind.length + 1), d.after);
 			}
 			if (active || st.held) swallowClick();
+			// held and let go in place: the menu opens now, where the finger was
+			const menuAt = !active && st.held && o.menu ? { x: st.x, y: st.y } : null;
 			cleanup();
+			if (menuAt) o.menu?.(menuAt);
 		}
 		function cancel(e: PointerEvent) {
 			if (st && e.pointerId === st.pid) cleanup();
