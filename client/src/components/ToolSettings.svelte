@@ -17,6 +17,8 @@
 
 	let cfg = $state<{ id: string; tools: ToolsInfo | null } | null>(null);
 	let error = $state("");
+	/** Delegate save errors show inside the delegate section, next to the switches that caused them. */
+	let delegateError = $state("");
 
 	const apiOf = (id: string) => {
 		const s = app.servers.find((x) => x.id === id);
@@ -63,10 +65,10 @@
 		cfg = { ...before!, tools: { ...before!.tools!, delegate: next } };
 		try {
 			cfg = { ...before!, tools: await apiOf(serverId)!.setDelegatePolicy(next) };
-			error = "";
+			delegateError = "";
 		} catch (e) {
 			cfg = before;
-			error = errorText(e);
+			delegateError = errorText(e);
 		}
 	}
 	const toggleModel = (key: string, on: boolean) => {
@@ -126,6 +128,7 @@
 				</SettingRow>
 			{/each}
 		{/if}
+		{#if delegateError}<span class="hint danger">{delegateError}</span>{/if}
 		<SettingRow label={t("동시에 실행할 도우미")} hint={t("한 대화에서 동시에 돌 수 있는 수")}>
 			<Select size="sm" width="96px" label={t("동시에 실행할 도우미")} value={d.maxConcurrent} options={nums([1, 2, 3, 4, 6, 8])} onchange={(n) => saveDelegate({ maxConcurrent: n })} />
 		</SettingRow>
