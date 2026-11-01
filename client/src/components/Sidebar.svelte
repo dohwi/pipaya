@@ -686,6 +686,24 @@
 		white-space: nowrap;
 		font-size: var(--fs-sm);
 	}
+	/* a pinned tab's pin sits right after its title, like a pinned folder's after its name (DirBlock .dpin): the title takes only its text's width
+	   (it still shrinks, with its ellipsis, when too long) and the pin follows; a folded group's count keeps its own right-hand place (margin-left: auto). Shared by lone tabs and split-tab headers */
+	:global(:where(.side) .open:has(> .tpin) .title) {
+		flex: 0 1 auto;
+	}
+	:global(:where(.side) .tpin) {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 14px;
+		height: 14px;
+		color: var(--text-faint);
+	}
+	:global(:where(.side) .tpin svg) {
+		width: 12px;
+		height: 12px;
+		transform: rotate(35deg); /* the slant of a pinned folder's pin */
+	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	:global(:where(.side) .title .track) {
 		display: inline;

@@ -55,31 +55,3 @@
 		{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
 	</button>
 </RowShell>
-
-<style>
-	/* the pin mark sits on the "+" / "⋯" column (centre x 256) like a folded row's count: the open button gives up its right padding, and the "⋯" takes the place while the row is hovered, focused or its menu is open */
-	.open.wide:has(> .tpin) {
-		padding-right: 0;
-	}
-	/* only where a pointer hovers: touch keeps the pin (its open row shows the "⋯" permanently, the pin sits beside it) and a tap's sticky :hover must not hide it */
-	@media (hover: hover) {
-		:global(.item:hover) .tpin,
-		:global(.item:focus-within) .tpin,
-		:global(.item.menuopen) .tpin {
-			display: none;
-		}
-	}
-	.tpin {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 20px;
-		height: 20px;
-		color: var(--text-faint);
-	}
-	.tpin :global(svg) {
-		width: 14px;
-		height: 14px;
-		transform: rotate(35deg); /* the slant of a pinned folder's icon */
-	}
-</style>

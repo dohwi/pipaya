@@ -56,35 +56,3 @@
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
 	</button>
 </RowShell>
-
-<style>
-	/* same pin mark as a lone tab's: the "⋯" column (centre x 256), given way to the "⋯" on hover */
-	.open.wide:has(> .tpin) {
-		padding-right: 0;
-	}
-	/* only where a pointer hovers: touch keeps the pin (its open row shows the "⋯" permanently, the pin sits beside it) and a tap's sticky :hover must not hide it */
-	@media (hover: hover) {
-		:global(.item:hover) .tpin,
-		:global(.item:focus-within) .tpin,
-		:global(.item.menuopen) .tpin {
-			display: none;
-		}
-	}
-	/* beside a folded group's count the pin sits on the list-button column (centre x 236): the open button's 4px gap would put it on 232, so it takes that gap back */
-	.tpin:has(+ .cbadge) {
-		margin-right: -4px;
-	}
-	.tpin {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 20px;
-		height: 20px;
-		color: var(--text-faint);
-	}
-	.tpin :global(svg) {
-		width: 14px;
-		height: 14px;
-		transform: rotate(35deg);
-	}
-</style>
