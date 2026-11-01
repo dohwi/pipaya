@@ -285,7 +285,6 @@ class AppStore {
     return this.link?.api ?? null;
   }
   private attachToken = 0;
-  private hiddenAt = 0;
 
   /* ---------- derived ---------- */
 
@@ -494,17 +493,24 @@ class AppStore {
       if (wasKorean !== /^ko(?:-|$)/i.test(language)) void this.api?.localizeNames(language).catch(() => {}); // offline: names just stay
       extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() });
     });
+    // Mobile OSes silently kill background sockets (EventSource gets no error), and a /health ping succeeds on a fresh
+    // connection while the old stream is dead. So coming back always reopens the streams, however short the absence.
+    // Android WebViews sometimes skip visibilitychange, so focus/pageshow wake too; `wake` merges the bursts.
+    let wokeAt = 0;
+    const wake = () => {
+      const now = Date.now();
+      if (now - wokeAt < 2000) return;
+      wokeAt = now;
+      this.resyncLinks(false);
+    };
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        this.hiddenAt = Date.now();
-      } else {
-        // Mobile OSes silently kill background sockets; resync instead of trusting the streams.
-        this.resyncLinks(Date.now() - this.hiddenAt <= 20_000);
-      }
+      if (!document.hidden) wake();
     });
+    window.addEventListener("focus", wake);
+    window.addEventListener("pageshow", wake);
     window.addEventListener(
       "online",
-      () => this.resyncLinks(true),
+      () => this.resyncLinks(false), // the network changed: the old stream is on a dead route
     );
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
