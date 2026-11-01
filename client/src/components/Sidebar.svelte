@@ -687,11 +687,11 @@
 		font-size: var(--fs-sm);
 	}
 	/* a pinned row's mark (PinMark) hangs off its icon: the icon boxes are its hosts. The folder icon is 14px against a logo's 16px,
-	   both centred on their column, so its corner is 1px further in */
+	   both centred on their column, so the mark moves 1px further in to sit on the same spot of the glyph */
 	:global(:where(.side) .dicon) {
 		position: relative;
-		--pinmark-x: -4px;
-		--pinmark-y: -2px;
+		--pinmark-x: -2px;
+		--pinmark-y: 0px;
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	:global(:where(.side) .title .track) {

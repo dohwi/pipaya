@@ -10,7 +10,8 @@
 	 *  The glyph is 10px, slanted 35deg (driven in), with a thin halo in `--pinmark-ring` (default the sidebar's colour) so it
 	 *  reads over the icon without a plate. Its colour is `--pinmark-c` (default the icon's resting grey); a host showing an
 	 *  agent's state sets it to the same state colour, so the pin follows the logo.
-	 *  `--pinmark-x` / `--pinmark-y` move it off the corner (defaults fit a 16px icon; a 14px one uses -4px / -2px).
+	 *  It overlaps the icon's corner a little (stuck into it). `--pinmark-x` / `--pinmark-y` move it (defaults fit a 16px
+	 *  icon; a 14px one uses -2px / 0, so the mark sits at the same spot of the glyph).
 	 */
 	let { label = t("고정됨") }: { label?: string } = $props();
 </script>
@@ -20,8 +21,8 @@
 <style>
 	.pinmark {
 		position: absolute;
-		right: var(--pinmark-x, -3px);
-		bottom: var(--pinmark-y, -3px);
+		right: var(--pinmark-x, -1px);
+		bottom: var(--pinmark-y, -1px);
 		display: grid;
 		place-items: center;
 		width: 10px;

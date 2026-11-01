@@ -455,16 +455,12 @@
 		flex: none;
 		--pinmark-ring: var(--bg);
 	}
-	/* a tab's icon and title sit 4px apart; the mark hangs 3px past the icon, so a pinned icon keeps 4px clear of the title */
-	.ico:has(> :global(.pinmark)) {
-		margin-right: 3px; /* the mark's overhang (PinMark right: -3px) */
-	}
-	/* the 14px strip icons: the mark's corner is 1px further in than on a 16px logo, like a sidebar folder's */
+	/* the 14px strip icons: the mark moves 1px further in than on a 16px logo, like a sidebar folder's */
 	.ico:not(:has(> .agent)) {
-		--pinmark-x: -4px;
-		--pinmark-y: -2px;
+		--pinmark-x: -2px;
+		--pinmark-y: 0px;
 	}
-	.ico :global(svg),
+	.ico > :global(svg), /* the icon's own glyph only: the pinned mark keeps its 10px */
 	.x :global(svg),
 	.add :global(svg) {
 		width: 14px;
