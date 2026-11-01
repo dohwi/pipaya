@@ -236,3 +236,25 @@ describe("motion goes through lib/motion", () => {
 		}
 	});
 });
+
+describe("model icon image cache", () => {
+	test("peekIconImage returns nothing until the image has been loaded, then the same URL at once", async () => {
+		const { peekIconImage, loadIconImage } = await import("../src/lib/model-icon-image");
+		const conn = { baseUrl: "http://x.test", token: "t" };
+		expect(peekIconImage(conn, "img:a")).toBeNull();
+		const realFetch = globalThis.fetch;
+		const realCreate = URL.createObjectURL;
+		globalThis.fetch = (async () => new Response(new Blob(["x"]), { status: 200 })) as unknown as typeof fetch;
+		URL.createObjectURL = () => "blob:test-1";
+		try {
+			const url = await loadIconImage(conn, "img:a");
+			await Promise.resolve();
+			expect(url).toBe("blob:test-1");
+			expect(peekIconImage(conn, "img:a")).toBe("blob:test-1");
+			expect(peekIconImage(conn, "img:b")).toBeNull();
+		} finally {
+			globalThis.fetch = realFetch;
+			URL.createObjectURL = realCreate;
+		}
+	});
+});

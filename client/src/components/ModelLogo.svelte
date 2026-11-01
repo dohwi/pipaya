@@ -2,7 +2,7 @@
 	import PipayaMark from "./PipayaMark.svelte";
 	import { brandOf, BRAND_COLOR, PIPAYA_ICON, type Brand } from "../lib/brand";
 	import { BRAND_MARKS } from "../lib/brand-marks";
-	import { isImageIcon, loadIconImage } from "../lib/model-icon-image";
+	import { isImageIcon, loadIconImage, peekIconImage } from "../lib/model-icon-image";
 	import { app } from "../lib/store.svelte";
 
 	/**
@@ -28,11 +28,16 @@
 		colored?: boolean;
 	} = $props();
 
-	let imageUrl = $state<string | null>(null);
+	// An icon seen before is drawn in the first frame (the dialog opens with it in place); only a new one waits for the fetch.
+	const first = () => { const c = conn ?? app.conn; return icon && isImageIcon(icon) && c ? peekIconImage(c, icon) : null; };
+	// svelte-ignore state_referenced_locally
+	let imageUrl = $state<string | null>(first());
 	$effect(() => {
-		imageUrl = null;
 		const c = conn ?? app.conn;
-		if (!icon || !isImageIcon(icon) || !c) return;
+		if (!icon || !isImageIcon(icon) || !c) { imageUrl = null; return; }
+		const hit = peekIconImage(c, icon);
+		if (hit) { imageUrl = hit; return; }
+		imageUrl = null;
 		let live = true;
 		void loadIconImage(c, icon).then((u) => { if (live) imageUrl = u; });
 		return () => { live = false; };
