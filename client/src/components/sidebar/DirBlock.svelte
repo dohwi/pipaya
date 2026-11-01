@@ -80,7 +80,7 @@
 						}}
 					/>
 				{:else}
-					<span class="dname" role="presentation" ondblclick={(e) => (e.preventDefault(), sb.dirRename.start(key, label))} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: label })}>{label}</span>
+					<span class="dname" title={label}>{label}</span>
 				{/if}
 				{#if above}<span class="dparent mono" use:tail={above}></span>{/if}
 			</span>

@@ -48,7 +48,7 @@
 	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && sb.startRename(x.id, x.title)} title={tip}>
+	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} title={tip}>
 		{@render body(pinned)}
 	</button>
 </RowShell>

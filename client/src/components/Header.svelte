@@ -66,11 +66,7 @@
 
 		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} ondblclick={(e) => {
-			// the group's name on a path renames the group; anywhere else the title's own subject
-			const t0 = (e.target as Element).closest(".gname") && groupTarget ? groupTarget : target;
-			if (t0) rename.start(t0.id, t0.name);
-		}} use:pressMenu={titleMenu}>
+		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} use:pressMenu={titleMenu}>
 			{#if (target && rename.is(target.id)) || (groupTarget && rename.is(groupTarget.id))}
 				{@const renamingGroup = !!groupTarget && rename.is(groupTarget.id)}
 				<input

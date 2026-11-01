@@ -128,7 +128,7 @@
 					}}
 				/>
 			{:else}
-			<span class="tt" role="presentation" ondblclick={() => id && rename.start(id, titleNow())}>
+			<span class="tt">
 				{#if term}
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>

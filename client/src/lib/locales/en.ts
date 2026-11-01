@@ -704,7 +704,6 @@ export const en: Record<string, string> = {
 	"대화 검색": "Search chats",
 	"검색 결과 없음": "No results",
 	"활성 대화 없음": "No active chats",
-	"{name} · 더블 클릭으로 이름 바꾸기": "{name} · double-click to rename",
 	"그룹 이름 바꾸기": "Rename group",
 	"그룹 해제": "Ungroup",
 	"그룹 해제 (대화는 그대로 남습니다)": "Ungroup (the chats stay)",
