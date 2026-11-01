@@ -12,6 +12,7 @@
 	import type { Session } from "../../lib/types";
 	import type { TerminalInfo } from "../../lib/terminal";
 	import Icon from "../Icon.svelte";
+	import PinMark from "../PinMark.svelte";
 	import GroupBlock from "./GroupBlock.svelte";
 	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
@@ -58,7 +59,7 @@
 	>
 		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon"><Icon name="folder" />{#if pinned}<span class="tpin dpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}</span>
+			<span class="dicon"><Icon name="folder" />{#if pinned}<PinMark />{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
 					<!-- svelte-ignore a11y_autofocus -->

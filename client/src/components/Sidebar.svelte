@@ -686,47 +686,12 @@
 		white-space: nowrap;
 		font-size: var(--fs-sm);
 	}
-	/* a pinned row's pin is a mark stuck in its icon's bottom-right corner (the top-right is the status dot's): the same spot on every row, whatever its title's length.
-	   It takes the icon's colour: the logo's state colour while the agent works, asks, is done or failed, otherwise the icon's resting grey (no plate behind it:
-	   the card's wash is not one colour, so a thin halo in the sidebar's colour keeps it readable over the logo) */
-	:global(:where(.side) .tpin) {
-		--pin-c: var(--text-dim);
-		position: absolute;
-		right: var(--pin-x, -3px);
-		bottom: var(--pin-y, -3px);
-		display: grid;
-		place-items: center;
-		width: 10px;
-		height: 10px;
-		color: var(--pin-c);
-		pointer-events: none;
-	}
-	:global(:where(.side) .lead:has(.agent.working) .tpin) {
-		--pin-c: var(--info);
-	}
-	:global(:where(.side) .lead:has(.agent.asking) .tpin) {
-		--pin-c: var(--warn);
-	}
-	:global(:where(.side) .lead:has(.agent.done) .tpin) {
-		--pin-c: var(--ok);
-	}
-	:global(:where(.side) .lead:has(.agent.failed) .tpin) {
-		--pin-c: var(--danger);
-	}
-	:global(:where(.side) .tpin svg) {
-		width: 10px;
-		height: 10px;
-		stroke-width: 2.4;
-		transform: rotate(35deg);
-		filter: drop-shadow(0 0 1px var(--bg-side)) drop-shadow(0 0 1px var(--bg-side));
-	}
-	:global(:where(.side) .dicon:has(> .tpin)) {
+	/* a pinned row's mark (PinMark) hangs off its icon: the icon boxes are its hosts. The folder icon is 14px against a logo's 16px,
+	   both centred on their column, so its corner is 1px further in */
+	:global(:where(.side) .dicon) {
 		position: relative;
-	}
-	/* the folder icon is 14px against a logo's 16px, both centred on their column: its corner is 1px further in on both sides */
-	:global(:where(.side) .dicon > .tpin) {
-		--pin-x: -4px;
-		--pin-y: -2px;
+		--pinmark-x: -4px;
+		--pinmark-y: -2px;
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	:global(:where(.side) .title .track) {

@@ -4,6 +4,7 @@
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Pin from "./Pin.svelte";
+	import PinMark from "./PinMark.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { newMenuEntries, rowMenuEntries, type RowTarget } from "../lib/sidebar-model";
 	import { InlineRename } from "../lib/inline-rename.svelte";
@@ -162,6 +163,7 @@
 </script>
 
 {#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
+	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="tab"
@@ -191,11 +193,11 @@
 				}}
 			>
 				{#if x.kind === "group"}
-					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
+					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}{#if pinned}<PinMark />{/if}</span>
 				{:else if x.kind === "terminal"}
-					<span class="ico"><Icon name="terminal" /></span>
+					<span class="ico"><Icon name="terminal" />{#if pinned}<PinMark />{/if}</span>
 				{:else}
-					<AgentBadge id={x.id} state={st} size={16} />
+					<span class="ico"><AgentBadge id={x.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 				{/if}
 				{#if rename.is(x.id)}
 					<input
@@ -448,11 +450,19 @@
 		color: var(--text-faint);
 	}
 	.ico {
+		position: relative; /* hosts the status dot (Pin) and the pinned mark (PinMark) */
 		display: grid;
 		flex: none;
+		--pinmark-ring: var(--bg);
 	}
-	.gico {
-		position: relative;
+	/* a tab's icon and title sit 4px apart; the mark hangs 3px past the icon, so a pinned icon keeps 4px clear of the title */
+	.ico:has(> :global(.pinmark)) {
+		margin-right: 3px; /* the mark's overhang (PinMark right: -3px) */
+	}
+	/* the 14px strip icons: the mark's corner is 1px further in than on a 16px logo, like a sidebar folder's */
+	.ico:not(:has(> .agent)) {
+		--pinmark-x: -4px;
+		--pinmark-y: -2px;
 	}
 	.ico :global(svg),
 	.x :global(svg),

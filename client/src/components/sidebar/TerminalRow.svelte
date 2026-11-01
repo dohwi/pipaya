@@ -2,8 +2,8 @@
 	import type { DropOpts } from "../../lib/dnd.svelte";
 	import type { SidebarNode } from "../../lib/sidebar-ctx";
 	import type { TerminalInfo } from "../../lib/terminal";
-	import { t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
+	import PinMark from "../PinMark.svelte";
 	import RowTitle from "./RowTitle.svelte";
 	import TabRow from "./TabRow.svelte";
 
@@ -12,7 +12,7 @@
 </script>
 
 {#snippet body(pinned: boolean)}
-	<span class="lead"><Icon name="terminal" />{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}</span>
+	<span class="lead"><Icon name="terminal" />{#if pinned}<PinMark />{/if}</span>
 	<RowTitle text={x.title} />
 {/snippet}
 
