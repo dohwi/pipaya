@@ -170,6 +170,17 @@
 
 	// Drag the sidebar edge to resize it (desktop).
 	let resizing = $state(false);
+	// the reconnect link gives feedback: the net stays "offline" while a retry runs, so without this a tap looks like nothing happened
+	let retrying = $state(false);
+	async function retryNow() {
+		if (retrying) return;
+		retrying = true;
+		try {
+			await Promise.all([app.sync(), new Promise((r) => setTimeout(r, 800))]); // hold at least 800ms so a fast failure is still visible
+		} finally {
+			retrying = false;
+		}
+	}
 	let gripFrom = { x: 0, w: 0 };
 	function gripDown(e: PointerEvent) {
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -352,8 +363,8 @@
 						<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
 						<button class="link" onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
 					{:else}
-						<Icon name="wifi-off" /> {t("서버에 다시 연결하는 중…")}
-						<button class="link" onclick={() => app.sync()}>{t("다시 연결하기")}</button>
+						{#if retrying}<span class="spinner"></span>{:else}<Icon name="wifi-off" />{/if} {t("서버에 다시 연결하는 중…")}
+						{#if !retrying}<button class="link" onclick={retryNow}>{t("다시 연결하기")}</button>{/if}
 					{/if}
 				</div>
 			{/if}
