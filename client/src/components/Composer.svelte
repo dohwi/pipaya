@@ -496,18 +496,41 @@
 			e.preventDefault();
 			return;
 		}
-		if (e.key !== "Enter" || composing || e.isComposing) return;
+		if (e.key !== "Enter") return;
 		// Phones: Enter inserts a newline, the buttons send. Desktop: Enter sends.
 		if (isTouch()) return;
 		const combo = buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
+		if (composing || e.isComposing) {
+			// IME (Korean etc.): this Enter only commits the last syllable. Remember it and send once the composition ends,
+			// so the user does not have to press Enter twice.
+			if (!e.shiftKey) pendingEnter = combo;
+			return;
+		}
+		enterAction(e, combo);
+	}
+
+	/** Enter pressed while composing: the combo to act on when `compositionend` arrives. */
+	let pendingEnter: string | null = null;
+	function onCompositionEnd(e: CompositionEvent) {
+		composing = false;
+		const combo = pendingEnter;
+		pendingEnter = null;
+		// Hangul only: there Enter just ends the last syllable. In Japanese/Chinese Enter confirms a conversion and
+		// a second Enter sends, so those keep their two presses.
+		if (combo === null || !/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(e.data ?? "")) return;
+		// The committed text lands in `text` after this event; act on the next tick.
+		setTimeout(() => enterAction(null, combo), 0);
+	}
+
+	function enterAction(e: KeyboardEvent | null, combo: string) {
 		// Mid-run: plain Enter always steers; the user's queue shortcut (Alt+Enter by default) queues for afterwards.
 		if (running && combo !== "Enter" && combo === app.prefs.bindings.queueMessage) {
-			e.preventDefault();
+			e?.preventDefault();
 			void during("queue");
 			return;
 		}
-		if (e.shiftKey) return;
-		e.preventDefault();
+		if (e?.shiftKey) return;
+		e?.preventDefault();
 		// Commands run locally even mid-run (/stop, ...).
 		const parsed = parseSlash(text);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
@@ -606,7 +629,7 @@
 			onfocus={syncCaret}
 			onpaste={onPaste}
 			oncompositionstart={() => (composing = true)}
-			oncompositionend={() => (composing = false)}
+			oncompositionend={onCompositionEnd}
 			rows="1"
 			placeholder={promptHint ? "" : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}

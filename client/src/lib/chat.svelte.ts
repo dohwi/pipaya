@@ -496,7 +496,10 @@ export class ChatState {
 				}
 				if (m.role === "user") {
 					const text = textOf(m.content);
-					const q = this.queued.findIndex((x) => x.text.trim() === text.trim());
+					// Same text queued twice (steer and follow_up): steers are delivered first, so that one is the one that landed.
+					const same = (x: { text: string }) => x.text.trim() === text.trim();
+					const sq = this.queued.findIndex((x) => x.mode === "steer" && same(x));
+					const q = sq >= 0 ? sq : this.queued.findIndex(same);
 					if (q >= 0) this.queued.splice(q, 1);
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
