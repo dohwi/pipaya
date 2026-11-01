@@ -8,6 +8,8 @@ export interface MenuRow {
 	desc: string;
 	current?: boolean;
 	tag?: string;
+	/** Name drawn in the accent colour (skills and extension commands). */
+	accent?: boolean;
 	group?: string;
 }
 
@@ -43,10 +45,10 @@ export function optionRows(options: readonly { value: string; desc: string; curr
 
 export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 	return entries.map((it): MenuRow => {
-		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, group: msg("스킬") };
+		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, accent: true, group: msg("스킬") };
 		if ("family" in it) {
 			const f = it.family;
-			return { id: `${f.prefix}:${f.name}`, text: slash(`${f.prefix}:${f.name}`), args: f.args, desc: f.description, tag: f.label, group: f.label };
+			return { id: `${f.prefix}:${f.name}`, text: slash(`${f.prefix}:${f.name}`), args: f.args, desc: f.description, tag: f.label, accent: true, group: f.label };
 		}
 		return { id: it.command.name, text: slash(it.command.name), args: it.command.args, desc: it.command.desc, group: msg("명령") };
 	});

@@ -10,8 +10,9 @@ describe("recommendation menu rows", () => {
 		]);
 		expect(rows).toEqual([
 			{ id: "model", text: "/model", args: "[name]", desc: "pick a model", group: "명령" },
-			{ id: "skill:review", text: "/skill:review", desc: "review code", group: "스킬" },
-			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it", tag: "Snippets", group: "Snippets" },
+			{ id: "skill:review", text: "/skill:review", desc: "review code", accent: true, group: "스킬" },
+			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it", tag: "Snippets",
+				accent: true, group: "Snippets" },
 		]);
 	});
 	test("images come before files, and a folder is labelled", () => {

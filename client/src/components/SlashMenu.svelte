@@ -10,7 +10,7 @@
 		onpick,
 		onhover,
 	}: {
-		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; group?: string; state?: Activity }[];
+		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; accent?: boolean; group?: string; state?: Activity }[];
 		index: number;
 		label?: string;
 		empty?: string;
@@ -41,7 +41,7 @@
 			onclick={() => onpick(i)}
 			onmousemove={() => onhover(i)}
 		>
-			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={!!item.tag}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
+			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={item.accent}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
 			<span class="d">{t(item.desc)}</span>
 			{#if item.tag}<span class="tag">{t(item.tag)}</span>{/if}
 			{#if item.current}<span class="current">{t("현재")}</span>{/if}
