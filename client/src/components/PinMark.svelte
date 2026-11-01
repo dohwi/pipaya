@@ -12,8 +12,7 @@
 	 *  The pin is a 9px glyph slanted 35deg, its box 1px past the icon glyph's corner (whole pixels, so it stays crisp at 1x
 	 *  and barely pulls the icon off its row's centre); the cutout follows the pin's own outline with 0.9px of air.
 	 *  A host whose icon glyph is smaller than the box (a 14px glyph centred in 16px) sets `--pinmark-inset` to the gap (1px).
-	 *  Its colour is `--pinmark-c` (default the icon's resting grey); a host showing an agent's state gets the same state
-	 *  colour, so the pin follows the logo.
+	 *  Its colour is always `--pinned` (violet), never the icon's or a state colour: the status dot already owns those.
 	 */
 	let { label = t("고정됨") }: { label?: string } = $props();
 </script>
@@ -30,7 +29,7 @@
 		place-items: center;
 		width: 9px;
 		height: 9px;
-		color: var(--pinmark-c, var(--text-dim));
+		color: var(--pinned);
 		pointer-events: none;
 	}
 	.pinmark :global(svg) {
@@ -54,18 +53,5 @@
 			linear-gradient(#000, #000),
 			var(--pinmark-cut) right -3px bottom -3px / 13px 13px no-repeat;
 		mask-composite: exclude;
-	}
-	/* an agent's logo carries its state colour: the pin takes the same one */
-	:global(:has(> .agent.working)) > .pinmark {
-		--pinmark-c: var(--info);
-	}
-	:global(:has(> .agent.asking)) > .pinmark {
-		--pinmark-c: var(--warn);
-	}
-	:global(:has(> .agent.done)) > .pinmark {
-		--pinmark-c: var(--ok);
-	}
-	:global(:has(> .agent.failed)) > .pinmark {
-		--pinmark-c: var(--danger);
 	}
 </style>

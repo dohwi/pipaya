@@ -182,6 +182,7 @@
 	--mark-header: #fcd34d;
 	--mark-mention: #7dd3fc;
 	--info: #5aa9ff;
+	--pinned: #b08cff; /* the pinned mark: a hue no status uses */
 	--ok: #3ecf8e;
 	--ok-fg: #052e1b; /* text on a solid --ok fill */
 	--warn: #f5a524;
@@ -232,6 +233,7 @@
 	--mark-file: #10b981;
 	--mark-mention: #0284c7;
 	--info: #1d6fe0;
+	--pinned: #7a4fd6;
 	--ok: #12a36a;
 	--ok-fg: #ffffff;
 	--warn: #b86e00;
