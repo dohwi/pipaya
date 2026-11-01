@@ -149,7 +149,7 @@
 			{:else if tab === "general"}
 				<GeneralPane />
 			{:else if current.server && server}
-				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} />{/key}
+				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} only={current.id === "mcp" && extId?.startsWith("mcp:") ? extId.slice(4) : null} />{/key}
 			{/if}
 			</div>
 			{/key}

@@ -18,7 +18,7 @@
 	import type { McpInfo, McpServer, McpServerInfo } from "../lib/types";
 
 	/** The MCP server list and its add/edit form for one server (`api`): the dialog and the settings page both show it. */
-	let { api, data = $bindable(null), loading = $bindable(true), refresh = 0 }: { api: Api; data?: McpInfo | null; loading?: boolean; refresh?: number } = $props();
+	let { api, data = $bindable(null), loading = $bindable(true), refresh = 0, only = null }: { api: Api; data?: McpInfo | null; loading?: boolean; refresh?: number; only?: string | null } = $props();
 
 	let error = $state("");
 	let busy = $state(false);
@@ -105,6 +105,8 @@
 		if (await save(list)) form = null;
 	}
 
+	/** One server's card only (picked in the settings sidebar); the whole list when it is gone or not asked for. */
+	const shown = $derived(only && data?.servers.some((x) => x.name === only) ? data.servers.filter((x) => x.name === only) : (data?.servers ?? []));
 	const statusTone = (s: McpServerInfo["status"]) => (s === "ready" ? "ok" : s === "error" ? "danger" : "neutral");
 	const statusText = (s: McpServerInfo["status"]) =>
 		s === "ready" ? t("연결됨") : s === "error" ? t("오류") : s === "connecting" ? t("연결하는 중…") : t("꺼져 있음");
@@ -156,7 +158,7 @@
 		<EmptyState loading />
 	{:else if data}
 		<ul class="list">
-			{#each data.servers as s (s.name)}
+			{#each shown as s (s.name)}
 				<li animate:reflow in:rowIn out:rowOut>
 					<ListItem off={!s.enabled}>
 						{#snippet lead()}<Switch checked={s.enabled} disabled={busy} onchange={on => toggle(s, on)} label={s.name} />{/snippet}
@@ -180,7 +182,7 @@
 				<EmptyState as="li">{t("등록된 MCP 서버가 없습니다.")}</EmptyState>
 			{/each}
 		</ul>
-		<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>
+		{#if shown.length === data.servers.length}<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>{/if}
 	{/if}
 </div>
 

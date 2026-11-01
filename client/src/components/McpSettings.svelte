@@ -5,7 +5,7 @@
 	import McpPanel from "./McpPanel.svelte";
 
 	/** MCP servers of one server, read from and saved to that server only (not the open one, unless it is). */
-	let { serverId }: { serverId: string } = $props();
+	let { serverId, only = null }: { serverId: string; only?: string | null } = $props();
 	const api = $derived.by(() => {
 		const s = app.servers.find((x) => x.id === serverId);
 		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
@@ -14,7 +14,7 @@
 
 <section class="set-group">
 	<div class="section-label">{t("MCP 서버")}</div>
-	{#if api}{#key serverId}<McpPanel {api} />{/key}{/if}
+	{#if api}{#key serverId}<McpPanel {api} {only} />{/key}{/if}
 </section>
 
 <style>

@@ -52,9 +52,23 @@
 		app.links[id]?.api.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
 	});
+	/** MCP servers of the chosen server, listed under "MCP" the same way (picking one narrows the pane to it). */
+	let mcpSide = $state<{ id: string; rows: { name: string; ready: boolean; failed: boolean }[] } | null>(null);
+	$effect(() => {
+		void app.mcpTick;
+		const id = server?.id;
+		if (!id) { mcpSide = null; return; }
+		let live = true;
+		app.links[id]?.api.mcp().then((r) => { if (live) mcpSide = { id, rows: r.servers.map((x) => ({ name: x.name, ready: x.status === "ready", failed: x.status === "error" })) }; }).catch(() => { if (live) mcpSide = null; });
+		return () => { live = false; };
+	});
 	type Kid = ExtensionRow;
 	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount(server?.id) : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
+		if (id === "mcp") {
+			const rows = mcpSide && mcpSide.id === server?.id ? mcpSide.rows : [];
+			return rows.map((m, i) => ({ id: `mcp:${m.name}`, name: m.name, live: m.ready, half: m.failed, halfLabel: t("오류"), builtin: false, end: i === rows.length - 1 }));
+		}
 		const sc = extScope(id);
 		if (!sc) return [];
 		void app.extensionStoreTick;

@@ -29,7 +29,7 @@
 	 */
 	type Section = "info" | "agent" | "models" | "tools" | "mcp" | "sessions" | "devices";
 	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
-	let { target, embedded = false, onclose, section }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section } = $props();
+	let { target, embedded = false, onclose, section, only = null }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section; only?: string | null } = $props();
 
 	// App.svelte re-mounts this component per target ({#key}), so reading `target` once is intended.
 	// svelte-ignore state_referenced_locally
@@ -171,7 +171,7 @@
 		</div>
 	{:else if editing && (tab === "agent" || tab === "models" || tab === "tools" || tab === "mcp")}
 		<!-- the modal keeps one "에이전트" tab with all three; the settings window pins one of them per section -->
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}{#if tab === "agent" || tab === "models"}<ModelConnections serverId={editing.id} />{/if}{#if tab === "agent" || tab === "tools"}<ToolSettings serverId={editing.id} />{/if}{#if tab === "agent" || tab === "mcp"}<McpSettings serverId={editing.id} />{/if}{/key}</div>
+		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}{#if tab === "agent" || tab === "models"}<ModelConnections serverId={editing.id} />{/if}{#if tab === "agent" || tab === "tools"}<ToolSettings serverId={editing.id} />{/if}{#if tab === "agent" || tab === "mcp"}<McpSettings serverId={editing.id} {only} />{/if}{/key}</div>
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">
