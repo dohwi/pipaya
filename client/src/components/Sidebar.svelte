@@ -618,6 +618,9 @@
 		top: 1px; /* Korean glyphs sit low in their line box: the 16px icon sat 1px above the title's visual centre (measured at 3x) */
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
+	:global(:where(.side) .lead:has(> svg)) {
+		--pinmark-inset: 1px; /* a 14px glyph centred in the 16px lead box: the pinned mark sits on the glyph's corner */
+	}
 	:global(:where(.side) .lead > svg) {
 		width: 14px;
 		height: 14px;
@@ -686,12 +689,9 @@
 		white-space: nowrap;
 		font-size: var(--fs-sm);
 	}
-	/* a pinned row's mark (PinMark) hangs off its icon: the icon boxes are its hosts. The folder icon is 14px against a logo's 16px,
-	   both centred on their column, so the mark moves 1px further in to sit on the same spot of the glyph */
+	/* a pinned row's mark (PinMark) is set into its icon's corner: the icon boxes are its hosts */
 	:global(:where(.side) .dicon) {
 		position: relative;
-		--pinmark-x: -2px;
-		--pinmark-y: 0px;
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	:global(:where(.side) .title .track) {

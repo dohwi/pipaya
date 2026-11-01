@@ -453,14 +453,8 @@
 		position: relative; /* hosts the status dot (Pin) and the pinned mark (PinMark) */
 		display: grid;
 		flex: none;
-		--pinmark-ring: var(--bg);
 	}
-	/* the 14px strip icons: the mark moves 1px further in than on a 16px logo, like a sidebar folder's */
-	.ico:not(:has(> .agent)) {
-		--pinmark-x: -2px;
-		--pinmark-y: 0px;
-	}
-	.ico > :global(svg), /* the icon's own glyph only: the pinned mark keeps its 10px */
+	.ico > :global(svg), /* the icon's own glyph only: the pinned mark keeps its own size */
 	.x :global(svg),
 	.add :global(svg) {
 		width: 14px;

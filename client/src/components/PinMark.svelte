@@ -3,15 +3,16 @@
 	import Icon from "./Icon.svelte";
 
 	/**
-	 * The "pinned" mark: a small pin stuck in its host icon's bottom-right corner (the top-right corner is the status
-	 * dot's, a `Pin`). One look everywhere a pinned thing is shown: sidebar folders and tabs, and the tab strip.
+	 * The "pinned" mark: a small pin set into its host icon's bottom-right corner (the top-right corner is the status
+	 * dot's, a `Pin`), so the pinned icon reads as one new icon. The icon is knocked out in a circle around the pin (a
+	 * mask, no plate or halo: it works on any background), leaving a hair of air between the two.
+	 * One look everywhere a pinned thing is shown: sidebar folders and tabs, and the tab strip.
 	 *
-	 *  The host must be `position: relative`. It sits in the same spot whatever the title beside it.
-	 *  The glyph is 10px, slanted 35deg (driven in), with a thin halo in `--pinmark-ring` (default the sidebar's colour) so it
-	 *  reads over the icon without a plate. Its colour is `--pinmark-c` (default the icon's resting grey); a host showing an
-	 *  agent's state sets it to the same state colour, so the pin follows the logo.
-	 *  It overlaps the icon's corner a little (stuck into it). `--pinmark-x` / `--pinmark-y` move it (defaults fit a 16px
-	 *  icon; a 14px one uses -2px / 0, so the mark sits at the same spot of the glyph).
+	 *  The host must be `position: relative`; its other children are the icon and get the cutout.
+	 *  The pin is an 8px glyph slanted 35deg, its centre 1.5px inside the host's corner; the cutout is a 4.8px circle round it.
+	 *  A host whose icon glyph is smaller than the box (a 14px glyph centred in 16px) sets `--pinmark-inset` to the gap (1px).
+	 *  Its colour is `--pinmark-c` (default the icon's resting grey); a host showing an agent's state gets the same state
+	 *  colour, so the pin follows the logo.
 	 */
 	let { label = t("고정됨") }: { label?: string } = $props();
 </script>
@@ -21,21 +22,28 @@
 <style>
 	.pinmark {
 		position: absolute;
-		right: var(--pinmark-x, -1px);
-		bottom: var(--pinmark-y, -1px);
+		/* an 8px box with its centre 1.5px inside the icon glyph's corner; a glyph smaller than its host box sits --pinmark-inset in from it */
+		right: calc(var(--pinmark-inset, 0px) - 2.5px);
+		bottom: calc(var(--pinmark-inset, 0px) - 2.5px);
 		display: grid;
 		place-items: center;
-		width: 10px;
-		height: 10px;
+		width: 8px;
+		height: 8px;
 		color: var(--pinmark-c, var(--text-dim));
 		pointer-events: none;
 	}
 	.pinmark :global(svg) {
-		width: 10px;
-		height: 10px;
-		stroke-width: 2.4;
+		width: 8px;
+		height: 8px;
+		stroke-width: 2.3;
 		transform: rotate(35deg);
-		filter: drop-shadow(0 0 1px var(--pinmark-ring, var(--bg-side))) drop-shadow(0 0 1px var(--pinmark-ring, var(--bg-side)));
+	}
+	/* the icon glyph beside the mark (not the status dot) is knocked out round the pin: centre on the pin's, radius 4.8 (pin 4 + 0.8 of air).
+	   The glyph is its own mask box, so the centre is 1.5px inside the glyph's corner whatever the host's size */
+	:global(:has(> .pinmark)) > :global(:not(.pinmark, .pin)) {
+		--cut: 1.5px;
+		-webkit-mask: radial-gradient(circle 4.8px at calc(100% - var(--cut)) calc(100% - var(--cut)), transparent 4.3px, #000 4.8px);
+		mask: radial-gradient(circle 4.8px at calc(100% - var(--cut)) calc(100% - var(--cut)), transparent 4.3px, #000 4.8px);
 	}
 	/* an agent's logo carries its state colour: the pin takes the same one */
 	:global(:has(> .agent.working)) > .pinmark {
