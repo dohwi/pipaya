@@ -65,5 +65,5 @@ cd client && bun run check && bun run test && bun run build
 1. `chore/release-X.Y.Z` 브랜치에서 `bun scripts/bump-version.ts X.Y.Z`를 실행하고 `chore(release): vX.Y.Z`로 커밋합니다.
 2. `main`에 병합합니다. `tauri.conf.json` 변경으로 *Client release* 워크플로가 실행되어 모든 플랫폼을 빌드하고 `latest` 릴리스를 갱신합니다.
 
-버전은 SemVer를 따릅니다(1.0 전까지 `0.MINOR.PATCH`): `fix`는 patch, `feat`나 호환 깨짐은 minor입니다.
+버전은 `0.MINOR.PATCH`(1.0 전)를 쓰지만, 릴리스마다 올리는 폭은 변경 종류와 상관없이 항상 0.0.1입니다(`feat`가 있어도 minor를 올리지 않습니다).
 작업 묶음은 오래 가는 버전 브랜치 대신 버전 이름의 GitHub 마일스톤으로 관리합니다.
