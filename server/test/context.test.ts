@@ -181,7 +181,7 @@ describe("context API and application", () => {
 			const specs = preview.toolSpecs as { name: string; description: string; parameters: any; source: string; enabled: boolean; bytes: number }[];
 			const bySource = (src: string) => specs.filter((t) => t.source === src).map((t) => t.name);
 			expect(bySource("session")).toEqual(["read"]);
-			expect(bySource("always")).toEqual(["peer_send", "peer_read", "peer_list", "peer_archive", "peer_abort", "peer_answer", "peer_create", "peer_manage", "peer_group", "delegate"]);
+			expect(bySource("always")).toEqual(["peer", "delegate"]);
 			expect(specs.every((t) => t.enabled && t.description && t.bytes > t.description.length)).toBe(true);
 			expect(specs.find((t) => t.name === "read")!.parameters).toMatchObject({ type: "object" });
 			// The system's own wording is listed too, each entry with when it applies and its text.
@@ -189,7 +189,7 @@ describe("context API and application", () => {
 			expect(prompts.map((p) => p.id)).toEqual(expect.arrayContaining(["sdk-claude-code", "runtime-peer-message", "runtime-compaction-summary", "helper-compaction", "helper-describe", "helper-group-name"]));
 			expect(prompts.every((p) => p.when && p.text && p.bytes === Buffer.byteLength(p.text))).toBe(true);
 			expect(prompts.find((p) => p.id === "helper-compaction")!.text).toContain("You compress the earlier part");
-			expect(prompts.find((p) => p.id === "runtime-peer-message")!.text).toContain("peer_send");
+			expect(prompts.find((p) => p.id === "runtime-peer-message")!.text).toContain("peer");
 			// The echo model speaks openai-completions, so the Anthropic / Codex wording is listed but not active.
 			expect(prompts.find((p) => p.id === "sdk-claude-code")!.active).toBe(false);
 			expect(prompts.find((p) => p.id === "sdk-codex-default")!.active).toBe(false);

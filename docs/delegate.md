@@ -6,12 +6,12 @@
 
 - 위치: `~/.agents/subagents/*.md`(전역), `<세션 cwd>/.agents/subagents/*.md`(프로젝트, 같은 이름이면 프로젝트가 이긴다). 호출마다 다시 읽는다.
 - 파일 이름(`.md` 제외)이 역할 이름. frontmatter: `description`, `model`(`provider/model`, 생략 = 부모 모델), `thinking`(생략 = off), `tools`(생략 = read·grep·ls), `maxTurns`(생략 12, 상한 30). 본문 = 도우미 시스템 프롬프트.
-- `delegate`·`ask_user`·`peer_*`는 `tools`에 적어도 도우미에게 주지 않는다(깊이 1, 사용자·다른 세션 접근 없음). 설정에서 끈 도구도 제외.
+- `delegate`·`ask_user`·`peer`는 `tools`에 적어도 도우미에게 주지 않는다(깊이 1, 사용자·다른 세션 접근 없음). 설정에서 끈 도구도 제외.
 
 ## 도구 (`server/src/tools.ts`, `SessionManager.delegate`)
 
 - 인자: `role`, `task`, 선택 `model`. 도우미는 부모 대화를 보지 못하므로 `task`에 목표·경로·질문·답 형식을 다 적는다.
-- 저장되지 않는 임시 Agent로 돈다: 세션 목록에 나타나지 않고, 부모에는 진행 줄(`role: 도구`)과 최종 텍스트만 남는다. 지속 대화는 `peer_create`.
+- 저장되지 않는 임시 Agent로 돈다: 세션 목록에 나타나지 않고, 부모에는 진행 줄(`role: 도구`)과 최종 텍스트만 남는다. 지속 대화는 `peer`(action create).
 - 서버 확장의 `tool_call`/`tool_result` 훅이 도우미에게도 적용된다.
 - 도우미의 토큰·비용은 `delegate` 결과의 `details.usage`에 저장되어 부모 세션 합계(`SessionStore.usage`)에 더해진다.
 

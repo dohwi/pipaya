@@ -149,7 +149,7 @@ export class SessionManager {
 		});
 	}
 
-	/** Group changes for `peer_group`, wired by the app once the group manager exists. */
+	/** Group changes for `peer(action=group_*)`, wired by the app once the group manager exists. */
 	private groupOps: GroupOps = {
 		create: () => { throw conflict("groups are not available"); },
 		add: () => { throw conflict("groups are not available"); },

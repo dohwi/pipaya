@@ -6,8 +6,8 @@ import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
 
 /**
- * Sessions talking to each other: every active session has an `@name`, an agent can message (`peer_send`) and read
- * (`peer_read`) another session or a whole tagged group, and `@name` / `@group` in a user message hands the agent a short
+ * Sessions talking to each other: every active session has an `@name`, an agent can message (`peer(action=send)`) and read
+ * (`peer(action=read)`) another session or a whole tagged group, and `@name` / `@group` in a user message hands the agent a short
  * index of those sessions (never transcripts).
  */
 
@@ -20,10 +20,10 @@ const MAX_LISTED = 12;
 const MAX_HINT_CHARS = 3000;
 const SNIPPET_CHARS = 100;
 export const READ_NOTE =
-	"This is only an index. Do not guess what they did: read a session with peer_read (a few messages) only when you need its words, and prefer git (branch, log, diff in its directory) for the work itself. Use peer_send to give a session work (to a whole tagged group, pass the group name as `to` once).";
+	"This is only an index. Do not guess what they did: read a session with peer(action=read) (a few messages) only when you need its words, and prefer git (branch, log, diff in its directory) for the work itself. Use peer(action=send) to give a session work (to a whole tagged group, pass the group name as `to` once).";
 
-/** Wording of what a peer message looks like to the receiving session (`peer_send`). */
-export const PEER_MESSAGE_TEMPLATE = "[from @${sender}, another session on this server; answer with peer_send to @${sender} only if a reply is needed]\n${message}";
+/** Wording of what a peer message looks like to the receiving session (`peer(action=send)`). */
+export const PEER_MESSAGE_TEMPLATE = "[from @${sender}, another session on this server; answer with peer(action=send) to @${sender} only if a reply is needed]\n${message}";
 /** Fills the template in one pass, so a `${sender}` or `${message}` typed inside the message itself is never expanded. */
 export const peerMessage = (self: string | undefined, message: string): string =>
 	PEER_MESSAGE_TEMPLATE.replace(/\$\{(sender|message)\}/g, (_, key: string) => (key === "sender" ? String(self) : message));
@@ -108,7 +108,7 @@ export function groupHint(groups: readonly { handle: string; members: readonly B
 		const shown = g.members.slice(0, MAX_LISTED);
 		const more = g.members.length - shown.length;
 		const lines = shown.map((m) => `- ${briefLine(m)}`);
-		if (more > 0) lines.push(`- (+${more} more; peer_read by name if needed)`);
+		if (more > 0) lines.push(`- (+${more} more; peer(action=read) by name if needed)`);
 		return `Group @${g.handle} (${g.members.length} sessions):\n${lines.join("\n")}`;
 	});
 	let body = blocks.join("\n");
@@ -154,7 +154,7 @@ export interface PeerHost {
 }
 
 export class PeerService {
-	/** `peer_send` calls in each session's current run. */
+	/** `peer(action=send)` calls in each session's current run. */
 	private sends = new Map<string, number>();
 
 	/** Questions already reported to a watcher (`sessionId:toolCallId`), so a restart or replay cannot report one twice. */
@@ -172,7 +172,7 @@ export class PeerService {
 		void this.host.deliver(watcher, body, this.host.isRunning(watcher) ? "follow_up" : "prompt").catch(() => {});
 	}
 
-	/** A watched session asks its user something and waits: nobody would notice, so the watchers hear it now (and may answer with peer_answer). */
+	/** A watched session asks its user something and waits: nobody would notice, so the watchers hear it now (and may answer with peer(action=answer)). */
 	private asked(id: string, q: QuestionRequest): void {
 		const watching = this.host.store.watchers(id);
 		if (!watching.length) return;
@@ -182,7 +182,7 @@ export class PeerService {
 		const name = this.host.store.get(id)?.name ?? "session";
 		const items = q.items?.length ? q.items : [{ question: q.question, options: q.options, recommended: q.recommended, allowFreeText: q.allowFreeText }];
 		const lines = items.map((it, i) => `${items.length > 1 ? `${i + 1}. ` : ""}${oneLine(it.question, 500)}${it.options?.length ? ` [options: ${it.options.join(" | ")}]` : ""}${it.recommended ? ` (recommended: ${it.recommended})` : ""}${it.allowFreeText ? "" : " (pick one option)"}`);
-		const body = `[from the server: @${name} is waiting for an answer and does nothing until it gets one. No reply to this message needed.]\n${lines.join("\n")}\nAnswer it with peer_answer (name: ${name}) if you can decide with what you know; if it needs the user's judgment, ask the user instead.`;
+		const body = `[from the server: @${name} is waiting for an answer and does nothing until it gets one. No reply to this message needed.]\n${lines.join("\n")}\nAnswer it with peer(action=answer) (name: ${name}) if you can decide with what you know; if it needs the user's judgment, ask the user instead.`;
 		for (const w of watching) this.tell(w, body);
 	}
 
@@ -194,7 +194,7 @@ export class PeerService {
 		const b = this.brief(id);
 		const name = b?.name ?? this.host.store.get(id)?.name ?? "session";
 		const state = result.status === "ok" || !result.status ? "finished its run" : `ended its run (${result.status}${result.error ? `: ${oneLine(result.error, 200)}` : ""})`;
-		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer_read for more, peer_send for follow-up work, peer_archive when it is done.`;
+		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer(action=read) for more, peer(action=send) for follow-up work, peer(action=archive) when it is done.`;
 		for (const w of watching) {
 			const r = this.host.store.get(w);
 			if (!r || r.closed) continue;
@@ -266,7 +266,7 @@ export class PeerService {
 
 	// ── tools ───────────────────────────────────────────────────────────────
 
-	/** `peer_send`: to one session by name, or to every other session of a group by its handle. */
+	/** `peer(action=send)`: to one session by name, or to every other session of a group by its handle. */
 	async send(selfId: string, to: string, message: string, opts: { mode?: "steer" | "follow_up"; notify?: boolean } = {}): Promise<string> {
 		const name = to.replace(/^@/, "");
 		const all = this.others(selfId);
@@ -291,10 +291,10 @@ export class PeerService {
 			}
 			return `@${t.name}${busy ? (opts.mode === "steer" ? " (busy; steered into its current run)" : " (busy; waits for its turn to end)") : ""}`;
 		}));
-		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; ${opts.notify ? "you get one report when each ends its run" : "use peer_read to check on them later"}.`;
+		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; ${opts.notify ? "you get one report when each ends its run" : "use peer(action=read) to check on them later"}.`;
 	}
 
-	/** `peer_list`: every other open session with its state, so an orchestrator sees who is working, idle or archived. */
+	/** `peer(action=list)`: every other open session with its state, so an orchestrator sees who is working, idle or archived. */
 	list(selfId: string): string {
 		const rows = this.others(selfId);
 		if (!rows.length) return "No other sessions.";
@@ -309,21 +309,21 @@ export class PeerService {
 		}).join("\n");
 	}
 
-	/** `peer_archive`: tuck a finished session away (or bring it back). A working session is refused: stop it first. */
+	/** `peer(action=archive)`: tuck a finished session away (or bring it back). A working session is refused: stop it first. */
 	archive(selfId: string, name: string, archived: boolean): string {
 		const peer = this.find(selfId, name.replace(/^@/, ""));
-		if (archived && this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; wait for its report or stop it with peer_abort first`);
+		if (archived && this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; wait for its report or stop it with peer(action=abort) first`);
 		this.host.archive(peer.id, archived);
 		return `@${peer.name} ${archived ? "archived" : "restored"}.`;
 	}
 
-	/** `peer_abort`: stop the current run of another session. */
+	/** `peer(action=abort)`: stop the current run of another session. */
 	abort(selfId: string, name: string): string {
 		const peer = this.find(selfId, name.replace(/^@/, ""));
 		return this.host.abort(peer.id) ? `Stopped @${peer.name}.` : `@${peer.name} was not working.`;
 	}
 
-	/** `peer_answer`: answer the question another session is waiting on (what the user would do in the app). */
+	/** `peer(action=answer)`: answer the question another session is waiting on (what the user would do in the app). */
 	answer(selfId: string, name: string, a: { answer?: string; answers?: string[]; toolCallId?: string }): string {
 		const peer = this.find(selfId, name.replace(/^@/, ""));
 		const waiting = this.host.questions(peer.id);
@@ -336,7 +336,7 @@ export class PeerService {
 		return `Answered @${peer.name}.${waiting.length > 1 ? ` ${waiting.length - 1} more question(s) still wait.` : ""}`;
 	}
 
-	/** `peer_create`: a new session that starts on `message`. The caller hears when it ends or asks something, unless `notify` is false. */
+	/** `peer(action=create)`: a new session that starts on `message`. The caller hears when it ends or asks something, unless `notify` is false. */
 	async create(selfId: string, input: PeerCreateInput): Promise<string> {
 		const count = (this.sends.get(selfId) ?? 0) + 1;
 		if (count > MAX_SENDS_PER_RUN) throw conflict(`at most ${MAX_SENDS_PER_RUN} peer messages per run; stop and report to the user instead`);
@@ -353,10 +353,10 @@ export class PeerService {
 			this.host.remove(r.id); // a session that never got its task is of no use
 			throw e;
 		}
-		return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer_read to check on it."}`;
+		return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer(action=read) to check on it."}`;
 	}
 
-	/** A session of this server by name, closed ones too (`peer_manage` resume). */
+	/** A session of this server by name, closed ones too (`peer(action=close|resume|delete|rename|set)` resume). */
 	private findAny(selfId: string, name: string): SessionRecord {
 		const n = name.replace(/^@/, "").toLowerCase();
 		const active = this.others(selfId).find((p) => p.name.toLowerCase() === n);
@@ -366,7 +366,7 @@ export class PeerService {
 		return closed;
 	}
 
-	/** `peer_manage`: close, resume, delete, rename, change the model, or take back a queued message. */
+	/** `peer(action=close|resume|delete|rename|set)`: close, resume, delete, rename, change the model, or take back a queued message. */
 	manage(selfId: string, name: string, action: ManageAction, a: ManageArgs = {}): string {
 		const peer = action === "resume" ? this.findAny(selfId, name) : this.find(selfId, name.replace(/^@/, ""));
 		switch (action) {
@@ -379,8 +379,8 @@ export class PeerService {
 				return `Resumed @${this.host.store.get(peer.id)?.name ?? peer.name}.`;
 			case "delete": {
 				// Deleting loses the transcript for good: only what this session started itself, and only when it is not working.
-				if (peer.parentId !== selfId) throw conflict(`only sessions you created with peer_create can be deleted; close @${peer.name} instead`);
-				if (this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; stop it with peer_abort first`);
+				if (peer.parentId !== selfId) throw conflict(`only sessions you created with peer(action=create) can be deleted; close @${peer.name} instead`);
+				if (this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; stop it with peer(action=abort) first`);
 				this.host.remove(peer.id);
 				return `Deleted @${peer.name}.`;
 			}
@@ -411,7 +411,7 @@ export class PeerService {
 		}
 	}
 
-	/** `peer_group`: arrange sessions into a tagged group, the way the user does in the app. */
+	/** `peer(action=group_*)`: arrange sessions into a tagged group, the way the user does in the app. */
 	group(selfId: string, action: "create" | "add" | "remove" | "dissolve", a: { group?: string; members?: string[]; name?: string }): string {
 		const own = this.host.store.get(selfId);
 		const ids = [...new Set((a.members ?? []).map((m) => {
@@ -437,14 +437,14 @@ export class PeerService {
 		}
 	}
 
-	/** `peer_read`: the latest messages of another session, text only. */
+	/** `peer(action=read)`: the latest messages of another session, text only. */
 	read(selfId: string, from: string, count: number, detail = false): string {
 		const peer = this.find(selfId, from.replace(/^@/, ""));
 		const rows = this.host.store.lastMessages(peer.id, Math.min(40, Math.max(1, count)));
 		const waiting = this.host.questions(peer.id);
 		const status = [
 			this.host.isRunning(peer.id) ? `@${peer.name} is still working.` : "",
-			waiting.length ? `@${peer.name} waits for an answer (peer_answer): ${waiting.map((q) => oneLine(q.question, 200)).join(" / ")}` : "",
+			waiting.length ? `@${peer.name} waits for an answer (peer(action=answer)): ${waiting.map((q) => oneLine(q.question, 200)).join(" / ")}` : "",
 		].filter(Boolean).join("\n");
 		if (!rows.length) return `${status ? `${status}\n` : ""}@${peer.name} has no messages yet.`;
 		const lines = rows.map(({ message: m }) => {
@@ -486,7 +486,7 @@ export class PeerService {
 		const asked = mentioned(text, names);
 		if (asked.length) {
 			const briefs = asked.flatMap((n) => { const p = peers.find((x) => x.name === n); const b = p && this.brief(p.id); return b ? [b] : []; });
-			out.push(briefs.length ? memberBriefHint(briefs) : `${HINT_OPEN}The user mentioned ${asked.map((n) => `@${n}`).join(", ")}: other sessions (agents) on this server. Use peer_send to give them work or ask them something, and peer_read to look at what they said or did. Do not guess what they did.</pipaya-hint>`);
+			out.push(briefs.length ? memberBriefHint(briefs) : `${HINT_OPEN}The user mentioned ${asked.map((n) => `@${n}`).join(", ")}: other sessions (agents) on this server. Use peer(action=send) to give them work or ask them something, and peer(action=read) to look at what they said or did. Do not guess what they did.</pipaya-hint>`);
 		}
 		return out;
 	}

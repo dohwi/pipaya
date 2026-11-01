@@ -50,7 +50,7 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 			delivery: "event" as const,
 			kind: "runtime" as const,
 			title: "Message from another session",
-			when: "A session used `peer_send`: this is how the receiving session sees it, as a user message",
+			when: "A session used `peer(action=send)`: this is how the receiving session sees it, as a user message",
 			text: PEER_MESSAGE_TEMPLATE,
 			active: true,
 		},

@@ -255,7 +255,7 @@ export class GroupManager {
 	}
 }
 
-/* ---------- group changes for sessions (peer_group) ---------- */
+/* ---------- group changes for sessions (peer(action=group_*)) ---------- */
 
 /** Rows of panes side by side, as the app lays out a new group by default. */
 export function rowLayout(ids: string[]): Layout {
@@ -263,7 +263,7 @@ export function rowLayout(ids: string[]): Layout {
 	return ids.slice(1).reduce<Layout>((acc, id, i) => ({ type: "split", dir: "row", ratio: (i + 1) / (i + 2), a: acc, b: pane(id) }), pane(ids[0]!));
 }
 
-/** What `peer_group` may do, expressed with the same group manager the app uses (its checks and events apply). */
+/** What `peer(action=group_*)` may do, expressed with the same group manager the app uses (its checks and events apply). */
 export function peerGroupOps(groups: GroupManager): import("./peers.ts").GroupOps {
 	const find = (handle: string): GroupRecord => {
 		const h = groupHandle(handle).toLowerCase();

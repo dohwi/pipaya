@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
-describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
+describe("peer sessions: names, peer / peer read and @mentions", () => {
 	let app: Awaited<ReturnType<typeof buildApp>>, base = "", dir = "", upstream: ReturnType<typeof startEchoUpstream>;
 	const api = async (method: string, path: string, body?: unknown) => {
 		const res = await fetch(base + path, { method, headers: { authorization: "Bearer t", ...(body !== undefined ? { "content-type": "application/json" } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
@@ -36,33 +36,33 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 
 	test("the peer tools and ask_user are built in and can be switched off", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
-		for (const n of ["ask_user", "peer_send", "peer_read"]) expect(info.toggleable).toContain(n);
-		expect((await api("GET", "/tools")).json.tools.map((t: any) => t.name)).toEqual(expect.arrayContaining(["ask_user", "peer_send", "peer_read"]));
+		for (const n of ["ask_user", "peer", "peer"]) expect(info.toggleable).toContain(n);
+		expect((await api("GET", "/tools")).json.tools.map((t: any) => t.name)).toEqual(expect.arrayContaining(["ask_user", "peer", "peer"]));
 	});
 
-	test("peer_send reaches another session and peer_read shows its answer", async () => {
+	test("peer reaches another session and peer read shows its answer", async () => {
 		const [a, b] = [await mk(), await mk()];
 		const bName = await nameOf(b);
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: bName, message: "hello peer" })}` });
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: bName, message: "hello peer" })}` });
 		await idle(a);
 		await Bun.sleep(100);
 		await idle(b);
 		const got = await said(b);
 		expect(got).toContain("hello peer");
 		expect(got).toContain(`from @${await nameOf(a)}`);
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_read ${JSON.stringify({ from: bName })}` });
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer ${JSON.stringify({ action: "read", name: bName })}` });
 		await idle(a);
 		expect(await said(a)).toContain("hello peer");
 		// an unknown name is a tool error, not a crash
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "nobody", message: "x" })}` });
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: "nobody", message: "x" })}` });
 		await idle(a);
 		expect(await said(a)).toContain("session @nobody");
 	});
 
-	test("peer_send to a group name reaches every other session in that group", async () => {
+	test("peer to a group name reaches every other session in that group", async () => {
 		const [a, b, c] = [await mk(), await mk(), await mk()];
 		const g = (await api("POST", "/groups", { name: "앱 개발", layout: split(pane(a), split(pane(b), pane(c))) })).json;
-		await api("POST", `/sessions/${a}/messages`, { text: `!peer_send ${JSON.stringify({ to: "앱-개발", message: "to everyone" })}` });
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: "앱-개발", message: "to everyone" })}` });
 		await idle(a);
 		await Bun.sleep(100);
 		await Promise.all([idle(b), idle(c)]);
@@ -113,22 +113,22 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		const [boss, worker] = [await mk(), await mk()];
 		const wName = await nameOf(worker);
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
-		await call("peer_list", {});
+		await call("peer", { action: "list" });
 		expect(await said(boss)).toContain(`@${wName}`);
 		// notify: the worker's run ends, the boss gets one report without asking
-		await call("peer_send", { to: wName, message: "do the thing", notify: true });
+		await call("peer", { action: "send", to: wName, message: "do the thing", notify: true });
 		await idle(worker);
 		await Bun.sleep(300);
 		await idle(boss);
 		expect(await said(boss)).toContain(`@${wName} finished its run`);
 		// archive: the finished worker is tucked away, then restored
-		await call("peer_archive", { name: wName });
+		await call("peer", { action: "archive", name: wName });
 		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(true);
-		await call("peer_archive", { name: wName, archived: false });
+		await call("peer", { action: "restore", name: wName });
 		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(false);
 		// a session that was not asked to notify does not report
 		const before = (await said(boss)).split("finished its run").length;
-		await call("peer_send", { to: wName, message: "again" });
+		await call("peer", { action: "send", to: wName, message: "again" });
 		await idle(worker);
 		await Bun.sleep(300);
 		await idle(boss);
@@ -139,7 +139,7 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		const boss = await mk();
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
 		const before = (await api("GET", "/sessions")).json.sessions.map((x: any) => x.id);
-		await call("peer_create", { message: "build the thing", title: "built", purpose: "builder" });
+		await call("peer", { action: "create", message: "build the thing", title: "built", purpose: "builder" });
 		const kid = (await api("GET", "/sessions")).json.sessions.find((x: any) => !before.includes(x.id));
 		expect(kid.title).toBe("built");
 		expect(kid.purpose).toBe("builder");
@@ -150,22 +150,22 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		expect(await said(kid.id)).toContain("build the thing");
 		expect(await said(boss)).toContain(`@${kid.name} finished its run`); // notify defaults on
 		// rename: a free name works, a taken or invalid one is refused
-		await call("peer_manage", { name: kid.name, action: "rename", newName: "builder-1" });
+		await call("peer", { name: kid.name, action: "rename", newName: "builder-1" });
 		expect(await nameOf(kid.id)).toBe("builder-1");
-		await call("peer_manage", { name: "builder-1", action: "rename", newName: "bad name!" });
+		await call("peer", { name: "builder-1", action: "rename", newName: "bad name!" });
 		expect(await nameOf(kid.id)).toBe("builder-1");
-		await call("peer_manage", { name: "builder-1", action: "set", purpose: "reviewer" });
+		await call("peer", { name: "builder-1", action: "set", purpose: "reviewer" });
 		expect((await api("GET", `/sessions/${kid.id}`)).json.purpose).toBe("reviewer");
 		// close and resume
-		await call("peer_manage", { name: "builder-1", action: "close" });
+		await call("peer", { name: "builder-1", action: "close" });
 		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(true);
-		await call("peer_manage", { name: "builder-1", action: "resume" });
+		await call("peer", { name: "builder-1", action: "resume" });
 		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(false);
 		// delete works on what the boss created, and only on that
 		const other = await mk();
-		await call("peer_manage", { name: await nameOf(other), action: "delete" });
+		await call("peer", { name: await nameOf(other), action: "delete" });
 		expect((await api("GET", `/sessions/${other}`)).status).toBe(200);
-		await call("peer_manage", { name: "builder-1", action: "delete" });
+		await call("peer", { name: "builder-1", action: "delete" });
 		expect((await api("GET", `/sessions/${kid.id}`)).status).toBe(404);
 	});
 
@@ -174,42 +174,42 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 		const wName = await nameOf(worker);
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
 		// the boss watches the worker, then the worker asks its user something
-		await call("peer_send", { to: wName, message: "hi", notify: true });
+		await call("peer", { action: "send", to: wName, message: "hi", notify: true });
 		await idle(worker);
 		await Bun.sleep(300);
 		await idle(boss);
-		await call("peer_send", { to: wName, message: "again", notify: true });
+		await call("peer", { action: "send", to: wName, message: "again", notify: true });
 		await idle(worker);
 		await Bun.sleep(300);
 		await idle(boss);
 		await api("POST", `/sessions/${worker}/messages`, { text: `!ask_user ${JSON.stringify({ question: "which color?", options: ["red", "blue"], allowFreeText: false })}` });
 		for (let i = 0; i < 100 && !(await api("GET", `/questions?sessionId=${worker}`)).json.questions.length; i++) await Bun.sleep(25);
 		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toHaveLength(1);
-		await call("peer_read", { from: wName });
+		await call("peer", { action: "read", name: wName });
 		expect(await said(boss)).toContain("waits for an answer");
 		// a wrong answer is refused, the right one releases the worker
-		await call("peer_answer", { name: wName, answer: "green" });
+		await call("peer", { action: "answer", name: wName, answer: "green" });
 		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toHaveLength(1);
-		await call("peer_answer", { name: wName, answer: "blue" });
+		await call("peer", { action: "answer", name: wName, answer: "blue" });
 		await idle(worker);
 		expect((await api("GET", `/questions?sessionId=${worker}`)).json.questions).toEqual([]);
 		expect(await said(worker)).toContain("blue");
 	});
 
-	test("peer_read detail shows tool calls and errors; cancel_queued lists what waits; a deleted watcher leaves no trace", async () => {
+	test("peer read detail shows tool calls and errors; cancel_queued lists what waits; a deleted watcher leaves no trace", async () => {
 		const [boss, worker] = [await mk(), await mk()];
 		const wName = await nameOf(worker);
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
 		await api("POST", `/sessions/${worker}/messages`, { text: "!bash echo detail-marker" });
 		await idle(worker);
-		await call("peer_read", { from: wName });
+		await call("peer", { action: "read", name: wName });
 		expect(await said(boss)).not.toContain("tool result bash");
-		await call("peer_read", { from: wName, detail: true });
+		await call("peer", { action: "read", name: wName, detail: true });
 		expect(await said(boss)).toContain("tool result bash");
-		await call("peer_manage", { name: wName, action: "cancel_queued" });
+		await call("peer", { name: wName, action: "cancel_queued" });
 		expect(await said(boss)).toContain(`Nothing is queued for @${wName}`);
 		// watching a session and then deleting the watcher must not break the target's next run end
-		await call("peer_send", { to: wName, message: "x", notify: true });
+		await call("peer", { action: "send", to: wName, message: "x", notify: true });
 		await api("DELETE", `/sessions/${boss}`);
 		await idle(worker);
 		await Bun.sleep(200);
@@ -218,14 +218,14 @@ describe("peer sessions: names, peer_send / peer_read and @mentions", () => {
 
 	test("peer_group builds, extends and dissolves a group", async () => {
 		const [boss, a, b] = [await mk(), await mk(), await mk()];
-		const call = async (args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!peer_group ${JSON.stringify(args)}` }); await idle(boss); };
-		await call({ action: "create", name: "crew", members: [await nameOf(a), await nameOf(b)] });
+		const call = async (args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify(args)}` }); await idle(boss); };
+		await call({ action: "group_create", groupName: "crew", members: [await nameOf(a), await nameOf(b)] });
 		let groups = (await api("GET", "/groups")).json.groups;
 		expect(groups.map((g: any) => g.name)).toContain("crew");
-		await call({ action: "add", group: "crew", members: [await nameOf(boss)] });
+		await call({ action: "group_add", group: "crew", members: [await nameOf(boss)] });
 		const g = (await api("GET", "/groups")).json.groups.find((x: any) => x.name === "crew");
 		expect(JSON.stringify(g.layout)).toContain(boss);
-		await call({ action: "dissolve", group: "crew" });
+		await call({ action: "group_dissolve", group: "crew" });
 		groups = (await api("GET", "/groups")).json.groups;
 		expect(groups.map((x: any) => x.name)).not.toContain("crew");
 	});
@@ -237,13 +237,13 @@ describe("old copies of the replaced extensions", () => {
 		try {
 			for (const name of ["ask-user", "peer-tools"]) {
 				mkdirSync(join(d, "ext", name), { recursive: true });
-				writeFileSync(join(d, "ext", name, "index.ts"), `export default (pi: any) => { pi.registerTool({ name: "${name === "ask-user" ? "ask_user" : "peer_send"}", label: "x", description: "old copy", parameters: pi.Type.Object({}), async execute() { return { content: [{ type: "text", text: "old" }] }; } }); };`);
+				writeFileSync(join(d, "ext", name, "index.ts"), `export default (pi: any) => { pi.registerTool({ name: "${name === "ask-user" ? "ask_user" : "peer"}", label: "x", description: "old copy", parameters: pi.Type.Object({}), async execute() { return { content: [{ type: "text", text: "old" }] }; } }); };`);
 			}
 			const other = await buildApp({ host: "0.0.0.0", port: 0, dataDir: d, dbPath: join(d, "t.db"), token: "t", workspaceRoot: join(d, "ws"), logLevel: "silent" }, { extensionDirs: [join(d, "ext")] });
 			const res = await other.server.inject({ method: "GET", url: "/tools", headers: { authorization: "Bearer t" } });
 			const tools = res.json().tools as { name: string; description: string }[];
 			expect(tools.filter((t) => t.description === "old copy")).toEqual([]);
-			expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["ask_user", "peer_send"]));
+			expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["ask_user", "peer"]));
 			await other.close();
 		} finally {
 			rmSync(d, { recursive: true, force: true });

@@ -181,7 +181,7 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	);`,
 	// v25: a session can be archived: still open (not closed), but tucked away in the apps' archive instead of the active list.
 	(db) => addColumn(db, "sessions", "archived", "INTEGER NOT NULL DEFAULT 0"),
-	// v26: session @names are part of the core again (peer_send / peer_read address sessions by them). Active sessions are numbered in creation order.
+	// v26: session @names are part of the core again (peer(action=send) / peer(action=read) address sessions by them). Active sessions are numbered in creation order.
 	(db) => {
 		addColumn(db, "sessions", "name", "TEXT NOT NULL DEFAULT ''");
 		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => groupHandle(g.name).toLowerCase()));
@@ -192,7 +192,7 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id: s.id, name });
 		}
 	},
-	// v27: sessions that asked to hear about another session's end or question (peer_send notify / peer_create); survives restarts.
+	// v27: sessions that asked to hear about another session's end or question (peer(action=send) notify / peer(action=create)); survives restarts.
 	`CREATE TABLE IF NOT EXISTS peer_watch (
 		target_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 		watcher_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
