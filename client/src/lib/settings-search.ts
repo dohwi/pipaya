@@ -5,7 +5,9 @@ export const SETTINGS_TABS = [
 	{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
-	{ id: "agent", label: msg("에이전트"), icon: "key", sub: msg("모델 연결 · 에이전트 도구 · MCP"), server: true },
+	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
+	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 도우미 위임"), server: true },
+	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
 	{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: "", server: true },
 	{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
@@ -21,10 +23,10 @@ export const needsOnlineServer = (id: string) => SETTINGS_TABS.some((x) => x.id 
 export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string }[] = [
 	{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
 	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
-	{ tab: "agent", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },
-	{ tab: "agent", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" },
-	{ tab: "agent", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
-	{ tab: "agent", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" },
+	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },
+	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" },
+	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
+	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" },
 	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" },
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" },
 	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
@@ -88,15 +90,7 @@ export function toolLabel(name: string): string {
 		case "grep": return t("내용 검색 (grep)");
 		case "bash": return t("셸 명령 실행 (bash)");
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
-		case "peer_send": return t("다른 대화에 메시지 보내기 (peer_send)");
-		case "peer_read": return t("다른 대화의 최근 내용 읽기 (peer_read)");
-		case "peer_list": return t("다른 대화 목록과 상태 보기 (peer_list)");
-		case "peer_archive": return t("다른 대화를 보관함으로 이동 (peer_archive)");
-		case "peer_abort": return t("다른 대화의 작업 중단 (peer_abort)");
-		case "peer_answer": return t("다른 대화가 기다리는 질문에 답하기 (peer_answer)");
-		case "peer_create": return t("새 대화를 만들어 작업 맡기기 (peer_create)");
-		case "peer_manage": return t("다른 대화 닫기·재개·삭제·이름 변경 (peer_manage)");
-		case "peer_group": return t("대화들을 그룹으로 묶기 (peer_group)");
+		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·보관·중단·답변·그룹 (peer)");
 		case "delegate": return t("일회성 도우미에게 작업 위임 (delegate)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;

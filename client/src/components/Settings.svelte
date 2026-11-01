@@ -26,7 +26,7 @@
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
-	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab);
+	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab === "agent" ? "models" : app.settingsTab); // "agent" (extensions, older links) is now "models"
 
 	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
 	const tabs = SETTINGS_TABS;

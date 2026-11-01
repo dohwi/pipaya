@@ -32,8 +32,8 @@ describe("settings search", () => {
 		expect(hit).toMatchObject({ combo: "Ctrl+N", target: { tab: "keys", keyFilter: "새 대화" } });
 	});
 	test("server sections are left out when there is no server", () => {
-		expect(find("에이전트", false).some((h) => h.key === "tab:agent")).toBe(false);
-		expect(find("에이전트", true).some((h) => h.key === "tab:agent")).toBe(true);
+		expect(find("에이전트", false).some((h) => h.key === "tab:tools")).toBe(false);
+		expect(find("에이전트", true).some((h) => h.key === "tab:tools")).toBe(true);
 	});
 });
 
@@ -52,7 +52,7 @@ describe("offline server", () => {
 	test("only the info section of a server stays searchable", () => {
 		const ids = (q: string) => searchSettings(queryWords(q), { hasServer: true, serverOnline: false, shortcuts: keys }).map((h) => h.target.tab);
 		expect(ids("정보")).toContain("info");
-		expect(ids("에이전트")).not.toContain("agent");
+		expect(ids("에이전트")).not.toContain("tools");
 		expect(ids("자동 삭제")).not.toContain("sessions");
 	});
 });

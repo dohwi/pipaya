@@ -27,7 +27,7 @@
 	 * `"new"` to add, or the id of the server being edited. `embedded` draws it as a page inside the settings window
 	 * (with a back button) instead of a modal of its own; `onclose` is then how it hands control back to the list.
 	 */
-	type Section = "info" | "agent" | "sessions" | "devices";
+	type Section = "info" | "agent" | "models" | "tools" | "mcp" | "sessions" | "devices";
 	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
 	let { target, embedded = false, onclose, section }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section } = $props();
 
@@ -38,9 +38,9 @@
 	/** Editing a server has four panes: its connection details, the agent (model connections and tools), its conversations (with the default folder), and its devices. */
 	// svelte-ignore state_referenced_locally
 	let tab = $state<Section>(section ?? "info");
-	const tabOrder = ["info", "agent", "sessions", "devices"] as const;
+	const tabOrder: Section[] = ["info", "agent", "models", "tools", "mcp", "sessions", "devices"];
 	let dir = $state(1);
-	function go(next: (typeof tabOrder)[number]) {
+	function go(next: Section) {
 		if (next === tab) return;
 		dir = tabOrder.indexOf(next) > tabOrder.indexOf(tab) ? 1 : -1;
 		tab = next;
@@ -169,8 +169,9 @@
 			</section>
 			{#key editing.id}<RetentionSection serverId={editing.id} />{/key}
 		</div>
-	{:else if editing && tab === "agent"}
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<ModelConnections serverId={editing.id} /><ToolSettings serverId={editing.id} /><McpSettings serverId={editing.id} />{/key}</div>
+	{:else if editing && (tab === "agent" || tab === "models" || tab === "tools" || tab === "mcp")}
+		<!-- the modal keeps one "에이전트" tab with all three; the settings window pins one of them per section -->
+		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}{#if tab === "agent" || tab === "models"}<ModelConnections serverId={editing.id} />{/if}{#if tab === "agent" || tab === "tools"}<ToolSettings serverId={editing.id} />{/if}{#if tab === "agent" || tab === "mcp"}<McpSettings serverId={editing.id} />{/if}{/key}</div>
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">
