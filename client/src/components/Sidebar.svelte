@@ -235,7 +235,7 @@
 			toggle: () => app.sidebar.toggleFolded(key),
 			togglePin: path === null ? undefined : () => app.sidebar.togglePinned(n.server.id, path),
 			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
-			rename: path !== null && app.sidebar.isPinned(n.server.id, path) ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
+			rename: path !== null ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
 			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 		});
 		rowMenu?.openAt(pt, id, items);
@@ -614,6 +614,8 @@
 		width: 16px;
 		height: 16px;
 		color: var(--text-faint);
+		position: relative;
+		top: 1px; /* Korean glyphs sit low in their line box: the 16px icon sat 1px above the title's visual centre (measured at 3x) */
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
 	:global(:where(.side) .lead > svg) {

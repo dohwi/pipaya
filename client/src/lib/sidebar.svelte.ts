@@ -63,11 +63,10 @@ export class SidebarState {
     const list = this.pinned[serverId] ?? [];
     this.pinned = { ...this.pinned, [serverId]: list.includes(path) ? list.filter((p) => p !== path) : [...list, path] };
     write(K.pinnedDirs, this.pinned);
-    if (!this.isPinned(serverId, path)) this.setDirName(serverId, path, "");
   }
 
   dirName(serverId: string, path: string): string | undefined {
-    return this.isPinned(serverId, path) ? this.dirNames[serverId]?.[path] : undefined;
+    return this.dirNames[serverId]?.[path];
   }
 
   /** Name a pinned folder; a blank name goes back to the default label. */

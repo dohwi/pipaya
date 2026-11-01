@@ -77,7 +77,7 @@
 						}}
 					/>
 				{:else}
-					<span class="dname" role="presentation" ondblclick={pinned ? (e) => (e.preventDefault(), sb.dirRename.start(key, label)) : undefined} title={pinned ? t("{name} · 더블 클릭으로 이름 바꾸기", { name: label }) : undefined}>{label}</span>
+					<span class="dname" role="presentation" ondblclick={(e) => (e.preventDefault(), sb.dirRename.start(key, label))} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: label })}>{label}</span>
 				{/if}
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 			</span>
@@ -163,7 +163,7 @@
 		margin: 0 -8px 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
 		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
 		   its right edge 20 from the row end (button column x 236): 20 + 20 + 8 = 48 */
-		padding: 0 56px 0 21px; /* 48 + the 8px the highlight runs past; measured: the 14px chevron centres on x 48, the folder icon's column */
+		padding: 0 28px 0 21px; /* the count ends 8 before the list button on touch (x 256 button, x 236 count: 8 + 20); folded rows on touch keep the list button on x 256, so the count sits on x 236 like a folder's; measured: the 14px chevron centres on x 48, the folder icon's column */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
