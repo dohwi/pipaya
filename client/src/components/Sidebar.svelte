@@ -519,8 +519,8 @@
 		stroke-width: 2;
 	}
 	:global(:where(.side) .dname) {
-		flex: none;
-		max-width: 70%;
+		flex: 0 1 auto; /* the name takes what it needs; only when it alone is too long does it shrink (the parent path, flex 1 from 0, gives way first) */
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
