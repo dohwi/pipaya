@@ -866,7 +866,7 @@
 	/* tree line: a rule down from the book's centre; each pane gets a short elbow with a 3px corner (near right angle) (the last one ends the rule) */
 	:global(:where(.side) .branch) {
 		position: absolute;
-		left: 47px; /* the line's 1.5px stroke is centred on the book icon's column (x 68): measured 69 at 48 */
+		left: 46.25px; /* the 1.5px stroke's centre (x 21 + 46.25 + 0.75) sits on the book icon's column, x 68 */
 		top: 0;
 		bottom: 0;
 		width: 12px;
@@ -902,7 +902,7 @@
 	}
 	:global(:where(.side) .members .tree-path) {
 		position: absolute;
-		left: 51px; /* the rule's column: x 68 like .branch (47px from a row's left, x 21); .members starts 4px further left, at x 17 */
+		left: 50.25px; /* the rule's column: x 68 like .branch (46.25px from a row's left, x 21); .members starts 4px further left, at x 17 */
 		top: -2px; /* up into the gap under the group row, where the first pane's rule starts */
 		z-index: 3; /* above the rows' quiet rules (z 2, which overlap each other by 1px), which are above the selection wash (z 1) */
 		width: 12px;

@@ -205,7 +205,8 @@
 	.nav .item::after {
 		content: "";
 		position: absolute;
-		left: -18px;
+		/* trunk centre = icon centre: nav 8 + button 12 + glyph 19/2 = 29.5; rows start at 44, so the 1.5px line's left edge is 44 - 15.25 = 28.75 */
+		left: -15.25px;
 		pointer-events: none;
 	}
 	.nav .item::after {
@@ -221,7 +222,7 @@
 	}
 	.nav .item::before {
 		top: calc(50% - 9px);
-		width: 18px;
+		width: 15.25px; /* from the trunk to the row's left edge */
 		height: 9px;
 		border-left: 1.5px solid var(--tree-line);
 		border-bottom: 1.5px solid var(--tree-line);
@@ -234,10 +235,10 @@
 	}
 	.nav .tree :global(.tree-path) {
 		position: absolute;
-		left: -2px; /* the trunk's column: the rows' trunks sit 18px left of the rows, which start 16px in */
+		left: 0.75px; /* the trunk's column: the rows' trunks sit 15.25px left of the rows, which start 16px in */
 		top: -10px; /* up to the section row, where the first trunk starts */
 		z-index: 1; /* above the rows' quiet trunks */
-		width: 18px;
+		width: 15.25px;
 		height: var(--path-h, 0px); /* already counts the 10px lead above the first row (lib/tree-path) */
 		box-sizing: border-box;
 		border-left: 1.5px solid var(--text-dim);
