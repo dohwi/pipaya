@@ -2,7 +2,7 @@
 	import { t } from "../lib/i18n";
 	import QueueBadge from "./QueueBadge.svelte";
 	import Icon from "./Icon.svelte";
-	import { orderQueued } from "../lib/queue";
+	import { orderQueued, queuedLabel, queuedTone } from "../lib/queue";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 
 	type Queued = { mode: "steer" | "follow_up"; text: string };
@@ -39,6 +39,9 @@
 	let fadeBottom = $state(false);
 	// A slim thumb in the right gutter (outside the ✕ column) shows there is more, also on touch where native bars hide.
 	let thumb = $state<{ top: number; height: number } | null>(null);
+	// Per-mode totals for the summary line shown while the list scrolls.
+	const steerN = $derived(queued.filter((q) => q.mode === "steer").length);
+	const followN = $derived(queued.length - steerN);
 	function syncFade() {
 		if (!ul) return;
 		fadeTop = ul.scrollTop > 1;
@@ -76,6 +79,12 @@
 </script>
 
 <div class="queued-wrap">
+{#if thumb}
+	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: queued.length })}>
+		{#if steerN}<span class="c {queuedTone("steer")}" title={queuedLabel({ mode: "steer", text: "", n: steerN })}><Icon name="bolt" />{steerN}</span>{/if}
+		{#if followN}<span class="c {queuedTone("follow_up")}" title={queuedLabel({ mode: "follow_up", text: "", n: followN })}><Icon name="list" />{followN}</span>{/if}
+	</p>
+{/if}
 <div class="scroll">
 {#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
 <ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
@@ -96,6 +105,33 @@
 	.queued-wrap {
 		position: relative;
 		padding: 12px 16px 0;
+	}
+	/* Shown only while the list scrolls: per-mode totals, starting on the same 16px line as the badges below. */
+	.count {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 0 4px;
+		font-size: var(--fs-xs);
+		line-height: 16px;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.c {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.c.warn {
+		color: var(--warn);
+	}
+	.c.info {
+		color: var(--info);
+	}
+	.count :global(svg) {
+		width: 11px;
+		height: 11px;
+		stroke-width: 2.2;
 	}
 	.scroll {
 		position: relative;
