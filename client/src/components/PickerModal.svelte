@@ -128,7 +128,7 @@
 		flex-direction: column;
 		flex: 1;
 		overflow-y: auto;
-		margin: 0 -4px;
+		margin: 0 -4px; /* 4px of room for the rows' focus ring, taken back so the rows stay on the gutter */
 		padding: 0 4px;
 	}
 	/* group labels and the empty line are plain markup from the caller */

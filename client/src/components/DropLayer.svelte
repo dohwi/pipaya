@@ -38,7 +38,7 @@
 	.drop {
 		position: absolute;
 		inset: 0;
-		z-index: 30;
+		z-index: var(--z-droplayer);
 	}
 	.zone {
 		position: absolute;

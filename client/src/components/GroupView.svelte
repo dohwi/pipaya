@@ -275,7 +275,7 @@
 			height var(--motion-normal) var(--ease-std);
 	}
 	.cell.zoomed {
-		z-index: 10;
+		z-index: 10; /* local to the group: above its other cells */
 		background: var(--bg-side); /* the gutter round the zoomed pane hides the panes behind it */
 	}
 	.cell.behind {
@@ -288,17 +288,17 @@
 	}
 	.div {
 		position: absolute;
-		z-index: 20;
+		z-index: 20; /* local to the group: dividers above every cell, the zoomed one too */
 		touch-action: none;
 	}
 	.div.row {
 		width: 9px;
-		margin-left: -4.5px;
+		margin-left: -4.5px; /* a 9px grab area centred on the 1px divider line */
 		cursor: col-resize;
 	}
 	.div.col {
 		height: 9px;
-		margin-top: -4.5px;
+		margin-top: -4.5px; /* a 9px grab area centred on the 1px divider line */
 		cursor: row-resize;
 	}
 	.div::after {

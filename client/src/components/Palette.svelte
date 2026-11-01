@@ -255,7 +255,7 @@
 		flex: none;
 		width: 9px;
 		height: 9px;
-		margin: -4px 4px 0 0;
+		margin: -4px 4px 0 0; /* the tree elbow reaches up into the row above, so the branch lines join */
 		border-left: 1px solid var(--text-faint);
 		border-bottom: 1px solid var(--text-faint);
 	}

@@ -296,7 +296,7 @@
 		border-radius: var(--radius);
 		box-shadow: var(--shadow);
 		padding: 4px 0;
-		z-index: 20;
+		z-index: var(--z-popover);
 	}
 	.opt {
 		display: flex;

@@ -115,7 +115,7 @@
 <style>
 	header {
 		flex: none;
-		z-index: 10;
+		z-index: 10; /* above the pane's own scroll content (fade, sticky rows); below every popover and dialog */
 		padding: var(--sat) var(--sar) 0 var(--sal);
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);

@@ -64,7 +64,7 @@
 		border-radius: var(--radius);
 		box-shadow: var(--shadow);
 		padding: 4px 0;
-		z-index: 20;
+		z-index: var(--z-popover);
 	}
 	/* a divider and a small heading wherever the kind of rows changes: commands, skills, files ... */
 	.head {
@@ -87,7 +87,7 @@
 		gap: 12px;
 		width: 100%;
 		min-height: 36px;
-		padding: 4px 15px;
+		padding: 4px 15px; /* 15 + the menu's 1px border = the composer text line, like .head */
 		text-align: left;
 		align-items: center;
 	}
@@ -141,7 +141,7 @@
 		color: var(--text-faint);
 	}
 	.none {
-		padding: 12px 15px;
+		padding: 12px 15px; /* on the composer text line, like .head */
 		font-size: var(--fs-sm);
 		color: var(--text-faint);
 	}
@@ -153,10 +153,10 @@
 			font-size: var(--fs-xs);
 		}
 	}
-	/* in a narrow pane the composer's text line is 12px in: the menu follows it */
+	/* in a narrow pane the composer's text line is 12px in: the menu follows it (11 + its 1px border) */
 	@container (max-width: 420px) {
 		.head { padding-left: 11px; padding-right: 11px; }
-		.cmd { padding-left: 11px; padding-right: 11px; }
-		.none { padding-left: 11px; padding-right: 11px; }
+		.cmd { padding-left: 11px; padding-right: 11px; } /* same line as .head */
+		.none { padding-left: 11px; padding-right: 11px; } /* same line as .head */
 	}
 </style>

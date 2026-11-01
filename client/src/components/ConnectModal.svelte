@@ -367,7 +367,7 @@
 	.body.form { padding: 0; overflow: hidden; flex: 1; }
 	.body { display: flex; flex-direction: column; gap: 12px; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); overflow-y: auto; min-height: 0; }
 	.hint { margin: 0; line-height: 1.55; word-break: keep-all; }
-	.hint.lead { margin-top: -4px; }
+	.hint.lead { margin-top: -4px; } /* the lead line sits 8 under the title, not the body's 12 gap */
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.search { position: relative; display: flex; align-items: center; }
 	.search :global(svg) { position: absolute; left: 12px; width: 16px; height: 16px; stroke: var(--text-faint); stroke-width: 2; pointer-events: none; }

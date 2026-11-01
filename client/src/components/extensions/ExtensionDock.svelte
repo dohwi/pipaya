@@ -82,7 +82,7 @@
 
 <style>
 	.dock { position: relative; flex: none; width: min(var(--dock-w), 70vw); min-width: 200px; display: flex; flex-direction: column; min-height: 0; background: var(--bg-side); border-left: 1px solid var(--border); }
-	.dock.narrow { position: absolute; inset: 0; z-index: 25; width: auto; border-left: none; }
+	.dock.narrow { position: absolute; inset: 0; z-index: var(--z-dock); width: auto; border-left: none; }
 	.edge { position: absolute; z-index: 2; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 	.edge:hover, .edge:focus-visible { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); outline: none; opacity: 0.6; }
 	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 8px; border-bottom: 1px solid var(--border); }

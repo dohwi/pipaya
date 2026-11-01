@@ -955,7 +955,7 @@
 		margin-top: 25px; /* 24 gap + the usual 1px between rows */
 	}
 	:global(:where(.side) .item.after) {
-		margin-bottom: 25px;
+		margin-bottom: 25px; /* 24 gap + the usual 1px between rows */
 	}
 	:global(:where(.side) .item.before::before),
 	:global(:where(.side) .item.after::after) {

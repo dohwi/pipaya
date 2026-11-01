@@ -105,9 +105,16 @@
 	--z-modal-4: 91;
 	--z-scrim-5: 95; /* a confirmation over a layer-4 dialog (unsaved changes in the connection form) */
 	--z-modal-5: 96;
+	/* page layers below every dialog (the same numbers the components used before they became tokens) */
+	--z-popover: 20; /* menus and grips over the page: slash menu, send-mode menu, overlays, the sidebar resize grip */
+	--z-dock: 25; /* an extension dock covering a narrow pane */
+	--z-droplayer: 30; /* a pane's own "drop here" layer */
+	--z-drawer-scrim: 49; /* the sidebar drawer's scrim (narrow screens) */
+	--z-drawer: 50; /* the sidebar drawer itself */
 	--z-notice: 40; /* toast strips: above the page, behind every dialog and its scrim */
 	--z-dropzone: 55; /* "drop files here" over the page: above the strips, below any dialog */
 	--z-toast: 100;
+	--z-dropdown: 110; /* a Select list: above every dialog it can sit in, below the lightbox */
 	--z-lightbox: 120;
 	--z-tooltip: 130; /* hover cards lifted to <body>: above everything, they never take input focus */
 	/* Motion (Material profile). lib/motion.ts reads --motion-* so JS and CSS stay in sync. */

@@ -373,7 +373,7 @@
 	}
 	.list {
 		position: fixed;
-		z-index: 110; /* above every dialog the dropdown can sit in, below the lightbox */
+		z-index: var(--z-dropdown);
 		display: flex;
 		flex-direction: column;
 		gap: 1px;

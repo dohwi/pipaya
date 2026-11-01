@@ -456,7 +456,7 @@
 <style>
 	.overlay {
 		position: absolute;
-		z-index: 20;
+		z-index: var(--z-popover);
 		top: 0;
 		left: 0;
 		right: 0;
@@ -478,7 +478,7 @@
 		position: fixed;
 		right: 0;
 		top: calc(64px + var(--sat));
-		z-index: 20;
+		z-index: var(--z-popover);
 	}
 	.extension-entry {
 		position: fixed;
@@ -614,7 +614,7 @@
 		.grip {
 			display: block;
 			position: absolute;
-			z-index: 20;
+			z-index: var(--z-popover);
 			top: 0;
 			bottom: 0;
 			right: -4px;
@@ -671,7 +671,7 @@
 		}
 		.side {
 			position: fixed;
-			z-index: 50;
+			z-index: var(--z-drawer);
 			left: 0;
 			top: 0;
 			bottom: 0;
@@ -688,7 +688,7 @@
 			display: block;
 			position: fixed;
 			inset: 0;
-			z-index: 49;
+			z-index: var(--z-drawer-scrim);
 			background: var(--scrim);
 			opacity: 0;
 			pointer-events: none;

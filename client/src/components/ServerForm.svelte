@@ -277,7 +277,7 @@
 		align-items: center;
 		gap: 4px;
 		height: var(--control-h-sm);
-		margin: 0 8px 0 -8px;
+		margin: 0 8px 0 -8px; /* the button's hover fill bleeds 8px left: its chevron glyph stays on the page gutter */
 		padding: 0 8px 0 4px;
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
