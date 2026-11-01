@@ -191,6 +191,9 @@ class Drag {
 
 export const drag = new Drag();
 
+/** Pointer-downs a source already took: a source nested in another (a chip in its group's box) picks up itself, not the one around it. */
+const taken = new WeakSet<Event>();
+
 /** Makes an element pick-up-able: it carries session `id`. */
 export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	let opts = initial;
@@ -222,7 +225,8 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 		st.unmenu = opts.menu({ x: st.x, y: st.y });
 	}
 	function down(e: PointerEvent) {
-		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || taken.has(e)) return;
+		taken.add(e);
 		const touch = e.pointerType === "touch";
 		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, timer: 0, held: false };
 		if (touch) st.timer = window.setTimeout(hold, HOLD_MS);
@@ -286,7 +290,11 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	}
 	/** Images and links inside would start a native drag of their own. */
 	const native = (e: Event) => e.preventDefault();
-	const ctx = (e: MouseEvent) => !opts.disabled && contextAt(e, node, opts.menu);
+	const ctx = (e: MouseEvent) => {
+		if (opts.disabled || taken.has(e)) return;
+		taken.add(e);
+		contextAt(e, node, opts.menu);
+	};
 
 	node.addEventListener("pointerdown", down);
 	node.addEventListener("dragstart", native);

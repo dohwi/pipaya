@@ -9,7 +9,8 @@
 	import { panesOf } from "../lib/layout";
 	import { app } from "../lib/store.svelte";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
-	import { pressMenu, type Point } from "../lib/press-menu";
+	import type { Point } from "../lib/press-menu";
+	import { drag, dragSource } from "../lib/dnd.svelte";
 	import { memberMenu } from "../lib/member-menu";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 
@@ -58,7 +59,7 @@
 					}}
 				/>
 			{:else}
-				<button class="chip tap" class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} use:pressMenu={(pt) => chipMenu(pt, x.id, x.title)} title="{x.title} · {ACTIVITY_LABEL[st]}">
+				<button class="chip tap" class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{x.title} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					<span class="t">{x.title}</span>
 				</button>
@@ -112,6 +113,9 @@
 	.chip:hover {
 		background: var(--bg-hover);
 		color: var(--text);
+	}
+	.chip.carried {
+		opacity: 0.45;
 	}
 	.chip.on {
 		background: var(--bg-active);

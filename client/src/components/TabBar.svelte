@@ -78,6 +78,16 @@
 			void put(id, x.id, sideOf(pt, document.querySelector(`[data-tab="${CSS.escape(x.id)}"]`)));
 		},
 	});
+	/** A group's box: a pane of that same group let go on it stays where it is; anything else lands before / after the box. */
+	const groupTarget = (x: Tab) => {
+		const base = tabTarget(x);
+		const own = (id: string) => tabPanes(x).includes(id);
+		return {
+			...base,
+			hover: (pt: Point | null) => base.hover(pt && drag.id && own(drag.id) ? null : pt),
+			drop: (id: string, pt: Point) => (own(id) ? base.hover(null) : base.drop(id, pt)),
+		};
+	};
 	const stripTarget = {
 		// the end of the strip is behind every unpinned tab: a pinned one cannot go there
 		accepts: (id: string) => takes(id) && !(!!app.serverId && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) && tabs.some((t) => !app.sidebar.isTabPinned(app.serverId!, t.id))),
@@ -231,7 +241,7 @@
 						data-tab={x.id}
 						title={x.group.name}
 						use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
-						use:dropTarget={tabTarget(x)}
+						use:dropTarget={groupTarget(x)}
 					>
 						<SessionStrip tab={x} />
 					</div>
