@@ -102,12 +102,18 @@ describe("Android launcher icons", () => {
 		expect(kt).toContain("WindowInsetsCompat.CONSUMED"); // consumed here, so the page's own safe-area padding is not added a second time
 		expect(kt.split("{").length).toBe(kt.split("}").length); // balanced braces: a typo here only shows up in CI otherwise
 	});
-	test("the keyboard comes back after a system dialog takes the window focus (WebView 155-157 hides it)", () => {
+	test("a system dialog does not take the keyboard away (WebView 155-157 hides it on window focus loss)", () => {
 		const kt = mainActivity("work.pipaya.app");
-		expect(kt).toContain("override fun onWindowFocusChanged(hasFocus: Boolean)");
+		// the shell keeps the focus loss from reaching the WebView while the activity is in front
+		expect(kt).toContain("keepKeyboardThroughDialogs(root)");
+		expect(kt).toContain("override fun dispatchWindowFocusChanged(hasFocus: Boolean)");
+		expect(kt).toContain("super.dispatchWindowFocusChanged(hasFocus || inFront)");
+		expect(kt).toContain("isAtLeast(Lifecycle.State.RESUMED)");
+		// and if it was hidden anyway, the page's field is focused again and the keyboard asked for, more than once
+		expect(kt).toContain("evaluateJavascript(REFOCUS_FIELD, null)");
+		expect(kt).toContain("showSoftInput(target, InputMethodManager.SHOW_IMPLICIT)");
 		expect(kt).toContain("isVisible(WindowInsetsCompat.Type.ime())");
-		expect(kt).toContain("showSoftInput(view, 0)");
 		// leaving the app must not bring the keyboard back on return
-		expect(kt).toMatch(/override fun onPause\(\) \{\s+\/\/[^\n]*\n\s+keyboardBeforeBlur = false/);
+		expect(kt).toMatch(/override fun onStop\(\) \{\s+\/\/[^\n]*\n\s+restoreOnFocus = false/);
 	});
 });

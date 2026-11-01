@@ -39,72 +39,146 @@ export function configureAndroid(source: string): string {
  * version, so the page's top bar ended up under the status bar. The system bar heights are applied as padding
  * to the activity's root view instead, and the page then needs no inset of its own on Android.
  *
- * Keyboard after a system dialog: Android System WebView 155-157 hides the soft keyboard whenever the window loses
- * focus (Chromium f04844f7e0, fixed in 158 by 37d5228c9e, b/560321831). A dialog from the keyboard app itself (delete
- * in its clipboard panel), the notification shade or the power menu takes the focus while the app stays resumed, so
- * the keyboard vanished and did not come back. When the focus returns without the app having been paused, the
- * keyboard is shown again if it was up before.
+ * Keyboard after a system dialog: Android System WebView 155-157 hides the soft keyboard the moment it hears that the
+ * window lost focus (Chromium f04844f7e0, fixed in 158 by 37d5228c9e, b/560321831). A dialog from the keyboard app
+ * itself (delete in its clipboard panel), the notification shade or the power menu takes the focus while the app is
+ * still in front, so the keyboard vanished with it. The shell around the WebView keeps the focus loss from reaching
+ * it, and if the keyboard is hidden anyway (the activity was paused, so the loss went through) it is shown again when
+ * the focus returns.
  */
 export function mainActivity(packageName: string): string {
 	return `package ${packageName}
 
+import android.content.Context
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.webkit.WebView
+import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 
 class MainActivity : TauriActivity() {
-  /** The soft keyboard was up when a dialog/overlay took the window focus (see restoreKeyboard). */
-  private var keyboardBeforeBlur = false
-
-  override fun onWindowFocusChanged(hasFocus: Boolean) {
-    // Runs before the WebView hears of the change, so the keyboard is still visible here.
-    if (!hasFocus) keyboardBeforeBlur = ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
-    super.onWindowFocusChanged(hasFocus)
-    if (hasFocus && keyboardBeforeBlur) {
-      keyboardBeforeBlur = false
-      currentFocus?.let { restoreKeyboard(it, 0) }
-    }
-  }
-
-  override fun onPause() {
-    // Leaving the app (home, app switch): coming back should not pop the keyboard up, as in any other app.
-    keyboardBeforeBlur = false
-    super.onPause()
-  }
-
-  /** The WebView re-learns its focused field asynchronously after regaining focus, so try a few times. */
-  private fun restoreKeyboard(view: View, attempt: Int) {
-    view.postDelayed({
-      if (!hasWindowFocus() || !view.isFocused) return@postDelayed
-      if (ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true) return@postDelayed
-      if (view.onCheckIsTextEditor()) {
-        getSystemService(InputMethodManager::class.java)?.showSoftInput(view, 0)
-      } else if (attempt < 4) {
-        restoreKeyboard(view, attempt + 1)
-      }
-    }, 100L)
-  }
+  /** The soft keyboard is on screen, as the window insets last reported. */
+  private var imeVisible = false
+  /** The keyboard was up when a dialog or overlay took the window focus: bring it back when the focus returns. */
+  private var restoreOnFocus = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
-    val root = findViewById<android.view.View>(android.R.id.content)
+    val root = findViewById<ViewGroup>(android.R.id.content)
+    keepKeyboardThroughDialogs(root)
     // Until the page reports its theme (plugin setSystemBars), start from the system's light/dark setting.
     val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
       android.content.res.Configuration.UI_MODE_NIGHT_YES
     window.decorView.setBackgroundColor(if (night) 0xFF161616.toInt() else 0xFFFFFFFF.toInt())
     WindowInsetsControllerCompat(window, root).isAppearanceLightStatusBars = !night
     ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+      val ime = insets.isVisible(WindowInsetsCompat.Type.ime())
+      // Chromium hides the keyboard a moment after the window lost the focus, so the inset that reports it can land
+      // after the focus change: remember the hide here as well, while the app is still in front.
+      if (imeVisible && !ime && !view.hasWindowFocus() && !isFinishing &&
+        lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) restoreOnFocus = true
+      imeVisible = ime
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-      val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+      val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime())
       // Keyboard: the page resizes itself (interactive-widget=resizes-content), so only the bars are padded here.
-      view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+      view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, keyboard.bottom))
       WindowInsetsCompat.CONSUMED
     }
+  }
+
+  /**
+   * Puts a shell between the content view and the WebView that keeps telling the WebView the window is focused while
+   * this activity is in front (see the comment above). The WebView is made by the Rust side a moment after the
+   * activity starts, so it is caught as it arrives. Nothing else is focusable there, so the WebView loses nothing.
+   */
+  private fun keepKeyboardThroughDialogs(root: ViewGroup) {
+    root.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+      override fun onChildViewAdded(parent: View, child: View) {
+        if (child is WebView) parent.post { wrapInFocusKeepingShell(child) }
+      }
+
+      override fun onChildViewRemoved(parent: View, child: View) = Unit
+    })
+    (0 until root.childCount).map(root::getChildAt).filterIsInstance<WebView>()
+      .forEach { root.post { wrapInFocusKeepingShell(it) } }
+  }
+
+  /** Moves the WebView into the shell (once: a WebView already in one is left alone). */
+  private fun wrapInFocusKeepingShell(web: WebView) {
+    val parent = web.parent as? ViewGroup ?: return
+    if (parent is FocusKeepingShell) return
+    val fill = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    parent.removeView(web)
+    val shell = FocusKeepingShell(this)
+    shell.addView(web, fill)
+    parent.addView(shell, fill)
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    // The activity hears of the change before the WebView does, so the keyboard has not been hidden yet.
+    if (!hasFocus) restoreOnFocus = restoreOnFocus || imeVisible
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus && restoreOnFocus) restoreKeyboard(0)
+  }
+
+  override fun onStop() {
+    // Leaving the app (home, app switch, screen off): coming back must not pop the keyboard up, as in any other app.
+    restoreOnFocus = false
+    super.onStop()
+  }
+
+  /**
+   * Shows the keyboard again, for the cases where the WebView heard the focus loss after all. Chromium drops the page's
+   * input connection with the focus, so a plain showSoftInput can be ignored: the page's own field is focused again
+   * first, which makes the WebView build a new connection and ask for the keyboard itself. Both are tried a few times,
+   * because the field, the IME and the dialog closing all take a moment.
+   */
+  private fun restoreKeyboard(attempt: Int) {
+    if (!restoreOnFocus) return
+    if (attempt > 8 || isFinishing) {
+      restoreOnFocus = false
+      return
+    }
+    window.decorView.postDelayed({
+      if (!restoreOnFocus) return@postDelayed
+      if (!hasWindowFocus() || isFinishing) {
+        restoreOnFocus = false
+        return@postDelayed
+      }
+      if (imeVisible) {
+        restoreOnFocus = false
+        return@postDelayed
+      }
+      val target = currentFocus ?: window.decorView
+      if (attempt == 0 || attempt == 2) (target as? WebView)?.evaluateJavascript(REFOCUS_FIELD, null)
+      val ime = getSystemService(InputMethodManager::class.java)
+      // The input connection was dropped with the focus, so the IME may not take the request before it is rebuilt.
+      if (attempt == 1) ime?.restartInput(target)
+      ime?.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT)
+      restoreKeyboard(attempt + 1)
+    }, 150L)
+  }
+
+  private companion object {
+    /** Focus the page's field again: blur first, since focusing the field that already has it changes nothing. */
+    const val REFOCUS_FIELD =
+      "(function(){var e=document.activeElement;if(!e)return;var t=e.tagName;if(t!=='TEXTAREA'&&t!=='INPUT')return;e.blur();e.focus();})()"
+  }
+}
+
+/** Keeps the window focus for the WebView while the activity is in front (see MainActivity.keepKeyboardThroughDialogs). */
+private class FocusKeepingShell(context: Context) : FrameLayout(context) {
+  override fun dispatchWindowFocusChanged(hasFocus: Boolean) {
+    val inFront = (context as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
+    super.dispatchWindowFocusChanged(hasFocus || inFront)
   }
 }
 `;
