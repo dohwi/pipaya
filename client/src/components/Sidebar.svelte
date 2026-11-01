@@ -29,7 +29,7 @@
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { DragMarks } from "../lib/drag-marks.svelte";
 	import { sidebarDirs, type DirBlock, type Tab } from "../lib/nav";
-	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../lib/sidebar-model";
+	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, rowMenuEntries, shortName, targetId, type RowActions } from "../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../lib/types";
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
@@ -88,8 +88,8 @@
 			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], d?.archived ?? []);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
-		// Servers that cannot be reached sink to the bottom (shown only; the saved order is untouched). The sort is stable.
-		return list.sort((a, b) => Number(unreachable(a.state)) - Number(unreachable(b.state)));
+		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
+		return orderServers(list);
 	});
 
 	const searching = $derived(query.trim().length > 0);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, rowMenuEntries, shortName, targetId, unreachable, type RowActions } from "../src/lib/sidebar-model";
+import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, orderServers, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {
@@ -13,6 +13,17 @@ describe("server state", () => {
 	test("only offline, rejected and incompatible servers are unreachable", () => {
 		expect(["online", "checking"].some((s) => unreachable(s as never))).toBe(false);
 		expect(["offline", "unauthorized", "incompatible"].every((s) => unreachable(s as never))).toBe(true);
+	});
+	test("the sidebar lists the servers that are up first, then those still checking, then the rest", () => {
+		const s = (id: string, state: ServerState) => ({ id, state });
+		const saved = [s("a", "offline"), s("b", "checking"), s("c", "online"), s("d", "unauthorized"), s("e", "online"), s("f", "incompatible")];
+		expect(orderServers(saved).map((x) => x.id)).toEqual(["c", "e", "b", "a", "d", "f"]);
+	});
+	test("servers in the same state keep the order they were saved in, and the saved list is left alone", () => {
+		const s = (id: string, state: ServerState) => ({ id, state });
+		const saved = [s("z", "checking"), s("y", "online"), s("x", "online"), s("w", "checking")];
+		expect(orderServers(saved).map((x) => x.id)).toEqual(["y", "x", "z", "w"]);
+		expect(saved.map((x) => x.id)).toEqual(["z", "y", "x", "w"]);
 	});
 });
 

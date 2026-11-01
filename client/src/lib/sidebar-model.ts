@@ -12,6 +12,15 @@ export function connectionState(net: string): ServerState {
 /** The states in which the server cannot be read, so its list is whatever was last seen. */
 export const unreachable = (state: ServerState) => state === "offline" || state === "unauthorized" || state === "incompatible";
 
+/**
+ * Where a server sits in the sidebar: the ones that are up first, then those still being checked (they may yet come up),
+ * then the unreachable. Equal ranks keep the saved order (the sort is stable; the saved order is never rewritten).
+ */
+const serverRank = (state: ServerState) => (state === "online" ? 0 : state === "checking" ? 1 : 2);
+
+/** The sidebar's server order: up, checking, unreachable; servers in the same state keep the order they were saved in. */
+export const orderServers = <T extends { state: ServerState }>(servers: T[]): T[] => [...servers].sort((a, b) => serverRank(a.state) - serverRank(b.state));
+
 /** A folder's label: its last two names (`~/work/app` -> `work/app`), the same on every OS; each server has its own home. */
 export function shortName(path: string, home?: string): string {
 	return nameSegs(path, home).slice(-2).join("/") || tilde(path, home);
