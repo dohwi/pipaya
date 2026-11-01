@@ -10,7 +10,7 @@ describe("recommendation menu rows", () => {
 		]);
 		expect(rows).toEqual([
 			{ id: "model", text: "/model", args: "[name]", desc: "pick a model", group: "명령" },
-			{ id: "skill:review", text: "/skill:review", desc: "review code", tag: "스킬", group: "스킬" },
+			{ id: "skill:review", text: "/skill:review", desc: "review code", group: "스킬" },
 			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it", tag: "Snippets", group: "Snippets" },
 		]);
 	});

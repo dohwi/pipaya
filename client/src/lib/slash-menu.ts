@@ -43,7 +43,7 @@ export function optionRows(options: readonly { value: string; desc: string; curr
 
 export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 	return entries.map((it): MenuRow => {
-		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, tag: msg("스킬"), group: msg("스킬") };
+		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, group: msg("스킬") };
 		if ("family" in it) {
 			const f = it.family;
 			return { id: `${f.prefix}:${f.name}`, text: slash(`${f.prefix}:${f.name}`), args: f.args, desc: f.description, tag: f.label, group: f.label };
