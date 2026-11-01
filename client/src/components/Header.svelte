@@ -120,9 +120,6 @@
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 	}
-	header.group {
-		background: var(--bg-group);
-	}
 	.capsule {
 		display: flex;
 		align-items: center;

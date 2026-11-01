@@ -152,7 +152,7 @@
 		void app.activeId;
 		// the open tab, or inside the open group's box the session being looked at
 		strip?.querySelector<HTMLElement>(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
-		strip?.querySelector<HTMLElement>('.chip[aria-current="true"]')?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+		strip?.querySelector<HTMLElement>('.gchip[aria-current="true"]')?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
 	});
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {
@@ -282,9 +282,6 @@
 			transform: translateX(-12px);
 		}
 	}
-	.bar.group {
-		background: var(--bg-group);
-	}
 	/* the strip is only as wide as its tabs, so the + follows the last one; once they overflow it stops at the bar's right end */
 	.tabs {
 		position: relative;
@@ -316,7 +313,6 @@
 		transition: margin var(--motion-fast) var(--ease-std);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
-		background: var(--bg-group);
 	}
 	.gbox.carried {
 		opacity: 0.45;
