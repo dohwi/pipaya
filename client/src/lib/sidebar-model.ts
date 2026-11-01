@@ -27,6 +27,24 @@ export function shortName(path: string, home?: string): string {
 }
 
 /**
+ * The dim path after a folder's label: where the folder sits, with the label's own tail cut off the end (`~/work/app`
+ * shows `work/app` and then `~`), so the two never repeat the same text and read as one smeared, overlapping line.
+ * A renamed folder's label is nowhere in its path, so it keeps the whole path: the pair still says two different things.
+ */
+export function parentPath(path: string, home: string | undefined, label: string): string {
+	const pretty = tilde(path, home);
+	const sep = pretty.includes("\\") ? "\\" : "/";
+	const tail = label.replace(/[\\/]/g, sep);
+	const cut = pretty.length - tail.length;
+	if (!tail) return pretty;
+	// the label is the whole path: nothing above it to show
+	if (cut === 0) return "";
+	// only a whole-segment match: a label that merely ends the path (`clone` in `meet-clone`) is not that folder's name
+	if (!/[\\/]/.test(pretty[cut - 1]!)) return pretty;
+	return pretty.slice(0, cut).replace(/[\\/]+$/, "");
+}
+
+/**
  * Where over a row a drag lands. The top and bottom of a row put the carried tab before / after it; the middle puts the
  * two together (`whole`: a carried group never goes into another group, so its middle counts as an edge too).
  */

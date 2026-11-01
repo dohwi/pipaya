@@ -7,7 +7,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { dropTarget } from "../../lib/dnd.svelte";
 	import type { DirBlock as Dir } from "../../lib/nav";
-	import { asWorkdir, dirKey, archiveKey } from "../../lib/sidebar-model";
+	import { asWorkdir, dirKey, archiveKey, parentPath } from "../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Session } from "../../lib/types";
 	import type { TerminalInfo } from "../../lib/terminal";
@@ -37,6 +37,8 @@
 	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
+	/** What shows dim after the name: the path above it, without the part the name already says */
+	const above = $derived(parentPath(d.path, n.home, label));
 	/** This folder's archived conversations: still open, but tucked away. The row is there only when there are some. */
 	const archived = $derived(n.archived[d.path] ?? []);
 	/** The most urgent state among the folder's tabs: tints the count while folded */
@@ -80,7 +82,7 @@
 				{:else}
 					<span class="dname" role="presentation" ondblclick={(e) => (e.preventDefault(), sb.dirRename.start(key, label))} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: label })}>{label}</span>
 				{/if}
-				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
+				{#if above}<span class="dparent mono" use:tail={above}></span>{/if}
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>

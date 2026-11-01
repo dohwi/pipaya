@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, orderServers, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
+import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, orderServers, parentPath, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {
@@ -43,6 +43,22 @@ describe("folder labels", () => {
 	});
 	test("a path with no segments falls back to the path itself", () => {
 		expect(shortName("/", undefined)).toBe("/");
+	});
+	test("the dim path does not repeat the label: the folder's own tail is cut", () => {
+		expect(parentPath("/h/work/meet-clone", "/h", shortName("/h/work/meet-clone", "/h"))).toBe("~");
+		expect(parentPath("/h/a/b/lib", "/h", "b/lib")).toBe("~/a");
+		// a folder right under home has nothing above it: the label (`~/work`) already says where it sits
+		expect(parentPath("/h/work", "/h", "~/work")).toBe("");
+		expect(parentPath("/h", "/h", "~")).toBe("");
+	});
+	test("the dim path keeps a name that only looks like the label's tail", () => {
+		expect(parentPath("/h/a/meet-clone", "/h", "clone")).toBe("~/a/meet-clone");
+		// a renamed folder: its label is nowhere in the path, so the whole path still says where it sits
+		expect(parentPath("/h/a/meet-clone", "/h", "내 앱")).toBe("~/a/meet-clone");
+	});
+	test("the dim path cuts at the OS's own separator", () => {
+		expect(parentPath("C:\\Users\\me\\work\\app", "C:\\Users\\me", "work/app")).toBe("C:\\Users\\me");
+		expect(parentPath("C:\\Users\\me\\work\\app", "C:\\Users\\me", "me/work/app")).toBe("C:\\Users");
 	});
 });
 
