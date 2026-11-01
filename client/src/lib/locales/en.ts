@@ -113,7 +113,6 @@ export const en: Record<string, string> = {
 	"전달 대기 중인 메시지 목록을 열어 하나씩 뺍니다": "Open the list of waiting messages and remove them one by one",
 	"대기열 관리": "Manage queue",
 	"{name} 취소": "Cancel {name}",
-	"{n}개 대기 중": "{n} waiting",
 	"대기 중인 메시지가 없습니다": "No waiting messages",
 	"작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령": "Working · Enter to steer / {key} to queue · / for commands",
 	"작업 중 · Enter 끼워 넣기 · / 명령": "Working · Enter to steer · / for commands",
