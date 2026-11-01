@@ -91,18 +91,19 @@
 </div>
 
 <style>
-	/* The gap above lives outside the scroller so the first row never touches the box edge, scrolled or not. */
+	/* The gap above lives outside the scroller so the first row never touches the box edge, scrolled or not.
+	   12px 16px = the textarea's own padding, so badges start on the text line and the ✕ glyph ends on it. */
 	.queued-wrap {
 		position: relative;
-		padding: 8px 12px 0;
+		padding: 12px 16px 0;
 	}
 	.scroll {
 		position: relative;
 	}
-	/* Track = the scroller; right: -8px puts the 4px thumb mid-gutter of the wrap's 12px side padding. */
+	/* Track = the scroller; right: -10px puts the 4px thumb mid-gutter of the wrap's 16px side padding. */
 	.thumb {
 		position: absolute;
-		right: -8px;
+		right: -10px;
 		width: 4px;
 		border-radius: 2px;
 		background: var(--text-faint);
@@ -147,6 +148,7 @@
 		width: 22px;
 		height: 22px;
 		margin-left: auto;
+		margin-right: -4px; /* 22px button, 14px glyph: the glyph's right end (not the button) sits on the 16px text line */
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
@@ -158,8 +160,8 @@
 		background: var(--bg-hover);
 	}
 	.qx :global(svg) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2;
 	}
 	.qt {
