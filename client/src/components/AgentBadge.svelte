@@ -77,17 +77,15 @@
 			opacity: var(--dim);
 		}
 	}
-	/* asking: the same breath and phase as working, plus a small swell and a glow in the logo's own shape while it is bright */
+	/* asking: the same breath and phase as working, plus a small swell while it is bright (no glow: it bled over the row) */
 	@keyframes ask {
 		0%,
 		100% {
 			transform: scale(1.12);
-			filter: drop-shadow(0 0 4px currentColor);
 		}
 		50% {
 			opacity: var(--dim);
 			transform: scale(1);
-			filter: drop-shadow(0 0 0 currentColor);
 		}
 	}
 	@keyframes shake {
