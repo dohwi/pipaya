@@ -294,6 +294,12 @@
 		margin: 0;
 		padding: 0;
 	}
+	/* a whole-pixel line box (20px): the body's line-height 1.55 made every row 37.14px and the header 44.14, so the rows
+	   drifted by 0.14px each. Row = 8 + 20 + 8 = 36 + the 1px hairline above it; header = 8 + 4 + 20 + 4 + 8 = 44. */
+	.gh,
+	li {
+		line-height: 20px;
+	}
 	li {
 		display: flex;
 		align-items: center;

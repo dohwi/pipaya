@@ -199,14 +199,15 @@
 	.md :global(a:hover) {
 		text-decoration-color: var(--text);
 	}
+	/* Block rhythm in px on the 4px scale: 12 between blocks, a heading 24 above / 8 below (em values gave 12.75 / 14.25 / 23.8 / 9.1). */
 	.md :global(p) {
-		margin: 0 0 0.85em;
+		margin: 0 0 12px;
 	}
 	.md :global(h1),
 	.md :global(h2),
 	.md :global(h3),
 	.md :global(h4) {
-		margin: 1.3em 0 0.5em;
+		margin: 24px 0 8px;
 		line-height: 1.3;
 		font-weight: 650;
 	}
@@ -221,36 +222,36 @@
 	}
 	.md :global(ul),
 	.md :global(ol) {
-		margin: 0 0 0.85em;
+		margin: 0 0 12px;
 		padding-left: 24px;
 	}
 	.md :global(li) {
-		margin: 0.2em 0;
+		margin: 4px 0;
 	}
 	.md :global(li > p) {
-		margin: 0.2em 0;
+		margin: 4px 0;
 	}
 	.md :global(blockquote) {
-		margin: 0 0 0.85em;
-		padding: 0.1em 0 0.1em 16px;
+		margin: 0 0 12px;
+		padding: 0.1em 0 0.1em 16px; /* text-relative: the bar reaches just past the quoted lines */
 		border-left: 3px solid var(--border-strong);
 		color: var(--text-dim);
 	}
 	.md :global(hr) {
 		border: 0;
 		border-top: 1px solid var(--border);
-		margin: 1.4em 0;
+		margin: 24px 0;
 	}
 	.md :global(:not(pre) > code) {
 		font-family: var(--mono);
 		font-size: 0.88em;
-		padding: 0.15em 0.4em;
+		padding: 0.15em 0.4em; /* inline code: sized with the surrounding text (a heading's code grows with it) */
 		border-radius: var(--radius-sm);
 		background: var(--bg-elev);
 		border: 1px solid var(--border);
 	}
 	.md :global(.codeblock) {
-		margin: 0 0 0.95em;
+		margin: 0 0 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-code);
@@ -293,7 +294,7 @@
 	}
 	.md :global(.tablewrap) {
 		overflow-x: auto;
-		margin: 0 0 0.95em;
+		margin: 0 0 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
@@ -344,13 +345,13 @@
 	}
 	/* the video player (lib/video-view.ts) is styled in app.css; a message only gives it room */
 	.md :global(.wd-video-wrap) {
-		margin: 0 0 0.85em;
+		margin: 0 0 12px;
 	}
 	.md :global(.wd-audio) {
 		display: block;
 		width: 100%;
 		max-width: 420px;
-		margin: 0 0 0.85em;
+		margin: 0 0 12px;
 	}
 	.md :global(.wd-img) {
 		color: var(--text-faint);
@@ -369,7 +370,7 @@
 		grid-template-rows: 1fr 1fr;
 		gap: 4px;
 		height: 340px; /* fixed so the grid does not jump while the pictures load */
-		margin: 0 0 0.85em;
+		margin: 0 0 12px;
 		overflow: hidden;
 		border-radius: var(--radius);
 	}
