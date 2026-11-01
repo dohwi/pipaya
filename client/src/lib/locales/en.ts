@@ -620,6 +620,7 @@ export const en: Record<string, string> = {
 	"에이전트는 아래에서 켠 모델 중에서만 고를 수 있습니다": "Agents can pick only from the models switched on below",
 	"에이전트가 연결된 모델 중 아무거나 고를 수 있습니다": "Agents can pick any connected model",
 	"연결에서 사라진 모델": "No longer connected",
+	"허용 목록에는 모델이 하나 이상 필요합니다": "The allow list needs at least one model",
 	"동시에 실행할 도우미": "Helpers at once",
 	"한 대화에서 동시에 돌 수 있는 수": "How many can run together in one chat",
 	"실행당 위임 횟수": "Delegations per run",

@@ -62,6 +62,11 @@
 		if (!cur) return;
 		const before = shown;
 		const next = { ...cur, ...patch };
+		// The server refuses this too (in English); say it in the UI language without the round trip.
+		if (next.policy === "allowlist" && !next.models.length) {
+			delegateError = t("허용 목록에는 모델이 하나 이상 필요합니다");
+			return;
+		}
 		cfg = { ...before!, tools: { ...before!.tools!, delegate: next } };
 		try {
 			cfg = { ...before!, tools: await apiOf(serverId)!.setDelegatePolicy(next) };
