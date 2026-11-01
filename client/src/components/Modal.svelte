@@ -98,26 +98,40 @@
 	 * in the next. The panel is placed by absolute pixel offsets instead: the window's whole-pixel middle minus the panel's whole half-size.
 	 * `ResizeObserver` reports the border-box size without the enter animation's transform (getBoundingClientRect has it).
 	 * A phone's bottom sheet is pinned to the bottom edge by CSS and only needs its sideways centring.
+	 *
+	 * Only the first size (and a window resize) centres. While the panel grows or shrinks (a collapse animation reports a new height every
+	 * frame) its top edge stays put, so the header and rows do not drift by half the change each frame (the content grows downward);
+	 * it only moves up when the bottom would leave the window. There is no second "re-centre" movement afterwards.
 	 */
 	function whole(node: HTMLElement) {
-		const place = (w: number, h: number) => {
+		let size: [number, number] | null = null;
+		let top: number | null = null;
+		const view = () => {
 			const zoom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
-			const vw = window.innerWidth / zoom, vh = window.innerHeight / zoom;
 			// computed `top` is never "auto" (it resolves to px), so ask the same media query the CSS uses
 			const sheet = node.classList.contains("sheet") && window.matchMedia("(max-width: 640px)").matches;
-			node.style.left = `${Math.round((vw - w) / 2)}px`;
-			node.style.top = sheet ? "" : `${Math.round((vh - h) / 2)}px`;
-			node.style.translate = "none";
+			return { vw: window.innerWidth / zoom, vh: window.innerHeight / zoom, sheet };
 		};
-		let size: [number, number] | null = null;
+		const middle = (vh: number, h: number) => Math.round((vh - h) / 2);
+		function place(recentre: boolean) {
+			if (!size) return;
+			const [w, h] = size;
+			const { vw, vh, sheet } = view();
+			node.style.left = `${Math.round((vw - w) / 2)}px`;
+			node.style.translate = "none";
+			if (sheet) return void (node.style.top = "");
+			if (top === null || recentre) top = middle(vh, h);
+			node.style.top = `${Math.max(Math.min(top, vh - h - 12), Math.min(12, middle(vh, h)))}px`;
+		}
 		const ro = new ResizeObserver(([e]) => {
 			const box = e?.borderBoxSize?.[0];
 			if (!box) return;
+			const first = size === null;
 			size = [box.inlineSize, box.blockSize];
-			place(...size);
+			place(first);
 		});
 		// window resizes arrive many times per frame: place once per frame
-		const onResize = () => size && schedule(node, () => { if (size) place(...size); });
+		const onResize = () => size && schedule(node, () => place(true));
 		ro.observe(node, { box: "border-box" });
 		window.addEventListener("resize", onResize);
 		return { destroy: () => { ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
