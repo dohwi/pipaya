@@ -238,7 +238,9 @@
 	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
 	let drawerW = $state(320);
 	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging).
-	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], pre, table, .grip";
+	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip";
+	// pre / table are not listed: they only keep the swipe when they really scroll sideways (scrollsSideways below),
+	// so a short code block or table inside a chat no longer swallows the drawer swipe.
 	const MODAL = 'dialog[open], [role="dialog"], [role="alertdialog"]';
 	function scrollsSideways(el: Element | null): boolean {
 		for (; el && el !== document.body; el = el.parentElement) {
@@ -259,7 +261,10 @@
 		if (!app.sidebar.open && t.clientX >= 24) {
 			const el = e.target instanceof Element ? e.target : null;
 			if (el?.closest(NO_SWIPE) || scrollsSideways(el)) return;
-			if (getSelection()?.toString()) return; // adjusting a text selection
+			// adjusting a text selection: only when the touch lands on it (a selection left over from before the app went
+			// to the background must not block the drawer swipe for good)
+			const sel = getSelection();
+			if (sel && !sel.isCollapsed && sel.rangeCount && el && sel.getRangeAt(0).intersectsNode(el)) return;
 		}
 		drawerW = sideEl?.offsetWidth || 320;
 		tracking = true;
@@ -286,6 +291,13 @@
 		tracking = locked = false;
 		swipe = null;
 	}
+	// Going to the background can swallow touchend/pointercancel: drop a half-done swipe or carried session so the
+	// next gesture starts clean (a stale `drag.id` makes every touchMove cancel the swipe).
+	function settleOnHide() {
+		if (!document.hidden) return;
+		cancelSwipe();
+		if (drag.id) drag.end(false);
+	}
 	function touchEnd() {
 		if (!tracking || !locked || swipe === null) return cancelSwipe();
 		const open = swipe / drawerW > 0.35 ? vx > -0.35 : vx > 0.35;
@@ -298,11 +310,14 @@
 	<title>pipaya</title>
 </svelte:head>
 
+<svelte:document onvisibilitychange={settleOnHide} />
+
 <svelte:window
 	ontouchstart={touchStart}
 	ontouchmove={touchMove}
 	ontouchend={touchEnd}
 	ontouchcancel={cancelSwipe}
+	onpagehide={settleOnHide}
 	onkeydowncapture={onShortcutCapture}
 	onkeydown={onShortcut}
 	onkeyup={onShortcutUp}
