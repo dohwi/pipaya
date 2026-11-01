@@ -106,11 +106,12 @@
 		position: relative;
 		padding: 12px 16px 0;
 	}
-	/* Shown only while the list scrolls: per-mode totals. Flush with the badges' left edge (16px wrap padding), the same
-	   line as the input text and the attach icon, so it reads as the header of the list. */
+	/* Shown only while the list scrolls: per-mode totals. Centred over the list, so it reads as a summary of it
+	   rather than as a column that has to line up with the badges. */
 	.count {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 8px;
 		margin: 0 0 4px;
 		font-size: var(--fs-xs);
