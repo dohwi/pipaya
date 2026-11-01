@@ -226,8 +226,11 @@
 						class:on
 						class:before={slot?.id === x.id && !slot.after}
 						class:after={slot?.id === x.id && slot.after}
+						class:carried={drag.id === x.id}
+						class:menuopen={menuId === x.id}
 						data-tab={x.id}
 						title={x.group.name}
+						use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
 						use:dropTarget={tabTarget(x)}
 					>
 						<SessionStrip tab={x} />
@@ -302,6 +305,12 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
+	}
+	.gbox.carried {
+		opacity: 0.45;
+	}
+	.gbox.menuopen {
+		background: var(--bg-hover);
 	}
 	.gbox.on {
 		border-color: var(--text-faint);
