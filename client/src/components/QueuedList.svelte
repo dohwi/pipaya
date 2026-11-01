@@ -106,14 +106,13 @@
 		position: relative;
 		padding: 12px 16px 0;
 	}
-	/* Shown only while the list scrolls: per-mode totals. The inset puts each icon and number on the icon and number
-	   inside the badges below. */
+	/* Shown only while the list scrolls: per-mode totals. Flush with the badges' left edge (16px wrap padding), the same
+	   line as the input text and the attach icon, so it reads as the header of the list. */
 	.count {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		margin: 0 0 4px;
-		padding-inline-start: 10px; /* measured, not on the scale: badge 8px padding + 1px inner padding + 1px, so the icon centre lands on the badge icon's (x 32.5) */
 		font-size: var(--fs-xs);
 		line-height: 16px;
 		color: var(--text-faint);
