@@ -1346,6 +1346,10 @@ class AppStore {
           read: () => extensions.packages(),
           apply: (v) => extensions.applyPackages(v),
         },
+        sidebar: {
+          read: () => this.sidebar.shared(serverId),
+          apply: (v) => this.sidebar.applyShared(serverId, v),
+        },
         extensionStates: {
           read: () => extensions.states(),
           apply: (v) => extensions.applyStates(v),
@@ -1353,6 +1357,7 @@ class AppStore {
       },
     });
     this.settingsSync = sync;
+    this.sidebar.onEdit = (id) => { if (id === serverId) sync.changed("sidebar"); };
     void sync.pull().catch(() => {});
   }
 

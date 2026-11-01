@@ -3,16 +3,16 @@ import { HttpError, badRequest } from "./errors.ts";
 
 /**
  * Client settings that belong to THIS server: every client connected to it sees the same value.
- * Anything a device decides for itself (theme, shortcuts, sound, language, sidebar, server list and tokens)
+ * Anything a device decides for itself (theme, shortcuts, sound, language, sidebar width and folding, server list and tokens)
  * is deliberately absent and stays on the device.
  */
-export const SERVER_SCOPED_KEYS = ["favModels", "favDirs", "extensions", "extensionStates", "notificationPolicy"] as const;
+export const SERVER_SCOPED_KEYS = ["favModels", "favDirs", "extensions", "extensionStates", "notificationPolicy", "sidebar"] as const;
 export type ClientSettingKey = (typeof SERVER_SCOPED_KEYS)[number];
 /**
  * Per-key cap in characters of JSON. Extensions carry code and design files (a package is at most 1 MiB, client
  * MAX_PACKAGE_BYTES): the list as a whole stays under the request body limit.
  */
-export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, favDirs: 50_000, extensions: 15_000_000, extensionStates: 20_000, notificationPolicy: 1_000 };
+export const MAX_SETTING_CHARS: Record<ClientSettingKey, number> = { favModels: 100_000, favDirs: 50_000, extensions: 15_000_000, extensionStates: 20_000, notificationPolicy: 1_000, sidebar: 500_000 };
 
 /** Minutes a notification shown on a PC may stay unread before it is also pushed to the phone; 0 = never. */
 export const ESCALATE_MINUTES = [0, 1, 2, 3, 5, 10, 15, 30, 60] as const;
@@ -23,6 +23,19 @@ const VALIDATORS: Partial<Record<ClientSettingKey, (value: unknown) => string | 
 	extensionStates: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "extensionStates must be an object";
 		return Object.values(v).every((x) => typeof x === "boolean") ? null : "extensionStates values must be booleans";
+	},
+	sidebar: (v) => {
+		if (!v || typeof v !== "object" || Array.isArray(v)) return "sidebar must be an object";
+		const lists = ["pinnedDirs", "pinnedTabs", "dirOrder", "tabOrder"];
+		const maps = ["dirNames", "groupDir"];
+		const o = v as Record<string, unknown>;
+		if (Object.keys(o).some((k) => !lists.includes(k) && !maps.includes(k))) return "sidebar has an unknown field";
+		for (const k of lists) if (o[k] !== undefined && !(Array.isArray(o[k]) && (o[k] as unknown[]).every((x) => typeof x === "string"))) return `sidebar.${k} must be a list of strings`;
+		for (const k of maps) {
+			const m = o[k];
+			if (m !== undefined && !(m && typeof m === "object" && !Array.isArray(m) && Object.values(m).every((x) => typeof x === "string"))) return `sidebar.${k} must map strings to strings`;
+		}
+		return null;
 	},
 	notificationPolicy: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "notificationPolicy must be an object";

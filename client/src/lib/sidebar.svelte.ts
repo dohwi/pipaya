@@ -18,7 +18,23 @@ export function reorder(visible: string[], key: string, target: string, after: b
   return list;
 }
 
+/** The part of the sidebar that follows the server (pins, folder names, hand-set order); folding and width stay on the device. */
+export interface SidebarShared {
+  pinnedDirs: string[];
+  pinnedTabs: string[];
+  dirOrder: string[];
+  tabOrder: string[];
+  dirNames: Record<string, string>;
+  groupDir: Record<string, string>;
+}
+const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+const strMap = (v: unknown): Record<string, string> =>
+  v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
+
 export class SidebarState {
+  /** Told after the user edits a server's shared part, so it can be uploaded. */
+  onEdit: (serverId: string) => void = () => {};
+
   /** The drawer on a narrow screen. */
   open = $state(false);
   collapsed = $state(read<boolean>(K.sidebar, false));
@@ -63,6 +79,7 @@ export class SidebarState {
     const list = this.pinned[serverId] ?? [];
     this.pinned = { ...this.pinned, [serverId]: list.includes(path) ? list.filter((p) => p !== path) : [...list, path] };
     write(K.pinnedDirs, this.pinned);
+    this.onEdit(serverId);
   }
 
   dirName(serverId: string, path: string): string | undefined {
@@ -75,6 +92,7 @@ export class SidebarState {
     const next = name.trim() ? { ...rest, [path]: name.trim() } : rest;
     this.dirNames = { ...this.dirNames, [serverId]: next };
     write(K.dirNames, this.dirNames);
+    this.onEdit(serverId);
   }
 
   isTabPinned(serverId: string, id: string): boolean {
@@ -85,6 +103,7 @@ export class SidebarState {
     const list = this.pinnedTabs[serverId] ?? [];
     this.pinnedTabs = { ...this.pinnedTabs, [serverId]: list.includes(id) ? list.filter((p) => p !== id) : [...list, id] };
     write(K.pinnedTabs, this.pinnedTabs);
+    this.onEdit(serverId);
   }
 
   toggleArchive(key: string) {
@@ -100,6 +119,7 @@ export class SidebarState {
     const rest = (this.dirOrder[serverId] ?? []).filter((x) => !list.includes(x));
     this.dirOrder = { ...this.dirOrder, [serverId]: [...list, ...rest] };
     write(K.dirOrder, this.dirOrder);
+    this.onEdit(serverId);
   }
 
   /** Put tab `id` before/after `target` among the tabs of one directory (`visible`, as listed now) and remember it. */
@@ -109,6 +129,7 @@ export class SidebarState {
     const rest = (this.tabOrder[serverId] ?? []).filter((x) => !list.includes(x));
     this.tabOrder = { ...this.tabOrder, [serverId]: [...rest, ...list] };
     write(K.tabOrder, this.tabOrder);
+    this.onEdit(serverId);
   }
 
   /**
@@ -121,18 +142,21 @@ export class SidebarState {
     if (changed.length) {
       this.groupDir = { ...this.groupDir, [serverId]: { ...g, ...Object.fromEntries(changed) } };
       write(K.groupDir, this.groupDir);
+    this.onEdit(serverId);
     }
     const d = this.dirOrder[serverId] ?? [];
     const newDirs = dirs.filter((p) => !d.includes(p));
     if (newDirs.length) {
       this.dirOrder = { ...this.dirOrder, [serverId]: [...d, ...newDirs] };
       write(K.dirOrder, this.dirOrder);
+    this.onEdit(serverId);
     }
     const t = this.tabOrder[serverId] ?? [];
     const newTabs = tabs.filter((x) => !t.includes(x));
     if (newTabs.length) {
       this.tabOrder = { ...this.tabOrder, [serverId]: [...t, ...newTabs] };
       write(K.tabOrder, this.tabOrder);
+    this.onEdit(serverId);
     }
   }
 
@@ -141,6 +165,37 @@ export class SidebarState {
     const rest = (this.tabOrder[serverId] ?? []).filter((x) => !list.includes(x));
     this.tabOrder = { ...this.tabOrder, [serverId]: [...rest, ...list] };
     write(K.tabOrder, this.tabOrder);
+    this.onEdit(serverId);
+  }
+
+  /** This device's shared part for a server; `undefined` while it never kept any (nothing to offer a fresh server). */
+  shared(serverId: string): SidebarShared | undefined {
+    const o: SidebarShared = {
+      pinnedDirs: this.pinned[serverId] ?? [],
+      pinnedTabs: this.pinnedTabs[serverId] ?? [],
+      dirOrder: this.dirOrder[serverId] ?? [],
+      tabOrder: this.tabOrder[serverId] ?? [],
+      dirNames: this.dirNames[serverId] ?? {},
+      groupDir: this.groupDir[serverId] ?? {},
+    };
+    const empty = !o.pinnedDirs.length && !o.pinnedTabs.length && !o.dirOrder.length && !o.tabOrder.length && !Object.keys(o.dirNames).length && !Object.keys(o.groupDir).length;
+    return empty ? undefined : o;
+  }
+
+  /** Show what the server holds for `serverId`, and keep it on this device. */
+  applyShared(serverId: string, v: unknown) {
+    const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+    this.pinned = { ...this.pinned, [serverId]: strs(o.pinnedDirs) };
+    this.pinnedTabs = { ...this.pinnedTabs, [serverId]: strs(o.pinnedTabs) };
+    this.dirOrder = { ...this.dirOrder, [serverId]: strs(o.dirOrder) };
+    this.tabOrder = { ...this.tabOrder, [serverId]: strs(o.tabOrder) };
+    this.dirNames = { ...this.dirNames, [serverId]: strMap(o.dirNames) };
+    this.groupDir = { ...this.groupDir, [serverId]: strMap(o.groupDir) };
+    write(K.pinnedDirs, this.pinned);
+    write(K.pinnedTabs, this.pinnedTabs);
+    write(K.dirOrder, this.dirOrder);
+    write(K.tabOrder, this.tabOrder);
+    write(K.dirNames, this.dirNames);
+    write(K.groupDir, this.groupDir);
   }
 }
-

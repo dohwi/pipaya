@@ -62,6 +62,29 @@ describe("sidebar moveDir", () => {
 	});
 });
 
+describe("sidebar shared part", () => {
+	test("edits are reported; the server's value replaces one server's pins only", () => {
+		(globalThis as any).localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+		const sb = new SidebarState();
+		const edits: string[] = [];
+		sb.onEdit = (id) => edits.push(id);
+		expect(sb.shared("s1")).toBeUndefined();
+		sb.togglePinned("s1", "/a");
+		sb.toggleTabPinned("s1", "g1");
+		sb.setDirName("s1", "/a", "A");
+		expect(edits).toEqual(["s1", "s1", "s1"]);
+		expect(JSON.parse(JSON.stringify(sb.shared("s1")))).toEqual({ pinnedDirs: ["/a"], pinnedTabs: ["g1"], dirOrder: [], tabOrder: [], dirNames: { "/a": "A" }, groupDir: {} });
+		sb.togglePinned("s2", "/z");
+		sb.applyShared("s1", { pinnedDirs: ["/b"], pinnedTabs: [1, "g2"], dirNames: "bad" });
+		expect(JSON.parse(JSON.stringify(sb.pinned))).toEqual({ s1: ["/b"], s2: ["/z"] });
+		expect([...sb.pinnedTabs.s1!]).toEqual(["g2"]);
+		expect({ ...sb.dirNames.s1 }).toEqual({});
+		const n = edits.length;
+		sb.applyShared("s1", {});
+		expect(edits.length).toBe(n); // a value from the server is not an edit
+	});
+});
+
 describe("feedback", () => {
 	test("a session's toast shows in its pane while on screen, globally otherwise", () => {
 		const f = new Feedback();

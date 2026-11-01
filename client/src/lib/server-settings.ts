@@ -10,8 +10,8 @@
  * It knows nothing about Svelte or the stores: the owner supplies one adapter per key.
  */
 
-export type SyncKey = "favModels" | "favDirs" | "extensions" | "extensionStates" | "notificationPolicy";
-export const SYNC_KEYS: readonly SyncKey[] = ["favModels", "favDirs", "extensions", "extensionStates", "notificationPolicy"];
+export type SyncKey = "favModels" | "favDirs" | "extensions" | "extensionStates" | "notificationPolicy" | "sidebar";
+export const SYNC_KEYS: readonly SyncKey[] = ["favModels", "favDirs", "extensions", "extensionStates", "notificationPolicy", "sidebar"];
 
 export interface SyncAdapter {
 	/** The local value to upload, or `undefined` when there is nothing worth uploading (an empty list on a fresh server). */

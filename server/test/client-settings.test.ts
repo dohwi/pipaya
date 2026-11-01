@@ -100,3 +100,11 @@ describe("client settings (server scoped)", () => {
 		expect((await api("PUT", "/client-settings/extensions", { value: "x".repeat(2_000_000) })).status).toBe(200);
 	});
 });
+
+describe("sidebar setting", () => {
+	test("accepts pins, names and order; rejects other shapes", async () => {
+		const ok = { pinnedDirs: ["/a"], pinnedTabs: ["g1"], dirOrder: ["/a"], tabOrder: ["g1"], dirNames: { "/a": "A" }, groupDir: { g1: "/a" } };
+		expect((await api("PUT", "/client-settings/sidebar", { value: ok })).status).toBe(200);
+		for (const value of [[], "x", { pinnedDirs: "/a" }, { dirNames: { "/a": 1 } }, { width: 3 }]) expect((await api("PUT", "/client-settings/sidebar", { value })).status).toBe(400);
+	});
+});
