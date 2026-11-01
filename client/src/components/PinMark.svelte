@@ -12,7 +12,7 @@
 	 *  The pin is a 9px glyph slanted 35deg, its box 1px past the icon glyph's corner (whole pixels, so it stays crisp at 1x
 	 *  and barely pulls the icon off its row's centre); the cutout follows the pin's own outline with 0.9px of air.
 	 *  A host whose icon glyph is smaller than the box (a 14px glyph centred in 16px) sets `--pinmark-inset` to the gap (1px).
-	 *  Its colour is always `--pinned` (violet), never the icon's or a state colour: the status dot already owns those.
+	 *  Its colour is always `--pinned` (white on dark, black on light), never the icon's or a state colour: the status dot already owns those.
 	 */
 	let { label = t("고정됨") }: { label?: string } = $props();
 </script>
