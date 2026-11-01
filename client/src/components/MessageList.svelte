@@ -1,3 +1,9 @@
+<script lang="ts" module>
+	/** Where each session's reader left the list: px between the view's end and the content's end. Absent = parked at the bottom.
+	 *  The list is re-mounted per session, so this lives outside the component. Memory only. */
+	const leftAt = new Map<string, number>();
+</script>
+
 <script lang="ts">
 	import Button from "./Button.svelte";
 	import { t } from "../lib/i18n";
@@ -59,6 +65,11 @@
 		}
 		lastTop = scroller.scrollTop;
 		showJump = gap() >= NEAR;
+		// Remember the reader's place for when this session comes back. Before the first restore the map still holds it.
+		if (!firstOpen) {
+			if (stuck) leftAt.delete(chat.id);
+			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
+		}
 		if (scroller.scrollTop < 600 && chat.hasEarlier) void loadEarlier();
 	}
 
@@ -149,10 +160,35 @@
 		pin();
 	}
 
-	// A conversation was opened and loaded: start at its end.
+	/** Back to where the reader left off; the bottom if they were parked there. */
+	function restore() {
+		// The first call uses the value from before mount: scroll events during mount overwrite the map.
+		const below = firstOpen ? initialBelow : (leftAt.get(chat.id) ?? null);
+		firstOpen = false;
+		return place(below);
+	}
+	let firstOpen = true;
+	let initialBelow: number | null = untrack(() => leftAt.get(chat.id) ?? null);
+	function place(below: number | null) {
+		if (below == null) return toBottom();
+		if (!scroller) return;
+		setStuck(false);
+		showJump = true;
+		scroller.scrollTop = scroller.scrollHeight - below;
+		lastTop = scroller.scrollTop;
+		// off-screen turns settle their real height afterwards; hold the same distance from the end
+		requestAnimationFrame(() => {
+			if (!scroller || stuck) return;
+			scroller.scrollTop = scroller.scrollHeight - below;
+			lastTop = scroller.scrollTop;
+			showJump = gap() >= NEAR;
+		});
+	}
+
+	// A conversation was opened and loaded: back where it was left, or at its end.
 	$effect(() => {
 		chat.id;
-		if (chat.ready) void tick().then(() => toBottom());
+		if (chat.ready) void tick().then(restore);
 	});
 
 	// The user just sent something (prompt / steer / queue): go to the bottom once, even if they had scrolled up.
