@@ -13,6 +13,7 @@
 	import ServerForm from "./ServerForm.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import Pin from "./Pin.svelte";
+	import { connectionState, orderServers, unreachable } from "../lib/sidebar-model";
 	import Icon from "./Icon.svelte";
 	import { slidingIndicator } from "../lib/sliding-indicator";
 	import { app } from "../lib/store.svelte";
@@ -67,6 +68,8 @@
 		if (!server && current.server) tab = "general";
 	});
 	/** The shown server does not answer: its sections are off, only "정보" stays so the address or token can be fixed. */
+	/** Same order as the sidebar: up, checking, then unreachable (shown only; the saved order is untouched). */
+	const chips = $derived(orderServers(app.servers.map((s) => ({ s, state: connectionState(app.links[s.id]?.net ?? "connecting") }))));
 	const serverOnline = $derived(!server || app.links[server.id]?.net === "online");
 	$effect(() => {
 		if (!serverOnline && needsOnlineServer(tab)) { extId = null; tab = "info"; }
@@ -107,8 +110,8 @@
 	<ModalHeader title={t("설정")} onclose={close} />
 	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
 		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
-		{#each app.servers as s (s.id)}
-			<span class="chipwrap">
+		{#each chips as { s, state } (s.id)}
+			<span class="chipwrap" class:off={unreachable(state)}>
 				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
 				{#if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
 			</span>
@@ -182,6 +185,15 @@
 		--pin-ring: var(--bg-elev);
 		/* the chip is a pill, so its corner is empty: pull the dot in onto the curve */
 		--pin-inset: 2px;
+	}
+	/* unreachable: the chip falls back to a dimmed, dashed outline (still pressable: its "정보" tab fixes the address or token) */
+	.chipwrap.off :global(.fchip) {
+		opacity: 0.5;
+		border-style: dashed;
+		color: var(--text-faint);
+	}
+	.chipwrap.off :global(.fchip.on) {
+		opacity: 0.75;
 	}
 	.srvname {
 		min-width: 0;
