@@ -85,6 +85,10 @@
 	}
 	.v {
 		font-variant-numeric: tabular-nums;
+		/* an extension's status text has no length limit: cut it so one item cannot push the rest off the row */
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.unit {
 		font-size: var(--fs-2xs);

@@ -279,11 +279,23 @@
 		stroke-linecap: round;
 		transition: stroke-dashoffset var(--motion-slow) var(--ease);
 	}
-	/* narrow pane: tighter spacing so the line stays on as few rows as possible */
+	/* narrow pane: tighter spacing, and one row only. Wrapping made the composer jump when a status was added; what does not
+	   fit scrolls sideways instead (`safe` keeps the first item reachable when the row overflows). */
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;
 			padding: 4px 16px 0;
+			flex-wrap: nowrap;
+			justify-content: safe center;
+			overflow-x: auto;
+			overflow-y: hidden;
+			scrollbar-width: none;
+		}
+		.statusline::-webkit-scrollbar {
+			display: none;
+		}
+		.statusline > :global(*) {
+			flex: none;
 		}
 		.statusline :global(.ring) {
 			width: 11px;
