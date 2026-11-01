@@ -56,9 +56,9 @@
 		use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: sb.hover(key), drop: sb.dropOnDir }}
 		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
-		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
+		<button class="dirtoggle" class:haspin={pinned} onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon" class:pinned title={pinned ? t("고정됨") : undefined}><Icon name={pinned ? "pin" : "folder"} /></span>
+			<span class="dicon"><Icon name="folder" /></span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
 					<!-- svelte-ignore a11y_autofocus -->
@@ -83,6 +83,7 @@
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>
+		{#if pinned}<span class="dpin" class:folded title={t("고정됨")}><Icon name="pin" /></span>{/if}
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 디렉터리의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 디렉터리에서 새 대화 또는 터미널")} />
 	</div>
@@ -121,9 +122,50 @@
 </div>
 
 <style>
-	/* a pinned folder's pin is stuck in at a slant; only the glyph turns (the 14px box and its centre on x 48 stay put) */
-	.dicon.pinned :global(svg) {
+	/* a pinned folder's pin: the same 20px box and 35deg slant as a pinned tab's (TabRow .tpin), on the same column as its "+" / "⋯".
+	   Mouse: x 256, giving way to the "+" while the row is hovered or focused (like the tab's pin to its "⋯"). Folded, the count
+	   owns x 256, so the pin steps to the free list-button column (x 236). Touch: "+" (256) and list button (236) are always
+	   there, so the pin sits one column further in (x 216). The pin lies outside the toggle; the name stops short of it. */
+	.dir {
+		position: relative;
+	}
+	.dpin {
+		position: absolute;
+		top: 50%;
+		right: 0;
+		translate: 0 -50%;
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		color: var(--text-faint);
+		pointer-events: none;
+	}
+	.dpin.folded {
+		right: 20px;
+	}
+	.dpin :global(svg) {
+		width: 14px;
+		height: 14px;
 		transform: rotate(35deg);
+	}
+	.dir.folded .haspin :global(.dlabel) {
+		margin-right: 20px;
+	}
+	@media (hover: hover) {
+		.dir:hover .dpin:not(.folded),
+		.dir:focus-within .dpin:not(.folded) {
+			display: none;
+		}
+	}
+	@media (pointer: coarse) {
+		.dpin,
+		.dpin.folded {
+			right: 40px;
+		}
+		.haspin :global(.dlabel) {
+			margin-right: 20px;
+		}
 	}
 	.dnameinput {
 		flex: 1;
