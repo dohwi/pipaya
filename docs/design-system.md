@@ -4,7 +4,7 @@ Source of truth for how the client is laid out. The values here are the ones the
 (`client/src/components/Sidebar.svelte`, `sidebar/*.svelte`); everything else is being moved onto the same rules.
 Tokens live in `client/src/app.css` (`:root`); read it before adding a value.
 
-> 한국어 요약은 맨 아래. Agents: the short version is in `AGENTS.md` ("UI 간격 규칙"); this file has the reasons and the exact numbers.
+> 한국어 요약은 맨 아래. The short, enforceable rules are in [`DESIGN.md`](../DESIGN.md) (read it first; `python3 scripts/ui-lint.py` checks them); this file has the reasons and the exact numbers.
 
 ## 1. One spacing scale
 
@@ -122,7 +122,9 @@ When you add an icon or a button to a sidebar row: pick the column it belongs to
   Containers step up (10 → 12 → 16) so nested corners stay concentric.
 - Type: `--fs-2xs` 11 … `--fs-2xl` 20. Inputs are at least `--fs-lg` 16 on iOS (smaller zooms the page).
 - Dialog widths: `--modal-w-s/m/l/xl` = 420 / 480 / 560 / 720, with `--modal-gutter` 24 to the screen edge.
-- Stacking: `--z-modal-1..5`, `--z-scrim-1..5`, `--z-notice`, `--z-toast`, `--z-lightbox`. Do not add a raw `z-index`.
+- Stacking: page layers `--z-popover` 20, `--z-dock` 25, `--z-droplayer` 30, `--z-notice` 40, `--z-drawer-scrim` / `--z-drawer` 49 / 50, `--z-dropzone` 55;
+  dialogs `--z-scrim-1..5` / `--z-modal-1..5`; above them `--z-toast` 100, `--z-dropdown` 110, `--z-lightbox` 120, `--z-tooltip` 130.
+  Anything that crosses components uses a token; a raw 0-9 stays inside one component (`ui-lint` flags anything higher without a comment).
 
 ### Question and tool-call blocks (chat)
 
@@ -229,6 +231,9 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 - Change a **shared component** (`Modal`, `Button`, `SettingRow`, `SearchField`, `Segmented`, …) only together with a check of every screen that uses it. Prefer fixing the token or the component over per-screen overrides.
 - Do not fix a misalignment with `margin-left: -1px` or `translate`. Find the box that is the wrong size and fix that. If a nudge is unavoidable, comment what it aligns to.
 - New values go into this file when they become a rule.
+- Markdown in messages: blocks are **12px** apart, a heading **24px above / 8px below**, list items 4px; all in px (em values gave 12.75 / 14.25 / 23.8 / 9.1px).
+- Text rows whose height adds up (conversation list, settings rows) use a whole-pixel `line-height` (20px), so a row is 36 + 1px hairline, never 37.14.
+- Run `python3 scripts/ui-lint.py` before committing a style change; it must print `clean`.
 
 ## 한국어 요약
 
