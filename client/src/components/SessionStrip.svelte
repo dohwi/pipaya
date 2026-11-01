@@ -2,11 +2,10 @@
 	import { RENAME_KEY } from "../lib/keys";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
-	import { dragScroll } from "../lib/drag-scroll";
-	import { edgeFade } from "../lib/edge-fade";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "./Icon.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../lib/activity";
+	import type { Tab } from "../lib/nav";
 	import { panesOf } from "../lib/layout";
 	import { app } from "../lib/store.svelte";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
@@ -32,20 +31,17 @@
 		return closeContextMenu;
 	}
 
-	/** The sessions of the open group as chips after its tab; a tap switches to that session. */
-	const group = $derived(app.activeGroup);
+	/** The sessions of a group as chips inside its box; a tap opens the group on that session. */
+	let { tab }: { tab: Extract<Tab, { kind: "group" }> } = $props();
+	const group = $derived(tab.group);
+	/** only the open group marks one of its sessions as the current one */
+	const open = $derived(app.activeTab?.tab.id === tab.id);
 	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
 
-	let strip: HTMLElement | undefined = $state();
-	// keep the focused chip in view when it changes (also when switched from elsewhere)
-	$effect(() => {
-		app.activeId;
-		strip?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-	});
 </script>
 
-{#if group && items.length}
-	<nav class="strip" bind:this={strip} aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }} use:dragScroll use:edgeFade>
+{#if items.length}
+	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".chip.on", radius: "var(--radius-sm)" }}>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{#if rename.is(x.id)}
@@ -62,7 +58,7 @@
 					}}
 				/>
 			{:else}
-				<button class="chip tap" class:on={x.id === app.activeId} aria-current={x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} use:pressMenu={(pt) => chipMenu(pt, x.id, x.title)} title="{x.title} · {ACTIVITY_LABEL[st]}">
+				<button class="chip tap" class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} ondblclick={() => rename.start(x.id, x.title)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} use:pressMenu={(pt) => chipMenu(pt, x.id, x.title)} title="{x.title} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					<span class="t">{x.title}</span>
 				</button>

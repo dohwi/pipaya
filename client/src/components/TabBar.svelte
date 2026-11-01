@@ -17,7 +17,6 @@
 	import { tabPanes, type Tab } from "../lib/nav";
 	import { app } from "../lib/store.svelte";
 	import { platformName } from "../lib/terminal";
-	import { viewport } from "../lib/viewport.svelte";
 
 	/**
 	 * The tabs of the working directory in front of the user, like an editor's: a lone conversation, a lone terminal,
@@ -140,7 +139,7 @@
 	$effect(() => {
 		void activeTab;
 		void app.activeId;
-		// the open group's tab and, inside its box of chips, the session being looked at (phones show one session at a time)
+		// the open tab, or inside the open group's box the session being looked at
 		strip?.querySelector<HTMLElement>(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
 		strip?.querySelector<HTMLElement>('.chip[aria-current="true"]')?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
 	});
@@ -218,12 +217,20 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				{@const boxed = x.kind === "group" && on && (viewport.narrow || app.isFull(x.id) || !!app.zoomId)}
-				<!-- one pane of the open group is enlarged (always, on phones): the group's tab becomes a box of its sessions; the
-				     group's name is the first step of the page header's "group › session" -->
-				{#if boxed}
-					<div class="gbox">
-						<SessionStrip />
+				<!-- a group is a bordered box around its sessions, laid out inline with the other tabs (its name is in the page
+				     header's "group › session" and the sidebar) -->
+				{#if x.kind === "group"}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="gbox"
+						class:on
+						class:before={slot?.id === x.id && !slot.after}
+						class:after={slot?.id === x.id && slot.after}
+						data-tab={x.id}
+						title={x.group.name}
+						use:dropTarget={tabTarget(x)}
+					>
+						<SessionStrip tab={x} />
 					</div>
 				{:else}
 					{@render tabItem(x, on, st)}
@@ -283,18 +290,21 @@
 	   pane while the group is enlarged, so the box keeps its whole width and the bar scrolls past it: the other tabs are
 	   the ones that make way, never a chip hidden behind a narrow box. */
 	.gbox {
+		position: relative;
 		flex: none;
 		min-width: 0;
-		max-width: 100%;
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		height: 28px;
 		padding: 0 4px;
-		margin-right: 8px;
-		border: 1px solid var(--border-strong);
+		transition: margin var(--motion-fast) var(--ease-std);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg-group);
+	}
+	.gbox.on {
+		border-color: var(--text-faint);
 	}
 	.tab {
 		position: relative;
@@ -341,14 +351,18 @@
 			color var(--motion-fast) var(--ease-std),
 			margin var(--motion-fast) var(--ease-std);
 	}
-	.tab.before {
+	.tab.before,
+	.gbox.before {
 		margin-left: 20px;
 	}
-	.tab.after {
+	.tab.after,
+	.gbox.after {
 		margin-right: 20px;
 	}
 	.tab.before::before,
-	.tab.after::after {
+	.tab.after::after,
+	.gbox.before::before,
+	.gbox.after::after {
 		content: "";
 		position: absolute;
 		top: 4px;
@@ -357,10 +371,12 @@
 		background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 		z-index: 2;
 	}
-	.tab.before::before {
+	.tab.before::before,
+	.gbox.before::before {
 		left: -24px;
 	}
-	.tab.after::after {
+	.tab.after::after,
+	.gbox.after::after {
 		right: -24px;
 	}
 	.tail.over::before {
