@@ -413,6 +413,8 @@ export const en: Record<string, string> = {
 	"켜면 저장된 키가 있어야 이 연결의 모델을 쓸 수 있습니다": "When on, a saved key is required to use this connection's models",
 	"모델 ({n})": "Models ({n})",
 	"모델 추가": "Add model",
+	"불러오지 못한 {n}개 삭제": "Delete {n} not available",
+	"{name} 삭제": "Delete {name}",
 	"아이콘": "Icon",
 	"아이콘 검색": "Search icons",
 	"올린 이미지": "Uploaded images",

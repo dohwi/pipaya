@@ -180,6 +180,12 @@
 		fresh = false;
 		editing = null;
 	}
+	function removeAt(i: number) {
+		form?.rows.splice(i, 1);
+	}
+	function pruneMissing() {
+		if (form) form.rows = form.rows.filter((r) => !r.unavailable);
+	}
 	function onName(v: string) {
 		if (!form) return;
 		form.name = v;
@@ -327,6 +333,8 @@
 						onopen={openModel}
 						onadd={addModel}
 						ondiscover={discover}
+						onremove={removeAt}
+						onprune={pruneMissing}
 					/>
 				{/if}
 			</div>
@@ -386,6 +394,8 @@
 							onopen={openModel}
 							onadd={addModel}
 							ondiscover={discover}
+							onremove={removeAt}
+							onprune={pruneMissing}
 						/>
 					{/if}
 				</div>

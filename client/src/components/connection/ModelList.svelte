@@ -2,6 +2,8 @@
 	import Button from "../Button.svelte";
 	import Badge from "../Badge.svelte";
 	import Icon from "../Icon.svelte";
+	import IconButton from "../IconButton.svelte";
+	import ConfirmButton from "../ConfirmButton.svelte";
 	import ModelLogo from "../ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
@@ -24,6 +26,8 @@
 		onopen,
 		onadd,
 		ondiscover,
+		onremove,
+		onprune,
 	}: {
 		form: Form;
 		connection: { baseUrl: string; token: string } | null | undefined;
@@ -35,20 +39,31 @@
 		onopen: (index: number) => void;
 		onadd: () => void;
 		ondiscover: () => void;
+		onremove: (index: number) => void;
+		/** drop every model the upstream no longer lists */
+		onprune: () => void;
 	} = $props();
+
+	const gone = $derived(form.rows.filter((r) => r.unavailable).length);
 </script>
 
 <section class="fsec">
 	<div class="mhead">
 		<div class="section-label">{t("모델 ({n})", { n: form.rows.length })}</div>
-		<Button size="sm" disabled={discovering || busy} onclick={ondiscover}>
-			<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
-		</Button>
+		<div class="mact">
+			{#if gone > 1}
+				<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onprune}>{t("불러오지 못한 {n}개 삭제", { n: gone })}</ConfirmButton>
+			{/if}
+			<Button size="sm" disabled={discovering || busy} onclick={ondiscover}>
+				<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
+			</Button>
+		</div>
 	</div>
 	{#if note}<p class="hint note" role="status" in:collapseIn out:collapseOut>{note}</p>{/if}
 	<div class="mpick">
 		{#each form.rows as r, i (i)}
-			<button type="button" class="mitem" class:off={r.disabled || r.unavailable} onclick={() => onopen(i)}>
+			<div class="mitem" class:off={r.disabled || r.unavailable}>
+			<button type="button" class="mopen" onclick={() => onopen(i)}>
 				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
 				<span class="mname" title={r.name.trim() || r.id.trim()}>{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream && !r.unavailable}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
 				{#if r.disabled}
@@ -62,6 +77,8 @@
 				{/if}
 				<Icon name="chevron-right" />
 			</button>
+			{#if r.unavailable}<IconButton icon="trash" label={t("{name} 삭제", { name: r.name.trim() || r.id.trim() })} tip size="sm" disabled={busy} onclick={() => onremove(i)} />{:else if gone}<span class="tspace" aria-hidden="true"></span>{/if}
+			</div>
 		{/each}
 	</div>
 	<Button variant="dashed" onclick={onadd}><Icon name="plus" /> {t("모델 추가")}</Button>
@@ -93,15 +110,32 @@
 		border-radius: var(--radius);
 		overflow: hidden;
 	}
-	.mitem {
+	.mact {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	/* keeps the chevron column straight when only some rows carry a delete button (32px = IconButton sm) */
+	.tspace {
+		flex: none;
+		width: 32px;
+	}
+	.mopen {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		min-height: 46px;
+		text-align: left;
+	}
+	.mitem {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		padding: 0 12px 0 12px;
 		background: var(--bg-elev);
 		border-bottom: 1px solid var(--border);
-		text-align: left;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.mitem:last-child {
