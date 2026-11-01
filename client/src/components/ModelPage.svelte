@@ -323,7 +323,7 @@
 	/* the strengths this model offers: on = its own colour with a filled dot, off = faded with a hollow one.
 	   The dot is the same 8px box either way, so switching a chip never changes its width (no re-wrapping). */
 	.cap.lv {
-		gap: 6px;
+		gap: 8px; /* was 6: the 8px dot and its label on the 4px scale */
 	}
 	.cap.lv .dot {
 		flex: none;
@@ -387,7 +387,7 @@
 		display: inline-block;
 		width: 5px;
 		height: 5px;
-		margin-right: 6px;
+		margin-right: 8px; /* was 6 */
 		border-radius: 50%;
 		background: var(--lv);
 		opacity: 0.55;

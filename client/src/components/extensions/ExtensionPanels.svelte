@@ -262,7 +262,7 @@
 	.rail.fade-l { mask-image: linear-gradient(to right, transparent, #000 28px); }
 	.rail.fade-r { mask-image: linear-gradient(to left, transparent, #000 28px); }
 	.rail.fade-l.fade-r { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-	:global(.iconbtn.step) { position: absolute; top: 50%; z-index: 2; width: 28px; height: 28px; margin-top: -12px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
+	:global(.iconbtn.step) { position: absolute; top: calc(50% - 14px); /* centred on the rail (a -12px margin left it 2px low) */ z-index: 2; width: 28px; height: 28px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
 	:global(.iconbtn.step.prev) { left: 0; }
 	:global(.iconbtn.step.next) { right: 0; }
 	:global(.iconbtn.step svg) { width: 15px; height: 15px; }

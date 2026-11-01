@@ -231,7 +231,7 @@
 		align-items: center;
 		gap: 4px;
 		margin-top: 4px;
-		margin-left: -4px;
+		margin-left: -8px; /* the 32px buttons hold a 16px glyph 8px in: the first glyph lands on the text's left edge (was -4: 4px in) */
 		opacity: 0.55;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}

@@ -450,7 +450,7 @@
 		min-height: 0;
 	}
 	:global(.iconbtn.back) {
-		margin-left: -8px;
+		margin-left: -9.5px; /* the 38px button holds a 19px glyph 9.5px in: the glyph's left edge lands on the gutter, like the close glyph on the right (was -8: 1.5px in) */
 	}
 	.fform > footer {
 		display: flex;
