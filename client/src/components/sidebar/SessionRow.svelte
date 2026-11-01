@@ -6,6 +6,7 @@
 	import type { DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../lib/sidebar-ctx";
 	import type { Session } from "../../lib/types";
+	import Icon from "../Icon.svelte";
 	import AgentBadge from "../AgentBadge.svelte";
 	import RowTitle from "./RowTitle.svelte";
 	import TabRow from "./TabRow.svelte";
@@ -19,8 +20,8 @@
 	const tip = $derived([label?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · "));
 </script>
 
-{#snippet body()}
-	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} /></span>
+{#snippet body(pinned: boolean)}
+	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}</span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
 	<RowTitle text={x.title} />
 {/snippet}

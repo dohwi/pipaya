@@ -50,9 +50,8 @@
 		<span class="chev" class:folded><Icon name="chevron-down" /></span>
 	</button>
 	<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} ondblclick={() => n.current && sb.startGroupRename(g)} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: g.name })}>
-		<span class="lead"><Icon name="group" /></span>
+		<span class="lead"><Icon name="group" />{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}</span>
 		<RowTitle text={g.name} />
-		{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
 	</button>
 </RowShell>

@@ -3,8 +3,6 @@
 	import { app } from "../../lib/store.svelte";
 	import { type DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
-	import { t } from "../../lib/i18n";
-	import Icon from "../Icon.svelte";
 	import RowShell from "./RowShell.svelte";
 
 	/**
@@ -27,7 +25,7 @@
 		tip: string;
 		drop: DropOpts;
 		member?: boolean;
-		body: Snippet;
+		body: Snippet<[boolean]>;
 	} = $props();
 
 	const sb = getSidebarCtx();
@@ -51,7 +49,6 @@
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} ondblclick={() => n.current && sb.startRename(x.id, x.title)} title={tip}>
-		{@render body()}
-		{#if pinned}<span class="tpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
+		{@render body(pinned)}
 	</button>
 </RowShell>

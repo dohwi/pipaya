@@ -58,7 +58,7 @@
 	>
 		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon"><Icon name="folder" /></span>
+			<span class="dicon"><Icon name="folder" />{#if pinned}<span class="tpin dpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
 					<!-- svelte-ignore a11y_autofocus -->
@@ -78,7 +78,6 @@
 					/>
 				{:else}
 					<span class="dname" role="presentation" ondblclick={(e) => (e.preventDefault(), sb.dirRename.start(key, label))} title={t("{name} · 더블 클릭으로 이름 바꾸기", { name: label })}>{label}</span>
-					{#if pinned}<span class="dpin" title={t("고정됨")}><Icon name="pin" /></span>{/if}
 				{/if}
 				{#if parent}<span class="dparent mono" use:tail={parent}></span>{/if}
 			</span>
@@ -122,22 +121,6 @@
 </div>
 
 <style>
-	/* a pinned folder's pin sits right after its name (before the dim parent path), slanted 35deg like a pinned tab's.
-	   It travels with the name, so it never floats between the name and the buttons and needs no column of its own */
-	.dpin {
-		display: grid;
-		place-items: center;
-		flex: none;
-		align-self: center;
-		width: 14px;
-		height: 14px;
-		color: var(--text-faint);
-	}
-	.dpin :global(svg) {
-		width: 12px;
-		height: 12px;
-		transform: rotate(35deg);
-	}
 	.dnameinput {
 		flex: 1;
 		min-width: 0;
