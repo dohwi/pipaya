@@ -414,12 +414,19 @@
 	const hasInput = $derived(text.trim().length > 0 || attached.any);
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
+	let duringBusy = false; // a second Enter while the first is still in flight would send the same text twice
 	async function during(kind: "steer" | "queue") {
-		if (!hasInput || app.net !== "online") return;
-		const out = await prepare();
-		if (!out) return;
-		const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, attached.files) : app.queue(out.body, out.images, pane.id, attached.files));
-		if (ok) clearSent(out.key);
+		if (!hasInput || duringBusy) return;
+		if (app.net !== "online") return void app.toast(t("서버에 연결되어 있지 않아 보내지 못했습니다"), "error", pane.id);
+		duringBusy = true;
+		try {
+			const out = await prepare();
+			if (!out) return;
+			const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, attached.files) : app.queue(out.body, out.images, pane.id, attached.files));
+			if (ok) clearSent(out.key);
+		} finally {
+			duringBusy = false;
+		}
 	}
 
 	let lastQueueTick = app.queueSendTick;

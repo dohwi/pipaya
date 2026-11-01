@@ -150,9 +150,12 @@
 	}
 	.queued {
 		list-style: none;
-		margin: 0;
-		padding: 0;
+		/* The ✕ below sticks out 4px (glyph aligned to the text line). Without room for it, overflow-y: auto turns
+		   the visible x axis into auto too and a horizontal scrollbar appears: pad 4px inside, pull 4px back out. */
+		margin: 0 -4px 0 0;
+		padding: 0 4px 0 0;
 		/* max-height comes from the script (1.5, 2.5 or 3.5 rows, by the room left). */
+		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		cursor: grab;

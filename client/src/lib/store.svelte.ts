@@ -1864,7 +1864,8 @@ class AppStore {
     files: UploadFile[] = [],
   ): Promise<boolean> {
     const api = this.api;
-    if (!api || this.sending) return false;
+    if (!api) return false;
+    if (this.sending) return void this.toast(t("이전 메시지를 보내는 중입니다. 잠시 후 다시 시도하세요"), "error", to), false;
     text = text.trim();
     if (!text && !images.length && !files.length) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
@@ -1959,8 +1960,11 @@ class AppStore {
       await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
       return true;
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409)
+      if (e instanceof ApiError && e.status === 409) {
+        // The run ended a moment ago: start a new one. `send` refuses while another send is in flight, so wait for it.
+        for (let i = 0; i < 40 && this.sending; i++) await new Promise((r) => setTimeout(r, 50));
         return this.send(text, images, to, files);
+      }
       this.fail(e, failMsg, chat.id);
       return false;
     }

@@ -1301,6 +1301,8 @@ export const en: Record<string, string> = {
 	"(첨부한 파일을 봐 주세요)": "(Please look at the attached file)",
 	"사용할 수 있는 모델이 없습니다. 모델 선택창에서 연결을 추가하세요.": "No models are available. Add a connection from the model picker.",
 	"보내지 못했습니다": "Couldn't send",
+	"서버에 연결되어 있지 않아 보내지 못했습니다": "Not connected to the server, so it was not sent",
+	"이전 메시지를 보내는 중입니다. 잠시 후 다시 시도하세요": "The previous message is still being sent. Try again in a moment",
 	"끼워 넣지 못했습니다": "Couldn't steer",
 	"대기열에 추가하지 못했습니다": "Couldn't queue",
 	"서버에 연결하고 압축할 대화를 여세요": "Connect to a server and open a chat to compact",
