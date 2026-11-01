@@ -4,7 +4,7 @@
 
 	/**
 	 * A destructive button that asks by itself: the first press arms it (the label turns into `confirmLabel`, the
-	 * button turns red and a thin bar shows the time left), a second press within `timeout` runs `onconfirm`.
+	 * button turns red and its border runs out like a timer), a second press within `timeout` runs `onconfirm`.
 	 * Leaving it alone, or moving focus away, disarms it. Used for removals that cannot be undone from where they are.
 	 */
 	let {
@@ -67,33 +67,41 @@
 </button>
 
 <style>
+	/* the time left is the border itself: a red ring that unwinds clockwise from the top */
+	@property --cb-a {
+		syntax: "<angle>";
+		inherits: false;
+		initial-value: 360deg;
+	}
 	.cbtn {
 		position: relative;
-		overflow: hidden;
 		transition:
 			color var(--motion-fast) var(--ease-std),
 			border-color var(--motion-fast) var(--ease-std),
 			background-color var(--motion-fast) var(--ease-std);
 	}
 	.cbtn.armed {
-		border-color: var(--danger);
+		border-color: color-mix(in srgb, var(--danger) 30%, transparent);
 	}
-	/* how long it stays armed, drawn as a bar that runs out */
 	.cbtn.armed::after {
 		content: "";
 		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		height: 2px;
-		background: currentColor;
-		opacity: 0.45;
-		transform-origin: left;
+		inset: -1px; /* covers the 1px border and 1px inside it, so the ring reads as 2px */
+		padding: 2px;
+		border-radius: inherit;
+		background: conic-gradient(var(--danger) var(--cb-a), transparent 0);
+		/* keep only the 1px ring: the padding box minus the content box */
+		mask:
+			linear-gradient(#000 0 0) content-box,
+			linear-gradient(#000 0 0);
+		mask-composite: exclude;
+		-webkit-mask-composite: xor;
+		pointer-events: none;
 		animation: cb-run var(--cb-time) linear forwards;
 	}
 	@keyframes cb-run {
 		to {
-			transform: scaleX(0);
+			--cb-a: 0deg;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
