@@ -111,16 +111,25 @@
 		padding-top: 8px;
 		border-top: 1px solid var(--border);
 	}
+	/* A phone: the actions drop under the text. They are a grid row of their own, so the card keeps its 12px padding (a wrapped
+	   flex line left 46px of empty space under the buttons) and the text column takes the full width next to the switch. */
 	@media (max-width: 640px) {
 		.item {
-			flex-wrap: wrap;
+			display: grid;
+			grid-template-columns: auto 1fr;
+			column-gap: 12px;
+			row-gap: 8px;
+			align-items: start;
+		}
+		.item:not(:has(.lead)) {
+			grid-template-columns: 1fr;
+		}
+		.item > .side {
+			grid-column: 1 / -1;
+			justify-content: flex-start;
 		}
 		.act {
 			--row: 22px;
-		}
-		.side {
-			width: 100%;
-			justify-content: flex-start;
 		}
 	}
 </style>

@@ -26,7 +26,7 @@
 	 * by hand on disk shows up here by itself. Shown in the settings (project scope = the default working folder) and in the
 	 * footer's dialog (`cwd` = that conversation's folder). `bare` drops the settings-card chrome for use inside a dialog.
 	 */
-	let { serverId, models, cwd, bare = false }: { serverId: string; models: ModelInfo[]; cwd?: string; bare?: boolean } = $props();
+	let { serverId, models, cwd, bare = false, refresh = 0, count = $bindable(null) }: { serverId: string; models: ModelInfo[]; cwd?: string; bare?: boolean; refresh?: number; count?: { on: number; total: number } | null } = $props();
 
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
@@ -36,10 +36,13 @@
 	let error = $state("");
 	let busy = $state(false);
 	const list = $derived(data && data.id === serverId ? data.list : null);
+	// the dialog's header says how many are on
+	$effect(() => { count = list ? { on: list.subagents.filter((r) => r.enabled).length, total: list.subagents.length } : null; });
 
 	// Re-read when the server changes, and when role files change on disk (the same `skills_updated` event the file watcher sends).
 	$effect(() => {
 		void app.skillsTick;
+		void refresh; // the dialog's refresh button
 		const id = serverId;
 		const a = api;
 		const dir = cwd;

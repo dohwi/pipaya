@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DialogBody from "./DialogBody.svelte";
+	import IconButton from "./IconButton.svelte";
 	import Modal from "./Modal.svelte";
 	import SubagentSettings from "./SubagentSettings.svelte";
 	import { t } from "../lib/i18n";
@@ -11,11 +12,17 @@
 	 * conversation's own folder, with add / edit / remove (the same list as in the settings).
 	 */
 	let { dialog: target, onclose }: { dialog: { cwd: string }; api: Api; onclose: () => void } = $props();
+	let refresh = $state(0);
+	let count = $state<{ on: number; total: number } | null>(null);
+	const home = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 	const models = $derived(app.models.filter((m) => !m.imageGeneration));
 </script>
 
-<Modal {onclose} title={t("도우미 역할")} sub={target.cwd.replace(/^\/home\/[^/]+/, "~")} width="xl" maxHeight="760px" safeArea>
+<Modal {onclose} title={t("도우미 역할")} sub={count ? `${t("{total}개 중 {on}개 사용", count)} · ${home(target.cwd)}` : home(target.cwd)} width="xl" maxHeight="760px" safeArea>
+	{#snippet headerActions()}
+		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} />
+	{/snippet}
 	<DialogBody gap>
-		{#if app.serverId}<SubagentSettings serverId={app.serverId} {models} cwd={target.cwd} bare />{/if}
+		{#if app.serverId}<SubagentSettings serverId={app.serverId} {models} cwd={target.cwd} {refresh} bind:count bare />{/if}
 	</DialogBody>
 </Modal>
