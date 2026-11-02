@@ -20,6 +20,13 @@
 	const prefix = `find-${Math.random().toString(36).slice(2, 8)}`;
 	const ALL = `${prefix}-all`;
 	const CURRENT = `${prefix}-current`;
+	// The rules join the document as a constructed sheet, not as a <style> element in <head>: that element made the browser
+	// restyle the whole page the moment the first conversation mounted, in the middle of the send. Removed with the bar.
+	const sheet = supported && "adoptedStyleSheets" in document ? new CSSStyleSheet() : null;
+	if (sheet) {
+		sheet.replaceSync(`::highlight(${ALL}){background:var(--warn-soft);color:inherit}::highlight(${CURRENT}){background:var(--warn);color:#000}`);
+		document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+	}
 
 	function paint() {
 		if (!supported) return;
@@ -117,6 +124,7 @@
 
 	onMount(() => () => {
 		clearTimeout(timer);
+		if (sheet) document.adoptedStyleSheets = document.adoptedStyleSheets.filter((x) => x !== sheet);
 		if (supported) {
 			CSS.highlights.delete(ALL);
 			CSS.highlights.delete(CURRENT);
@@ -137,12 +145,6 @@
 
 	const count = $derived(ranges.length >= MAX_MATCHES ? `${MAX_MATCHES}+` : String(ranges.length));
 </script>
-
-<svelte:head>
-	{#if supported}
-		{@html `<style>::highlight(${ALL}){background:var(--warn-soft);color:inherit}::highlight(${CURRENT}){background:var(--warn);color:#000}</style>`}
-	{/if}
-</svelte:head>
 
 <div bind:this={bar} class="slot">
 	{#if open}
