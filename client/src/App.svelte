@@ -7,7 +7,7 @@
 	import Sidebar from "./components/Sidebar.svelte";
 	import Rail from "./components/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
-	import { cancelChord, onShortcut, onShortcutCapture, onShortcutUp, resetKeyboard } from "./lib/actions";
+	import { cancelChord, notePress, onShortcut, onShortcutCapture, onShortcutUp, resetKeyboard } from "./lib/actions";
 	import Header from "./components/Header.svelte";
 	import Pane from "./components/Pane.svelte";
 	import GroupView from "./components/GroupView.svelte";
@@ -329,7 +329,7 @@
 	onkeydowncapture={onShortcutCapture}
 	onkeydown={onShortcut}
 	onkeyup={onShortcutUp}
-	onpointerdowncapture={cancelChord}
+	onpointerdowncapture={(e) => (notePress(e), cancelChord())}
 	onblur={resetKeyboard}
 />
 

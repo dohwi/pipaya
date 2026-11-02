@@ -277,6 +277,16 @@ function typingTarget(e: KeyboardEvent) {
   );
 }
 
+/**
+ * The element last pressed. F2 renames the place that was clicked (its sidebar row, tab, title or pane bar): a macOS
+ * webview never focuses what it clicks, so the click is the only thing left to tell which one the user means.
+ */
+let pressed: Element | null = null;
+
+export function notePress(e: PointerEvent) {
+  pressed = e.target instanceof Element ? e.target : null;
+}
+
 /** Leave a half-typed shortcut (Ctrl+B pressed, waiting for the next key) without running anything. */
 export function cancelChord() {
   disarmPrefixAction();
@@ -375,7 +385,7 @@ export function onShortcut(e: KeyboardEvent) {
   // handled it already (preventDefault, returned above); this is the rest of the window: a click on a row leaves focus on
   // the body in a macOS webview (WebKit bug 22261), and a folded sidebar has no row to focus at all.
   if (e.key === RENAME_KEY) {
-    const now = renameNow();
+    const now = renameNow(pressed);
     if (
       now &&
       !e.ctrlKey &&

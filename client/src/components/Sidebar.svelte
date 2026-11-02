@@ -124,6 +124,7 @@
 	$effect(() =>
 		registerRenamePlace({
 			order: 0,
+			zone: '[data-part="sidebar"]',
 			open() {
 				if (app.sidebar.collapsed) return null;
 				const g = app.activeGroup;

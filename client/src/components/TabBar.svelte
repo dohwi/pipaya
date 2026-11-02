@@ -9,6 +9,7 @@
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
 	import { newMenuEntries, rowMenuEntries, type RowTarget } from "../lib/sidebar-model";
 	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { registerRenamePlace } from "../lib/rename-places";
 	import { chooseGroup } from "../lib/group-picker";
 	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../lib/dnd.svelte";
@@ -119,6 +120,19 @@
 
 	/* ---- context menu (right click / long press): the sidebar row's entries, renaming in place ---- */
 	const rename = new InlineRename();
+	/** A click on this strip makes F2 rename its tab here rather than in the sidebar (`rename-places`) */
+	$effect(() =>
+		registerRenamePlace({
+			order: 1,
+			zone: '[data-part="tabbar"]',
+			open: () => {
+				const x = tabs.find((x) => x.id === activeTab);
+				// a split tab is a box of its sessions here: its own name is renamed on its sidebar row
+				return x && x.kind !== "group" ? { id: x.id, title: titleOf(x) } : null;
+			},
+			start: (id, title) => rename.start(id, title),
+		})
+	);
 	const targetOf = (x: Tab): RowTarget =>
 		x.kind === "group" ? { kind: "group", g: { id: x.id, name: x.group.name } } : { kind: x.kind, x: { id: x.id, title: titleOf(x) } };
 	const tabItems = (x: Tab): RowMenuItem[] =>

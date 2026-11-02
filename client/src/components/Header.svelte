@@ -36,7 +36,8 @@
 	 */
 	$effect(() =>
 		registerRenamePlace({
-			order: 1,
+			order: 2,
+			zone: '[data-part="header"]',
 			open: () => (target ? { id: target.id, title: target.name } : null),
 			start: (id, title) => rename.start(id, title),
 		})

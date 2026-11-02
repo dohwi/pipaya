@@ -442,4 +442,25 @@ describe("F2 renames the open thing", () => {
 		offTitle();
 		expect(renameNow()).toBeUndefined();
 	});
+
+	test("a click picks the place it landed in, and an empty one falls back to the order", () => {
+		const place = (order: number, zone: string | undefined, title: string) => ({
+			order,
+			zone,
+			open: () => (title ? { id: `id${order}`, title } : null),
+			start: () => {},
+		});
+		const click = (zone: string) => ({ closest: (sel: string) => (sel === zone ? {} : null) }) as unknown as Element;
+		const offRow = registerRenamePlace(place(0, '[data-part="sidebar"]', "row"));
+		const offStrip = registerRenamePlace(place(1, '[data-part="tabbar"]', "tab"));
+		const offPane = registerRenamePlace(place(3, '[data-pane="s1"]', "")); // a pane with nothing to rename
+		expect(renameNow(click('[data-part="tabbar"]'))?.target.title).toBe("tab");
+		expect(renameNow(click('[data-pane="s1"]'))?.target.title).toBe("row"); // an empty place lets the order decide
+		expect(renameNow(click("[data-part=dialog]"))?.target.title).toBe("row");
+		expect(renameNow()?.target.title).toBe("row");
+		offPane();
+		offStrip();
+		offRow();
+		expect(renameNow()).toBeUndefined();
+	});
 });

@@ -22,6 +22,7 @@
 	import { memberMenu } from "../lib/member-menu";
 	import { setPane } from "../lib/pane";
 	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { registerRenamePlace } from "../lib/rename-places";
 	import { app } from "../lib/store.svelte";
 	import ExtensionSlot from "./extensions/ExtensionSlot.svelte";
 	import Lazy from "./Lazy.svelte";
@@ -60,6 +61,15 @@
 	/** The title being renamed in place (double click on it, or "이름 바꾸기" in the menu). */
 	const rename = new InlineRename();
 	const titleNow = () => (term ? term.title : (session?.title ?? ""));
+	/** A click in this pane makes F2 rename its own title here, even while a split tab is open (`rename-places`) */
+	$effect(() =>
+		registerRenamePlace({
+			order: 3,
+			zone: id ? `[data-pane="${id}"]` : undefined,
+			open: () => (id && titleNow() ? { id, title: titleNow() } : null),
+			start: (target, title) => rename.start(target, title),
+		})
+	);
 	function commitRename() {
 		const done = rename.commit();
 		if (!done) return;
