@@ -198,6 +198,11 @@
 	section { display: flex; flex-direction: column; gap: 8px; }
 	.note { margin: 0; line-height: 1.5; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+	/* The cards sit on the grey settings group: the page colour and the strong border lift them off it (the default hairline vanishes there). */
+	.list :global(.item) { background: var(--bg); border-color: var(--border-strong); }
+	/* name row, description and the model/limits line are three different things: the description reads as body text, the facts as a quiet mono line under a hairline. */
+	.list :global(.desc) { margin-top: 8px; color: var(--text); }
+	.list :global(.meta) { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.ftitle { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 	.ftitle .name { font-size: var(--fs-sm); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
