@@ -45,19 +45,26 @@ export function tail(node: HTMLElement, text: string) {
  * Idle rows keep the plain ellipsis. Only measures; the animation itself is CSS (see `.title:global([data-over])`).
  */
 export function marquee(node: HTMLElement, _text: string) {
-	const measure = () => {
+	/** Reads in the frame's read phase, writes in its write phase (lib/frame.ts), so a row that mounts or changes does not force a layout of its own. */
+	const measure = (): (() => void) | void => {
 		const mq = node.querySelector<HTMLElement>(".mq");
 		if (!mq) return;
 		// measured idle (inline, clipped): the text overflows its box only when it really does not fit
 		const over = node.scrollWidth > node.clientWidth + 1;
-		if (over) {
-			node.dataset.over = "";
-			// ~40px per second, never frantic for a title that only just overflows
-			node.style.setProperty("--mq-d", `${Math.max(6, (mq.offsetWidth + 32) / 40)}s`);
-		} else delete node.dataset.over;
+		const duration = over ? `${Math.max(6, (mq.offsetWidth + 32) / 40)}s` : "";
+		return () => {
+			if (over) {
+				node.dataset.over = "";
+				// ~40px per second, never frantic for a title that only just overflows
+				node.style.setProperty("--mq-d", duration);
+			} else delete node.dataset.over;
+		};
 	};
-	const ro = new ResizeObserver(() => schedule(node, () => { measure(); }));
+	const later = () => schedule(node, measure);
+	// Rows mount in bulk when a conversation appears (a send, a list reload): each measured at once, every one of them forced
+	// a layout of the page. The first fit lands in the next frame instead, together with the other rows'.
+	const ro = new ResizeObserver(later);
 	ro.observe(node);
-	measure();
-	return { update: () => queueMicrotask(measure), destroy: () => (ro.disconnect(), unschedule(node)) };
+	later();
+	return { update: later, destroy: () => (ro.disconnect(), unschedule(node)) };
 }
