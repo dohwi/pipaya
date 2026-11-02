@@ -626,6 +626,31 @@ export function escapeShouldStop(o: {
   return true;
 }
 
+/**
+ * F2 renames what has focus. A macOS webview never focuses a button on click (WebKit bug 22261), so clicking a sidebar
+ * row or a chip leaves focus on the body and the row's own handler never sees the key: when the key gets this far, the
+ * app renames the open conversation instead. A field being typed in, the terminal, and an open dialog or menu keep it.
+ */
+export function renameShouldFallThrough(o: {
+  key: string;
+  defaultPrevented: boolean;
+  repeat: boolean;
+  mod: boolean;
+  target: { tagName?: string; isContentEditable?: boolean } | null;
+  inTerminal: boolean;
+  overlayOpen: boolean;
+  recording: boolean;
+  renaming: boolean;
+}): boolean {
+  if (o.key !== RENAME_KEY || o.defaultPrevented || o.repeat || o.mod) return false;
+  if (o.recording || o.renaming || o.overlayOpen || o.inTerminal) return false;
+  const t = o.target;
+  if (!t) return true;
+  if (t.isContentEditable) return false;
+  const tag = t.tagName ?? "";
+  return tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT";
+}
+
 /** True when the combo fires on keys alone, so it must not trigger while typing in a text field. */
 export function isBareCombo(combo: string): boolean {
   const { mods, keys } = splitCombo(combo);

@@ -11,7 +11,7 @@
 	import { serverUpdater } from "../lib/server-update.svelte";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
-	import { formatCombo } from "../lib/keys";
+	import { formatCombo, OVERLAY_SELECTOR, RENAME_KEY, renameShouldFallThrough } from "../lib/keys";
 	import Icon from "./Icon.svelte";
 	import IconButton from "./IconButton.svelte";
 	import RowMenu, { type RowMenuItem } from "./RowMenu.svelte";
@@ -115,6 +115,34 @@
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
 
 	const startRename = (id: string, title: string) => rename.start(id, title);
+	/**
+	 * F2 renames the open conversation from wherever the key comes. A row only sees it while something inside the row has
+	 * focus, and a macOS webview never focuses a button on click (WebKit bug 22261), so a click on a row leaves the key on
+	 * the body and the row would never rename. A row that did take the key handled it and called preventDefault.
+	 */
+	function renameKey(e: KeyboardEvent) {
+		if (e.key !== RENAME_KEY || e.defaultPrevented || app.sidebar.collapsed) return;
+		const id = app.activeId;
+		const title = id ? (app.session(id)?.title ?? app.terminal(id)?.title) : undefined;
+		if (!id || title === undefined) return;
+		const el = e.target as HTMLElement | null;
+		if (
+			!renameShouldFallThrough({
+				key: e.key,
+				defaultPrevented: e.defaultPrevented,
+				repeat: e.repeat,
+				mod: e.ctrlKey || e.metaKey || e.altKey || e.shiftKey,
+				target: el,
+				inTerminal: !!el?.closest?.("[data-terminal]"),
+				overlayOpen: !!document.querySelector(OVERLAY_SELECTOR),
+				recording: app.prefs.recordingKey,
+				renaming: rename.id !== null || groupRename.id !== null || dirRename.id !== null,
+			})
+		)
+			return;
+		e.preventDefault();
+		rename.start(id, title);
+	}
 	function commitRename() {
 		const done = rename.commit();
 		if (done) void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
@@ -287,6 +315,8 @@
 	const settingsAlert = $derived(app.compat !== "ok" ? t("업데이트 필요") : updater.visible || serverUpdater.available ? t("업데이트 있음") : "");
 </script>
 
+
+<svelte:window onkeydown={renameKey} />
 
 <aside class="side" data-part="sidebar">
 	<div class="brandrow" data-part="sidebar.brand">

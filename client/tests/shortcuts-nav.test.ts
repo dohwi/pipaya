@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -180,6 +180,24 @@ describe("shortcut catalogue", () => {
 		expect(escapeShouldStop({ ...base, target: { tagName: "INPUT" } })).toBe(false); // rename field, search box
 		expect(escapeShouldStop({ ...base, target: { tagName: "TEXTAREA", dataset: {} } })).toBe(false);
 		expect(escapeShouldStop({ ...base, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
+	});
+
+	test("F2 renames the open conversation when a click left focus on the body (macOS webviews do not focus a button)", () => {
+		const base = { key: "F2", defaultPrevented: false, repeat: false, mod: false, target: { tagName: "BODY" }, inTerminal: false, overlayOpen: false, recording: false, renaming: false };
+		expect(renameShouldFallThrough(base)).toBe(true);
+		expect(renameShouldFallThrough({ ...base, target: null })).toBe(true);
+		expect(renameShouldFallThrough({ ...base, key: "F3" })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, defaultPrevented: true })).toBe(false); // a row took it
+		expect(renameShouldFallThrough({ ...base, repeat: true })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, mod: true })).toBe(false); // Shift+F2 and friends are not rename
+		expect(renameShouldFallThrough({ ...base, inTerminal: true })).toBe(false); // the shell gets F2
+		expect(renameShouldFallThrough({ ...base, overlayOpen: true })).toBe(false); // a dialog or menu is open
+		expect(renameShouldFallThrough({ ...base, recording: true })).toBe(false); // recording a shortcut in Settings
+		expect(renameShouldFallThrough({ ...base, renaming: true })).toBe(false); // already renaming
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "INPUT" } })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "TEXTAREA" } })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "SELECT" } })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
 	});
 
 	test("Esc shrinks the zoomed pane only when nothing else uses it", () => {
