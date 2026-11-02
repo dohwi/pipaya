@@ -27,7 +27,7 @@
   </picture>
 </p>
 
-<h2 align="center">Features</h2>
+## Features
 
 - **Agent with built-in tools**: read, write, edit, ls, grep, bash. More via extensions
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
@@ -35,7 +35,7 @@
 - **Split view**: up to 8 conversations on one screen
 - **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
 
-<h2 align="center">Install</h2>
+## Install
 
 | Client | How |
 |---|---|
@@ -51,11 +51,11 @@ curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
 
 Docker, configuration and everything else are in the [wiki](https://github.com/dohwi/pipaya-wiki).
 
-<h2 align="center">Security</h2>
+## Security
 
 The token grants **administrator** access, API keys are stored **unencrypted**, and `bash` is **not a sandbox**. Use Tailscale or HTTPS, never the open internet. Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
-<h2 align="center">Development</h2>
+## Development
 
 ```bash
 mise install                          # Bun, Rust
@@ -65,6 +65,6 @@ cd client && bun install && bun run dev    # web client (port 1420)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [`server/README.md`](server/README.md).
 
-<h2 align="center">License</h2>
+## License
 
 [MIT](LICENSE)
