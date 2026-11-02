@@ -9,6 +9,7 @@ import { syncSystemBars, syncWindowTheme } from "./native-push";
 import { setDurableSetting } from "./durable-storage";
 import { K, read, write } from "./persist";
 import { applyUiScale, clampScale, stepScale } from "./ui-scale";
+import { DEFAULT_FOOTER, moveFooterItem, sanitizeFooter, type FooterItemId, type FooterPrefs } from "./footer-prefs";
 import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./terminal-prefs";
 
 export type ThemePref = "system" | "dark" | "light";
@@ -54,6 +55,7 @@ export class Preferences {
   uiScale = $state(clampScale(read<unknown>(K.uiScale, 100)));
   bindings = $state<Record<ActionId, string>>(readBindings());
   terminal = $state<TerminalPrefs>(sanitizeTerminal(read<unknown>(K.terminal, null)));
+  footer = $state<FooterPrefs>(sanitizeFooter(read<unknown>(K.footer, null)));
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
   recordingKey = $state(false);
 
@@ -73,6 +75,7 @@ export class Preferences {
     this.soundOn = read<boolean>(K.sound, true);
     this.soundVolume = readVolume();
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
+    this.footer = sanitizeFooter(read<unknown>(K.footer, null));
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
     applyUiScale(this.uiScale);
     this.applyTheme();
@@ -159,6 +162,26 @@ export class Preferences {
   resetTerminal() {
     this.terminal = { ...DEFAULT_TERMINAL };
     write(K.terminal, this.terminal);
+  }
+
+  /* ---------- footer ---------- */
+
+  setFooter(patch: Partial<FooterPrefs>) {
+    this.footer = sanitizeFooter({ ...this.footer, ...patch });
+    write(K.footer, this.footer);
+  }
+
+  toggleFooterItem(id: FooterItemId, show: boolean) {
+    this.setFooter({ hidden: show ? this.footer.hidden.filter((x) => x !== id) : [...this.footer.hidden, id] });
+  }
+
+  moveFooterItem(id: FooterItemId, dir: -1 | 1) {
+    this.setFooter({ order: moveFooterItem(this.footer.order, id, dir) });
+  }
+
+  resetFooter() {
+    this.footer = sanitizeFooter(DEFAULT_FOOTER);
+    write(K.footer, this.footer);
   }
 
   /* ---------- shortcuts ---------- */

@@ -8,6 +8,7 @@
 	import StatusItem from "./StatusItem.svelte";
 	import SessionContext from "./SessionContext.svelte";
 	import { getPane } from "../lib/pane";
+	import { visibleFooter } from "../lib/footer-prefs";
 	import { cacheLevel, contextLevel, speedLevel } from "../lib/status-level";
 
 	const pane = getPane();
@@ -205,6 +206,9 @@
 	};
 	const elapsed = $derived(startedAt === null ? "" : clock(Math.max(0, now - startedAt)));
 
+	const footer = $derived(app.prefs.footer);
+	const visible = $derived(visibleFooter(footer));
+
 	const ring = 2 * Math.PI * 7;
 	const level = $derived(ctx === null || !win ? "" : contextLevel(ctxPct));
 	const hitLevel = $derived(cacheLevel(hit, calls.length));
@@ -234,40 +238,52 @@
 </script>
 
 <!-- Reserve room before the first reply; allow narrow screens to wrap without clipping. -->
-<div class="statusline mono" data-part="statusline" aria-label={t("세션 통계")}>
+<div class="statusline mono" data-part="statusline" data-layout={footer.layout} data-align={footer.align} aria-label={t("세션 통계")}>
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
 		<StatusItem title={item.owner}>{item.text}</StatusItem>
 	{/each}
-	{#if elapsed}
-		<StatusItem icon="clock" title={t("작업 경과 시간")}>{elapsed}</StatusItem>
-	{/if}
-	{#if ctxFiles !== null}
-		<StatusItem icon="prompt" empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>{t("{n}개", { n: ctxFiles })}</StatusItem>
-	{/if}
-	{#if skillCount !== null}
-		<StatusItem icon="skill" empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>{t("{n}개", { n: skillCount })}</StatusItem>
-	{/if}
-	{#if mcpHere}
-		<StatusItem icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
-	{/if}
-	{#if rolesHere}
-		<StatusItem icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
-	{/if}
-	{#if tplNames !== null}
-		<StatusItem icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>
-	{/if}
-	<!-- Always shown, so the line does not jump when the first reply arrives; "—" until there is a figure. -->
-	<StatusItem level={level} empty={ctx === null} title={ctxTip}>
-		{#snippet mark()}
-			<svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
-				<circle cx="9" cy="9" r="7" class="track" />
-				<circle cx="9" cy="9" r="7" class="fill" stroke-dasharray={ring} stroke-dashoffset={ring * (1 - Math.min(100, ctxPct) / 100)} />
-			</svg>
-		{/snippet}
-		{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}
-	</StatusItem>
-	<StatusItem icon="cache" level={hitLevel} empty={hit === null} title={hitTip}>{hit === null ? "—" : `${pct(hit)}%`}</StatusItem>
-	<StatusItem icon="gauge" level={tpsLevel} empty={tps === null} unit="tps" title={tpsTip}>{tps === null ? "—" : speed(tps)}</StatusItem>
+	{#each visible as id (id)}
+		{#if id === "elapsed"}
+			{#if elapsed}
+				<StatusItem icon="clock" title={t("작업 경과 시간")}>{elapsed}</StatusItem>
+			{/if}
+		{:else if id === "agents"}
+			{#if ctxFiles !== null}
+				<StatusItem icon="prompt" empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>{t("{n}개", { n: ctxFiles })}</StatusItem>
+			{/if}
+		{:else if id === "skills"}
+			{#if skillCount !== null}
+				<StatusItem icon="skill" empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>{t("{n}개", { n: skillCount })}</StatusItem>
+			{/if}
+		{:else if id === "mcp"}
+			{#if mcpHere}
+				<StatusItem icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
+			{/if}
+		{:else if id === "roles"}
+			{#if rolesHere}
+				<StatusItem icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
+			{/if}
+		{:else if id === "commands"}
+			{#if tplNames !== null}
+				<StatusItem icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>
+			{/if}
+		{:else if id === "context"}
+			<!-- Shown even before there is a figure ("—"), so the line does not jump when the first reply arrives. -->
+			<StatusItem level={level} empty={ctx === null} title={ctxTip}>
+				{#snippet mark()}
+					<svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
+						<circle cx="9" cy="9" r="7" class="track" />
+						<circle cx="9" cy="9" r="7" class="fill" stroke-dasharray={ring} stroke-dashoffset={ring * (1 - Math.min(100, ctxPct) / 100)} />
+					</svg>
+				{/snippet}
+				{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}
+			</StatusItem>
+		{:else if id === "cache"}
+			<StatusItem icon="cache" level={hitLevel} empty={hit === null} title={hitTip}>{hit === null ? "—" : `${pct(hit)}%`}</StatusItem>
+		{:else if id === "speed"}
+			<StatusItem icon="gauge" level={tpsLevel} empty={tps === null} unit="tps" title={tpsTip}>{tps === null ? "—" : speed(tps)}</StatusItem>
+		{/if}
+	{/each}
 </div>
 
 {#if openKey && openKey === ctxKey && app.api}
@@ -310,22 +326,47 @@
 		stroke-linecap: round;
 		transition: stroke-dashoffset var(--motion-slow) var(--ease);
 	}
+	.statusline[data-align="start"] {
+		justify-content: flex-start;
+	}
+	/* One row that scrolls sideways instead of wrapping: wrapping makes the composer jump when an item appears (`safe` keeps the first item reachable). */
+	.statusline[data-layout="scroll"] {
+		flex-wrap: nowrap;
+		justify-content: safe center;
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+	}
+	.statusline[data-layout="scroll"][data-align="start"] {
+		justify-content: flex-start;
+	}
+	.statusline[data-layout="scroll"]::-webkit-scrollbar {
+		display: none;
+	}
+	.statusline[data-layout="scroll"] > :global(*) {
+		flex: none;
+	}
 	/* narrow pane: tighter spacing, and one row only. Wrapping made the composer jump when a status was added; what does not
 	   fit scrolls sideways instead (`safe` keeps the first item reachable when the row overflows). */
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;
 			padding: 4px 16px 0;
+		}
+		.statusline[data-layout="auto"] {
 			flex-wrap: nowrap;
 			justify-content: safe center;
 			overflow-x: auto;
 			overflow-y: hidden;
 			scrollbar-width: none;
 		}
-		.statusline::-webkit-scrollbar {
+		.statusline[data-layout="auto"][data-align="start"] {
+			justify-content: flex-start;
+		}
+		.statusline[data-layout="auto"]::-webkit-scrollbar {
 			display: none;
 		}
-		.statusline > :global(*) {
+		.statusline[data-layout="auto"] > :global(*) {
 			flex: none;
 		}
 		.statusline :global(.ring) {

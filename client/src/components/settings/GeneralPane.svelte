@@ -9,6 +9,7 @@
 	import SettingRow from "../SettingRow.svelte";
 	import Switch from "../Switch.svelte";
 	import NotificationSettings from "../NotificationSettings.svelte";
+	import FooterSettings from "../FooterSettings.svelte";
 	import TerminalSettings from "../TerminalSettings.svelte";
 	import UpdateSettings from "../UpdateSettings.svelte";
 
@@ -53,6 +54,7 @@
 	<RangeField label={t("크기")} ariaLabel={t("알림음 크기")} min={0} max={200} step={5} value={app.prefs.soundVolume} disabled={!app.prefs.soundOn} oninput={(v) => app.prefs.setSoundVolume(v)} onchange={() => app.prefs.previewSound()} alignAction />
 </section>
 <section class="set-group"><NotificationSettings /></section>
+<section class="set-group"><FooterSettings /></section>
 <section class="set-group"><TerminalSettings /></section>
 <section class="set-group"><UpdateSettings /></section>
 
