@@ -1,3 +1,4 @@
+import { sessionTitle } from "./session-title";
 import { app } from "./store.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { copyText } from "./clipboard";
@@ -57,7 +58,7 @@ function when(ts: number): string {
 function sessionRows(list: Session[], opts: { current?: string; showClosed?: boolean } = {}) {
 	return list.map((s) => ({
 		id: s.id,
-		title: s.title,
+		title: sessionTitle(s.title),
 		sub: `${dirLabel(s.cwd)} · ${when(s.updatedAt)}`,
 		tag: opts.showClosed && s.closed ? t("닫힘") : undefined,
 		current: s.id === opts.current,

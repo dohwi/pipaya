@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../lib/session-title";
 	import EmptyState from "./EmptyState.svelte";
 	import Button from "./Button.svelte";
 	import { onMount } from "svelte";
@@ -212,7 +213,7 @@
 								<li class:on={picked[s.id]} animate:reflow in:rowIn out:rowOut>
 									<label>
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />
-										<span class="title">{s.title || t("제목 없음")}</span>
+										<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
 									</label>
 									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{:else if s.archived}<Badge size="sm">{t("보관됨")}</Badge>{/if}
 									<span class="age" title={new Date(s.updatedAt).toLocaleString()}>{ageOf(s.updatedAt)}</span>

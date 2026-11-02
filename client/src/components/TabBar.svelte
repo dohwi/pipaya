@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../lib/session-title";
 	import { t } from "../lib/i18n";
 	import { schedule, unschedule } from "../lib/frame";
 	import Icon from "./Icon.svelte";
@@ -32,7 +33,7 @@
 	const activeTab = $derived(app.activeTab?.tab.id ?? null);
 	const ids = $derived(tabs.map((x) => x.id));
 
-	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? x.session.title : x.terminal.title);
+	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The most pressing state among a tab's conversations. */
 	function stateOf(x: Tab): Activity {
 		const states = tabPanes(x)

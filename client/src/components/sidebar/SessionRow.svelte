@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../../lib/session-title";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { ACTIVITY_LABEL } from "../../lib/activity";
 	import { t } from "../../lib/i18n";
@@ -17,13 +18,13 @@
 	const sb = getSidebarCtx();
 	const st = $derived(sb.stateOf(n, x));
 	const label = $derived(peerLabel(x) ?? extensions.labelOf(x.id));
-	const tip = $derived([label?.title ?? "", x.title, st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · "));
+	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · "));
 </script>
 
 {#snippet body(pinned: boolean)}
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
-	<RowTitle text={x.title} />
+	<RowTitle text={sessionTitle(x.title)} />
 {/snippet}
 
 <TabRow {n} {x} target={{ kind: "session", x }} {tip} {drop} {member} {body} />

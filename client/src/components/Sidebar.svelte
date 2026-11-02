@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../lib/session-title";
 	import EmptyState from "./EmptyState.svelte";
 	import SearchField from "./SearchField.svelte";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
@@ -58,7 +59,7 @@
 	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], archived: Session[], shared?: DirBlock[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
 		// a copy: the archived-only folders appended below must not leak into the shared list
 		const dirs = shared ? [...shared] : sidebarDirs(sessions, groups, terminals, {
-			match: (x) => !q || x.title.toLowerCase().includes(q),
+			match: (x) => !q || sessionTitle(x.title).toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
 			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
 			dirOrder: order,
@@ -70,7 +71,7 @@
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
 		// Archived conversations hang under their folder; a folder with only archived ones still shows, after the others.
 		const byDir: Record<string, Session[]> = {};
-		for (const s of archived) if (!q || s.title.toLowerCase().includes(q)) (byDir[s.cwd] ??= []).push(s);
+		for (const s of archived) if (!q || sessionTitle(s.title).toLowerCase().includes(q)) (byDir[s.cwd] ??= []).push(s);
 		for (const cwd of Object.keys(byDir)) if (!dirs.some((d) => d.path === cwd)) dirs.push({ path: cwd, tabs: [] });
 		return { root: ws?.root, total, dirs, archived: byDir };
 	}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../../lib/session-title";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
@@ -26,9 +27,9 @@
 
 <div class="item nested member archived" use:pressMenu={menu}>
 	<span class="branch" aria-hidden="true"></span>
-	<button class="open wide" onclick={() => void app.unarchive(n.server.id, x.id, true)} title={t("{title} · 눌러서 복원하고 열기", { title: x.title })}>
+	<button class="open wide" onclick={() => void app.unarchive(n.server.id, x.id, true)} title={t("{title} · 눌러서 복원하고 열기", { title: sessionTitle(x.title) })}>
 		<span class="lead"><AgentBadge id={x.id} server={n.server.id} size={16} /></span>
-		<RowTitle text={x.title} />
+		<RowTitle text={sessionTitle(x.title)} />
 	</button>
 	<div class="acts">
 		<button class="more" onclick={() => void app.unarchive(n.server.id, x.id)} aria-label={t("복원")} title={t("복원")}><Icon name="undo" /></button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../lib/session-title";
 	import { RENAME_KEY } from "../lib/keys";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
@@ -60,7 +61,7 @@
 
 	/** The title being renamed in place (double click on it, or "이름 바꾸기" in the menu). */
 	const rename = new InlineRename();
-	const titleNow = () => (term ? term.title : (session?.title ?? ""));
+	const titleNow = () => (term ? term.title : (session ? sessionTitle(session.title) : ""));
 	/** A click in this pane makes F2 rename its own title here, even while a split tab is open (`rename-places`) */
 	$effect(() =>
 		registerRenamePlace({
@@ -143,8 +144,8 @@
 				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
 				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 				{:else}
-				{#snippet label()}{#if tag}<span class="who mono {state}" title={session?.name ? t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: session.name }) : tag.title}>{tag.text}</span>{/if}{session?.title ?? t("대화")}{/snippet}
-				<span class="t" use:marquee={`${tag?.text ?? ""}${session?.title ?? ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
+				{#snippet label()}{#if tag}<span class="who mono {state}" title={session?.name ? t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: session.name }) : tag.title}>{tag.text}</span>{/if}{session ? sessionTitle(session.title) : t("대화")}{/snippet}
+				<span class="t" use:marquee={`${tag?.text ?? ""}${session ? sessionTitle(session.title) : ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
 				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>

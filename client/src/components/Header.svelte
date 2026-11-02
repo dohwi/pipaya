@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sessionTitle } from "../lib/session-title";
 	import { RENAME_KEY } from "../lib/keys";
 	import { t } from "../lib/i18n";
 	import { formatCombo } from "../lib/keys";
@@ -66,7 +67,7 @@
 	const heading = $derived(
 		group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? crumb.cwd.split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
 		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
-		: { title: s?.title ?? t("새 대화"), sub: s ? s.cwd.split(/[\\/]/).slice(-2).join("/") : "" },
+		: { title: sessionTitle(s?.title), sub: s ? s.cwd.split(/[\\/]/).slice(-2).join("/") : "" },
 	);
 </script>
 
@@ -105,7 +106,7 @@
 				<span class="t">{term.title}</span>
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
-				<span class="t">{s?.title ?? t("새 대화")}</span>
+				<span class="t">{sessionTitle(s?.title)}</span>
 				{#if s}<span class="sub mono">{s.cwd.split("/").slice(-2).join("/")}</span>{/if}
 			{/if}
 		</div>
