@@ -155,11 +155,14 @@ def notification_icon():
     glyph = alpha.crop(bbox)
     for dens, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}.items():
         size = round(24 * scale)
-        inner = round(size * 0.84)  # the status bar crops tight, so leave a small margin
+        inner = round(size * 0.8)  # the status bar crops tight, so leave a margin (also room for the lift below)
         fit = min(inner / glyph.width, inner / glyph.height)
         small = glyph.resize((max(1, round(glyph.width * fit)), max(1, round(glyph.height * fit))), Image.LANCZOS)
         a = Image.new("L", (size, size), 0)
-        a.paste(small, ((size - small.width) // 2, (size - small.height) // 2))
+        # Lift the glyph ~1dp: its mass sits low (centroid at 52% of the height, wide crown over a trunk) and the status
+        # bar places the icon slot below the clock's text centre, so a box-centred glyph looks sunk next to the time.
+        lift = round(size * 0.05)
+        a.paste(small, ((size - small.width) // 2, (size - small.height) // 2 - lift))
         out = Image.new("RGBA", (size, size), (255, 255, 255, 0))
         out.putalpha(a)
         save(out, base / f"drawable-{dens}" / "ic_stat_pipaya.png")
