@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
-import { chooseModel, DelegateLimits, helperUsage, loadSubagents } from "../src/subagents.ts";
+import { readFileSync } from "node:fs";
+import { chooseModel, DelegateLimits, helperUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -32,6 +33,35 @@ describe("loadSubagents", () => {
 
 	test("missing directories give an empty set", () => {
 		expect(loadSubagents("/nonexistent-x", "/nonexistent-y").size).toBe(0);
+	});
+});
+
+describe("subagent editing", () => {
+	const input = { description: "finds: things # now", model: "p/m", thinking: "medium" as const, tools: ["read", "delegate", "grep"], maxTurns: 99, prompt: "Be brief." };
+	test("create, update (unknown keys kept), list both scopes and remove", () => {
+		const root = mkdtempSync(join(tmpdir(), "pipaya-sub-"));
+		try {
+			const home = join(root, "home"), cwd = join(root, "proj");
+			const made = saveSubagent("global", cwd, home, "explore", input, true);
+			// forbidden tools and absurd turn counts are cleaned, the YAML survives a colon and a hash
+			expect(made).toMatchObject({ description: "finds: things # now", model: "p/m", thinking: "medium", tools: ["read", "grep"], maxTurns: 30, prompt: "Be brief." });
+			expect(() => saveSubagent("global", cwd, home, "explore", input, true)).toThrow(/already exists/);
+			expect(() => saveSubagent("global", cwd, home, "nope", input, false)).toThrow(/not found/);
+			expect(() => saveSubagent("global", cwd, home, "../evil", input, true)).toThrow(/role names/);
+			const file = join(home, ".agents", "subagents", "explore.md");
+			writeFileSync(file, readFileSync(file, "utf8").replace("---\n", "---\ncolor: blue\n"));
+			saveSubagent("global", cwd, home, "explore", { ...input, model: undefined, prompt: "New." }, false);
+			const text = readFileSync(file, "utf8");
+			expect(text).toContain("color: blue");
+			expect(text).not.toContain("model:");
+			expect(text).not.toContain("thinking:"); // a strength without a model means nothing
+			saveSubagent("project", cwd, home, "explore", { ...input, prompt: "Proj." }, true);
+			const all = listSubagents(cwd, home);
+			expect(all.map((d) => [d.scope, d.name, d.overridden])).toEqual([["global", "explore", true], ["project", "explore", false]]);
+			removeSubagent("project", cwd, home, "explore");
+			expect(listSubagents(cwd, home).map((d) => d.overridden)).toEqual([false]);
+			expect(() => removeSubagent("project", cwd, home, "explore")).toThrow(/not found/);
+		} finally { rmSync(root, { recursive: true, force: true }); }
 	});
 });
 
@@ -165,6 +195,21 @@ describe("delegate tool", () => {
 		expect(alive()).toBe(false);
 	}, 30_000);
 
+	test("roles are listed, created, edited and removed over the API, and a new one is used at once", async () => {
+		expect((await fetch(`${base}/configuration/subagents`)).status).toBe(401);
+		const list = await api("GET", "/configuration/subagents");
+		expect(list.json.subagents.map((r: any) => r.name)).toContain("explore");
+		expect(list.json.tools).not.toContain("delegate");
+		const body = { scope: "global", description: "d", tools: ["read"], maxTurns: 3, prompt: "p" };
+		expect((await api("POST", "/configuration/subagents", { name: "fresh", ...body })).status).toBe(200);
+		expect((await api("POST", "/configuration/subagents", { name: "fresh", ...body })).status).toBe(409);
+		expect((await api("POST", "/configuration/subagents", { name: "bad name", ...body })).status).toBe(400);
+		const put = await api("PUT", "/configuration/subagents/fresh", { ...body, description: "changed" });
+		expect(put.json.subagents.find((r: any) => r.name === "fresh").description).toBe("changed");
+		expect((await api("PUT", "/configuration/subagents/ghost", body)).status).toBe(404);
+		expect((await api("DELETE", "/configuration/subagents/fresh?scope=global")).json.subagents.map((r: any) => r.name)).not.toContain("fresh");
+		expect((await api("DELETE", "/configuration/subagents/fresh?scope=global")).status).toBe(404);
+	});
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const out = await call(id, { role: "ghost", task: "x" });

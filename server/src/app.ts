@@ -574,7 +574,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"), (cwd) => resolve(configuration.defaultWorkdir(), cwd?.trim() || "."));
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
-	registerConfigurationRoutes(server, configuration, bus);
+	registerConfigurationRoutes(server, configuration, bus, opts.home);
 	registerLlmRoutes(server, modelRoles, llm, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
 	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));

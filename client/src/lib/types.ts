@@ -438,8 +438,29 @@ export interface SubagentInfo {
 	thinking?: string;
 	tools: string[];
 	maxTurns: number;
+	/** The role's instructions (the file's body) */
+	prompt: string;
 	file: string;
 	scope: "global" | "project";
+	/** A project role of the same name wins over this global one */
+	overridden: boolean;
+}
+
+export interface SubagentList {
+	subagents: SubagentInfo[];
+	/** Tool names a helper may be given */
+	tools: string[];
+	/** Folder the project scope writes to */
+	projectDir: string;
+}
+
+export interface SubagentInput {
+	description: string;
+	model?: string;
+	thinking?: ThinkingLevel;
+	tools: string[];
+	maxTurns: number;
+	prompt: string;
 }
 
 export interface ToolsInfo {

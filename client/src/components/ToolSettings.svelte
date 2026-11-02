@@ -3,7 +3,8 @@
 	import { toolLabel } from "../lib/settings-search";
 	import { Api, errorText } from "../lib/api";
 	import { app } from "../lib/store.svelte";
-	import type { DelegateMode, DelegatePolicy, ModelInfo, SubagentInfo, ToolsInfo } from "../lib/types";
+	import type { DelegateMode, DelegatePolicy, ModelInfo, ToolsInfo } from "../lib/types";
+	import SubagentSettings from "./SubagentSettings.svelte";
 	import Segmented from "./Segmented.svelte";
 	import Select from "./Select.svelte";
 	import Switch from "./Switch.svelte";
@@ -43,13 +44,6 @@
 		const id = serverId;
 		apiOf(id)?.models().then((list) => (models = { id, list: list.filter((m) => !m.imageGeneration) })).catch(() => {});
 	});
-	let roles = $state<{ id: string; list: SubagentInfo[] } | null>(null);
-	$effect(() => {
-		void app.configTick;
-		const id = serverId;
-		apiOf(id)?.subagents().then((list) => (roles = { id, list })).catch(() => {});
-	});
-	const roleList = $derived(roles && roles.id === serverId ? roles.list : []);
 	const modelList = $derived(models && models.id === serverId ? models.list : []);
 
 	const modes: { id: DelegateMode; label: string }[] = [
@@ -140,14 +134,6 @@
 				</SettingRow>
 			{/each}
 		{/if}
-		<div class="section-label">{t("도우미 역할")}</div>
-		{#each roleList as r (r.name)}
-			<SettingRow label={r.name} hint={r.description || r.file}>
-				<span class="role-meta">{r.model ?? t("호출한 대화의 모델")} · {r.scope === "project" ? t("프로젝트") : t("전역")}</span>
-			</SettingRow>
-		{:else}
-			<span class="hint">{t("역할 파일이 없습니다. ~/.agents/subagents/*.md 또는 프로젝트의 .agents/subagents/*.md에 추가하세요")}</span>
-		{/each}
 		{#if delegateError}<span class="hint danger">{delegateError}</span>{/if}
 		<SettingRow label={t("동시에 실행할 도우미")} hint={t("한 대화에서 동시에 돌 수 있는 수")}>
 			<Select size="sm" width="96px" label={t("동시에 실행할 도우미")} value={d.maxConcurrent} options={nums([1, 2, 3, 4, 6, 8])} onchange={(n) => saveDelegate({ maxConcurrent: n })} />
@@ -159,17 +145,10 @@
 			<Select size="sm" width="96px" label={t("도우미 최대 모델 호출")} value={d.maxTurns} options={nums([5, 10, 15, 20, 30, 50])} onchange={(n) => saveDelegate({ maxTurns: n })} />
 		</SettingRow>
 	</section>
+	<SubagentSettings {serverId} models={modelList} />
 {/if}
 
 <style>
-	.role-meta {
-		font-size: 12px;
-		line-height: 20px;
-		color: var(--text-dim);
-		max-width: 40%;
-		text-align: end;
-		overflow-wrap: anywhere;
-	}
 	section {
 		display: flex;
 		flex-direction: column;

@@ -3,9 +3,9 @@
  * the project one wins) and the limits that keep delegation from running away. Loading is pure over the file system, so it is
  * testable without a session.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { conflict } from "./errors.ts";
+import { badRequest, conflict, notFound } from "./errors.ts";
 import { parseFrontmatter } from "./skills.ts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
@@ -58,20 +58,74 @@ function parseDef(file: string, scope: SubagentDef["scope"]): SubagentDef | null
 	};
 }
 
+const dirOf = (scope: SubagentDef["scope"], cwd: string, home: string) => join(scope === "global" ? home : cwd, ".agents", "subagents");
+
+/** Every readable definition of one scope, by file name. */
+function readScope(dir: string, scope: SubagentDef["scope"]): SubagentDef[] {
+	let names: string[];
+	try { names = readdirSync(dir).filter((f) => f.endsWith(".md")).sort(); } catch { return []; }
+	const out: SubagentDef[] = [];
+	for (const f of names) {
+		const file = join(dir, f);
+		try { if (!statSync(file).isFile()) continue; } catch { continue; }
+		const def = parseDef(file, scope);
+		if (def) out.push(def);
+	}
+	return out;
+}
+
 /** Definitions by role name: global first, project ones replace global ones of the same name. Unreadable files are skipped. */
 export function loadSubagents(cwd: string, home: string): Map<string, SubagentDef> {
 	const out = new Map<string, SubagentDef>();
-	for (const [dir, scope] of [[join(home, ".agents", "subagents"), "global"], [join(cwd, ".agents", "subagents"), "project"]] as const) {
-		let names: string[];
-		try { names = readdirSync(dir).filter((f) => f.endsWith(".md")).sort(); } catch { continue; }
-		for (const f of names) {
-			const file = join(dir, f);
-			try { if (!statSync(file).isFile()) continue; } catch { continue; }
-			const def = parseDef(file, scope);
-			if (def) out.set(def.name, def);
-		}
-	}
+	for (const scope of ["global", "project"] as const) for (const def of readScope(dirOf(scope, cwd, home), scope)) out.set(def.name, def);
 	return out;
+}
+
+/** Both scopes side by side for the settings list; a global role hidden by a project role of the same name is marked `overridden`. */
+export function listSubagents(cwd: string, home: string): (SubagentDef & { overridden: boolean })[] {
+	const project = readScope(dirOf("project", cwd, home), "project");
+	const names = new Set(project.map((d) => d.name));
+	return [...readScope(dirOf("global", cwd, home), "global").map((d) => ({ ...d, overridden: names.has(d.name) })), ...project.map((d) => ({ ...d, overridden: false }))];
+}
+
+export const SUBAGENT_NAME = /^[A-Za-z0-9][\w.-]{0,39}$/;
+export interface SubagentInput { description: string; model?: string; thinking?: ThinkingLevel; tools: string[]; maxTurns: number; prompt: string }
+
+/** Tool names a role file may list: everything a helper may get (never the ones in FORBIDDEN). */
+export const helperTools = (all: readonly string[]) => all.filter((n) => !FORBIDDEN(n));
+
+/**
+ * Writes `<dir>/<name>.md`. Frontmatter keys this editor does not know are kept as they are. `create` refuses to overwrite an
+ * existing role, an update refuses to invent one, so two clients cannot silently replace each other's role.
+ */
+export function saveSubagent(scope: SubagentDef["scope"], cwd: string, home: string, name: string, input: SubagentInput, create: boolean): SubagentDef {
+	if (!SUBAGENT_NAME.test(name)) throw badRequest("role names are letters, digits, '.', '_' and '-' (at most 40, starting with a letter or digit)");
+	if (input.model !== undefined && !/^[^/\s]+\/\S+$/.test(input.model)) throw badRequest("model must be provider/model");
+	const dir = dirOf(scope, cwd, home);
+	const file = join(dir, `${name}.md`);
+	const exists = existsSync(file);
+	if (create && exists) throw conflict(`helper role "${name}" already exists in the ${scope} folder`);
+	if (!create && !exists) throw notFound(`helper role "${name}"`);
+	let meta: Record<string, unknown> = {};
+	if (exists) { try { meta = parseFrontmatter(readFileSync(file, "utf8")) ?? {}; } catch { /* unreadable: rewritten from the form */ } }
+	const set = (k: string, v: unknown) => { if (v === undefined || v === "") delete meta[k]; else meta[k] = v; };
+	set("description", input.description.trim());
+	set("model", input.model);
+	set("thinking", input.model ? input.thinking : undefined);
+	set("tools", [...new Set(input.tools.filter((t) => !FORBIDDEN(t)))]);
+	set("maxTurns", Math.min(Math.max(Math.floor(input.maxTurns), 1), MAX_SUBAGENT_TURNS));
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(file, `---\n${Bun.YAML.stringify(meta, null, 2)}\n---\n${input.prompt.trim()}\n`);
+	const def = parseDef(file, scope);
+	if (!def) throw badRequest("the role could not be read back");
+	return def;
+}
+
+export function removeSubagent(scope: SubagentDef["scope"], cwd: string, home: string, name: string): void {
+	if (!SUBAGENT_NAME.test(name)) throw badRequest("invalid role name");
+	const file = join(dirOf(scope, cwd, home), `${name}.md`);
+	if (!existsSync(file)) throw notFound(`helper role "${name}"`);
+	rmSync(file);
 }
 
 /** What a helper is told besides its role text. */

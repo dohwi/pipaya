@@ -7,14 +7,34 @@ import { catalogEntries } from "./thinking-catalog.ts";
 import { badRequest, notFound } from "./errors.ts";
 import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
-const SubagentList = Type.Object({
-	subagents: Type.Array(Type.Object({
-		name: Type.String(), description: Type.String(), model: Type.Optional(Type.String()), thinking: Type.Optional(Type.String()),
-		tools: Type.Array(Type.String()), maxTurns: Type.Integer(), file: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]),
-	})),
-});
 import { homedir } from "node:os";
-import { loadSubagents } from "./subagents.ts";
+import { join } from "node:path";
+import { helperTools, listSubagents, removeSubagent, saveSubagent } from "./subagents.ts";
+import { TOOL_DEFS } from "./tools.ts";
+import { THINKING_LEVELS } from "./store.ts";
+const Scope = Type.Union([Type.Literal("global"), Type.Literal("project")], { description: "global: ~/.agents/subagents; project: .agents/subagents of the server's default working folder" });
+const SubagentInfo = Type.Object({
+	name: Type.String(), description: Type.String(), model: Type.Optional(Type.String()), thinking: Type.Optional(Type.String()),
+	tools: Type.Array(Type.String()), maxTurns: Type.Integer(), prompt: Type.String(), file: Type.String(), scope: Scope,
+	overridden: Type.Boolean({ description: "A project role of the same name wins over this global one" }),
+});
+const SubagentList = Type.Object({
+	subagents: Type.Array(SubagentInfo),
+	tools: Type.Array(Type.String(), { description: "Tool names a helper may be given" }),
+	projectDir: Type.String({ description: "Folder the project scope writes to" }),
+});
+const SubagentFields = {
+	description: Type.String({ maxLength: 500 }),
+	model: Type.Optional(Type.String({ minLength: 3, maxLength: 200 })),
+	thinking: Type.Optional(Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)))),
+	tools: Type.Array(Type.String({ pattern: "^[\\w.-]+$", maxLength: 80 }), { maxItems: 50 }),
+	maxTurns: Type.Integer({ minimum: 1, maximum: 30 }),
+	prompt: Type.String({ maxLength: 20000, description: "The role's instructions (the file's body)" }),
+};
+const SubagentCreate = Type.Object({ name: Type.String({ maxLength: 40 }), scope: Scope, ...SubagentFields }, { additionalProperties: false });
+const SubagentUpdate = Type.Object({ scope: Scope, ...SubagentFields }, { additionalProperties: false });
+const SubagentScope = Type.Object({ scope: Scope });
+const SubagentName = Type.Object({ name: Type.String() });
 
 const CatalogResult = Type.Object({
 	models: Type.Array(Type.Object({
@@ -24,17 +44,41 @@ const CatalogResult = Type.Object({
 });
 
 /** Authenticated configuration API for any client. No assets or frontend build. */
-export function registerConfigurationRoutes(server: FastifyInstance, config: Configuration, bus: EventBus): void {
+export function registerConfigurationRoutes(server: FastifyInstance, config: Configuration, bus: EventBus, home: string = homedir()): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	config.onModelsChanged = (id) => bus.publish(null, "configuration_updated", { scope: "provider", id, action: "saved" });
 	app.get("/configuration", {
 		schema: { response: { 200: ConfigurationResult, ...errors(401) } },
 		handler: async () => { config.refreshStale(); return config.snapshot(); },
 	});
+	// Project roles live in the default working folder: a session in another folder reads that folder's own `.agents/subagents`.
+	const roles = () => ({ subagents: listSubagents(config.defaultWorkdir(), home), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(config.defaultWorkdir(), ".agents", "subagents") });
 	app.get("/configuration/subagents", {
 		schema: { response: { 200: SubagentList, ...errors(401) } },
-		// Global roles plus the project ones of the default workdir (a session's own cwd may add more).
-		handler: async () => ({ subagents: [...loadSubagents(config.defaultWorkdir(), homedir()).values()].map(({ prompt: _prompt, ...d }) => d) }),
+		handler: async () => roles(),
+	});
+	app.post("/configuration/subagents", {
+		schema: { body: SubagentCreate, response: { 200: SubagentList, ...errors(400, 401, 409) } },
+		handler: async (req) => {
+			const { name, scope, ...input } = req.body;
+			saveSubagent(scope, config.defaultWorkdir(), home, name, input, true);
+			return roles();
+		},
+	});
+	app.put("/configuration/subagents/:name", {
+		schema: { params: SubagentName, body: SubagentUpdate, response: { 200: SubagentList, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const { scope, ...input } = req.body;
+			saveSubagent(scope, config.defaultWorkdir(), home, req.params.name, input, false);
+			return roles();
+		},
+	});
+	app.delete("/configuration/subagents/:name", {
+		schema: { params: SubagentName, querystring: SubagentScope, response: { 200: SubagentList, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			removeSubagent(req.query.scope, config.defaultWorkdir(), home, req.params.name);
+			return roles();
+		},
 	});
 	app.get("/configuration/catalog", {
 		schema: { response: { 200: CatalogResult, ...errors(401) } },
