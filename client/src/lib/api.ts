@@ -4,6 +4,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ActivityInfo,
 	ConfigurationInfo,
 	ToolsInfo,
+	SubagentInfo,
 	DelegatePolicy,
 	LoginState,
 	CompactionResult,
@@ -239,6 +240,7 @@ export class Api {
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
 	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
+	subagents = () => this.req<{ subagents: SubagentInfo[] }>("GET", "/configuration/subagents").then((r) => r.subagents);
 	setDelegatePolicy = (p: DelegatePolicy) => this.req<ToolsInfo>("PUT", "/configuration/delegate", p);
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
 	listDirs = (path?: string, hidden = false, signal?: AbortSignal) =>

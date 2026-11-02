@@ -430,6 +430,18 @@ export interface DelegatePolicy {
 	maxTurns: number;
 }
 
+export interface SubagentInfo {
+	name: string;
+	description: string;
+	/** provider/model; missing = the calling session's model */
+	model?: string;
+	thinking?: string;
+	tools: string[];
+	maxTurns: number;
+	file: string;
+	scope: "global" | "project";
+}
+
 export interface ToolsInfo {
 	delegate?: DelegatePolicy;
 	toggleable: string[];

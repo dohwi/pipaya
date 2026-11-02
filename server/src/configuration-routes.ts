@@ -7,6 +7,14 @@ import { catalogEntries } from "./thinking-catalog.ts";
 import { badRequest, notFound } from "./errors.ts";
 import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
+const SubagentList = Type.Object({
+	subagents: Type.Array(Type.Object({
+		name: Type.String(), description: Type.String(), model: Type.Optional(Type.String()), thinking: Type.Optional(Type.String()),
+		tools: Type.Array(Type.String()), maxTurns: Type.Integer(), file: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]),
+	})),
+});
+import { homedir } from "node:os";
+import { loadSubagents } from "./subagents.ts";
 
 const CatalogResult = Type.Object({
 	models: Type.Array(Type.Object({
@@ -22,6 +30,11 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 	app.get("/configuration", {
 		schema: { response: { 200: ConfigurationResult, ...errors(401) } },
 		handler: async () => { config.refreshStale(); return config.snapshot(); },
+	});
+	app.get("/configuration/subagents", {
+		schema: { response: { 200: SubagentList, ...errors(401) } },
+		// Global roles plus the project ones of the default workdir (a session's own cwd may add more).
+		handler: async () => ({ subagents: [...loadSubagents(config.defaultWorkdir(), homedir()).values()].map(({ prompt: _prompt, ...d }) => d) }),
 	});
 	app.get("/configuration/catalog", {
 		schema: { response: { 200: CatalogResult, ...errors(401) } },

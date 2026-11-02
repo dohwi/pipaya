@@ -193,6 +193,11 @@ describe("API contracts", () => {
 		expect((await api("PUT", "/configuration/tools", { disabled: ["read"] })).status).toBe(400);
 		expect((await api("PUT", "/configuration/tools", { disabled: ["delegate"] })).json.disabled).toEqual(["delegate"]);
 		expect((await api("PUT", "/configuration/tools", { disabled: ["nonexistent"] })).status).toBe(400);
+		// role list: authenticated, no prompt bodies
+		expect((await api("GET", "/configuration/subagents", undefined, {})).status).toBe(401);
+		const roles = await api("GET", "/configuration/subagents");
+		expect(roles.status).toBe(200);
+		for (const r of roles.json.subagents) expect(r).not.toHaveProperty("prompt");
 		expect((await api("PUT", "/configuration/tools", { disabled: [] })).json.disabled).toEqual([]);
 	});
 
