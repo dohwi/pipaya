@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from "../lib/i18n";
+	import { schedule, unschedule } from "../lib/frame";
 	import Icon from "./Icon.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -150,9 +151,19 @@
 	$effect(() => {
 		void activeTab;
 		void app.activeId;
-		// the open tab, or inside the open group's box the session being looked at
-		strip?.querySelector<HTMLElement>(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
-		strip?.querySelector<HTMLElement>('.gchip[aria-current="true"]')?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+		const host = strip;
+		if (!host) return;
+		// Next frame, with the other layout reads: scrolling here forced the style pass of everything the send just changed
+		// in the middle of the effect flush. Both reads go first, the writes after (no layout thrash between them).
+		schedule(host, () => {
+			const on = host.querySelector<HTMLElement>(".tab.on");
+			const chip = host.querySelector<HTMLElement>('.gchip[aria-current="true"]');
+			return () => {
+				on?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+				chip?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+			};
+		});
+		return () => unschedule(host);
 	});
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {

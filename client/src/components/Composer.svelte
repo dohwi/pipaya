@@ -105,8 +105,10 @@
 			const v = `${Math.max(0, root.clientHeight - el.getBoundingClientRect().top)}px`;
 			return () => root.style.setProperty("--composer-top", v);
 		};
-		read()();
+		// The first value waits for the frame like every later one: reading the rect here ran in the middle of the effect
+		// flush that follows a send (new session, tab and badge rows all just changed) and paid for their style pass alone.
 		const update = () => schedule(key, read);
+		update();
 		const ro = new ResizeObserver(update);
 		ro.observe(el);
 		window.addEventListener("resize", update);
