@@ -526,6 +526,8 @@
 		white-space: nowrap;
 		font-size: var(--fs-sm);
 		font-weight: 600;
+		padding-bottom: 4px;
+		margin-bottom: -4px; /* descenders (g p y) overflow the line-height:1 box; widen the clip area without moving layout */
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
 	/* 20px wide, like the "+" / "⋯" / list buttons (x 246..266): one and two digits both centre on x 256, so the count and the button that replaces it share a column */
