@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
+import { isContextOverflow, isRetryableAssistantError, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -27,7 +27,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, runawayReason } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, helperUsage, loadSubagents, subagentSystem } from "./subagents.ts";
-import { DEFAULT_UPSTREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { DEFAULT_UPSTREAM_RETRY, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
@@ -730,6 +730,8 @@ export class SessionManager {
 	private abortRun(id: string, live: Live): void {
 		const settled = live.settled;
 		live.agent.abort();
+		// Waiting out a retry is idle work; stopping it there must not wait for the backoff to end.
+		live.retryWait?.abort();
 		const timer = setTimeout(() => {
 			if (!live.running || live.settled !== settled || this.live.get(id) !== live) return;
 			live.forceStopped = true;
@@ -796,6 +798,7 @@ export class SessionManager {
 
 		const settled = (async () => {
 			let error: string | null = null;
+			let interrupted = false;
 			try {
 				await start();
 			} catch (e) {
@@ -809,13 +812,34 @@ export class SessionManager {
 					error = e instanceof Error ? e.message : String(e);
 				}
 			}
+			// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
+			// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
+			for (let attempt = 1; !error && !live.forceStopped && attempt <= STREAM_RETRY.maxRetries && this.droppedMidStream(live); attempt++) {
+				const delayMs = retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
+				this.bus.publish(id, "run_retrying", { attempt, maxRetries: STREAM_RETRY.maxRetries, delayMs, restart: true }, { ephemeral: true });
+				const wait = new AbortController();
+				live.retryWait = wait;
+				await sleepAbortable(delayMs, wait.signal);
+				live.retryWait = undefined;
+				if (live.forceStopped) return; // run_finished was already published when it was cut loose
+				if (wait.signal.aborted) {
+					interrupted = true; // the user stopped the run while it waited: keep the partial reply, report an abort
+					break;
+				}
+				this.dropLastReply(id, live);
+				try {
+					await live.agent.continue();
+				} catch (e) {
+					error = e instanceof Error ? e.message : String(e);
+				}
+			}
 			if (live.forceStopped) return; // run_finished was already published when it was cut loose
 			live.running = false;
 			live.lastActive = Date.now();
 			const last = live.agent.state.messages[live.agent.state.messages.length - 1];
 			const failed = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
 			error ??= failed ? (last.errorMessage ?? null) : null;
-			const status = !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
+			const status = interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
 			this.bus.publish(id, "run_finished", {
 				status,
 				error,
@@ -852,6 +876,24 @@ export class SessionManager {
 		}
 		const next = live.agent.state.messages[live.agent.state.messages.length - 1];
 		return !!next && next.role !== "assistant" && next.role !== "system";
+	}
+
+	/**
+	 * True when the run ended on a transient transport error (a gateway closing the socket mid-answer) *after* the model
+	 * had already started replying. The reply is then half-written and cannot be resumed; the caller repeats the request.
+	 * An empty reply never gets here: withUpstreamRetry already retried it inside the stream call.
+	 */
+	private droppedMidStream(live: Live): boolean {
+		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
+		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return false;
+		return isRetryableAssistantError(last);
+	}
+
+	/** Throws the half-written reply away (`continue()` then replaces it, without asking the model to repeat itself). */
+	private dropLastReply(id: string, live: Live): void {
+		this.store.deleteLastMessage(id);
+		live.nextSeq--;
+		live.agent.state.messages = live.agent.state.messages.slice(0, -1);
 	}
 
 	private ensureLive(record: SessionRecord): Live {

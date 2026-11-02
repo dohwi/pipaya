@@ -7,6 +7,8 @@
  *   "!bash <command>"  -> streams a bash tool call, then summarises the tool result
  *   "!<tool> {json}"   -> streams a call to any other tool with JSON args
  *   "!overflow ..."    -> 400 "maximum context length" until the request carries a compaction summary
+ *   "!drop ..."        -> streams the first frames of the reply, then the body ends without a finish reason
+ *                         (the first time only, so the retry of the same request succeeds)
  */
 export interface UpstreamRequest {
 	path: string;
@@ -61,6 +63,8 @@ function plan(messages: any[]): Plan {
 		const name = call?.function?.name ?? last.name ?? "tool";
 		return { text: `Tool ${name} finished:\n${input.slice(0, 500)}` };
 	}
+	// "!drop ..." only asks the fixture to cut the stream; the reply itself is a plain echo.
+	if (input.startsWith("!drop")) return { text: `Echo: ${input.replace(/^!drop\s*/, "")}` };
 	const m = /^!(\w+)\s+(.*)$/s.exec(input);
 	if (last?.role === "user" && m) {
 		const [, name, rest] = m as unknown as [string, string, string];
@@ -89,6 +93,8 @@ function chunks(p: Plan, callId: string): object[] {
 
 export function startEchoUpstream(): EchoUpstream {
 	const requests: UpstreamRequest[] = [];
+	/** User texts whose stream was cut once already (see "!drop"): the retried request answers normally. */
+	const dropped = new Set<string>();
 	let calls = 0;
 	const server = Bun.serve({
 		hostname: "0.0.0.0",
@@ -104,18 +110,23 @@ export function startEchoUpstream(): EchoUpstream {
 			if (textOf(msgs[msgs.length - 1]?.content).startsWith("!overflow") && !msgs.some((m) => textOf(m.content).includes("was compacted"))) {
 				return Response.json({ error: { message: "This model's maximum context length is 8192 tokens. However, your messages resulted in 9000 tokens.", type: "invalid_request_error", code: "context_length_exceeded" } }, { status: 400 });
 			}
+			const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+			const dropText = textOf(lastUser?.content);
+			const drop = dropText.startsWith("!drop") && !dropped.has(dropText);
+			if (drop) dropped.add(dropText);
 			const frames = chunks(plan(body.messages ?? []), `call_echo_${++calls}`);
 			let cancelled = false;
 			const enc = new TextEncoder();
 			return new Response(new ReadableStream({
 				async start(controller) {
-					for (const f of frames) {
+					for (const f of drop ? frames.slice(0, 2) : frames) {
 						if (cancelled) return;
 						controller.enqueue(enc.encode(`data: ${JSON.stringify(f)}\n\n`));
 						await Bun.sleep(1);
 					}
 					if (!cancelled) {
-						controller.enqueue(enc.encode("data: [DONE]\n\n"));
+						// "!drop": the reply stops mid-stream, exactly like a gateway closing the socket under us.
+						if (!drop) controller.enqueue(enc.encode("data: [DONE]\n\n"));
 						controller.close();
 					}
 				},

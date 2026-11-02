@@ -58,6 +58,8 @@ export interface Live {
 	readRoots: string[];
 	/** Set while a compaction runs; aborting it cancels the summary call. */
 	compacting?: AbortController;
+	/** Set while a dropped stream waits for its retry; aborting it stops the wait and ends the run as aborted. */
+	retryWait?: AbortController;
 	/** Resolves when the running compaction ends (success or not); a prompt sent meanwhile waits for it. */
 	compactSettled?: Promise<void>;
 	/** Settles after the run's own wrap-up (run_finished) has been published, not just when the agent is idle. */

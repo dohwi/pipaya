@@ -15,7 +15,14 @@ export interface UpstreamRetryOptions {
 /** 2s, 4s, 8s, 16s, 30s, 30s: about 90 seconds of patience for a gateway that drops for a moment (502/503/504, reset, timeout). */
 export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, baseDelayMs: 2000, maxDelayMs: 30_000 };
 
-const sleepAbortable = (ms: number, signal?: AbortSignal) =>
+/**
+ * A stream that broke after part of the reply had already been sent (a proxy or gateway closed the socket mid-answer).
+ * The partial reply cannot be resumed, so the whole request is repeated: fewer tries than DEFAULT_UPSTREAM_RETRY
+ * (2s, 4s, 8s) because the user is already waiting on an answer that disappeared.
+ */
+export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, baseDelayMs: 2000, maxDelayMs: 10_000 };
+
+export const sleepAbortable = (ms: number, signal?: AbortSignal) =>
 	new Promise<void>((resolve) => {
 		if (signal?.aborted) return resolve();
 		const t = setTimeout(done, ms);
@@ -26,7 +33,8 @@ const sleepAbortable = (ms: number, signal?: AbortSignal) =>
 /**
  * Wraps a model stream so a transient upstream failure (502 Bad Gateway, 503, 504, connection reset, timeout …) that
  * happens before the model produced any content is retried with exponential backoff instead of ending the run.
- * Once content has streamed, an error is passed through as is: resending would duplicate what the user already saw.
+ * Once content has streamed, an error is passed through as is: the caller owns the reply by then (SessionManager drops
+ * the partial message and repeats the request — see STREAM_RETRY — because a half-streamed answer cannot be resumed).
  * Quota/billing errors and aborts are never retried.
  */
 export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortSignal }?]>(inner: Stream<A>, opts: UpstreamRetryOptions = DEFAULT_UPSTREAM_RETRY): Stream<A> {

@@ -345,6 +345,15 @@ export class ChatState {
 		return last && last.kind === "assistant" && last.streaming ? last : null;
 	}
 
+	/**
+	 * The server dropped a reply that was cut off mid-stream and asks the model again: forget what the failed attempt
+	 * had shown, so the retried answer replaces it instead of being appended to a half-written message.
+	 */
+	private dropPartialReply(): void {
+		const last = this.items[this.items.length - 1];
+		if (last?.kind === "assistant") this.items.pop();
+	}
+
 	private ensureStream(): AssistantItem {
 		let item = this.streamItem();
 		if (!item) {
@@ -431,6 +440,7 @@ export class ChatState {
 
 			case "run_retrying":
 				this.retrying = { attempt: Number(d.attempt) || 1, maxRetries: Number(d.maxRetries) || 1 };
+				if (d.restart) this.dropPartialReply();
 				break;
 
 			case "run_started":
