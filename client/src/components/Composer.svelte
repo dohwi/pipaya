@@ -6,7 +6,6 @@
 </script>
 
 <script lang="ts">
-	import { schedule, unschedule } from "../lib/frame";
 	import Button from "./Button.svelte";
 	import { errorText } from "../lib/api";
 	import ExtensionMount from "./extensions/ExtensionMount.svelte";
@@ -55,7 +54,6 @@
 	let ta: HTMLTextAreaElement | undefined = $state();
 	let mirror: HTMLDivElement | undefined = $state();
 	let fileInput: HTMLInputElement | undefined = $state();
-	let wrapEl: HTMLDivElement | undefined = $state();
 	const attached = new Attachments({
 		vision: () => vision,
 		error: (m) => app.toast(m, "error", pane.id),
@@ -95,30 +93,10 @@
 	// Collapsing the textarea to `auto` on every keystroke shrank the composer for a moment, which made the message list
 	// grow, clamp its scrollTop and jump (the flicker while typing long input).
 
-	// Publish the composer's top edge so floating UI (toasts) can sit above the input instead of over it.
-	$effect(() => {
-		if (!wrapEl || !pane.focused) return;
-		const el = wrapEl;
-		const root = document.documentElement;
-		const key = {};
-		const read = () => {
-			const v = `${Math.max(0, root.clientHeight - el.getBoundingClientRect().top)}px`;
-			return () => root.style.setProperty("--composer-top", v);
-		};
-		// The first value waits for the frame like every later one: reading the rect here ran in the middle of the effect
-		// flush that follows a send (new session, tab and badge rows all just changed) and paid for their style pass alone.
-		const update = () => schedule(key, read);
-		update();
-		const ro = new ResizeObserver(update);
-		ro.observe(el);
-		window.addEventListener("resize", update);
-		return () => {
-			ro.disconnect();
-			unschedule(key);
-			window.removeEventListener("resize", update);
-			root.style.removeProperty("--composer-top");
-		};
-	});
+	// The composer's top edge used to be published as `--composer-top` on <html> so floating UI could sit above the input.
+	// Nothing reads it (toasts are anchored to the top of the screen), yet writing it on every resize re-resolved a custom
+	// property for the whole document: the empty conversation's hero giving way to the message list moved the input, and the
+	// page (~3,900 elements) was restyled right in the frames after a send.
 
 	// Each conversation has its own input: stash the one being left, restore the one being entered.
 	let draftKey: string | null | undefined;
@@ -587,7 +565,7 @@
 
 {#if dragging}<DropOverlay />{/if}
 
-<div class="wrap" bind:this={wrapEl} data-part="composer">
+<div class="wrap" data-part="composer">
 	<ExtensionMount slot="composer.top" />
 	{#if whereShown && app.net === "online"}
 		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
