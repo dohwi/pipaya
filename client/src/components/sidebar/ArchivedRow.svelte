@@ -36,10 +36,13 @@
 </div>
 
 <style>
-	.archived {
+	/* dim the content only: the row's tree rule overlaps its neighbours' by 1px, so a row-wide opacity doubled up into a dark seam and tinted the rule unlike the other trees' */
+	.archived > :global(.open),
+	.archived > :global(.acts) {
 		opacity: 0.6;
 	}
-	.archived:hover {
+	.archived:hover > :global(.open),
+	.archived:hover > :global(.acts) {
 		opacity: 1;
 	}
 </style>
