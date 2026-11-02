@@ -43,7 +43,10 @@
 	   image holds the 9px pin box at 2..11 with 2px of margin for that stroke; it sits so the pin box ends 1px past the glyph's
 	   corner, exactly over the mark: 13px at right/bottom -3px. The glyph is its own mask box, so this holds for 14 and 16px icons.
 	   Everything else of the glyph stays (the first layer, a plain fill, minus the cut) */
-	:global(:has(> .pinmark)) > :global(:not(.pinmark, .pin)) {
+	/* The host list is spelled out: a bare `:has(> .pinmark)` has every element as its subject, so each DOM change anywhere
+	   (a streamed reply, a row's state flip) made the browser re-test the whole page for it. The hosts are the icon boxes
+	   of the sidebar rows (.lead, .dicon) and tab bar (.ico); a new host kind has to be added here. */
+	:global(:where(.lead, .dicon, .ico):has(> .pinmark)) > :global(:not(.pinmark, .pin)) {
 		--pinmark-cut: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Cpath transform='translate(2 2) scale(.375) rotate(35 12 12)' d='M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7' stroke='%23000' stroke-width='7.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		-webkit-mask:
 			linear-gradient(#000, #000),
