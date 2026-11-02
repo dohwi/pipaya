@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { schedule, unschedule } from "../lib/frame";
 	import type { Snippet } from "svelte";
-	import { fadeIn, fadeOut, modalIn, modalOut, ms } from "../lib/motion";
+	import { fadeIn, fadeOut, modalIn, modalOut } from "../lib/motion";
 	import { modalLayer, portal as lift } from "../lib/dialog";
 	import ModalHeader from "./ModalHeader.svelte";
 
