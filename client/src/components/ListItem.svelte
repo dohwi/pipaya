@@ -38,7 +38,9 @@
 		gap: 12px;
 		align-items: flex-start;
 		padding: 12px;
-		border: 1px solid var(--border);
+		/* the page colour and the strong border: a card must stand out on the dialog surface and on the grey settings group alike */
+		background: var(--bg);
+		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 	}
 	.info {
@@ -92,16 +94,22 @@
 		overflow-wrap: anywhere;
 	}
 	.item :global(.desc) {
-		margin: 4px 0 0;
+		margin: 8px 0 0;
 		font-size: var(--fs-xs);
 		line-height: 18px;
-		color: var(--text-dim);
+		color: var(--text);
 		display: -webkit-box;
 		-webkit-line-clamp: 3;
 		line-clamp: 3;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 		overflow-wrap: anywhere;
+	}
+	/* what the entry is (desc) and the facts about it (meta: path, model, limits) are two different things: a hairline between them */
+	.item :global(.desc + .meta) {
+		margin-top: 8px;
+		padding-top: 8px;
+		border-top: 1px solid var(--border);
 	}
 	@media (max-width: 640px) {
 		.item {

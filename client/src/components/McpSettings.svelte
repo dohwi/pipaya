@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { t } from "../lib/i18n";
 	import { Api } from "../lib/api";
 	import { app } from "../lib/store.svelte";
 	import McpPanel from "./McpPanel.svelte";
@@ -13,7 +12,6 @@
 </script>
 
 <section class="set-group">
-	<div class="section-label">{t("MCP 서버")}</div>
 	{#if api}{#key serverId}<McpPanel {api} {only} />{/key}{/if}
 </section>
 

@@ -10,6 +10,8 @@
 	import { errorText, type Api } from "../lib/api";
 	import type { CommandFamily } from "../lib/types";
 	import DialogBody from "./DialogBody.svelte";
+	import ExtrasIntro from "./ExtrasIntro.svelte";
+	import ListGroup from "./ListGroup.svelte";
 	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
 
@@ -45,24 +47,28 @@
 	const home = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 </script>
 
-<Modal {onclose} title={t("확장 명령")} sub={data ? `${t("{n}개", { n: total })} · ${home(data.cwd)}` : null} width="680px" maxHeight="760px" safeArea>
+<Modal {onclose} title={t("확장 명령")} sub={data ? `${t("{n}개", { n: total })} · ${home(data.cwd)}` : null} width="xl" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
 	{#if total > 6}
 		<div class="tools"><SearchField label={t("명령 검색")} bind:value={query} /></div>
 	{/if}
-	<p class="hint">{t("서버 확장이 이 폴더에서 제공하는 명령입니다. 입력창에 /접두어:이름 [내용]을 쓰면 서버가 실행합니다.")}</p>
 
-	<DialogBody busy={loading}>
+	<DialogBody gap busy={loading}>
+		<ExtrasIntro
+			what={t("입력창에 /접두어:이름 을 써서 사람이 직접 실행하는 명령입니다. 서버 확장이 이 폴더에 제공합니다.")}
+			how={t("에이전트가 고르는 것이 아니라 사용자가 부르는 것이고, 실행은 서버가 합니다.")}
+		/>
 		{#if error}
-			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
+			<Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice>
 		{/if}
 		{#if !data && loading}
 			<EmptyState loading />
 		{:else if data}
 			{#each shown as f (f.prefix)}
-				<h3 class="fam">{f.label ?? f.prefix} <Badge size="sm">{f.extension}</Badge></h3>
+				<ListGroup title={f.label ?? f.prefix} count={t("{n}개", { n: f.entries.length })}>
+					{#snippet extra()}<Badge size="sm" variant="outline">{f.extension}</Badge>{/snippet}
 				<ul class="list">
 					{#each f.entries as e (e.name)}
 						<li>
@@ -73,6 +79,7 @@
 						</li>
 					{/each}
 				</ul>
+				</ListGroup>
 			{:else}
 				<EmptyState>{total ? t("일치하는 명령이 없습니다.") : t("이 폴더에서 쓸 수 있는 확장 명령이 없습니다.")}</EmptyState>
 			{/each}
@@ -82,14 +89,9 @@
 
 <style>
 	.tools { display: flex; padding: 0 var(--dlg-px); flex: none; }
-	.hint { margin: 8px var(--dlg-px) 12px; flex: none; }
-	.fam { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: var(--fs-sm); font-weight: 600; }
-	.fam:not(:first-child) { margin-top: 16px; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.args { font-weight: 400; color: var(--text-faint); }
-	.gap { margin-bottom: 8px; }
 	@media (max-width: 640px) {
 		.tools { padding: 0 var(--dlg-px); }
-		.hint { margin: 8px var(--dlg-px) 12px; }
 	}
 </style>

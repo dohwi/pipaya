@@ -6,6 +6,8 @@
 	import EmptyState from "./EmptyState.svelte";
 	import IconButton from "./IconButton.svelte";
 	import FormField from "./FormField.svelte";
+	import ExtrasIntro from "./ExtrasIntro.svelte";
+	import ListGroup from "./ListGroup.svelte";
 	import ListItem from "./ListItem.svelte";
 	import Notice from "./Notice.svelte";
 	import Segmented from "./Segmented.svelte";
@@ -115,7 +117,10 @@
 
 <div class="body" aria-busy={loading}>
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
-	<p class="hint">{t("MCP 서버의 도구는 연결되어 있는 동안 이 서버의 모든 대화에서 mcp_서버이름_도구이름 으로 쓸 수 있습니다. stdio 서버는 이 서버 컴퓨터에서 명령을 실행하니 믿을 수 있는 것만 추가하세요.")}</p>
+	<ExtrasIntro
+		what={t("외부 도구 서버를 에이전트에 연결합니다. 연결된 서버의 도구를 에이전트가 직접 호출합니다.")}
+		how={t("도구 이름은 mcp_서버이름_도구이름 이고 이 서버의 모든 대화에서 쓸 수 있습니다. stdio 서버는 이 서버 컴퓨터에서 명령을 실행하니 믿을 수 있는 것만 추가하세요.")}
+	/>
 
 	{#if form}
 		<form class="form" onsubmit={submit}>
@@ -157,6 +162,7 @@
 	{:else if !data && loading}
 		<EmptyState loading />
 	{:else if data}
+		<ListGroup title={t("MCP 서버")} count={t("{on}/{total}개 연결", { on: data.ready, total: data.servers.length })}>
 		<ul class="list">
 			{#each shown as s (s.name)}
 				<li animate:reflow in:rowIn out:rowOut>
@@ -182,6 +188,7 @@
 				<EmptyState as="li">{t("등록된 MCP 서버가 없습니다.")}</EmptyState>
 			{/each}
 		</ul>
+		</ListGroup>
 		{#if shown.length === data.servers.length}<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>{/if}
 	{/if}
 </div>

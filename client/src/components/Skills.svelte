@@ -16,6 +16,8 @@
 	import { app } from "../lib/store.svelte";
 	import type { SessionContext, SkillInfo, SkillList, SkillSource } from "../lib/types";
 	import DialogBody from "./DialogBody.svelte";
+	import ExtrasIntro from "./ExtrasIntro.svelte";
+	import ListGroup from "./ListGroup.svelte";
 	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
 
@@ -188,33 +190,26 @@
 		</div>
 	{/if}
 
-	<DialogBody busy={loading}>
+	<DialogBody gap busy={loading}>
 		{#if error}
-			<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
+			<Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice>
 		{/if}
 		{#if !data && loading}
 			<EmptyState loading />
 		{:else if data}
-			<div class="note" role="status">
-				{#if target.sessionId}
-					{t("바꾼 설정은 이 대화의")} <b>{t("다음 메시지")}</b>{t("부터 바로 적용됩니다.")}
-				{:else}
-					{t("바꾼 설정은 새 대화와 기존 대화의")} <b>{t("다음 메시지")}</b>{t("부터 적용됩니다.")}
-				{/if}
-			</div>
+			<ExtrasIntro
+				what={t("에이전트가 작업에 맞으면 스스로 읽어서 따르는 지침 묶음입니다. 사용자가 /skill:이름 으로 직접 부를 수도 있습니다.")}
+				how={target.sessionId ? t("바꾼 설정은 이 대화의 다음 메시지부터 바로 적용됩니다.") : t("바꾼 설정은 새 대화와 기존 대화의 다음 메시지부터 적용됩니다.")}
+			/>
 			{#each data.warnings as warning}
-				<div class="gap"><Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice></div>
+				<Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice>
 			{/each}
-			<section class="section">
-				<h3>{t("이 프로젝트")}</h3>
-				<p class="hint">{t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}</p>
+			<ListGroup title={t("이 프로젝트")} count={t("{n}개 사용", { n: (data.skills).filter(x => effective(x, "project") && x.modelInvocable).length })} path={home(data.project)} hint={t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}>
 				{@render list("project")}
-			</section>
-			<section class="section">
-				<h3>{t("모든 프로젝트")}</h3>
-				<p class="hint">{t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}</p>
+			</ListGroup>
+			<ListGroup title={t("모든 프로젝트")} count={t("{n}개 사용", { n: (data.skills).filter(x => x.globalEnabled && x.modelInvocable).length })} hint={t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}>
 				{@render list("global")}
-			</section>
+			</ListGroup>
 		{/if}
 	</DialogBody>
 </Modal>
@@ -226,11 +221,6 @@
 <style>
 	.tools { display: flex; padding: 0 var(--dlg-px) var(--dlg-foot-t); flex: none; }
 	.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.hint { margin: 4px 0 8px; }
-	.section + .section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
-	h3 { margin: 0; font-size: var(--fs-md, 1rem); font-weight: 600; }
-	.note { margin-bottom: 12px; padding: 8px 12px; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-dim); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
-	.note b { color: var(--text); font-weight: 600; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.link { padding: 0; font: inherit; font-size: var(--fs-xs); color: var(--text-dim); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 	.link.small { font-size: var(--fs-2xs); }
@@ -238,5 +228,4 @@
 	@media (max-width: 640px) {
 		.tools { padding: 0 var(--dlg-px); }
 	}
-	.gap { margin-bottom: 8px; }
 </style>

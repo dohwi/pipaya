@@ -6,6 +6,8 @@
 	import EmptyState from "./EmptyState.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import FormField from "./FormField.svelte";
+	import ExtrasIntro from "./ExtrasIntro.svelte";
+	import ListGroup from "./ListGroup.svelte";
 	import ListItem from "./ListItem.svelte";
 	import ModelField from "./ModelField.svelte";
 	import Notice from "./Notice.svelte";
@@ -124,7 +126,10 @@
 
 <section class:set-group={!bare} class:bare>
 	{#if !bare}<div class="section-label">{t("도우미 역할")}</div>{/if}
-	<p class="hint note">{t("delegate가 띄울 수 있는 도우미입니다. 역할마다 파일 하나(.md)이고, 프로젝트 역할은 같은 이름의 전역 역할보다 우선합니다.")}</p>
+	<ExtrasIntro
+		what={t("에이전트가 delegate 도구로 일을 맡길 수 있는 도우미입니다. 각자 모델, 도구, 지침을 따로 가집니다.")}
+		how={t("역할마다 파일 하나(.md)이고, 같은 이름이면 프로젝트 역할이 전역 역할보다 우선합니다.")}
+	/>
 	{#if loadError}<Notice tone="warn">{loadError}</Notice>{/if}
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 
@@ -182,13 +187,9 @@
 			</div>
 		</form>
 	{:else if list}
+		<div class="groups">
 		{#each groups as g (g.scope)}
-			<div class="group" role="group" aria-label={scopeText(g.scope)}>
-				<div class="ghead">
-					<span class="gname">{scopeText(g.scope)}</span>
-					<span class="gcount">{g.items.filter((r) => r.enabled).length}/{g.items.length}</span>
-					<span class="gpath mono">{g.path}</span>
-				</div>
+			<ListGroup title={scopeText(g.scope)} count={t("{on}/{total}개 사용", { on: g.items.filter((r) => r.enabled).length, total: g.items.length })} path={g.path}>
 				<ul class="list">
 					{#each g.items as r (`${r.scope}/${r.name}`)}
 						<li animate:reflow in:rowIn out:rowOut>
@@ -208,10 +209,11 @@
 						</li>
 					{/each}
 				</ul>
-			</div>
+			</ListGroup>
 		{:else}
 			<EmptyState>{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
 		{/each}
+		</div>
 		<Button variant="dashed" onclick={add}>{t("도우미 역할 추가")}</Button>
 	{:else if !loadError}
 		<EmptyState loading />
@@ -220,22 +222,11 @@
 
 <style>
 	section { display: flex; flex-direction: column; gap: 8px; }
-	/* inside a dialog the cards sit on the dialog surface, not on a grey group */
-	.bare .list :global(.item) { border-color: var(--border); }
-	.note { margin: 0; line-height: 1.5; }
+	.bare { gap: var(--dlg-gap); }
+	/* in the settings the heading is 8px above the text, and the text is 16px above the groups (the dialog spacing) */
+	section:not(.bare) > :global(.intro) { margin-bottom: 8px; }
+	.groups { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	/* The cards sit on the grey settings group: the page colour and the strong border lift them off it (the default hairline vanishes there). */
-	.list :global(.item) { background: var(--bg); border-color: var(--border-strong); }
-	/* name row, description and the model/limits line are three different things: the description reads as body text, the facts as a quiet mono line under a hairline. */
-	.list :global(.desc) { margin-top: 8px; color: var(--text); }
-	.list :global(.meta) { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-	.group { display: flex; flex-direction: column; gap: 8px; }
-	.note + .group, .group + .group { margin-top: 8px; }
-	/* group header: the scope, how many, and the folder the files live in (the path shrinks, the label never does) */
-	.ghead { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-xs); line-height: 20px; }
-	.gname { flex: none; font-weight: 600; color: var(--text); }
-	.gcount { flex: none; color: var(--text-faint); }
-	.gpath { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.ftitle { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 	.ftitle .name { font-size: var(--fs-sm); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }

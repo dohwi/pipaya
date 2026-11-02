@@ -15,7 +15,7 @@
 </script>
 
 <Modal {onclose} title={t("도우미 역할")} sub={target.cwd.replace(/^\/home\/[^/]+/, "~")} width="xl" maxHeight="760px" safeArea>
-	<DialogBody>
+	<DialogBody gap>
 		{#if app.serverId}<SubagentSettings serverId={app.serverId} {models} cwd={target.cwd} bare />{/if}
 	</DialogBody>
 </Modal>

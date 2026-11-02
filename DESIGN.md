@@ -21,12 +21,23 @@ measuring recipes are in [`docs/design-system.md`](docs/design-system.md). Token
 7. **Stacking only through tokens.** `z-index: var(--z-…)` from `app.css` for anything that crosses components
    (popover, dock, drawer, notice, modal layers, dropdown, toast, lightbox, tooltip). A raw 0-9 is fine inside one component; anything
    higher needs a token or a comment.
-8. **Shared parts first.** Use `Modal`, `DialogBody`, `ListItem`, `FormField`, `Button`, `IconButton`, `SearchField`, `Segmented`
+8. **Shared parts first.** Use `Modal`, `DialogBody`, `ListItem`, `ListGroup`, `ExtrasIntro`, `FormField`, `Button`, `IconButton`, `SearchField`, `Segmented`
    instead of re-writing their CSS. Change a shared part and you check every screen that uses it.
 9. **Measure, never eyeball.** Read `getBoundingClientRect()` of the svg / text, not the wrapper. Every changed spot is checked
    at 1440×900, 820×1180 and 390×844, dark and light.
 10. **Every exception carries a comment on the same line or the line above**: what it aligns to, or why it is not on the scale.
     No comment = it gets "fixed" by the next person.
+
+## List dialogs (skills, MCP servers, extension commands, helper roles)
+
+All four have one shape, so a new one is built from the same parts and never gets its own look:
+`Modal` (title, `sub` = count and folder, refresh in `headerActions`) → `DialogBody gap` → `ExtrasIntro` (one sentence
+that says what the thing is and who uses it, then one line on how) → one `ListGroup` per kind (heading, count, folder) →
+`ListItem` cards. Add / edit goes in a dashed `Button` and an inline form. Do not restyle `.item`, `.desc` or `.meta`
+from a screen: `ListItem` draws the card (page colour, `--border-strong`, so it reads on the dialog and on a grey
+settings group) and a hairline between the description and the facts line.
+Who uses what: skills and MCP tools are called by the agent, extension commands by the user (`/prefix:name`), helper
+roles by the agent through `delegate`. Say it in the intro, in those words.
 
 ## Before you commit a style change
 
