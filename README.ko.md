@@ -1,10 +1,12 @@
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner.ko-dark.svg" />
-    <img src=".github/assets/banner.ko.svg" alt="pipaya" width="100%" />
+    <img src=".github/assets/banner.ko.svg" alt="pipaya - 내 서버에서 일하는 AI 에이전트" width="100%" />
   </picture>
 
   <p><a href="README.md">English</a> · <b>한국어</b></p>
+
+  <p>pipaya는 <b>내 서버에서 돌리는 AI 에이전트 채팅 도구</b>입니다.<br />서버가 모델 호출과 도구 실행을 맡고, 앱은 어느 기기에서든 같은 서버에 접속합니다.<br />세션, 설정, API 키는 내 서버의 SQLite에만 저장되며 클라우드 계정이 필요 없습니다.</p>
 
   <p>
     <a href="https://bun.sh" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Bun-1.3-000000?style=flat-square&logo=bun&logoColor=white" alt="Bun" /></a>
@@ -18,8 +20,6 @@
     <a href="https://discord.gg/rn3uEghsjh" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
   </p>
 </div>
-
-pipaya는 **내 서버에서 돌리는 AI 에이전트 채팅 도구**입니다. 서버가 모델 호출과 도구 실행을 맡고, 앱은 어느 기기에서든 같은 서버에 접속합니다. 세션, 설정, API 키는 내 서버의 SQLite에만 저장되며 클라우드 계정이 필요 없습니다.
 
 <p align="center">
   <picture>
@@ -94,7 +94,7 @@ cd server && bun run typecheck && bun run lint && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
 
-필요한 도구 버전은 [`mise.toml`](mise.toml)에 고정돼 있습니다(Bun 1.3, Rust stable). 서버는 [`server/README.ko.md`](server/README.ko.md), 로고는 [`logo/README.md`](logo/README.md)를 보세요. 커밋은 [Conventional Commits](https://www.conventionalcommits.org)를 따릅니다.
+필요한 도구 버전은 [`mise.toml`](mise.toml)에 고정돼 있습니다(Bun 1.3, Rust stable. `mise install`로 설치). 서버는 [`server/README.ko.md`](server/README.ko.md), 로고는 [`logo/README.md`](logo/README.md)를 보세요. 커밋은 [Conventional Commits](https://www.conventionalcommits.org)를 따릅니다.
 
 ## 라이선스
 

@@ -1,10 +1,12 @@
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg" />
-    <img src=".github/assets/banner.svg" alt="pipaya" width="100%" />
+    <img src=".github/assets/banner.svg" alt="pipaya - Your AI agent, on your own server" width="100%" />
   </picture>
 
   <p><b>English</b> · <a href="README.ko.md">한국어</a></p>
+
+  <p>pipaya is an <b>AI agent chat tool that runs on your own server</b>.<br />The server calls models and runs tools; the app connects to it from any device.<br />Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.</p>
 
   <p>
     <a href="https://bun.sh" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Bun-1.3-000000?style=flat-square&logo=bun&logoColor=white" alt="Bun" /></a>
@@ -19,8 +21,6 @@
   </p>
 </div>
 
-pipaya is an **AI agent chat tool that runs on your own server**. The server calls models and runs tools; the app connects to it from any device. Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/preview-dark.png" />
@@ -34,7 +34,7 @@ pipaya is an **AI agent chat tool that runs on your own server**. The server cal
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
 - **Many devices, one conversation**: Windows, macOS, Android and web, with notifications and mobile push
 - **Teamwork and split view**: up to 8 conversations on one screen, and extensions can let them hand work to each other
-- **Extensible**: AGENTS.md, skills, templates, server and client extensions
+- **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
 
 ## Quick install
 
@@ -94,7 +94,7 @@ cd server && bun run typecheck && bun run lint && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
 
-Prerequisites are pinned in [`mise.toml`](mise.toml) (Bun 1.3, Rust stable). The server is documented in [`server/README.md`](server/README.md) and the logo in [`logo/README.md`](logo/README.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org).
+Prerequisites are pinned in [`mise.toml`](mise.toml) (Bun 1.3, Rust stable; `mise install` sets them up). The server is documented in [`server/README.md`](server/README.md) and the logo in [`logo/README.md`](logo/README.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org).
 
 ## License
 
