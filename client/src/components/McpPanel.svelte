@@ -111,7 +111,7 @@
 	const shown = $derived(only && data?.servers.some((x) => x.name === only) ? data.servers.filter((x) => x.name === only) : (data?.servers ?? []));
 	const statusTone = (s: McpServerInfo["status"]) => (s === "ready" ? "ok" : s === "error" ? "danger" : "neutral");
 	const statusText = (s: McpServerInfo["status"]) =>
-		s === "ready" ? t("연결됨") : s === "error" ? t("오류") : s === "connecting" ? t("연결하는 중…") : t("꺼져 있음");
+		s === "ready" ? t("연결됨") : s === "error" ? t("오류") : s === "connecting" ? t("연결하는 중…") : t("꺼짐");
 	const target = (s: McpServerInfo) => (s.transport === "stdio" ? [s.command, ...(s.args ?? [])].join(" ") : s.url);
 </script>
 

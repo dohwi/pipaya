@@ -62,7 +62,7 @@
 	);
 	const projectEnabled = (s: SkillInfo) => s.override ?? s.globalEnabled;
 	const effective = (s: SkillInfo, mode: Mode) => (mode === "project" ? projectEnabled(s) : s.globalEnabled);
-	const onCount = $derived((data?.skills ?? []).filter(s => s.enabled && s.modelInvocable).length);
+	const onCount = $derived((data?.skills ?? []).filter(s => s.enabled).length);
 	const used = $derived(new Set(session?.skills.map(s => s.name)));
 
 	async function toggle(s: SkillInfo, next: boolean, mode: Mode) {
@@ -99,7 +99,7 @@
 		}
 	}
 
-	/* ---------- edit / delete: they change the skill's own files, so only skills from files, in the all-projects list ---------- */
+	/* ---------- edit / delete: they change the skill's own files, so every skill from a file has them (the built-in ones are read-only) ---------- */
 	let editing = $state<SkillSource | null>(null);
 	let fileBusy = $state(false);
 	async function startEdit(s: SkillInfo) {
@@ -140,21 +140,20 @@
 	<Button size="sm" onclick={() => startEdit(s)} disabled={fileBusy}>{t("수정")}</Button>
 	<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={fileBusy}>{t("삭제")}</ConfirmButton>
 {/snippet}
-	<ListItem off={!on || !s.modelInvocable} actions={mode === "global" && s.scope !== "builtin" ? fileActions : undefined}>
+	<ListItem off={!on} actions={s.scope !== "builtin" ? fileActions : undefined}>
 		{#snippet lead()}
-			<span title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다")}>
-				<Switch
-					checked={on && s.modelInvocable}
-					disabled={!s.modelInvocable || saving[mode + s.name]}
-					onchange={next => toggle(s, next, mode)}
-					label="{s.name} {mode === 'project' ? t('이 프로젝트') : t('모든 프로젝트')}"
-				/>
-			</span>
+			<Switch
+				checked={on}
+				disabled={saving[mode + s.name]}
+				onchange={next => toggle(s, next, mode)}
+				label="{s.name} {mode === 'project' ? t('이 프로젝트') : t('모든 프로젝트')}"
+			/>
 		{/snippet}
 		{#snippet title()}
 			<span class="name mono">{s.name}</span>
-			<Badge size="sm">{s.scope === "project" ? t("프로젝트") : s.scope === "builtin" ? t("기본 내장") : t("전역")}</Badge>
-			{#if !s.modelInvocable}<Badge size="sm" variant="outline">{t("수동 전용")}</Badge>{/if}
+			<Badge size="sm" variant="outline">{s.scope === "project" ? t("프로젝트") : s.scope === "builtin" ? t("기본 내장") : t("전역")}</Badge>
+			{#if !on}<Badge size="sm">{t("꺼짐")}</Badge>{/if}
+			{#if !s.modelInvocable}<span title={t("에이전트는 이 스킬을 모릅니다. /skill:이름 으로 직접 부를 때만 쓰입니다.")}><Badge size="sm" variant="outline">{t("수동 전용")}</Badge></span>{/if}
 			{#if mode === "project" && s.override !== null}
 				<Badge size="sm" variant="solid" tone="accent">{s.override ? t("프로젝트에서 켬") : t("프로젝트에서 끔")}</Badge>
 				<button class="link small" onclick={() => reset(s)} disabled={saving[mode + s.name]} title={t("기본값을 따르도록 되돌리기")}>{t("되돌리기")}</button>
@@ -204,10 +203,10 @@
 			{#each data.warnings as warning}
 				<Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice>
 			{/each}
-			<ListGroup title={t("이 프로젝트")} count={t("{n}개 사용", { n: (data.skills).filter(x => effective(x, "project") && x.modelInvocable).length })} path={home(data.project)} hint={t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}>
+			<ListGroup title={t("이 프로젝트")} count={t("{on}/{total}개 사용", { on: data.skills.filter(x => effective(x, "project")).length, total: data.skills.length })} path={home(data.project)} hint={t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}>
 				{@render list("project")}
 			</ListGroup>
-			<ListGroup title={t("모든 프로젝트")} count={t("{n}개 사용", { n: (data.skills).filter(x => x.globalEnabled && x.modelInvocable).length })} hint={t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}>
+			<ListGroup title={t("모든 프로젝트")} count={t("{on}/{total}개 사용", { on: data.skills.filter(x => x.globalEnabled).length, total: data.skills.length })} hint={t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}>
 				{@render list("global")}
 			</ListGroup>
 		{/if}

@@ -20,7 +20,6 @@ export const en: Record<string, string> = {
 	"환경 변수 (KEY=값, 한 줄에 하나)": "Environment variables (KEY=value, one per line)",
 	"헤더 (이름: 값, 한 줄에 하나)": "Headers (Name: value, one per line)",
 	"저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.": "Saved secret values show as ••••••••. Leave them as they are to keep the stored value.",
-	"꺼져 있음": "Off",
 	"다시 연결": "Reconnect",
 	"MCP 서버 추가": "Add MCP server",
 	/* ---- app shell ---- */
@@ -643,7 +642,6 @@ export const en: Record<string, string> = {
 	"에이전트가 작업에 맞으면 스스로 읽어서 따르는 지침 묶음입니다. 사용자가 /skill:이름 으로 직접 부를 수도 있습니다.": "Sets of instructions the agent reads and follows by itself when a task fits. You can also call one with /skill:name.",
 	"바꾼 설정은 이 대화의 다음 메시지부터 바로 적용됩니다.": "Changes apply from this conversation's next message.",
 	"바꾼 설정은 새 대화와 기존 대화의 다음 메시지부터 적용됩니다.": "Changes apply to new conversations and from the next message of existing ones.",
-	"{n}개 사용": "{n} on",
 	"에이전트가 delegate 도구로 일을 맡길 수 있는 도우미입니다. 각자 모델, 도구, 지침을 따로 가집니다.": "Helpers the agent can hand work to with the delegate tool. Each has its own model, tools and instructions.",
 	"역할마다 파일 하나(.md)이고, 같은 이름이면 프로젝트 역할이 전역 역할보다 우선합니다.": "Each role is one .md file; with the same name the project role wins over the global one.",
 	"{on}/{total}개 사용": "{on}/{total} on",
@@ -768,7 +766,6 @@ export const en: Record<string, string> = {
 	"스킬 검색": "Search skills",
 	"이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.": "Turned on or off for this project only. Set it back to match the default and it follows the default.",
 	"모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.": "This is the default for all projects. Skills a project has set itself stay as they are.",
-	"자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다": "This skill is excluded from automatic invocation (disable-model-invocation), so it can't be toggled",
 	"프로젝트": "Project",
 	"기본 내장": "Built-in",
 	"전역": "Global",
