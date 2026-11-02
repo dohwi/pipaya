@@ -65,7 +65,7 @@
 	aria-label={variant === "field" ? label : undefined}
 	title={variant === "inline" ? label : undefined}
 >
-	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={Boolean(current?.icon)} /></span>{/if}
+	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={variant === "inline" || Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>

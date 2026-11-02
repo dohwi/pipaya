@@ -131,7 +131,7 @@
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
 				<span class="stats">
-					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} /></span>{tail.model}{/if}
+					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{tail.model}{/if}
 					{#if tailModel && !tailModel.reasoning}· off{:else if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
 					{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
 					{#if took}· {duration(took)}{/if}
