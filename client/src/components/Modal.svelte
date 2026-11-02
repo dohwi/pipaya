@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { schedule, unschedule } from "../lib/frame";
 	import type { Snippet } from "svelte";
-	import { fadeIn, fadeOut, modalIn, modalOut } from "../lib/motion";
+	import { fadeIn, fadeOut, modalIn, modalOut, ms } from "../lib/motion";
 	import { modalLayer, portal as lift } from "../lib/dialog";
 	import ModalHeader from "./ModalHeader.svelte";
 
@@ -101,9 +101,17 @@
 	 *
 	 * Only the first size (and a window resize) centres. While the panel grows or shrinks (a collapse animation reports a new height every
 	 * frame) its top edge stays put, so the header and rows do not drift by half the change each frame (the content grows downward);
-	 * it only moves up when the bottom would leave the window. There is no second "re-centre" movement afterwards.
+	 * it only moves up when the bottom would leave the window.
+	 *
+	 * Content that arrives late (a list fetched after opening) makes the panel grow from its small first size, which would leave it hanging
+	 * below the middle. So during the first LOAD_MS after opening, once the size has been still for SETTLE_MS, the panel eases once to the
+	 * middle of its final size. Later size changes (the user expanding a row) never move it.
 	 */
+	const LOAD_MS = 1500;
+	const SETTLE_MS = 200;
 	function whole(node: HTMLElement) {
+		const opened = performance.now();
+		let settle: ReturnType<typeof setTimeout> | undefined;
 		let size: [number, number] | null = null;
 		let top: number | null = null;
 		const view = () => {
@@ -123,18 +131,30 @@
 			if (top === null || recentre) top = middle(vh, h);
 			node.style.top = `${Math.max(Math.min(top, vh - h - 12), Math.min(12, middle(vh, h)))}px`;
 		}
+		function recentre() {
+			if (!size || node.classList.contains("sheet") && view().sheet) return;
+			const target = middle(view().vh, size[1]);
+			if (top === null || Math.abs(top - target) < 1) return;
+			const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+			node.style.transition = still ? "none" : "top var(--motion-fast) var(--ease-std)";
+			top = target;
+			place(false);
+			setTimeout(() => (node.style.transition = ""), ms("fast") + 40);
+		}
 		const ro = new ResizeObserver(([e]) => {
 			const box = e?.borderBoxSize?.[0];
 			if (!box) return;
 			const first = size === null;
 			size = [box.inlineSize, box.blockSize];
 			place(first);
+			clearTimeout(settle);
+			if (!first && performance.now() - opened < LOAD_MS) settle = setTimeout(recentre, SETTLE_MS);
 		});
 		// window resizes arrive many times per frame: place once per frame
 		const onResize = () => size && schedule(node, () => place(true));
 		ro.observe(node, { box: "border-box" });
 		window.addEventListener("resize", onResize);
-		return { destroy: () => { ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
+		return { destroy: () => { clearTimeout(settle); ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
 	}
 	// Before any child mounts and focuses itself: this is where focus goes back to on close.
 	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
