@@ -70,6 +70,7 @@ export const SessionStatus = Type.Object({
 	pendingQuestions: Type.Integer(),
 	streamingMessage: Type.Unknown({ description: "Partial assistant message while a run is streaming, else null. Lets late joiners catch up." }),
 	queued: Type.Boolean(),
+	queuedMessages: Type.Array(Type.Object({ mode: Type.Union([Type.Literal("steer"), Type.Literal("follow_up")]), text: Type.String() }), { description: "Messages still waiting in the steer / follow_up queues" }),
 	lastError: Nullable(Type.String()),
 	compacting: Type.Boolean({ description: "A manual or automatic compaction is writing its summary" }),
 });

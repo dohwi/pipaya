@@ -32,6 +32,8 @@ export interface SessionStatus {
 	/** Partial assistant message for late-joining clients. */
 	streamingMessage: AgentMessage | null;
 	queued: boolean;
+	/** Texts still waiting in the steer / follow-up queues, so a client that reloads can show them again. */
+	queuedMessages: { mode: "steer" | "follow_up"; text: string }[];
 	lastError: string | null;
 	/** A manual or automatic compaction is writing its summary. */
 	compacting: boolean;

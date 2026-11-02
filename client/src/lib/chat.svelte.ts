@@ -288,7 +288,7 @@ export class ChatState {
 			this.compaction = detail.compaction ?? null;
 			this.serverCompacting = st.compacting ?? false;
 			this.contextRevision++;
-			this.queued = [];
+			this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text }));
 			this.ready = true;
 		} catch (e) {
 			if (token !== this.token) return;

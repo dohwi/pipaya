@@ -283,6 +283,7 @@ export class SessionManager {
 			pendingQuestions: this.questions?.list(id).length ?? 0,
 			streamingMessage: (live?.running && live.agent.state.streamingMessage) || null,
 			queued: live?.agent.hasQueuedMessages() ?? false,
+			queuedMessages: this.queuedOf(id),
 			lastError: live?.agent.state.errorMessage ?? null,
 			compacting: !!live?.compacting,
 		};

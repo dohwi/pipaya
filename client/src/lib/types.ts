@@ -254,6 +254,8 @@ export interface SessionDetail extends Session {
 		/** Partial assistant message while a run is streaming, else null. Lets late joiners catch up. */
 		streamingMessage: unknown;
 		queued: boolean;
+		/** Absent on servers from before this field. */
+		queuedMessages?: { mode: "steer" | "follow_up"; text: string }[];
 		lastError: string | null;
 	};
 	usage: Usage;
