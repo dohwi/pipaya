@@ -354,7 +354,8 @@
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box centred by the row; the handle's ink centre lands on the row's centre line, level with the title */
+		line-height: 16px; /* whole-pixel line box centred by the row */
+		padding-bottom: 2px; /* measured 1x-3x: the mono handle's ink sat 0.5-1.2px below the row's centre line (worst at 125%/150% Windows scaling); 2px lifts the box 1px so it lands within 0.7px, level with the title */
 	}
 	:global(:where(.side) .who.working) { color: var(--info); }
 	:global(:where(.side) .who.asking) { color: var(--warn); }
