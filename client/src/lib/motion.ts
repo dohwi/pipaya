@@ -139,13 +139,14 @@ export const collapseOut = (node: Element) => slide(node, { duration: ms("fast")
 
 /* ---------- modals: centred dialog on desktop, bottom sheet on phones ---------- */
 function sheet(node: Element, dir: "in" | "out") {
-	const h = (node as HTMLElement).offsetHeight;
 	// A sheet pulled down by hand (lib/sheet.ts leaves its offset in --pull) leaves from where the finger let go.
-	const from = dir === "out" ? Math.min(h, parseFloat((node as HTMLElement).style.getPropertyValue("--pull")) || 0) : 0;
+	const from = dir === "out" ? Math.min((node as HTMLElement).offsetHeight, parseFloat((node as HTMLElement).style.getPropertyValue("--pull")) || 0) : 0;
 	return {
 		duration: dir === "in" ? ms("normal") : Math.round(ms("fast") * SHEET_OUT_FACTOR),
 		easing: dir === "in" ? easeEnter : easeExit,
-		css: (_: number, u: number) => `transform:translateY(${(from + u * (h - from)).toFixed(2)}px)`,
+		// The distance is a percentage of the sheet's height *now*, not the height at the start: a sheet that opens on a short
+		// loading state and fills a frame later (context, skills) would otherwise start 145px off-screen and jump into view.
+		css: (_: number, u: number) => `transform:translateY(calc(${from.toFixed(2)}px + ${u.toFixed(4)} * (100% - ${from.toFixed(2)}px)))`,
 	};
 }
 
