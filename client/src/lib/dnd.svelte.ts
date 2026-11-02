@@ -200,8 +200,14 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	let st: { pid: number; touch: boolean; x: number; y: number; ox: number; oy: number; timer: number; held: boolean } | null = null;
 	let active = false;
 
+	/** What `style()` last wrote. `update` runs whenever the row's options object is rebuilt (every list change, for every row). */
+	let styled: boolean | null = null;
 	function style() {
 		const on = !opts.disabled;
+		// Writing the same three properties again still invalidated the row's style, so each list change restyled every
+		// row of the sidebar (about 400 writes in the second after a send); only a change of `disabled` writes now.
+		if (styled === on) return;
+		styled = on;
 		node.style.userSelect = on ? "none" : "";
 		node.style.setProperty("-webkit-user-select", on ? "none" : "");
 		node.style.setProperty("-webkit-touch-callout", on ? "none" : "");
