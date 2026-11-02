@@ -6,12 +6,15 @@
 	import Notice from "./Notice.svelte";
 	import Badge from "./Badge.svelte";
 	import Switch from "./Switch.svelte";
+	import Button from "./Button.svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
+	import SkillEditor from "./SkillEditor.svelte";
 	import { t } from "../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
 	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../lib/api";
 	import { app } from "../lib/store.svelte";
-	import type { SessionContext, SkillInfo, SkillList } from "../lib/types";
+	import type { SessionContext, SkillInfo, SkillList, SkillSource } from "../lib/types";
 	import DialogBody from "./DialogBody.svelte";
 	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
@@ -94,6 +97,35 @@
 		}
 	}
 
+	/* ---------- edit / delete: they change the skill's own files, so only skills from files, in the all-projects list ---------- */
+	let editing = $state<SkillSource | null>(null);
+	let fileBusy = $state(false);
+	async function startEdit(s: SkillInfo) {
+		if (fileBusy) return;
+		fileBusy = true;
+		error = "";
+		try {
+			editing = await api.skillSource(s.name, target.cwd);
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			fileBusy = false;
+		}
+	}
+	async function remove(s: SkillInfo) {
+		if (fileBusy) return;
+		fileBusy = true;
+		error = "";
+		try {
+			data = await api.deleteSkill(s.name, target.cwd);
+			app.skillsTick++;
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			fileBusy = false;
+		}
+	}
+
 	const home = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 </script>
 
@@ -102,7 +134,11 @@
 		{#each shown as s (s.name)}
 {@const on = effective(s, mode)}
 <li animate:reflow in:rowIn out:rowOut>
-	<ListItem off={!on || !s.modelInvocable}>
+{#snippet fileActions()}
+	<Button size="sm" onclick={() => startEdit(s)} disabled={fileBusy}>{t("수정")}</Button>
+	<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={fileBusy}>{t("삭제")}</ConfirmButton>
+{/snippet}
+	<ListItem off={!on || !s.modelInvocable} actions={mode === "global" && s.scope !== "builtin" ? fileActions : undefined}>
 		{#snippet lead()}
 			<span title={s.modelInvocable ? undefined : t("자동 호출에서 제외된 스킬(disable-model-invocation)이라 켜고 끌 수 없습니다")}>
 				<Switch
@@ -182,6 +218,10 @@
 		{/if}
 	</DialogBody>
 </Modal>
+
+{#if editing}
+	<SkillEditor source={editing} cwd={target.cwd} {api} onsaved={(l) => { data = l; app.skillsTick++; }} onclose={() => (editing = null)} />
+{/if}
 
 <style>
 	.tools { display: flex; padding: 0 var(--dlg-px) var(--dlg-foot-t); flex: none; }

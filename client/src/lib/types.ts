@@ -162,6 +162,21 @@ export interface SessionContext {
 
 export type SkillScope = "global" | "project" | "builtin";
 
+/** A skill's file split into what the editor changes. */
+export interface SkillSource {
+	name: string;
+	scope: SkillScope;
+	path: string;
+	description: string;
+	/** `disable-model-invocation: true`: only callable by hand with /skill:name */
+	manualOnly: boolean;
+	body: string;
+	/** Files in the skill's folder besides SKILL.md; deleting the skill deletes them too */
+	extraFiles: number;
+	/** The folder is a symlink: deleting removes only the link */
+	linked: boolean;
+}
+
 export interface SkillInfo {
 	name: string;
 	description: string;

@@ -33,6 +33,21 @@ const SetBody = Type.Object({
 	sessionId: Type.Optional(Type.String({ maxLength: 128, description: "Required for scope session" })),
 });
 
+const SkillName = Type.Object({ name: Type.String({ maxLength: 64 }) });
+const SourceQuery = Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096 })) });
+const SkillSourceResult = Type.Object({
+	name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project"), Type.Literal("builtin")]), path: Type.String(),
+	description: Type.String(), manualOnly: Type.Boolean(), body: Type.String(),
+	extraFiles: Type.Integer({ description: "Files in the skill's folder besides SKILL.md; deleting the skill deletes them too" }),
+	linked: Type.Boolean({ description: "The folder is a symlink: deleting removes only the link" }),
+});
+const EditBody = Type.Object({
+	description: Type.String({ maxLength: 4096 }),
+	manualOnly: Type.Boolean({ description: "true = `disable-model-invocation: true`" }),
+	body: Type.String({ maxLength: 200_000 }),
+	cwd: Type.Optional(Type.String({ maxLength: 4096 })),
+}, { additionalProperties: false });
+
 /** Skills are discovered from disk on every request; only on/off switches are stored. */
 export function registerSkillRoutes(server: FastifyInstance, skills: SkillService, bus: EventBus): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
@@ -45,6 +60,27 @@ export function registerSkillRoutes(server: FastifyInstance, skills: SkillServic
 		handler: async (req) => {
 			const result = skills.set(req.params.id, req.body);
 			bus.publish(null, "skills_updated", { name: req.params.id, scope: req.body.scope, project: result.project, ...(req.body.sessionId ? { sessionId: req.body.sessionId } : {}) });
+			return result;
+		},
+	});
+	app.get("/skills/:name/source", {
+		schema: { params: SkillName, querystring: SourceQuery, response: { 200: SkillSourceResult, ...errors(400, 401, 404, 409) } },
+		handler: async (req) => skills.source(req.params.name, req.query.cwd),
+	});
+	app.put("/skills/:name/source", {
+		schema: { params: SkillName, body: EditBody, response: { 200: SkillListResult, ...errors(400, 401, 404, 409) } },
+		handler: async (req) => {
+			const { cwd, ...input } = req.body;
+			const result = skills.update(req.params.name, input, cwd);
+			bus.publish(null, "skills_updated", { name: req.params.name, scope: "global", project: result.project, source: "files" });
+			return result;
+		},
+	});
+	app.delete("/skills/:name", {
+		schema: { params: SkillName, querystring: SourceQuery, response: { 200: SkillListResult, ...errors(400, 401, 404, 409) } },
+		handler: async (req) => {
+			const result = skills.remove(req.params.name, req.query.cwd);
+			bus.publish(null, "skills_updated", { name: req.params.name, scope: "global", project: result.project, source: "files" });
 			return result;
 		},
 	});

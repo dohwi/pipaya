@@ -4,6 +4,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	ActivityInfo,
 	ConfigurationInfo,
 	ToolsInfo,
+	SkillSource,
 	SubagentInput,
 	SubagentList,
 	DelegatePolicy,
@@ -294,6 +295,9 @@ export class Api {
 	/** scope "project"/"session": enabled null removes the override. "session" needs sessionId. */
 	setSkill = (name: string, body: { scope: "global" | "project" | "session"; enabled: boolean | null; cwd?: string; sessionId?: string }) =>
 		this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}`, body);
+	skillSource = (name: string, cwd?: string) => this.req<SkillSource>("GET", `/skills/${encodeURIComponent(name)}/source${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`);
+	saveSkill = (name: string, body: { description: string; manualOnly: boolean; body: string; cwd?: string }) => this.req<SkillList>("PUT", `/skills/${encodeURIComponent(name)}/source`, body);
+	deleteSkill = (name: string, cwd?: string) => this.req<SkillList>("DELETE", `/skills/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`);
 	mcp = (signal?: AbortSignal) => this.req<McpInfo>("GET", "/mcp", undefined, signal);
 	/** Saves the whole list. A secret sent back as the mask keeps its stored value. */
 	setMcp = (servers: McpServer[]) => this.req<McpInfo>("PUT", "/mcp", { servers });

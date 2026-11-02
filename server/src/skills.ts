@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { badRequest, conflict, notFound } from "./errors.ts";
@@ -259,6 +259,41 @@ export class SkillSettings {
 	}
 }
 
+/** A folder that is itself a skills root (`.agents/skills`, `.pi/skills`) holds many skills and must never be deleted as one. */
+const SKILL_ROOT_GUARD = (dir: string) => !/[\\/]\.(agents|pi)[\\/]skills$/.test(dir) && basename(dir) !== "skills";
+
+export interface SkillEditInput {
+	description: string;
+	/** true = `disable-model-invocation: true` (only callable by hand with /skill:name) */
+	manualOnly: boolean;
+	/** The skill's instructions (SKILL.md without the frontmatter). */
+	body: string;
+}
+
+/** A skill as the editor needs it: the file's text split into the parts the form edits. */
+export interface SkillSource extends SkillEditInput {
+	name: string;
+	scope: Skill["scope"];
+	path: string;
+	/** Files in the skill's folder besides SKILL.md (scripts, references); deleting the skill deletes them too. */
+	extraFiles: number;
+	/** Whether the folder is a symlink: deleting then removes only the link, never the linked folder. */
+	linked: boolean;
+}
+
+const FRONT = /^\uFEFF?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
+const countFiles = (dir: string, depth = 0): number => {
+	if (depth > MAX_DEPTH + 2) return 0;
+	let n = 0;
+	try {
+		for (const e of readdirSync(dir, { withFileTypes: true })) {
+			if (e.name === "node_modules" || e.name === ".git") continue;
+			n += e.isDirectory() ? countFiles(join(dir, e.name), depth + 1) : 1;
+		}
+	} catch { /* unreadable: counted as nothing */ }
+	return n;
+};
+
 export interface SetSkillInput {
 	scope: "global" | "project" | "session";
 	/** project/session scope: null removes the override. */
@@ -349,6 +384,60 @@ export class SkillService {
 		}
 		this.settings.save(stored);
 		return this.view(cwd, input.sessionId);
+	}
+
+	/** The skill to edit or delete, looked up by name among what is discovered for `cwd`; built-in ones are read-only. */
+	private editable(name: string, cwd: string): Skill {
+		if (!SKILL_NAME.test(name) || name.length > MAX_SKILL_NAME) throw badRequest("invalid skill name");
+		const skill = this.discover(cwd).skills.find((s) => s.name === name);
+		if (!skill) throw notFound(`skill "${name}"`);
+		if (skill.scope === "builtin") throw conflict("built-in skills ship with the server and cannot be changed; copy one into ~/.agents/skills to change it");
+		return skill;
+	}
+
+	source(name: string, cwdInput?: string): SkillSource {
+		const skill = this.editable(name, this.resolveCwd(cwdInput));
+		const raw = readFileSync(skill.path, "utf8");
+		const meta = parseFrontmatter(raw) ?? {};
+		return {
+			name: skill.name, scope: skill.scope, path: skill.path,
+			description: typeof meta.description === "string" ? meta.description.trim() : skill.description,
+			manualOnly: meta["disable-model-invocation"] === true,
+			body: raw.replace(FRONT, "").trim(),
+			extraFiles: Math.max(0, countFiles(skill.baseDir) - 1),
+			linked: lstatSync(skill.baseDir).isSymbolicLink(),
+		};
+	}
+
+	/** Rewrites SKILL.md: description, manual-only flag and body change; the name and every other frontmatter key stay as they are. */
+	update(name: string, input: SkillEditInput, cwdInput?: string): SkillList {
+		const cwd = this.resolveCwd(cwdInput);
+		const skill = this.editable(name, cwd);
+		const description = input.description.trim().replace(/\s+/g, " ");
+		if (!description) throw badRequest("a skill needs a description: the model decides from it when to use the skill");
+		if (description.length > MAX_SKILL_DESCRIPTION) throw badRequest(`description is longer than ${MAX_SKILL_DESCRIPTION} characters`);
+		const meta = parseFrontmatter(readFileSync(skill.path, "utf8")) ?? {};
+		meta.description = description;
+		if (input.manualOnly) meta["disable-model-invocation"] = true; else delete meta["disable-model-invocation"];
+		writeFileSync(skill.path, `---\n${Bun.YAML.stringify(meta, null, 2)}\n---\n${input.body.trim()}\n`);
+		return this.view(cwd);
+	}
+
+	/** Deletes the skill's folder (only the link when the folder is a symlink) and its on/off records. */
+	remove(name: string, cwdInput?: string): SkillList {
+		const cwd = this.resolveCwd(cwdInput);
+		const skill = this.editable(name, cwd);
+		// `walk` stops at the first SKILL.md, so baseDir is the skill's own folder, never a root that holds several skills.
+		if (!SKILL_ROOT_GUARD(skill.baseDir)) throw badRequest("refusing to delete a skills root");
+		if (lstatSync(skill.baseDir).isSymbolicLink()) unlinkSync(skill.baseDir);
+		else rmSync(skill.baseDir, { recursive: true, force: true });
+		const stored = this.settings.load();
+		delete stored.global[name];
+		for (const bucket of Object.values(stored.projects)) delete bucket[name];
+		for (const k of Object.keys(stored.projects)) if (!Object.keys(stored.projects[k]!).length) delete stored.projects[k];
+		this.settings.save(stored);
+		this.db.query("DELETE FROM session_skills WHERE name = $name").run({ name });
+		return this.view(cwd);
 	}
 
 	private discover(cwd: string) {

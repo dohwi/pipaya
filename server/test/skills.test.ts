@@ -209,6 +209,71 @@ describe("skills API", () => {
 	});
 });
 
+describe("editing and deleting skills", () => {
+	test("source / update / delete over the API: other frontmatter and files survive an edit, a delete takes the folder, built-ins are read-only", async () => {
+		const f = fixture();
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"), token: "skills-test", workspaceRoot: f.cwd, logLevel: "silent" };
+		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home });
+		const api = async (method: "GET" | "PUT" | "DELETE", url: string, payload?: object, authorized = true) => {
+			const res = await app.server.inject({ method, url, payload, headers: authorized ? { authorization: `Bearer ${cfg.token}` } : {} });
+			return { status: res.statusCode, json: res.body ? res.json() : undefined };
+		};
+		const c = encodeURIComponent(f.cwd);
+		try {
+			const dir = join(f.home, ".agents", "skills", "alpha");
+			skill(dir, "alpha", { license: "MIT" }, "# Steps\n1. do it\n");
+			mkdirSync(join(dir, "scripts"), { recursive: true });
+			writeFileSync(join(dir, "scripts", "run.sh"), "echo hi\n");
+			expect((await api("GET", `/skills/alpha/source?cwd=${c}`, undefined, false)).status).toBe(401);
+			const src = (await api("GET", `/skills/alpha/source?cwd=${c}`)).json;
+			expect(src).toMatchObject({ name: "alpha", scope: "global", manualOnly: false, extraFiles: 1, linked: false, body: "# Steps\n1. do it" });
+
+			const put = (b: object) => api("PUT", "/skills/alpha/source", { cwd: f.cwd, description: "New: text # kept", manualOnly: false, body: "New body", ...b });
+			expect((await put({ description: "   " })).status).toBe(400);
+			expect((await put({ description: "x".repeat(1025) })).status).toBe(400);
+			const done = await put({ manualOnly: true });
+			expect(done.status).toBe(200);
+			expect(done.json.skills.find((x: any) => x.name === "alpha")).toMatchObject({ description: "New: text # kept", modelInvocable: false });
+			const text = readFileSync(join(dir, "SKILL.md"), "utf8");
+			expect(text).toContain("license: MIT"); // keys the editor does not know stay
+			expect(text).toContain("name: alpha");
+			expect(existsSync(join(dir, "scripts", "run.sh"))).toBe(true);
+			expect((await put({ manualOnly: false })).json.skills.find((x: any) => x.name === "alpha").modelInvocable).toBe(true);
+			expect(readFileSync(join(dir, "SKILL.md"), "utf8")).not.toContain("disable-model-invocation");
+			expect((await api("PUT", "/skills/ghost/source", { cwd: f.cwd, description: "d", manualOnly: false, body: "" })).status).toBe(404);
+
+			// a switched-off skill leaves no record behind once it is deleted
+			await api("PUT", "/skills/alpha", { scope: "global", enabled: false });
+			expect((await api("DELETE", `/skills/alpha?cwd=${c}`)).json.skills.filter((x: any) => x.scope !== "builtin")).toEqual([]);
+			expect(existsSync(dir)).toBe(false);
+			expect(existsSync(join(f.home, ".agents", "skills"))).toBe(true); // the skills root stays
+			expect((await api("DELETE", `/skills/alpha?cwd=${c}`)).status).toBe(404);
+			skill(dir, "alpha");
+			expect((await api("GET", `/skills?cwd=${c}`)).json.skills.find((x: any) => x.name === "alpha").globalEnabled).toBe(true);
+
+			// a symlinked skill folder: only the link goes
+			const target = join(f.root, "elsewhere", "linked");
+			skill(target, "linked");
+			symlinkSync(target, join(f.home, ".agents", "skills", "linked"));
+			expect((await api("GET", `/skills/linked/source?cwd=${c}`)).json.linked).toBe(true);
+			expect((await api("DELETE", `/skills/linked?cwd=${c}`)).status).toBe(200);
+			expect(existsSync(join(target, "SKILL.md"))).toBe(true);
+		} finally { await app.close(); f.cleanup(); }
+	});
+	test("built-in skills cannot be edited or deleted", async () => {
+		const f = fixture();
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"), token: "skills-test", workspaceRoot: f.cwd, logLevel: "silent" };
+		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home });
+		const h = { authorization: `Bearer ${cfg.token}` };
+		try {
+			const name = (discoverSkills(f.cwd, { home: f.home }).skills.find((s) => s.scope === "builtin"))!.name;
+			expect((await app.server.inject({ method: "GET", url: `/skills/${name}/source`, headers: h })).statusCode).toBe(409);
+			expect((await app.server.inject({ method: "DELETE", url: `/skills/${name}`, headers: h })).statusCode).toBe(409);
+			expect((await app.server.inject({ method: "PUT", url: `/skills/${name}/source`, headers: h, payload: { description: "d", manualOnly: false, body: "" } })).statusCode).toBe(409);
+		} finally { await app.close(); f.cleanup(); }
+	});
+});
+
 describe("session-scoped skill overrides", () => {
 	test("apply to one session only, win over project/global, validate input, die with the session", async () => {
 		const f = fixture();
