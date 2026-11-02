@@ -243,6 +243,23 @@ export class Configuration {
 		return this.toolsInfo();
 	}
 
+	/** Helper roles switched off, as `scope/name` (a global and a project role of one name are switched separately). Saved on the server. */
+	disabledSubagents(): string[] {
+		const row = this.db.query("SELECT data FROM settings WHERE key = 'disabled_subagents'").get() as { data: string } | null;
+		try {
+			const v = row ? JSON.parse(row.data) : [];
+			return Array.isArray(v) ? v.filter((n): n is string => typeof n === "string") : [];
+		} catch { return []; }
+	}
+
+	setSubagentEnabled(key: string, enabled: boolean): string[] {
+		const next = new Set(this.disabledSubagents());
+		if (enabled) next.delete(key); else next.add(key);
+		const data = JSON.stringify([...next].sort());
+		this.db.query("INSERT INTO settings (key, data) VALUES ('disabled_subagents', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data });
+		return this.disabledSubagents();
+	}
+
 	delegatePolicy(): DelegatePolicyValue {
 		const row = this.db.query("SELECT data FROM settings WHERE key = 'delegate_policy'").get() as { data: string } | null;
 		try {

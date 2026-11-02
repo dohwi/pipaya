@@ -444,6 +444,8 @@ export interface SubagentInfo {
 	scope: "global" | "project";
 	/** A project role of the same name wins over this global one */
 	overridden: boolean;
+	/** Switched off: `delegate` cannot start it */
+	enabled: boolean;
 }
 
 export interface SubagentList {

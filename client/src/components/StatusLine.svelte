@@ -123,7 +123,7 @@
 		app.skillsTick; // role files are watched with the skills, so a change on disk (or from another client) bumps this
 		if (!api) return;
 		return abortable((signal) => api.subagents(cwd, signal), {
-			ok: (r) => (roles = { key, global: r.subagents.filter(d => d.scope === "global" && !d.overridden).map(d => d.name), project: r.subagents.filter(d => d.scope === "project").map(d => d.name) }),
+			ok: (r) => (roles = { key, global: r.subagents.filter(d => d.enabled && d.scope === "global" && !d.overridden).map(d => d.name), project: r.subagents.filter(d => d.enabled && d.scope === "project").map(d => d.name) }),
 			fail: () => { if (roles?.key === key) roles = null; },
 		});
 	});

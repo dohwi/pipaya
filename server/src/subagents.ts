@@ -75,17 +75,23 @@ function readScope(dir: string, scope: SubagentDef["scope"]): SubagentDef[] {
 }
 
 /** Definitions by role name: global first, project ones replace global ones of the same name. Unreadable files are skipped. */
-export function loadSubagents(cwd: string, home: string): Map<string, SubagentDef> {
+export function loadSubagents(cwd: string, home: string, disabled: readonly string[] = []): Map<string, SubagentDef> {
 	const out = new Map<string, SubagentDef>();
-	for (const scope of ["global", "project"] as const) for (const def of readScope(dirOf(scope, cwd, home), scope)) out.set(def.name, def);
+	// A switched-off role is skipped before the project-over-global merge, so switching a project role off lets the global one of that name show again.
+	for (const scope of ["global", "project"] as const) for (const def of readScope(dirOf(scope, cwd, home), scope)) if (!disabled.includes(subagentKey(def))) out.set(def.name, def);
 	return out;
 }
 
+/** The key a role is switched on/off by: global and project roles of one name are separate switches. */
+export const subagentKey = (d: { scope: string; name: string }) => `${d.scope}/${d.name}`;
+
 /** Both scopes side by side for the settings list; a global role hidden by a project role of the same name is marked `overridden`. */
-export function listSubagents(cwd: string, home: string): (SubagentDef & { overridden: boolean })[] {
+export function listSubagents(cwd: string, home: string, disabled: readonly string[] = []): (SubagentDef & { overridden: boolean; enabled: boolean })[] {
 	const project = readScope(dirOf("project", cwd, home), "project");
-	const names = new Set(project.map((d) => d.name));
-	return [...readScope(dirOf("global", cwd, home), "global").map((d) => ({ ...d, overridden: names.has(d.name) })), ...project.map((d) => ({ ...d, overridden: false }))];
+	// A project role hides the global one of its name only while it is on.
+	const names = new Set(project.filter((d) => !disabled.includes(subagentKey(d))).map((d) => d.name));
+	const row = (d: SubagentDef, overridden: boolean) => ({ ...d, overridden, enabled: !disabled.includes(subagentKey(d)) });
+	return [...readScope(dirOf("global", cwd, home), "global").map((d) => row(d, names.has(d.name))), ...project.map((d) => row(d, false))];
 }
 
 export const SUBAGENT_NAME = /^[A-Za-z0-9][\w.-]{0,39}$/;

@@ -245,6 +245,7 @@ export class Api {
 	subagents = (cwd?: string, signal?: AbortSignal) => this.req<SubagentList>("GET", `/configuration/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
 	createSubagent = (name: string, scope: "global" | "project", b: SubagentInput, cwd?: string) => this.req<SubagentList>("POST", `/configuration/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { name, scope, ...b });
 	saveSubagent = (name: string, scope: "global" | "project", b: SubagentInput, cwd?: string) => this.req<SubagentList>("PUT", `/configuration/subagents/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { scope, ...b });
+	setSubagentEnabled = (name: string, scope: "global" | "project", enabled: boolean, cwd?: string) => this.req<SubagentList>("PUT", `/configuration/subagents/${encodeURIComponent(name)}/enabled`, { scope, enabled, ...(cwd ? { cwd } : {}) });
 	deleteSubagent = (name: string, scope: "global" | "project", cwd?: string) => this.req<SubagentList>("DELETE", `/configuration/subagents/${encodeURIComponent(name)}?${new URLSearchParams({ scope, ...(cwd ? { cwd } : {}) })}`);
 	setDelegatePolicy = (p: DelegatePolicy) => this.req<ToolsInfo>("PUT", "/configuration/delegate", p);
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });

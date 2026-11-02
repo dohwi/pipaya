@@ -11,6 +11,7 @@
 	import Notice from "./Notice.svelte";
 	import Segmented from "./Segmented.svelte";
 	import Select from "./Select.svelte";
+	import Switch from "./Switch.svelte";
 	import { Api, errorText } from "../lib/api";
 	import { t } from "../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../lib/motion";
@@ -103,6 +104,7 @@
 		const ok = await run((a) => (f.original ? a.saveSubagent(f.original, f.scope, body, cwd) : a.createSubagent(f.name.trim(), f.scope, body, cwd)));
 		if (ok) form = null;
 	}
+	const toggle = (r: SubagentInfo, on: boolean) => run((a) => a.setSubagentEnabled(r.name, r.scope, on, cwd));
 	const remove = (r: SubagentInfo) => run((a) => a.deleteSubagent(r.name, r.scope, cwd));
 
 	const scopeText = (s: "global" | "project") => (s === "global" ? t("전역") : t("프로젝트"));
@@ -184,16 +186,17 @@
 			<div class="group" role="group" aria-label={scopeText(g.scope)}>
 				<div class="ghead">
 					<span class="gname">{scopeText(g.scope)}</span>
-					<span class="gcount">{g.items.length}</span>
+					<span class="gcount">{g.items.filter((r) => r.enabled).length}/{g.items.length}</span>
 					<span class="gpath mono">{g.path}</span>
 				</div>
 				<ul class="list">
 					{#each g.items as r (`${r.scope}/${r.name}`)}
 						<li animate:reflow in:rowIn out:rowOut>
-							<ListItem off={r.overridden}>
+							<ListItem off={!r.enabled || r.overridden}>
+								{#snippet lead()}<Switch checked={r.enabled} disabled={busy} onchange={(on) => toggle(r, on)} label={r.name} />{/snippet}
 								{#snippet title()}
 									<span class="name mono">{r.name}</span>
-									{#if r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
+									{#if !r.enabled}<Badge size="sm">{t("꺼짐")}</Badge>{:else if r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
 								{/snippet}
 								{#snippet actions()}
 									<Button size="sm" onclick={() => edit(r)} disabled={busy}>{t("수정")}</Button>

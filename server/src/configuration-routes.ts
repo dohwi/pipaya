@@ -9,7 +9,7 @@ import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { helperTools, listSubagents, removeSubagent, saveSubagent } from "./subagents.ts";
+import { helperTools, listSubagents, removeSubagent, saveSubagent, subagentKey } from "./subagents.ts";
 import { TOOL_DEFS } from "./tools.ts";
 import { THINKING_LEVELS } from "./store.ts";
 const Scope = Type.Union([Type.Literal("global"), Type.Literal("project")], { description: "global: ~/.agents/subagents; project: .agents/subagents of the server's default working folder" });
@@ -17,6 +17,7 @@ const SubagentInfo = Type.Object({
 	name: Type.String(), description: Type.String(), model: Type.Optional(Type.String()), thinking: Type.Optional(Type.String()),
 	tools: Type.Array(Type.String()), maxTurns: Type.Integer(), prompt: Type.String(), file: Type.String(), scope: Scope,
 	overridden: Type.Boolean({ description: "A project role of the same name wins over this global one" }),
+	enabled: Type.Boolean({ description: "Switched off roles cannot be started by `delegate`" }),
 });
 const SubagentList = Type.Object({
 	subagents: Type.Array(SubagentInfo),
@@ -36,6 +37,7 @@ const SubagentUpdate = Type.Object({ scope: Scope, ...SubagentFields }, { additi
 const SubagentCwd = Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096, description: "Folder whose `.agents/subagents` is the project scope; the default working folder when left out" })) });
 const SubagentScope = Type.Object({ scope: Scope, cwd: Type.Optional(Type.String({ maxLength: 4096 })) });
 const SubagentName = Type.Object({ name: Type.String() });
+const SubagentEnabled = Type.Object({ scope: Scope, enabled: Type.Boolean(), cwd: Type.Optional(Type.String({ maxLength: 4096 })) }, { additionalProperties: false });
 
 const CatalogResult = Type.Object({
 	models: Type.Array(Type.Object({
@@ -55,7 +57,7 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 	// Project roles live in `<cwd>/.agents/subagents`. `cwd` is the folder of the conversation asking (the footer); without it the
 	// default working folder is used (the settings page). Relative paths resolve against the default working folder.
 	const where = (cwd?: string) => (cwd?.trim() ? resolve(config.defaultWorkdir(), cwd.trim()) : config.defaultWorkdir());
-	const roles = (cwd?: string) => ({ subagents: listSubagents(where(cwd), home), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(where(cwd), ".agents", "subagents") });
+	const roles = (cwd?: string) => ({ subagents: listSubagents(where(cwd), home, config.disabledSubagents()), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(where(cwd), ".agents", "subagents") });
 	const changed = () => bus.publish(null, "skills_updated", { name: "", scope: "global", project: "", source: "files" });
 	app.get("/configuration/subagents", {
 		schema: { querystring: SubagentCwd, response: { 200: SubagentList, ...errors(400, 401) } },
@@ -79,10 +81,22 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			return roles(req.query.cwd);
 		},
 	});
+	app.put("/configuration/subagents/:name/enabled", {
+		schema: { params: SubagentName, body: SubagentEnabled, response: { 200: SubagentList, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const { scope, enabled, cwd } = req.body;
+			// Only roles that exist can be switched, so the saved list never collects keys of deleted files.
+			if (!listSubagents(where(cwd), home).some((d) => d.scope === scope && d.name === req.params.name)) throw notFound(`helper role "${req.params.name}"`);
+			config.setSubagentEnabled(subagentKey({ scope, name: req.params.name }), enabled);
+			changed();
+			return roles(cwd);
+		},
+	});
 	app.delete("/configuration/subagents/:name", {
 		schema: { params: SubagentName, querystring: SubagentScope, response: { 200: SubagentList, ...errors(400, 401, 404) } },
 		handler: async (req) => {
 			removeSubagent(req.query.scope, where(req.query.cwd), home, req.params.name);
+			config.setSubagentEnabled(subagentKey({ scope: req.query.scope, name: req.params.name }), true); // a deleted role leaves no switch behind
 			changed();
 			return roles(req.query.cwd);
 		},

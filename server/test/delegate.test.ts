@@ -65,6 +65,22 @@ describe("subagent editing", () => {
 	});
 });
 
+describe("subagent switches", () => {
+	test("a switched-off project role lets the global one of its name show again; a deleted role keeps no switch", () => {
+		const root = mkdtempSync(join(tmpdir(), "pipaya-sub-"));
+		try {
+			const home = join(root, "home"), cwd = join(root, "proj");
+			def(join(home, ".agents", "subagents"), "explore", "description: global");
+			def(join(cwd, ".agents", "subagents"), "explore", "description: project");
+			expect(loadSubagents(cwd, home).get("explore")?.scope).toBe("project");
+			expect(loadSubagents(cwd, home, ["project/explore"]).get("explore")?.scope).toBe("global");
+			expect(loadSubagents(cwd, home, ["project/explore", "global/explore"]).has("explore")).toBe(false);
+			const rows = listSubagents(cwd, home, ["project/explore"]);
+			expect(rows.map((r) => [r.scope, r.enabled, r.overridden])).toEqual([["global", true, false], ["project", false, false]]);
+		} finally { rmSync(root, { recursive: true, force: true }); }
+	});
+});
+
 describe("DelegateLimits", () => {
 	test("caps concurrent helpers and calls per run with conflict errors, and a new run starts over", () => {
 		const l = new DelegateLimits({ calls: 4, running: 2 });
@@ -217,6 +233,16 @@ describe("delegate tool", () => {
 		expect((await api("GET", "/configuration/subagents")).json.subagents.map((r: any) => r.name)).toContain("local"); // ws is also the default folder here
 		expect((await api("GET", `/configuration/subagents?cwd=${encodeURIComponent(join(dir, "elsewhere"))}`)).json.subagents.map((r: any) => r.name)).not.toContain("local");
 		expect((await api("DELETE", `/configuration/subagents/local?scope=project&cwd=${encodeURIComponent(proj)}`)).status).toBe(200);
+	});
+	test("a role switched off is refused by delegate and comes back when switched on", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const off = await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: false });
+		expect(off.json.subagents.find((r: any) => r.name === "explore")).toMatchObject({ enabled: false });
+		expect(await call(id, { role: "explore", task: "x" })).toContain("helper role");
+		expect((await api("PUT", "/configuration/subagents/ghost/enabled", { scope: "global", enabled: false })).status).toBe(404);
+		const on = await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: true });
+		expect(on.json.subagents.find((r: any) => r.name === "explore").enabled).toBe(true);
+		expect(await call(id, { role: "explore", task: "x" })).toContain("Echo: x"); // the history keeps the earlier refusal; the new answer is the helper's
 	});
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;

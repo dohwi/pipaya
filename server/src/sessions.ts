@@ -112,6 +112,8 @@ export class SessionManager {
 		private home: string = homedir(),
 		/** The user's rules for helpers: which models `delegate` may pick and the limits. */
 		private delegatePolicy: () => DelegatePolicyValue = () => DEFAULT_DELEGATE_POLICY,
+		/** Helper roles the user switched off (`scope/name`); `delegate` treats them as missing. */
+		private disabledSubagents: () => string[] = () => [],
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -994,9 +996,9 @@ export class SessionManager {
 	private async delegate(sessionId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void) {
 		const rec = this.store.get(sessionId);
 		if (!rec) throw notFound("session");
-		const defs = loadSubagents(rec.cwd, this.home);
+		const defs = loadSubagents(rec.cwd, this.home, this.disabledSubagents());
 		const def = defs.get(input.role.replace(/\.md$/, ""));
-		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents)"}`);
+		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents, or switch a role on in the settings)"}`);
 		const pol = this.delegatePolicy();
 		const spec = chooseModel(pol, input.model, def.model);
 		let provider = rec.provider, modelId = rec.model;
