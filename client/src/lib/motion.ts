@@ -35,9 +35,15 @@ export function isPhone(): boolean {
 export function ms(token: Token): number {
 	if (reduced()) return 0;
 	if (typeof document === "undefined" || typeof getComputedStyle !== "function" || !document.documentElement) return FALLBACK[token];
+	const hit = cached[token];
+	if (hit !== undefined) return hit;
 	const v = cssMs(getComputedStyle(document.documentElement).getPropertyValue(`--motion-${token}`));
-	return Number.isFinite(v) && v >= 0 ? v : FALLBACK[token];
+	const out = Number.isFinite(v) && v >= 0 ? v : FALLBACK[token];
+	cached[token] = out;
+	return out;
 }
+/** Token values already read: a custom-property read forces a style recalculation, and ms() runs inside every transition. */
+const cached: Partial<Record<Token, number>> = {};
 
 /** A CSS <time> in ms. The production CSS minifier rewrites `360ms` to `.36s`, so the unit has to be read. */
 export function cssMs(value: string): number {
