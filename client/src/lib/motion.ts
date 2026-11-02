@@ -16,9 +16,9 @@ export type Frame = { opacity: number; y: number; scale: number };
 type Token = "fast" | "normal" | "slow";
 const FALLBACK: Record<Token, number> = { fast: 180, normal: 360, slow: 460 };
 
-/** Dialogs scale symmetrically from the screen centre without a vertical shift, so their bottom edge does not stick or rebound. */
+/** Dialogs fade in place from the screen centre: no scale (a large panel scaling wobbles every edge) and no vertical shift. */
 const DIALOG_SHIFT = { in: 0, out: 0 };
-const DIALOG_SCALE = { in: 0.96, out: 0.98 };
+const DIALOG_SCALE = { in: 1, out: 1 };
 const EXIT_SHIFT_RATIO = 0.45;
 /** Phone sheets leave a little slower than `fast`: they cover most of the screen. */
 const SHEET_OUT_FACTOR = 1.35;
@@ -99,8 +99,14 @@ export function surfaceFrame(u: number, y: number, dir: "in" | "out"): Frame {
 	return { opacity: 1 - u, y: u * y * (dir === "out" ? EXIT_SHIFT_RATIO : 1), scale: 1 };
 }
 
-const css = (f: Frame, base = 1) =>
-	`opacity:${(f.opacity * base).toFixed(3)};transform:${f.y ? `translateY(${f.y.toFixed(2)}px) ` : ""}scale(${f.scale.toFixed(4)})`;
+const css = (f: Frame, base = 1) => {
+	const parts = [`opacity:${(f.opacity * base).toFixed(3)}`];
+	const transforms: string[] = [];
+	if (f.y) transforms.push(`translateY(${f.y.toFixed(2)}px)`);
+	if (f.scale !== 1) transforms.push(`scale(${f.scale.toFixed(4)})`);
+	if (transforms.length) parts.push(`transform:${transforms.join(" ")}`);
+	return parts.join(";");
+};
 
 const targetOpacity = (node: Element) => {
 	const v = typeof getComputedStyle === "function" ? +getComputedStyle(node).opacity : 1;

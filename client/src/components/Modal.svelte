@@ -140,8 +140,10 @@
 			const box = e?.borderBoxSize?.[0];
 			if (!box) return;
 			const first = size === null;
+			const oldH = size ? size[1] : 0;
 			size = [box.inlineSize, box.blockSize];
-			place(first || performance.now() - opened < LOAD_MS);
+			const grewSignificantly = !first && performance.now() - opened < LOAD_MS && Math.abs(size[1] - oldH) >= 40;
+			place(first || grewSignificantly);
 		});
 		// window resizes arrive many times per frame: place once per frame
 		const onResize = () => size && schedule(node, () => place(true));

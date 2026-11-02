@@ -27,11 +27,11 @@ describe("bezier", () => {
 });
 
 describe("frames", () => {
-	test("dialogs scale symmetrically without vertical shift; exits shrink less than entrances", () => {
+	test("dialogs fade in place without scaling or vertical shift", () => {
 		const into = dialogFrame(1, "in");
 		const out = dialogFrame(1, "out");
-		expect(into).toEqual({ opacity: 0, y: 0, scale: 0.96 });
-		expect(out).toEqual({ opacity: 0, y: 0, scale: 0.98 });
+		expect(into).toEqual({ opacity: 0, y: 0, scale: 1 });
+		expect(out).toEqual({ opacity: 0, y: 0, scale: 1 });
 		expect(dialogFrame(0, "in")).toEqual({ opacity: 1, y: 0, scale: 1 });
 	});
 	test("surfaces never scale (a large panel scaling wobbles every edge)", () => {
