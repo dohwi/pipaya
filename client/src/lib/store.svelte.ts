@@ -333,7 +333,9 @@ class AppStore {
   }
 
   session(id: string | null | undefined): Session | undefined {
-    return id ? this.sessions.find((s) => s.id === id) : undefined;
+    // active ones only (the map also holds the archived); a lookup, not a scan: it runs once per row on every list change
+    const s = id ? this.link?.sessionById.get(id) : undefined;
+    return s && !s.archived ? s : undefined;
   }
 
   /** Transcript of the focused session. */

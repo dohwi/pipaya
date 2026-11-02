@@ -12,7 +12,7 @@
 
 	/** The session's current model: the logo follows a model change at once (see lib/agent-logo). */
 	const logoModel = $derived.by(() => {
-		const s = link?.data.sessions.find((x) => x.id === id) ?? link?.data.archived.find((x) => x.id === id);
+		const s = link?.sessionById.get(id);
 		const items = !server || server === app.serverId ? app.chatOf(id)?.items : undefined;
 		const e = app.effectiveOf(id);
 		return logoModelOf(s, items, { provider: e.provider, model: e.model });

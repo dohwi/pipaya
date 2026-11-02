@@ -31,6 +31,11 @@ export class ServerLink {
 	/** True once the lists below were read at least once. */
 	loaded = $state(false);
 	data = $state<LinkData>(emptyLinkData());
+	/**
+	 * The listed sessions by id, rebuilt only when the list changes. Every badge in the sidebar, rail and tab bar looks its
+	 * session up, and a `find` per badge turned each list change into (rows x rows) comparisons.
+	 */
+	sessionById: Map<string, Session> = $derived(new Map([...this.data.sessions, ...this.data.archived].map((x) => [x.id, x] as const)));
 	models = $state<ModelInfo[]>([]);
 	providers = $state<ProviderInfo[]>([]);
 	tools = $state<ToolInfo[]>([]);
