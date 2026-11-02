@@ -326,10 +326,7 @@
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
-		/* the row centres its children by line box, so the 11px handle sat 1.5px above the 13px title's baseline (measured). The offset
-		   is the difference of the two fonts' baselines inside their centred line boxes; it moves only the handle, not the row. */
-		position: relative;
-		top: 1.5px;
+		line-height: 16px; /* whole-pixel line box centred by the row; the handle's ink centre lands on the row's centre line, level with the title */
 	}
 	:global(:where(.side) .who.working) { color: var(--info); }
 	:global(:where(.side) .who.asking) { color: var(--warn); }
@@ -616,8 +613,6 @@
 		width: 16px;
 		height: 16px;
 		color: var(--text-faint);
-		position: relative;
-		top: 1px; /* Korean glyphs sit low in their line box: the 16px icon sat 1px above the title's visual centre (measured at 3x) */
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
 	:global(:where(.side) .lead:has(> svg)) {
