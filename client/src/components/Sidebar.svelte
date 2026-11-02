@@ -641,6 +641,7 @@
 		width: 16px;
 		height: 16px;
 		color: var(--text-faint);
+		position: relative; /* hosts the pinned mark (PinMark, absolute): without it the mark lands on the row's corner */
 	}
 	/* only the line icons (terminal, split tab): a model logo keeps its own fill and colours */
 	:global(:where(.side) .lead:has(> svg)) {
