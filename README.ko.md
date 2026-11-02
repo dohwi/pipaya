@@ -27,7 +27,7 @@
   </picture>
 </p>
 
-## 주요 기능
+<h2 align="center">주요 기능</h2>
 
 - **내장 도구 에이전트**: read, write, edit, ls, grep, bash. 나머지는 확장으로 추가
 - **어떤 모델이든**: 내장 제공자, 로컬 서버(Ollama, LM Studio, llama.cpp, vLLM), 직접 만든 엔드포인트
@@ -35,7 +35,7 @@
 - **분할 화면**: 한 화면에 대화 최대 8개
 - **확장 가능**: AGENTS.md, 스킬, 템플릿, 하위 에이전트, 서버·클라이언트 확장
 
-## 설치
+<h2 align="center">설치</h2>
 
 | 클라이언트 | 설치 방법 |
 |---|---|
@@ -51,11 +51,11 @@ curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
 
 Docker, 설정 등 나머지는 [위키](https://github.com/dohwi/pipaya-wiki)를 보세요.
 
-## 보안
+<h2 align="center">보안</h2>
 
 토큰은 **관리자 권한**이고, API 키는 **암호화 없이** 저장되며, `bash`는 **샌드박스가 아닙니다**. Tailscale이나 HTTPS로만 접근하세요. 취약점은 [SECURITY.md](SECURITY.md)에 따라 비공개로 제보하세요.
 
-## 개발
+<h2 align="center">개발</h2>
 
 ```bash
 mise install                          # Bun, Rust
@@ -65,6 +65,6 @@ cd client && bun install && bun run dev    # 웹 클라이언트 (포트 1420)
 
 [CONTRIBUTING.md](CONTRIBUTING.md)와 [`server/README{".ko" if ko else ""}.md`](server/README{".ko" if ko else ""}.md)를 보세요.
 
-## 라이선스
+<h2 align="center">라이선스</h2>
 
 [MIT](LICENSE)
