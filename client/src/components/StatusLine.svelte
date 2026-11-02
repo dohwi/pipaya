@@ -111,6 +111,34 @@
 				].filter(Boolean).join("\n")
 			: "",
 	);
+	// Helper roles `delegate` can start here: the global ones plus the ones in this conversation's folder. Hidden while the
+	// `delegate` tool is off (nothing could start them); dimmed when there are none, like the other items.
+	let roles = $state<{ key: string; global: string[]; project: string[] } | null>(null);
+	const rolesCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
+	const rolesKey = $derived(`${app.serverId}:${rolesCwd}`);
+	$effect(() => {
+		const key = rolesKey;
+		const cwd = rolesCwd;
+		const api = app.api;
+		app.skillsTick; // role files are watched with the skills, so a change on disk (or from another client) bumps this
+		if (!api) return;
+		return abortable((signal) => api.subagents(cwd, signal), {
+			ok: (r) => (roles = { key, global: r.subagents.filter(d => d.scope === "global" && !d.overridden).map(d => d.name), project: r.subagents.filter(d => d.scope === "project").map(d => d.name) }),
+			fail: () => { if (roles?.key === key) roles = null; },
+		});
+	});
+	const rolesHere = $derived(roles && roles.key === rolesKey && !(app.toolsInfo?.disabled ?? []).includes("delegate") ? roles : null);
+	const rolesCount = $derived(rolesHere ? rolesHere.global.length + rolesHere.project.length : 0);
+	const rolesTip = $derived(
+		rolesHere
+			? [
+					rolesCount ? t("도우미 역할 {n}개 (전역 {g} · 프로젝트 {p})", { n: rolesCount, g: rolesHere.global.length, p: rolesHere.project.length }) : t("등록된 도우미 역할이 없습니다."),
+					rolesHere.project.length ? `${t("프로젝트")}: ${list(rolesHere.project)}` : "",
+					rolesHere.global.length ? `${t("전역")}: ${list(rolesHere.global)}` : "",
+					t("눌러서 관리"),
+				].filter(Boolean).join("\n")
+			: "",
+	);
 	const skillNames = $derived(pane.id ? (here ? here.skills : null) : (fresh && fresh.key === cwdKey ? fresh.names : null));
 	const skillCount = $derived(skillNames ? skillNames.length : null);
 	const base = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
@@ -221,6 +249,9 @@
 	{/if}
 	{#if mcpHere}
 		<StatusItem icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
+	{/if}
+	{#if rolesHere}
+		<StatusItem icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
 	{/if}
 	{#if tplNames !== null}
 		<StatusItem icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>

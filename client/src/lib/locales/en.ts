@@ -630,6 +630,8 @@ export const en: Record<string, string> = {
 	"최대 {n}회": "Up to {n} calls",
 	"등록된 도우미 역할이 없습니다.": "No helper roles yet.",
 	"도우미 역할 추가": "Add helper role",
+	"도우미 역할 {n}개 (전역 {g} · 프로젝트 {p})": "{n} helper roles (global {g} · project {p})",
+	"도우미 역할 {n}개": "{n} helper roles",
 	"정의된 모델만": "Role's model only",
 	"허용 목록": "Allow list",
 	"자유": "Any",

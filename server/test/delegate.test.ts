@@ -209,6 +209,14 @@ describe("delegate tool", () => {
 		expect((await api("PUT", "/configuration/subagents/ghost", body)).status).toBe(404);
 		expect((await api("DELETE", "/configuration/subagents/fresh?scope=global")).json.subagents.map((r: any) => r.name)).not.toContain("fresh");
 		expect((await api("DELETE", "/configuration/subagents/fresh?scope=global")).status).toBe(404);
+		// the project scope follows the `cwd` of the asking conversation, not only the default folder
+		const proj = join(dir, "ws");
+		const made = await api("POST", `/configuration/subagents?cwd=${encodeURIComponent(proj)}`, { name: "local", ...body, scope: "project" });
+		expect(made.json.projectDir).toBe(join(proj, ".agents", "subagents"));
+		expect(made.json.subagents.find((r: any) => r.name === "local").scope).toBe("project");
+		expect((await api("GET", "/configuration/subagents")).json.subagents.map((r: any) => r.name)).toContain("local"); // ws is also the default folder here
+		expect((await api("GET", `/configuration/subagents?cwd=${encodeURIComponent(join(dir, "elsewhere"))}`)).json.subagents.map((r: any) => r.name)).not.toContain("local");
+		expect((await api("DELETE", `/configuration/subagents/local?scope=project&cwd=${encodeURIComponent(proj)}`)).status).toBe(200);
 	});
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;

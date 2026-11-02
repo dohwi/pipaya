@@ -261,6 +261,12 @@ class AppStore {
   openMcp() {
     if (this.api) this.mcpDialog = true;
   }
+  /** Helper roles dialog (`delegate` roles, opened from the footer). cwd decides which folder's project roles are listed. */
+  subagentsDialog = $state<{ cwd: string } | null>(null);
+  openSubagents(sessionId: string | null = this.activeId) {
+    if (!this.api) return;
+    this.subagentsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+  }
   /** Extension commands dialog (`/prefix:name`, opened from the footer badge). cwd decides which folder's commands are listed. */
   commandsDialog = $state<{ cwd: string } | null>(null);
   openCommands(sessionId: string | null = this.activeId) {

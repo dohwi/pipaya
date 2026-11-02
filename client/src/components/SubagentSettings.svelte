@@ -20,9 +20,10 @@
 	/**
 	 * The helper roles `delegate` can start: the files in `~/.agents/subagents` (global) and the default working folder's
 	 * `.agents/subagents` (project), listed, added, edited and removed here. The server writes the role files; a role changed
-	 * by hand on disk shows up here by itself.
+	 * by hand on disk shows up here by itself. Shown in the settings (project scope = the default working folder) and in the
+	 * footer's dialog (`cwd` = that conversation's folder). `bare` drops the settings-card chrome for use inside a dialog.
 	 */
-	let { serverId, models }: { serverId: string; models: ModelInfo[] } = $props();
+	let { serverId, models, cwd, bare = false }: { serverId: string; models: ModelInfo[]; cwd?: string; bare?: boolean } = $props();
 
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
@@ -38,9 +39,10 @@
 		void app.skillsTick;
 		const id = serverId;
 		const a = api;
+		const dir = cwd;
 		untrack(() => {
 			if (!a) return;
-			a.subagents().then((l) => { data = { id, list: l }; loadError = ""; }).catch((e) => (loadError = errorText(e)));
+			a.subagents(dir).then((l) => { data = { id, list: l }; loadError = ""; }).catch((e) => (loadError = errorText(e)));
 		});
 	});
 
@@ -98,17 +100,28 @@
 		const f = form;
 		if (!f) return;
 		const body = { description: f.description, ...(f.model ? { model: f.model, ...(f.thinking ? { thinking: f.thinking } : {}) } : {}), tools: f.tools, maxTurns: f.maxTurns, prompt: f.prompt };
-		const ok = await run((a) => (f.original ? a.saveSubagent(f.original, f.scope, body) : a.createSubagent(f.name.trim(), f.scope, body)));
+		const ok = await run((a) => (f.original ? a.saveSubagent(f.original, f.scope, body, cwd) : a.createSubagent(f.name.trim(), f.scope, body, cwd)));
 		if (ok) form = null;
 	}
-	const remove = (r: SubagentInfo) => run((a) => a.deleteSubagent(r.name, r.scope));
+	const remove = (r: SubagentInfo) => run((a) => a.deleteSubagent(r.name, r.scope, cwd));
 
 	const scopeText = (s: "global" | "project") => (s === "global" ? t("전역") : t("프로젝트"));
+	/** Project roles first (they win), then global ones; a group with nothing in it is left out. */
+	const groups = $derived(
+		(["project", "global"] as const)
+			.map((scope) => ({ scope, items: (list?.subagents ?? []).filter((r) => r.scope === scope), path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents" }))
+			.filter((g) => g.items.length),
+	);
+	/** `~` for the home folder, and a long path loses its front (the end is the part that tells folders apart). */
+	const tilde = (p: string) => {
+		const h = p.replace(/^\/home\/[^/]+/, "~");
+		return h.length > 44 ? `…${h.slice(-43)}` : h;
+	};
 	const scopeHint = $derived(form?.scope === "project" ? (list?.projectDir ?? "") : "~/.agents/subagents");
 </script>
 
-<section class="set-group">
-	<div class="section-label">{t("도우미 역할")}</div>
+<section class:set-group={!bare} class:bare>
+	{#if !bare}<div class="section-label">{t("도우미 역할")}</div>{/if}
 	<p class="hint note">{t("delegate가 띄울 수 있는 도우미입니다. 역할마다 파일 하나(.md)이고, 프로젝트 역할은 같은 이름의 전역 역할보다 우선합니다.")}</p>
 	{#if loadError}<Notice tone="warn">{loadError}</Notice>{/if}
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
@@ -167,27 +180,35 @@
 			</div>
 		</form>
 	{:else if list}
-		<ul class="list">
-			{#each list.subagents as r (`${r.scope}/${r.name}`)}
-				<li animate:reflow in:rowIn out:rowOut>
-					<ListItem off={r.overridden}>
-						{#snippet title()}
-							<span class="name mono">{r.name}</span>
-							<Badge size="sm" variant="outline">{scopeText(r.scope)}</Badge>
-							{#if r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
-						{/snippet}
-						{#snippet actions()}
-							<Button size="sm" onclick={() => edit(r)} disabled={busy}>{t("수정")}</Button>
-							<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(r)} disabled={busy}>{t("삭제")}</ConfirmButton>
-						{/snippet}
-						{#if r.description}<p class="desc">{r.description}</p>{/if}
-						<p class="meta mono">{r.model ?? t("호출한 대화의 모델")}{r.thinking ? ` · ${r.thinking}` : ""} · {t("도구 {n}개", { n: r.tools.length })} · {t("최대 {n}회", { n: r.maxTurns })}</p>
-					</ListItem>
-				</li>
-			{:else}
-				<EmptyState as="li">{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
-			{/each}
-		</ul>
+		{#each groups as g (g.scope)}
+			<div class="group" role="group" aria-label={scopeText(g.scope)}>
+				<div class="ghead">
+					<span class="gname">{scopeText(g.scope)}</span>
+					<span class="gcount">{g.items.length}</span>
+					<span class="gpath mono">{g.path}</span>
+				</div>
+				<ul class="list">
+					{#each g.items as r (`${r.scope}/${r.name}`)}
+						<li animate:reflow in:rowIn out:rowOut>
+							<ListItem off={r.overridden}>
+								{#snippet title()}
+									<span class="name mono">{r.name}</span>
+									{#if r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
+								{/snippet}
+								{#snippet actions()}
+									<Button size="sm" onclick={() => edit(r)} disabled={busy}>{t("수정")}</Button>
+									<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(r)} disabled={busy}>{t("삭제")}</ConfirmButton>
+								{/snippet}
+								{#if r.description}<p class="desc">{r.description}</p>{/if}
+								<p class="meta mono">{r.model ?? t("호출한 대화의 모델")}{r.thinking ? ` · ${r.thinking}` : ""} · {t("도구 {n}개", { n: r.tools.length })} · {t("최대 {n}회", { n: r.maxTurns })}</p>
+							</ListItem>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{:else}
+			<EmptyState>{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
+		{/each}
 		<Button variant="dashed" onclick={add}>{t("도우미 역할 추가")}</Button>
 	{:else if !loadError}
 		<EmptyState loading />
@@ -196,6 +217,8 @@
 
 <style>
 	section { display: flex; flex-direction: column; gap: 8px; }
+	/* inside a dialog the cards sit on the dialog surface, not on a grey group */
+	.bare .list :global(.item) { border-color: var(--border); }
 	.note { margin: 0; line-height: 1.5; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	/* The cards sit on the grey settings group: the page colour and the strong border lift them off it (the default hairline vanishes there). */
@@ -203,6 +226,13 @@
 	/* name row, description and the model/limits line are three different things: the description reads as body text, the facts as a quiet mono line under a hairline. */
 	.list :global(.desc) { margin-top: 8px; color: var(--text); }
 	.list :global(.meta) { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+	.group { display: flex; flex-direction: column; gap: 8px; }
+	.note + .group, .group + .group { margin-top: 8px; }
+	/* group header: the scope, how many, and the folder the files live in (the path shrinks, the label never does) */
+	.ghead { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-xs); line-height: 20px; }
+	.gname { flex: none; font-weight: 600; color: var(--text); }
+	.gcount { flex: none; color: var(--text-faint); }
+	.gpath { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.ftitle { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 	.ftitle .name { font-size: var(--fs-sm); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }

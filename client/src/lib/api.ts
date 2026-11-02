@@ -241,10 +241,11 @@ export class Api {
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
 		this.req<Pick<ConfigurationInfo, "defaults" | "effectiveDefaults">>("PUT", "/configuration/defaults", sel);
 	setDisabledTools = (disabled: string[]) => this.req<ToolsInfo>("PUT", "/configuration/tools", { disabled });
-	subagents = () => this.req<SubagentList>("GET", "/configuration/subagents");
-	createSubagent = (name: string, scope: "global" | "project", b: SubagentInput) => this.req<SubagentList>("POST", "/configuration/subagents", { name, scope, ...b });
-	saveSubagent = (name: string, scope: "global" | "project", b: SubagentInput) => this.req<SubagentList>("PUT", `/configuration/subagents/${encodeURIComponent(name)}`, { scope, ...b });
-	deleteSubagent = (name: string, scope: "global" | "project") => this.req<SubagentList>("DELETE", `/configuration/subagents/${encodeURIComponent(name)}?scope=${scope}`);
+	/** `cwd` = the folder whose `.agents/subagents` is the project scope; the server's default working folder when left out. */
+	subagents = (cwd?: string, signal?: AbortSignal) => this.req<SubagentList>("GET", `/configuration/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
+	createSubagent = (name: string, scope: "global" | "project", b: SubagentInput, cwd?: string) => this.req<SubagentList>("POST", `/configuration/subagents${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { name, scope, ...b });
+	saveSubagent = (name: string, scope: "global" | "project", b: SubagentInput, cwd?: string) => this.req<SubagentList>("PUT", `/configuration/subagents/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, { scope, ...b });
+	deleteSubagent = (name: string, scope: "global" | "project", cwd?: string) => this.req<SubagentList>("DELETE", `/configuration/subagents/${encodeURIComponent(name)}?${new URLSearchParams({ scope, ...(cwd ? { cwd } : {}) })}`);
 	setDelegatePolicy = (p: DelegatePolicy) => this.req<ToolsInfo>("PUT", "/configuration/delegate", p);
 	setDefaultWorkdir = (path: string | null) => this.req<WorkdirInfo>("PUT", "/configuration/workdir", { path });
 	listDirs = (path?: string, hidden = false, signal?: AbortSignal) =>

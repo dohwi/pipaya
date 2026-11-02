@@ -60,6 +60,7 @@
 		skills: () => import("./components/Skills.svelte"),
 		commands: () => import("./components/CommandFamilies.svelte"),
 		mcp: () => import("./components/Mcp.svelte"),
+		subagents: () => import("./components/Subagents.svelte"),
 		lightbox: () => import("./components/Lightbox.svelte"),
 		queue: () => import("./components/QueueModal.svelte"),
 		filePreview: () => import("./components/FilePreview.svelte"),
@@ -413,6 +414,9 @@
 {/if}
 {#if app.mcpDialog && app.api}
 	{#key app.serverId}<Lazy load={load.mcp} api={app.api} onclose={() => (app.mcpDialog = false)} />{/key}
+{/if}
+{#if app.subagentsDialog && app.api}
+	{#key app.serverId}<Lazy load={load.subagents} dialog={app.subagentsDialog} api={app.api} onclose={() => (app.subagentsDialog = null)} />{/key}
 {/if}
 {#if app.commandsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.commands} dialog={app.commandsDialog} api={app.api} onclose={() => (app.commandsDialog = null)} />{/key}

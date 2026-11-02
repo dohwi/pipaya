@@ -8,7 +8,7 @@ import { badRequest, notFound } from "./errors.ts";
 import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { helperTools, listSubagents, removeSubagent, saveSubagent } from "./subagents.ts";
 import { TOOL_DEFS } from "./tools.ts";
 import { THINKING_LEVELS } from "./store.ts";
@@ -33,7 +33,8 @@ const SubagentFields = {
 };
 const SubagentCreate = Type.Object({ name: Type.String({ maxLength: 40 }), scope: Scope, ...SubagentFields }, { additionalProperties: false });
 const SubagentUpdate = Type.Object({ scope: Scope, ...SubagentFields }, { additionalProperties: false });
-const SubagentScope = Type.Object({ scope: Scope });
+const SubagentCwd = Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096, description: "Folder whose `.agents/subagents` is the project scope; the default working folder when left out" })) });
+const SubagentScope = Type.Object({ scope: Scope, cwd: Type.Optional(Type.String({ maxLength: 4096 })) });
 const SubagentName = Type.Object({ name: Type.String() });
 
 const CatalogResult = Type.Object({
@@ -51,33 +52,39 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 		schema: { response: { 200: ConfigurationResult, ...errors(401) } },
 		handler: async () => { config.refreshStale(); return config.snapshot(); },
 	});
-	// Project roles live in the default working folder: a session in another folder reads that folder's own `.agents/subagents`.
-	const roles = () => ({ subagents: listSubagents(config.defaultWorkdir(), home), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(config.defaultWorkdir(), ".agents", "subagents") });
+	// Project roles live in `<cwd>/.agents/subagents`. `cwd` is the folder of the conversation asking (the footer); without it the
+	// default working folder is used (the settings page). Relative paths resolve against the default working folder.
+	const where = (cwd?: string) => (cwd?.trim() ? resolve(config.defaultWorkdir(), cwd.trim()) : config.defaultWorkdir());
+	const roles = (cwd?: string) => ({ subagents: listSubagents(where(cwd), home), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(where(cwd), ".agents", "subagents") });
+	const changed = () => bus.publish(null, "skills_updated", { name: "", scope: "global", project: "", source: "files" });
 	app.get("/configuration/subagents", {
-		schema: { response: { 200: SubagentList, ...errors(401) } },
-		handler: async () => roles(),
+		schema: { querystring: SubagentCwd, response: { 200: SubagentList, ...errors(400, 401) } },
+		handler: async (req) => roles(req.query.cwd),
 	});
 	app.post("/configuration/subagents", {
-		schema: { body: SubagentCreate, response: { 200: SubagentList, ...errors(400, 401, 409) } },
+		schema: { querystring: SubagentCwd, body: SubagentCreate, response: { 200: SubagentList, ...errors(400, 401, 409) } },
 		handler: async (req) => {
 			const { name, scope, ...input } = req.body;
-			saveSubagent(scope, config.defaultWorkdir(), home, name, input, true);
-			return roles();
+			saveSubagent(scope, where(req.query.cwd), home, name, input, true);
+			changed();
+			return roles(req.query.cwd);
 		},
 	});
 	app.put("/configuration/subagents/:name", {
-		schema: { params: SubagentName, body: SubagentUpdate, response: { 200: SubagentList, ...errors(400, 401, 404) } },
+		schema: { params: SubagentName, querystring: SubagentCwd, body: SubagentUpdate, response: { 200: SubagentList, ...errors(400, 401, 404) } },
 		handler: async (req) => {
 			const { scope, ...input } = req.body;
-			saveSubagent(scope, config.defaultWorkdir(), home, req.params.name, input, false);
-			return roles();
+			saveSubagent(scope, where(req.query.cwd), home, req.params.name, input, false);
+			changed();
+			return roles(req.query.cwd);
 		},
 	});
 	app.delete("/configuration/subagents/:name", {
 		schema: { params: SubagentName, querystring: SubagentScope, response: { 200: SubagentList, ...errors(400, 401, 404) } },
 		handler: async (req) => {
-			removeSubagent(req.query.scope, config.defaultWorkdir(), home, req.params.name);
-			return roles();
+			removeSubagent(req.query.scope, where(req.query.cwd), home, req.params.name);
+			changed();
+			return roles(req.query.cwd);
 		},
 	});
 	app.get("/configuration/catalog", {
