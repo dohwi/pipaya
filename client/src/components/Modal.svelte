@@ -130,6 +130,12 @@
 			if (top === null || recentre) top = middle(vh, h);
 			node.style.top = `${Math.max(Math.min(top, vh - h - 12), Math.min(12, middle(vh, h)))}px`;
 		}
+		const initW = node.offsetWidth;
+		const initH = node.offsetHeight;
+		if (initW > 0 && initH > 0) {
+			size = [initW, initH];
+			place(true);
+		}
 		const ro = new ResizeObserver(([e]) => {
 			const box = e?.borderBoxSize?.[0];
 			if (!box) return;

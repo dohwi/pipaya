@@ -16,9 +16,9 @@ export type Frame = { opacity: number; y: number; scale: number };
 type Token = "fast" | "normal" | "slow";
 const FALLBACK: Record<Token, number> = { fast: 180, normal: 360, slow: 460 };
 
-/** Entrances are bigger than exits (Material: exits are quieter). */
-const DIALOG_SHIFT = { in: 18, out: 8 };
-const DIALOG_SCALE = { in: 0.94, out: 0.96 };
+/** Dialogs scale symmetrically from the screen centre without a vertical shift, so their bottom edge does not stick or rebound. */
+const DIALOG_SHIFT = { in: 0, out: 0 };
+const DIALOG_SCALE = { in: 0.96, out: 0.98 };
 const EXIT_SHIFT_RATIO = 0.45;
 /** Phone sheets leave a little slower than `fast`: they cover most of the screen. */
 const SHEET_OUT_FACTOR = 1.35;
@@ -100,7 +100,7 @@ export function surfaceFrame(u: number, y: number, dir: "in" | "out"): Frame {
 }
 
 const css = (f: Frame, base = 1) =>
-	`opacity:${(f.opacity * base).toFixed(3)};transform:translateY(${f.y.toFixed(2)}px) scale(${f.scale.toFixed(4)})`;
+	`opacity:${(f.opacity * base).toFixed(3)};transform:${f.y ? `translateY(${f.y.toFixed(2)}px) ` : ""}scale(${f.scale.toFixed(4)})`;
 
 const targetOpacity = (node: Element) => {
 	const v = typeof getComputedStyle === "function" ? +getComputedStyle(node).opacity : 1;
