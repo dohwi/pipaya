@@ -1400,7 +1400,7 @@ export const en: Record<string, string> = {
 	"업데이트를 설치하지 못했습니다": "Couldn't install the update",
 	"고정된 단축키입니다": "This shortcut is fixed",
 	"\"{name}\"에 고정된 단축키입니다": "This shortcut is fixed to \"{name}\"",
-	"포커스가 있는 사이드바 행, 창 제목, 칩, 위쪽 제목의 이름을 바꿉니다. 터미널 안에서는 셸이 F2를 받습니다": "Renames the focused sidebar row, pane title, chip or header title. Inside a terminal the shell gets F2",
+	"포커스가 있는 사이드바 행·창 제목·칩의 이름을 바꿉니다. 포커스가 없으면 열려 있는 대화를 바꾸고, 터미널 안에서는 셸이 F2를 받습니다": "Renames the focused sidebar row, pane title or chip, and the open conversation when nothing is focused. Inside a terminal the shell gets F2",
 	"이 단축키로 저장": "Save this shortcut",
 	"서버에 연결하는 중…": "Connecting to the server…",
 	"연결": "Connect",

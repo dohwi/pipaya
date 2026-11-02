@@ -17,8 +17,11 @@ import {
   MAX_KEYS,
   nextChord,
   OVERLAY_SELECTOR,
+  RENAME_KEY,
+  renameShouldFallThrough,
   type ActionId,
 } from "./keys";
+import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { THINKING_LEVELS, type ThinkingLevel } from "./types";
@@ -365,6 +368,35 @@ export function onShortcut(e: KeyboardEvent) {
     if (stop) {
       e.preventDefault();
       void app.abort();
+    }
+    return;
+  }
+  // F2 renames the open thing (a conversation, a terminal or a split tab). Whatever had focus and took the key itself
+  // handled it already (preventDefault, returned above); this is the rest of the window: a click on a row leaves focus on
+  // the body in a macOS webview (WebKit bug 22261), and a folded sidebar has no row to focus at all.
+  if (e.key === RENAME_KEY) {
+    const now = renameNow();
+    if (
+      now &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      renameShouldFallThrough({
+        key: e.key,
+        defaultPrevented: e.defaultPrevented,
+        repeat: e.repeat,
+        mod: false,
+        target: e.target as HTMLElement | null,
+        inTerminal: fromTerminal,
+        overlayOpen: !!document.querySelector(OVERLAY_SELECTOR),
+        recording: app.prefs.recordingKey,
+        // an inline field that is already open keeps its own key (it has focus, so this is belt and braces)
+        renaming: !!document.querySelector("input.rename"),
+      })
+    ) {
+      e.preventDefault();
+      now.place.start(now.target.id, now.target.title);
     }
     return;
   }

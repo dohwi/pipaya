@@ -11,6 +11,7 @@
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
 	import { InlineRename } from "../lib/inline-rename.svelte";
+	import { registerRenamePlace } from "../lib/rename-places";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -29,6 +30,17 @@
 	const sessionTarget = $derived(term ? { id: term.id, name: term.title } : s ? { id: s.id, name: s.title } : null);
 	const groupTarget = $derived(group ? { id: group.id, name: group.name } : null);
 	const target = $derived(group && !crumb ? groupTarget : sessionTarget);
+	/**
+	 * The title is where F2 renames the open thing when the sidebar is folded away (it has no row then); while the sidebar
+	 * shows, its row comes first (see `rename-places`).
+	 */
+	$effect(() =>
+		registerRenamePlace({
+			order: 1,
+			open: () => (target ? { id: target.id, title: target.name } : null),
+			start: (id, title) => rename.start(id, title),
+		})
+	);
 	function commitRename() {
 		const done = rename.commit();
 		if (!done) return;

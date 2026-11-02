@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
+import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
 import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
@@ -421,5 +422,24 @@ describe("stepDir", () => {
 
 	test("nothing to step through", () => {
 		expect(stepDir([], "a", 1)).toBeNull();
+	});
+});
+
+describe("F2 renames the open thing", () => {
+	test("the sidebar row wins while it shows; the header title takes it when the sidebar has nothing", () => {
+		const made: string[] = [];
+		const offTitle = registerRenamePlace({ order: 1, open: () => ({ id: "s1", title: "one" }), start: (id, title) => made.push(`title:${id}:${title}`) });
+		const offEmptyRow = registerRenamePlace({ order: 0, open: () => null, start: (id, title) => made.push(`row:${id}:${title}`) });
+		let now = renameNow();
+		expect(now?.target).toEqual({ id: "s1", title: "one" });
+		now?.place.start(now.target.id, now.target.title);
+		expect(made).toEqual(["title:s1:one"]);
+		offEmptyRow();
+		const offRow = registerRenamePlace({ order: 0, open: () => ({ id: "g1", title: "grp" }), start: (id, title) => made.push(`row:${id}:${title}`) });
+		now = renameNow();
+		expect(now?.target).toEqual({ id: "g1", title: "grp" });
+		offRow();
+		offTitle();
+		expect(renameNow()).toBeUndefined();
 	});
 });
