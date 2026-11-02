@@ -122,3 +122,16 @@ export function renderStreaming(full: string): string {
 	}
 	return head + renderMarkdown(src.slice(cut), { cache: false });
 }
+
+/**
+ * Run the markdown path once on a throwaway sample while the app is idle. The first real answer otherwise pays for the
+ * parser's and the sanitizer's first run (regex compilation, hook setup, cold code) inside the frames of the send itself,
+ * about 120ms at the moment the first token lands. The sample covers what answers are made of: emphasis, a list, a code
+ * block, a table and a link. Nothing it produces is kept (no cache entry, nothing in the document).
+ */
+export function warmMarkdown() {
+	const sample = "**warm** `up`\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n[link](https://example.com)";
+	renderStreaming(sample);
+	renderStreaming(`${sample}\n\nmore text still being wr`);
+	renderMarkdown(sample, { cache: false });
+}

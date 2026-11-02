@@ -92,6 +92,13 @@
 	});
 
 	onMount(() => guardWindowClose(() => app.requestClose()));
+	// Cold markdown code is what the first reply stalls on (lib/markdown.ts): warm it once the first paint is done.
+	onMount(() => {
+		const run = () => void import("./lib/markdown").then((m) => m.warmMarkdown());
+		const idle = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+		if (idle) idle(run, { timeout: 2000 });
+		else setTimeout(run, 500);
+	});
 	/** The shared context menu of the rail, pane title bars and the phone's pane strip (lib/context-menu). */
 	let contextMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	$effect(() => {
