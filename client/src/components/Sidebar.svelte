@@ -54,8 +54,9 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], archived: Session[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
-		const dirs = sidebarDirs(sessions, groups, terminals, {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], archived: Session[], shared?: DirBlock[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
+		// a copy: the archived-only folders appended below must not leak into the shared list
+		const dirs = shared ? [...shared] : sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || x.title.toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
 			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
@@ -85,7 +86,9 @@
 			const state = link ? connectionState(link.net) : "checking";
 			const ws = link?.workspace ?? null;
 			const d = link?.data;
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], d?.archived ?? []);
+			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
+			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], d?.archived ?? [], shared);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).

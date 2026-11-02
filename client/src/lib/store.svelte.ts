@@ -64,6 +64,8 @@ import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./s
 import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ThinkingLevel } from "./types";
 
+const NO_DIRS: DirBlock[] = [];
+
 class AppStore {
   servers = $state<Server[]>(loadServers());
   serverId = $state<string | null>(null);
@@ -1381,15 +1383,30 @@ class AppStore {
     return (this.serverId && this.sidebar.pinnedTabs[this.serverId]) || [];
   }
 
+  /**
+   * Every server's working directories and tabs in sidebar order, built once per change and shared by the sidebar, the
+   * rail, the tab bar and the shortcuts. They each used to build their own copy (and the getters rebuilt it on every read),
+   * dozens of sorts of the whole session list in the second after a send. A search narrows the list, so the sidebar
+   * still builds its own while a query is typed.
+   */
+  dirsByServer: Record<string, DirBlock[]> = $derived.by(() => {
+    const out: Record<string, DirBlock[]> = {};
+    for (const server of this.servers) {
+      const d = this.links[server.id]?.data;
+      if (!d) continue;
+      const id = server.id;
+      out[id] = sidebarDirs(d.sessions, d.groups, d.terminals, { dirOrder: this.sidebar.dirOrder[id], tabOrder: this.sidebar.tabOrder[id], groupDir: this.sidebar.groupDir[id], keep: this.sidebar.pinned[id], pinnedTabs: this.sidebar.pinnedTabs[id] });
+    }
+    return out;
+  });
+
   /** The open server's working directories and their tabs, in sidebar order. */
   get dirs(): DirBlock[] {
-    return sidebarDirs(this.sessions, this.groups, this.terminals, { dirOrder: this.currentDirOrder, tabOrder: this.currentTabOrder, groupDir: this.serverId ? this.sidebar.groupDir[this.serverId] : undefined, keep: this.serverId ? this.sidebar.pinned[this.serverId] : undefined, pinnedTabs: this.serverId ? this.sidebar.pinnedTabs[this.serverId] : undefined });
+    return (this.serverId && this.dirsByServer[this.serverId]) || NO_DIRS;
   }
 
   /** The tab the focused pane is in, and its directory. */
-  get activeTab(): { dir: DirBlock; tab: Tab } | null {
-    return tabOf(this.dirs, this.activeId);
-  }
+  activeTab: { dir: DirBlock; tab: Tab } | null = $derived.by(() => tabOf(this.dirs, this.activeId));
 
   /** The pane last focused in each tab (by tab id), so switching back to a group lands where it was left. */
   private lastPane: Record<string, string> = {};
@@ -1417,9 +1434,7 @@ class AppStore {
   /** Show a folder: the tab last used in it, else its first one. `serverId` other than the open one switches server. */
   openDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
-    const dirs = ov
-      ? sidebarDirs(ov.sessions, ov.groups, ov.terminals, { dirOrder: this.sidebar.dirOrder[serverId], tabOrder: this.sidebar.tabOrder[serverId], groupDir: this.sidebar.groupDir[serverId], keep: this.sidebar.pinned[serverId], pinnedTabs: this.sidebar.pinnedTabs[serverId] })
-      : this.dirs;
+    const dirs = ov ? (this.dirsByServer[serverId] ?? []) : this.dirs;
     const dir = dirs.find((d) => d.path === path);
     if (!dir) return;
     const last = dir.tabs.find((x) => x.id === this.lastTabIn[`${serverId}\u0000${path}`]);
