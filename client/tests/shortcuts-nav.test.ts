@@ -197,6 +197,7 @@ describe("shortcut catalogue", () => {
 		expect(renameShouldFallThrough({ ...base, renaming: true })).toBe(false); // already renaming
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "INPUT" } })).toBe(false);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "TEXTAREA" } })).toBe(false);
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "TEXTAREA", dataset: { composer: "" } } })).toBe(true); // the composer takes focus on a switch
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "SELECT" } })).toBe(false);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
 	});

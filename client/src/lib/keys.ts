@@ -636,7 +636,7 @@ export function renameShouldFallThrough(o: {
   defaultPrevented: boolean;
   repeat: boolean;
   mod: boolean;
-  target: { tagName?: string; isContentEditable?: boolean } | null;
+  target: { tagName?: string; isContentEditable?: boolean; dataset?: { composer?: string } } | null;
   inTerminal: boolean;
   overlayOpen: boolean;
   recording: boolean;
@@ -648,7 +648,9 @@ export function renameShouldFallThrough(o: {
   if (!t) return true;
   if (t.isContentEditable) return false;
   const tag = t.tagName ?? "";
-  return tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT";
+  // Opening a conversation moves focus into its composer, and F2 types nothing there: it must still rename right after a switch
+  if (tag === "TEXTAREA") return t.dataset?.composer !== undefined;
+  return tag !== "INPUT" && tag !== "SELECT";
 }
 
 /** True when the combo fires on keys alone, so it must not trigger while typing in a text field. */
