@@ -4,11 +4,11 @@
     <img src=".github/assets/banner.svg" alt="pipaya - Your AI agent, on your own server" width="100%" />
   </picture>
 
-  <p><b>English</b> · <a href="README.ko.md">한국어</a></p>
+  <p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
 
-  <p>pipaya is an <b>AI agent chat tool that runs on your own server</b>.<br />The server calls models and runs tools; the app connects to it from any device.<br />Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.</p>
+  <p align="center"><b>An AI agent chat tool that runs on your own server.</b><br />Sessions, settings and API keys stay in your server's SQLite database. No cloud account needed.</p>
 
-  <p>
+  <p align="center">
     <a href="https://bun.sh" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Bun-1.3-000000?style=flat-square&logo=bun&logoColor=white" alt="Bun" /></a>
     <a href="https://fastify.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
     <a href="https://svelte.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte" /></a>
@@ -30,71 +30,41 @@
 
 ## Features
 
-- **Agent with 6 built-in tools**: read, write, edit, ls, grep, bash. Everything else (asking you a question, messaging other chats, ...) comes from extensions
+- **Agent with built-in tools**: read, write, edit, ls, grep, bash. More via extensions
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
-- **Many devices, one conversation**: Windows, macOS, Android and web, with notifications and mobile push
-- **Teamwork and split view**: up to 8 conversations on one screen, and extensions can let them hand work to each other
+- **Many devices, one conversation**: Windows, macOS, Android, web
+- **Split view**: up to 8 conversations on one screen
 - **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
 
-## Quick install
-
-Install the client. On Windows and macOS the app **bundles its own server** (shown as "This PC", loopback only by default), so there is nothing else to set up. To reach it from other devices, launch the app with `PIPAYA_APP_HOST` set to your Tailscale IP (and optionally `PIPAYA_APP_PORT`).
+## Install
 
 | Client | How |
 |---|---|
 | Windows x64 | `irm https://raw.githubusercontent.com/dohwi/pipaya/main/install.ps1 \| iex` |
 | macOS (Apple Silicon) | `curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh \| bash -s -- client` |
-| Android | APK on the [latest release](https://github.com/dohwi/pipaya/releases/tag/latest). Needs a headless server below |
-| Linux, web | `cd client && bun install && bun run dev -- --host 0.0.0.0`. Needs a headless server below |
+| Android, Linux, web | See the [wiki](https://github.com/dohwi/pipaya-wiki) |
 
-Open the app and connect a model under **Settings → Model connections**.
-
-## Headless server
-
-Run the server on its own to use it from a phone, the web or several devices. Linux or macOS; requires `git` and `curl`, and the script asks before installing Bun.
+Windows and macOS apps bundle their own server. For a headless server (phone, web, several devices) run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dohwi/pipaya/main/install.sh | bash
 ```
 
-It registers a user service on port `8787` and prints where the access token is (`~/.pipaya/token`). The default listen address is your Tailscale IP if there is one, else `127.0.0.1`. In the app, add `http://<server address>:8787` and the token.
-
-Other commands: `install.sh update | status | uninstall`. To run it in a container instead, see below.
-
-## Server in Docker (Sandbox)
-
-Runs the server in a hardened container, so the agent's `bash` and file tools stay inside it.
-
-```bash
-docker compose up -d --build
-docker compose exec pipaya cat /data/token    # the auth token
-```
-
-Set `PIPAYA_WORKSPACE_DIR` (a host folder the agent may work on), `PIPAYA_BIND` and `PIPAYA_PORT` in a `.env` file. See [`compose.yaml`](compose.yaml).
+Docker, configuration and everything else are in the [wiki](https://github.com/dohwi/pipaya-wiki).
 
 ## Security
 
-- The token grants **administrator** access. Reach the server over Tailscale or HTTPS, never the open internet.
-- API keys are stored **unencrypted** in the server database.
-- The file tools can read outside the working folder and `bash` is **not a sandbox**. Keep the policy at `ask` and use Docker or a VM.
-
-Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+The token grants **administrator** access, API keys are stored **unencrypted**, and `bash` is **not a sandbox**. Use Tailscale or HTTPS, never the open internet. Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
 ## Development
 
 ```bash
-cd server && bun install && bun run dev          # API server
-cd client && bun install && bun run dev          # web client (port 1420)
+mise install                          # Bun, Rust
+cd server && bun install && bun run dev
+cd client && bun install && bun run dev    # web client (port 1420)
 ```
 
-Before committing:
-
-```bash
-cd server && bun run typecheck && bun run lint && bun run test
-cd client && bun run check && bun run test && bun run build
-```
-
-Prerequisites are pinned in [`mise.toml`](mise.toml) (Bun 1.3, Rust stable; `mise install` sets them up). The server is documented in [`server/README.md`](server/README.md) and the logo in [`logo/README.md`](logo/README.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [`server/README.md`](server/README.md).
 
 ## License
 
