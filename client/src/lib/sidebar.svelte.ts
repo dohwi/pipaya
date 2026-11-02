@@ -144,15 +144,18 @@ export class SidebarState {
       write(K.groupDir, this.groupDir);
     this.onEdit(serverId);
     }
+    // sets, not `includes` per entry: this runs on every list change, with the whole session list as `tabs`
     const d = this.dirOrder[serverId] ?? [];
-    const newDirs = dirs.filter((p) => !d.includes(p));
+    const haveDirs = new Set(d);
+    const newDirs = dirs.filter((p) => !haveDirs.has(p));
     if (newDirs.length) {
       this.dirOrder = { ...this.dirOrder, [serverId]: [...d, ...newDirs] };
       write(K.dirOrder, this.dirOrder);
     this.onEdit(serverId);
     }
     const t = this.tabOrder[serverId] ?? [];
-    const newTabs = tabs.filter((x) => !t.includes(x));
+    const haveTabs = new Set(t);
+    const newTabs = tabs.filter((x) => !haveTabs.has(x));
     if (newTabs.length) {
       this.tabOrder = { ...this.tabOrder, [serverId]: [...t, ...newTabs] };
       write(K.tabOrder, this.tabOrder);

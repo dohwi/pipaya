@@ -82,11 +82,10 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 		if (grouped.has(t.id) || !matchTerminal(t)) continue;
 		all.push({ cwd: t.cwd, tab: { kind: "terminal", id: t.id, terminal: t }, created: t.createdAt ?? 0 });
 	}
-	const tabOrder = o.tabOrder ?? [];
-	const trank = (id: string) => {
-		const i = tabOrder.indexOf(id);
-		return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-	};
+	// ranks looked up from a map: `indexOf` inside the sort comparator made the order O(n^2 log n) in the tab count
+	const tabRank = new Map<string, number>();
+	(o.tabOrder ?? []).forEach((id, i) => { if (!tabRank.has(id)) tabRank.set(id, i); });
+	const trank = (id: string) => tabRank.get(id) ?? Number.MAX_SAFE_INTEGER;
 	// placed tabs keep their place; new ones go after them, oldest first (a new tab lands at the end, like an editor's)
 	// pinned tabs lead their folder; within each part the rule above applies
 	const pinnedTabs = new Set(o.pinnedTabs ?? []);
@@ -100,8 +99,9 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	}
 	// a pinned folder with nothing open (or nothing matching) still gets its block; a new one sorts after the others until placed
 	for (const p of o.keep ?? []) if (!by.has(p)) by.set(p, { tabs: [], first: Number.MAX_SAFE_INTEGER });
-	const dirOrder = o.dirOrder ?? [];
-	const rank = (p: string) => dirOrder.indexOf(p);
+	const dirRank = new Map<string, number>();
+	(o.dirOrder ?? []).forEach((p, i) => { if (!dirRank.has(p)) dirRank.set(p, i); });
+	const rank = (p: string) => dirRank.get(p) ?? -1;
 	return [...by.entries()]
 		.sort(([pa, a], [pb, b]) => {
 			const ra = rank(pa);
