@@ -239,13 +239,18 @@
 	.foot:focus-within {
 		opacity: 1;
 	}
+	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
+	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */
 	.slogo {
 		display: inline-flex;
-		vertical-align: -2px;
+		vertical-align: -2.5px;
 		margin-right: 4px;
 	}
+	/* an 11px line centred as a box puts its baseline 4.1px under the row centre, so the lowercase body rides 1px low
+	   next to the 16px glyphs; 2px of bottom margin lifts the text (not the box) onto the row centre */
 	.stats {
 		margin-left: 8px;
+		margin-bottom: 2px;
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		white-space: nowrap;
