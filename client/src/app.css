@@ -747,6 +747,7 @@ kbd {
 .set-group > .section-label,
 .set-group > .head .section-label {
 	font-size: var(--fs-sm);
+	line-height: 20px; /* whole-pixel line box (the body's 1.55 gave 20.15), like .lbl above a field */
 	color: var(--text);
 }
 /* Heading of a settings block ("Language", "Export", "Default model"): one style for every section label. */
