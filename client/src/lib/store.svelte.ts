@@ -13,6 +13,9 @@ import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
+
+/** How many off-screen transcripts stay loaded so switching back to them is instant. */
+const KEEP_CHATS = 8;
 import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent } from "./server-link-model";
 import { viewport } from "./viewport.svelte";
@@ -1267,6 +1270,9 @@ class AppStore {
    */
   /** Resolves when the editor of the server just opened has sent its last edits */
   private handover: Promise<void> = Promise.resolve();
+  /** When each transcript was last on screen, and which were on screen at the previous sync (see syncChats). */
+  private chatUsed = new Map<string, number>();
+  private lastVisible = new Set<string>();
   private extStores = new Map<string, { store: ServerExtensionStore; sync: ServerSettingsSync; api: Api }>();
   /** Bumped whenever one of those editors changed, so what shows them reads again. */
   extensionStoreTick = $state(0);
@@ -1829,7 +1835,21 @@ class AppStore {
    */
   syncChats(ids: string[]) {
     const keep = new Set(ids);
-    const stale = Object.keys(this.chats).filter((id) => !keep.has(id));
+    // Recently seen transcripts stay in memory (events keep applying to them), so switching back is instant.
+    const now = Date.now();
+    for (const id of ids) this.chatUsed.set(id, now);
+    const spare = Object.keys(this.chats)
+      .filter((id) => !keep.has(id))
+      .sort((a, b) => (this.chatUsed.get(b) ?? 0) - (this.chatUsed.get(a) ?? 0))
+      .slice(0, KEEP_CHATS);
+    const kept = new Set([...keep, ...spare]);
+    for (const id of this.chatUsed.keys()) if (!kept.has(id)) this.chatUsed.delete(id);
+    const stale = Object.keys(this.chats).filter((id) => !kept.has(id));
+    // A cached transcript coming back on screen shows at once, then refreshes in place in the background.
+    for (const id of ids) {
+      if (this.chats[id]?.ready && !this.lastVisible.has(id)) void this.chats[id]!.load();
+    }
+    this.lastVisible = keep;
     if (stale.length) {
       const next = { ...this.chats };
       for (const id of stale) delete next[id];
