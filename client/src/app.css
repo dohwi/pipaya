@@ -1019,14 +1019,17 @@ dialog[data-closing]::backdrop {
 		opacity: 0;
 	}
 }
+/* the same rise as lib/motion.ts (16px in, 6px out, no scale), for the native <dialog> panels */
 @keyframes dialog-in {
 	from {
 		opacity: 0;
+		transform: translateY(16px);
 	}
 }
 @keyframes dialog-out {
 	to {
 		opacity: 0;
+		transform: translateY(6px);
 	}
 }
 @media (max-width: 640px) {

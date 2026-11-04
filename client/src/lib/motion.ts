@@ -5,7 +5,7 @@
  * place tunes everything. The Svelte transitions below read those tokens, which keeps JS-driven and
  * CSS-driven motion identical. Rules carried over:
  *  - entrances decelerate over `normal`, exits accelerate away over `fast` and travel less;
- *  - dialogs move + scale, large floating surfaces (menus, pickers) only translate + fade;
+ *  - dialogs lift into place and large floating surfaces (menus, pickers) only translate + fade: nothing scales;
  *  - bottom sheets slide on phones;
  *  - colour tokens never transition for theme changes (see `.theme-switching`), only opacity/geometry do;
  *  - `prefers-reduced-motion` collapses every duration to 0.
@@ -16,8 +16,12 @@ export type Frame = { opacity: number; y: number; scale: number };
 type Token = "fast" | "normal" | "slow";
 const FALLBACK: Record<Token, number> = { fast: 180, normal: 360, slow: 460 };
 
-/** Dialogs fade in place from the screen centre: no scale (a large panel scaling wobbles every edge) and no vertical shift. */
-const DIALOG_SHIFT = { in: 0, out: 0 };
+/**
+ * Dialogs rise into place from a little below: the eye follows the panel's lower edge, so a short lift reads as "arriving".
+ * They do not scale — a large panel scaling moves every edge and its text, which is what made the entrance look like a wobble.
+ * The way out only drops a little (exits travel less than entrances).
+ */
+const DIALOG_SHIFT = { in: 16, out: 6 };
 const DIALOG_SCALE = { in: 1, out: 1 };
 const EXIT_SHIFT_RATIO = 0.45;
 /** Phone sheets leave a little slower than `fast`: they cover most of the screen. */
@@ -87,7 +91,7 @@ export function bezier(x1: number, y1: number, x2: number, y2: number): (t: numb
 export const easeEnter = bezier(0.22, 1, 0.36, 1);
 export const easeExit = bezier(0.3, 0, 0.8, 0.15);
 
-/** Frame for progress `u` (0 = at rest, 1 = fully away). Dialogs shrink and drop; surfaces only drop. */
+/** Frame for progress `u` (0 = at rest, 1 = fully away). Dialogs rise and drop; surfaces only drop. */
 export function dialogFrame(u: number, dir: "in" | "out"): Frame {
 	return {
 		opacity: 1 - u,

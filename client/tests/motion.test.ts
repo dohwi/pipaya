@@ -27,12 +27,15 @@ describe("bezier", () => {
 });
 
 describe("frames", () => {
-	test("dialogs fade in place without scaling or vertical shift", () => {
+	test("dialogs rise into place and never scale", () => {
 		const into = dialogFrame(1, "in");
 		const out = dialogFrame(1, "out");
-		expect(into).toEqual({ opacity: 0, y: 0, scale: 1 });
-		expect(out).toEqual({ opacity: 0, y: 0, scale: 1 });
+		// u = 1 is fully away: the entrance starts below its place and the exit leaves downward, less far than it came
+		expect(into).toEqual({ opacity: 0, y: 16, scale: 1 });
+		expect(out).toEqual({ opacity: 0, y: 6, scale: 1 });
+		expect(out.y).toBeLessThan(into.y);
 		expect(dialogFrame(0, "in")).toEqual({ opacity: 1, y: 0, scale: 1 });
+		for (const dir of ["in", "out"] as const) for (const u of [0, 0.5, 1]) expect(dialogFrame(u, dir).scale).toBe(1);
 	});
 	test("surfaces never scale (a large panel scaling wobbles every edge)", () => {
 		for (const dir of ["in", "out"] as const) for (const u of [0, 0.5, 1]) expect(surfaceFrame(u, 10, dir).scale).toBe(1);
