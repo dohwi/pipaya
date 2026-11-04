@@ -198,16 +198,16 @@
 		border-radius: var(--radius);
 		display: block;
 	}
+	/* the same 32px row as the answer's foot (one height for every action row), right-aligned on the content's right line:
+	   the box ends where the answer's text ends, and the 8px bleed puts the last glyph on that line instead of 2px inside it */
 	.actions {
 		opacity: 0;
 		transition: opacity var(--motion-fast) var(--ease-std);
-		height: 24px;
+		height: 32px;
 		display: flex;
-		align-items: flex-start;
-	}
-	.actions :global(.iconbtn) {
-		height: 28px;
-		width: 28px;
+		align-items: center;
+		gap: 4px;
+		margin-right: -8px; /* a 32px button holds a 16px glyph 8px in: the glyph's right edge lands on the content's right edge */
 	}
 	.row.user:hover .actions,
 	.actions:focus-within {
@@ -215,8 +215,9 @@
 	}
 	@media (pointer: coarse) {
 
+		/* no hover on a phone: hidden actions would be unreachable, so they stay on */
 		.actions {
-			display: none;
+			opacity: 1;
 		}
 	}
 </style>
