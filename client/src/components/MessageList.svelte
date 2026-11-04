@@ -73,7 +73,7 @@
 		// The older page (already fetched ahead) goes in front only while the view is at rest or has reached the top:
 		// writing scrollTop in the middle of a fling cuts its momentum and makes the view jump. A fling that reaches the
 		// top simply stops there, the page is put in front, and the reader stays on the same message.
-		if (chat.hasEarlier && scroller.scrollTop < EARLIER_ZONE()) {
+		if (chat.hasEarlier && !chat.earlierFailed && scroller.scrollTop < EARLIER_ZONE()) {
 			if (scroller.scrollTop <= 1) void loadEarlier();
 			else {
 				clearTimeout(restTimer);
@@ -107,7 +107,7 @@
 
 	// A short transcript that does not fill the view has nothing to scroll: fetch the older page right away.
 	$effect(() => {
-		if (!chat.ready || !chat.hasEarlier || chat.loadingEarlier || !scroller) return;
+		if (!chat.ready || !chat.hasEarlier || chat.loadingEarlier || chat.earlierFailed || !scroller) return; // after a failure the retry button waits for the reader
 		void tick().then(() => {
 			if (scroller && scroller.scrollHeight <= scroller.clientHeight + 40) void loadEarlier();
 		});
@@ -304,9 +304,14 @@
 				<Button onclick={() => chat.load()}>{t("다시 시도")}</Button>
 			</div>
 		{:else}
-			{#if chat.hasEarlier}
+			{#if chat.hasEarlier && (chat.loadingEarlier || chat.earlierFailed)}
+				<!-- older pages arrive by themselves while scrolling; only a loading hint, or a retry after a failure, is shown -->
 				<div class="earlier">
-					<Button onclick={loadEarlier} disabled={chat.loadingEarlier}>{chat.loadingEarlier ? t("불러오는 중…") : t("이전 대화 더 보기")}</Button>
+					{#if chat.loadingEarlier}
+						<span class="earlier-wait" role="status">{t("불러오는 중…")}</span>
+					{:else}
+						<Button onclick={loadEarlier}>{t("이전 대화 더 보기")}</Button>
+					{/if}
 				</div>
 			{/if}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
@@ -350,6 +355,10 @@
 		display: flex;
 		justify-content: center;
 		padding: 8px 0;
+	}
+	.earlier-wait {
+		line-height: 20px;
+		color: var(--text-dim);
 	}
 	.row.wait {
 		display: flex;

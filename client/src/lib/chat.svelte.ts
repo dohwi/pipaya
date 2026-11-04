@@ -195,6 +195,8 @@ export class ChatState {
 	/** Older messages exist on the server than the ones loaded (only the newest page is fetched on open). */
 	hasEarlier = $state(false);
 	loadingEarlier = $state(false);
+	/** The last attempt to fetch the older page failed (offline): the list shows a retry button until one succeeds. */
+	earlierFailed = $state(false);
 	/** Bumped after older messages were put in front, so the list can keep the reader where they were. */
 	earlierRevision = $state(0);
 
@@ -233,9 +235,11 @@ export class ChatState {
 			if (msgs.length) this.firstSeq = msgs[0]!.seq;
 			this.hasEarlier = msgs.length > 0 && msgs.length <= EARLIER_PAGE && this.firstSeq > 0;
 			this.earlierRevision++;
+			this.earlierFailed = false;
 			this.ahead = null;
 		} catch {
-			/* offline: the button stays and tries again */
+			this.earlierFailed = true; // offline: the list offers a retry button
+			return;
 		} finally {
 			this.loadingEarlier = false;
 		}
@@ -300,6 +304,7 @@ export class ChatState {
 			this.firstSeq = msgs.length ? msgs[0]!.seq : 0;
 			// A server from before `tail` ignores it and sends everything: more than a page back means nothing is left to fetch.
 			this.hasEarlier = msgs.length > 0 && msgs.length <= FIRST_PAGE && this.firstSeq > 0;
+			this.earlierFailed = false;
 			this.running = st.running;
 			// Joined mid-run: the best guess for its start is the last prompt.
 			this.runStartedAt = st.running ? (this.runStartedAt ?? [...items].reverse().find((i) => i.kind === "user")?.ts ?? Date.now()) : null;
