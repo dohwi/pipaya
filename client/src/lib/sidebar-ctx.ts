@@ -21,7 +21,7 @@ export interface SidebarNode {
 	home: string | undefined;
 	total: number;
 	dirs: DirBlock[];
-	/** Archived conversations by folder (a folder with only archived ones is in `dirs` with no tabs) */
+	/** Archived conversations by folder (a folder with only archived ones is in `dirs` with no tabs only while searching) */
 	archived: Record<string, Session[]>;
 	/** What the server runs (linux, darwin, win32), when it says so */
 	platform: string | undefined;

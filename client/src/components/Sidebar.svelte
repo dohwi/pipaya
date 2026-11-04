@@ -69,10 +69,15 @@
 			pinnedTabs: ptabs,
 		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
-		// Archived conversations hang under their folder; a folder with only archived ones still shows, after the others.
+		// Archived conversations hang under their folder. A folder that has only archived ones (no open tab, not pinned)
+		// is not kept open for them; a search still lists those matches, after the others.
 		const byDir: Record<string, Session[]> = {};
 		for (const s of archived) if (!q || sessionTitle(s.title).toLowerCase().includes(q)) (byDir[s.cwd] ??= []).push(s);
-		for (const cwd of Object.keys(byDir)) if (!dirs.some((d) => d.path === cwd)) dirs.push({ path: cwd, tabs: [] });
+		for (const cwd of Object.keys(byDir)) {
+			if (dirs.some((d) => d.path === cwd)) continue;
+			if (q) dirs.push({ path: cwd, tabs: [] });
+			else delete byDir[cwd];
+		}
 		return { root: ws?.root, total, dirs, archived: byDir };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
