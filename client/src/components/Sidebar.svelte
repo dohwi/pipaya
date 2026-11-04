@@ -499,11 +499,10 @@
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
 	}
-	/* a folded row's count is centred on the "+" column (x 256): the toggle ends where the "+" does (x 266) */
-	@media (hover: hover) {
-		:global(:where(.side) .dir.folded .dirtoggle) {
-			padding-right: 0;
-		}
+	/* folded, the list button is hidden, so the toggle runs to the "+" and its count takes the column it gives up: x 256 on a mouse
+	   (the "+" is out of the flow there), x 236 on touch (the "+" keeps x 256, so the count lands on the list column) — both measured */
+	:global(:where(.side) .dir.folded .dirtoggle) {
+		padding-right: 0;
 	}
 	:global(:where(.side) .dir:hover .dirtoggle),
 	:global(:where(.side) .dir.cur .dirtoggle) {
@@ -588,6 +587,11 @@
 			opacity: 1;
 		}
 	}
+	/* a folded row has no button beside its count, so the toggle gives up its 8px right inset: the count lands on the list button's
+	   column (x 236 on touch, where the "+" keeps x 256) instead of 8px short of it — measured */
+	:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
+		padding-right: 0;
+	}
 	/* folded rows: on hover the count gives way to the "+", which takes its place instead of sitting beside it */
 	@media (hover: hover) {
 		:global(:where(.side) .dir.folded),
@@ -605,10 +609,6 @@
 		}
 		:global(:where(.side) .srvhead.folded .dirnew) {
 			right: 12px; /* the strip's right padding: the same centre (x 256) */
-		}
-		/* a folded split tab: the count on the same column, the "⋯" over it while the row is hovered, focused or its menu is open */
-		:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
-			padding-right: 0;
 		}
 		:global(:where(.side) .grprow.gfolded .acts) {
 			position: absolute;

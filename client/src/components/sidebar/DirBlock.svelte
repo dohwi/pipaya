@@ -141,28 +141,32 @@
 		position: relative;
 		margin: 1px 0; /* 1px between rows, like the tab rows */
 	}
+	/* its own column (x 236) whether the archive is folded or open: folding must not push the list button onto the "+" column */
 	.archive :global(.listbtn) {
 		position: absolute;
-		top: 4px;
+		top: 6px; /* 6 + the 20px button + 6 = the 32px row: its glyph sits on the row's centre line, like the list buttons above */
 		right: 20px; /* its centre on x 236, the list-button column of the rows above */
 	}
-	/* folded: the list button takes the count's place on the "+" column (x 256) instead of sitting beside it; open, it stays on x 236 */
-	.archive:has(> .archtoggle.folded) :global(.listbtn) {
-		right: 0;
+	/* folded on touch there is no hover to bring the button back, and a second glyph on the count's row reads as a broken column:
+	   the row shows its count alone, like a folded folder whose list button is hidden too */
+	@media (pointer: coarse) {
+		.archive:has(> .archtoggle.folded) :global(.listbtn) {
+			display: none;
+		}
 	}
 	.archive:hover :global(.listbtn) {
 		opacity: 1;
 	}
 	.archtoggle {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		width: calc(100% + 4px); /* 4px inset on the left, and the highlight runs 8px past the content on the right like a tab row's (the padding below gives it back) */
 		height: 32px; /* every row is 32px tall */
 		margin: 0 -8px 0 4px; /* the same inset as a tab row (.item), so its chevron and count line up with the split tab's */
-		/* chevron centred under the folder icon above. The count badge ends 8px before the list button, which is 20px wide with
-		   its right edge 20 from the row end (button column x 236): 20 + 20 + 8 = 48 */
-		padding: 0 28px 0 21px; /* the count ends 8 before the list button on touch (x 256 button, x 236 count: 8 + 20); folded rows on touch keep the list button on x 256, so the count sits on x 236 like a folder's; measured: the 14px chevron centres on x 48, the folder icon's column */
+		/* 48 = the 20px list button on x 236 (its right edge 20 from the row end) plus the 8px gap to the count (x 256): the name and its count end where the buttons start */
+		padding: 0 48px 0 21px; /* measured: the 14px chevron centres on x 48, the folder icon's column */
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-xs);
@@ -172,17 +176,18 @@
 		color: var(--text);
 		background: var(--bg-hover);
 	}
-	/* mouse + folded: the count sits on the "+" column (centre x 256, like every folded row's count) and gives way to the list button on hover.
-	   The 20px badge fills the toggle's end, which is 4px before the row's: centre 256 (measured). On touch the button stays visible, so the 48px of room stays */
+	/* the count takes the column of the button that belongs there: x 236 on touch (the list button is hidden while folded, so the
+	   count replaces it, as on a folder row), x 256 on a mouse (the list button comes back on x 236 on hover, beside the count).
+	   Positioned out of the flow so the 48px the name reserves does not move it */
+	.archtoggle :global(.cbadge) {
+		position: absolute;
+		inset-block: 0;
+		margin-block: auto; /* 18px badge centred in the 32px row */
+		right: 28px; /* the toggle's end is 8px past the row's: 28 + 8 puts the count's centre on x 236 */
+	}
 	@media (hover: hover) {
-		.archtoggle.folded {
-			padding-right: 8px; /* the highlight's extra 8px: the count stays on x 256 */
-		}
-		.archtoggle.folded :global(.cbadge) {
-			transition: opacity var(--motion-fast) var(--ease-std);
-		}
-		.archive:hover .archtoggle.folded :global(.cbadge) {
-			opacity: 0;
+		.archtoggle :global(.cbadge) {
+			right: 8px; /* the highlight's extra 8px: the centre stays on x 256 */
 		}
 	}
 	/* the same 16px icon column as a tab's icon (centre x 68), so the archive icon and the tabs' icons share one centre */

@@ -142,10 +142,10 @@
 		text-align: left;
 		color: var(--text-dim);
 	}
-	@media (hover: hover) {
-		:global(:where(.side) .srvhead.folded .srvtoggle) {
-			padding-right: 0; /* the count is centred on the "+" column (x 256), like the folders'; on touch the "+" stays beside it */
-		}
+	/* folded: the list button is hidden, so the toggle runs to the "+" and its count takes that column (x 256 on a mouse, where the
+	   "+" leaves the flow; x 236 on touch, where the "+" keeps x 256) — measured, both on the grid */
+	:global(:where(.side) .srvhead.folded .srvtoggle) {
+		padding-right: 0;
 	}
 	:global(:where(.side) .srv.cur .srvtoggle) {
 		color: var(--text);
