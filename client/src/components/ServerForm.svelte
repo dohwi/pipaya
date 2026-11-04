@@ -375,6 +375,7 @@
 		flex: 1;
 		min-width: 0;
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel line box: the body's 1.55 made the path's box 21.69px (rule 3) */
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
