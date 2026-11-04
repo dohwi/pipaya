@@ -429,8 +429,18 @@
 		border-color: var(--text-dim);
 	}
 
-	/* blinking caret on the last block while the model is still writing */
-	.md.streaming :global(> :last-child::after) {
+	/* Blinking caret at the very end of the text while the model is still writing. It has to sit inline in the last text
+	   block: on a list (`ul`/`ol`) as a direct `::after` it became a block of its own under the list, one line taller, and
+	   vanished when the next paragraph started (the whole reply jumped by a line). Down to three list levels; the caret is
+	   left out where the last thing is a code block or table. Blinking only toggles visibility, so it never moves layout. */
+	.md.streaming :global(> :is(p, h1, h2, h3, h4):last-child)::after,
+	.md.streaming :global(> blockquote:last-child > p:last-child)::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child:not(:has(> :is(ul, ol, p, pre, table, blockquote, .codeblock, .tablewrap))))::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child > p:last-child)::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child:not(:has(> :is(ul, ol, p, pre, table, blockquote, .codeblock, .tablewrap))))::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child > p:last-child)::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child:not(:has(> :is(ul, ol, p, pre, table, blockquote, .codeblock, .tablewrap))))::after,
+	.md.streaming :global(> :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child > :is(ul, ol):last-child > li:last-child > p:last-child)::after {
 		content: "";
 		display: inline-block;
 		width: 7px;
@@ -444,11 +454,6 @@
 	/* `text-wrap: balance` (app.css) re-splits a heading's lines on every token, so its words jump between lines while it is written */
 	.md.streaming :global(> :last-child:is(h1, h2, h3, h4)) {
 		text-wrap: wrap;
-	}
-	.md.streaming :global(> pre:last-child::after),
-	.md.streaming :global(> .codeblock:last-child::after),
-	.md.streaming :global(> .tablewrap:last-child::after) {
-		display: none;
 	}
 	@keyframes caret {
 		to {
