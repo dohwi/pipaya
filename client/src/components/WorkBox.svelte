@@ -16,9 +16,9 @@
 	/** `live`: the agent is still working and this box is the newest thing in the reply. */
 	let { steps, live = false }: { steps: Step[]; live?: boolean } = $props();
 
-	/** The status line rolls: the old line leaves upward as the new one comes in from below. */
-	const rollIn = (_: Element) => ({ duration: ms("normal"), easing: easeEnter, css: (t: number, u: number) => `opacity:${t.toFixed(3)};transform:translateY(${(u * 14).toFixed(2)}px)` });
-	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number, u: number) => `opacity:${t.toFixed(3)};transform:translateY(${(-u * 14).toFixed(2)}px)` });
+	/** The status line changes by fading in place: no vertical shift, so a new call that looks like the old one (bash after bash) does not wobble. */
+	const rollIn = (_: Element) => ({ duration: ms("normal"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
+	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number) => `opacity:${t.toFixed(3)}` });
 
 	const pane = getPane();
 	const runOf = (id: string): ToolRun => (id && app.chatOf(pane.id)?.tools[id]) || { state: "pending", output: "" };
@@ -46,7 +46,7 @@
 		return [...m].map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)).join(" · ");
 	});
 
-	/** The single line the box shows; changing `key` rolls the old line up and the new one in. */
+	/** The single line the box shows; changing `key` cross-fades the old line into the new one. */
 	/** The step the header names. Between two steps it stays on the tool that just finished instead of a bare "작업 중". */
 	const shown = $derived(cur >= 0 ? cur : active && steps.at(-1)?.kind === "tool" ? steps.length - 1 : -1);
 	const line = $derived.by(() => {
