@@ -191,10 +191,6 @@
 		padding: 0;
 		border-radius: var(--radius);
 		cursor: zoom-in;
-		transition: filter var(--motion-fast) var(--ease-std);
-	}
-	.zoom:hover {
-		filter: brightness(1.08);
 	}
 	.imgs img {
 		max-width: 100%;
