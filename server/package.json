@@ -1,6 +1,6 @@
 {
   "name": "pipaya-server",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "license": "MIT",
   "type": "module",
   "private": true,
