@@ -1,4 +1,4 @@
-import { errorText, ApiError, type Api } from "./api";
+import { errorText, ApiError, type Api, type StoredMessage } from "./api";
 import { uid } from "./format";
 import { LocalizedError, t } from "./i18n";
 import type {
@@ -106,8 +106,8 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
  * Events that arrive while a (re)load is in flight are buffered and replayed afterwards; `seq` de-duplicates.
  */
 /** Messages fetched when a conversation opens, and per step when scrolling back. */
-const FIRST_PAGE = 120;
-const EARLIER_PAGE = 200;
+const FIRST_PAGE = 40;
+const EARLIER_PAGE = 100;
 
 export class ChatState {
 	items = $state<ChatItem[]>([]);
@@ -198,13 +198,31 @@ export class ChatState {
 	/** Bumped after older messages were put in front, so the list can keep the reader where they were. */
 	earlierRevision = $state(0);
 
+	/** The page before `firstSeq`, already on its way or arrived, so scrolling back never waits for the network. */
+	private ahead: { before: number; token: number; req: Promise<StoredMessage[]> } | null = null;
+
+	private fetchAhead(): Promise<StoredMessage[]> {
+		const before = this.firstSeq, token = this.token;
+		if (this.ahead && this.ahead.before === before && this.ahead.token === token) return this.ahead.req;
+		const req = this.api.tailMessages(this.id, EARLIER_PAGE, before);
+		const entry = { before, token, req };
+		this.ahead = entry;
+		req.catch(() => { if (this.ahead === entry) this.ahead = null; }); // a failed prefetch is retried on demand
+		return req;
+	}
+
+	/** Start fetching the next older page in the background (no-op when there is none or it is already fetched). */
+	prefetchEarlier(): void {
+		if (this.hasEarlier && !this.syncing) void this.fetchAhead().catch(() => {});
+	}
+
 	/** Fetch the page before the oldest loaded message and put it in front. */
 	async loadEarlier(beforeInsert?: () => void): Promise<void> {
 		if (!this.hasEarlier || this.loadingEarlier || this.syncing) return;
 		const token = this.token;
 		this.loadingEarlier = true;
 		try {
-			const msgs = await this.api.tailMessages(this.id, EARLIER_PAGE, this.firstSeq);
+			const msgs = await this.fetchAhead();
 			if (token !== this.token) return;
 			const items: ChatItem[] = [];
 			const tools: Record<string, ToolRun> = {};
@@ -215,11 +233,13 @@ export class ChatState {
 			if (msgs.length) this.firstSeq = msgs[0]!.seq;
 			this.hasEarlier = msgs.length > 0 && msgs.length <= EARLIER_PAGE && this.firstSeq > 0;
 			this.earlierRevision++;
+			this.ahead = null;
 		} catch {
 			/* offline: the button stays and tries again */
 		} finally {
 			this.loadingEarlier = false;
 		}
+		this.prefetchEarlier(); // keep one page ahead of the reader
 	}
 	private syncing = false;
 	private buffer: PipayaEvent[] = [];
@@ -290,6 +310,8 @@ export class ChatState {
 			this.contextRevision++;
 			this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text }));
 			this.ready = true;
+			this.ahead = null;
+			setTimeout(() => { if (token === this.token) this.prefetchEarlier(); }, 0);
 		} catch (e) {
 			if (token !== this.token) return;
 			this.notFound = e instanceof ApiError && e.status === 404;

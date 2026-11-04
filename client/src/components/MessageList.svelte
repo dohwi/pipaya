@@ -70,21 +70,39 @@
 			if (stuck) leftAt.delete(chat.id);
 			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
 		}
-		if (scroller.scrollTop < 600 && chat.hasEarlier) void loadEarlier();
+		// The older page (already fetched ahead) goes in front only while the view is at rest or has reached the top:
+		// writing scrollTop in the middle of a fling cuts its momentum and makes the view jump. A fling that reaches the
+		// top simply stops there, the page is put in front, and the reader stays on the same message.
+		if (chat.hasEarlier && scroller.scrollTop < EARLIER_ZONE()) {
+			if (scroller.scrollTop <= 1) void loadEarlier();
+			else {
+				clearTimeout(restTimer);
+				restTimer = setTimeout(() => { if (scroller && scroller.scrollTop < EARLIER_ZONE()) void loadEarlier(); }, 120);
+			}
+		}
 	}
+	/** About three screens from the top: the page is in place before a calm reader gets there. */
+	const EARLIER_ZONE = () => Math.max(2400, (scroller?.clientHeight ?? 0) * 3);
+	let restTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(restTimer));
 
 	/** Put the next older page in front without moving what the reader is looking at (Safari has no scroll anchoring). */
 	async function loadEarlier() {
 		if (!scroller || !chat.hasEarlier || chat.loadingEarlier) return;
-		let below = -1;
+		let before = -1;
 		await chat.loadEarlier(() => {
-			if (scroller) below = scroller.scrollHeight - scroller.scrollTop;
+			// Browser anchoring and our correction must not both move the view: ours alone, by exactly the height added.
+			if (!scroller) return;
+			before = scroller.scrollHeight;
+			scroller.style.overflowAnchor = "none";
 		});
 		await tick();
-		if (scroller && below >= 0) {
-			scroller.scrollTop = scroller.scrollHeight - below;
+		if (!scroller) return;
+		if (before >= 0) {
+			scroller.scrollTop += scroller.scrollHeight - before;
 			lastTop = scroller.scrollTop;
 		}
+		scroller.style.overflowAnchor = stuck ? "none" : "auto";
 	}
 
 	// A short transcript that does not fill the view has nothing to scroll: fetch the older page right away.

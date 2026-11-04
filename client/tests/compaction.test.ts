@@ -243,17 +243,35 @@ describe("ask_user questions", () => {
 
 describe("paged transcript", () => {
 	const stored = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => ({ seq: from + i, role: "user", createdAt: 1, message: { role: "user", content: `m${from + i}`, timestamp: 1 } }));
+	/** A server holding seq 0..999: the newest `n` below `before`, like the real `tail`. */
+	const server = (calls: (number | undefined)[] = [], total = 1000) => async (_id: string, n: number, before?: number) => {
+		calls.push(before);
+		const end = before ?? total;
+		return stored(Math.max(0, end - n), end);
+	};
+	const settle = () => new Promise((r) => setTimeout(r, 5));
 	test("opens on the newest page and loads earlier ones in front", async () => {
 		const calls: (number | undefined)[] = [];
-		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => { calls.push(before); return before === undefined ? stored(300, 420) : stored(100, 300); } });
+		const { chat } = setup({ tailMessages: server(calls) });
 		await chat.load();
-		expect(chat.items).toHaveLength(120);
+		expect(chat.items).toHaveLength(40);
 		expect(chat.hasEarlier).toBe(true);
 		await chat.loadEarlier();
-		expect(calls).toEqual([undefined, 300]);
-		expect(chat.items).toHaveLength(320);
-		expect(chat.items[0]!.seq).toBe(100);
+		expect(calls.slice(0, 2)).toEqual([undefined, 960]);
+		expect(chat.items).toHaveLength(140);
+		expect(chat.items[0]!.seq).toBe(860);
 		expect(chat.hasEarlier).toBe(true);
+	});
+	test("the next older page is fetched ahead, once, and used when the reader gets there", async () => {
+		const calls: (number | undefined)[] = [];
+		const { chat } = setup({ tailMessages: server(calls) });
+		await chat.load();
+		await settle();
+		expect(calls).toEqual([undefined, 960]);
+		await chat.loadEarlier();
+		expect(calls.slice(0, 2)).toEqual([undefined, 960]); // no second request for the same page
+		await settle();
+		expect(calls).toEqual([undefined, 960, 860]); // and the page after it is already on its way
 	});
 	test("a short conversation has nothing earlier", async () => {
 		const { chat } = setup({ tailMessages: async () => stored(0, 5) });
@@ -266,27 +284,33 @@ describe("paged transcript", () => {
 		expect(chat.items).toHaveLength(1900);
 		expect(chat.hasEarlier).toBe(false);
 	});
-	test("a failed earlier fetch keeps the loaded messages and the button", async () => {
+	test("a failed earlier fetch keeps the loaded messages and the button, and retries later", async () => {
 		let fail = false;
-		const { chat } = setup({ tailMessages: async () => { if (fail) throw new Error("offline"); return stored(300, 420); } });
-		await chat.load();
+		const ok = server();
+		const { chat } = setup({ tailMessages: async (id: string, n: number, before?: number) => { if (fail && before !== undefined) throw new Error("offline"); return ok(id, n, before); } });
 		fail = true;
+		await chat.load();
+		await settle();
 		await chat.loadEarlier();
-		expect(chat.items).toHaveLength(120);
+		expect(chat.items).toHaveLength(40);
 		expect(chat.hasEarlier).toBe(true);
 		expect(chat.loadingEarlier).toBe(false);
+		fail = false;
+		await chat.loadEarlier();
+		expect(chat.items).toHaveLength(140);
 	});
 	test("the reader's position is measured when the page lands, not when the request left", async () => {
 		let release!: () => void;
 		const gate = new Promise<void>((r) => { release = r; });
-		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => { if (before === undefined) return stored(300, 420); await gate; return stored(100, 300); } });
+		const ok = server();
+		const { chat } = setup({ tailMessages: async (id: string, n: number, before?: number) => { if (before !== undefined) await gate; return ok(id, n, before); } });
 		await chat.load();
 		const order: string[] = [];
 		const pending = chat.loadEarlier(() => order.push(`insert@${chat.items.length}`));
 		order.push("scrolled meanwhile");
 		release();
 		await pending;
-		expect(order).toEqual(["scrolled meanwhile", "insert@120"]);
-		expect(chat.items).toHaveLength(320);
+		expect(order).toEqual(["scrolled meanwhile", "insert@40"]);
+		expect(chat.items).toHaveLength(140);
 	});
 });
