@@ -56,6 +56,11 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - `ListItem`: one card row (12px padding, 12px gap): optional leading `Switch`, title line (name + `Badge size="sm"`), body lines (`.meta`, `.desc`), trailing actions. The first row shares one centre line (22px with a switch, 34px with action buttons; actions drop below on a phone). Animate the keyed `<li>` around it (`animate:reflow in:rowIn out:rowOut`).
 - `FormField`: label (20px line) + 8px + control = 68px with a 40px field. `group` for a control that is not one input (`Segmented`).
 - `StatusItem`: one item under the input (icon or mark + value + tooltip), a 21px box (19px in a narrow pane) with a 4px gap. A button when it has `onclick` (add `empty` when there is nothing to show, `level` for warn/danger).
+  **Its icon/value pair is not a centring bug.** The row centres both boxes on one line (measured box centres: 0.00px apart), but the
+  painted ink does not agree: an 11px value sits −1.5 to +2.5px from its 13px mark depending on the string (`0개` −1.5, `4개` −1.0,
+  `tps` +0.75, `—` +2.0), on top of each mark's own 0.1–0.9px glyph offset. The line boxes are whole pixels already (11px / 11px).
+  Measured nudges do not help: lifting the mark 1px turns `0개` into +0.38 but pushes `—` to +3.0, and a 13px or 16px value line box
+  leaves the digits where they were. So the row stays as it is — do not "fix" it with a margin.
 - Check by measuring: every item in a row must have the same top, height and icon/text centre (`getBoundingClientRect`), at 1440, 820 and 390.
 
 ### Text inside pills (measure the ink, not the box)
@@ -212,6 +217,17 @@ Everything you read in a dialog ends on **one** right line and starts on **one**
 ### Extra facts in a tooltip
 
 Facts that only some rows have (a model's abilities and context size) go in the row's native `title`, like the status line's readouts, not in the row and not in a custom popup. A row stays a name and its controls.
+
+### Icon/label pairs (`scripts/ui-pairs.py`)
+
+The sibling check for "an icon and one line of text": every row that puts a line icon beside a label, measured on the painted ink at
+device_scale_factor 4 over every screen (`main`, the settings sections, the server tabs, the conversation list, the folder picker, the
+model picker, a row menu) at 1440 / 820 / 390. From **1px** apart it is a bug; 0.5px is the half-pixel limit. Two labels are exempt and
+reported separately as *light glyph*: their ink has no height of its own (`..`, `—`, a lone `.`), so a centred box still paints low.
+The status line is the other known exception (see `StatusItem` above). Rows whose label inherits the body's 1.55 line box are listed as
+*fractional line box*: that is what once put the working-directory path 1.5px below its folder glyph, so give the label `line-height: 20px`
+before hunting anywhere else. Audit result at the time of writing: no layout bug on any screen; the only 1px+ pairs were the status line
+and the folder picker's `..` row.
 
 ### Alignment lint (finds the misses by itself)
 
