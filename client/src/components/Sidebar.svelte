@@ -592,6 +592,19 @@
 	:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
 		padding-right: 0;
 	}
+	/* touch, folded split tab: its "⋯" only shows while the tab is open, so the count would land on x 256 when it is not; it keeps
+	   the list button's column (x 236, like the folder and archive counts) either way — 20 from the row's end puts its centre there */
+	@media (pointer: coarse) {
+		:global(:where(.side) .grprow.gfolded .cbadge) {
+			position: absolute;
+			inset-block: 0;
+			margin-block: auto;
+			right: 28px; /* 20 for the count's centre on x 236 plus the row's own 8px highlight bleed */
+		}
+		:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
+			padding-right: 40px; /* room for that count: the title ends where the pill starts */
+		}
+	}
 	/* folded rows: on hover the count gives way to the "+", which takes its place instead of sitting beside it */
 	@media (hover: hover) {
 		:global(:where(.side) .dir.folded),
