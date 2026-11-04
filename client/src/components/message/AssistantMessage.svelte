@@ -229,11 +229,17 @@
 	.foot {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0;
 		margin-top: 4px;
-		margin-left: -8px; /* the 32px buttons hold a 16px glyph 8px in: the first glyph lands on the text's left edge (was -4: 4px in) */
+		/* 8px glyph inset less the 2px the first box is pulled in: the first glyph lands on the text's left edge */
+		margin-left: -6px;
 		opacity: 0.55;
 		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	/* A 16px glyph in a 32px box leaves 8px of air on each side, so side by side boxes read 20px apart and the icons look
+	   scattered. The boxes overlap 2px instead: a 28px pitch, the spacing the action rows had before they shared a size. */
+	.foot :global(.iconbtn) {
+		margin-inline: -2px;
 	}
 	.row:hover .foot,
 	.foot:focus-within {

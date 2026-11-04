@@ -144,6 +144,7 @@ Applies to `ToolCard`, `QuestionReply` and the work box. Measured on 320 / 390 /
 - **Steps** (several questions): up to 4 are numbered 28px circles joined by 16x2px lines, centred; answered = green outline and check, current = filled with the warn colour (a touch darker, 5:1 contrast), ahead = grey outline. From 5 questions on it is `‹ 3 / 8 ›` between two 28px arrows. Every circle and arrow carries `.tap`. The row is 28px and 12px above the question.
 - **One height.** In a multi-question block the card keeps the same height on every tab (a question without an input holds the input's 40px).
 - **Answers can be given in any order**: after an answer the block goes to the next unanswered question, else the first unanswered one before it; it sends only when every question has an answer.
+- **Action rows** (copy / reply / branch / retry under an answer, copy / branch under your own message): 32px `sm` icon buttons, 16px glyphs, and the boxes overlap 2px so the pitch is 28px — 8px of air on each side of a glyph would read as 20px between neighbours. Both rows bleed by the glyph inset less that overlap (`-6px`), so the first glyph starts on the text's left line and the last one ends on the content's right line. Both rows are 32px high and the same on every device; a touch screen has no hover, so they stay visible there.
 
 ## 5. Breakpoints and touch
 

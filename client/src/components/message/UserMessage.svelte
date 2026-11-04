@@ -199,15 +199,20 @@
 		display: block;
 	}
 	/* the same 32px row as the answer's foot (one height for every action row), right-aligned on the content's right line:
-	   the box ends where the answer's text ends, and the 8px bleed puts the last glyph on that line instead of 2px inside it */
+	   the box ends 2px past where the answer's text ends, and the 6px bleed puts the last glyph on that line */
 	.actions {
 		opacity: 0;
 		transition: opacity var(--motion-fast) var(--ease-std);
 		height: 32px;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		margin-right: -8px; /* a 32px button holds a 16px glyph 8px in: the glyph's right edge lands on the content's right edge */
+		gap: 0;
+		/* 8px glyph inset less the 2px the last box is pulled in: the last glyph's right edge lands on the content's right edge */
+		margin-right: -6px;
+	}
+	/* same 28px pitch as the answer's foot: 32px boxes overlapping 2px, so the 16px glyphs do not read 20px apart */
+	.actions :global(.iconbtn) {
+		margin-inline: -2px;
 	}
 	.row.user:hover .actions,
 	.actions:focus-within {
