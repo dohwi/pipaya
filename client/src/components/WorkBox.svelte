@@ -92,6 +92,17 @@
 		// a tool with nothing to show but its target (read, ls, grep …): say what it touched
 		return { lines: tail(src || toolSummary(s.name, a)), kind: "src" };
 	});
+	/**
+	 * Between two steps the next one has nothing to show yet (a call still preparing, a thought with no text), so `peek` is
+	 * empty for a moment. Closing the preview and reopening it a frame later made the box and everything under it bounce;
+	 * keep the last preview on screen until the new one has lines, and drop it only when the box stops being live.
+	 */
+	let held = $state<{ lines: string[]; kind: "out" | "src" | "think" }>({ lines: [], kind: "out" });
+	$effect.pre(() => {
+		if (!active) held = { lines: [], kind: "out" };
+		else if (peek.lines.length) held = peek;
+	});
+	const shownPeek = $derived(peek.lines.length ? peek : active ? held : peek);
 	/** The picture tool is the step being worked on: the box opens a canvas that fills in, instead of a text preview. */
 	const painting = $derived.by(() => {
 		if (!active) return false;
@@ -158,13 +169,13 @@
 
 	{#if painting}
 		<div class="canvas" in:collapseIn out:collapseOut><PaintingCanvas /></div>
-	{:else if active && peek.lines.length}
+	{:else if active && shownPeek.lines.length}
 		<!-- A mouse shortcut to the same dialog the "details" button above opens (hidden from assistive tech on purpose). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="peek mono {peek.kind}" onclick={() => (modal = true)} aria-hidden="true" in:collapseIn out:collapseOut>
+		<div class="peek mono {shownPeek.kind}" onclick={() => (modal = true)} aria-hidden="true" in:collapseIn out:collapseOut>
 			<div class="pin" class:clip={peekH > PEEK_LINES * LINE_H} style:height="{peekWin}px">
 				<div class="inner" bind:clientHeight={peekH}>
-					{#each peek.lines as l, i (i)}
+					{#each shownPeek.lines as l, i (i)}
 						<div class="pl">{l}</div>
 					{/each}
 				</div>
