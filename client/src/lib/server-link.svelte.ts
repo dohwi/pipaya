@@ -17,6 +17,19 @@ export interface LinkHooks {
 	ready(link: ServerLink): void;
 }
 
+/** How long the initial lists may take before the attempt counts as a network failure (and is retried). */
+const LISTS_TIMEOUT_MS = 15_000;
+
+function withDeadline<T>(p: Promise<T>, ms: number, fail: () => Error): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(fail()), ms);
+		p.then(
+			(v) => (clearTimeout(timer), resolve(v)),
+			(e) => (clearTimeout(timer), reject(e)),
+		);
+	});
+}
+
 /**
  * One server, kept live for as long as the app runs: its lists, models and what each session is doing, read first-hand
  * and updated by its own event stream. Every saved server has one, so none of them is "the" open server: the app only
@@ -134,6 +147,10 @@ export class ServerLink {
 				api.activity().catch(() => null),
 			]);
 			listsReq.catch(() => {}); // judged below; a failure before that point must not go unhandled
+			// Only /health had a deadline: a list request stuck on a connection the OS killed in the background never settled,
+			// so sync hung (spinner forever, no retry scheduled). Past the deadline it fails like any other network error.
+			const lists = withDeadline(listsReq, LISTS_TIMEOUT_MS, () => new ApiError(0, "network", t("서버에 연결할 수 없습니다")));
+			lists.catch(() => {});
 			const health = await healthReq;
 			if (token !== this.token) return;
 			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
@@ -143,7 +160,7 @@ export class ServerLink {
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
 				return;
 			}
-			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await listsReq;
+			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await lists;
 			if (token !== this.token) return;
 			const running: Record<string, boolean> = {};
 			const awaiting: Record<string, number> = {};
