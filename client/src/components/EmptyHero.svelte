@@ -47,7 +47,8 @@
 		grid-area: 1 / 1;
 	}
 	.base {
-		opacity: 0.35;
+		/* solid colour (the old 35% fade of --text-faint, pre-mixed): the grid lines must not show through the mark */
+		color: color-mix(in srgb, var(--text-faint) 35%, var(--bg));
 	}
 	.tint {
 		opacity: 0;
@@ -59,10 +60,10 @@
 			animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
 		}
 		25% {
-			opacity: 0.9;
+			opacity: 1;
 		}
 		60% {
-			opacity: 0.9;
+			opacity: 1;
 			animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
 		}
 		100% {
