@@ -131,10 +131,13 @@
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
 				<span class="stats">
-					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{tail.model}{/if}
-					{#if tailModel && !tailModel.reasoning}· off{:else if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
-					{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
-					{#if took}· {duration(took)}{/if}
+					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
+					<span class="stext">
+						{#if tail.model}{tail.model}{/if}
+						{#if tailModel && !tailModel.reasoning}· off{:else if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
+						{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
+						{#if took}· {duration(took)}{/if}
+					</span>
 				</span>
 			</div>
 		{/if}
@@ -248,20 +251,34 @@
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
 	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */
 	.slogo {
-		display: inline-flex;
-		vertical-align: -2.5px;
+		display: flex;
+		flex: none;
+		align-items: center;
 		margin-right: 4px;
+	}
+	.slogo :global(.model) {
+		display: block;
+	}
+	/* measured: in a 20px line the lowercase x-height centre sits 1.2px under the box centre (icon glyphs 16.2, text 17.3);
+	   2px of bottom padding moves the text, not the row, up 1px onto the glyph centre */
+	.stext {
+		min-width: 0;
+		padding-bottom: 2px;
+		line-height: 20px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	/* an 11px line centred as a box puts its baseline 4.1px under the row centre, so the lowercase body rides 1px low
 	   next to the 16px glyphs; 2px of bottom margin lifts the text (not the box) onto the row centre */
 	.stats {
+		display: flex;
+		align-items: center;
+		min-width: 0;
 		margin-left: 8px;
-		margin-bottom: 2px;
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		white-space: nowrap;
 		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 	/* narrow pane: the stats line gives way before the buttons do, and the text shrinks a notch */
 	@container (max-width: 420px) {
