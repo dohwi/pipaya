@@ -75,7 +75,7 @@
 	);
 </script>
 
-<Modal {onclose} title={t("적용된 컨텍스트")} sub={subText} width="xl" maxHeight="720px" safeArea>
+<Modal {onclose} title={t("적용된 컨텍스트")} sub={subText} width="xl" maxHeight="720px" safeArea portal>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
