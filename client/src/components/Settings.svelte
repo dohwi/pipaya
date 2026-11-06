@@ -132,7 +132,9 @@
 					<SearchHits {hits} onpick={pick} />
 				</div>
 			{:else}
-			{#key tab + (current.server ? (server?.id ?? "") : "")}
+			<!-- Switching server on the same section must not replay the pane fade (it blanked the content for a moment = flicker);
+			     ServerForm is keyed by server id below and swaps in place. Only the extensions list reads the server from a prop. -->
+			{#key tab + (tab === "srvext" ? (server?.id ?? "") : "")}
 			<div class="pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
 			<div class="phead">
 				<h3>{t(current.label)}</h3>

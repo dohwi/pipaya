@@ -45,6 +45,7 @@
 </script>
 
 {#if available}
+<div class="stack" in:collapseIn> <!-- the card shows up after an async lookup: slide it open instead of popping in -->
 	<div class="section-label">{t("내장 서버")}</div>
 	<SettingRow label={t("다른 기기에서 접속 허용")} hint={t("끄면 이 PC에서만 접속됩니다. 접속은 토큰이 있어야 합니다")}>
 		<Switch checked={shared} label={t("다른 기기에서 접속 허용")} onchange={(on) => (shared = on)} />
@@ -64,13 +65,22 @@
 	</div>
 	{#if error}<p class="hint danger" role="alert" in:collapseIn out:collapseOut>{error}</p>{/if}
 	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중단됩니다")}</p>
+</div>
 {/if}
 
 <style>
+	/* rows and hints sat flush against each other: one 12px rhythm for the whole block */
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.hint {
+		margin: 0;
+	}
 	.actions {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 4px;
 	}
 	input {
 		width: 160px;
