@@ -16,6 +16,8 @@ import { ChatState } from "./chat.svelte";
 
 /** How many off-screen transcripts stay loaded so switching back to them is instant. */
 const KEEP_CHATS = 8;
+/** Away longer than this and a mobile OS may have killed the streams: coming back forces a full resync. */
+const LONG_AWAY_MS = 30_000;
 import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent } from "./server-link-model";
 import { viewport } from "./viewport.svelte";
@@ -509,15 +511,25 @@ class AppStore {
     // Mobile OSes silently kill background sockets (EventSource gets no error), and a /health ping succeeds on a fresh
     // connection while the old stream is dead. So coming back always reopens the streams, however short the absence.
     // Android WebViews sometimes skip visibilitychange, so focus/pageshow wake too; `wake` merges the bursts.
+    // A short absence (alt-tab) only pings: a forced sync reloads the open transcript and re-renders every message (visible jitter).
+    // The stream is rebuilt without a reload only when the ping fails; a long absence still forces the full resync.
     let wokeAt = 0;
+    let leftAt = 0;
+    const left = () => {
+      if (!leftAt) leftAt = Date.now();
+    };
     const wake = () => {
       const now = Date.now();
       if (now - wokeAt < 2000) return;
       wokeAt = now;
-      this.resyncLinks(false);
+      const away = leftAt ? now - leftAt : Infinity;
+      leftAt = 0;
+      this.resyncLinks(away < LONG_AWAY_MS);
     };
+    window.addEventListener("blur", left);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) wake();
+      if (document.hidden) left();
+      else wake();
     });
     window.addEventListener("focus", wake);
     window.addEventListener("pageshow", wake);
