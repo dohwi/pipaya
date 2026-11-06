@@ -222,7 +222,8 @@
 		overflow: hidden;
 	}
 	.pane.focused {
-		border-color: var(--accent);
+		/* a full-strength accent frame reads far heavier than the 1px --border lines around it; blend toward them */
+		border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 	}
 	/* finished while the user was elsewhere: green frame + title bar until the pane is looked at */
 	.pane.finished {
