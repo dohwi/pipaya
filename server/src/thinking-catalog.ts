@@ -43,8 +43,8 @@ const STRENGTH_OVERRIDES: Record<string, LevelMap> = {
 	...Object.fromEntries(["mistral-large-4", "mistral-large-4-0"].map((k) => [k, { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: null, max: null } as LevelMap])),
 	// low/high/max
 	...Object.fromEntries(["glm-5.3", "zai-glm-5-3"].map((k) => [k, { off: null, minimal: null, low: "low", medium: null, high: "high", xhigh: null, max: "max" } as LevelMap])),
-	// none/low/high/xhigh/max
-	...Object.fromEntries(["deepseek-4.1-flash", "deepseek-v4.1-flash", "deepseek-v4-1-flash-1017"].map((k) => [k, { off: "none", minimal: null, low: "low", medium: null, high: "high", xhigh: "xhigh", max: "max" } as LevelMap])),
+	// low/high/xhigh/max (no off, by policy)
+	...Object.fromEntries(["deepseek-4.1-flash", "deepseek-v4.1-flash", "deepseek-v4-1-flash-1017"].map((k) => [k, { off: null, minimal: null, low: "low", medium: null, high: "high", xhigh: "xhigh", max: "max" } as LevelMap])),
 };
 
 /** The OpenRouter catalog entry (and its reasoning strengths) for this model id, or `undefined` when it is unknown or ambiguous. */
