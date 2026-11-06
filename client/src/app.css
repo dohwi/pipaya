@@ -231,6 +231,7 @@
 	--lv-max: #dc2626;
 	--mark-img: #8b5cf6;
 	--mark-file: #10b981;
+	--mark-header: #b45309; /* amber-700: the peer header label and tint on light surfaces (dark uses #fcd34d) */
 	--mark-mention: #0284c7;
 	--info: #1d6fe0;
 	--pinned: #000000;
