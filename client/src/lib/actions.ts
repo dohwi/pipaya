@@ -103,12 +103,13 @@ function stepWorkspace(step: 1 | -1) {
   if (id && id !== app.activeId) void app.openSession(id);
 }
 
-/** Previous / next tab of the tab bar (the active workspace's tabs), wrapping. */
+/** Previous / next tab of the tab bar (the active workspace's tabs), wrapping. A split group counts as one tab per pane. */
 function stepTab(step: 1 | -1) {
   const at = app.activeTab;
-  if (!at) return;
-  const id = stepFrom(at.dir.tabs.map((x) => x.id), at.tab.id, step);
-  if (id && id !== at.tab.id) app.openTab(id);
+  if (!at || !app.activeId) return;
+  const order = at.dir.tabs.flatMap((x) => tabPanes(x)).filter((id) => app.shows(id));
+  const id = stepFrom(order, app.activeId, step);
+  if (id && id !== app.activeId) void app.openSession(id);
 }
 
 function lastSession() {
