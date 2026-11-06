@@ -184,7 +184,7 @@
 		if (retrying) return;
 		retrying = true;
 		try {
-			await Promise.all([app.sync(), new Promise((r) => setTimeout(r, 800))]); // hold at least 800ms so a fast failure is still visible
+			await Promise.all([app.syncAll(), new Promise((r) => setTimeout(r, 800))]); // hold at least 800ms so a fast failure is still visible
 		} finally {
 			retrying = false;
 		}

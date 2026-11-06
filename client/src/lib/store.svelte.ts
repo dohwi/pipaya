@@ -318,6 +318,11 @@ class AppStore {
     await this.link?.sync();
   }
 
+  /** Reconnect every saved server now, not only the open one (the banner's "reconnect" button). */
+  async syncAll(): Promise<void> {
+    await Promise.all(Object.values(this.links).map((l) => l.sync()));
+  }
+
   /** Connection of the open server (kept as `conn` for components that only need url/token). */
   get conn(): { baseUrl: string; token: string } | null {
     const s = this.server;
