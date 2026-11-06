@@ -409,6 +409,8 @@ export const en: Record<string, string> = {
 	"API 형식": "API format",
 	"API 키 필요": "API key required",
 	"켜면 저장된 키가 있어야 이 연결의 모델을 쓸 수 있습니다": "When on, a saved key is required to use this connection's models",
+	"system 역할만 사용": "Use the system role only",
+	"서버가 developer 역할을 거부(422)할 때 켭니다. 추론 모델에도 시스템 프롬프트를 system으로 보냅니다": "Turn on if the server rejects the developer role (422). Reasoning models get the system prompt as a system message",
 	"모델 ({n})": "Models ({n})",
 	"모델 추가": "Add model",
 	"불러오지 못한 {n}개 삭제": "Delete {n} not available",

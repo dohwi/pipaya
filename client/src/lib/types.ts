@@ -388,6 +388,8 @@ export interface CustomProviderInput {
 	baseUrl: string;
 	api: ApiFormat;
 	authRequired: boolean;
+	/** openai-completions only: send the system prompt as "system", never "developer". */
+	noDeveloperRole?: boolean;
 	models: CustomModel[];
 }
 

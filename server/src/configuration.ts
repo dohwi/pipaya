@@ -24,6 +24,7 @@ export const CustomProviderBody = Type.Object({
 	baseUrl: Type.String({ minLength: 1, maxLength: 2000, description: "HTTP(S) API base URL, e.g. http://host:11434/v1. Server-side requests; use only trusted endpoints." }),
 	api: Type.Union([Type.Literal("openai-completions"), Type.Literal("openai-responses"), Type.Literal("anthropic-messages")]),
 	authRequired: Type.Boolean(),
+	noDeveloperRole: Type.Optional(Type.Boolean({ description: "openai-completions only: send the system prompt as a \"system\" message even for reasoning models. Turn on when the upstream rejects the \"developer\" role (HTTP 422). Left out = pi-ai detects it." })),
 	models: Type.Array(Type.Object({
 		id: Type.String({ minLength: 1, maxLength: 200 }),
 		name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
@@ -539,6 +540,8 @@ export class Configuration {
 			...(m.reasoning && !m.imageGeneration && m.defaultThinkingLevel ? { defaultThinkingLevel: m.defaultThinkingLevel } : {}),
 			contextWindow: m.contextWindow, maxTokens: m.maxTokens,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			// Only set when the owner asked for it; otherwise pi-ai keeps detecting the role from the endpoint.
+			...(p.api === "openai-completions" && p.noDeveloperRole ? { compat: { supportsDeveloperRole: false } } : {}),
 		}));
 		return createProvider({
 			id: p.id, name: p.name, baseUrl: p.baseUrl, models, api: implementations[p.api](), images: { [IMAGE_API]: openrouterImagesApi() },

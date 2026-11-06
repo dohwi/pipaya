@@ -234,7 +234,7 @@
 		const out = res.out;
 		busy = true;
 		try {
-			await a.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, models: out });
+			await a.saveCustomProvider(f.id, { name: f.name.trim(), baseUrl: f.baseUrl.trim(), api: f.api, authRequired: f.authRequired, noDeveloperRole: f.api === "openai-completions" && f.noDeveloperRole, models: out });
 			if (f.isNew && f.authRequired && f.apiKey.trim()) {
 				try {
 					await a.setCredential(f.id, f.apiKey.trim());
