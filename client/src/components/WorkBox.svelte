@@ -117,8 +117,9 @@
 	const drawn = $derived.by(() => {
 		if (!active) return [];
 		for (let i = steps.length - 1; i >= 0; i--) {
-			if (steps[i].kind === "tool" && runs[i]?.state === "done" && runs[i]?.images?.length) return runs[i]!.images!;
-			if (steps[i].kind === "tool" && runs[i]?.state !== "done") break; // a step is still running: do not show an older picture next to it
+			if (steps[i].kind !== "tool") continue;
+			// Only the latest tool step counts: a step without a picture (bash) must not bring back an older step's picture.
+			return runs[i]?.state === "done" ? (runs[i]?.images ?? []) : [];
 		}
 		return [];
 	});
