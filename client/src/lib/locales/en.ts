@@ -764,6 +764,8 @@ export const en: Record<string, string> = {
 	"{total}개 중 {on}개 사용": "{on} of {total} in use",
 	"이 프로젝트": "This project",
 	"적용 범위": "Scope",
+	"전체": "All",
+	"이 범위에 적용된 AGENTS.md가 없습니다.": "No AGENTS.md applies in this scope.",
 	"이 프로젝트에서 쓰는 스킬 {n}개": "{n} {n#skill|skills} used in this project",
 	"모든 프로젝트": "All projects",
 	"스킬 검색": "Search skills",

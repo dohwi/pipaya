@@ -12,6 +12,7 @@
 	import DialogBody from "./DialogBody.svelte";
 	import Icon from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
+	import Segmented from "./Segmented.svelte";
 	
 	/** sessionId null: preview of a new conversation in `cwd`. */
 	let { sessionId, cwd = "", api, onclose }: { sessionId: string | null; cwd?: string; api: Api; onclose: () => void } = $props();
@@ -22,6 +23,11 @@
 	/** Which sources are unfolded, by key. A plain <details> snaps open, so the fold is drawn by hand to animate. */
 	let opened = $state<Record<string, boolean>>({});
 	const scope = { global: msg("전역 AGENTS.md"), ancestor: msg("상위 폴더 AGENTS.md"), cwd: msg("프로젝트 AGENTS.md") };
+	/** AGENTS.md filter: all, the global file, or the project's (its folder and the ones above it). Numbers keep the apply order. */
+	type Part = "all" | "global" | "project";
+	let part = $state<Part>("all");
+	const inPart = (x: { scope: string }) => part === "all" || (part === "global" ? x.scope === "global" : x.scope !== "global");
+	const partCount = (k: Part) => (data?.instructions ?? []).filter((x) => k === "all" || (k === "global" ? x.scope === "global" : x.scope !== "global")).length;
 	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델") };
 	const kindName = { sdk: msg("출처 SDK"), runtime: msg("출처 서버"), extension: msg("출처 확장"), helper: msg("출처 보조 모델") };
 	const promptGroups = [
@@ -86,7 +92,15 @@
 				<h2 class="part">{t("사용자 정의")}</h2>
 				<section class="group">
 					<h3>{t("AGENTS.md (적용 순서)")}</h3>
+					{#if data.instructions.length}
+						<div class="tabs"><Segmented tabs label={t("적용 범위")} value={part} onchange={(id) => (part = id)} options={[
+							{ id: "all", label: `${t("전체")} ${partCount("all")}` },
+							{ id: "global", label: `${t("전역")} ${partCount("global")}` },
+							{ id: "project", label: `${t("프로젝트")} ${partCount("project")}` },
+						]} /></div>
+					{/if}
 					{#each data.instructions as instruction, i (instruction.path)}
+						{#if inPart(instruction)}
 						<div class="source">
 							<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
 								<span class="label"><span class="source-name mono">{i + 1}. {instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
@@ -94,9 +108,11 @@
 							</button>
 							{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
 						</div>
+						{/if}
 					{:else}
 						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
 					{/each}
+					{#if data.instructions.length && !partCount(part)}<div class="empty">{t("이 범위에 적용된 AGENTS.md가 없습니다.")}</div>{/if}
 				</section>
 				<div class="rest">
 					<h2 class="part">{t("시스템 정의")}</h2>
@@ -206,6 +222,7 @@
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 
 	.gap { margin-bottom: 8px; }
+	.tabs { margin-bottom: 8px; }
 	.inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }
 	.inner > .note { margin-top: 8px; }
 	.inner .source { margin-top: 4px; }

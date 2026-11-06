@@ -113,12 +113,13 @@
 	const remove = (r: SubagentInfo) => run((a) => a.deleteSubagent(r.name, r.scope, cwd));
 
 	const scopeText = (s: "global" | "project") => (s === "global" ? t("전역") : t("프로젝트"));
-	/** Project roles first (they win), then global ones; a group with nothing in it is left out. */
+	/** Project roles first (they win), then global ones. Both tabs always exist so the counts stay visible. */
+	let tab = $state<"project" | "global">("project");
 	const groups = $derived(
 		(["project", "global"] as const)
-			.map((scope) => ({ scope, items: (list?.subagents ?? []).filter((r) => r.scope === scope), path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents" }))
-			.filter((g) => g.items.length),
+			.map((scope) => ({ scope, items: (list?.subagents ?? []).filter((r) => r.scope === scope), path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents" })),
 	);
+	const current = $derived(groups.find((g) => g.scope === tab) ?? groups[0]);
 	/** `~` for the home folder, and a long path loses its front (the end is the part that tells folders apart). */
 	const tilde = (p: string) => {
 		const h = p.replace(/^\/home\/[^/]+/, "~");
@@ -191,7 +192,14 @@
 		</form>
 	{:else if list}
 		<div class="groups">
-		{#each groups as g (g.scope)}
+		<Segmented
+			tabs
+			label={t("적용 범위")}
+			value={tab}
+			onchange={(id) => (tab = id)}
+			options={groups.map((g) => ({ id: g.scope, label: `${scopeText(g.scope)} ${g.items.filter((r) => r.enabled).length}/${g.items.length}` }))}
+		/>
+		{#each [current] as g (g.scope)}
 			<ListGroup title={scopeText(g.scope)} count={t("{on}/{total}개 사용", { on: g.items.filter((r) => r.enabled).length, total: g.items.length })} path={g.path}>
 				<ul class="list">
 					{#each g.items as r (`${r.scope}/${r.name}`)}
@@ -210,11 +218,11 @@
 								<p class="meta mono">{r.model ?? t("호출한 대화의 모델")}{r.thinking ? ` · ${r.thinking}` : ""} · {t("도구 {n}개", { n: r.tools.length })} · {t("최대 {n}회", { n: r.maxTurns })}</p>
 							</ListItem>
 						</li>
+					{:else}
+						<EmptyState as="li">{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
 					{/each}
 				</ul>
 			</ListGroup>
-		{:else}
-			<EmptyState>{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
 		{/each}
 		</div>
 		<Button variant="dashed" onclick={add}>{t("도우미 역할 추가")}</Button>
