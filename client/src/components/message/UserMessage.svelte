@@ -215,7 +215,7 @@
 		margin-inline: -2px;
 	}
 	.row.user:hover .actions,
-	.actions:focus-within {
+	.actions:has(:focus-visible) {
 		opacity: 1;
 	}
 	@media (pointer: coarse) {

@@ -245,7 +245,7 @@
 		margin-inline: -2px;
 	}
 	.row:hover .foot,
-	.foot:focus-within {
+	.foot:has(:focus-visible) {
 		opacity: 1;
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and

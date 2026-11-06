@@ -632,7 +632,7 @@
 			transition: opacity var(--motion-fast) var(--ease-std);
 		}
 		:global(:where(.side) .grprow.gfolded:hover .cbadge),
-		:global(:where(.side) .grprow.gfolded:focus-within .cbadge),
+		:global(:where(.side) .grprow.gfolded:has(:focus-visible) .cbadge),
 		:global(:where(.side) .grprow.gfolded.menuopen .cbadge) {
 			opacity: 0;
 		}
@@ -746,21 +746,21 @@
 	}
 	@media (hover: hover) {
 		:global(:where(.side) .item:hover .title[data-over]),
-	:global(:where(.side) .item:focus-within .title[data-over]) {
+	:global(:where(.side) .item:has(:focus-visible) .title[data-over]) {
 			text-overflow: clip;
 			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 		}
 		:global(:where(.side) .item:hover .title[data-over] .track),
-	:global(:where(.side) .item:focus-within .title[data-over] .track) {
+	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .track) {
 			display: flex;
 			width: max-content;
 			animation: mq var(--mq-d, 8s) linear infinite;
 		}
 		:global(:where(.side) .item:hover .title[data-over] .mq),
-	:global(:where(.side) .item:focus-within .title[data-over] .mq),
+	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .mq),
 	:global(:where(.side) .item:hover .title[data-over] .dup),
-	:global(:where(.side) .item:focus-within .title[data-over] .dup) {
+	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .dup) {
 			display: block;
 			flex: none;
 			padding-right: 32px;
@@ -802,7 +802,7 @@
 		display: none;
 	}
 	:global(:where(.side) .item:hover .acts),
-	:global(:where(.side) .item:focus-within .acts),
+	:global(:where(.side) .item:has(:focus-visible) .acts),
 	:global(:where(.side) .item.menuopen .acts) {
 		display: flex;
 	}
