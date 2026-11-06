@@ -87,7 +87,7 @@ describe("default commands", () => {
 
 	test("uses one English name per command with a stable default order", () => {
 		const names = commands.COMMANDS.map((c) => c.name);
-		expect(names).toEqual(["new", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"]);
+		expect(names).toEqual(["new", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"]);
 		expect(new Set(names).size).toBe(names.length);
 		for (const cmd of commands.COMMANDS) {
 			expect(cmd.name).toMatch(/^[a-z]+$/);

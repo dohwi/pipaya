@@ -103,16 +103,16 @@ describe("row menu", () => {
 		entries.forEach((e) => e.run());
 		return { icons: entries.map((e) => e.icon), calls: [...calls] };
 	};
-	test("a conversation can be grouped, renamed and closed, in that order", () => {
-		expect(run({ kind: "session", x: { id: "s1", title: "Chat" } })).toEqual({ icons: ["columns", "pencil", "x"], calls: ["groupWith s1", "rename s1 Chat", "close s1"] });
+	test("a conversation can be renamed, grouped and closed, in that order", () => {
+		expect(run({ kind: "session", x: { id: "s1", title: "Chat" } })).toEqual({ icons: ["pencil", "columns", "x"], calls: ["rename s1 Chat", "groupWith s1", "close s1"] });
 	});
 	test("a terminal closes as a terminal, not as a conversation", () => {
-		expect(run({ kind: "terminal", x: { id: "t1", title: "sh" } })).toEqual({ icons: ["columns", "pencil", "x"], calls: ["groupWith t1", "rename t1 sh", "closeTerminal t1"] });
+		expect(run({ kind: "terminal", x: { id: "t1", title: "sh" } })).toEqual({ icons: ["pencil", "columns", "x"], calls: ["rename t1 sh", "groupWith t1", "closeTerminal t1"] });
 	});
 	test("a pane of a split tab can also be taken out of it, before closing", () => {
 		calls.length = 0;
 		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, leaveGroup: (id) => calls.push(`leave ${id}`) }, true);
-		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "unlink", "x"]);
+		expect(entries.map((e) => e.icon)).toEqual(["pencil", "columns", "unlink", "x"]);
 		entries[2]!.run();
 		expect(calls).toEqual(["leave s1"]);
 	});
@@ -121,9 +121,9 @@ describe("row menu", () => {
 	});
 	test("a conversation can be archived before closing, when the menu offers it; a terminal cannot", () => {
 		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, archiveSession: (id) => calls.push(`archive ${id}`) });
-		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "archive", "x"]);
+		expect(entries.map((e) => e.icon)).toEqual(["pencil", "archive", "columns", "x"]);
 		calls.length = 0;
-		entries[2]!.run();
+		entries[1]!.run();
 		expect(calls).toEqual(["archive s1"]);
 		expect(rowMenuEntries({ kind: "terminal", x: { id: "t1", title: "sh" } }, { ...act, archiveSession: () => {} }).map((e) => e.icon)).not.toContain("archive");
 	});
@@ -136,7 +136,7 @@ describe("row menu", () => {
 	});
 	test("only the split tab's own row dissolves it: its panes never do, even in the sidebar", () => {
 		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, { ...act, leaveGroup: () => {} }, true);
-		expect(entries.map((e) => e.icon)).toEqual(["columns", "pencil", "unlink", "x"]);
+		expect(entries.map((e) => e.icon)).toEqual(["pencil", "columns", "unlink", "x"]);
 		expect(entries.map((e) => e.label)).not.toContain("그룹 해제");
 	});
 	test("the target id is the group's own, else the tab's", () => {

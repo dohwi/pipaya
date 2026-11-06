@@ -31,8 +31,8 @@
 		description={t("진행 중인 작업 {n}개가 종료되면서 창이 닫힙니다.", { n: (app.closeConfirm ?? last)?.count ?? 0 })}
 		oncancel={cancel}
 		actions={[
-			{ label: t("취소"), onclick: cancel },
 			{ label: t("종료하고 닫기"), variant: "primary", onclick: ok },
+			{ label: t("취소"), variant: "ghost", onclick: cancel },
 		]}
 	/>
 {/if}

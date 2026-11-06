@@ -261,7 +261,7 @@ const DEFINITIONS: SlashCommand[] = [
 		run: () => {
 			const s = app.current;
 			if (!s) return;
-			pickList(t("정말 삭제할까요? 복구할 수 없습니다"), [{ id: "yes", title: t("삭제: {title}", { title: s.title }), sub: dirLabel(s.cwd) }, { id: "no", title: t("취소") }], (id) => {
+			pickList(t("정말 삭제할까요? 복구할 수 없습니다"), [{ id: "no", title: t("취소") }, { id: "yes", title: t("삭제: {title}", { title: s.title }), sub: dirLabel(s.cwd) }], (id) => {
 				if (id === "yes") void app.remove(s.id).then((ok) => ok && app.toast(t("대화를 삭제했습니다")));
 			});
 		},
@@ -269,7 +269,7 @@ const DEFINITIONS: SlashCommand[] = [
 ];
 
 // Stable default order: conversations → settings → execution → history → utilities.
-const DEFAULT_ORDER = ["new", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete"];
+const DEFAULT_ORDER = ["new", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"];
 export const COMMANDS: SlashCommand[] = DEFAULT_ORDER.map((name) => DEFINITIONS.find((c) => c.name === name)!);
 
 /** Run a built-in command by name, as a shortcut would: with its "needs an open chat" rule applied. */

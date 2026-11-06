@@ -136,18 +136,19 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
 	const leave = act.leaveGroup;
 	const archive = act.archiveSession;
+	// most used first, grouping in the middle, and the way out (archive before close) last
 	return [
+		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		// a pane of a split tab is pinned with its tab, not alone
 		...(member ? [] : pinEntry(x.id, act)),
-		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
-		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
-		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
+		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
 		...(act.toggleMute && target.kind === "session"
 			? [(act.isMuted?.(x.id)
 					? { icon: "bell", label: t("알림 켜기"), title: t("이 대화의 완료·질문 알림을 다시 받습니다"), run: () => act.toggleMute!(x.id) }
 					: { icon: "bell-off", label: t("알림 끄기"), title: t("이 대화의 완료·질문 알림을 받지 않습니다"), run: () => act.toggleMute!(x.id) }) satisfies MenuEntry]
 			: []),
-		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
+		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
+		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
 		close,
 	];
 }
