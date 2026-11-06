@@ -25,22 +25,20 @@
 {#snippet body(pinned: boolean)}
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
-	<RowTitle text={sessionTitle(x.title)} />
 	{#if x.muted}<span class="muted" title={t("알림 꺼짐")}><Icon name="bell-off" /></span>{/if}
+	<RowTitle text={sessionTitle(x.title)} />
 {/snippet}
 
 <TabRow {n} {x} target={{ kind: "session", x }} {tip} {drop} {member} {body} />
 
 <style>
-	/* a 16px glyph box, like the lead badge, so the title keeps its column; dim because it is a state, not an action */
+	/* before the title, not after it: the right-hand columns (the three dots, 256) appear and vanish with hover and touch focus, and an icon beside them jumped 20px */
 	.muted {
 		flex: none;
 		display: inline-flex;
 		width: 16px;
 		height: 16px;
-		margin-inline-start: 4px;
 		font-size: 16px;
-		color: var(--text-dim, currentColor);
-		opacity: 0.6;
+		color: var(--text-faint);
 	}
 </style>

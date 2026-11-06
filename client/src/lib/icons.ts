@@ -11,8 +11,8 @@ export type IconName =
 export const ICON_PATHS: Record<IconName, string> = {
 	menu: "M4 7h16M4 12h16M4 17h16",
 	archive: "M3 5h18v4H3zM5 9v10h14V9M10 13h4",
-	bell: "M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4",
-	"bell-off": "M6 16V11a6 6 0 0 1 9-5.2M18 11v5l2 2H4l2-2M10 21h4M4 4l16 16",
+	bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
+	"bell-off": "M8.7 3A6 6 0 0 1 18 8c0 2.2.3 4 .7 5.4M17 17H3s3-2 3-9c0-.6.1-1.2.3-1.7M10.3 21a1.94 1.94 0 0 0 3.4 0M3 3l18 18",
 	pin: "M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7",
 	plus: "M12 5v14M5 12h14",
 	send: "M12 19V5M5 12l7-7 7 7",
