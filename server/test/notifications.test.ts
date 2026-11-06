@@ -48,6 +48,17 @@ describe("notification policy", () => {
     expect((events[1]!.data as any).notification.kind).toBe("user_request");
     expect((events[1]!.data as any).notification.body).toBe("Which file?");
   });
+  test("a muted session raises no notice, built-in or from a rule; others still do", () => {
+    const db = openDb(":memory:"); const bus = new EventBus(db); const muted = new Set(["quiet"]);
+    const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined, muted: id => muted.has(id) });
+    const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
+    disposals.push(async () => { await service.close(); db.close(); });
+    service.heartbeat("pc", presence("desktop"));
+    bus.publish("quiet", "run_finished", { status: "ok" }); bus.publish("quiet", "question_requested", { toolCallId: "c", question: "?" });
+    service.setRule("a", "done", { event: "run_finished", title: "custom" }); bus.publish("quiet", "run_finished", { status: "error" });
+    expect(events).toHaveLength(0);
+    bus.publish("loud", "run_finished", { status: "ok" }); expect(events).toHaveLength(1);
+  });
   test("durable rules override the default event notice, and revoke is owner-scoped", () => {
     const { service, bus, db, events } = setup(); service.heartbeat("pc", presence("desktop"));
     service.setRule("a", "done", { event: "run_finished", title: "custom" });

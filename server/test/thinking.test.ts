@@ -30,7 +30,7 @@ describe("thinking levels", () => {
 			const record: SessionRecord = {
 				id: "legacy-off", name: "", title: "Keep my title", cwd: dir, provider: "custom", model: "manual",
 				thinkingLevel: "medium", systemPrompt: "Keep my prompt", tools: ["read"],
-				purpose: "", parentId: null, closed: false, archived: false, createdAt: 100, updatedAt: 200,
+				purpose: "", parentId: null, closed: false, archived: false, muted: false, createdAt: 100, updatedAt: 200,
 			};
 			store.create(record);
 			store.create({ ...record, id: "existing-high", thinkingLevel: "high" });

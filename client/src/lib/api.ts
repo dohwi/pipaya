@@ -78,6 +78,7 @@ export interface PatchSessionInput {
 	thinkingLevel?: ThinkingLevel;
 	closed?: boolean;
 	archived?: boolean;
+	muted?: boolean;
 }
 
 export const normalizeUrl = (url: string): string => {

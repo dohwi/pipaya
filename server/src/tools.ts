@@ -527,8 +527,8 @@ const peerTool: ToolDef = {
 				"archive / restore (name): tuck a finished session away (a new message brings it back) or bring it back. Only archive sessions whose work is done and merged; a working session is refused; never archive one that stopped on a problem, report it instead.",
 				"abort (name): stop what it is doing right now, like the user pressing stop. Only when it is stuck or going the wrong way; prefer send with mode steer first.",
 				"answer (name, answer | answers, toolCallId?): answer the ask_user question it waits on. Answer only what you can decide with what you know; anything that needs the user's judgment goes back to the user.",
-				"create (message, title?, purpose?, cwd?, provider?, model?, thinkingLevel?, notify?): start a new session on `message` and get its @name back. Include all the context it needs; it sees nothing else. You get a report when it ends or asks (notify defaults to true). The directory defaults to yours; for code changes give each session its own git worktree.",
-				"close (stops its work, hides it, keeps the transcript) / resume (reopens a closed one) / delete (erases the transcript for good; only sessions you made with create, not working) (name); cancel_queued (name, mode?, text?): lists steer/follow_up messages not yet delivered, with `text` takes one back; rename (name, newName); set (name, purpose?, provider?, model?, thinkingLevel?).",
+				"create (message, title?, purpose?, cwd?, provider?, model?, thinkingLevel?, notify?, muted?): start a new session on `message` and get its @name back. Include all the context it needs; it sees nothing else. You get a report when it ends or asks (notify defaults to true). With notify the new session is created muted (no OS/push notification to the user, you report to them instead); pass muted=false to keep its notifications on. The directory defaults to yours; for code changes give each session its own git worktree.",
+				"close (stops its work, hides it, keeps the transcript) / resume (reopens a closed one) / delete (erases the transcript for good; only sessions you made with create, not working) (name); cancel_queued (name, mode?, text?): lists steer/follow_up messages not yet delivered, with `text` takes one back; rename (name, newName); set (name, purpose?, provider?, model?, thinkingLevel?, muted?).",
 				"group_create (members, name?), group_add / group_remove (group, members), group_dissolve (group): put sessions side by side in a named group (tag them all with @group, or send to the group name). A session is in one group at a time; a group of fewer than 2 dissolves.",
 			].join("\n") + PEER_NOTE,
 			parameters: Type.Object({
@@ -538,6 +538,7 @@ const peerTool: ToolDef = {
 				message: Type.Optional(Type.String({ maxLength: 8000, description: "send, create: what to tell or ask; include all context it needs" })),
 				mode: Type.Optional(Type.Union([Type.Literal("follow_up"), Type.Literal("steer")], { description: "send, cancel_queued: which delivery / queue" })),
 				notify: Type.Optional(Type.Boolean({ description: "send, create: report to you when it ends its run" })),
+				muted: Type.Optional(Type.Boolean({ description: "create, set: true turns the session's notifications to the user off, false on (create default: same as notify)" })),
 				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "read: how many recent messages (default 10)" })),
 				detail: Type.Optional(Type.Boolean({ description: "read: also show tool call arguments and results, errors included" })),
 				answer: Type.Optional(Type.String({ maxLength: 8000, description: "answer: the answer (one of its options when it offers only options)" })),
@@ -572,7 +573,7 @@ const peerTool: ToolDef = {
 						return text(await peers.create({ ...rest, message: need(p.message, "message", a), thinkingLevel: p.thinkingLevel as PeerCreateInput["thinkingLevel"] }), { action: a });
 					}
 					case "close": case "resume": case "delete": case "cancel_queued": case "rename": case "set":
-						return text(peers.manage(name(), a, { mode: p.mode, text: p.text, newName: p.newName, purpose: p.purpose, provider: p.provider, model: p.model, thinkingLevel: p.thinkingLevel as ManageArgs["thinkingLevel"] }), { action: a, name: p.name });
+						return text(peers.manage(name(), a, { mode: p.mode, text: p.text, newName: p.newName, purpose: p.purpose, provider: p.provider, model: p.model, thinkingLevel: p.thinkingLevel as ManageArgs["thinkingLevel"], muted: p.muted }), { action: a, name: p.name });
 					case "group_create": case "group_add": case "group_remove": case "group_dissolve":
 						return text(peers.group(a.slice(6) as "create" | "add" | "remove" | "dissolve", { group: p.group, members: p.members, name: p.groupName }), { action: a });
 				}

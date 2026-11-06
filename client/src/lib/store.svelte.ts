@@ -1562,6 +1562,18 @@ class AppStore {
     }
   }
 
+  /** Turn a conversation's notifications (run ended, question) off or on. */
+  async toggleMute(id: string) {
+    const api = this.api;
+    const s = this.link?.sessionById.get(id);
+    if (!api || !s) return;
+    try {
+      await api.patchSession(id, { muted: !s.muted }); // the session_updated event refreshes the list
+    } catch (e) {
+      this.fail(e, t("알림 설정을 바꾸지 못했습니다"), id);
+    }
+  }
+
   /** Bring an archived session of `serverId` back to its folder; `open` also shows it. */
   async unarchive(serverId: string, id: string, open = false) {
     const api = this.apiFor(serverId);

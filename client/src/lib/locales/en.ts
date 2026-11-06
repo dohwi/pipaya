@@ -861,6 +861,11 @@ export const en: Record<string, string> = {
 	"{n}개를 지웠습니다.": "Deleted {n} {n#chat|chats}.",
 	/* ---- archive & conversation list ---- */
 	"보관": "Archive",
+	"알림 끄기": "Mute notifications",
+	"알림 켜기": "Unmute notifications",
+	"이 대화의 완료·질문 알림을 받지 않습니다": "Stop notifications for this chat (run finished, questions)",
+	"이 대화의 완료·질문 알림을 다시 받습니다": "Get notifications for this chat again",
+	"알림 설정을 바꾸지 못했습니다": "Could not change notification settings",
 	"보관 (닫지 않고 보관함에 넣기)": "Archive (stays open, just tucked away)",
 	"보관함": "Archived",
 	"이 디렉터리의 대화 목록 관리": "Manage this folder's chats",

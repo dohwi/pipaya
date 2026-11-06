@@ -47,7 +47,7 @@ export interface PushTransport {
 }
 export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
-export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined }
+export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined; muted?(sessionId: string): boolean }
 export const DEFAULT_TITLES: Record<string, string> = { user_request: "Answer needed", task_failed: "Task failed", task_completed: "Task completed" };
 const LEASE_MS = 45_000;
 /** How long to wait for a PC/browser to confirm it showed a notification before pushing to the phone. A receipt normally takes well under a second. */
@@ -285,6 +285,7 @@ export class NotificationService {
     if (!e.sessionId || !isNotifying(e.type)) return;
     const kind = NOTIFYING_EVENTS[e.type].kind((e.data ?? {}) as { status?: string });
     if (!kind) return;
+    if (this.sessions?.muted?.(e.sessionId)) return; // a muted chat stays quiet, built-in notices and extension rules alike
     const rules = (this.db.query("SELECT owner, id, data FROM notification_rules").all() as { owner: string; id: string; data: string }[])
       .map(row => ({ ...row, rule: JSON.parse(row.data) as NotificationRule })).filter(row => row.rule.event === e.type);
     try {

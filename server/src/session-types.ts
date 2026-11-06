@@ -14,6 +14,8 @@ export const IDLE_EVICT_MS = 30 * 60_000;
 export type PromptMode = "prompt" | "steer" | "follow_up";
 
 export interface CreateSessionInput {
+	/** Start with notifications off. */
+	muted?: boolean;
 	title?: string;
 	cwd?: string;
 	provider?: string;

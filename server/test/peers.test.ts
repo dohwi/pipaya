@@ -144,6 +144,7 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(kid.title).toBe("built");
 		expect(kid.purpose).toBe("builder");
 		expect(kid.parentId).toBe(boss);
+		expect(kid.muted).toBe(true); // a session its creator reports on does not notify the user itself
 		await idle(kid.id);
 		await Bun.sleep(300);
 		await idle(boss);

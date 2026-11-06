@@ -198,6 +198,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		watcher_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 		PRIMARY KEY (target_id, watcher_id)
 	);`,
+	// v28: a session can be muted: its runs and questions raise no OS / push notification.
+	(db) => addColumn(db, "sessions", "muted", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
 export function openDb(path: string): Database {

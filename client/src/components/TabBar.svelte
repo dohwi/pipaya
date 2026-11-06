@@ -143,6 +143,8 @@
 			groupWith: chooseGroup,
 			closeSession: (id) => void app.close(id),
 			archiveSession: (id) => void app.archive(id),
+		toggleMute: (id) => void app.toggleMute(id),
+		isMuted: (id) => !!app.link?.sessionById.get(id)?.muted,
 			closeTerminal: (id) => void app.closeTerminal(id),
 		});
 	function tabMenu(pt: Point, x: Tab) {

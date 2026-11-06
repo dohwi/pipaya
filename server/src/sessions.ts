@@ -209,6 +209,7 @@ export class SessionManager {
 			parentId,
 			closed: false,
 			archived: false,
+			muted: input.muted ?? false,
 			createdAt: now,
 			updatedAt: now,
 		};

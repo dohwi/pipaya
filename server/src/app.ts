@@ -115,6 +115,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const notifications = new NotificationService(db, bus, opts.pushTransports ?? push.transports, Date.now, opts.mobileDelayMs, () => clientSettings.escalateMs(), {
 		title: (id) => store.get(id)?.title ?? "",
 		lastAnswer: (id) => lastAnswer(store, id),
+		muted: (id) => store.get(id)?.muted ?? false,
 	});
 	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id));
 	notifications.onLook = (ids) => unread.read(ids);
@@ -140,7 +141,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
-		tools: r.tools, closed: r.closed, archived: r.archived, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
+		tools: r.tools, closed: r.closed, archived: r.archived, muted: r.muted, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
 	});
 	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
 	const thinking = (v: string | undefined) => {

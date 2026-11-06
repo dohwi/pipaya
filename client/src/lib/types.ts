@@ -77,6 +77,8 @@ export interface Session {
 	closed: boolean;
 	/** Archived sessions stay open but sit in the sidebar's archive; a new message (or PATCH archived=false) brings them back */
 	archived: boolean;
+	/** Muted sessions raise no OS / push notification (run ended, question) */
+	muted?: boolean;
 	/** Unix ms */
 	createdAt: number;
 	/** Unix ms */
