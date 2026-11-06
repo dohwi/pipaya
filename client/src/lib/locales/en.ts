@@ -862,7 +862,6 @@ export const en: Record<string, string> = {
 	/* ---- archive & conversation list ---- */
 	"보관": "Archive",
 	"알림 끄기": "Mute notifications",
-	"알림 꺼짐": "Notifications off",
 	"알림 켜기": "Unmute notifications",
 	"이 대화의 완료·질문 알림을 받지 않습니다": "Stop notifications for this chat (run finished, questions)",
 	"이 대화의 완료·질문 알림을 다시 받습니다": "Get notifications for this chat again",
