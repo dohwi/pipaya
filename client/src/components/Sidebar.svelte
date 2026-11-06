@@ -514,15 +514,14 @@
 		width: 14px;
 		color: var(--text-faint);
 	}
-	/* name and parent path share one baseline; the pair is centred on the icons (line-height 1 drops the uneven leading) */
+	/* name and parent path are centred on the same horizontal line, which is the icons' centre (line-height 1 drops the uneven leading) */
 	:global(:where(.side) .dlabel) {
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 4px;
 		line-height: 1;
-		padding-bottom: 1px; /* lowercase sits low in its box: lift it onto the icons' centre */
 	}
 	/* where the folder sits, dim after its name; the full path is the tooltip */
 	:global(:where(.side) .dparent) {
