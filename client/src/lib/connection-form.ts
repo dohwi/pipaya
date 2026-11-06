@@ -38,7 +38,6 @@ export interface Form {
 	baseUrl: string;
 	api: ApiFormat;
 	authRequired: boolean;
-	noDeveloperRole: boolean;
 	/** Typed into a new connection; sent to the server only on save (never kept in the list). */
 	apiKey: string;
 	rows: Row[];
@@ -107,7 +106,6 @@ export function newForm(preset?: LocalPreset): Form {
 		baseUrl: preset?.baseUrl ?? "",
 		api: "openai-completions",
 		authRequired: false,
-		noDeveloperRole: false,
 		apiKey: "",
 		rows: [],
 	};
@@ -122,7 +120,6 @@ export function formFromProvider(p: CustomProvider): Form {
 		baseUrl: p.baseUrl,
 		api: p.api,
 		authRequired: p.authRequired,
-		noDeveloperRole: p.noDeveloperRole ?? false,
 		apiKey: "",
 		rows: p.models.map((m) => ({
 			id: m.id,
@@ -222,4 +219,4 @@ export function collectModels(
 }
 
 /** Everything the user can change, as one string: the dialog is "dirty" when it differs from the one taken on open. */
-export const snapshot = (f: Form) => JSON.stringify([f.name, f.id, f.baseUrl, f.api, f.authRequired, f.noDeveloperRole, f.apiKey, f.rows]);
+export const snapshot = (f: Form) => JSON.stringify([f.name, f.id, f.baseUrl, f.api, f.authRequired, f.apiKey, f.rows]);

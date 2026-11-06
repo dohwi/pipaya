@@ -55,15 +55,6 @@
 		</span>
 		<Switch checked={form.authRequired} label={t("API 키 필요")} describedby="auth-req-d" onchange={(on) => { form.authRequired = on; }} />
 	</div>
-	{#if form.api === "openai-completions"}
-		<div class="switchrow">
-			<span class="swtext">
-				<b id="no-dev-l">{t("system 역할만 사용")}</b>
-				<small id="no-dev-d">{t("서버가 developer 역할을 거부(422)할 때 켭니다. 추론 모델에도 시스템 프롬프트를 system으로 보냅니다")}</small>
-			</span>
-			<Switch checked={form.noDeveloperRole} label={t("system 역할만 사용")} describedby="no-dev-d" onchange={(on) => { form.noDeveloperRole = on; }} />
-		</div>
-	{/if}
 	{#if form.isNew && form.authRequired}
 		<label in:collapseIn out:collapseOut>
 			<span>{t("API 키")}</span>
