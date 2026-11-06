@@ -4,7 +4,8 @@ import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
-import { firstUnseen, sessionOrder, stepDir, stepFrom } from "./nav";
+import { dirKey, groupKey } from "./sidebar-model";
+import { firstUnseen, sessionOrder, stepDir, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -66,10 +67,34 @@ async function cycleThinking() {
   if (l) await app.configure({ thinkingLevel: l });
 }
 
-/** Previous / next conversation in sidebar order. */
+/** Previous / next conversation in sidebar order, skipping rows hidden by a folded folder or split group. */
 function stepSession(step: 1 | -1) {
-  const id = stepFrom(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.currentPinnedTabs), app.activeId, step);
-  if (id && id !== app.activeId) void app.openSession(id);
+  const sid = app.serverId;
+  if (!sid) return;
+  const folded = app.sidebar.folded;
+  const order: string[] = [];
+  const hidden = new Set<string>();
+  for (const d of app.dirs) {
+    const dirFolded = folded.includes(dirKey(sid, d.path));
+    for (const t of d.tabs) {
+      const panes = tabPanes(t);
+      // a folded split group still shows its own row, which stands for its first pane
+      const groupFolded = t.kind === "group" && folded.includes(groupKey(t.id));
+      panes.forEach((id, i) => {
+        order.push(id);
+        if (dirFolded || (groupFolded && i > 0)) hidden.add(id);
+      });
+    }
+  }
+  const at = app.activeId ? order.indexOf(app.activeId) : -1;
+  // walk from the open one (even when it sits in a folded folder) to the next row that is shown
+  for (let k = 1; k <= order.length; k++) {
+    const i = at < 0 ? (step === 1 ? k - 1 : order.length - k) : (((at + step * k) % order.length) + order.length) % order.length;
+    const id = order[i]!;
+    if (hidden.has(id)) continue;
+    if (id !== app.activeId) void app.openSession(id);
+    return;
+  }
 }
 
 /** Previous / next workspace (folder block in the sidebar): opens its first tab. */
