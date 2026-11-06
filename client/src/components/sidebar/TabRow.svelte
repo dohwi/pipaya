@@ -18,6 +18,7 @@
 		drop,
 		member = false,
 		body,
+		trail,
 	}: {
 		n: SidebarNode;
 		x: { id: string; title: string };
@@ -26,6 +27,8 @@
 		drop: DropOpts;
 		member?: boolean;
 		body: Snippet<[boolean]>;
+		/** A mark in the right-hand column left of the "more" button (x 236), e.g. the bell of a muted conversation */
+		trail?: Snippet;
 	} = $props();
 
 	const sb = getSidebarCtx();
@@ -51,4 +54,5 @@
 	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} title={tip}>
 		{@render body(pinned)}
 	</button>
+	{@render trail?.()}
 </RowShell>

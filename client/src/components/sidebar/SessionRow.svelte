@@ -25,19 +25,23 @@
 {#snippet body(pinned: boolean)}
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
-	{#if x.muted}<span class="muted" title={t("알림 꺼짐")}><Icon name="bell-off" /></span>{/if}
 	<RowTitle text={sessionTitle(x.title)} />
 {/snippet}
 
-<TabRow {n} {x} target={{ kind: "session", x }} {tip} {drop} {member} {body} />
+{#snippet trail()}
+	{#if x.muted}<span class="mutemark" title={t("알림 꺼짐")}><Icon name="bell-off" /></span>{/if}
+{/snippet}
+
+<TabRow {n} {x} target={{ kind: "session", x }} {tip} {drop} {member} {body} {trail} />
 
 <style>
-	/* before the title, not after it: the right-hand columns (the three dots, 256) appear and vanish with hover and touch focus, and an icon beside them jumped 20px */
-	.muted {
+	/* a 20px box like the "more" button beside it, so it centres on the list-button column (x 236); Sidebar.svelte keeps that button's box reserved */
+	.mutemark {
 		flex: none;
-		display: inline-flex;
-		width: 16px;
-		height: 16px;
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
 		font-size: 16px;
 		color: var(--text-faint);
 	}
