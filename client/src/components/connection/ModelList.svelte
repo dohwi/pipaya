@@ -51,12 +51,12 @@
 	<div class="mhead">
 		<div class="section-label">{t("모델 ({n})", { n: form.rows.length })}</div>
 		<div class="mact">
-			{#if gone > 1}
-				<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onprune}>{t("불러오지 못한 {n}개 삭제", { n: gone })}</ConfirmButton>
-			{/if}
 			<Button size="sm" disabled={discovering || busy} onclick={ondiscover}>
 				<Icon name="download" /> {discovering ? t("불러오는 중…") : t("업스트림에서 불러오기")}
 			</Button>
+			{#if gone > 1}
+				<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onprune}>{t("불러오지 못한 {n}개 삭제", { n: gone })}</ConfirmButton>
+			{/if}
 		</div>
 	</div>
 	{#if note}<p class="hint note" role="status" in:collapseIn out:collapseOut>{note}</p>{/if}

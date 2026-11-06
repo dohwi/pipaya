@@ -21,25 +21,10 @@
 
 <section class="fsec">
 	<div class="section-label">{t("연결 정보")}</div>
-	<div class="grid2">
-		<label>
-			<span>{t("이름")}</span>
-			<input class="field" value={form.name} oninput={(e) => onname(e.currentTarget.value)} placeholder={t("예: 내 프록시")} autocomplete="off" />
-		</label>
-		<label>
-			<span>ID</span>
-			<input
-				class="field mono"
-				value={form.id}
-				oninput={(e) => { form.id = e.currentTarget.value; form.idTouched = true; }}
-				disabled={!form.isNew}
-				placeholder="my-proxy"
-				autocomplete="off"
-				autocapitalize="off"
-				spellcheck="false"
-			/>
-		</label>
-	</div>
+	<label>
+		<span>{t("이름")}</span>
+		<input class="field" value={form.name} oninput={(e) => onname(e.currentTarget.value)} placeholder={t("예: 내 프록시")} autocomplete="off" />
+	</label>
 	<label>
 		<span>Endpoint (Base URL)</span>
 		<input class="field mono" bind:value={form.baseUrl} placeholder="https://host.example/v1" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" />
@@ -61,6 +46,19 @@
 			<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
 		</label>
 	{/if}
+	<label>
+		<span>ID</span>
+		<input
+			class="field mono"
+			value={form.id}
+			oninput={(e) => { form.id = e.currentTarget.value; form.idTouched = true; }}
+			disabled={!form.isNew}
+			placeholder="my-proxy"
+			autocomplete="off"
+			autocapitalize="off"
+			spellcheck="false"
+		/>
+	</label>
 	{#if form.isNew}<p class="hint note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
 </section>
 
@@ -75,11 +73,6 @@
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--text-dim);
-	}
-	.grid2 {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 8px;
 	}
 	.switchrow {
 		display: flex;
@@ -114,11 +107,5 @@
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-	}
-	@media (max-width: 640px) {
-		/* name/ID and model ID/display name stack; the two numbers stay side by side */
-		.grid2 {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

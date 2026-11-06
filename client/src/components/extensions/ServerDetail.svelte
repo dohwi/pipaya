@@ -88,6 +88,16 @@
 		</Notice>
 	{/if}
 
+	{#if ext.tools.length || ext.commands.length || ext.flags.length}
+		<section class="block set-group">
+			<h3 class="section-label">{t("제공 기능")}</h3>
+			{#if provides.length}<p class="brief">{provides.join(", ")}</p>{/if}
+			{#each ext.flags as flag (flag.name)}
+				<p class="hint"><code>{flagVariable(flag.name)}</code>{flag.description ? ` — ${flag.description}` : ""}{flag.value !== undefined ? ` (${t("현재 값")}: ${String(flag.value)})` : ""}</p>
+			{/each}
+		</section>
+	{/if}
+
 	<section class="block set-group">
 		<h3 class="section-label">{t("확장 설정")}</h3>
 		{#if form.fields}
@@ -98,16 +108,6 @@
 			<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
 		{/if}
 	</section>
-
-	{#if ext.tools.length || ext.commands.length || ext.flags.length}
-		<section class="block set-group">
-			<h3 class="section-label">{t("제공 기능")}</h3>
-			{#if provides.length}<p class="brief">{provides.join(", ")}</p>{/if}
-			{#each ext.flags as flag (flag.name)}
-				<p class="hint"><code>{flagVariable(flag.name)}</code>{flag.description ? ` — ${flag.description}` : ""}{flag.value !== undefined ? ` (${t("현재 값")}: ${String(flag.value)})` : ""}</p>
-			{/each}
-		</section>
-	{/if}
 
 	<section class="block set-group">
 		<h3 class="section-label">{t("관리")}</h3>

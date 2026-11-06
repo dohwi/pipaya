@@ -107,7 +107,7 @@
 	<div class="actions">
 		{#if p.authRequired}
 			{#if p.hasStoredKey}
-				<Button variant="ghost" size="sm" disabled={busy} onclick={onremovekey}><Icon name="key" /> {t("키 삭제")}</Button>
+				<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} disabled={busy} onconfirm={onremovekey}><Icon name="key" /> {t("키 삭제")}</ConfirmButton>
 			{:else}
 				<Button size="sm" onclick={ontogglekey}><Icon name="key" /> {t("키 추가")}</Button>
 			{/if}

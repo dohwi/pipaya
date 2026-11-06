@@ -157,6 +157,9 @@
 			<FormField label={t("설명")} hint={t("에이전트가 이 역할을 언제 고를지 알려 주는 한두 문장")}>
 				<input class="field" bind:value={form.description} maxlength="500" autocomplete="off" />
 			</FormField>
+			<FormField label={t("지침")}>
+				<textarea class="field mono area" bind:value={form.prompt} rows="8" placeholder={t("이 도우미가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
+			</FormField>
 			<FormField label={t("모델")} group hint={t("비워 두면 호출한 대화의 모델로 실행합니다")}>
 				<ModelField
 					conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
@@ -181,9 +184,6 @@
 			</FormField>
 			<FormField label={t("최대 모델 호출")} group hint={t("한 번 일하는 동안 모델을 부를 수 있는 횟수 (위의 상한을 넘지 않습니다)")}>
 				<Select width="120px" label={t("최대 모델 호출")} value={form.maxTurns} options={turnOptions(form.maxTurns)} onchange={(n) => { if (form) form.maxTurns = n; }} />
-			</FormField>
-			<FormField label={t("지침")}>
-				<textarea class="field mono area" bind:value={form.prompt} rows="8" placeholder={t("이 도우미가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
 			</FormField>
 			<div class="actions">
 				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>

@@ -236,6 +236,41 @@
 		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
 	{:else if cfg}
 		<section class="set-group">
+			<div class="section-label">{t("연결")}</div>
+			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
+			{#if cfg.providers.length}
+				<div class="plist">
+					{#each cfg.providers as p (p.id)}
+						<div class="provwrap" animate:reflow in:rowIn out:rowOut>
+							<ProviderCard
+								{p}
+								conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
+								{busy}
+								{tests}
+								keying={keyFor === p.id}
+								bind:keyValue
+								refreshing={refreshingId === p.id}
+								anyRefreshing={refreshingId !== null}
+								ontest={(model) => test(p.id, model)}
+								ontoggle={(model, on) => void toggleModel(p, model, on)}
+								ontogglekey={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}
+								onsavekey={() => void saveKey(p)}
+								onremovekey={() => removeKey(p)}
+								onrefresh={() => refreshModels(p)}
+								onedit={() => (form = { kind: "edit", provider: p })}
+								onremove={() => remove(p)}
+							/>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			{#if !form}
+				<Button variant="dashed" onclick={() => (picking = true)}><Icon name="plus" /> {t("연결 추가")}</Button>
+			{/if}
+		</section>
+
+		<section class="set-group">
 			<div class="section-label">{t("새 대화 기본 모델")}</div>
 			<ModelField
 				conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
@@ -270,41 +305,6 @@
 		<SystemModelSection {serverId} models={chatModels} providers={providerList} />
 
 		<ImageModelSection {serverId} {models} providers={providerList} />
-
-		<section class="set-group">
-			<div class="section-label">{t("연결")}</div>
-			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
-			{#if cfg.providers.length}
-				<div class="plist">
-					{#each cfg.providers as p (p.id)}
-						<div class="provwrap" animate:reflow in:rowIn out:rowOut>
-							<ProviderCard
-								{p}
-								conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
-								{busy}
-								{tests}
-								keying={keyFor === p.id}
-								bind:keyValue
-								refreshing={refreshingId === p.id}
-								anyRefreshing={refreshingId !== null}
-								ontest={(model) => test(p.id, model)}
-								ontoggle={(model, on) => void toggleModel(p, model, on)}
-								ontogglekey={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}
-								onsavekey={() => void saveKey(p)}
-								onremovekey={() => removeKey(p)}
-								onrefresh={() => refreshModels(p)}
-								onedit={() => (form = { kind: "edit", provider: p })}
-								onremove={() => remove(p)}
-							/>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			{#if !form}
-				<Button variant="dashed" onclick={() => (picking = true)}><Icon name="plus" /> {t("연결 추가")}</Button>
-			{/if}
-		</section>
 
 		{#if picking}
 			<ConnectModal

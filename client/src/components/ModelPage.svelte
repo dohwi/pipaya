@@ -116,21 +116,6 @@
 			</label>
 		</div>
 	</section>
-	{#if !r.imageGeneration}
-	<section class="fsec set-group">
-		<div class="section-label">{t("제한")}</div>
-		<div class="grid2">
-			<label>
-				<span>{t("컨텍스트 크기")}</span>
-				<input class="field mono" inputmode="numeric" bind:value={r.contextWindow} />
-			</label>
-			<label>
-				<span>{t("최대 출력")}</span>
-				<input class="field mono" inputmode="numeric" bind:value={r.maxTokens} />
-			</label>
-		</div>
-	</section>
-	{/if}
 	<section class="fsec set-group">
 		<div class="section-label">{t("기능")}</div>
 		<div class="caps">
@@ -185,6 +170,21 @@
 			</div>
 			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 		</section>
+	{/if}
+	{#if !r.imageGeneration}
+	<section class="fsec set-group">
+		<div class="section-label">{t("제한")}</div>
+		<div class="grid2">
+			<label>
+				<span>{t("컨텍스트 크기")}</span>
+				<input class="field mono" inputmode="numeric" bind:value={r.contextWindow} />
+			</label>
+			<label>
+				<span>{t("최대 출력")}</span>
+				<input class="field mono" inputmode="numeric" bind:value={r.maxTokens} />
+			</label>
+		</div>
+	</section>
 	{/if}
 	{#if !locked}
 		<Button variant="ghost" class="danger-text" onclick={onremove}><Icon name="trash" /> {t("이 모델 삭제")}</Button>

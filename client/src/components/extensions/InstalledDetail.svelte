@@ -86,8 +86,8 @@
 		/>
 	{/snippet}
 
-	{#if !src.runs}<Notice tone="info" size="sm" role="status">{on ? t("이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.") : t("이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.")}</Notice>{/if}
 	{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
+	{#if !src.runs}<Notice tone="info" size="sm" role="status">{on ? t("이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.") : t("이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.")}</Notice>{/if}
 	{#if pairedServer && !bundledBy}
 		<Notice tone={on ? "info" : "warn"} size="sm" icon="clip" role="status">
 			{on ? t("서버 확장 ‘{name}’과 함께 작동합니다.", { name: pairedServer }) : t("서버 확장 ‘{name}’과 함께 쓰려면 이 확장을 켜야 합니다.", { name: pairedServer })}
@@ -103,6 +103,11 @@
 	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 
 	<section class="block set-group">
+		<h3 class="section-label">{t("권한과 실행 안내")}</h3>
+		<PermissionList pkg={entry.package} />
+	</section>
+
+	<section class="block set-group">
 		<h3 class="section-label">{t("확장 설정")}</h3>
 		{#if fields}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
@@ -115,11 +120,6 @@
 				<Button size="sm" disabled={tasks.busy[id] || entry.state === "starting"} onclick={() => onsave()}>{saveLabel}</Button>
 			</div>
 		{/if}
-	</section>
-
-	<section class="block set-group">
-		<h3 class="section-label">{t("권한과 실행 안내")}</h3>
-		<PermissionList pkg={entry.package} />
 	</section>
 
 	<section class="block set-group">

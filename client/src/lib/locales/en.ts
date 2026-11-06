@@ -823,7 +823,6 @@ export const en: Record<string, string> = {
 	"서버에서 실행": "Runs on the server",
 	"열기": "Open",
 	"서버 확장 필요": "Server extension needed",
-	"설치하기": "Install",
 	"클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.": "The client extension “{name}” is off. Turn it on for this to work properly.",
 	"서버 확장 ‘{name}’과 함께 작동합니다.": "Works together with the server extension “{name}”.",
 	"서버 확장 ‘{name}’과 함께 쓰려면 이 확장을 켜야 합니다.": "Turn this extension on to use it with the server extension “{name}”.",

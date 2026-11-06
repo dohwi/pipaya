@@ -227,7 +227,7 @@
 							<div class="acts">
 								{#if !sHave}
 									<Button variant="primary" size="sm" disabled={!!working || entry.source.type !== "git"} onclick={() => startServer(entry)}>
-										{working === entry.id ? t("설치하는 중…") : t("설치하기")}
+										{working === entry.id ? t("설치하는 중…") : t("설치")}
 									</Button>
 								{:else}
 									<Button size="sm" variant="danger" disabled={!!working} aria-expanded={removing === entry.id} onclick={() => (removing = entry.id)}>{t("삭제")}</Button>
