@@ -109,5 +109,5 @@ export const BAR_KEYS: readonly BarKey[] = [
 	{ ...sym("/"), gap: true },
 	...[..."-|~_\\$"].map(sym),
 	{ ...ctl("c"), gap: true },
-	...[..."dzlrawu"].map(ctl),
+	...[..."dzlruaw"].map(ctl),
 ];

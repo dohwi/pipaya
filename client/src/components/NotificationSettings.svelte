@@ -47,6 +47,10 @@
 {#if busy}<p class="hint" in:collapseIn out:collapseOut>{t("알림 권한을 확인하는 중…")}</p>{/if}
 {#if error}<p class="hint danger" role="alert" in:collapseIn out:collapseOut>{error}</p>{/if}
 
+<SettingRow label={t("폰으로 다시 알림")} hint={t("어느 기기에서도 확인하지 않으면 이 시간 뒤 폰으로 보냅니다 · 모든 기기 공통")} for="escalate">
+  <Select id="escalate" size="sm" width="auto" value={app.escalateMinutes} disabled={!app.api} onchange={(m) => app.setEscalateMinutes(m)} options={ESCALATE_CHOICES.map((m) => ({ value: m, label: label(m) }))} />
+</SettingRow>
+
 <div class="test">
 <SettingRow label={t("시험 알림")}>
   <Button size="sm" onclick={runTest} disabled={testing || !app.api}>{testing ? t("보내는 중…") : t("시험")}</Button>
@@ -58,10 +62,6 @@
     <p class="hint">{t("모바일 푸시: 서버 {server} · 이 기기 토큰 {token}", { server: outcome.server.pushConfigured ? t("준비됨") : t("꺼짐"), token: outcome.server.hasToken ? t("있음") : t("없음") })}</p>
   {/if}
 {/if}
-
-<SettingRow label={t("폰으로 다시 알림")} hint={t("어느 기기에서도 확인하지 않으면 이 시간 뒤 폰으로 보냅니다 · 모든 기기 공통")} for="escalate">
-  <Select id="escalate" size="sm" width="auto" value={app.escalateMinutes} disabled={!app.api} onchange={(m) => app.setEscalateMinutes(m)} options={ESCALATE_CHOICES.map((m) => ({ value: m, label: label(m) }))} />
-</SettingRow>
 <style>
   .section-label { margin-bottom: 12px; }
   .hint { line-height: 1.6; margin: 8px 0 0; word-break: keep-all; }

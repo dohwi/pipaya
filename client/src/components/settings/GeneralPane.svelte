@@ -46,6 +46,7 @@
 	<span class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</span>
 </section>
 
+<section class="set-group"><NotificationSettings /></section>
 <section class="set-group">
 	<div class="section-label">{t("알림음")}</div>
 	<SettingRow label={t("소리 재생")} hint={t("작업 완료 · 확인 필요 · 실패 때. 보고 있는 대화는 승인 요청만 울립니다")}>
@@ -53,7 +54,6 @@
 	</SettingRow>
 	<RangeField label={t("크기")} ariaLabel={t("알림음 크기")} min={0} max={200} step={5} value={app.prefs.soundVolume} disabled={!app.prefs.soundOn} oninput={(v) => app.prefs.setSoundVolume(v)} onchange={() => app.prefs.previewSound()} alignAction />
 </section>
-<section class="set-group"><NotificationSettings /></section>
 <section class="set-group"><FooterSettings /></section>
 <section class="set-group"><TerminalSettings /></section>
 <section class="set-group"><UpdateSettings /></section>

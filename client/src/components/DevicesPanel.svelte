@@ -117,12 +117,22 @@
 			if (!cur || rank(d) > rank(cur) || (rank(d) === rank(cur) && (d.lastSeen ?? 0) > (cur.lastSeen ?? 0))) best.set(key, d);
 		}
 		const keep = new Set([...best.values()].map((d) => d.id));
-		return (devices ?? []).filter((d) => keep.has(d.id));
+		// this window first, then the ones that are connected
+		return (devices ?? []).filter((d) => keep.has(d.id)).sort((a, b) => rank(b) - rank(a));
 	});
 </script>
 
 <div class="devices">
 	<p class="lead">{t("이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")}</p>
+	<div class="add">
+		<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
+			<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
+		</Button>
+		{#if adding}
+			<div class="addbody">{#key serverId}<PairPanel {serverId} />{/key}</div>
+		{/if}
+	</div>
+
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if devices === null && !error}
 		<EmptyState loading tone="plain" as="p" />
@@ -167,15 +177,6 @@
 			</ul>
 		</div>
 	{/if}
-
-	<div class="add">
-		<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
-			<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
-		</Button>
-		{#if adding}
-			<div class="addbody">{#key serverId}<PairPanel {serverId} />{/key}</div>
-		{/if}
-	</div>
 </div>
 
 <style>

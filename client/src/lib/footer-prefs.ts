@@ -1,7 +1,7 @@
 /** Footer (the line under the input) settings: which items show, in what order, and how the line behaves when it is full. Free of runes so tests can import it. */
 
 /** Items a user can show, hide and reorder. Extension statuses are not listed: they always come first. */
-export const FOOTER_ITEMS = ["elapsed", "agents", "skills", "mcp", "roles", "commands", "context", "cache", "speed"] as const;
+export const FOOTER_ITEMS = ["context", "cache", "speed", "elapsed", "agents", "skills", "mcp", "roles", "commands"] as const;
 export type FooterItemId = (typeof FOOTER_ITEMS)[number];
 
 /** auto: wraps on a wide pane, one scrolling row on a narrow one · wrap: always wraps · scroll: always one scrolling row */

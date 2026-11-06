@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import RangeField from "./RangeField.svelte";
+	import SettingRow from "./SettingRow.svelte";
+	import Switch from "./Switch.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
 	import { Api, errorText } from "../lib/api";
@@ -90,10 +92,6 @@
 					onpick={(c) => void save({ ...s, model: c })}
 				/>
 			</div>
-			<label class="autoc" title={t("컨텍스트가 가득 차면 자동으로 압축")}>
-				<input type="checkbox" checked={s.auto} disabled={busy} onchange={(e) => void save({ ...s, auto: e.currentTarget.checked })} />
-				<span>{t("자동 압축")}</span>
-			</label>
 		</div>
 		<p class="hint note">
 			{#if !s.model}
@@ -104,6 +102,9 @@
 				{t("이 모델이 요약합니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
+		<SettingRow label={t("자동 압축")} hint={t("컨텍스트가 가득 차면 자동으로 압축")}>
+			<Switch checked={s.auto} label={t("자동 압축")} disabled={busy} onchange={(on) => void save({ ...s, auto: on })} />
+		</SettingRow>
 		<RangeField
 			label={t("자동 압축 기준")}
 			min={30}
@@ -133,20 +134,6 @@
 	.cfield {
 		flex: 1 1 0;
 		min-width: 0;
-	}
-	.autoc {
-		display: flex;
-		align-items: center;
-		justify-content: flex-start;
-		gap: 8px;
-		padding: 0 12px;
-		min-height: var(--control-h); /* the height of the model field beside it */
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-control);
-		font-size: var(--fs-sm);
-		white-space: nowrap;
-		cursor: pointer;
-		flex: none;
 	}
 	.note {
 		margin: 0;

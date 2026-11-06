@@ -45,9 +45,9 @@
 		<div class="item" class:off={!shown} role="listitem">
 			<Icon name={labels[id].icon as never} />
 			<span class="name">{t(labels[id].name)}</span>
+			<Switch checked={shown} label={t(labels[id].name)} onchange={(on) => app.prefs.toggleFooterItem(id, on)} />
 			<button class="mv tap" aria-label={t("위로")} disabled={i === 0} onclick={() => app.prefs.moveFooterItem(id, -1)}><Icon name="arrow-up" /></button>
 			<button class="mv tap" aria-label={t("아래로")} disabled={i === f.order.length - 1} onclick={() => app.prefs.moveFooterItem(id, 1)}><Icon name="arrow-down" /></button>
-			<Switch checked={shown} label={t(labels[id].name)} onchange={(on) => app.prefs.toggleFooterItem(id, on)} />
 		</div>
 	{/each}
 </div>

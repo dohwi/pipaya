@@ -158,7 +158,8 @@ export function languages(): LanguageInfo[] {
 	const tags = new Set<Lang>([...remote.keys(), ...[...local.values()].map((p) => p.tag)]);
 	return [
 		...Object.entries(BUILT_IN).map(([tag, v]) => ({ tag, name: v.name, builtIn: true })),
-		...[...tags].sort().map((tag) => ({ tag, name: pack(tag)!.name, builtIn: false })),
+		// packs by the name people read in the picker, not by their tag
+		...[...tags].map((tag) => ({ tag, name: pack(tag)!.name, builtIn: false })).sort((a, b) => a.name.localeCompare(b.name)),
 	];
 }
 /** A language's own name, or the tag when it is unknown. */

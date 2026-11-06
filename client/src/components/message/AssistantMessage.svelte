@@ -124,11 +124,11 @@
 			<div class="foot">
 				<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
 				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
-				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
-					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
-				{/if}
 				{#if canRetry}
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
+				{/if}
+				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
+					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
 				{/if}
 				<span class="stats">
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
