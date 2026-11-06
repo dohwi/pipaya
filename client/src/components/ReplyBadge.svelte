@@ -26,7 +26,6 @@
 		min-width: 0;
 		border-radius: var(--radius-pill);
 		background: var(--accent-soft);
-		border-left: 3px solid var(--border-strong);
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}
