@@ -22,6 +22,18 @@ describe("thinking levels looked up by model name", () => {
 	});
 });
 
+test("a reasoning model without a catalog map still matches and offers the default strengths", async () => {
+	const { catalogMatch } = await import("../src/thinking-catalog.ts");
+	expect(catalogMatch("anthropic/claude-sonnet-4.5")?.id).toBe("anthropic/claude-sonnet-4.5");
+	expect(levels("claude-sonnet-4.5")).toEqual(["off", "minimal", "low", "medium", "high"]);
+});
+
+test("measured strengths override the OpenRouter catalog", () => {
+	for (const id of ["mistral-large-4", "mistralai/mistral-large-4-0"]) expect(levels(id)).toEqual(["low", "medium", "high"]);
+	for (const id of ["glm-5.3", "z-ai/glm-5.3"]) expect(levels(id)).toEqual(["low", "high", "max"]);
+	for (const id of ["deepseek-4.1-flash", "deepseek/deepseek-v4.1-flash"]) expect(levels(id)).toEqual(["off", "low", "high", "xhigh", "max"]);
+});
+
 test("catalogEntries lists image generation models too", async () => {
 	const { catalogEntries } = await import("../src/thinking-catalog.ts");
 	const e = catalogEntries().find((c) => c.id === "google/gemini-3.1-flash-image");

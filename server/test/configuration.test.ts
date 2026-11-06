@@ -250,6 +250,16 @@ describe("where a model's reasoning strengths come from", () => {
 		expect(r.body.models[0].thinkingSource).toEqual({ kind: "custom", catalogId: "anthropic/claude-haiku-5.5", levels: ["low", "high"] });
 		expect(await levelsOf("src-pick-own")).toEqual(["low", "high"]);
 	});
+	test("a model measured against its real API reports the measured strengths", async () => {
+		const r = await put("src-measured", [{ id: "mistral-large-4", reasoning: true }, { id: "claude-sonnet-4.5", reasoning: true }]);
+		expect(r.body.models[0].thinkingSource).toMatchObject({ kind: "catalog", levels: ["low", "medium", "high"] });
+		expect(r.body.models[1].thinkingSource).toEqual({ kind: "catalog", catalogId: "anthropic/claude-sonnet-4.5", levels: ["off", "minimal", "low", "medium", "high"] });
+	});
+	test("narrowing a matched model keeps off usable", async () => {
+		const r = await put("src-narrow", [{ id: "my-opus", reasoning: true, catalogId: "anthropic/claude-opus-4.7", thinkingLevels: ["off", "high"] }]);
+		expect(r.status).toBe(200);
+		expect(await levelsOf("src-narrow")).toEqual(["off", "high"]);
+	});
 	test("catalogId null means manual: the name is not looked up", async () => {
 		const r = await put("src-manual", [{ id: "claude-sonnet-5", reasoning: true, catalogId: null }]);
 		expect(r.body.models[0].thinkingSource).toEqual({ kind: "default", levels: ["off", "minimal", "low", "medium", "high"] });

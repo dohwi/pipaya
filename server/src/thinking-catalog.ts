@@ -18,8 +18,9 @@ function build() {
 	const byName = new Map<string, CatalogMatch | null>();
 	const exact = new Map<string, CatalogMatch>();
 	for (const m of Object.values(OPENROUTER_MODELS as Record<string, Model<any>>)) {
-		if (!m.reasoning || m.id.includes(":") || m.id.startsWith("~") || !m.thinkingLevelMap) continue;
-		const match = { id: m.id, map: m.thinkingLevelMap };
+		if (!m.reasoning || m.id.includes(":") || m.id.startsWith("~")) continue;
+		// A reasoning model without a map is still a match: it takes pi-ai's default strengths (off through high).
+		const match = { id: m.id, map: m.thinkingLevelMap ?? {} };
 		exact.set(m.id.toLowerCase(), match);
 		const key = normalize(m.id);
 		const seen = byName.get(key);
@@ -33,9 +34,25 @@ function build() {
 
 let built: ReturnType<typeof build> | undefined;
 
+/**
+ * Strengths measured against the real APIs that win over OpenRouter's (stale or incomplete) catalog. Keys are normalized
+ * names (last path segment, lowercase); list every spelling a gateway may expose. Checked 2026-11-06.
+ */
+const STRENGTH_OVERRIDES: Record<string, LevelMap> = {
+	// low/medium/high only; "none" is rejected
+	...Object.fromEntries(["mistral-large-4", "mistral-large-4-0"].map((k) => [k, { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: null, max: null } as LevelMap])),
+	// low/high/max
+	...Object.fromEntries(["glm-5.3", "zai-glm-5-3"].map((k) => [k, { off: null, minimal: null, low: "low", medium: null, high: "high", xhigh: null, max: "max" } as LevelMap])),
+	// none/low/high/xhigh/max
+	...Object.fromEntries(["deepseek-4.1-flash", "deepseek-v4.1-flash", "deepseek-v4-1-flash-1017"].map((k) => [k, { off: "none", minimal: null, low: "low", medium: null, high: "high", xhigh: "xhigh", max: "max" } as LevelMap])),
+};
+
 /** The OpenRouter catalog entry (and its reasoning strengths) for this model id, or `undefined` when it is unknown or ambiguous. */
 export function catalogMatch(id: string): CatalogMatch | undefined {
 	built ??= build();
+	const forced = STRENGTH_OVERRIDES[normalize(id)];
+	// Keep the catalog id (limits and capabilities still come from it); only the strengths are replaced.
+	if (forced) return { id: (built.exact.get(id.toLowerCase()) ?? built.byName.get(normalize(id)))?.id ?? id, map: forced };
 	return built.exact.get(id.toLowerCase()) ?? built.byName.get(normalize(id)) ?? undefined;
 }
 
@@ -77,7 +94,7 @@ export function catalogEntries(): CatalogEntry[] {
 			reasoning: Boolean(m.reasoning),
 			vision: m.input.includes("image"),
 			image: false,
-			levels: m.reasoning ? getSupportedThinkingLevels(m) : [],
+			levels: m.reasoning ? getSupportedThinkingLevels(STRENGTH_OVERRIDES[normalize(m.id)] ? { ...m, thinkingLevelMap: STRENGTH_OVERRIDES[normalize(m.id)] } : m) : [],
 		});
 	}
 	// A model listed as both chat and image keeps its chat entry (it has real limits).

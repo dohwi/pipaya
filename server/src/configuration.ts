@@ -64,8 +64,10 @@ function supportedLevelsFor(m: { id: string; catalogId?: string | null; thinking
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
 function thinkingMapFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
 	if (m.thinkingLevels?.length) {
+		// Keep the catalog's own wire value for a level that stays on (OpenRouter calls "off" "none"), else the level itself.
+		const base = catalogFor(m)?.map as Record<string, string | null | undefined> | undefined;
 		const map: Record<string, string | null> = {};
-		for (const level of THINKING_LEVELS) map[level] = m.thinkingLevels.includes(level) ? level : null;
+		for (const level of THINKING_LEVELS) map[level] = m.thinkingLevels.includes(level) ? (base?.[level] ?? level) : null;
 		return { thinkingLevelMap: map };
 	}
 	const found = catalogFor(m)?.map;
