@@ -34,7 +34,10 @@ export function peerMentions(sessions: readonly Session[], groups: readonly Grou
 }
 
 /** A message another session sent with peer(action=send): `[from @name, another session on this server; ...]\nbody`. */
-export function parsePeer(text: string): { from: string; body: string } | null {
+export function parsePeer(text: string): { from: string; body: string; server?: boolean } | null {
 	const m = /^\[from (@[^,\]\n]+), another session on this server;[^\]\n]*\]\n?([\s\S]*)$/.exec(text);
-	return m ? { from: m[1]!.trim(), body: m[2]! } : null;
+	if (m) return { from: m[1]!.trim(), body: m[2]! };
+	// a report from the server itself (`[from the server: @name finished its run. ...]\nmore`): the first line stays in the body
+	const s = /^\[from the server: ([^\n]*)\]\n?([\s\S]*)$/.exec(text);
+	return s ? { from: t("서버 알림"), body: s[2] ? `${s[1]}\n${s[2]}` : s[1]!, server: true } : null;
 }

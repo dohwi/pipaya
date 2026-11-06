@@ -28,5 +28,8 @@ describe("peers", () => {
 	test("parsePeer reads the sender and the body", () => {
 		expect(parsePeer("[from @지우, another session on this server; answer with peer_send to @지우 only if a reply is needed]\n안녕")).toEqual({ from: "@지우", body: "안녕" });
 		expect(parsePeer("hello")).toBeNull();
+		const r = parsePeer("[from the server: @도하 finished its run. This is a report you asked for; no reply needed.]\nlast words: \"끝\"\nUse peer(action=read).");
+		expect(r?.server).toBe(true);
+		expect(r?.body).toBe("@도하 finished its run. This is a report you asked for; no reply needed.\nlast words: \"끝\"\nUse peer(action=read).");
 	});
 });

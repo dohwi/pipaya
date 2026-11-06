@@ -552,6 +552,7 @@ export const en: Record<string, string> = {
 	"그룹 {n}": "Group {n}",
 	"세션": "Sessions",
 	"그룹": "Groups",
+	"서버 알림": "Server",
 	"{n}개 세션": "{n} sessions",
 	"이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다": "This chat's name. Other chats can call it @{name}",
 	"사용자에게 질문하고 답을 기다림 (ask_user)": "Ask you a question and wait (ask_user)",
