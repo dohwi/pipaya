@@ -20,6 +20,7 @@
 	import ListGroup from "./ListGroup.svelte";
 	import ListItem from "./ListItem.svelte";
 	import Modal from "./Modal.svelte";
+	import Segmented from "./Segmented.svelte";
 
 	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null }; api: Api; onclose: () => void } = $props();
 
@@ -30,6 +31,7 @@
 	let error = $state("");
 	let refresh = $state(0);
 	let query = $state("");
+	let tab = $state<Mode>("project");
 	let saving = $state<Record<string, boolean>>({});
 
 	// Re-read on manual refresh and whenever any client changes a skill (skills_updated).
@@ -203,12 +205,27 @@
 			{#each data.warnings as warning}
 				<Notice tone="warn"><span class="mono">{home(warning.path)}</span><br />{warning.message}</Notice>
 			{/each}
-			<ListGroup title={t("이 프로젝트")} count={t("{on}/{total}개 사용", { on: data.skills.filter(x => effective(x, "project")).length, total: data.skills.length })} path={home(data.project)} hint={t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}>
-				{@render list("project")}
-			</ListGroup>
-			<ListGroup title={t("모든 프로젝트")} count={t("{on}/{total}개 사용", { on: data.skills.filter(x => x.globalEnabled).length, total: data.skills.length })} hint={t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}>
-				{@render list("global")}
-			</ListGroup>
+			{@const projOn = data.skills.filter(x => effective(x, "project")).length}
+			{@const globOn = data.skills.filter(x => x.globalEnabled).length}
+			<Segmented
+				tabs
+				label={t("적용 범위")}
+				value={tab}
+				onchange={(id) => (tab = id)}
+				options={[
+					{ id: "project", label: `${t("이 프로젝트")} ${projOn}/${data.skills.length}` },
+					{ id: "global", label: `${t("모든 프로젝트")} ${globOn}/${data.skills.length}` },
+				]}
+			/>
+			{#if tab === "project"}
+				<ListGroup title={t("이 프로젝트")} count={t("{on}/{total}개 사용", { on: projOn, total: data.skills.length })} path={home(data.project)} hint={t("이 프로젝트에서만 켜고 끕니다. 기본값과 같게 돌리면 기본값을 따릅니다.")}>
+					{@render list("project")}
+				</ListGroup>
+			{:else}
+				<ListGroup title={t("모든 프로젝트")} count={t("{on}/{total}개 사용", { on: globOn, total: data.skills.length })} hint={t("모든 프로젝트의 기본값입니다. 프로젝트에서 따로 정한 스킬은 그대로 유지됩니다.")}>
+					{@render list("global")}
+				</ListGroup>
+			{/if}
 		{/if}
 	</DialogBody>
 </Modal>

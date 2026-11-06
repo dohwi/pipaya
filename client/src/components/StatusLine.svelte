@@ -22,7 +22,7 @@
 
 	// Number of entries in the context panel: the system prompt plus every applied AGENTS.md.
 	// Servers without the endpoint (or a failed lookup) simply hide the item.
-	type Loaded = { key: string; files: string[]; skills: string[] | null };
+	type Loaded = { key: string; files: string[] };
 	let loaded = $state<Loaded | null>(null);
 	let openKey = $state<string | null>(null);
 	// A conversation reads its own context; a new chat previews what the chosen directory will get.
@@ -41,26 +41,29 @@
 		const cwd = app.workdirAbs;
 		if (!api) return;
 		return abortable((signal) => (id ? api.sessionContext(id, signal) : api.previewContext(cwd, signal)), {
-			ok: (r) => (loaded = { key, files: r.instructions.map(i => i.path), skills: r.skills.map(k => k.name) }),
+			ok: (r) => (loaded = { key, files: r.instructions.map(i => i.path) }),
 			fail: () => { if (loaded?.key === key) loaded = null; },
 		});
 	});
 	$effect(() => { if (openKey !== ctxKey) openKey = null; });
 
-	// Skills the model is offered. A conversation shows what it uses (frozen after its first run);
-	// a new chat shows what the next conversation in the chosen directory will get.
+	// Skills the model is offered in the project (the conversation's folder, else the chosen one): the project's settings, not a
+	// conversation's frozen set, so the count matches the "this project" tab of the skills dialog.
 	let fresh = $state<{ key: string; names: string[] } | null>(null);
-	const cwdKey = $derived(pane.id ? null : `${app.serverId}:${app.workdirAbs}`);
+	const skillsCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
+	const cwdKey = $derived(`${app.serverId}:${skillsCwd}`);
 	$effect(() => {
 		const key = cwdKey;
+		const cwd = skillsCwd;
 		const api = app.api;
 		app.skillsTick;
-		if (!key || !api) return;
-		return abortable((signal) => api.skills(app.workdirAbs, signal), {
-			ok: (r) => (fresh = { key, names: r.skills.filter(k => k.enabled && k.modelInvocable).map(k => k.name) }),
+		if (!api) return;
+		return abortable((signal) => api.skills(cwd, signal), {
+			ok: (r) => (fresh = { key, names: r.skills.filter(k => projectOn(k) && k.modelInvocable).map(k => k.name) }),
 			fail: () => { if (fresh?.key === key) fresh = null; },
 		});
 	});
+	const projectOn = (k: { override: boolean | null; globalEnabled: boolean }) => k.override ?? k.globalEnabled;
 	// Commands server extensions offer as /prefix:name in the chosen directory (the open chat's, else the new-chat one).
 	let tpl = $state<{ key: string; names: string[] } | null>(null);
 	const tplCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
@@ -140,7 +143,7 @@
 				].filter(Boolean).join("\n")
 			: "",
 	);
-	const skillNames = $derived(pane.id ? (here ? here.skills : null) : (fresh && fresh.key === cwdKey ? fresh.names : null));
+	const skillNames = $derived(fresh && fresh.key === cwdKey ? fresh.names : null);
 	const skillCount = $derived(skillNames ? skillNames.length : null);
 	const base = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
 	const filesTip = $derived(
@@ -156,7 +159,7 @@
 	const skillsTip = $derived(
 		skillNames
 			? [
-					pane.id ? t("이 대화가 사용하는 스킬 {n}개 (이 프로젝트 설정 반영)", { n: skillNames.length }) : t("다음 대화에서 사용할 스킬 {n}개", { n: skillNames.length }),
+					t("이 프로젝트에서 쓰는 스킬 {n}개", { n: skillNames.length }),
 					skillNames.length ? list(skillNames) : t("켜진 스킬이 없습니다"),
 					t("눌러서 켜기/끄기"),
 				].join("\n")
