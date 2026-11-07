@@ -107,6 +107,9 @@
 	const shownThinking = $derived<ThinkingLevel | null>(saved?.thinkingLevel ?? null);
 	const shownInfo = $derived(shownModel ? models.find((m) => m.provider === shownModel.provider && m.id === shownModel.model) : undefined);
 
+	/** The shown model's connection exists but has no usable key (its models are then missing from the list). */
+	const shownNoKey = $derived(Boolean(shownModel) && providerList.some((p) => p.id === shownModel!.provider && !p.configured));
+
 	/** Save a new default. The reasoning strength only travels with a model that has reasoning. */
 	async function saveDefault(next: DefaultModelSelection | null) {
 		const a = api();
@@ -284,11 +287,16 @@
 				unsetLabel={t("서버 기본값")}
 				placeholder={t("서버 기본값")}
 				disabled={busy}
+				invalid={Boolean(shownModel) && (shownNoKey || !shownInfo || !shownInfo.configured)}
 				label={t("기본 모델")}
 				onpick={pickDefault}
 			/>
 			<p class="hint note">
-				{#if !saved}
+				{#if shownNoKey || (shownInfo && !shownInfo.configured)}
+					<span class="bad">{t("이 모델의 연결에 키가 없어 새 대화를 시작하지 못합니다. 키를 설정하거나 다른 모델을 고르세요.")}</span>
+				{:else if shownModel && !shownInfo}
+					<span class="bad">{t("이 모델을 찾을 수 없어 새 대화를 시작하지 못합니다. 연결이나 모델이 바뀌었는지 확인하고 다른 모델을 고르세요.")}</span>
+				{:else if !saved}
 					{t("서버 기본값을 씁니다.")}{#if cfg.effectiveDefaults} ({cfg.effectiveDefaults.provider}/{cfg.effectiveDefaults.model}){/if}
 				{:else if shownInfo && !shownInfo.reasoning}
 					{t("이 모델은 추론 모드를 지원하지 않아 추론 강도는 쓰이지 않습니다.")}
@@ -346,6 +354,9 @@
 	}
 	.note {
 		margin: 0;
+	}
+	.bad {
+		color: var(--danger);
 	}
 	.provwrap:last-child :global(.prov) {
 		border-bottom: 0;

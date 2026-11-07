@@ -30,6 +30,7 @@
 		onfav,
 		onmanage,
 		conn = null,
+		invalid = false,
 	}: {
 		models: ModelInfo[];
 		providers?: ProviderInfo[];
@@ -49,6 +50,8 @@
 		onmanage?: () => void;
 		/** The server whose models these are (uploaded icon images live there); the open server when left out. */
 		conn?: { baseUrl: string; token: string } | null;
+		/** The saved model can no longer be used (removed, or its connection lost its key): show a warning mark. */
+		invalid?: boolean;
 	} = $props();
 
 	const current = $derived(value ? models.find((m) => m.provider === value.provider && m.id === value.model) : undefined);
@@ -58,6 +61,7 @@
 <button
 	type="button"
 	class="trigger {variant}"
+	class:invalid
 	onclick={() => (open = true)}
 	{disabled}
 	aria-haspopup="dialog"
@@ -68,6 +72,7 @@
 	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={variant === "inline" || Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
+	{#if invalid}<span class="warnmark"><Icon name="alert" /></span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
 </button>
 
@@ -185,5 +190,17 @@
 	}
 	.field .chev {
 		color: var(--text-dim);
+	}
+	.trigger.field.invalid {
+		border-color: var(--danger);
+	}
+	.warnmark {
+		display: grid;
+		flex: none;
+		color: var(--danger);
+	}
+	.warnmark :global(svg) {
+		width: 16px;
+		height: 16px;
 	}
 </style>

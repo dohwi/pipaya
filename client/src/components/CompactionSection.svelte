@@ -66,6 +66,8 @@
 	}
 
 	const info = $derived(settings?.model ? models.find((m) => m.provider === settings!.model!.provider && m.id === settings!.model!.model) : undefined);
+	/** The saved model's connection exists but has no usable key (its models are then missing from the list). */
+	const noKey = $derived(Boolean(settings?.model) && providers.some((p) => p.id === settings!.model!.provider && !p.configured));
 	const def = $derived(defaults);
 	const own = $derived(serverId === app.serverId); // favourites are the open server's
 </script>
@@ -88,6 +90,7 @@
 					unsetLabel={t("세션 모델 그대로 사용")}
 					placeholder={t("세션 모델 그대로 사용")}
 					disabled={busy}
+					invalid={Boolean(s.model) && (noKey || !info || !info.configured)}
 					label={t("압축 모델")}
 					onpick={(c) => void save({ ...s, model: c })}
 				/>
@@ -96,8 +99,10 @@
 		<p class="hint note">
 			{#if !s.model}
 				{t("대화에서 쓰는 모델이 요약합니다.")}
-			{:else if info && !info.configured}
-				{t("이 모델의 연결에 키가 없어 압축이 실패합니다. 키를 설정하거나 다른 모델을 고르세요.")}
+			{:else if noKey || (info && !info.configured)}
+				<span class="bad">{t("이 모델의 연결에 키가 없어 압축이 실패합니다. 키를 설정하거나 다른 모델을 고르세요.")}</span>
+			{:else if !info}
+				<span class="bad">{t("이 모델을 찾을 수 없어 압축이 실패합니다. 연결이나 모델이 바뀌었는지 확인하고 다른 모델을 고르세요.")}</span>
 			{:else}
 				{t("이 모델이 요약합니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
@@ -137,5 +142,8 @@
 	}
 	.note {
 		margin: 0;
+	}
+	.bad {
+		color: var(--danger);
 	}
 </style>
