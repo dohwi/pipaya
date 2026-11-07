@@ -66,7 +66,13 @@
 		{#if ext.version}<span class="meta">v{ext.version}</span>{/if}
 		<span class="meta">{t("서버에서 실행")}</span>
 	{/snippet}
+	{#snippet control()}
+		<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>
+	{/snippet}
 
+	{#if removing}
+		<RemoveExtensionConfirm name={ext.name} busy={busy} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
+	{/if}
 	{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
 	{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
 	{#if missingClient}
@@ -108,23 +114,12 @@
 			<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
 		{/if}
 	</section>
-
-	<section class="block set-group">
-		<h3 class="section-label">{t("관리")}</h3>
-		<div class="row">
-			<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>
-		</div>
-		{#if removing}
-			<RemoveExtensionConfirm name={ext.name} busy={busy} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
-		{/if}
-	</section>
 </ExtensionPage>
 
 <style>
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
 	p { margin: 0; }
-	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
