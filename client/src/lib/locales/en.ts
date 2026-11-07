@@ -881,7 +881,7 @@ export const en: Record<string, string> = {
 	"복원하지 못했습니다": "Could not restore",
 	"보관함에서 꺼내 목록으로 되돌립니다": "Move it out of Archived and back into the list",
 	"대화를 영구 삭제합니다": "Delete the chat for good",
-	"{title} · 눌러서 복원하고 열기": "{title} · click to restore and open",
+	"{title} · 눌러서 열기 (복원은 오른쪽 버튼)": "{title} · click to open (restore with the button on the right)",
 	"{n}개를 보관했습니다.": "Archived {n} {n#chat|chats}.",
 	"{n}개를 복원했습니다.": "Restored {n} {n#chat|chats}.",
 	"대화 목록 관리": "Manage chats",

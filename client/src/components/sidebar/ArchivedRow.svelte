@@ -11,8 +11,8 @@
 	import { type SidebarNode } from "../../lib/sidebar-ctx";
 
 	/**
-	 * A conversation in a folder's archive: dimmed, nothing drags or groups it. Clicking brings it back and opens it; the
-	 * button (and the context menu) restores it quietly, or deletes it for good.
+	 * A conversation in a folder's archive: dimmed, nothing drags or groups it. Clicking only opens it to read (it stays
+	 * archived); the button (and the context menu) restores it, or deletes it for good.
 	 */
 	let { n, x }: { n: SidebarNode; x: Session } = $props();
 
@@ -27,7 +27,7 @@
 
 <div class="item nested member archived" use:pressMenu={menu}>
 	<span class="branch" aria-hidden="true"></span>
-	<button class="open wide" onclick={() => void app.unarchive(n.server.id, x.id, true)} title={t("{title} · 눌러서 복원하고 열기", { title: sessionTitle(x.title) })}>
+	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} title={t("{title} · 눌러서 열기 (복원은 오른쪽 버튼)", { title: sessionTitle(x.title) })}>
 		<span class="lead"><AgentBadge id={x.id} server={n.server.id} size={16} /></span>
 		<RowTitle text={sessionTitle(x.title)} />
 	</button>

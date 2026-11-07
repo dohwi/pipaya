@@ -354,7 +354,8 @@ class AppStore {
   session(id: string | null | undefined): Session | undefined {
     // active ones only (the map also holds the archived); a lookup, not a scan: it runs once per row on every list change
     const s = id ? this.link?.sessionById.get(id) : undefined;
-    return s && !s.archived ? s : undefined;
+    // an archived one still shows while it is the focused one: opening it from the archive only views it
+    return s && (!s.archived || id === this.activeId) ? s : undefined;
   }
 
   /** Transcript of the focused session. */
@@ -900,7 +901,7 @@ class AppStore {
     // Restore (or refresh) the open conversation.
     const want = this.activeId ?? read<string | null>(this.activeKey, null);
     const had = Object.keys(this.chats);
-    if (want && this.shows(want)) await this.openSession(want, true);
+    if (want && (this.shows(want) || this.archived.some((x) => x.id === want))) await this.openSession(want, true);
     else if (this.activeId) this.newChat();
     if (token !== this.attachToken) return;
     if (this.pendingTerminal !== null) {
@@ -1005,6 +1006,7 @@ class AppStore {
       case "session_updated": {
         const s = e.data as Session;
         const hide = s.closed || s.archived;
+        const wasArchived = this.archived.some((x) => x.id === s.id); // viewed from the archive: an update must not kick it out
         const next = hide ? this.neighbourOf(s.id) : undefined;
         if (hide) this.forgetInGroups(s.id);
         const i = this.sessions.findIndex((x) => x.id === s.id);
@@ -1013,7 +1015,7 @@ class AppStore {
         if (s.archived && !s.closed) {
           // Archived sessions leave the tabs but stay open (a run goes on); the archive holds them until a message or a restore.
           this.archived.unshift(s);
-          if (this.activeId === s.id) this.leave(next);
+          if (this.activeId === s.id && !wasArchived) this.leave(next);
           break;
         }
         if (s.closed) {
