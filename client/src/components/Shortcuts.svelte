@@ -6,6 +6,7 @@
 	import { app } from "../lib/store.svelte";
 	import { extensions } from "../lib/extensions/host.svelte";
 	import { appConflict } from "../lib/extensions/shortcuts";
+	import { errorText } from "../lib/api";
 	import Icon from "./Icon.svelte";
 	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../lib/keys";
 
@@ -13,7 +14,10 @@
 	let { filter = $bindable("") }: { filter?: string } = $props();
 
 	let recording = $state<ActionId | null>(null);
+	/** The extension shortcut being recorded, with its "<owner>:<id>" key. */
+	let recordingExt = $state<{ key: string; owner: string; id: string; label: string } | null>(null);
 	let note = $state<{ id: ActionId; text: string; bad?: boolean } | null>(null);
+	let extNote = $state<{ key: string; text: string; bad?: boolean } | null>(null);
 	/** Keys pressed so far. Nothing is saved until the user confirms with the check button. */
 	let rec = $state(emptyRecording());
 	const live = $derived(recordingLabel(rec));
@@ -38,12 +42,13 @@
 	const visible = $derived(ACTIONS.filter(matches));
 	/** Shortcuts the running extensions registered. Read-only here; an app shortcut on the same keys wins and is called out. */
 	const extra = $derived(
-		extensions.shortcutList().filter((x) => !q || q.split(/\s+/).every((w) => [x.label, x.ownerName, x.combo, formatCombo(x.combo)].join("\n").toLowerCase().includes(w))),
+		extensions.shortcutList().filter((x) => !q || q.split(/\s+/).every((w) => [x.label, x.ownerName, x.combo ?? "", formatCombo(x.combo ?? "")].join("\n").toLowerCase().includes(w))),
 	);
-	const changed = $derived(ACTIONS.some((a) => app.prefs.bindings[a.id] !== a.default));
+	const changed = $derived(ACTIONS.some((a) => app.prefs.bindings[a.id] !== a.default) || extensions.shortcutOverrideCount > 0);
 
 	function start(id: ActionId) {
 		void extensions.releaseShortcut("recording").catch(() => {}); // a held extension shortcut ends: the keys now belong to this editor
+		stopExt();
 		recording = id;
 		note = null;
 		rec = emptyRecording();
@@ -55,6 +60,41 @@
 		rec = emptyRecording();
 		app.prefs.recordingKey = false;
 	}
+
+	/** Same editor for an extension shortcut: the user picks the combo there (a hold keeps working on the new one). */
+	function startExt(x: { owner: string; id: string; label: string }) {
+		void extensions.releaseShortcut("recording").catch(() => {});
+		stop();
+		recordingExt = { key: `${x.owner}:${x.id}`, ...x };
+		extNote = null;
+		rec = emptyRecording();
+		app.prefs.recordingKey = true;
+	}
+
+	function stopExt() {
+		recordingExt = null;
+		rec = emptyRecording();
+		app.prefs.recordingKey = false;
+	}
+
+	/** Give an extension shortcut a combo ("" = none). The host refuses what an extension shortcut may not use. */
+	function setExt(x: { owner: string; id: string }, combo: string) {
+		try {
+			const taken = extensions.setShortcutCombo(x.owner, x.id, combo, app.prefs.bindings);
+			// the combo was taken from another extension shortcut: say which one gave it up
+			const takenBy = taken ? extensions.shortcutList().find(y => `${y.owner}:${y.id}` === taken) : undefined;
+			extNote = taken && takenBy ? { key: `${x.owner}:${x.id}`, text: t('"{name}"에서 이 단축키를 가져왔습니다', { name: takenBy.label }) } : null;
+		} catch (cause) {
+			extNote = { key: `${x.owner}:${x.id}`, text: errorText(cause), bad: true };
+		}
+	}
+
+	function confirmExt() {
+		if (!recordingExt || !canConfirm) return;
+		setExt(recordingExt, recordingCombo(rec));
+		stopExt();
+	}
+
 
 	function bind(id: ActionId, combo: string) {
 		const owner = fixedActionFor(combo);
@@ -74,7 +114,7 @@
 
 	/** Capture phase + stopPropagation so neither the app's shortcuts nor the dialog's Esc see the key. */
 	function onKey(e: KeyboardEvent) {
-		if (!recording) return;
+		if (!recording && !recordingExt) return;
 		e.preventDefault();
 		e.stopPropagation();
 		if (e.repeat) return;
@@ -83,25 +123,30 @@
 		if (e.key === "Backspace" && plain) {
 			// removes the last key; with nothing left it clears the shortcut
 			if (recordingIsEmpty(rec)) {
-				bind(recording, "");
-				return stop();
+				if (recording) { bind(recording, ""); return stop(); }
+				if (recordingExt) { setExt(recordingExt, ""); return stopExt(); }
+				return;
 			}
 			rec = undoRecording(rec);
 			note = null;
+			extNote = null;
 			return;
 		}
 		const { next, rejected } = recordKey(rec, e);
 		if (rejected) {
-			note = { id: recording, text: t("일반 키는 {n}개까지 함께 누를 수 있습니다", { n: MAX_KEYS }), bad: true };
+			const text = t("일반 키는 {n}개까지 함께 누를 수 있습니다", { n: MAX_KEYS });
+			if (recording) note = { id: recording, text, bad: true };
+			if (recordingExt) extNote = { key: recordingExt.key, text, bad: true };
 			return;
 		}
 		note = null;
+		extNote = null;
 		rec = next;
 	}
 
 	/** Releasing keys does nothing: the shortcut only changes when the check button is pressed. */
 	function onKeyUp(e: KeyboardEvent) {
-		if (!recording) return;
+		if (!recording && !recordingExt) return;
 		e.preventDefault();
 		e.stopPropagation();
 	}
@@ -164,15 +209,25 @@
 		<div class="group">{t("확장")}</div>
 		<ul>
 		{#each extra as x (x.owner + ":" + x.id)}
-			{@const taken = appConflict(x.combo, app.prefs.bindings)}
+			{@const taken = x.combo ? appConflict(x.combo, app.prefs.bindings) : undefined}
 			<li>
 				<div class="what">
 					<span class="name">{x.label}</span>
 					<span class="sub">{x.ownerName}{#if x.hold} · {t("누르고 있는 동안 동작")}{/if}</span>
 					{#if taken}<span class="note bad">{t('앱 단축키 "{name}"이(가) 우선이라 이 확장 단축키는 동작하지 않습니다', { name: label(taken) })}</span>{/if}
+					{#if extNote?.key === x.owner + ":" + x.id}<span class="note" class:bad={extNote.bad}>{extNote.text}</span>{/if}
 				</div>
-				<span class="key fixed" title={t("확장이 등록한 단축키입니다")}>{formatCombo(x.combo)}</span>
-				<span class="slot" aria-hidden="true"></span>
+				{#if recordingExt?.key === x.owner + ":" + x.id}
+					<span class="key rec" aria-live="polite">{live || t("키를 누르세요…")}</span>
+					<button class="step ok" disabled={!canConfirm} onclick={confirmExt} title={t("이 단축키로 저장")} aria-label={t("이 단축키로 저장")}><Icon name="check" /></button>
+					<button class="step" onclick={stopExt} title={t("취소")} aria-label={t("취소")}><Icon name="x" /></button>
+				{:else}
+					<button class="key" class:none={!x.combo} onclick={() => startExt(x)}>
+						{#if x.combo}{formatCombo(x.combo)}{:else}{t("없음")}{/if}
+					</button>
+					<button class="reset tap" disabled={!x.combo} onclick={() => setExt(x, "")} title={t("단축키 없애기")} aria-label={t("{name} 단축키 없애기", { name: x.label })}><Icon name="x" /></button>
+					<button class="reset tap" disabled={!x.override} onclick={() => extensions.resetShortcutCombo(x.owner, x.id)} title={t("기본값으로")} aria-label={t("{name} 기본값으로", { name: x.label })}><Icon name="undo" /></button>
+				{/if}
 			</li>
 		{/each}
 		</ul>
@@ -180,7 +235,7 @@
 	{/if}
 
 	<div class="foot">
-		<Button size="sm" disabled={!changed} onclick={() => app.prefs.resetBindings()}>{t("모두 기본값으로")}</Button>
+		<Button size="sm" disabled={!changed} onclick={() => { app.prefs.resetBindings(); extensions.resetShortcutCombos(); }}>{t("모두 기본값으로")}</Button>
 	</div>
 </section>
 

@@ -105,7 +105,17 @@ export interface ExtensionSDK {
    * `blur` / `hidden` (the window lost the keyboard), `recording` (the user started recording a shortcut), `removed`.
    * `up` can arrive while an async `down` handler is still running. Without `hold` the handler only ever gets `down`.
    */
-  readonly shortcuts: { register(spec: { id: string; label: string; combo: string; hold?: boolean }, handler: (event: ShortcutEvent) => void | Promise<void>): Promise<void>; remove(id: string): Promise<void> };
+  readonly shortcuts: {
+    /**
+     * `combo` is optional: without it the shortcut starts unbound and the user gives it one in Settings > Shortcuts.
+     * Given, it is the default the user can change or clear there. The handler gets `{ phase: "down" }` when the keys go
+     * down; with `hold: true` also exactly one `{ phase: "up", reason }` per `down` (see the reasons in `ShortcutUpReason`).
+     */
+    register(spec: { id: string; label: string; combo?: string; hold?: boolean }, handler: (event: ShortcutEvent) => void | Promise<void>): Promise<void>;
+    remove(id: string): Promise<void>;
+    /** The combo this shortcut works with right now: the user's own if there is one, else the default. `null` = unbound. */
+    current(id: string): Promise<string | null>;
+  };
   /** Needs `dialogs`: modal questions. Resolve to `null` when the user cancels. */
   readonly dialog: {
     confirm(spec: { title: string; message?: string; confirmLabel?: string }): Promise<boolean>;

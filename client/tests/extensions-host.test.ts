@@ -1553,6 +1553,67 @@ describe("hold shortcuts and component shortcuts", () => {
 		expect(host.heldShortcut).toBeNull();
 	});
 
+	test("a shortcut without a combo starts unbound; the user's combo works at once and survives re-registration", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.free", HOLD));
+		call(host, id, "shortcuts.register", [{ id: "mic", label: "Mic" }, "tok"]); // no combo: the user gives it one
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+		expect(host.shortcutList().map(x => [x.id, x.combo, x.override])).toEqual([["mic", null, false]]);
+		expect(host.setShortcutCombo(id, "mic", "Alt+M", {})).toBeNull();
+		expect(host.shortcutFor("Alt+M")?.id).toBe("mic");
+		expect(host.shortcutList()[0]!.override).toBe(true);
+		expect(await call(host, id, "shortcuts.current", ["mic"])).toBe("Alt+M");
+		// a shortcut registered again after a removal keeps the user's combo (an extension re-registering, an update)
+		call(host, id, "shortcuts.remove", ["mic"]);
+		call(host, id, "shortcuts.register", [{ id: "mic", label: "Mic" }, "tok2"]);
+		expect(host.shortcutFor("Alt+M")?.id).toBe("mic");
+		// registering the same id twice is still a duplicate
+		expect(() => call(host, id, "shortcuts.register", [{ id: "mic", label: "Mic" }, "tok3"])).toThrow();
+		expect(() => host.setShortcutCombo("example.nobody", "mic", "Alt+M", {})).toThrow(); // no such extension shortcut
+		host.stop();
+	});
+
+	test("the user's combo is refused for app shortcuts, other extensions and bad shapes, and taken from the previous holder", async () => {
+		const { host } = await reload();
+		const a = await activate(host, code("example.a", HOLD));
+		const b = await activate(host, code("example.b", HOLD));
+		call(host, a.id, "shortcuts.register", [{ id: "one", label: "One", combo: "Alt+A" }, "tok"]);
+		call(host, b.id, "shortcuts.register", [{ id: "two", label: "Two", combo: "Alt+B" }, "tok"]);
+		// a combo another extension works with is taken from it (the note says which)
+		expect(host.setShortcutCombo(b.id, "two", "Alt+A", {})).toBe(`${a.id}:one`);
+		expect(() => host.setShortcutCombo(b.id, "two", "Mod+J+K", {})).toThrow();
+		expect(() => host.setShortcutCombo(b.id, "two", "Shift+K", {})).toThrow();
+		expect(() => host.setShortcutCombo(b.id, "two", "Mod+B", { toggleSidebar: "Mod+B" })).toThrow(/앱 단축키/);
+		// the app's longer shortcut starts with it: the combo would never fire
+		expect(() => host.setShortcutCombo(b.id, "two", "Alt+Q", { toggleSidebar: "Alt+Q+W" })).toThrow(/앱 단축키/);
+		expect(host.shortcutFor("Alt+A")?.owner).toBe(b.id);
+		expect(host.shortcutFor("Alt+B")).toBeUndefined();
+		expect(host.shortcutList().find(x => x.owner === a.id)!.combo).toBeNull();
+		// a shortcut already on the combo it is given keeps it (its own combo, no clash with itself)
+		expect(host.setShortcutCombo(b.id, "two", "Alt+A", {})).toBeNull();
+		host.resetShortcutCombo(b.id, "two");
+		expect(host.shortcutFor("Alt+A")).toBeUndefined(); // back to nothing (no default)
+		host.stop();
+	});
+
+	test("user overrides survive disable and reinstall, and go away on delete without kept settings", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.stay", HOLD));
+		call(host, id, "shortcuts.register", [{ id: "mic", label: "Mic", combo: "Alt+M" }, "tok"]);
+		host.setShortcutCombo(id, "mic", "Alt+K", {});
+		host.disable(id);
+		await host.enable(id);
+		call(host, id, "shortcuts.register", [{ id: "mic", label: "Mic", combo: "Alt+M" }, "tok"]); // the code registers again on start
+		expect(host.shortcutFor("Alt+K")?.id).toBe("mic"); // the user's combo survived
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+		host.remove(id, { keepSettings: false });
+		const again = await activate(host, code("example.stay", HOLD));
+		call(host, again.id, "shortcuts.register", [{ id: "mic", label: "Mic", combo: "Alt+M" }, "tok"]);
+		expect(host.shortcutFor("Alt+K")).toBeUndefined(); // the override went with the delete
+		expect(host.shortcutFor("Alt+M")?.id).toBe("mic"); // the default applies again
+		host.stop();
+	});
+
 	test("a component of a disabled extension registers nothing, and safe mode hides every shortcut", async () => {
 		const { host } = await reload();
 		const { id } = await activate(host, ui("example.mic"));

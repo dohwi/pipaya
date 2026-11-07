@@ -41,7 +41,7 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Entry card | `sdk.messages.*` | `EntryCard.svelte` in `MessageList` | `messages`, 20 | `messageRendererFor` |
 | Header/footer slot | `sdk.slots.*` | `ExtensionSlot.svelte` (`Header`, `Pane`) | `slots`, 2 | `slots` |
 | Pre-send filter | `sdk.composerFilter.*` | `Composer.svelte` submit | `composer-filter`, 2 s | `filterComposer` |
-| Shortcut | `sdk.shortcuts.*`, or `shortcuts` of the `pipaya` kit in a component | `lib/actions.ts` `onShortcut` (after app shortcuts); read-only list in `Shortcuts.svelte` | `shortcuts`, 10 per extension | `shortcutFor`, `pressShortcut`/`releaseShortcut`, `shortcutList`, `registerComponentShortcut`; rules in `lib/extensions/shortcuts.ts` |
+| Shortcut | `sdk.shortcuts.*`, or `shortcuts` of the `pipaya` kit in a component | `lib/actions.ts` `onShortcut` (after app shortcuts); editable list in `Shortcuts.svelte` | `shortcuts`, 10 per extension | `shortcutFor`, `pressShortcut`/`releaseShortcut`, `shortcutList`, `setShortcutCombo`/`resetShortcutCombo(s)`, `registerComponentShortcut`; rules in `lib/extensions/shortcuts.ts` |
 | Dialog | `sdk.dialog.*` | `ExtensionDialog.svelte` | `dialogs`, one at a time | `store.askExtension` |
 | Session control | `sdk.session.*` | `HostAdapter.session` | `session`, 5 per 10 s | `limitSession` |
 | Pane control | `sdk.panes.*` | `HostAdapter.panes` (`extensions/panes.ts`, layouts checked by `layout-spec.ts`) | `panes`, 30 changes per 10 s | `limitPanes` |
@@ -103,6 +103,10 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 | `pipaya.extension.storage.<id>` | `sdk.storage` |
 | `pipaya.extensions.settings-source` | `local` stops mirroring server settings |
 | `pipaya.extensions.configuration-backup(-at)`, `.background-grant.<id>` | import backup, background grant |
+
+## User-chosen combos
+
+A shortcut's `combo` is its default; what works is `shortcutCombo(s)`: the user's override (`pipaya.extensions.shortcut-keys`, `{ "<extension id>:<shortcut id>": combo | "" }`, device-local like `pipaya.keys`) else the default. `combo` may be null (shipped unbound, or the user cleared it). `setShortcutCombo` (Settings > Shortcuts) validates the same rules as a registration, refuses app-bound combos and combos another shortcut works with (freeing the previous holder instead, except within one extension), and writes the override; `remove(..., { keepSettings: false })` drops an extension's overrides. `sdk.shortcuts.current(id)` / the kit's `currentShortcut(id)` read the working combo.
 
 ## Hold shortcuts
 

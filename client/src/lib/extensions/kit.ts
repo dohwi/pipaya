@@ -31,7 +31,7 @@ import { fadeIn, fadeOut, surfaceIn, surfaceOut, collapseIn, collapseOut, reduce
  * `ext.data` / `ext.settings` are getters: read them inside the component (markup, $derived, $effect) to stay reactive.
  * `ext.assets` holds the package's design files as `data:` URLs (`<img src={ext.assets["logo.svg"]}>`).
  */
-export function kit(id: string, data: () => unknown, settings: () => Record<string, unknown>, assets: Readonly<Record<string, string>> = {}, registerShortcut?: ShortcutRegistrar): Record<string, unknown> {
+export function kit(id: string, data: () => unknown, settings: () => Record<string, unknown>, assets: Readonly<Record<string, string>> = {}, registerShortcut?: ShortcutRegistrar, currentCombo?: (owner: string, id: string) => string | null): Record<string, unknown> {
 	const ext = {
 		id,
 		assets: Object.freeze({ ...assets }),
@@ -44,6 +44,8 @@ export function kit(id: string, data: () => unknown, settings: () => Record<stri
 		ext, app, extensions, t, tc, getPane,
 		// `shortcuts.register({ id, label, combo }, { down, up })` -> remove function; needs the `shortcuts` permission
 		shortcuts: componentShortcuts(registerShortcut ?? (() => { throw new Error("shortcuts are not available here"); }), onDestroy),
+		// the combo a shortcut works with right now (the user's change, else its default): for tooltips; null = unbound
+		get currentShortcut() { return (sid: string) => currentCombo?.(id, sid) ?? null; },
 		// building blocks, so a component looks like the app without copying its markup
 		Icon, Button, IconButton, Badge, Switch, Pin, StatusDot, Modal, ModalHeader, Select, Segmented, Accordion, Notice, Markdown, SearchField,
 		// the declarative renderer, for a component that mixes its own look with plain nodes

@@ -45,7 +45,7 @@ const sdk = Object.freeze({
     list: () => rpc('server.list'),
     on: async fn => { if (typeof fn !== 'function') throw new Error('A listener is required'); await rpc('server.subscribe'); serverListeners.add(fn); return () => serverListeners.delete(fn); }
   }),
-  shortcuts: Object.freeze({ register: (spec, fn) => register('shortcuts.register', spec, fn), remove: id => rpc('shortcuts.remove', id) }),
+  shortcuts: Object.freeze({ register: (spec, fn) => register('shortcuts.register', spec, fn), remove: id => rpc('shortcuts.remove', id), current: id => rpc('shortcuts.current', id) }),
   dialog: Object.freeze({ confirm: spec => rpc('dialog.confirm', spec), select: spec => rpc('dialog.select', spec), input: spec => rpc('dialog.input', spec) }),
   session: Object.freeze({ send: (text, mode) => rpc('session.send', text, mode === undefined ? 'prompt' : mode), abort: () => rpc('session.abort') }),
   panes: Object.freeze({

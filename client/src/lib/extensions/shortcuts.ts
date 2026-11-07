@@ -14,7 +14,7 @@ export type { ShortcutEvent, ShortcutUpReason } from "./sdk";
 /** Shortcuts one extension may hold at once, whichever way they were registered. */
 export const MAX_SHORTCUTS = 10;
 
-export interface ShortcutSpec { id: string; label: string; combo: string; hold: boolean }
+export interface ShortcutSpec { id: string; label: string; combo: string | null; hold: boolean }
 
 /** What a component passes to `shortcuts.register`. `up` makes the shortcut a hold. */
 export interface ComponentHandlers {
@@ -27,6 +27,7 @@ export type ShortcutRegistrar = (spec: unknown, handlers: unknown) => () => void
 
 const MODS = ["Mod", "Alt", "Shift"];
 const NEEDS = msg("단축키는 Ctrl/⌘ 또는 Alt와 키 하나로 구성해야 합니다 (예: Mod+Shift+K)");
+export const NEEDS_COMBO = NEEDS;
 
 /**
  * The canonical form (`Mod`, `Alt`, `Shift` in that order, a letter upper case) of a combo made of Ctrl/⌘ or Alt and
@@ -40,11 +41,15 @@ export function normalizeCombo(combo: string): string | null {
   return [...MODS.filter((m) => parts.includes(m)), key.length === 1 ? key.toUpperCase() : key].join("+");
 }
 
-/** Check what an extension handed over. A component decides `hold` by having an `up` handler and passes it in. */
+/**
+ * Check what an extension handed over. A component decides `hold` by having an `up` handler and passes it in. `combo` is
+ * optional: without it the shortcut starts unbound ("없음" in Settings) and the user gives it one there. Given, it is
+ * the default the user can change or clear.
+ */
 export function parseShortcutSpec(value: unknown, hold?: boolean): ShortcutSpec {
   const s = object(value);
-  const combo = normalizeCombo(string(s.combo, 40, "combo"));
-  if (!combo) throw new LocalizedError(t(NEEDS));
+  const combo = s.combo === undefined || s.combo === "" ? null : normalizeCombo(string(s.combo, 40, "combo"));
+  if (s.combo !== undefined && s.combo !== "" && !combo) throw new LocalizedError(t(NEEDS));
   if (s.hold !== undefined && typeof s.hold !== "boolean") throw new LocalizedError(t("hold는 true 또는 false여야 합니다"));
   return { id: localId(s.id), label: string(s.label, 60), combo, hold: hold ?? s.hold === true };
 }
@@ -58,11 +63,17 @@ export function parseComponentHandlers(value: unknown): ComponentHandlers {
   return { down: h.down as ComponentHandlers["down"], up: h.up as ComponentHandlers["up"] };
 }
 
-/** Refuse a registration over the limit, with an ID the extension already uses, or on a combo another extension has. */
-export function checkShortcutFree(existing: readonly { owner: string; id: string; combo: string }[], owner: string, spec: ShortcutSpec) {
+/**
+ * Refuse a registration over the limit, with an ID the extension already uses, or on a combo another extension works
+ * with. `comboOf` is what a registration currently does (the user's change, or its default): clashes are judged on
+ * that, so a combo the user moved away from is free again.
+ */
+export function checkShortcutFree(existing: readonly { owner: string; id: string; combo: string | null; defaultCombo?: string | null }[], owner: string, spec: ShortcutSpec, comboOf: (x: { owner: string; id: string; combo: string | null; defaultCombo?: string | null }) => string | null = (x) => x.combo) {
   const own = existing.filter((x) => x.owner === owner);
   if (own.length >= MAX_SHORTCUTS || own.some((x) => x.id === spec.id)) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
-  if (existing.some((x) => x.combo === spec.combo)) throw new LocalizedError(t("이미 다른 확장이 쓰는 단축키입니다: {combo}", { combo: spec.combo }));
+  // Judged on the combo that works right now (the user's change, else the default), so a combo the user moved away from
+  // is free again. Two shortcuts of one extension on the same combo would be ambiguous, so they clash like any other.
+  if (spec.combo && existing.some((x) => comboOf(x) === spec.combo)) throw new LocalizedError(t("이미 다른 확장이 쓰는 단축키입니다: {combo}", { combo: spec.combo }));
 }
 
 /**

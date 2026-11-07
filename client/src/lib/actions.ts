@@ -445,7 +445,10 @@ export function onShortcut(e: KeyboardEvent) {
   const key = keyName(e.code);
   held.add(key);
   // A held key repeats: the extension hold that owns it also keeps the browser from typing a character (Alt+K on macOS) each time.
-  if (e.repeat && extensions.heldShortcut?.combo === buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [key])) e.preventDefault();
+  if (e.repeat) {
+    const heldCombo = extensions.heldShortcut ? extensions.shortcutCombo(extensions.heldShortcut) : null;
+    if (heldCombo && heldCombo === buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [key])) e.preventDefault();
+  }
   if (e.repeat || fired) return;
   const mods = { mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey };
   // Keys held together are one shortcut (J+K+L). Fall back to this key alone so a shortcut still works while
@@ -501,8 +504,11 @@ export function endExtensionHold(reason: ShortcutUpReason) {
 export function onShortcutUpCapture(e: KeyboardEvent) {
   const held = extensions.heldShortcut;
   if (!held) return;
-  const { keys } = splitCombo(held.combo);
-  if (releasedByKeyUp(held.combo, keys[0] ?? "", e)) endExtensionHold("release");
+  // The working combo (the user may have changed it while the key was down), not the snapshot taken at registration.
+  const combo = extensions.shortcutCombo(held);
+  if (!combo) return;
+  const { keys } = splitCombo(combo);
+  if (releasedByKeyUp(combo, keys[0] ?? "", e)) endExtensionHold("release");
 }
 
 export function onShortcutUp(e: KeyboardEvent) {

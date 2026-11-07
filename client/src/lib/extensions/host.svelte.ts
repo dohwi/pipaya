@@ -16,7 +16,7 @@ import { ExtensionRuntime } from "./runtime";
 import { PANEL_PLACEMENTS, parsePanelLayout, parsePanelSpec, parseView, validateUIEvent, type UIPanelPlacement, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
 import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ShortcutEvent, ShortcutUpReason, ToolRenderInput } from "./sdk";
-import { ComponentHandlerSet, checkShortcutFree, parseComponentHandlers, parseShortcutSpec } from "./shortcuts";
+import { ComponentHandlerSet, NEEDS_COMBO, appConflict, checkShortcutFree, normalizeCombo, parseComponentHandlers, parseShortcutSpec } from "./shortcuts";
 import { THINKING_LEVELS } from "../types";
 import type { PaneAdapter } from "./panes";
 import { parseLayout } from "./layout-spec";
@@ -24,6 +24,7 @@ import type { WorkspaceAdapter } from "./workspace";
 import { SETTINGS_TABS, WORKSPACE_DIALOGS } from "./workspace-spec";
 import type { Edge } from "../layout";
 import { clone, identify, localId, object, plain, string, within, withoutKeybindings } from "./host-values";
+import { read as readStore, write as writeStore } from "../persist";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
   prefill(text: string): void;
@@ -87,7 +88,11 @@ export interface ExtensionCommand { owner: string; name: string; desc: string; a
 export interface ComposerAction { owner: string; id: string; label: string; run(): Promise<void> }
 export interface StatusItem { owner: string; id: string; text: string }
 export interface ExtensionShortcut {
-  owner: string; id: string; label: string; combo: string;
+  owner: string; id: string; label: string;
+  /** The combo the extension gave: the default the user can change or clear. Null when it shipped without one. */
+  defaultCombo: string | null;
+  /** The combo that works right now: the user's change if there is one, else the default. Null = unbound. */
+  combo: string | null;
   /** A hold also gets `up` events (key released, window blurred...), see `sdk.shortcuts.register`. */
   hold: boolean;
   /** `worker`: registered through `sdk.shortcuts`; `component`: through `shortcuts` of the `pipaya` kit. */
@@ -141,6 +146,8 @@ const CORRUPT = "pipaya.extensions.v1.corrupt";
 const DEVICE_KEY = "pipaya.extensions.device.v1";
 const DEVICE_CORRUPT = "pipaya.extensions.device.v1.corrupt";
 const MAX_ENTRIES = 50;
+/** Shortcut overrides the user made in Settings > Shortcuts: { "<extension id>:<shortcut id>": combo | "" } ("" = unbound). */
+const SHORTCUT_KEYS = "pipaya.extensions.shortcut-keys";
 const NONE: MountedComponent[] = [];
 const STORE = "pipaya.extension.storage.";
 const SYNC_FETCH_MS = 3000;
@@ -150,6 +157,16 @@ export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 활성화할 �
 export const BOOT_INTERRUPTED = msg("시작이 완료되지 않아 비활성화했습니다");
 export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
 
+/** The user's extension shortcut overrides, read once at start: { "<extension id>:<shortcut id>": combo | "" }. */
+function readShortcuts(): Record<string, string> {
+  const raw = readStore<Record<string, unknown> | null>(SHORTCUT_KEYS, null);
+  const out: Record<string, string> = {};
+  // The key is "<extension id>:<shortcut id>"; both are lower-case ids, so this keeps hostile keys out.
+  if (raw && typeof raw === "object" && !Array.isArray(raw))
+    for (const [key, combo] of Object.entries(raw)) if (/^[a-z][a-z0-9.-]*:[a-z][a-z0-9-]*$/.test(key) && typeof combo === "string") out[key] = combo.slice(0, 40);
+  return out;
+}
+
 export class ExtensionHost {
   installed = $state<InstalledExtension[]>([]);
   commands = $state.raw<ExtensionCommand[]>([]);
@@ -157,6 +174,8 @@ export class ExtensionHost {
   statuses = $state<StatusItem[]>([]);
   navbar = $state.raw<NavbarItem[]>([]);
   shortcuts = $state.raw<ExtensionShortcut[]>([]);
+  /** The user's own combos, by "<extension id>:<shortcut id>" ("" = unbound). Device-local, like the app's `pipaya.keys`. */
+  private shortcutKeys = $state.raw<Record<string, string>>(readShortcuts());
   toolRenderers = $state.raw<ToolRenderer[]>([]);
   slots = $state.raw<SlotItem[]>([]);
   /** Trusted components (`ui-components`) of the active extensions, and the parts they replace. */
@@ -627,7 +646,7 @@ export class ExtensionHost {
     const [{ loadComponents }, { kit }] = await Promise.all([import("./components"), import("./kit")]);
     if (!current()) return;
     const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id), pkg.assets ?? {},
-      (spec, handlers) => current() ? this.registerComponentShortcut(id, spec, handlers) : () => {}));
+      (spec, handlers) => current() ? this.registerComponentShortcut(id, spec, handlers) : () => {}, (owner, sid) => this.currentShortcutCombo(owner, sid)));
     this.mounted = [...this.mounted, ...(pkg.mounts ?? []).map((m, i) => ({ owner: id, slot: m.slot, order: m.order ?? 0, key: `${id}:${i}`, component: loaded[m.component]! }))];
     this.replacements = [...this.replacements, ...Object.entries(pkg.replaces ?? {}).map(([part, name]) => ({ owner: id, part: part as UIPart, component: loaded[name]! }))];
   }
@@ -717,6 +736,12 @@ export class ExtensionHost {
   }
   /** Removes the package, its private storage and stops it. `keepSettings` decides what happens to the settings. */
   remove(id: string, opts: { keepSettings: boolean }) {
+    const dropShortcutKeys = () => {
+      const prefix = `${id}:`;
+      const rest = Object.fromEntries(Object.entries(this.shortcutKeys).filter(([k]) => !k.startsWith(prefix)));
+      this.shortcutKeys = rest;
+      writeStore(SHORTCUT_KEYS, rest);
+    };
     const keep = opts?.keepSettings !== false;
     const removed = this.find(id);
     const settings = removed.settings;
@@ -728,7 +753,7 @@ export class ExtensionHost {
       // Offline fallback; an unsynced local value is newer than the cached server copy.
       if (this.unsynced.has(id)) delete this.remote[id];
       if (removed.configured) this.keepLocal(id, settings);
-    } else this.discardSettings(id, !this.sharesSettings(removed));
+    } else { this.discardSettings(id, !this.sharesSettings(removed)); dropShortcutKeys(); }
     this.unsynced.delete(id); this.touched.delete(id);
   }
   /** Removing an extension takes down the language packs it published (only its own; best effort). */
@@ -1123,8 +1148,14 @@ export class ExtensionHost {
       case "shortcuts.register": {
         this.require(id, "shortcuts");
         const token = string(args[1], 40); const spec = parseShortcutSpec(args[0]);
-        checkShortcutFree(this.shortcuts, id, spec);
-        this.shortcuts = [...this.shortcuts, { owner: id, id: spec.id, label: spec.label, combo: spec.combo, hold: spec.hold, source: "worker", run: (event = { phase: "down" }) => execute(token, event).then(() => {}) }]; return;
+        checkShortcutFree(this.shortcuts, id, spec, x => this.shortcutCombo({ owner: x.owner, id: x.id, defaultCombo: x.defaultCombo ?? null }));
+        const entry: ExtensionShortcut = { owner: id, id: spec.id, label: spec.label, defaultCombo: spec.combo, combo: null, hold: spec.hold, source: "worker", run: (event = { phase: "down" }) => execute(token, event).then(() => {}) };
+        entry.combo = this.shortcutCombo(entry);
+        this.shortcuts = [...this.shortcuts, entry]; return;
+      }
+      case "shortcuts.current": {
+        this.require(id, "shortcuts"); const combo = this.currentShortcutCombo(id, localId(args[0]));
+        return combo ?? null;
       }
       case "shortcuts.remove": {
         this.require(id, "shortcuts");
@@ -1432,15 +1463,67 @@ export class ExtensionHost {
     if (this.safeMode) return;
     for (const id of this.serverSubscribed) this.runtimes.get(id)?.serverEvent(event);
   }
-  /** The shortcut an extension registered for this key combo, if any. Only active extensions count. */
+  /** The combo a shortcut works with right now: the user's own if there is one, else the extension's default. */
+  shortcutCombo(s: { owner: string; id: string; defaultCombo: string | null }): string | null {
+    /* public: the key handler reads the working combo of a hold (the user may change it while the key is down) */
+    const own = this.shortcutKeys[`${s.owner}:${s.id}`];
+    return own === undefined ? s.defaultCombo : own || null;
+  }
+  /** The shortcut that works on this key combo, if any. Only active extensions count. */
   shortcutFor(combo: string): ExtensionShortcut | undefined {
     if (this.safeMode) return undefined;
-    return this.shortcuts.find(s => s.combo === combo && this.activeOwner(s.owner));
+    return this.shortcuts.find(s => this.shortcutCombo(s) === combo && this.activeOwner(s.owner));
   }
-  /** The shortcuts of the active extensions with the name of their owner, for the shortcut settings. */
-  shortcutList(): (ExtensionShortcut & { ownerName: string })[] {
+  /** The shortcuts of the active extensions for the shortcut settings: the combo that works right now and whether the user changed it. */
+  shortcutList(): (ExtensionShortcut & { ownerName: string; override: boolean })[] {
     if (this.safeMode) return [];
-    return this.shortcuts.filter(s => this.activeOwner(s.owner)).map(s => ({ ...s, ownerName: this.find(s.owner).package.manifest.name }));
+    return this.shortcuts.filter(s => this.activeOwner(s.owner)).map(s => ({
+      ...s, combo: this.shortcutCombo(s), override: this.shortcutKeys[`${s.owner}:${s.id}`] !== undefined,
+      ownerName: this.find(s.owner).package.manifest.name,
+    }));
+  }
+  /** How many extension shortcuts the user changed, for "모두 기본값으로". */
+  get shortcutOverrideCount(): number { return Object.keys(this.shortcutKeys).length; }
+  /** The combo a shortcut works with right now, for the extension's own UI (tooltips). */
+  currentShortcutCombo(owner: string, id: string): string | null {
+    const s = this.shortcuts.find(x => x.owner === owner && x.id === id);
+    return s ? this.shortcutCombo(s) : null;
+  }
+  /**
+   * What the user picked in Settings > Shortcuts. `combo` may be empty (unbound). Refused when the combo is not one an
+   * extension shortcut may use, when an app shortcut (or the start of one) takes it, or when another extension shortcut
+   * already works with it. Returns the id of the extension shortcut that had to give it up, if any.
+   */
+  setShortcutCombo(owner: string, id: string, combo: string, bindings: Record<string, string>): string | null {
+    if (!this.shortcuts.some(s => s.owner === owner && s.id === id)) throw new LocalizedError(t("단축키를 찾을 수 없습니다"));
+    const canonical = combo ? normalizeCombo(combo) : null;
+    if (combo && !canonical) throw new LocalizedError(t(NEEDS_COMBO));
+    let taken: string | null = null;
+    const next = { ...this.shortcutKeys };
+    if (canonical) for (const s of this.shortcuts) {
+      if (s.owner === owner && s.id === id) continue;
+      if (this.shortcutCombo(s) !== canonical) continue;
+      if (s.owner === owner) { const err = t("이미 이 확장이 쓰는 단축키입니다: {combo}", { combo: canonical }); throw new LocalizedError(err); }
+      if (appConflict(canonical, bindings)) throw new LocalizedError(t("앱 단축키가 먼저 사용하는 조합입니다: {combo}", { combo: canonical }));
+      next[`${s.owner}:${s.id}`] = "";
+      taken = `${s.owner}:${s.id}`;
+    }
+    if (canonical && appConflict(canonical, bindings)) throw new LocalizedError(t("앱 단축키가 먼저 사용하는 조합입니다: {combo}", { combo: canonical }));
+    next[`${owner}:${id}`] = canonical ?? "";
+    this.shortcutKeys = next;
+    writeStore(SHORTCUT_KEYS, next);
+    return taken;
+  }
+  /** Back to what the extension declared (its default, or nothing). */
+  resetShortcutCombo(owner: string, id: string) {
+    const { [`${owner}:${id}`]: _drop, ...rest } = this.shortcutKeys;
+    this.shortcutKeys = rest;
+    writeStore(SHORTCUT_KEYS, rest);
+  }
+  /** Every user override, for "모두 기본값으로". */
+  resetShortcutCombos() {
+    this.shortcutKeys = {};
+    writeStore(SHORTCUT_KEYS, {});
   }
   /** The hold shortcut whose keys are down right now (one at a time). */
   private holding: ExtensionShortcut | null = null;
@@ -1472,11 +1555,11 @@ export class ExtensionHost {
     const spec = parseShortcutSpec(rawSpec, typeof handlers.up === "function" ? true : undefined);
     let entry = this.shortcuts.find(x => x.owner === id && x.id === spec.id);
     if (entry) {
-      if (entry.source !== "component" || entry.combo !== spec.combo || entry.hold !== spec.hold) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
+      if (entry.source !== "component" || entry.defaultCombo !== spec.combo || entry.hold !== spec.hold) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
     } else {
-      checkShortcutFree(this.shortcuts, id, spec);
+      checkShortcutFree(this.shortcuts, id, spec, x => this.shortcutCombo({ owner: x.owner, id: x.id, defaultCombo: x.defaultCombo ?? null }));
       const set = new ComponentHandlerSet(e => this.log(id, t("단축키 실패: {error}", { error: e instanceof Error ? e.message : String(e) })));
-      entry = { owner: id, id: spec.id, label: spec.label, combo: spec.combo, hold: spec.hold, source: "component", handlers: set, run: event => set.run(event ?? { phase: "down" }) };
+      entry = { owner: id, id: spec.id, label: spec.label, defaultCombo: spec.combo, combo: null, hold: spec.hold, source: "component", handlers: set, run: event => set.run(event ?? { phase: "down" }) };
       this.shortcuts = [...this.shortcuts, entry];
     }
     const shortcut = entry;

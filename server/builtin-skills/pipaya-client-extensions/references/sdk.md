@@ -156,7 +156,7 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `locales` | none | ship language packs |
 | `system-notifications` | `sdk.notifications.send(spec)`, `status()`, `register(id, rule)`, `remove(id)` | OS / push ([notifications.md](notifications.md)) |
 | `server` | `sdk.server.call(extension, method, params?, sessionId?)`, `entries({sessionId?, extension?, type?})`, `list()`, `on(handler)` | server extension methods, entries, events; 15 s per call |
-| `shortcuts` | `sdk.shortcuts.register({id, label, combo, hold?}, handler)`, `remove(id)`; also `shortcuts.register` of a `ui-components` component (below) | ≤10 per extension (Worker and components together); `Mod` (Ctrl/⌘) or `Alt` + one key (`Mod+Shift+K`, canonicalised, so `Shift+Mod+k` is the same combo); app shortcuts win, no combo shared between extensions; never fires during IME composition or while the user records a shortcut; listed read-only (owner, hold, app clash) in Settings > Shortcuts |
+| `shortcuts` | `sdk.shortcuts.register({id, label, combo?, hold?}, handler)`, `remove(id)`, `current(id)`; also `shortcuts.register` of a `ui-components` component (below) | ≤10 per extension (Worker and components together); `combo` optional (without it the shortcut starts unbound and the user gives it one in Settings); `Mod` (Ctrl/⌘) or `Alt` + one key (`Mod+Shift+K`, canonicalised, so `Shift+Mod+k` is the same combo); app shortcuts win, no combo worked by two shortcuts; never fires during IME composition or while the user records a shortcut; the user can change or clear the combo in Settings > Shortcuts (see below) |
 | `dialogs` | `sdk.dialog.confirm/select/input(spec)` | modal question showing the extension name; cancel → `false` / `null`; queued one at a time |
 | `session` | `sdk.session.send(text, mode?)`, `abort()` | message or stop the open chat; 5 per 10 s |
 | `tools` | `sdk.tools.registerRenderer(toolName, render)`, `removeRenderer(toolName)` | render finished tool calls (read-only nodes, 80 nodes, depth 5, 24 KiB); `null`/error → default; last registration wins; ≤20 |
@@ -171,7 +171,11 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `workspace` | `sdk.workspace.state()`, `sidebar({open?, collapsed?, width?})`, `openTab(id)`, `moveTab(id, target, 'before'\|'after')`, `openSettings(tab?)`, `closeSettings()`, `open('skills'\|'commands'\|'queue'\|'folder')`, `runCommand(name, arg?)`, `commands()` | the screen around the panes on this device; shares the 30 per 10 s limit. Built-in commands can be run, never replaced |
 | none | `sdk.settings.get()`, `sdk.log(text)` | own settings, extension log |
 
-### Shortcuts: `down`, `hold` and `up`
+### Shortcuts: `down`, `hold`, `up` and the user's own combos
+
+The user can change or clear a shortcut's combo in Settings > Shortcuts, and a shortcut can ship without one: register with no `combo` and the user gives it one there ("없음" until they do). The combo the extension passed is only the **default**; the user's choice survives re-registration, disable/enable and reinstall, and goes away when the extension is deleted without kept settings. `sdk.shortcuts.current(id)` (and `currentShortcut(id)` of the kit) returns the combo that works right now (`null` = unbound) — read it for tooltips, not the one you passed. A change applies at once; a hold running on the old combo is ended (`recording`).
+
+### The handler: `down`, `hold` and `up`
 
 `handler(event)` gets `{ phase: "down" }` when the keys go down (auto-repeat is ignored). Registered with `hold: true`, it also gets `{ phase: "up", reason }` **exactly once per `down`**:
 
