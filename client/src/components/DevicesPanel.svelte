@@ -16,8 +16,6 @@
 
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
-	/** Whether this very window is connected to the server being shown: its own row can be marked "this device". */
-	const isOpen = $derived(serverId === app.serverId);
 
 	let devices = $state<NotificationDevice[] | null>(null);
 	/** Tokens issued by QR pairing. null = not shown: this window connects with a paired device's own token, which may not manage them. */
@@ -102,7 +100,8 @@
 		if (hour < 24) return t("{n}시간 전", { n: hour });
 		return t("{n}일 전", { n: Math.floor(hour / 24) });
 	}
-	const mine = (d: NotificationDevice) => isOpen && d.id === notifications.id;
+	/** This window reports to every saved server under one id, so its row is "this device" on any server tab. */
+	const mine = (d: NotificationDevice) => d.id === notifications.id;
 
 	/**
 	 * A reinstall or app update registers the same phone again under a new id, so the old row lingers.
