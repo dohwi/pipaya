@@ -823,6 +823,7 @@
 	:global(.side .item:has(> .mutemark) > .acts) {
 		display: flex;
 		visibility: hidden;
+		min-width: 20px; /* the "more" button's box: another server's row has no button, and without this the bell's column (x 236) collapses to the right edge (x 256) */
 	}
 	:global(.side .item:has(> .mutemark):is(:hover, :has(:focus-visible), .menuopen) > .acts) {
 		visibility: visible;
