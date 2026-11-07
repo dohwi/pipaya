@@ -67,3 +67,6 @@ tmp/shots/
 
 # pipaya agent runtime files (uploads, generated images)
 .pipaya/
+
+# scratch dirs of the tests (compiled rune modules, built host)
+client/tests/.*-*/
