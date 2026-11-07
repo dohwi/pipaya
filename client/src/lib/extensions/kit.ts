@@ -44,7 +44,11 @@ export function kit(id: string, data: () => unknown, settings: () => Record<stri
 		ext, app, extensions, t, tc, getPane,
 		// `shortcuts.register({ id, label, combo }, { down, up })` -> remove function; needs the `shortcuts` permission
 		shortcuts: componentShortcuts(registerShortcut ?? (() => { throw new Error("shortcuts are not available here"); }), onDestroy),
-		// the combo a shortcut works with right now (the user's change, else its default): for tooltips; null = unbound
+		/**
+		 * The combo a shortcut works with right now (the user's change, else its default), for tooltips: `""` when it has
+		 * none (cleared, or shipped without one and not set yet), `null` when there is no such shortcut. Reactive: read it
+		 * in markup, `$derived` or an `$effect` and it updates as soon as the user changes the combo in Settings.
+		 */
 		get currentShortcut() { return (sid: string) => currentCombo?.(id, sid) ?? null; },
 		// building blocks, so a component looks like the app without copying its markup
 		Icon, Button, IconButton, Badge, Switch, Pin, StatusDot, Modal, ModalHeader, Select, Segmented, Accordion, Notice, Markdown, SearchField,

@@ -106,7 +106,7 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 
 ## User-chosen combos
 
-A shortcut's `combo` is its default; what works is `shortcutCombo(s)`: the user's override (`pipaya.extensions.shortcut-keys`, `{ "<extension id>:<shortcut id>": combo | "" }`, device-local like `pipaya.keys`) else the default. `combo` may be null (shipped unbound, or the user cleared it). `setShortcutCombo` (Settings > Shortcuts) validates the same rules as a registration, refuses app-bound combos and combos another shortcut works with (freeing the previous holder instead, except within one extension), and writes the override; `remove(..., { keepSettings: false })` drops an extension's overrides. `sdk.shortcuts.current(id)` / the kit's `currentShortcut(id)` read the working combo.
+A shortcut's `combo` is its default; what works is `shortcutCombo(s)`: the user's override (`pipaya.extensions.shortcut-keys`, `{ "<extension id>:<shortcut id>": combo | "" }`, device-local like `pipaya.keys`) else the default. `combo` may be null (shipped unbound, or the user cleared it). `setShortcutCombo` (Settings > Shortcuts) validates the same rules as a registration, refuses app-bound combos and combos another shortcut works with (freeing the previous holder instead, except within one extension), and writes the override; `remove(..., { keepSettings: false })` drops an extension's overrides. `sdk.shortcuts.current(id)` / the kit's `currentShortcut(id)` read the working combo (`""` = none right now, `null` = no such shortcut); the kit's is a getter over `$state`, so a component's `$derived`/markup follows a change at once.
 
 ## Hold shortcuts
 

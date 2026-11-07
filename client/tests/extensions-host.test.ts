@@ -62,16 +62,17 @@ defineGlobal("document", {
 const runtimes = () => ((globalThis as any).__fakeRuntimes ??= []) as FakeRuntime[];
 
 beforeAll(async () => {
-	dir = await mkdtemp(join(tmpdir(), "pipaya-extensions-host-"));
+	// Inside the project, so the built host resolves `svelte` from the client's node_modules (one runtime, so runes work).
+	dir = await mkdtemp(join(process.cwd(), "tests", ".extensions-host-"));
 	const fakeFile = join(dir, "fake-runtime.js");
 	await writeFile(fakeFile, FAKE_RUNTIME);
 	// Compiling real Svelte and linking the app kit is covered by extensions-components.test.ts; the host only needs the result.
 	const componentsFile = join(dir, "fake-components.js");
 	await writeFile(componentsFile, `export function loadComponents(pkg) { if (globalThis.__componentsError) throw new Error(globalThis.__componentsError); return Object.fromEntries(Object.keys(pkg.components).map(n => [n, { name: n }])); }`);
 	const kitFile = join(dir, "fake-kit.js");
-	await writeFile(kitFile, `export function kit(id, data, settings, assets, registerShortcut) { (globalThis.__kitShortcuts ??= {})[id] = registerShortcut; return { id, data }; }`);
+	await writeFile(kitFile, `export function kit(id, data, settings, assets, registerShortcut, currentCombo) { (globalThis.__kitShortcuts ??= {})[id] = registerShortcut; (globalThis.__kitCurrent ??= {})[id] = currentCombo; return { id, data, shortcuts: { register: registerShortcut }, get currentShortcut() { return (sid) => currentCombo?.(id, sid) ?? null; } }; }`);
 	const build = await Bun.build({
-		entrypoints: [resolve("src/lib/extensions/host.svelte.ts")], target: "bun",
+		entrypoints: [resolve("src/lib/extensions/host.svelte.ts")], target: "bun", external: ["svelte", "svelte/internal/client"],
 		plugins: [{ name: "runes", setup(builder) {
 			builder.onResolve({ filter: /^\.\/runtime$/ }, () => ({ path: fakeFile }));
 			builder.onResolve({ filter: /^\.\/components$/ }, () => ({ path: componentsFile }));
@@ -86,7 +87,9 @@ beforeAll(async () => {
 	});
 	if (!build.success) throw new Error(build.logs.join("\n"));
 	const file = join(dir, "host.mjs");
+	// Svelte stays external so the host's runes share the test's Svelte runtime (a second copy would break reactivity).
 	await writeFile(file, await build.outputs[0]!.text());
+	await writeFile(join(dir, "package.json"), JSON.stringify({ type: "module" }));
 	ExtensionHost = (await import(file)).ExtensionHost;
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
@@ -97,6 +100,7 @@ beforeEach(() => {
 	delete (globalThis as any).__fakeRuntimeStart;
 	delete (globalThis as any).__componentsError;
 	(globalThis as any).__kitShortcuts = {};
+	(globalThis as any).__kitCurrent = {};
 	styleEls.length = 0;
 });
 
@@ -1611,6 +1615,49 @@ describe("hold shortcuts and component shortcuts", () => {
 		call(host, again.id, "shortcuts.register", [{ id: "mic", label: "Mic", combo: "Alt+M" }, "tok"]);
 		expect(host.shortcutFor("Alt+K")).toBeUndefined(); // the override went with the delete
 		expect(host.shortcutFor("Alt+M")?.id).toBe("mic"); // the default applies again
+		host.stop();
+	});
+
+	test("current(id) is \"\" when a shortcut has no combo (cleared, or never set) and null when it does not exist", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.none", HOLD));
+		call(host, id, "shortcuts.register", [{ id: "free", label: "Free", hold: true }, "tok"]); // shipped without one
+		expect(await call(host, id, "shortcuts.current", ["free"])).toBe("");
+		expect(host.currentShortcutCombo(id, "free")).toBe("");
+		host.setShortcutCombo(id, "free", "Alt+M", {});
+		expect(await call(host, id, "shortcuts.current", ["free"])).toBe("Alt+M");
+		host.setShortcutCombo(id, "free", "", {}); // the user cleared it
+		expect(await call(host, id, "shortcuts.current", ["free"])).toBe("");
+		expect(host.currentShortcutCombo(id, "free")).toBe("");
+		expect(await call(host, id, "shortcuts.current", ["nope"])).toBeNull(); // no such shortcut
+		// a shortcut with a default that the user cleared reads the same way
+		call(host, id, "shortcuts.register", [{ id: "fixed", label: "Fixed", combo: "Alt+O" }, "tok"]);
+		host.setShortcutCombo(id, "fixed", "", {});
+		expect(await call(host, id, "shortcuts.current", ["fixed"])).toBe("");
+		host.stop();
+	});
+
+	test("the kit's currentShortcut is reactive: it follows the user's change with no event to subscribe to", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, ui("example.live"));
+		const current = (globalThis as any).__kitCurrent[id] as (owner: string, sid: string) => string | null;
+		expect(current(id, "mic")).toBeNull(); // not registered yet
+		register(id)({ id: "mic", label: "Mic", combo: "Alt+M" }, { down() {} });
+		expect(current(id, "mic")).toBe("Alt+M");
+		// A Svelte effect (what a tooltip's $derived does) re-runs when the user picks another combo.
+		const { effect_root, render_effect } = await import("svelte/internal/client");
+		const { flushSync } = await import("svelte");
+		const seen: string[] = [];
+		const destroy = effect_root(() => { render_effect(() => { seen.push(current(id, "mic") ?? "null"); }); });
+		// The scheduler runs effects on a microtask; a macrotask turn is the smallest wait that covers it.
+		const settle = async () => { flushSync(); await new Promise((r) => setTimeout(r, 5)); };
+		await settle();
+		host.setShortcutCombo(id, "mic", "Alt+K", {});
+		await settle();
+		host.resetShortcutCombo(id, "mic");
+		await settle();
+		destroy();
+		expect(seen).toEqual(["Alt+M", "Alt+K", "Alt+M"]);
 		host.stop();
 	});
 

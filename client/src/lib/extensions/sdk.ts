@@ -113,7 +113,10 @@ export interface ExtensionSDK {
      */
     register(spec: { id: string; label: string; combo?: string; hold?: boolean }, handler: (event: ShortcutEvent) => void | Promise<void>): Promise<void>;
     remove(id: string): Promise<void>;
-    /** The combo this shortcut works with right now: the user's own if there is one, else the default. `null` = unbound. */
+    /**
+     * The combo this shortcut works with right now: the user's own if there is one, else the default. `""` when it has
+     * none (the user cleared it, or it shipped without one and nobody set it yet); `null` when there is no such shortcut.
+     */
     current(id: string): Promise<string | null>;
   };
   /** Needs `dialogs`: modal questions. Resolve to `null` when the user cancels. */

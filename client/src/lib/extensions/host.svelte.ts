@@ -1154,8 +1154,9 @@ export class ExtensionHost {
         this.shortcuts = [...this.shortcuts, entry]; return;
       }
       case "shortcuts.current": {
-        this.require(id, "shortcuts"); const combo = this.currentShortcutCombo(id, localId(args[0]));
-        return combo ?? null;
+        this.require(id, "shortcuts");
+        // "" = no combo right now (cleared, or never set); null = the extension has no such shortcut
+        return this.currentShortcutCombo(id, localId(args[0]));
       }
       case "shortcuts.remove": {
         this.require(id, "shortcuts");
@@ -1484,10 +1485,13 @@ export class ExtensionHost {
   }
   /** How many extension shortcuts the user changed, for "모두 기본값으로". */
   get shortcutOverrideCount(): number { return Object.keys(this.shortcutKeys).length; }
-  /** The combo a shortcut works with right now, for the extension's own UI (tooltips). */
+  /**
+   * The combo a shortcut works with right now, for the extension's own UI (tooltips): `""` when it has none (the user
+   * cleared it, or it shipped without one and nobody set it yet), `null` only when there is no such shortcut.
+   */
   currentShortcutCombo(owner: string, id: string): string | null {
     const s = this.shortcuts.find(x => x.owner === owner && x.id === id);
-    return s ? this.shortcutCombo(s) : null;
+    return s ? this.shortcutCombo(s) ?? "" : null;
   }
   /**
    * What the user picked in Settings > Shortcuts. `combo` may be empty (unbound). Refused when the combo is not one an
