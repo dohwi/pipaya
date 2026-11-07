@@ -6,6 +6,8 @@ import { app } from "../store.svelte";
 import { t, tc, getLang } from "../i18n";
 import { getPane } from "../pane";
 import { extensions } from "./host.svelte";
+import { onDestroy } from "svelte";
+import { componentShortcuts, type ShortcutRegistrar } from "./shortcuts";
 import Icon from "../../components/Icon.svelte";
 import Button from "../../components/Button.svelte";
 import IconButton from "../../components/IconButton.svelte";
@@ -25,10 +27,11 @@ import ExtensionView from "../../components/extensions/ExtensionView.svelte";
 import { fadeIn, fadeOut, surfaceIn, surfaceOut, collapseIn, collapseOut, reduced } from "../motion";
 
 /**
+ * `shortcuts.register` is released with the component that called it (during init or in an `$effect`).
  * `ext.data` / `ext.settings` are getters: read them inside the component (markup, $derived, $effect) to stay reactive.
  * `ext.assets` holds the package's design files as `data:` URLs (`<img src={ext.assets["logo.svg"]}>`).
  */
-export function kit(id: string, data: () => unknown, settings: () => Record<string, unknown>, assets: Readonly<Record<string, string>> = {}): Record<string, unknown> {
+export function kit(id: string, data: () => unknown, settings: () => Record<string, unknown>, assets: Readonly<Record<string, string>> = {}, registerShortcut?: ShortcutRegistrar): Record<string, unknown> {
 	const ext = {
 		id,
 		assets: Object.freeze({ ...assets }),
@@ -39,6 +42,8 @@ export function kit(id: string, data: () => unknown, settings: () => Record<stri
 	};
 	return {
 		ext, app, extensions, t, tc, getPane,
+		// `shortcuts.register({ id, label, combo }, { down, up })` -> remove function; needs the `shortcuts` permission
+		shortcuts: componentShortcuts(registerShortcut ?? (() => { throw new Error("shortcuts are not available here"); }), onDestroy),
 		// building blocks, so a component looks like the app without copying its markup
 		Icon, Button, IconButton, Badge, Switch, Pin, StatusDot, Modal, ModalHeader, Select, Segmented, Accordion, Notice, Markdown, SearchField,
 		// the declarative renderer, for a component that mixes its own look with plain nodes

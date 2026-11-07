@@ -41,7 +41,7 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Entry card | `sdk.messages.*` | `EntryCard.svelte` in `MessageList` | `messages`, 20 | `messageRendererFor` |
 | Header/footer slot | `sdk.slots.*` | `ExtensionSlot.svelte` (`Header`, `Pane`) | `slots`, 2 | `slots` |
 | Pre-send filter | `sdk.composerFilter.*` | `Composer.svelte` submit | `composer-filter`, 2 s | `filterComposer` |
-| Shortcut | `sdk.shortcuts.*` | `lib/actions.ts` `onShortcut` (after app shortcuts) | `shortcuts`, 10 | `shortcutFor` |
+| Shortcut | `sdk.shortcuts.*`, or `shortcuts` of the `pipaya` kit in a component | `lib/actions.ts` `onShortcut` (after app shortcuts); read-only list in `Shortcuts.svelte` | `shortcuts`, 10 per extension | `shortcutFor`, `pressShortcut`/`releaseShortcut`, `shortcutList`, `registerComponentShortcut`; rules in `lib/extensions/shortcuts.ts` |
 | Dialog | `sdk.dialog.*` | `ExtensionDialog.svelte` | `dialogs`, one at a time | `store.askExtension` |
 | Session control | `sdk.session.*` | `HostAdapter.session` | `session`, 5 per 10 s | `limitSession` |
 | Pane control | `sdk.panes.*` | `HostAdapter.panes` (`extensions/panes.ts`, layouts checked by `layout-spec.ts`) | `panes`, 30 changes per 10 s | `limitPanes` |
@@ -64,6 +64,7 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `schema.ts` | `parsePackage` (strict), `PERMISSIONS`, `THEME_TOKENS`, `resolveSettings`, `fillSettingDefaults` |
 | `ui.ts` | node types, `UI_LIMITS`, `NODE_KEYS`, `parseView`, `parsePanelSpec`, `validateUIEvent` |
 | `navbar.ts` | navbar item validation, `NAVBAR_NODE_TYPES` |
+| `shortcuts.ts` | the one set of shortcut rules (combo form, limit, clashes, IME, keyup matching) shared by the Worker and component paths; `ComponentHandlerSet` |
 | `sdk.ts` | public types for extension authors (`ExtensionSDK`, ...) |
 | `runtime.ts` | sandbox iframe + Worker source, heartbeat, message and time limits |
 | `host.svelte.ts` | `ExtensionHost`: install, enable, cleanup, settings sync, `request()` dispatcher, panel/navbar/status state |
@@ -102,6 +103,10 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 | `pipaya.extension.storage.<id>` | `sdk.storage` |
 | `pipaya.extensions.settings-source` | `local` stops mirroring server settings |
 | `pipaya.extensions.configuration-backup(-at)`, `.background-grant.<id>` | import backup, background grant |
+
+## Hold shortcuts
+
+`onShortcut` (keydown) → `extensions.pressShortcut` (remembers a `hold` as `heldShortcut`, sends `{phase:"down"}`). The hold ends through `extensions.releaseShortcut(reason)`, which sends exactly one `{phase:"up", reason}` and forgets it. Every route that can end a key goes there: `onShortcutUpCapture` (capture-phase keyup of the key or a modifier of the combo, so a terminal or field cannot swallow it), `resetKeyboard` (window blur), `settleOnHide`/`pagehide` (`hidden`), `Shortcuts.svelte` `start` (`recording`), `shortcuts.remove` and `cleanup` (`removed`). Worker shortcuts are delivered through `runtime.execute(token, event)`; component shortcuts through a `ComponentHandlerSet` (synchronous, so a user-gesture API works). `onShortcut` ignores keys while `recordingKey` is set, during IME composition (`isComposing` / keyCode 229), and for app-bound combos, so extensions never see them. A new way a keyup can be lost must call `endExtensionHold`.
 
 ## Server API
 

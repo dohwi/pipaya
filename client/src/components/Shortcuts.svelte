@@ -4,6 +4,8 @@
 	import { msg, t } from "../lib/i18n";
 	import { onDestroy } from "svelte";
 	import { app } from "../lib/store.svelte";
+	import { extensions } from "../lib/extensions/host.svelte";
+	import { appConflict } from "../lib/extensions/shortcuts";
 	import Icon from "./Icon.svelte";
 	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../lib/keys";
 
@@ -34,9 +36,14 @@
 	};
 	const matches = (a: (typeof ACTIONS)[number]) => !q || q.split(/\s+/).every((w) => shown(a).includes(w));
 	const visible = $derived(ACTIONS.filter(matches));
+	/** Shortcuts the running extensions registered. Read-only here; an app shortcut on the same keys wins and is called out. */
+	const extra = $derived(
+		extensions.shortcutList().filter((x) => !q || q.split(/\s+/).every((w) => [x.label, x.ownerName, x.combo, formatCombo(x.combo)].join("\n").toLowerCase().includes(w))),
+	);
 	const changed = $derived(ACTIONS.some((a) => app.prefs.bindings[a.id] !== a.default));
 
 	function start(id: ActionId) {
+		void extensions.releaseShortcut("recording").catch(() => {}); // a held extension shortcut ends: the keys now belong to this editor
 		recording = id;
 		note = null;
 		rec = emptyRecording();
@@ -151,6 +158,26 @@
 	</ul>
 	</section>
 	{/each}
+
+	{#if extra.length}
+	<section class="set-group shortcut">
+		<div class="group">{t("확장")}</div>
+		<ul>
+		{#each extra as x (x.owner + ":" + x.id)}
+			{@const taken = appConflict(x.combo, app.prefs.bindings)}
+			<li>
+				<div class="what">
+					<span class="name">{x.label}</span>
+					<span class="sub">{x.ownerName}{#if x.hold} · {t("누르고 있는 동안 동작")}{/if}</span>
+					{#if taken}<span class="note bad">{t('앱 단축키 "{name}"이(가) 우선이라 이 확장 단축키는 동작하지 않습니다', { name: label(taken) })}</span>{/if}
+				</div>
+				<span class="key fixed" title={t("확장이 등록한 단축키입니다")}>{formatCombo(x.combo)}</span>
+				<span class="slot" aria-hidden="true"></span>
+			</li>
+		{/each}
+		</ul>
+	</section>
+	{/if}
 
 	<div class="foot">
 		<Button size="sm" disabled={!changed} onclick={() => app.prefs.resetBindings()}>{t("모두 기본값으로")}</Button>

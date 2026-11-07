@@ -69,7 +69,7 @@ beforeAll(async () => {
 	const componentsFile = join(dir, "fake-components.js");
 	await writeFile(componentsFile, `export function loadComponents(pkg) { if (globalThis.__componentsError) throw new Error(globalThis.__componentsError); return Object.fromEntries(Object.keys(pkg.components).map(n => [n, { name: n }])); }`);
 	const kitFile = join(dir, "fake-kit.js");
-	await writeFile(kitFile, `export function kit(id, data) { return { id, data }; }`);
+	await writeFile(kitFile, `export function kit(id, data, settings, assets, registerShortcut) { (globalThis.__kitShortcuts ??= {})[id] = registerShortcut; return { id, data }; }`);
 	const build = await Bun.build({
 		entrypoints: [resolve("src/lib/extensions/host.svelte.ts")], target: "bun",
 		plugins: [{ name: "runes", setup(builder) {
@@ -96,6 +96,7 @@ beforeEach(() => {
 	runtimes().length = 0;
 	delete (globalThis as any).__fakeRuntimeStart;
 	delete (globalThis as any).__componentsError;
+	(globalThis as any).__kitShortcuts = {};
 	styleEls.length = 0;
 });
 
@@ -1410,5 +1411,160 @@ describe("trusted UI (ui-style / ui-components)", () => {
 		const { host } = newHost();
 		await activate(host, code("example.skin", ["ui"]));
 		expect(host.canResume(ui("example.skin") as never)).toBe(false);
+	});
+});
+
+
+describe("hold shortcuts and component shortcuts", () => {
+	const HOLD = ["shortcuts"];
+	const ui = (id: string, permissions = ["ui-components", "shortcuts"]) => pkg(id, permissions, { components: { Mic: "<p/>" }, mounts: [{ slot: "header.end", component: "Mic" }] });
+	const register = (id: string) => (globalThis as any).__kitShortcuts[id] as (spec: unknown, handlers: unknown) => () => void;
+	const spec = (id: string, combo: string, extra: Record<string, unknown> = {}) => [{ id, label: id, combo, ...extra }, "tok"];
+	const events = () => runtimes().at(-1)!.executed.map(x => x.arg);
+
+	test("a plain shortcut gets a down event and is not remembered as held", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.plain", HOLD));
+		call(host, id, "shortcuts.register", spec("go", "Mod+Shift+K"));
+		const s = host.shortcutFor("Mod+Shift+K")!;
+		expect(s.hold).toBe(false);
+		await host.pressShortcut(s);
+		expect(events()).toEqual([{ phase: "down" }]);
+		expect(host.heldShortcut).toBeNull();
+		await host.releaseShortcut("release");
+		expect(events()).toEqual([{ phase: "down" }]);
+	});
+
+	test("a hold gets down, then exactly one up with the reason", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.hold", HOLD));
+		call(host, id, "shortcuts.register", spec("mic", "Alt+M", { hold: true }));
+		const s = host.shortcutFor("Alt+M")!;
+		expect(s.hold).toBe(true);
+		await host.pressShortcut(s);
+		expect(host.heldShortcut).toBe(s);
+		await host.releaseShortcut("blur");
+		await host.releaseShortcut("release"); // already over: nothing more
+		await host.releaseShortcut("hidden");
+		expect(events()).toEqual([{ phase: "down" }, { phase: "up", reason: "blur" }]);
+		expect(host.heldShortcut).toBeNull();
+	});
+
+	test("a second press while the first hold is still down ends the first one", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.hold", HOLD));
+		call(host, id, "shortcuts.register", spec("a", "Alt+A", { hold: true }));
+		call(host, id, "shortcuts.register", spec("b", "Alt+B", { hold: true }));
+		await host.pressShortcut(host.shortcutFor("Alt+A")!);
+		await host.pressShortcut(host.shortcutFor("Alt+B")!);
+		expect(events()).toEqual([{ phase: "down" }, { phase: "up", reason: "release" }, { phase: "down" }]);
+		expect(host.heldShortcut?.id).toBe("b");
+	});
+
+	test("removing a held shortcut, or disabling its extension, ends the hold of a component but never leaks it", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.hold", HOLD));
+		call(host, id, "shortcuts.register", spec("mic", "Alt+M", { hold: true }));
+		await host.pressShortcut(host.shortcutFor("Alt+M")!);
+		call(host, id, "shortcuts.remove", ["mic"]);
+		expect(events()).toEqual([{ phase: "down" }, { phase: "up", reason: "removed" }]);
+		expect(host.heldShortcut).toBeNull();
+		call(host, id, "shortcuts.register", spec("mic", "Alt+M", { hold: true }));
+		await host.pressShortcut(host.shortcutFor("Alt+M")!);
+		host.disable(id);
+		expect(host.heldShortcut).toBeNull(); // nothing left that could think it is still held
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+	});
+
+	test("hold must be a boolean; the old three-field call still works unchanged", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.old", HOLD));
+		expect(() => call(host, id, "shortcuts.register", spec("x", "Alt+X", { hold: "yes" }))).toThrow();
+		call(host, id, "shortcuts.register", [{ id: "old", label: "Old", combo: "Mod+Shift+O" }, "tok"]);
+		expect(host.shortcutList().map(x => [x.id, x.hold, x.source, x.ownerName])).toEqual([["old", false, "worker", "Name example.old"]]);
+	});
+
+	test("combos are compared in canonical form, so another spelling cannot dodge the clash", async () => {
+		const { host } = await reload();
+		const a = await activate(host, code("example.a", HOLD));
+		call(host, a.id, "shortcuts.register", spec("k", "Shift+Mod+k"));
+		expect(host.shortcutFor("Mod+Shift+K")?.owner).toBe(a.id);
+		const b = await activate(host, code("example.b", HOLD));
+		expect(() => call(host, b.id, "shortcuts.register", spec("k", "Mod+Shift+K"))).toThrow();
+	});
+
+	test("a component registers with the same rules and the shortcuts permission, and the app lists it with the owner", async () => {
+		const { host } = await reload();
+		const noPermission = await activate(host, ui("example.nope", ["ui-components"]));
+		expect(() => register(noPermission.id)({ id: "m", label: "M", combo: "Alt+M" }, { down() {} })).toThrow(/권한|permission/i);
+		const { id } = await activate(host, ui("example.mic"));
+		const log: unknown[] = [];
+		const off = register(id)({ id: "mic", label: "Mic", combo: "Alt+M" }, { down: (e: unknown) => log.push(e), up: (e: unknown) => log.push(e) });
+		const s = host.shortcutFor("Alt+M")!;
+		expect([s.hold, s.source]).toEqual([true, "component"]); // an up handler makes it a hold
+		expect(host.shortcutList()[0]!.ownerName).toBe("Name example.mic");
+		await host.pressShortcut(s);
+		await host.releaseShortcut("release");
+		expect(log).toEqual([{ phase: "down" }, { phase: "up", reason: "release" }]);
+		off(); off();
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+	});
+
+	test("components obey the same limits: bad combos, other extensions' combos, the per-extension maximum", async () => {
+		const { host } = await reload();
+		const other = await activate(host, code("example.other", HOLD));
+		call(host, other.id, "shortcuts.register", spec("taken", "Alt+T"));
+		const { id } = await activate(host, ui("example.mic"));
+		const reg = register(id);
+		for (const combo of ["M", "Shift+M", "Alt+J+K", "Alt+T"]) expect(() => reg({ id: "x", label: "X", combo }, { down() {} })).toThrow();
+		for (const handlers of [undefined, {}, { down: 1 }, { sideways() {} }, [() => {}]]) expect(() => reg({ id: "x", label: "X", combo: "Alt+X" }, handlers)).toThrow();
+		for (let i = 0; i < 10; i++) reg({ id: `k${i}`, label: "K", combo: `Alt+${"ABCDEFGHIJ"[i]}` }, { down() {} });
+		expect(() => reg({ id: "eleven", label: "K", combo: "Alt+Z" }, { down() {} })).toThrow(/제한|limit/i);
+		// a component and the Worker of one extension also share the ten
+		expect(host.shortcutList().filter(x => x.owner === id)).toHaveLength(10);
+	});
+
+	test("the same component in several panes shares one shortcut; each instance hears it and leaves on its own", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, ui("example.mic"));
+		const reg = register(id);
+		const heard: string[] = [];
+		const s = { id: "mic", label: "Mic", combo: "Alt+M" };
+		const offA = reg(s, { down: () => heard.push("a-down"), up: () => heard.push("a-up") });
+		const offB = reg(s, { down: () => heard.push("b-down"), up: () => heard.push("b-up") });
+		expect(host.shortcutList()).toHaveLength(1);
+		expect(() => reg({ ...s, combo: "Alt+N" }, { down() {} })).toThrow(); // same ID, different keys: refused
+		await host.pressShortcut(host.shortcutFor("Alt+M")!);
+		offA(); // pane A closes while the key is down: its up is delivered at once, B keeps holding
+		await host.releaseShortcut("release");
+		expect(heard).toEqual(["a-down", "b-down", "a-up", "b-up"]);
+		offB();
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+	});
+
+	test("a hold of a component that goes away while pressed gets its up, and cleanup ends it", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, ui("example.mic"));
+		const log: unknown[] = [];
+		register(id)({ id: "mic", label: "Mic", combo: "Alt+M" }, { down: () => log.push("down"), up: (e: { reason: string }) => log.push(`up:${e.reason}`) });
+		await host.pressShortcut(host.shortcutFor("Alt+M")!);
+		host.disable(id);
+		expect(log).toEqual(["down", "up:removed"]);
+		expect(host.heldShortcut).toBeNull();
+	});
+
+	test("a component of a disabled extension registers nothing, and safe mode hides every shortcut", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, ui("example.mic"));
+		const reg = register(id);
+		reg({ id: "mic", label: "Mic", combo: "Alt+M" }, { down() {} });
+		host.setSafeMode(true);
+		expect(host.shortcutFor("Alt+M")).toBeUndefined();
+		expect(host.shortcutList()).toEqual([]);
+		host.setSafeMode(false);
+		const late = reg;
+		host.disable(id);
+		expect(late({ id: "again", label: "A", combo: "Alt+A" }, { down() {} })).toBeInstanceOf(Function);
+		expect(host.shortcutList()).toEqual([]);
 	});
 });

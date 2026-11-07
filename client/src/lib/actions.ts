@@ -20,11 +20,13 @@ import {
   OVERLAY_SELECTOR,
   RENAME_KEY,
   renameShouldFallThrough,
+  splitCombo,
   type ActionId,
 } from "./keys";
 import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
+import { composing, releasedByKeyUp, type ShortcutUpReason } from "./extensions/shortcuts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./types";
 import { t } from "./i18n";
 
@@ -442,6 +444,8 @@ export function onShortcut(e: KeyboardEvent) {
   if (!e.repeat) fired = false;
   const key = keyName(e.code);
   held.add(key);
+  // A held key repeats: the extension hold that owns it also keeps the browser from typing a character (Alt+K on macOS) each time.
+  if (e.repeat && extensions.heldShortcut?.combo === buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [key])) e.preventDefault();
   if (e.repeat || fired) return;
   const mods = { mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey };
   // Keys held together are one shortcut (J+K+L). Fall back to this key alone so a shortcut still works while
@@ -457,10 +461,11 @@ export function onShortcut(e: KeyboardEvent) {
     // A key the app does not use may belong to an extension (built-in shortcuts always win).
     if (!id && !starts && keys.length === 1) {
       const own = extensions.shortcutFor(combo);
-      if (own) {
+      // An IME composition owns the key, also when a focused terminal let it through above.
+      if (own && !composing(e)) {
         e.preventDefault();
         fired = true;
-        own.run().catch((cause) => app.toast(t("확장 실패: {error}", { error: errorText(cause) }), "error", app.activeId));
+        extensions.pressShortcut(own).catch(extensionShortcutFailed);
         return;
       }
     }
@@ -480,6 +485,26 @@ export function onShortcut(e: KeyboardEvent) {
   }
 }
 
+function extensionShortcutFailed(cause: unknown) {
+  app.toast(t("확장 실패: {error}", { error: errorText(cause) }), "error", app.activeId);
+}
+
+/** Why an extension hold is over, and what the app does about it. The extension gets exactly one `up`. */
+export function endExtensionHold(reason: ShortcutUpReason) {
+  extensions.releaseShortcut(reason).catch(extensionShortcutFailed);
+}
+
+/**
+ * Capture-phase keyup: ends an extension hold when its key (or a modifier of its combo) comes up. Capture, so a focused
+ * terminal or field that swallows the keyup cannot leave the extension holding (a microphone that never turns off).
+ */
+export function onShortcutUpCapture(e: KeyboardEvent) {
+  const held = extensions.heldShortcut;
+  if (!held) return;
+  const { keys } = splitCombo(held.combo);
+  if (releasedByKeyUp(held.combo, keys[0] ?? "", e)) endExtensionHold("release");
+}
+
 export function onShortcutUp(e: KeyboardEvent) {
   if (MODIFIER_CODE.test(e.code)) {
     // macOS sends no keyup for other keys while ⌘ is down, so letting go of ⌘ is the only chance to forget them.
@@ -495,7 +520,9 @@ export function clearHeldKeys() {
   held.clear();
   fired = false;
 }
+/** The window lost the keyboard: the keyup of whatever was down will never arrive. */
 export function resetKeyboard() {
   clearHeldKeys();
   cancelChord();
+  endExtensionHold("blur");
 }

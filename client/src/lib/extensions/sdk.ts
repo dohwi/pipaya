@@ -39,6 +39,10 @@ export interface ToolRenderInput {
   output: string;
   details: Record<string, unknown> | null;
 }
+/** Why a hold shortcut ended (see `shortcuts.register`). */
+export type ShortcutUpReason = "release" | "blur" | "hidden" | "recording" | "removed";
+/** What a shortcut handler is told: `down` when the keys go down, `up` (hold shortcuts only) once the hold is over. */
+export type ShortcutEvent = { phase: "down" } | { phase: "up"; reason: ShortcutUpReason };
 export interface CommandSpec { name: string; description: string; args?: string }
 export interface ComposerActionSpec { id: string; label: string }
 export interface ExtensionSDK {
@@ -94,8 +98,14 @@ export interface ExtensionSDK {
     list(): Promise<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>;
     on(handler: (event: ServerExtensionEvent) => void | Promise<void>): Promise<() => void>;
   };
-  /** Needs `shortcuts`. The combo must contain Ctrl/⌘ (`Mod`) or `Alt`, e.g. `Mod+Shift+K`; the user can see which extension owns it. */
-  readonly shortcuts: { register(spec: { id: string; label: string; combo: string }, handler: () => void | Promise<void>): Promise<void>; remove(id: string): Promise<void> };
+  /**
+   * Needs `shortcuts`. The combo must contain Ctrl/⌘ (`Mod`) or `Alt` plus one key, e.g. `Mod+Shift+K`; app shortcuts win; the
+   * user sees which extension owns it. The handler gets `{ phase: "down" }` when the keys go down. With `hold: true` it
+   * also gets `{ phase: "up", reason }` exactly once per `down`: when the key (or a modifier of the combo) is released, or
+   * `blur` / `hidden` (the window lost the keyboard), `recording` (the user started recording a shortcut), `removed`.
+   * `up` can arrive while an async `down` handler is still running. Without `hold` the handler only ever gets `down`.
+   */
+  readonly shortcuts: { register(spec: { id: string; label: string; combo: string; hold?: boolean }, handler: (event: ShortcutEvent) => void | Promise<void>): Promise<void>; remove(id: string): Promise<void> };
   /** Needs `dialogs`: modal questions. Resolve to `null` when the user cancels. */
   readonly dialog: {
     confirm(spec: { title: string; message?: string; confirmLabel?: string }): Promise<boolean>;

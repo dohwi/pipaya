@@ -156,7 +156,7 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `locales` | none | ship language packs |
 | `system-notifications` | `sdk.notifications.send(spec)`, `status()`, `register(id, rule)`, `remove(id)` | OS / push ([notifications.md](notifications.md)) |
 | `server` | `sdk.server.call(extension, method, params?, sessionId?)`, `entries({sessionId?, extension?, type?})`, `list()`, `on(handler)` | server extension methods, entries, events; 15 s per call |
-| `shortcuts` | `sdk.shortcuts.register({id, label, combo}, handler)`, `remove(id)` | ≤10; `Mod` (Ctrl/⌘) or `Alt` + one key (`Mod+Shift+K`); app shortcuts win, no combo shared between extensions |
+| `shortcuts` | `sdk.shortcuts.register({id, label, combo, hold?}, handler)`, `remove(id)`; also `shortcuts.register` of a `ui-components` component (below) | ≤10 per extension (Worker and components together); `Mod` (Ctrl/⌘) or `Alt` + one key (`Mod+Shift+K`, canonicalised, so `Shift+Mod+k` is the same combo); app shortcuts win, no combo shared between extensions; never fires during IME composition or while the user records a shortcut; listed read-only (owner, hold, app clash) in Settings > Shortcuts |
 | `dialogs` | `sdk.dialog.confirm/select/input(spec)` | modal question showing the extension name; cancel → `false` / `null`; queued one at a time |
 | `session` | `sdk.session.send(text, mode?)`, `abort()` | message or stop the open chat; 5 per 10 s |
 | `tools` | `sdk.tools.registerRenderer(toolName, render)`, `removeRenderer(toolName)` | render finished tool calls (read-only nodes, 80 nodes, depth 5, 24 KiB); `null`/error → default; last registration wins; ≤20 |
@@ -170,6 +170,40 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `panes` | `sdk.panes.list()`, `group()`, `read(id,{limit?})`, `focus`, `send(id,text,mode?)`, `abort`, `split(id,edge,{kind?,focus?})`, `move(id,target,edge)`, `swap(a,b)`, `resize(id,ratio)`, `leave`, `close`, `zoom(id?)`, `models()`, `configure(id,{title?,provider?,model?,thinkingLevel?})`, `compact(id,instructions?)` | read (text only) and drive the open group's chats and terminals by ID; `split` keeps focus unless `focus: true`; 30 changes per 10 s; `configure` changes only that chat (model needs `provider`, thinking level must be supported). Server-wide: `list({all: true})` every open chat/terminal, `groups()`, `openGroup(id)`, `createGroup(layout, name?)`, `setLayout(groupId, layout)`, `renameGroup`, `deleteGroup`, `full(groupId, on)`; a layout is `{type:'pane', id}` \| `{type:'split', dir:'row'\|'col', ratio?, a, b}` with 2–8 panes |
 | `workspace` | `sdk.workspace.state()`, `sidebar({open?, collapsed?, width?})`, `openTab(id)`, `moveTab(id, target, 'before'\|'after')`, `openSettings(tab?)`, `closeSettings()`, `open('skills'\|'commands'\|'queue'\|'folder')`, `runCommand(name, arg?)`, `commands()` | the screen around the panes on this device; shares the 30 per 10 s limit. Built-in commands can be run, never replaced |
 | none | `sdk.settings.get()`, `sdk.log(text)` | own settings, extension log |
+
+### Shortcuts: `down`, `hold` and `up`
+
+`handler(event)` gets `{ phase: "down" }` when the keys go down (auto-repeat is ignored). Registered with `hold: true`, it also gets `{ phase: "up", reason }` **exactly once per `down`**:
+
+| `reason` | When |
+|---|---|
+| `release` | the key, or a modifier of the combo, came up (on macOS only the modifier arrives while ⌘ is down) |
+| `blur` / `hidden` | the window lost the keyboard / the tab was hidden: the keyup will never come |
+| `recording` | the user started recording a shortcut in Settings |
+| `removed` | `sdk.shortcuts.remove`, or the component that registered it went away (a sandboxed extension that is disabled is stopped and hears nothing) |
+
+One hold is active at a time; pressing another ends the first with `release`. `up` may arrive while an async `down` is still running: keep your own state. Without `hold` the handler only ever gets `down`, and a call written before `hold` existed (a handler that ignores its argument) behaves as it did.
+
+```js
+await sdk.shortcuts.register({ id: "push-to-talk", label: "Push to talk", combo: "Alt+M", hold: true }, e => {
+  if (e.phase === "down") startRecording(); else stopRecording(e.reason);
+});
+```
+
+A worker handler runs asynchronously, so something that needs a user gesture (the microphone, clipboard) belongs in a `ui-components` component, which is called synchronously inside the key event:
+
+```svelte
+<script>
+  import { shortcuts } from "pipaya";
+  // `up` makes it a hold. Returns a function that removes it; removed on its own when the component is destroyed.
+  shortcuts.register({ id: "push-to-talk", label: "Push to talk", combo: "Alt+M" }, {
+    down: () => start(),
+    up: e => stop(e.reason),
+  });
+</script>
+```
+
+Needs both `ui-components` and `shortcuts` (the consent text of `shortcuts` is what tells the user keys are taken). Rules are the same as the Worker's and live in one place (`lib/extensions/shortcuts.ts`). A component mounted several times (one per pane) registers the same ID each time: they share one shortcut, every instance hears each event and decides for itself whether it is the one meant; the shortcut goes away with the last. Called during init or in an `$effect` the registration is released with the component; called later (in an event handler) keep the returned function.
 
 Messages sent with `session`/`panes` are run by the agent, and `panes.close` ends terminal jobs; the consent text must say so.
 

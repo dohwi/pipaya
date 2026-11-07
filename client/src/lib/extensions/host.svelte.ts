@@ -15,8 +15,8 @@ import { inlineAssets, raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
 import { PANEL_PLACEMENTS, parsePanelLayout, parsePanelSpec, parseView, validateUIEvent, type UIPanelPlacement, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
-import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ToolRenderInput } from "./sdk";
-import { splitCombo } from "../keys";
+import type { ExtensionContext, ExtensionEvent, ServerExtensionEvent, ShortcutEvent, ShortcutUpReason, ToolRenderInput } from "./sdk";
+import { ComponentHandlerSet, checkShortcutFree, parseComponentHandlers, parseShortcutSpec } from "./shortcuts";
 import { THINKING_LEVELS } from "../types";
 import type { PaneAdapter } from "./panes";
 import { parseLayout } from "./layout-spec";
@@ -86,7 +86,17 @@ export interface UnreadableExtension { raw: unknown; id?: string; name?: string;
 export interface ExtensionCommand { owner: string; name: string; desc: string; args?: string; run(arg: string): Promise<void> }
 export interface ComposerAction { owner: string; id: string; label: string; run(): Promise<void> }
 export interface StatusItem { owner: string; id: string; text: string }
-export interface ExtensionShortcut { owner: string; id: string; label: string; combo: string; run(): Promise<void> }
+export interface ExtensionShortcut {
+  owner: string; id: string; label: string; combo: string;
+  /** A hold also gets `up` events (key released, window blurred...), see `sdk.shortcuts.register`. */
+  hold: boolean;
+  /** `worker`: registered through `sdk.shortcuts`; `component`: through `shortcuts` of the `pipaya` kit. */
+  source: "worker" | "component";
+  /** Without an event this is a plain `down`. */
+  run(event?: ShortcutEvent): Promise<void>;
+  /** The handlers of a component shortcut (one per mounted instance). */
+  handlers?: ComponentHandlerSet;
+}
 export interface SlotItem extends NavbarItemSpec { owner: string; id: string; slot: "header" | "footer" }
 export interface MessageRenderer { owner: string; entryType: string; render(entry: EntryInput): Promise<UINode | null> }
 export interface EntryInput { id: number; extension: string; type: string; data: unknown; createdAt: number }
@@ -616,7 +626,8 @@ export class ExtensionHost {
     if (!pkg.components || !pkg.manifest.permissions.includes("ui-components")) return;
     const [{ loadComponents }, { kit }] = await Promise.all([import("./components"), import("./kit")]);
     if (!current()) return;
-    const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id), pkg.assets ?? {}));
+    const loaded = loadComponents(pkg, kit(id, () => this.componentData[id] ?? null, () => this.effectiveSettings(id), pkg.assets ?? {},
+      (spec, handlers) => current() ? this.registerComponentShortcut(id, spec, handlers) : () => {}));
     this.mounted = [...this.mounted, ...(pkg.mounts ?? []).map((m, i) => ({ owner: id, slot: m.slot, order: m.order ?? 0, key: `${id}:${i}`, component: loaded[m.component]! }))];
     this.replacements = [...this.replacements, ...Object.entries(pkg.replaces ?? {}).map(([part, name]) => ({ owner: id, part: part as UIPart, component: loaded[name]! }))];
   }
@@ -671,6 +682,11 @@ export class ExtensionHost {
     this.pendingPanelOpens.delete(id);
     this.subscribed.delete(id); this.notificationTimes.delete(id);
     this.serverSubscribed.delete(id); this.sessionCalls.delete(id); this.paneCalls.delete(id);
+    if (this.holding?.owner === id) {
+      // A sandboxed extension is stopped above and cannot hear it; a component is still here and ends its hold.
+      const held = this.holding; this.holding = null;
+      if (held.source === "component") void held.run({ phase: "up", reason: "removed" }).catch(() => {});
+    }
     this.shortcuts = this.shortcuts.filter(s => s.owner !== id);
     this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id);
     this.slots = this.slots.filter(s => s.owner !== id);
@@ -924,7 +940,7 @@ export class ExtensionHost {
   restoreConfiguration() { restoreBackup(this.configIO("")); }
 
   private request(id: string, method: string, args: unknown[], runtime: ExtensionRuntime): unknown {
-    const execute = (token: string, arg = ""): Promise<unknown> => runtime.execute(token, arg);
+    const execute = (token: string, arg: unknown = ""): Promise<unknown> => runtime.execute(token, arg);
     switch (method) {
       case "configuration.authorize": {
         this.require(id, "configuration-background"); if (args.length) throw new LocalizedError(t("인자를 받지 않습니다"));
@@ -1105,15 +1121,19 @@ export class ExtensionHost {
         return within(15000, signal => new Api(connection).serverExtensions(signal));
       }
       case "shortcuts.register": {
-        this.require(id, "shortcuts"); const s = object(args[0]); const token = string(args[1], 40); const shortcutId = localId(s.id);
-        const combo = string(s.combo, 40, "combo");
-        const { mods, keys } = splitCombo(combo);
-        if ((!mods.includes("Mod") && !mods.includes("Alt")) || keys.length !== 1) throw new LocalizedError(t("단축키는 Ctrl/⌘ 또는 Alt와 키 하나로 구성해야 합니다 (예: Mod+Shift+K)"));
-        if (this.shortcuts.filter(x => x.owner === id).length >= 10 || this.shortcuts.some(x => x.owner === id && x.id === shortcutId)) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
-        if (this.shortcuts.some(x => x.combo === combo)) throw new LocalizedError(t("이미 다른 확장이 쓰는 단축키입니다: {combo}", { combo }));
-        this.shortcuts = [...this.shortcuts, { owner: id, id: shortcutId, label: string(s.label, 60), combo, run: () => execute(token).then(() => {}) }]; return;
+        this.require(id, "shortcuts");
+        const token = string(args[1], 40); const spec = parseShortcutSpec(args[0]);
+        checkShortcutFree(this.shortcuts, id, spec);
+        this.shortcuts = [...this.shortcuts, { owner: id, id: spec.id, label: spec.label, combo: spec.combo, hold: spec.hold, source: "worker", run: (event = { phase: "down" }) => execute(token, event).then(() => {}) }]; return;
       }
-      case "shortcuts.remove": this.require(id, "shortcuts"); this.shortcuts = this.shortcuts.filter(x => x.owner !== id || x.id !== localId(args[0])); return;
+      case "shortcuts.remove": {
+        this.require(id, "shortcuts");
+        const shortcutId = localId(args[0]);
+        const gone = this.shortcuts.find(x => x.owner === id && x.id === shortcutId && x.source === "worker");
+        // A hold that is down gets its `up` while the extension can still hear it.
+        if (gone && this.holding === gone) void this.releaseShortcut("removed").catch(() => {});
+        this.shortcuts = this.shortcuts.filter(x => x !== gone); return;
+      }
       case "dialog.confirm":
       case "dialog.select":
       case "dialog.input": {
@@ -1416,6 +1436,55 @@ export class ExtensionHost {
   shortcutFor(combo: string): ExtensionShortcut | undefined {
     if (this.safeMode) return undefined;
     return this.shortcuts.find(s => s.combo === combo && this.activeOwner(s.owner));
+  }
+  /** The shortcuts of the active extensions with the name of their owner, for the shortcut settings. */
+  shortcutList(): (ExtensionShortcut & { ownerName: string })[] {
+    if (this.safeMode) return [];
+    return this.shortcuts.filter(s => this.activeOwner(s.owner)).map(s => ({ ...s, ownerName: this.find(s.owner).package.manifest.name }));
+  }
+  /** The hold shortcut whose keys are down right now (one at a time). */
+  private holding: ExtensionShortcut | null = null;
+  get heldShortcut(): ExtensionShortcut | null { return this.holding; }
+  /** The keys of an extension shortcut went down. A hold is remembered until `releaseShortcut`. */
+  pressShortcut(shortcut: ExtensionShortcut): Promise<void> {
+    if (shortcut.hold) {
+      // A keyup that never came (the previous hold is still down) must not leave that extension waiting.
+      void this.releaseShortcut("release").catch(() => {});
+      this.holding = shortcut;
+    }
+    return shortcut.run({ phase: "down" });
+  }
+  /** Ends the hold that is down, if any: exactly one `up` per `down`, whatever ends it. */
+  releaseShortcut(reason: ShortcutUpReason): Promise<void> {
+    const held = this.holding;
+    if (!held) return Promise.resolve();
+    this.holding = null;
+    return held.run({ phase: "up", reason });
+  }
+  /**
+   * `shortcuts.register` for a trusted component. Same rules as the sandboxed SDK (one place: `shortcuts.ts`) and the
+   * same `shortcuts` permission. Components mounted more than once (one per pane) share a shortcut that has the same ID,
+   * combo and kind; the shortcut goes away with the last of them. The returned function removes this registration.
+   */
+  registerComponentShortcut(id: string, rawSpec: unknown, rawHandlers: unknown): () => void {
+    this.require(id, "shortcuts");
+    const handlers = parseComponentHandlers(rawHandlers);
+    const spec = parseShortcutSpec(rawSpec, typeof handlers.up === "function" ? true : undefined);
+    let entry = this.shortcuts.find(x => x.owner === id && x.id === spec.id);
+    if (entry) {
+      if (entry.source !== "component" || entry.combo !== spec.combo || entry.hold !== spec.hold) throw new LocalizedError(t("단축키 제한 또는 중복 ID"));
+    } else {
+      checkShortcutFree(this.shortcuts, id, spec);
+      const set = new ComponentHandlerSet(e => this.log(id, t("단축키 실패: {error}", { error: e instanceof Error ? e.message : String(e) })));
+      entry = { owner: id, id: spec.id, label: spec.label, combo: spec.combo, hold: spec.hold, source: "component", handlers: set, run: event => set.run(event ?? { phase: "down" }) };
+      this.shortcuts = [...this.shortcuts, entry];
+    }
+    const shortcut = entry;
+    const remove = shortcut.handlers!.add(handlers);
+    return () => {
+      remove();
+      if (!shortcut.handlers!.size) this.shortcuts = this.shortcuts.filter(x => x !== shortcut);
+    };
   }
   /**
    * Runs the active extensions' composer filters in install order on a message about to be sent. A filter that fails or

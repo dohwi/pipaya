@@ -7,7 +7,7 @@
 	import Sidebar from "./components/Sidebar.svelte";
 	import Rail from "./components/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
-	import { cancelChord, notePress, onShortcut, onShortcutCapture, onShortcutUp, resetKeyboard } from "./lib/actions";
+	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
 	import Header from "./components/Header.svelte";
 	import Pane from "./components/Pane.svelte";
 	import GroupView from "./components/GroupView.svelte";
@@ -303,6 +303,7 @@
 	// next gesture starts clean (a stale `drag.id` makes every touchMove cancel the swipe).
 	function settleOnHide() {
 		if (!document.hidden) return;
+		endExtensionHold("hidden"); // the keyup of a held extension shortcut will not arrive while the page is hidden
 		cancelSwipe();
 		if (drag.id) drag.end(false);
 	}
@@ -325,10 +326,11 @@
 	ontouchmove={touchMove}
 	ontouchend={touchEnd}
 	ontouchcancel={cancelSwipe}
-	onpagehide={settleOnHide}
+	onpagehide={() => (endExtensionHold("hidden"), settleOnHide())}
 	onkeydowncapture={onShortcutCapture}
 	onkeydown={onShortcut}
 	onkeyup={onShortcutUp}
+	onkeyupcapture={onShortcutUpCapture}
 	onpointerdowncapture={(e) => (notePress(e), cancelChord())}
 	onblur={resetKeyboard}
 />
