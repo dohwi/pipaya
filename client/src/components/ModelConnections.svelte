@@ -6,7 +6,7 @@
 	import Notice from "./Notice.svelte";
 	import ModelField from "./ModelField.svelte";
 	import { app } from "../lib/store.svelte";
-	import { PROBLEM_ROLE_LABEL } from "../lib/settings-problems";
+	import { PROBLEM_ROLE_LABEL, type ProblemRole } from "../lib/settings-problems";
 	import { Api, errorText } from "../lib/api";
 	import ProviderCard from "./connection/ProviderCard.svelte";
 	import ConnectionForm, { localPresets } from "./ConnectionForm.svelte";
@@ -29,6 +29,19 @@
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const problems = $derived(app.problemsOf(serverId));
+	/** A problem's row jumps to the broken field so it can be fixed without hunting for it. */
+	/** A problem's row jumps to the broken field so it can be fixed without hunting for it. */
+	const sections: Record<Exclude<ProblemRole, "default"> | ProblemRole, HTMLElement | undefined> = $state({ default: undefined, compaction: undefined, system: undefined });
+	function goto(role: ProblemRole) {
+		const el = sections[role];
+		if (!el) return;
+		el.scrollIntoView({ block: "center" });
+		// Outline the section for a moment so the eye lands on it after the jump.
+		el.classList.remove("flash");
+		void el.offsetWidth; // restart the transition when the same row is picked twice
+		el.classList.add("flash");
+		setTimeout(() => el.classList.remove("flash"), 1600);
+	}
 
 	let cfg = $state<ConfigurationInfo | null>(null);
 	let models = $state<ModelInfo[]>([]);
@@ -36,6 +49,9 @@
 	const chatModels = $derived(models.filter((m) => !m.imageGeneration));
 	let loading = $state(false);
 	let loadError = $state("");
+	/** The last failed provider action, shown beside the list (a toast would land behind this dialog). */
+	let actionError = $state("");
+	const setError = (m: string) => (actionError = m);
 	let busy = $state(false);
 	let tests = $state<Record<string, ConnectionResult | "running">>({});
 	let keyFor = $state<string | null>(null);
@@ -143,7 +159,7 @@
 			await a.deleteCustomProvider(p.id);
 			await reload();
 		} catch (e) {
-			app.toast(t("삭제하지 못했습니다: {error}", { error: errorText(e) }), "error");
+			setError(t("삭제하지 못했습니다: {error}", { error: errorText(e) }));
 		} finally {
 			busy = false;
 		}
@@ -240,17 +256,18 @@
 	{:else if loadError}
 		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
 	{:else if cfg}
+		{#if actionError}<Notice tone="danger" role="alert">{actionError}</Notice>{/if}
 		{#if problems.length}
 			<Notice tone="danger">
 				<strong>{t("설정 문제 {n}", { n: problems.length })}</strong>
 				<ul class="problems">
 					{#each problems as p (p.role)}
-						<li>{t(PROBLEM_ROLE_LABEL[p.role])}: {p.model.provider}/{p.model.model} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</li>
+						<li><button type="button" class="jump" onclick={() => goto(p.role)}>{t(PROBLEM_ROLE_LABEL[p.role])}: {p.model.provider}/{p.model.model} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</button></li>
 					{/each}
 				</ul>
 			</Notice>
 		{/if}
-		<section class="set-group">
+		<section class="set-group" bind:this={sections.default}>
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
 			{#if cfg.providers.length}
@@ -320,9 +337,9 @@
 			</p>
 		</section>
 
-		<CompactionSection {serverId} models={chatModels} providers={providerList} />
+		<div bind:this={sections.compaction}><CompactionSection {serverId} models={chatModels} providers={providerList} /></div>
 
-		<SystemModelSection {serverId} models={chatModels} providers={providerList} />
+		<div bind:this={sections.system}><SystemModelSection {serverId} models={chatModels} providers={providerList} /></div>
 
 		<ImageModelSection {serverId} {models} providers={providerList} />
 
@@ -370,9 +387,36 @@
 	.bad {
 		color: var(--danger);
 	}
+	:global(.flash) {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: var(--radius);
+		animation: flashOut 1600ms var(--ease, ease) forwards;
+	}
+	@keyframes flashOut {
+		0%, 55% { outline-color: var(--accent); }
+		100% { outline-color: transparent; }
+	}
 	.problems {
 		margin: 4px 0 0;
-		padding-left: 16px;
+		padding: 0;
+		list-style: none;
+	}
+	.jump {
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+		padding: 0;
+		background: none;
+		border: 0;
+	}
+	.jump::before {
+		content: "•";
+		margin-right: 8px;
+	}
+	.jump:hover {
+		text-decoration: underline;
 	}
 	.provwrap:last-child :global(.prov) {
 		border-bottom: 0;

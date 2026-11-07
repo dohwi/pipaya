@@ -215,6 +215,8 @@ export class Configuration {
 		private cfg: Config,
 		private registry: ModelRegistry,
 		private credentials: SqliteCredentialStore,
+		/** Who else uses a model, so a delete can say what would break instead of a bare conflict. */
+		private usedBy: () => string[] = () => [],
 	) {
 		this.images = new ModelIcons(db);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
@@ -475,12 +477,16 @@ export class Configuration {
 
 	async delete(id: string) {
 		if (!this.get(id)) throw notFound("custom provider");
+		const users = this.usedBy();
+		if (users.length) throw conflict(`this provider is still in use (${users.join(", ")}); change those settings first`);
 		if (this.effectiveDefaults()?.provider === id) throw conflict("change the default model before deleting its provider");
 		if (this.db.query("SELECT id FROM sessions WHERE provider = $id LIMIT 1").get({ id })) throw conflict("provider is referenced by a session; change or delete those sessions first");
 		await this.credentials.deleteWithCleanup(id, () => {
 			// Recheck after waiting for any credential mutation; no concurrent default/session can slip in.
 			if (this.effectiveDefaults()?.provider === id || this.db.query("SELECT id FROM sessions WHERE provider = $id LIMIT 1").get({ id })) {
 				throw conflict("provider became referenced by defaults or a session");
+			} else if (this.usedBy().length) {
+				throw conflict("provider became referenced by a settings model");
 			}
 			this.db.query("DELETE FROM custom_providers WHERE id = $id").run({ id });
 		});

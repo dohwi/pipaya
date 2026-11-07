@@ -121,13 +121,18 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	notifications.onLook = (ids) => unread.read(ids);
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
-	const configuration = new Configuration(db, cfg, registry, credentials);
 	const questions = new QuestionManager(bus);
 	const skills = new SkillService(db, { home: opts.home, builtin: opts.builtinSkills, defaultWorkdir: () => configuration.defaultWorkdir() });
 	const modelRoles = new ModelRoles(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
 	const imageModel = new ImageModelSettings(db, registry);
+	// Above the Configuration that asks them: a provider delete says what still uses it instead of a bare conflict.
+	const configuration = new Configuration(db, cfg, registry, credentials, () => [
+		...(compactionSettings.get().model?.provider ? [`compaction model: ${compactionSettings.get().model!.provider}/${compactionSettings.get().model!.model}`] : []),
+		...(systemModel.get().model?.provider ? [`system model: ${systemModel.get().model!.provider}/${systemModel.get().model!.model}`] : []),
+		...(imageModel.get().model?.provider ? [`image model: ${imageModel.get().model!.provider}/${imageModel.get().model!.model}`] : []),
+	]);
 	const extensionSettings = new ExtensionSettings(cfg.dataDir);
 	const extensions = new ExtensionHost({
 		db, bus, registry, dataDir: cfg.dataDir, settings: extensionSettings,
