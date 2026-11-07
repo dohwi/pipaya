@@ -2,18 +2,22 @@ import type { Static, TSchema } from "typebox";
 import Value from "typebox/value";
 
 export class HttpError extends Error {
+	/** Extra fields for a client to render the error in its own language (optional). */
+	data?: Record<string, unknown>;
 	constructor(
 		readonly status: number,
 		readonly code: string,
 		message: string,
+		data?: Record<string, unknown>,
 	) {
 		super(message);
+		if (data) this.data = data;
 	}
 }
 
 export const badRequest = (message: string) => new HttpError(400, "invalid_request", message);
 export const notFound = (what: string) => new HttpError(404, "not_found", `${what} not found`);
-export const conflict = (message: string) => new HttpError(409, "conflict", message);
+export const conflict = (message: string, data?: Record<string, unknown>) => new HttpError(409, "conflict", message, data);
 
 /** Validate untrusted input against a TypeBox schema or throw a 400. */
 export function parse<T extends TSchema>(schema: T, data: unknown): Static<T> {

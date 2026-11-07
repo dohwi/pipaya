@@ -38,12 +38,16 @@ import { getLang, t } from "./i18n";
 import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, type ServerUpdateStatus, type ServerVersions } from "./protocol";
 
 export class ApiError extends Error {
+	/** Extra fields a server sent with the error, e.g. what blocks a delete (optional). */
+	data?: Record<string, unknown>;
 	constructor(
 		readonly status: number,
 		readonly code: string,
 		message: string,
+		data?: Record<string, unknown>,
 	) {
 		super(message);
+		if (data) this.data = data;
 	}
 }
 
@@ -124,7 +128,8 @@ export class Api {
 			json = undefined;
 		}
 		if (!res.ok) {
-			throw new ApiError(res.status, json?.error?.code ?? "http_error", json?.error?.message ?? res.statusText);
+			const { code, message, ...data } = json?.error ?? {};
+			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
 		}
 		return json as T;
 	}
@@ -347,7 +352,8 @@ export class Api {
 		}
 		if (!res.ok) {
 			const json = await res.json().catch(() => undefined);
-			throw new ApiError(res.status, json?.error?.code ?? "http_error", json?.error?.message ?? res.statusText);
+			const { code, message, ...data } = json?.error ?? {};
+			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
 		}
 		return res.blob();
 	}
@@ -481,12 +487,24 @@ const RAW_NETWORK = /^(failed to fetch|load failed|networkerror|network request 
  * string itself; a bare browser network error becomes the app's own "서버에 연결할 수 없습니다". `fallback` is for a
  * value with no message at all (default: "문제가 발생했습니다").
  */
+/** Settings that can hold a model, for translating a provider_in_use error's role ids. */
+const ROLE_LABELS: Record<string, string> = {
+	compaction: "컨텍스트 압축 모델",
+	system: "시스템 모델",
+	image: "이미지 모델",
+};
+
 export function errorText(e: unknown, fallback?: string): string {
 	if (e instanceof ApiError) {
 		if (e.status === 0) return t("서버에 연결할 수 없습니다");
 		if (e.status === 401 || e.status === 403) return t("토큰이 거부되었습니다");
 		if (isUnsupportedRoute(e)) return t("이 서버는 아직 이 기능을 지원하지 않습니다. 서버를 업데이트하세요");
 		if (e.code === "not_found") return t("대상을 찾을 수 없습니다");
+		if (e.code === "provider_in_use") {
+			const roles = (e.data?.inUse ?? []) as { role: string; model: string }[];
+			const names = roles.map((r) => t(ROLE_LABELS[r.role] ?? r.role));
+			return names.length ? t("이 연결은 {list}에 쓰이고 있어 삭제할 수 없습니다. 먼저 다른 모델로 바꾸세요", { list: names.join(", ") }) : t("이 연결은 다른 설정에 쓰이고 있어 삭제할 수 없습니다. 먼저 다른 모델로 바꾸세요");
+		}
 		return e.message;
 	}
 	const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";

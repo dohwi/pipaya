@@ -128,11 +128,16 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const systemModel = new SystemModelSettings(db, registry);
 	const imageModel = new ImageModelSettings(db, registry);
 	// Above the Configuration that asks them: a provider delete says what still uses it instead of a bare conflict.
-	const configuration = new Configuration(db, cfg, registry, credentials, () => [
-		...(compactionSettings.get().model?.provider ? [`compaction model: ${compactionSettings.get().model!.provider}/${compactionSettings.get().model!.model}`] : []),
-		...(systemModel.get().model?.provider ? [`system model: ${systemModel.get().model!.provider}/${systemModel.get().model!.model}`] : []),
-		...(imageModel.get().model?.provider ? [`image model: ${imageModel.get().model!.provider}/${imageModel.get().model!.model}`] : []),
-	]);
+	const configuration = new Configuration(db, cfg, registry, credentials, () => {
+		// Role ids the client translates; a delete refuses while any of these still points here.
+		const used: { role: string; provider: string; model: string }[] = [];
+		for (const [role, m] of [
+			["compaction", compactionSettings.get().model],
+			["system", systemModel.get().model],
+			["image", imageModel.get().model],
+		] as const) if (m?.provider) used.push({ role, provider: m.provider, model: m.model });
+		return used;
+	});
 	const extensionSettings = new ExtensionSettings(cfg.dataDir);
 	const extensions = new ExtensionHost({
 		db, bus, registry, dataDir: cfg.dataDir, settings: extensionSettings,
@@ -307,7 +312,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 
 	server.setErrorHandler((err: Error & { statusCode?: number; code?: string }, req, reply) => {
-		if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code, message: err.message } });
+		if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code, message: err.message, ...(err.data ?? {}) } });
 		const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
 		if (status >= 500) req.log.error(err);
 		return reply.status(status).send({

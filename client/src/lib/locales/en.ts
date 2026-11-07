@@ -392,6 +392,8 @@ export const en: Record<string, string> = {
 	"이미지 읽기": "Reads images",
 	"그림만 그리는 모델입니다. 에이전트 설정에서 이미지 모델로 고르세요.": "Draws only; it does not chat. Pick it as the image model in the agent settings.",
 	"이미지 모델": "Image model",
+	"이 연결은 {list}에 쓰이고 있어 삭제할 수 없습니다. 먼저 다른 모델로 바꾸세요": "This connection is used by {list}, so it cannot be deleted. Switch those to another model first",
+	"이 연결은 다른 설정에 쓰이고 있어 삭제할 수 없습니다. 먼저 다른 모델로 바꾸세요": "This connection is used by another setting, so it cannot be deleted. Switch it to another model first",
 	"이미지 모델을 저장하지 못했습니다: {error}": "Could not save the image model: {error}",
 	"고른 모델로 에이전트가 그림을 그립니다.": "Agents draw with the model you pick.",
 	"고른 모델을 더 이상 찾을 수 없어 이미지 생성이 꺼져 있습니다.": "The chosen model is gone, so image generation is off.",

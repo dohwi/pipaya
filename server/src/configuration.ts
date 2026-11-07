@@ -216,7 +216,7 @@ export class Configuration {
 		private registry: ModelRegistry,
 		private credentials: SqliteCredentialStore,
 		/** Who else uses a model, so a delete can say what would break instead of a bare conflict. */
-		private usedBy: () => string[] = () => [],
+		private usedBy: () => { role: string; provider: string; model: string }[] = () => [],
 	) {
 		this.images = new ModelIcons(db);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
@@ -477,8 +477,11 @@ export class Configuration {
 
 	async delete(id: string) {
 		if (!this.get(id)) throw notFound("custom provider");
-		const users = this.usedBy();
-		if (users.length) throw conflict(`this provider is still in use (${users.join(", ")}); change those settings first`);
+		const usedBy = this.usedBy();
+		if (usedBy.length) {
+			// A structured list, so the client can say it in its own language instead of this English message.
+			throw conflict("this provider is still in use; change those settings first", { code: "provider_in_use", inUse: usedBy });
+		}
 		if (this.effectiveDefaults()?.provider === id) throw conflict("change the default model before deleting its provider");
 		if (this.db.query("SELECT id FROM sessions WHERE provider = $id LIMIT 1").get({ id })) throw conflict("provider is referenced by a session; change or delete those sessions first");
 		await this.credentials.deleteWithCleanup(id, () => {
@@ -486,7 +489,7 @@ export class Configuration {
 			if (this.effectiveDefaults()?.provider === id || this.db.query("SELECT id FROM sessions WHERE provider = $id LIMIT 1").get({ id })) {
 				throw conflict("provider became referenced by defaults or a session");
 			} else if (this.usedBy().length) {
-				throw conflict("provider became referenced by a settings model");
+				throw conflict("provider became referenced by a settings model", { code: "provider_in_use", inUse: this.usedBy() });
 			}
 			this.db.query("DELETE FROM custom_providers WHERE id = $id").run({ id });
 		});
