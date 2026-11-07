@@ -243,7 +243,7 @@
 		{#if problems.length}
 			<Notice tone="danger">
 				<strong>{t("설정 문제 {n}", { n: problems.length })}</strong>
-				<ul class="plist">
+				<ul class="problems">
 					{#each problems as p (p.role)}
 						<li>{t(PROBLEM_ROLE_LABEL[p.role])}: {p.model.provider}/{p.model.model} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</li>
 					{/each}
@@ -370,7 +370,7 @@
 	.bad {
 		color: var(--danger);
 	}
-	.plist {
+	.problems {
 		margin: 4px 0 0;
 		padding-left: 16px;
 	}
