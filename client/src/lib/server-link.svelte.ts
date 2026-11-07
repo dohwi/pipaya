@@ -1,11 +1,12 @@
 import { Api, ApiError, errorText } from "./api";
 import { compat, isClientTooOld, type ServerVersions } from "./protocol";
 import { t } from "./i18n";
+import { settingsProblems, type SettingsProblem } from "./settings-problems";
 import { emptyLinkData, type LinkData } from "./server-link-model";
 import type { Server } from "./store-model";
 import type { TerminalInfo, TerminalSupport } from "./terminal";
 import type {
-	DefaultModelSelection, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
+	CompactionSettings, DefaultModelSelection, SystemModelSettings, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
 } from "./types";
 
 export type NetState = "idle" | "connecting" | "online" | "offline" | "unauthorized" | "incompatible";
@@ -57,6 +58,13 @@ export class ServerLink {
 	toolsInfo = $state<ToolsInfo | null>(null);
 	serverDefault = $state<DefaultModelSelection | null>(null);
 	terminalSupport = $state<TerminalSupport | null>(null);
+	/** The compaction and system models, kept to flag the ones that stopped working (see settings-problems). */
+	compaction = $state<CompactionSettings | null>(null);
+	systemModel = $state<SystemModelSettings | null>(null);
+	/** Settings of this server that no longer work. Empty until the lists were read. */
+	problems: SettingsProblem[] = $derived(
+		this.loaded ? settingsProblems({ defaults: this.serverDefault, compaction: this.compaction, system: this.systemModel, models: this.models, providers: this.providers }) : [],
+	);
 
 	private unsubscribe: (() => void) | null = null;
 	private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -190,6 +198,7 @@ export class ServerLink {
 			this.workdirInfo = config?.workdir ?? null;
 			this.toolsInfo = config?.tools ?? null;
 			this.loaded = true;
+			void this.refreshModelSettings();
 
 			this.unsubscribe = api.subscribe(
 				{
@@ -238,10 +247,18 @@ export class ServerLink {
 			this.serverDefault = config?.effectiveDefaults ?? null;
 			if (config?.workdir) this.workdirInfo = config.workdir;
 			if (config?.tools) this.toolsInfo = config.tools;
+			void this.refreshModelSettings();
 			return true;
 		} catch {
 			return false; // the next sync retries
 		}
+	}
+
+	/** Reread which models compaction and the system jobs use. A server without them keeps null (no problem to flag). */
+	async refreshModelSettings(): Promise<void> {
+		const [c, s] = await Promise.all([this.api.compactionSettings().catch(() => null), this.api.systemModelSettings().catch(() => null)]);
+		this.compaction = c?.settings ?? null;
+		this.systemModel = s?.settings ?? null;
 	}
 
 	async refreshWorkspace(): Promise<void> {

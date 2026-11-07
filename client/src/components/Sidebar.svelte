@@ -316,8 +316,10 @@
 	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(Object.fromEntries(Object.entries(app.links).map(([id, l]) => [id, l?.api]))); });
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
-	const alertTone = $derived(app.compat === "ok" ? "ok" : "warn");
-	const settingsAlert = $derived(app.compat !== "ok" ? t("업데이트 필요") : updater.visible || serverUpdater.available ? t("업데이트 있음") : "");
+	/** A saved model that no longer works outranks an update: chats, compaction or naming fail until it is fixed. */
+	const problems = $derived(app.problemCount);
+	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
+	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible || serverUpdater.available ? t("업데이트 있음") : "");
 </script>
 
 

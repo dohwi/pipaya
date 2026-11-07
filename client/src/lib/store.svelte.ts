@@ -68,6 +68,7 @@ export { defaultServerUrl } from "./store-model";
 import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ThinkingLevel } from "./types";
+import type { SettingsProblem } from "./settings-problems";
 
 const NO_DIRS: DirBlock[] = [];
 
@@ -216,6 +217,14 @@ class AppStore {
   }
   get providers(): ProviderInfo[] {
     return this.link?.providers ?? NONE;
+  }
+  /** Settings of one server that no longer work (any server, not only the open one). */
+  problemsOf(serverId: string): SettingsProblem[] {
+    return this.links[serverId]?.problems ?? NONE;
+  }
+  /** How many settings problems all servers have together: the sidebar's settings button shows it. */
+  get problemCount(): number {
+    return this.servers.reduce((n, s) => n + this.problemsOf(s.id).length, 0);
   }
   get tools(): ToolInfo[] {
     return this.link?.tools ?? NONE;

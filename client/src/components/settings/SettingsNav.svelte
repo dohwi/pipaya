@@ -113,7 +113,7 @@
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
 				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
-					<span class="nico"><Icon name={x.icon} />{#if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
+					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
 						{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}

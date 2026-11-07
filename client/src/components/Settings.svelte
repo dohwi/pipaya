@@ -113,7 +113,8 @@
 		{#each chips as { s, state } (s.id)}
 			<span class="chipwrap" class:off={unreachable(state)}>
 				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-				{#if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
+				{#if app.problemsOf(s.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(s.id).length })} />
+				{:else if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
 			</span>
 		{/each}
 		<FilterChip title={t("서버 추가")} onclick={() => (app.serverForm = "new")}><Icon name="plus" /></FilterChip>

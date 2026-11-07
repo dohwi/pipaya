@@ -6,6 +6,7 @@
 	import Notice from "./Notice.svelte";
 	import ModelField from "./ModelField.svelte";
 	import { app } from "../lib/store.svelte";
+	import { PROBLEM_ROLE_LABEL } from "../lib/settings-problems";
 	import { Api, errorText } from "../lib/api";
 	import ProviderCard from "./connection/ProviderCard.svelte";
 	import ConnectionForm, { localPresets } from "./ConnectionForm.svelte";
@@ -27,6 +28,7 @@
 	/** Model connection settings live on each server, so this talks to the chosen server directly, not only the open one. */
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
+	const problems = $derived(app.problemsOf(serverId));
 
 	let cfg = $state<ConfigurationInfo | null>(null);
 	let models = $state<ModelInfo[]>([]);
@@ -238,6 +240,16 @@
 	{:else if loadError}
 		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
 	{:else if cfg}
+		{#if problems.length}
+			<Notice tone="danger">
+				<strong>{t("설정 문제 {n}", { n: problems.length })}</strong>
+				<ul class="plist">
+					{#each problems as p (p.role)}
+						<li>{t(PROBLEM_ROLE_LABEL[p.role])}: {p.model.provider}/{p.model.model} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</li>
+					{/each}
+				</ul>
+			</Notice>
+		{/if}
 		<section class="set-group">
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
@@ -357,6 +369,10 @@
 	}
 	.bad {
 		color: var(--danger);
+	}
+	.plist {
+		margin: 4px 0 0;
+		padding-left: 16px;
 	}
 	.provwrap:last-child :global(.prov) {
 		border-bottom: 0;
