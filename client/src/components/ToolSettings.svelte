@@ -145,7 +145,7 @@
 			<Select size="sm" width="96px" label={t("도우미 최대 모델 호출")} value={d.maxTurns} options={nums([5, 10, 15, 20, 30, 50])} onchange={(n) => saveDelegate({ maxTurns: n })} />
 		</SettingRow>
 	</section>
-	<SubagentSettings {serverId} models={modelList} />
+	<SubagentSettings {serverId} models={modelList} globalOnly />
 {/if}
 
 <style>

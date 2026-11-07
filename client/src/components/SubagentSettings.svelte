@@ -24,9 +24,9 @@
 	 * The helper roles `delegate` can start: the files in `~/.agents/subagents` (global) and the default working folder's
 	 * `.agents/subagents` (project), listed, added, edited and removed here. The server writes the role files; a role changed
 	 * by hand on disk shows up here by itself. Shown in the settings (project scope = the default working folder) and in the
-	 * footer's dialog (`cwd` = that conversation's folder). `bare` drops the settings-card chrome for use inside a dialog.
+	 * footer's dialog (`cwd` = that conversation's folder). `bare` drops the settings-card chrome for use inside a dialog. `globalOnly` (the settings) shows and saves only global roles.
 	 */
-	let { serverId, models, cwd, bare = false, refresh = 0, count = $bindable(null) }: { serverId: string; models: ModelInfo[]; cwd?: string; bare?: boolean; refresh?: number; count?: { on: number; total: number } | null } = $props();
+	let { serverId, models, cwd, bare = false, globalOnly = false, refresh = 0, count = $bindable(null) }: { serverId: string; models: ModelInfo[]; cwd?: string; bare?: boolean; globalOnly?: boolean; refresh?: number; count?: { on: number; total: number } | null } = $props();
 
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
@@ -116,7 +116,7 @@
 	/** Project roles first (they win), then global ones. Both tabs always exist so the counts stay visible. */
 	let tab = $state<"project" | "global">("project");
 	const groups = $derived(
-		(["project", "global"] as const)
+		(globalOnly ? (["global"] as const) : (["project", "global"] as const))
 			.map((scope) => ({ scope, items: (list?.subagents ?? []).filter((r) => r.scope === scope), path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents" })),
 	);
 	const current = $derived(groups.find((g) => g.scope === tab) ?? groups[0]);
@@ -145,14 +145,16 @@
 				<FormField label={t("이름")}>
 					<input class="field mono" bind:value={form.name} placeholder="reviewer" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" required />
 				</FormField>
-				<FormField label={t("저장 위치")} group hint={scopeHint}>
-					<Segmented
-						label={t("저장 위치")}
-						value={form.scope}
-						options={[{ id: "global", label: t("전역") }, { id: "project", label: t("프로젝트") }]}
-						onchange={(id) => { if (form) form.scope = id; }}
-					/>
-				</FormField>
+				{#if !globalOnly}
+					<FormField label={t("저장 위치")} group hint={scopeHint}>
+						<Segmented
+							label={t("저장 위치")}
+							value={form.scope}
+							options={[{ id: "global", label: t("전역") }, { id: "project", label: t("프로젝트") }]}
+							onchange={(id) => { if (form) form.scope = id; }}
+						/>
+					</FormField>
+				{/if}
 			{/if}
 			<FormField label={t("설명")} hint={t("에이전트가 이 역할을 언제 고를지 알려 주는 한두 문장")}>
 				<input class="field" bind:value={form.description} maxlength="500" autocomplete="off" />
@@ -192,6 +194,7 @@
 		</form>
 	{:else if list}
 		<div class="groups">
+		{#if !globalOnly}
 		<Segmented
 			tabs
 			label={t("적용 범위")}
@@ -199,7 +202,8 @@
 			onchange={(id) => (tab = id)}
 			options={groups.map((g) => ({ id: g.scope, label: `${scopeText(g.scope)} ${g.items.filter((r) => r.enabled).length}/${g.items.length}` }))}
 		/>
-		{#each [current] as g (g.scope)}
+		{/if}
+		{#each [globalOnly ? groups[0] : current] as g (g.scope)}
 			<ListGroup title={scopeText(g.scope)} count={t("{on}/{total}개 사용", { on: g.items.filter((r) => r.enabled).length, total: g.items.length })} path={g.path}>
 				<ul class="list">
 					{#each g.items as r (`${r.scope}/${r.name}`)}
