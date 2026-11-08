@@ -56,7 +56,10 @@ async function cycleModel() {
   if (starred.length === 1 && cur === 0)
     return void app.toast(t("바꿀 다른 즐겨찾기 모델이 없습니다"), "error");
   const m = starred[(cur + 1) % starred.length];
-  if (m) await app.configure({ provider: m.provider, model: m.id });
+  if (!m) return;
+  // A model and its starting strength travel together (like the model picker): the target's own default, else "medium".
+  const lvl = m.reasoning ? (m.defaultThinkingLevel ?? "medium") : undefined;
+  await app.configure({ provider: m.provider, model: m.id, ...(lvl ? { thinkingLevel: lvl } : {}) });
 }
 
 async function cycleThinking() {

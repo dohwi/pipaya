@@ -194,7 +194,9 @@ const DEFINITIONS: SlashCommand[] = [
 				usable.find((m) => `${m.provider}/${m.id}`.toLowerCase() === q) ??
 				usable.filter((m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q)[0];
 			if (!hit) return void app.toast(t("모델을 찾을 수 없습니다: {name}", { name: a.trim() }), "error", app.activeId);
-			if (await app.configure({ provider: hit.provider, model: hit.id }))
+			// A model and its starting strength travel together (like the model picker): the target's own default, else "medium".
+			const lvl = hit.reasoning ? (hit.defaultThinkingLevel ?? "medium") : undefined;
+			if (await app.configure({ provider: hit.provider, model: hit.id, ...(lvl ? { thinkingLevel: lvl } : {}) }))
 				app.toast(t("모델을 {name}(으)로 바꿨습니다", { name: hit.name }), "ok", app.activeId);
 		},
 	},
