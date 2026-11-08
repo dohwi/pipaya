@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { sessionTitle } from "../lib/session-title";
+	import { peerLabel } from "../lib/peers";
+	import { extensions } from "../lib/extensions/host.svelte";
 	import { RENAME_KEY } from "../lib/keys";
 	import { t } from "../lib/i18n";
 	import { slidingIndicator } from "../lib/sliding-indicator";
@@ -40,6 +42,11 @@
 	/** only the open group marks one of its sessions as the current one */
 	const open = $derived(app.activeTab?.tab.id === tab.id);
 	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
+	/** The `@name` handle of a conversation (a terminal has none), as the sidebar row and the tab bar show it. */
+	const whoOf = (id: string) => {
+		const s = app.session(id);
+		return s ? (peerLabel(s) ?? extensions.labelOf(id)) : undefined;
+	};
 
 </script>
 
@@ -47,6 +54,7 @@
 	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".gchip.on", radius: "var(--radius-sm)" }} use:rovingKeys={{ item: ".gchip" }}>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
+			{@const who = whoOf(x.id)}
 			{#if rename.is(x.id)}
 				<input
 					class="rename"
@@ -61,9 +69,9 @@
 					}}
 				/>
 			{:else}
-				<button class="gchip tap" tabindex={!open || x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
+				<button class="gchip tap" tabindex={!open || x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={open ? st : "idle"} size={16} />{/if}
-					<span class="t">{sessionTitle(x.title)}</span>
+					{#if who}<span class="who mono">{who.text}</span>{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>
 			{/if}
 		{/each}
@@ -144,5 +152,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	/* the `@name` handle, as in the tab bar and the sidebar row (11px on a 16px line box) */
+	.who {
+		flex: none;
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--text-faint);
+		line-height: 16px;
 	}
 </style>

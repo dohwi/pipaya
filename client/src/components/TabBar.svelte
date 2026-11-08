@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { sessionTitle } from "../lib/session-title";
+	import { peerLabel } from "../lib/peers";
+	import { extensions } from "../lib/extensions/host.svelte";
 	import { t } from "../lib/i18n";
 	import { schedule, unschedule } from "../lib/frame";
 	import Icon from "./Icon.svelte";
@@ -34,6 +36,8 @@
 	const ids = $derived(tabs.map((x) => x.id));
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
+	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
+	const handleOf = (x: Tab) => (x.kind === "session" ? (peerLabel(x.session) ?? extensions.labelOf(x.id)) : undefined);
 	/** The most pressing state among a tab's conversations. */
 	function stateOf(x: Tab): Activity {
 		const states = tabPanes(x)
@@ -194,6 +198,7 @@
 
 {#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
 	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
+	{@const who = handleOf(x)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="tab"
@@ -206,7 +211,7 @@
 				role="tab"
 				tabindex={on ? 0 : -1}
 				aria-selected={on}
-				title="{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
+				title="{who ? `${who.title} · ` : ''}{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 				use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
 				use:dropTarget={tabTarget(x)}
 				onclick={() => {
@@ -245,7 +250,7 @@
 						}}
 					/>
 				{:else}
-					<span class="t">{titleOf(x)}</span>
+					{#if who}<span class="who mono">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
@@ -445,6 +450,15 @@
 	}
 	.tail.over::before {
 		left: 0;
+	}
+	/* the `@name` other sessions call this one by, before its title: the same small dim handle the sidebar row and the
+	   split tab's title bar carry (11px on a 16px line box, so it centres on the 28px tab like the title does) */
+	.who {
+		flex: none;
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--text-faint);
+		line-height: 16px;
 	}
 	.t {
 		min-width: 0;
