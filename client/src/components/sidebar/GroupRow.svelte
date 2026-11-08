@@ -50,9 +50,9 @@
 	<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!folded} aria-label={folded ? t("펼치기") : t("접기")} title={folded ? t("펼치기") : t("접기")}>
 		<span class="chev" class:folded><Icon name="chevron-down" /></span>
 	</button>
-	<button class="open wide" onclick={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} title={g.name}>
+	<svelte:element this={n.current && sb.groupRename.is(g.id) ? "div" : "button"} class="open wide" onclick={() => !sb.groupRename.is(g.id) && (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} title={g.name}>
 		<span class="lead"><Icon name="group" />{#if pinned}<PinMark />{/if}</span>
 		<RowTitle text={g.name} />
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
-	</button>
+	</svelte:element>
 </RowShell>

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { RENAME_KEY } from "../../lib/keys";
-	import type { Snippet } from "svelte";
+	import { setContext, type Snippet } from "svelte";
 	import type { ClassValue } from "svelte/elements";
 	import { t } from "../../lib/i18n";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type MenuTarget } from "../../lib/sidebar-ctx";
 	import Icon from "../Icon.svelte";
-	import RenameInput from "./RenameInput.svelte";
+	import { ROW_RENAME, type RowRename } from "./row-rename";
 
 	/**
 	 * The frame every tab row shares, whether it is a conversation, a terminal or a split tab's header: drag source and
@@ -57,6 +57,15 @@
 	} = $props();
 
 	const sb = getSidebarCtx();
+	/** The row keeps its icon and its place while renamed: only its `RowTitle` turns into the field (read there) */
+	setContext<RowRename>(ROW_RENAME, {
+		get active() { return current && renaming; },
+		get draft() { return draft; },
+		ondraft: (v) => ondraft(v),
+		oncommit: () => oncommit(),
+		oncancel: () => oncancel(),
+		get maxlength() { return maxlength; },
+	});
 	/** F2 renames the focused row, as in a file manager. */
 	function keys(e: KeyboardEvent) {
 		if (e.key !== RENAME_KEY || !current || renaming || (e.target as Element).closest("input")) return;
@@ -80,10 +89,8 @@
 	use:dropTarget={drop}
 	onkeydown={keys}
 >
-	{#if current && renaming}
-		<RenameInput value={draft} oninput={ondraft} {oncommit} {oncancel} {maxlength} />
-	{:else}
-		{@render children()}
+	{@render children()}
+	{#if !(current && renaming)}
 		<div class="acts">
 			{#if current}
 				<button class="more" class:on={sb.menuId === id} onpointerenter={(e) => sb.hoverMenu(e, target, member)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickMenu(e, target, member)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={sb.menuId === id}><Icon name="more" /></button>

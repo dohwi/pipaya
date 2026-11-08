@@ -51,8 +51,8 @@
 	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-	<button class="open wide" onclick={() => app.openIn(n.server.id, { session: x.id })} title={tip}>
+	<svelte:element this={n.current && sb.rename.is(x.id) ? "div" : "button"} class="open wide" onclick={() => !sb.rename.is(x.id) && app.openIn(n.server.id, { session: x.id })} title={tip}>
 		{@render body(pinned)}
-	</button>
+	</svelte:element>
 	{@render trail?.()}
 </RowShell>
