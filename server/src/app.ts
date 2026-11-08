@@ -20,6 +20,8 @@ import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { TOGGLEABLE_TOOLS } from "./tools.ts";
 import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
+import { VoiceSettings } from "./voice-input.ts";
+import { registerVoiceRoutes } from "./voice-routes.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
@@ -127,6 +129,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
 	const imageModel = new ImageModelSettings(db, registry);
+	const voice = new VoiceSettings(db);
 	// Above the Configuration that asks them: a provider delete says what still uses it instead of a bare conflict.
 	const configuration = new Configuration(db, cfg, registry, credentials, () => {
 		// Role ids the client translates; a delete refuses while any of these still points here.
@@ -273,6 +276,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		// still counts as an HTTP connection, and without this `close()` (restart, tests) waits on it forever.
 		forceCloseConnections: true,
 	});
+	// Voice input uploads the browser's own recording as multipart; the runtime's FormData parser reads it (no plugin).
+	server.addContentTypeParser("multipart/form-data", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(makeSerializerCompiler(opts.strictResponses ?? false));
 	const corsPolicy = createCorsPolicy(cfg.corsOrigins);
@@ -592,6 +597,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerRetentionRoutes(server, retention, bus);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
+	registerVoiceRoutes(server, voice, credentials, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.

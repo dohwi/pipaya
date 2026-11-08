@@ -16,7 +16,7 @@ export const ErrorBody = Type.Object(
 );
 
 /** Standard error responses for a route. */
-export const errors = (...codes: (400 | 401 | 403 | 404 | 409 | 413 | 426 | 429 | 501 | 502)[]) =>
+export const errors = (...codes: (400 | 401 | 403 | 404 | 409 | 413 | 426 | 429 | 501 | 502 | 504)[]) =>
 	Object.fromEntries(codes.map((c) => [c, { ...ErrorBody, description: ERROR_DESCRIPTIONS[c] }])) as Record<number, typeof ErrorBody>;
 const ERROR_DESCRIPTIONS = {
 	400: "Invalid request",
@@ -29,6 +29,7 @@ const ERROR_DESCRIPTIONS = {
 	429: "Too many requests",
 	501: "Not supported by this server",
 	502: "The model provider failed",
+	504: "The upstream server did not answer in time",
 } as const;
 
 export const IdParams = Type.Object({ id: Type.String() });

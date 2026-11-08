@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { mkdtempSync, mkdirSync, readFileSync as read, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { configureAndroid, installLauncherIcons, mainActivity } from "../scripts/prepare-android";
+import { androidManifest, configureAndroid, installLauncherIcons, mainActivity } from "../scripts/prepare-android";
 
 // Relevant sections of the Tauri 2.12 Android template. Fail closed on template drift.
 const template = `android {
@@ -115,5 +115,48 @@ describe("Android launcher icons", () => {
 		expect(kt).toContain("isVisible(WindowInsetsCompat.Type.ime())");
 		// leaving the app must not bring the keyboard back on return
 		expect(kt).toMatch(/override fun onStop\(\) \{\s+\/\/[^\n]*\n\s+restoreOnFocus = false/);
+	});
+});
+
+
+describe("Android microphone permission", () => {
+	const manifest = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:label="pipaya">
+        <activity android:name=".MainActivity" />
+    </application>
+</manifest>`;
+
+	test("declares RECORD_AUDIO and MODIFY_AUDIO_SETTINGS, keeps what was there, and is idempotent", () => {
+		const once = androidManifest(manifest);
+		expect(once).toContain('<uses-permission android:name="android.permission.RECORD_AUDIO" />');
+		expect(once).toContain('<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />');
+		expect(once).toContain("android.permission.INTERNET");
+		expect(once.indexOf("RECORD_AUDIO")).toBeLessThan(once.indexOf("<application"));
+		expect(androidManifest(once)).toBe(once);
+	});
+	test("fails closed on a template without exactly one application element", () => {
+		expect(() => androidManifest("<manifest></manifest>")).toThrow(/template changed/);
+		expect(() => androidManifest("<manifest><application/><application/></manifest>")).toThrow(/template changed/);
+	});
+	test("the activity answers a microphone request: audio only, this app's page only, after Android's permission", () => {
+		const kotlin = mainActivity("work.pipaya.app");
+		expect(kotlin).toContain("import android.Manifest");
+		expect(kotlin).toContain("import android.webkit.PermissionRequest");
+		expect(kotlin).toContain("override fun onPermissionRequest(request: PermissionRequest)");
+		expect(kotlin).toContain("PermissionRequest.RESOURCE_AUDIO_CAPTURE");
+		expect(kotlin).toContain("request.deny()");
+		expect(kotlin).toContain("ActivityCompat.requestPermissions");
+		expect(kotlin).toContain("Manifest.permission.RECORD_AUDIO");
+		expect(kotlin).toContain("override fun onRequestPermissionsResult");
+		// only the app's own page, and nothing but audio
+		expect(kotlin).toMatch(/request\.origin\?\.host == "tauri\.localhost"/);
+		expect(kotlin).toContain("val wantsOther = request.resources.any { it != PermissionRequest.RESOURCE_AUDIO_CAPTURE }");
+		// the keyboard fix stays: one hierarchy listener that does both jobs
+		expect(kotlin.match(/setOnHierarchyChangeListener/g)).toHaveLength(1);
+		expect(kotlin).toContain("private fun onWebView(web: WebView)");
+		expect(kotlin).toContain("wrapInFocusKeepingShell(web)");
+		expect(kotlin).toContain("attachMicrophonePermission(web)");
 	});
 });

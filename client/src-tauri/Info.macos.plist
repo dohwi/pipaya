@@ -14,5 +14,8 @@
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Connect to your pipaya server on your local or Tailscale network.</string>
+    <!-- Voice input records from the microphone; macOS shows this line in its permission prompt. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Dictate into the message box. The recording goes to the transcription server you configure and is not stored.</string>
 </dict>
 </plist>

@@ -35,6 +35,7 @@
 	import { app, SIDEBAR_W } from "./lib/store.svelte";
 	import { armSound } from "./lib/sound";
 	import { extensions } from "./lib/extensions/host.svelte";
+	import { voice } from "./lib/voice.svelte";
 	import { COMMANDS, runCommand } from "./lib/commands";
 	import { workspaceAdapter } from "./lib/extensions/workspace";
 	import { viewport } from "./lib/viewport.svelte";
@@ -136,6 +137,13 @@
 		};
 	});
 
+	// Voice input: read this server's settings, and keep them in step when the open server changes.
+	$effect(() => {
+		const api = app.api;
+		const serverId = app.serverId;
+		if (serverId) void voice.load(api, serverId);
+	});
+
 	onMount(() => {
 		armSound();
 		app.init();
@@ -147,6 +155,8 @@
 		const updateTimer = setTimeout(() => updater.autoCheck(), 5000);
 		notifications.init(() => app.visibleIds, (sid, api) => { const sv = api ? app.serverIdOfApi(api) : null; if (sv && sv !== app.serverId) app.openIn(sv, { session: sid }); else void app.openAny(sid); }, nativePushAdapter(), () => app.readableId);
 		const api = () => { if (!app.api) throw new Error(t("서버에 연결해 주세요")); return app.api; };
+		// Voice input: the microphone's own availability (secure context, MediaRecorder) is fixed for this window.
+		voice.probe();
 		extensions.init({
 			prefill: text => { app.prefill = text; },
 			notify: text => app.toast(text),

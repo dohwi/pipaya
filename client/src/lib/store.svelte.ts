@@ -259,6 +259,8 @@ class AppStore {
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);
+  /** Text to put into the composer at the caret, once: voice input's transcript (a plain append would add a line break). */
+  insertText = $state<{ paneId: string; text: string } | null>(null);
   /** Message the next prompt answers (the Reply button); the composer shows it as a badge and quotes it on send. */
   replyTo = $state<{ text: string; who?: string } | null>(null);
   settingsOpen = $state(false);
@@ -1921,6 +1923,11 @@ class AppStore {
   /* ---------- commands ---------- */
 
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
+  /** Put `text` into the composer of `paneId` at the caret (the composer consumes it once). */
+  insertIntoComposer(paneId: string, text: string) {
+    this.insertText = { paneId, text };
+  }
+
   toast(text: string, tone: Toast["tone"] = "info", sid?: string | null) {
     this.feedback.toast(text, tone, sid);
   }

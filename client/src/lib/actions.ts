@@ -27,6 +27,8 @@ import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { composing, releasedByKeyUp, type ShortcutUpReason } from "./extensions/shortcuts";
+import { voice } from "./voice.svelte";
+import { TAP_MS } from "./voice";
 import { THINKING_LEVELS, type ThinkingLevel } from "./types";
 import { t } from "./i18n";
 
@@ -261,6 +263,12 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   skills: () => app.openSkills(),
   cycleServer,
   toggleSound: () => app.prefs.setSound(!app.prefs.soundOn),
+  // A tap: start recording, or stop a recording the tap started. A longer press is the hold path below.
+  voiceInput: () => {
+    if (!voice.visible) return;
+    if (voice.recording) voice.stop();
+    else void voice.start(app.activeId ?? "");
+  },
   resume: () => resume(),
   modelPicker: () => void app.modelPickerTick++,
   cycleModel,
@@ -289,6 +297,38 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
 
 export function runAction(id: ActionId) {
   void RUN[id]();
+}
+
+/** When the voice shortcut went down: a press shorter than this is a tap (toggle), a longer one records while held. */
+let holdStartedAt = 0;
+/** The voice shortcut is down and recording because of it (letting go stops). */
+let voiceHolding = false;
+/** The keydown started the recording (a tap keeps it; a tap while already recording stops it). */
+let voiceStartedOnDown = false;
+
+/**
+ * The voice shortcut's keys went down ("both" mode): recording starts at once, so a long press records from the start.
+ * The keyup tells a tap from a hold — a tap keeps what it started (toggle on) or stops a recording that was already
+ * running (toggle off); a hold stops when the key comes up.
+ */
+function startVoiceHold() {
+  if (!voice.visible) return;
+  voiceHolding = true;
+  voiceStartedOnDown = !voice.recording;
+  if (voiceStartedOnDown) void voice.start(app.activeId ?? "").then((failure) => { if (failure) voiceStartedOnDown = false; });
+}
+
+/** The key came up: a tap toggles, a hold stops the recording it made. */
+function endVoiceHold() {
+  if (!voiceHolding) return;
+  voiceHolding = false;
+  const held = performance.now() - holdStartedAt;
+  holdStartedAt = 0;
+  const started = voiceStartedOnDown;
+  voiceStartedOnDown = false;
+  if (!voice.visible) return;
+  if (held < TAP_MS && started) return; // a tap that started recording: keep recording until the next tap
+  if (voice.recording) voice.stop();
 }
 
 /** Plain keys currently held, by physical code. Cleared on blur so a missed keyup cannot stick. */
@@ -485,7 +525,10 @@ export function onShortcut(e: KeyboardEvent) {
       if (id) armPrefixAction(id);
     } else {
       fired = true;
-      runAction(id!);
+      if (id === "voiceInput") {
+        holdStartedAt = performance.now();
+        startVoiceHold();
+      } else runAction(id!);
     }
     return;
   }
@@ -515,6 +558,7 @@ export function onShortcutUpCapture(e: KeyboardEvent) {
 }
 
 export function onShortcutUp(e: KeyboardEvent) {
+  if (voiceHolding && !MODIFIER_CODE.test(e.code)) endVoiceHold();
   if (MODIFIER_CODE.test(e.code)) {
     // macOS sends no keyup for other keys while ⌘ is down, so letting go of ⌘ is the only chance to forget them.
     if (e.key === "Meta") held.clear();
@@ -534,4 +578,6 @@ export function resetKeyboard() {
   clearHeldKeys();
   cancelChord();
   endExtensionHold("blur");
+  // The keyup of a held voice recording will not arrive either: stop it rather than leave the microphone open.
+  if (voiceHolding) { voiceHolding = false; voiceStartedOnDown = false; holdStartedAt = 0; if (voice.recording) voice.stop(); }
 }

@@ -3,6 +3,7 @@ import { msg, t } from "./i18n";
 /** The settings window's sections. `server: true` ones belong to the chosen server and sit between the app-wide ones. */
 export const SETTINGS_TABS = [
 	{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
+	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 	{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: "", server: false },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },

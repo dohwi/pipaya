@@ -11,6 +11,7 @@ Facts about the user's own pipaya. Everything here was checked against the serve
 |---|---|
 | Global and project `AGENTS.md`, when edits take effect, size limits | `references/agents-md.md` |
 | Skills: where they load from, on/off | `references/agents-md.md` section "Skills" |
+| Voice input (dictation): turning it on, the transcription server, the microphone button and shortcut | `references/voice-input.md` |
 
 ## Rules
 

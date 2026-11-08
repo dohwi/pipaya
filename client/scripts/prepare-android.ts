@@ -49,13 +49,20 @@ export function configureAndroid(source: string): string {
 export function mainActivity(packageName: string): string {
 	return `package ${packageName}
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.widget.FrameLayout
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -64,6 +71,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 
 class MainActivity : TauriActivity() {
+  /** The WebView's pending microphone request, answered once the user has chosen in the Android dialog. */
+  private var micRequest: PermissionRequest? = null
   /** The soft keyboard is on screen, as the window insets last reported. */
   private var imeVisible = false
   /** The keyboard was up when a dialog or overlay took the window focus: bring it back when the focus returns. */
@@ -102,13 +111,19 @@ class MainActivity : TauriActivity() {
   private fun keepKeyboardThroughDialogs(root: ViewGroup) {
     root.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
       override fun onChildViewAdded(parent: View, child: View) {
-        if (child is WebView) parent.post { wrapInFocusKeepingShell(child) }
+        if (child is WebView) parent.post { onWebView(child) }
       }
 
       override fun onChildViewRemoved(parent: View, child: View) = Unit
     })
     (0 until root.childCount).map(root::getChildAt).filterIsInstance<WebView>()
-      .forEach { root.post { wrapInFocusKeepingShell(it) } }
+      .forEach { root.post { onWebView(it) } }
+  }
+
+  /** A WebView arrived: keep the keyboard through dialogs, and let the page ask for the microphone. */
+  private fun onWebView(web: WebView) {
+    wrapInFocusKeepingShell(web)
+    attachMicrophonePermission(web)
   }
 
   /** Moves the WebView into the shell (once: a WebView already in one is left alone). */
@@ -120,6 +135,47 @@ class MainActivity : TauriActivity() {
     val shell = FocusKeepingShell(this)
     shell.addView(web, fill)
     parent.addView(shell, fill)
+  }
+
+  /**
+   * Gives the WebView a WebChromeClient that answers microphone requests. Tauri already installs one for other web
+   * permissions, so the existing client is kept and only onPermissionRequest is answered here.
+   */
+  private fun attachMicrophonePermission(web: WebView) {
+    if (web.webChromeClient is MicrophoneChromeClient) return
+    web.webChromeClient = MicrophoneChromeClient()
+  }
+
+  /** Answers a WebView microphone request: audio from this app's page only, after Android's own permission. */
+  private inner class MicrophoneChromeClient : WebChromeClient() {
+    override fun onPermissionRequest(request: PermissionRequest) {
+      val ownPage = request.origin?.host == "tauri.localhost" || request.origin?.host == "localhost"
+      val wantsAudio = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+      val wantsOther = request.resources.any { it != PermissionRequest.RESOURCE_AUDIO_CAPTURE }
+      if (!ownPage || !wantsAudio || wantsOther) {
+        request.deny()
+        return
+      }
+      if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+        return
+      }
+      micRequest = request
+      ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQUEST)
+    }
+  }
+
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode != MIC_REQUEST) return
+    val pending = micRequest
+    micRequest = null
+    if (pending == null) return
+    if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+      pending.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+    } else {
+      pending.deny()
+    }
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -168,6 +224,8 @@ class MainActivity : TauriActivity() {
   }
 
   private companion object {
+    /** The microphone request's id, so the answer can be matched. */
+    const val MIC_REQUEST = 4711
     /** Focus the page's field again: blur first, since focusing the field that already has it changes nothing. */
     const val REFOCUS_FIELD =
       "(function(){var e=document.activeElement;if(!e)return;var t=e.tagName;if(t!=='TEXTAREA'&&t!=='INPUT')return;e.blur();e.focus();})()"
@@ -213,8 +271,22 @@ export function installLauncherIcons(iconsDir: string, resDir: string): void {
 	cpSync(source, resDir, { recursive: true, force: true });
 }
 
+/**
+ * The microphone. The WebView asks the app for it (`onPermissionRequest`); the app asks Android (`RECORD_AUDIO`) and
+ * answers the WebView with what the user chose. Declared in the manifest, since a runtime request for a permission the
+ * manifest does not list is refused without a dialog.
+ */
+export function androidManifest(source: string): string {
+	const marker = "<!-- pipaya microphone -->";
+	if (source.includes(marker)) return source;
+	if (source.split("<application").length !== 2) throw new Error("Android template changed: expected exactly one <application");
+	return source.replace("<application", `${marker}\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n\n    <application`);
+}
+
 if (import.meta.main) {
 	installLauncherIcons(resolve(import.meta.dir, "../src-tauri/icons"), resolve(import.meta.dir, "../src-tauri/gen/android/app/src/main/res"));
+	const manifest = resolve(import.meta.dir, "../src-tauri/gen/android/app/src/main/AndroidManifest.xml");
+	writeFileSync(manifest, androidManifest(readFileSync(manifest, "utf8")));
 	const activity = resolve(import.meta.dir, "../src-tauri/gen/android/app/src/main/java/work/pipaya/app/MainActivity.kt");
 	writeFileSync(activity, mainActivity("work.pipaya.app"));
 	const path = resolve(import.meta.dir, "../src-tauri/gen/android/app/build.gradle.kts");

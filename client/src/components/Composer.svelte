@@ -21,6 +21,7 @@
 	import IconButton from "./IconButton.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
 	import SendControls from "./SendControls.svelte";
+	import VoiceInput from "./VoiceInput.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
 	import QueuedList from "./QueuedList.svelte";
 	import StatusLine from "./StatusLine.svelte";
@@ -128,6 +129,18 @@
 		// Keep what is already typed: append instead of overwriting.
 		const cur = untrack(() => text);
 		setText(cur.trim() ? `${cur.replace(/\s+$/, "")}\n${p}` : p);
+	});
+
+	// Voice input hands its transcript over once: inserted at the caret, so it continues the sentence being typed.
+	$effect(() => {
+		const incoming = app.insertText;
+		// "" is the new-chat composer (no session yet): it takes the text, as the microphone there did.
+		if (!incoming || incoming.paneId !== (pane.id ?? "")) return;
+		app.insertText = null;
+		const at = ta?.selectionStart ?? untrack(() => text).length;
+		const next = insertToken(untrack(() => text), at, incoming.text);
+		setText(next.text);
+		queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
 	});
 
 	// The Reply button on a message hands it over once.
@@ -625,6 +638,7 @@
 			<ModelPicker />
 			<ExtensionMount slot="composer.toolbar" />
 			<span class="grow"></span>
+			<VoiceInput paneId={pane.id ?? ""} />
 
 			<ExtensionPart part="composer.send" props={{ canSend, hasInput, running, compacting, send: submit, stop: () => app.abort(pane.id) }}>
 			<SendControls

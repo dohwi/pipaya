@@ -8,6 +8,7 @@
 	import SettingsNav from "./settings/SettingsNav.svelte";
 	import ModalHeader from "./ModalHeader.svelte";
 	import Shortcuts from "./Shortcuts.svelte";
+	import VoicePane from "./settings/VoicePane.svelte";
 	import Extensions from "./Extensions.svelte";
 	import Backup from "./Backup.svelte";
 	import ServerForm from "./ServerForm.svelte";
@@ -147,6 +148,8 @@
 				<Extensions scope="server" serverId={server?.id ?? null} bind:selected={extId} bind:marketFor ongoclient={(id) => { go("extensions"); extId = id; }} />
 			{:else if tab === "backup"}
 				<Backup />
+			{:else if tab === "voice"}
+				<VoicePane />
 			{:else if tab === "keys"}
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}

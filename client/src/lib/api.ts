@@ -51,6 +51,15 @@ export class ApiError extends Error {
 	}
 }
 
+/** What Settings > Voice keeps on the server (server/src/voice-input.ts). The key is separate and never read back. */
+export interface VoiceSettings {
+	enabled: boolean;
+	baseUrl: string;
+	path: string;
+	model: string;
+	language: string;
+}
+
 export interface Connection {
 	baseUrl: string;
 	token: string;
@@ -213,6 +222,37 @@ export class Api {
 		this.req<{ value: unknown; updatedAt: number }>("GET", `/client-settings/${encodeURIComponent(key)}`, undefined, signal);
 	putClientSetting = (key: string, value: unknown, at: number, origin: string, signal?: AbortSignal) =>
 		this.req<{ value: unknown; updatedAt: number; applied: boolean }>("PUT", `/client-settings/${encodeURIComponent(key)}`, { value, at, origin }, signal);
+
+	/* ---------- voice input (server/src/voice-routes.ts) ---------- */
+	voice = (signal?: AbortSignal) =>
+		this.req<{ settings: VoiceSettings; hasKey: boolean; defaults: VoiceSettings; defaultPath: string; endpoint: string | null }>("GET", "/voice", undefined, signal);
+	saveVoice = (settings: VoiceSettings, apiKey: string | undefined, signal?: AbortSignal) =>
+		this.req<{ settings: VoiceSettings; hasKey: boolean; defaults: VoiceSettings; defaultPath: string; endpoint: string | null }>("PUT", "/voice", apiKey === undefined ? { settings } : { settings, apiKey }, signal);
+	/** One recording in, its text out. The recording goes up as the browser made it (webm, mp4, ogg). */
+	async transcribe(blob: Blob, language: string, signal?: AbortSignal): Promise<string> {
+		const form = new FormData();
+		form.append("file", blob, `voice.${blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm"}`);
+		if (language) form.append("language", language);
+		return (await this.upload<{ text: string }>("/voice/transcribe", form, signal)).text;
+	}
+	/** The connection test: the server sends a second of silence and reports what came back. */
+	testVoice = (signal?: AbortSignal) => this.req<{ text: string; status: number }>("POST", "/voice/test", {}, signal);
+	/** A multipart upload: the browser sets the boundary, so no Content-Type is written here. */
+	private async upload<T>(path: string, body: FormData, signal?: AbortSignal): Promise<T> {
+		let res: Response;
+		try {
+			res = await fetch(`${this.conn.baseUrl}${path}`, { method: "POST", body, signal, headers: { Authorization: `Bearer ${this.conn.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) } });
+		} catch (e) {
+			if ((e as Error).name === "AbortError") throw e;
+			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
+		}
+		const json = await res.json().catch(() => undefined);
+		if (!res.ok) {
+			const { code, message, ...data } = json?.error ?? {};
+			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
+		}
+		return json as T;
+	}
 
 	/* ---------- connect another device by QR (server/src/pairing.ts) ---------- */
 	createPairing = (signal?: AbortSignal) =>
