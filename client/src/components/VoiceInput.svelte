@@ -2,7 +2,7 @@
 	import Icon from "./Icon.svelte";
 	import { t } from "../lib/i18n";
 	import { voice } from "../lib/voice.svelte";
-	import { FAILURE_TEXT, formatTime, TAP_MS } from "../lib/voice";
+	import { FAILURE_SUMMARY, FAILURE_TEXT, formatTime, TAP_MS } from "../lib/voice";
 
 	/**
 	 * The composer's microphone and its status pill. Shown only when voice input is on and its connection test passed
@@ -20,6 +20,8 @@
 	let holdRecords = false;
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let frame = 0;
+	/** Eased bar heights (0..1), so the wave moves smoothly instead of jumping with each frame's peak. */
+	let levels = [0, 0, 0, 0, 0, 0, 0];
 	const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 	function down(e: PointerEvent) {
@@ -61,6 +63,7 @@
 		if (!voice.recording || !canvas) return;
 		const stream = voice.analyserStream();
 		if (!stream) return;
+		levels = [0, 0, 0, 0, 0, 0, 0];
 		const context = new AudioContext();
 		const node = context.createAnalyser();
 		node.fftSize = 256;
@@ -82,11 +85,19 @@
 			g.strokeStyle = getComputedStyle(el).color;
 			g.lineWidth = 2;
 			g.lineCap = "round";
+			// A quiet microphone (a laptop's, a phone's, the fake device) barely moves the samples: amplify, then ease
+			// the bar height towards the level so it reads as a voice and not as noise flicker.
+			const floor = 3; // px: every bar is visible even in silence
+			const reach = h / 2 - 1;
 			for (let i = 0; i < bars; i++) {
 				let peak = 0;
 				for (let j = 0; j < step; j++) peak = Math.max(peak, Math.abs(data[i * step + j]! - 128) / 128);
+				// sqrt lifts quiet speech into view; the gain makes a laptop or phone microphone's small signal visible
+				// without pinning loud speech to the top
+				const level = Math.min(1, Math.sqrt(peak) * 2.4);
+				levels[i] = levels[i]! + (level - levels[i]!) * 0.6;
+				const half = floor + levels[i]! * (reach - floor);
 				const x = (i + 0.5) * (w / bars);
-				const half = Math.max(1.5, peak * (h / 2 - 1));
 				g.beginPath();
 				g.moveTo(x, h / 2 - half);
 				g.lineTo(x, h / 2 + half);
@@ -118,8 +129,15 @@
 				<span>{t("변환 중…")}</span>
 			</div>
 		{:else if voice.failure}
-			<button class="pill error" role="status" onclick={() => voice.clearFailure()} title={t("닫기")}>
-				<span>{t(FAILURE_TEXT[voice.failure])}</span>
+			<!-- The toast carries the whole sentence: the chip is a short reminder, so it never crowds the composer. -->
+			<button
+				class="pill error"
+				role="status"
+				title={t(FAILURE_TEXT[voice.failure])}
+				aria-label={`${t(FAILURE_SUMMARY[voice.failure])}. ${t(FAILURE_TEXT[voice.failure])}`}
+				onclick={() => voice.clearFailure()}
+			>
+				<span>{t(FAILURE_SUMMARY[voice.failure])}</span>
 			</button>
 		{/if}
 		{#if voice.visible}
@@ -136,7 +154,7 @@
 			onpointerleave={() => { if (voice.recording && !holdRecords) return; holding = false; }}
 			onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void (voice.recording ? voice.stop() : voice.start(paneId)); } }}
 		>
-			<Icon name={voice.recording ? "stop" : "mic"} />
+			<Icon name={voice.recording ? "mic-rec" : "mic"} />
 		</button>
 		{/if}
 	</div>
@@ -254,15 +272,18 @@
 			animation: none;
 		}
 	}
-	/* a narrow pane keeps the toolbar on one line: the pill drops its text and only the time stays */
+	/* a narrow pane keeps the toolbar on one line: the busy pill drops its word, the error chip keeps its short one
+	   (it is a summary now, and an empty pill would say nothing at all) */
 	@container (max-width: 480px) {
-		.pill.error span,
 		.pill.busy span:not(.spinner) {
 			display: none;
 		}
-		.pill.error,
 		.pill.busy {
 			padding-right: 8px;
+		}
+		.pill.error {
+			max-width: 152px;
+			padding-right: 12px;
 		}
 		.wave {
 			width: 28px;

@@ -4,6 +4,7 @@
 	import SettingRow from "../SettingRow.svelte";
 	import Switch from "../Switch.svelte";
 	import { t } from "../../lib/i18n";
+	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";
 	import type { VoiceSettings } from "../../lib/api";
 
@@ -25,6 +26,9 @@
 		key = "";
 		keyTouched = false;
 	});
+
+	/** The old microphone extension, if it is installed: two microphones with two settings would confuse anyone. */
+	const oldExtension = $derived(extensions.installed.find((e) => e.package.manifest.id === "voice-input") ?? null);
 
 	const dirty = $derived(
 		keyTouched ||
@@ -65,6 +69,12 @@
 	<SettingRow label={t("음성 입력 사용")} hint={t("켜고 연결을 확인하면 입력창에 마이크가 나타납니다")}>
 		<Switch checked={draft.enabled} label={t("음성 입력 사용")} onchange={(on) => (draft = { ...draft, enabled: on })} />
 	</SettingRow>
+	{#if oldExtension}
+		<Notice tone="warn" size="sm">
+			{t("확장 voice-input이 설치되어 있습니다. 마이크가 두 개 보일 수 있으니 확장을 끄고 이 설정을 쓰세요.")}
+			{#if oldExtension.enabled}<span class="hint">{t("지금 켜져 있습니다")}</span>{:else}<span class="hint">{t("지금 꺼져 있습니다")}</span>{/if}
+		</Notice>
+	{/if}
 	{#if voice.availability}
 		<Notice tone="warn" size="sm">{t(voice.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.")}</Notice>
 	{/if}

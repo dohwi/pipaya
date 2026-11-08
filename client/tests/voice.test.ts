@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-	CONFIG_FAILURES, FAILURE_TEXT, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability, micFailure,
-	pickMimeType, serverFailure, voiceState,
+	CONFIG_FAILURES, FAILURE_SUMMARY, FAILURE_TEXT, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
+	micFailure, pickMimeType, serverFailure, voiceState,
 } from "../src/lib/voice";
 
 describe("voiceState", () => {
@@ -57,6 +57,13 @@ describe("failures", () => {
 	});
 	test("every failure has a sentence", () => {
 		for (const [kind, text] of Object.entries(FAILURE_TEXT)) expect({ kind, empty: !text }).toEqual({ kind, empty: false });
+	});
+	test("every failure has a short chip form, and it is shorter than the sentence", () => {
+		for (const kind of Object.keys(FAILURE_TEXT) as (keyof typeof FAILURE_TEXT)[]) {
+			const short = FAILURE_SUMMARY[kind];
+			expect({ kind, empty: !short }).toEqual({ kind, empty: false });
+			expect({ kind, shorter: short.length < FAILURE_TEXT[kind].length }).toEqual({ kind, shorter: true });
+		}
 	});
 });
 

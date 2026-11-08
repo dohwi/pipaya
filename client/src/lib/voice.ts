@@ -116,5 +116,28 @@ export const FAILURE_TEXT: Record<VoiceFailure, string> = {
 	aborted: msg("녹음을 취소했습니다."),
 };
 
+/**
+ * The chip's short form of each failure. The toast and the chip's title carry the whole sentence (`FAILURE_TEXT`), so
+ * the composer keeps one line and the detail stays one hover (or one screen reader) away.
+ */
+export const FAILURE_SUMMARY: Record<VoiceFailure, string> = {
+	micDenied: msg("마이크 권한이 거부되었습니다"),
+	noMic: msg("마이크를 찾을 수 없습니다"),
+	micBusy: msg("마이크를 열 수 없습니다"),
+	micFailed: msg("마이크를 시작하지 못했습니다"),
+	tooShort: msg("녹음이 너무 짧습니다"),
+	tooBig: msg("녹음이 너무 깁니다"),
+	network: msg("서버에 연결할 수 없습니다"),
+	timeout: msg("변환이 늦어지고 있습니다"),
+	not_configured: msg("음성 입력 설정이 필요합니다"),
+	bad_key: msg("API 키가 거부되었습니다"),
+	not_found: msg("변환 경로를 찾을 수 없습니다"),
+	too_large: msg("녹음이 너무 큽니다"),
+	upstream_error: msg("변환 서버가 오류를 돌려주었습니다"),
+	bad_response: msg("변환 응답을 읽을 수 없습니다"),
+	empty: msg("인식된 내용이 없습니다"),
+	aborted: msg("녹음을 취소했습니다"),
+};
+
 /** Whether a failure means the settings must be fixed before the button may show again. */
 export const isConfigFailure = (failure: VoiceFailure) => CONFIG_FAILURES.includes(failure);

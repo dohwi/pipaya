@@ -3,7 +3,7 @@
  * (`lib/video-view.ts` draws the video's own buttons) uses the same shapes instead of copying them.
  */
 export type IconName =
-	| "menu" | "plus" | "send" | "stop" | "mic" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
+	| "menu" | "plus" | "send" | "stop" | "mic" | "mic-rec" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 	| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 	| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
 	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "archive" | "plug" | "pin" | "bot" | "bell" | "bell-off";
@@ -18,6 +18,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	send: "M12 19V5M5 12l7-7 7 7",
 	// a microphone: the capsule, its stand and the base
 	mic: "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6",
+	// recording: the microphone with a filled dot, so it never reads as the agent's square stop button
+	"mic-rec": "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M19.5 4.5h.01",
 	stop: "M7 7h10v10H7z",
 	chat: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z",
 	trash: "M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
