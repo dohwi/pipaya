@@ -69,6 +69,10 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new pill style gets its own measured value, never a guess.
 - Dialogs sit on whole pixels (`Modal` places the panel by pixel offsets, not `top: 50%` + `translate`), otherwise a panel with the other parity than the window lands on x.5 and its badges are painted 0.5px higher than in the next dialog. Header title/subtitle have whole-pixel line boxes (28 / 18).
 - A small label next to bigger text in a centred row (the `@name` handle before a conversation title) is aligned on the **baseline**, not the centre: the handle is lowered 1.5px.
+- The `@name` handle is one style everywhere it appears (sidebar row, split tab's title bar, tab, group chip inside the group box): 11px
+  `--fs-2xs`, weight 600, `--text-faint`, on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
+  It sits between the agent badge and the title (4px gaps, the row's own), never after the title. It does not shrink (`flex: none`): a tab
+  too narrow for both shows the handle whole and ellipsises the title, which is what the tab's `max-width: 220px` leaves room for.
 - Audit: render at `device_scale_factor` 4-8 with `scripts/ui-ink.py`, find the painted pixels inside each pill and compare their centre with the box centre; flag anything over 0.5px. Differences up to 0.5px represent the physical half-pixel grid limit of an odd-pixel glyph in an even-content box.
 
 ## 2. Vertical rhythm
