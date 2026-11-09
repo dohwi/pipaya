@@ -1,7 +1,8 @@
 /**
  * Recently closed tabs, kept on this device: the conversations and terminals the user closed in the last hour, newest
- * first, so the sidebar can offer them back with one click. A tab that is open again (reopened, or closed and then
- * resumed) leaves the list, and so does one that is deleted, so the list never offers something that is already there.
+ * first. Each folder of the sidebar lists its own (`forDir`), under its tabs and folded like a split tab, so a closed tab
+ * comes back where it was rather than in one list away from the tree. A tab that is open again (reopened, or closed and
+ * then resumed) leaves the list, and so does one that is deleted, so nothing is offered that is already there.
  *
  * The list is capped (`MAX`) and pruned by age on every read: nothing has to run on a timer for an old entry to go.
  */
@@ -9,8 +10,13 @@ import { K, read, write } from "./persist";
 
 /** How long a closed tab is offered back. */
 export const RECENT_TTL = 60 * 60 * 1000;
-/** How many are kept (and shown). */
-export const MAX_RECENT = 3;
+/** How many are kept on file (several folders can each show some). */
+export const MAX_RECENT = 12;
+/** How many one folder shows. */
+export const MAX_PER_DIR = 3;
+
+/** The fold key of one folder's recent list (`<serverId>\u0000<path>`): its own, so it opens and folds by itself. */
+export const recentKey = (serverId: string, path: string) => `recent\u0000${serverId}\u0000${path}`;
 
 export type RecentKind = "session" | "terminal";
 
@@ -61,6 +67,16 @@ export class RecentTabs {
 	/** The ones to show now: inside the hour, newest first, at most three. */
 	get visible(): RecentTab[] {
 		return pruneRecent(this.list);
+	}
+
+	/** What one folder on one server offers back: its own closed tabs, newest first, at most `MAX_PER_DIR`. */
+	forDir(serverId: string, cwd: string): RecentTab[] {
+		return this.visible.filter((x) => x.serverId === serverId && x.cwd === cwd).slice(0, MAX_PER_DIR);
+	}
+
+	/** The folders on one server with something to offer back: a folder with nothing open still shows for its list. */
+	cwdsOf(serverId: string): string[] {
+		return [...new Set(this.visible.filter((x) => x.serverId === serverId).map((x) => x.cwd))];
 	}
 
 	/** Remember a tab as just closed (the newest first; the same id never appears twice). */

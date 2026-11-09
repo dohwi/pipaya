@@ -38,7 +38,6 @@
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
 	import ServerBlock from "./sidebar/ServerBlock.svelte";
-	import RecentTabs from "./sidebar/RecentTabs.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -90,6 +89,8 @@
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
 			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
 			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], shared);
+			// A folder with nothing open but a tab closed in the last hour still shows, so that list can be reached (never while searching).
+			if (!q && app.prefs.recentTabs) for (const cwd of app.recent.cwdsOf(server.id)) if (!data.dirs.some((x) => x.path === cwd)) data.dirs.push({ path: cwd, tabs: [] });
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
@@ -361,7 +362,6 @@
 	</div>
 
 	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
-		{#if !searching}<RecentTabs />{/if}
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}
