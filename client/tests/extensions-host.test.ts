@@ -937,7 +937,8 @@ describe("generic configuration host capabilities", () => {
 			expect(host.find(active.id).configured).toBe(false);
 			expect(host.find(sync.id).state).toBe("active");
 			expect(storage.has("pipaya.extensions.configuration-backup")).toBe(true);
-			expect(storage.get("pipaya.extensions.settings-source")).toBe("local");
+			// an import no longer pins every extension to this device: the imported values go to the server instead
+			expect(storage.get("pipaya.extensions.settings-source")).toBeUndefined();
 			call(host, sync.id, "configuration.restore"); approve(true); await flush();
 			expect(host.find(active.id).settings).toEqual({ mode: "before", token: "local-secret" });
 			expect(host.find(active.id).enabled).toBe(false);

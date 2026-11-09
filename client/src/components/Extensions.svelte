@@ -13,6 +13,7 @@
 		import { CONFIG_REQUIRED, extensions, type ExtensionScope } from "../lib/extensions/host.svelte";
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
+	import type { StoredExtensionSettings } from "../lib/extensions/settings-store";
 	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
 	import { fetchCompanion } from "../lib/extensions/marketplace";
@@ -56,7 +57,7 @@
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
 	let serverSide = $state<ServerExt[]>([]);
 	/** Saved settings of the server extensions, by settings id (`GET /extensions/settings`). */
-	let serverSettings = $state<Record<string, Record<string, unknown>>>({});
+	let serverSettings = $state<Record<string, StoredExtensionSettings>>({});
 	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
 	/** A server extension that needs a client extension this device does not have runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !app.clientExtensionsOf(serverId ?? app.serverId).some((e) => e.id === companion);
@@ -72,7 +73,8 @@
 		void run(srvKey(ext.name), async () => {
 			const api = srvApi;
 			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
-			serverSettings[ext.settingsId] = (await api.saveExtensionSettings(ext.settingsId, settings)).settings;
+			const saved = await api.saveExtensionSettings(ext.settingsId, settings);
+			serverSettings[ext.settingsId] = { value: saved.value, updatedAt: saved.updatedAt };
 			tasks.notice = t("설정을 저장했습니다.");
 		});
 	}
@@ -453,12 +455,13 @@
 			onaskremove={(event) => askRemove(id, event)}
 			oncancelremove={cancelRemove}
 			onremove={(keepSettings) => remove(id, keepSettings)}
+			onsettingslocal={(local) => src.setSettingsLocal(id, local)}
 		/>
 	{:else if openServer}
 		<ServerDetail
 			ext={openServer}
 			{serverId}
-			settings={serverSettings[openServer.settingsId]}
+			settings={serverSettings[openServer.settingsId]?.value}
 			busy={!!tasks.busy[srvKey(openServer.name)]}
 			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			onback={() => (selected = null)}

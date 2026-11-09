@@ -10,6 +10,7 @@
 	import PermissionList from "./PermissionList.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
+	import SettingRow from "../SettingRow.svelte";
 
 	/**
 	 * The page of one installed extension: on/off switch, its settings (a form when it declares fields, else raw JSON),
@@ -36,6 +37,7 @@
 		onaskremove,
 		oncancelremove,
 		onremove,
+		onsettingslocal,
 	}: {
 		entry: ExtensionRow;
 		/** Where the extension lives: the host (runs here) or another server's idle list (only remembers the choice) */
@@ -64,6 +66,8 @@
 		onaskremove: (event: Event) => void;
 		oncancelremove: () => void;
 		onremove: (keepSettings: boolean) => void;
+		/** Keep this extension's settings on this device only (a server extension that shares them) */
+		onsettingslocal?: (local: boolean) => void;
 	} = $props();
 
 	const id = $derived(entry.package.manifest.id);
@@ -72,6 +76,11 @@
 	const on = $derived(src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled);
 	const problem = $derived(on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id));
 	const saveLabel = $derived(src.runs && entry.state === "active" ? t("설정 저장 및 다시 불러오기") : t("설정 저장"));
+	/** The manifest can force device-only settings; then the switch has nothing to decide. */
+	const forcedLocal = $derived(entry.package.manifest.settingsScope === "local");
+	const local = $derived(forcedLocal || extensions.isSettingsLocal(id));
+	/** Only a server extension shares its settings with the server, so only it gets the choice. */
+	const canChooseLocal = $derived(entry.scope === "server" && !!onsettingslocal);
 </script>
 
 <ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
@@ -109,6 +118,14 @@
 
 	<section class="block set-group">
 		<h3 class="section-label">{t("확장 설정")}</h3>
+		{#if canChooseLocal}
+			<SettingRow
+				label={t("이 기기에만 저장")}
+				hint={forcedLocal ? t("이 확장은 설정을 기기에만 두도록 만들어졌습니다.") : local ? t("이 기기의 설정만 쓰고, 서버에 올리지 않습니다. 비밀값은 항상 이 기기에만 남습니다.") : t("서버에 저장해 이 서버의 모든 기기가 같은 설정을 씁니다. 비밀값은 이 기기에만 남습니다.")}
+			>
+				<Switch checked={local} disabled={forcedLocal || tasks.busy[id]} label={t("이 기기에만 저장")} onchange={(next) => onsettingslocal?.(next)} />
+			</SettingRow>
+		{/if}
 		{#if fields}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
 			<SettingsForm {id} {fields} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} />

@@ -3,7 +3,6 @@ import { LocalizedError, msg, t } from "../i18n";
 import { ACTIONS, isActionId } from "../keys";
 
 export const CONFIGURATION_BACKUP = "pipaya.extensions.configuration-backup";
-export const SETTINGS_SOURCE = "pipaya.extensions.settings-source";
 export const CONFIGURATION_MAX_BYTES = 4 * 1024 * 1024;
 /** When the last pre-import backup was taken (ms since epoch), kept next to the backup itself. */
 export const CONFIGURATION_BACKUP_AT = "pipaya.extensions.configuration-backup-at";
