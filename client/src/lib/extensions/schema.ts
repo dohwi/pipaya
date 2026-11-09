@@ -29,7 +29,7 @@ export const UI_PARTS = Object.freeze([
 export type UIPart = (typeof UI_PARTS)[number];
 /** `data-part` names the app puts on its main elements: the stable selectors for `ui-style` CSS. */
 export const STYLE_PARTS = Object.freeze([
-	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "sidebar.recent", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
+	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
 	"composer", "composer.box", "composer.bar", "statusline",
 	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal", "dock", "floating",
 ] as const);

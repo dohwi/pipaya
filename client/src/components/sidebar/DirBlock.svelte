@@ -16,7 +16,6 @@
 	import GroupBlock from "./GroupBlock.svelte";
 	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
-	import RecentTabs from "./RecentTabs.svelte";
 	import SessionRow from "./SessionRow.svelte";
 	import TerminalRow from "./TerminalRow.svelte";
 
@@ -96,8 +95,6 @@
 					<GroupBlock {n} g={tab.group} members={tab.members as (Session | TerminalInfo)[]} {drop} />
 				{/if}
 			{/each}
-			<!-- what was closed here in the last hour, under the folder's own tabs (a search lists matches only) -->
-			{#if !searching}<RecentTabs {n} path={d.path} />{/if}
 		</div>
 	{/if}
 </div>

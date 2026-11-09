@@ -38,7 +38,6 @@ import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { SidebarState, reorder } from "./sidebar.svelte";
-import { RecentTabs } from "./recent-tabs.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -251,8 +250,6 @@ class AppStore {
   readonly feedback = new Feedback();
   /** Drawer, width, folded nodes, dragged order. */
   readonly sidebar = new SidebarState();
-  /** Tabs closed in the last hour, offered back by the sidebar. */
-  readonly recent = new RecentTabs();
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);
@@ -726,8 +723,6 @@ class AppStore {
   removeServer(id: string) {
     const wasOpen = id === this.serverId;
     this.servers = this.servers.filter((s) => s.id !== id);
-    // Its closed tabs can never be opened again: forget them with the server.
-    this.recent.keepServers(this.servers.map((s) => s.id));
     this.saveServers();
     this.syncLinks();
     try {
@@ -861,22 +856,6 @@ class AppStore {
   /** A new chat to start as soon as the server being switched to is connected */
   private pendingChat = false;
 
-  /** A closed conversation to resume as soon as the server being switched to is connected */
-  private pendingResume: string | null = null;
-
-  /**
-   * Open a closed conversation again (the sidebar's recent tabs): resumed and shown on its own server, switching to it
-   * first when it lives elsewhere. A closed session is not in the active list, so `openIn` cannot carry it.
-   */
-  reopen(serverId: string, id: string) {
-    if (serverId !== this.serverId || this.net === "idle") {
-      this.pendingResume = id;
-      this.openServer(serverId, true);
-      return;
-    }
-    void this.resume(id);
-  }
-
   private get activeKey(): string {
     return `${K.active}.${this.serverId}`;
   }
@@ -944,11 +923,6 @@ class AppStore {
     if (this.pendingChat) {
       this.pendingChat = false;
       void this.startChat();
-    }
-    if (this.pendingResume) {
-      const id = this.pendingResume;
-      this.pendingResume = null;
-      void this.resume(id);
     }
     // Panes of the open group missed events while we were away. A warm reconnect replayed them, so only the two things a
     // replay cannot carry are read (a run that started or ended, a reply that streamed); a cold one reloads them.
@@ -1044,8 +1018,6 @@ class AppStore {
         const s = e.data as Session;
         const hide = s.closed;
         const next = hide ? this.neighbourOf(s.id) : undefined;
-        // Closed from another window or device: the tab left the sidebar here too, so it is offered back like a local close.
-        if (hide && this.sessions.some((x) => x.id === s.id)) this.recent.add({ id: s.id, kind: "session", serverId: this.serverId ?? "", title: s.title, cwd: s.cwd });
         if (hide) this.forgetInGroups(s.id);
         const i = this.sessions.findIndex((x) => x.id === s.id);
         if (i >= 0) this.sessions.splice(i, 1);
@@ -1577,11 +1549,8 @@ class AppStore {
   async close(id: string) {
     if (!this.api) return;
     const next = this.neighbourOf(id);
-    // Read before it leaves the list: the sidebar offers it back for the next hour (see lib/recent-tabs).
-    const was = this.session(id);
     try {
       await this.api.patchSession(id, { closed: true });
-      if (was) this.recent.add({ id, kind: "session", serverId: this.serverId ?? "", title: was.title, cwd: was.cwd });
       this.forgetInGroups(id);
       this.sessions = this.sessions.filter((x) => x.id !== id);
       this.running[id] = false;
@@ -1673,7 +1642,6 @@ class AppStore {
     const g = from ? this.groupOf(from) : undefined;
     try {
       const s = await this.api.patchSession(id, { closed: false });
-      this.recent.drop(id);
       const i = this.sessions.findIndex((x) => x.id === id);
       if (i >= 0) this.sessions.splice(i, 1);
       this.sessions.unshift(s);
@@ -2236,7 +2204,6 @@ class AppStore {
     try {
       const next = this.neighbourOf(id);
       await this.api.deleteSession(id);
-      this.recent.drop(id);
       this.forgetInGroups(id);
       this.sessions = this.sessions.filter((x) => x.id !== id);
       if (this.activeId === id) this.leave(next);
@@ -2472,21 +2439,17 @@ class AppStore {
   /** End the shell. The terminal leaves its group and the sidebar (the server confirms with terminal_closed). */
   async closeTerminal(id: string): Promise<void> {
     if (!this.api) return;
-    const was = this.terminal(id);
     try {
       await this.api.closeTerminal(id);
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 404)) return this.fail(e, t("터미널을 닫지 못했습니다"), id);
     }
-    // A shell cannot be opened again (its scrollback and its processes are gone), so it is not offered back.
-    if (was) this.recent.drop(id);
     this.dropTerminal(id);
   }
 
   /** The shell is gone (closed here, elsewhere, or it exited): forget it and move focus on. */
   dropTerminal(id: string) {
     if (!this.terminals.some((x) => x.id === id)) return;
-    this.recent.drop(id);
     const next = this.neighbourOf(id);
     this.forgetInGroups(id);
     this.terminals = this.terminals.filter((x) => x.id !== id);

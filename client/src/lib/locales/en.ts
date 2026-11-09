@@ -714,12 +714,6 @@ export const en: Record<string, string> = {
 	"터미널 스크롤백 줄 수": "Terminal scrollback lines",
 	"커서 깜빡임": "Blinking cursor",
 	"앱 단축키 우선": "App shortcuts first",
-	"사이드바": "Sidebar",
-	"최근 사용 탭": "Recent tabs",
-	"최근 사용 탭 접기": "Fold recent tabs",
-	"최근 사용 탭 펼치기": "Unfold recent tabs",
-	"{title} · 눌러서 다시 열기": "{title} · click to reopen",
-	"한 시간 안에 닫은 대화를 사이드바 위에 띄웁니다. 누르면 다시 열립니다": "Shows the chats you closed in the last hour above the sidebar. Click one to reopen it",
 
 	/* ---- shortcuts ---- */
 	"모델 · 추론": "Model · reasoning",

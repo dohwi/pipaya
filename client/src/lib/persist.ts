@@ -30,9 +30,6 @@ export const K = {
   pinnedDirs: "pipaya.pinneddirs", // folders pinned to the sidebar, kept even with no tabs: { <serverId>: [cwd, ...] }
   dirNames: "pipaya.dirnames", // names given to pinned folders, shown instead of the path's tail: { <serverId>: { <cwd>: name } }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
-  recentTabs: "pipaya.recenttabs", // tabs closed in the last hour, newest first: [{ id, kind, serverId, title, cwd, at }]
-  recentTabsOn: "pipaya.recenttabs.on", // the sidebar lists them (a switch in settings)
-  recentOpen: "pipaya.recenttabs.open", // folders whose recent-tabs list is unfolded: ["<serverId>\u0000<path>", ...]
 };
 
 export function read<T>(key: string, fallback: T): T {

@@ -11,7 +11,7 @@ Two opt-in permissions let a package change the app itself. Both run **in the ap
 A whole package is at most 1 MiB. A design pack is one package: `theme` for the tokens, `styles` for the rest, `assets` for its images and fonts, `components` for anything new.
 
 ## Styles
-Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sidebar.brand, sidebar.bottom, sidebar.recent, rail, header, header.title, tabbar, pane, messages, message.user, message.assistant, tool, welcome, sessions, composer, composer.box, composer.bar, statusline, toasts, palette, modal`. Internal class names are not a contract. The host raises each rule's specificity (`style.ts`), so a plain `[data-part="header"] { ... }` beats the app's scoped rules without `!important`. Override design tokens with `:root { --accent: ... }` (not raised). Files from `assets` are referenced as `asset("name")`, which becomes `url("data:...")`; naming a file the package does not carry is refused at install:
+Target `[data-part="..."]` (`STYLE_PARTS` in `schema.ts`): `app, sidebar, sidebar.brand, sidebar.bottom, rail, header, header.title, tabbar, pane, messages, message.user, message.assistant, tool, welcome, sessions, composer, composer.box, composer.bar, statusline, toasts, palette, modal`. Internal class names are not a contract. The host raises each rule's specificity (`style.ts`), so a plain `[data-part="header"] { ... }` beats the app's scoped rules without `!important`. Override design tokens with `:root { --accent: ... }` (not raised). Files from `assets` are referenced as `asset("name")`, which becomes `url("data:...")`; naming a file the package does not carry is refused at install:
 
 ```css
 @font-face { font-family: "Brand"; src: asset("brand.woff2") format("woff2"); }

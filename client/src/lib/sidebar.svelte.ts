@@ -40,8 +40,6 @@ export class SidebarState {
   collapsed = $state(read<boolean>(K.sidebar, false));
   width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
   folded = $state<string[]>(read<string[]>(K.folded, []));
-  /** Folders whose recent-tabs list is open (folded by default, like a split tab): see lib/recent-tabs. */
-  recentOpen = $state<string[]>(read<string[]>(K.recentOpen, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
@@ -75,11 +73,6 @@ export class SidebarState {
    * Unfold the one node that holds `key` (a folder's `dirKey`, or a server's id), so the row it stands for can be seen
    * when something opens in it. Nothing else in the tree moves: the rest stays as the user folded it.
    */
-  toggleRecentOpen(key: string) {
-    this.recentOpen = this.recentOpen.includes(key) ? this.recentOpen.filter((p) => p !== key) : [...this.recentOpen, key];
-    write(K.recentOpen, this.recentOpen);
-  }
-
   reveal(key: string) {
     if (!this.folded.includes(key)) return;
     this.folded = this.folded.filter((p) => p !== key);

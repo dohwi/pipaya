@@ -27,7 +27,6 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
 	{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
 	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
-	{ tab: "general", label: msg("최근 사용 탭"), words: "recent closed tab sidebar history 최근 닫은 탭 사이드바" },
 	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
 	{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },

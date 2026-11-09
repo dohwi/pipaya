@@ -89,8 +89,6 @@
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
 			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
 			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], shared);
-			// A folder with nothing open but a tab closed in the last hour still shows, so that list can be reached (never while searching).
-			if (!q && app.prefs.recentTabs) for (const cwd of app.recent.cwdsOf(server.id)) if (!data.dirs.some((x) => x.path === cwd)) data.dirs.push({ path: cwd, tabs: [] });
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
