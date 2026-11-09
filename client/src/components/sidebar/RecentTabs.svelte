@@ -46,6 +46,8 @@
 <style>
 	/* a band like a server's, so it reads as one more block of the tree (the list's 8px inset, 8px to the first server) */
 	.recent {
+		display: flex; /* a column, so a row stretches to the card's content line like a tab row does (a button does not stretch on its own) */
+		flex-direction: column;
 		margin: 0 8px 8px;
 		padding: 0 12px 4px 8px; /* the same inner box as a server band: the first column 12 from the card's left, the last 12 from its right */
 		background: var(--band);
@@ -80,7 +82,7 @@
 	}
 	/* a closed tab: the agent's logo where a tab's icon is (x 68), its title, then where it worked, dim at the end */
 	.rrow {
-		width: 100%;
+		/* no `width`: as a flex item of the column above it stretches to the card's content line, and `.item`'s own -8px margin runs its highlight past it, exactly like a tab row's */
 		gap: 4px;
 		min-height: 32px;
 		padding-left: 39px; /* the tab icon's column, as `.item.nested .open` */
