@@ -40,8 +40,6 @@ export class SidebarState {
   collapsed = $state(read<boolean>(K.sidebar, false));
   width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
   folded = $state<string[]>(read<string[]>(K.folded, []));
-  /** Archives (one per folder) that are open; the others stay folded. */
-  archiveOpen = $state<string[]>(read<string[]>(K.archiveOpen, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
@@ -104,11 +102,6 @@ export class SidebarState {
     this.pinnedTabs = { ...this.pinnedTabs, [serverId]: list.includes(id) ? list.filter((p) => p !== id) : [...list, id] };
     write(K.pinnedTabs, this.pinnedTabs);
     this.onEdit(serverId);
-  }
-
-  toggleArchive(key: string) {
-    this.archiveOpen = this.archiveOpen.includes(key) ? this.archiveOpen.filter((p) => p !== key) : [...this.archiveOpen, key];
-    write(K.archiveOpen, this.archiveOpen);
   }
 
   /** Put directory `path` before/after `target` within `visible` (the directories as listed now) and remember it. */

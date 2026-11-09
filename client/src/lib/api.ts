@@ -90,7 +90,6 @@ export interface PatchSessionInput {
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
 	closed?: boolean;
-	archived?: boolean;
 	muted?: boolean;
 }
 

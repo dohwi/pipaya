@@ -172,7 +172,7 @@ const DEFINITIONS: SlashCommand[] = [
 	},
 	{
 		name: "clear",
-		desc: msg("이 창에서 새 대화로 비우기 · 이전 대화는 보관함으로"),
+		desc: msg("이 창에서 새 대화로 비우기 · 이전 대화는 닫힘"),
 		run: () => app.clearChatInPane(),
 	},
 	{

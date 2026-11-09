@@ -61,14 +61,13 @@ export const asWorkdir = (path: string, root: string | undefined) => (path === r
 /** Separator that cannot occur in a path or id, for keys that combine two of them. */
 const SEP = "\u0000";
 export const dirKey = (serverId: string, path: string) => `${serverId}${SEP}${path}`;
-export const archiveKey = (serverId: string, path: string) => `archive${SEP}${serverId}${SEP}${path}`;
 export const groupKey = (id: string) => `group${SEP}${id}`;
 export const newKey = (key: string) => `new${SEP}${key}`;
 
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "archive" | "pin" | "bell" | "bell-off";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "bell" | "bell-off";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -91,8 +90,6 @@ export interface RowActions {
 	groupWith(tab: { id: string; title: string }): void;
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
-	/** Tuck a conversation into the folder's archive (it stays open; a new message brings it back) */
-	archiveSession?(id: string): void;
 	/** Silence or re-enable a conversation's notifications; `isMuted` says which the entry offers */
 	toggleMute?(id: string): void;
 	isMuted?(id: string): boolean;
@@ -135,13 +132,11 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 			? { icon: "x", label: t("터미널 닫기"), title: t("셸을 종료합니다"), run: () => act.closeTerminal(x.id) }
 			: { icon: "x", label: t("닫기"), title: t("닫기 (/resume 으로 다시 열기)"), run: () => act.closeSession(x.id) };
 	const leave = act.leaveGroup;
-	const archive = act.archiveSession;
-	// most used first, grouping in the middle, and the way out (archive before close) last
+	// most used first, grouping in the middle, and the way out (close) last
 	return [
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		// a pane of a split tab is pinned with its tab, not alone
 		...(member ? [] : pinEntry(x.id, act)),
-		...(archive && target.kind === "session" ? [{ icon: "archive", label: t("보관"), title: t("보관 (닫지 않고 보관함에 넣기)"), run: () => archive(x.id) } satisfies MenuEntry] : []),
 		...(act.toggleMute && target.kind === "session"
 			? [(act.isMuted?.(x.id)
 					? { icon: "bell", label: t("알림 켜기"), title: t("이 대화의 완료·질문 알림을 다시 받습니다"), run: () => act.toggleMute!(x.id) }

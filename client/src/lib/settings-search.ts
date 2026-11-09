@@ -91,7 +91,7 @@ export function toolLabel(name: string): string {
 		case "grep": return t("내용 검색 (grep)");
 		case "bash": return t("셸 명령 실행 (bash)");
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
-		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·보관·중단·답변·그룹 (peer)");
+		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·중단·답변·그룹 (peer)");
 		case "delegate": return t("일회성 도우미에게 작업 위임 (delegate)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;

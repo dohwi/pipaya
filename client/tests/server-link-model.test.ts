@@ -1,22 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { applyLinkEvent, emptyLinkData } from "../src/lib/server-link-model";
 
-const session = (id: string, over: Record<string, unknown> = {}) => ({ id, title: id, closed: false, archived: false, provider: "p", model: "m", ...over });
+const session = (id: string, over: Record<string, unknown> = {}) => ({ id, title: id, closed: false, provider: "p", model: "m", ...over });
 const ev = (type: string, data: unknown = {}, sessionId: string | null = null) => ({ type, data, sessionId, ts: 1 }) as never;
 
 describe("a background server's live state", () => {
 	test("sessions come, change sides and go", () => {
 		const d = emptyLinkData();
 		applyLinkEvent(d, ev("session_created", session("a")));
-		applyLinkEvent(d, ev("session_created", session("b", { archived: true })));
-		expect(d.sessions.map((s) => s.id)).toEqual(["a"]);
-		expect(d.archived.map((s) => s.id)).toEqual(["b"]);
-		applyLinkEvent(d, ev("session_updated", session("a", { archived: true })));
-		expect(d.sessions).toEqual([]);
-		expect(d.archived.map((s) => s.id).sort()).toEqual(["a", "b"]);
+		applyLinkEvent(d, ev("session_created", session("b")));
+		expect(d.sessions.map((s) => s.id)).toEqual(["b", "a"]);
+		// a closed one leaves the list, and a deleted one goes for good
 		applyLinkEvent(d, ev("session_updated", session("a", { closed: true })));
+		expect(d.sessions.map((s) => s.id)).toEqual(["b"]);
 		applyLinkEvent(d, ev("session_deleted", { id: "b" }));
-		expect(d.sessions.length + d.archived.length).toBe(0);
+		expect(d.sessions.length).toBe(0);
 	});
 	test("a run marks the session working, then done; a question marks it asking", () => {
 		const d = emptyLinkData();

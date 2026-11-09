@@ -14,7 +14,6 @@ export type ActionId =
   | "newChat"
   | "clearChat"
   | "closeSession"
-  | "archiveSession"
   | "prevSession"
   | "nextSession"
   | "prevWorkspace"
@@ -109,7 +108,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "clearChat",
     label: msg("새 대화로 비우기"),
-    hint: msg("보고 있는 대화를 새 대화로 갈아 끼웁니다. 이전 대화는 보관함으로 가고 그룹의 나머지 창은 그대로입니다"),
+    hint: msg("보고 있는 대화를 새 대화로 갈아 끼웁니다. 이전 대화는 닫히고 그룹의 나머지 창은 그대로입니다"),
     default: "Mod+Shift+N",
   },
   {
@@ -117,12 +116,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("현재 대화 닫기"),
     hint: msg("사이드바에서 치웁니다. 기록은 남아 다시 열 수 있습니다"),
     default: "Mod+D",
-  },
-  {
-    id: "archiveSession",
-    label: msg("현재 대화 보관"),
-    hint: msg("닫지 않고 보관함에 넣습니다. 새 메시지가 오면 목록으로 돌아옵니다"),
-    default: "Mod+W",
   },
   {
     id: "prevSession",

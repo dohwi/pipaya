@@ -49,7 +49,7 @@ export class ServerLink {
 	 * The listed sessions by id, rebuilt only when the list changes. Every badge in the sidebar, rail and tab bar looks its
 	 * session up, and a `find` per badge turned each list change into (rows x rows) comparisons.
 	 */
-	sessionById: Map<string, Session> = $derived(new Map([...this.data.sessions, ...this.data.archived].map((x) => [x.id, x] as const)));
+	sessionById: Map<string, Session> = $derived(new Map(this.data.sessions.map((x) => [x.id, x] as const)));
 	models = $state<ModelInfo[]>([]);
 	providers = $state<ProviderInfo[]>([]);
 	tools = $state<ToolInfo[]>([]);
@@ -180,8 +180,7 @@ export class ServerLink {
 			}
 			for (const u of activity?.unread ?? []) (u.kind === "failed" ? failed : unread)[u.sessionId] = true;
 			this.data = {
-				sessions: list.sessions.filter((s: Session) => !s.closed && !s.archived),
-				archived: list.sessions.filter((s: Session) => !s.closed && s.archived),
+				sessions: list.sessions.filter((s: Session) => !s.closed),
 				groups,
 				terminals,
 				running,

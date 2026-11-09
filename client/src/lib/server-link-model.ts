@@ -4,8 +4,6 @@ import type { TerminalInfo } from "./terminal";
 /** What the client keeps live about one server: its lists and what each session is doing. */
 export interface LinkData {
 	sessions: Session[];
-	/** Open but tucked into the archive */
-	archived: Session[];
 	groups: Group[];
 	terminals: TerminalInfo[];
 	running: Record<string, boolean>;
@@ -14,7 +12,7 @@ export interface LinkData {
 	failed: Record<string, boolean>;
 }
 
-export const emptyLinkData = (): LinkData => ({ sessions: [], archived: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {} });
+export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {} });
 
 /** Events that can change a link's lists (the rest are about a transcript, which a background server does not hold). */
 export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
@@ -23,28 +21,23 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 		case "session_created": {
 			const s = e.data as Session;
 			if (s.closed) break;
-			if (s.archived) {
-				if (!d.archived.some((x) => x.id === s.id)) d.archived.unshift(s);
-			} else if (!d.sessions.some((x) => x.id === s.id)) d.sessions.unshift(s);
+			if (!d.sessions.some((x) => x.id === s.id)) d.sessions.unshift(s);
 			break;
 		}
 		case "session_updated": {
 			const s = e.data as Session;
 			d.sessions = d.sessions.filter((x) => x.id !== s.id);
-			d.archived = d.archived.filter((x) => x.id !== s.id);
 			if (s.closed) {
 				d.running[s.id] = false;
 				d.awaiting[s.id] = 0;
 				delete d.unread[s.id];
 				delete d.failed[s.id];
-			} else if (s.archived) d.archived.unshift(s);
-			else d.sessions.unshift(s);
+			} else d.sessions.unshift(s);
 			break;
 		}
 		case "session_deleted": {
 			const id = (e.data as { id: string }).id;
 			d.sessions = d.sessions.filter((x) => x.id !== id);
-			d.archived = d.archived.filter((x) => x.id !== id);
 			delete d.running[id];
 			delete d.awaiting[id];
 			delete d.unread[id];

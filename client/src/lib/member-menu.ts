@@ -6,7 +6,7 @@ import { app } from "./store.svelte";
 /**
  * The menu of one pane of a split tab outside the sidebar (a session chip, a pane's title bar): the sidebar's own entries for
  * a `member` (`rowMenuEntries`), so every place a pane is listed offers the same things in the same order. Dissolving the whole
- * group and archiving are left out: those belong to the sidebar's menus. `extra` entries come right after renaming.
+ * group and closing are left out: those belong to the sidebar's menus. `extra` entries come right after renaming.
  */
 export function memberMenu(id: string, title: string, rename: (id: string, title: string) => void, extra: MenuItem[] = []): MenuItem[] {
 	const target = app.terminal(id) ? ({ kind: "terminal", x: { id, title } } as const) : ({ kind: "session", x: { id, title } } as const);
