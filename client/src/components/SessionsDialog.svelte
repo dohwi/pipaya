@@ -5,7 +5,7 @@
 	import Modal from "./Modal.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
 
-	/** A server's conversation list: archive, restore and delete conversations by folder. Opened from the server's header in the sidebar. */
+	/** A server's conversation list: close, reopen and delete conversations by folder. Opened from the server's header in the sidebar. */
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const filter = $derived(app.sessionsFilter);
@@ -16,12 +16,12 @@
 	let count = $state<number | null>(null);
 	let busy = $state(false);
 	let reload = $state<(() => void) | undefined>();
-	const title = $derived(filter?.archived ? t("보관함") : t("대화 목록"));
+	const title = t("대화 목록");
 	const sub = $derived([server ? app.serverLabel(server) : null, filter?.cwd].filter(Boolean).join(" · ") || null);
 </script>
 
 <Modal onclose={close} label={title} {title} {sub} width="l" maxHeight="720px" {titleExtra} {headerActions}>
-	<div class="body"><SessionsPanel {serverId} cwd={filter?.cwd} archivedOnly={!!filter?.archived} bind:count bind:reload bind:busy /></div>
+	<div class="body"><SessionsPanel {serverId} cwd={filter?.cwd} bind:count bind:reload bind:busy /></div>
 </Modal>
 
 {#snippet titleExtra()}{#if count !== null}<span class="n">{count}</span>{/if}{/snippet}

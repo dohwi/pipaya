@@ -17,14 +17,12 @@
 	let {
 		serverId,
 		cwd,
-		archivedOnly = false,
 		count = $bindable(null),
 		reload = $bindable(),
 		busy = $bindable(false),
 	}: {
 		serverId: string;
 		cwd?: string;
-		archivedOnly?: boolean;
 		/** how many chats are listed (null until loaded): the dialog shows it next to its title */
 		count?: number | null;
 		/** reloads the list: the dialog's refresh button calls it */
@@ -84,7 +82,6 @@
 		const map = new Map<string, Session[]>();
 		for (const s of sessions ?? []) {
 			if (cwd !== undefined && s.cwd !== cwd) continue;
-			if (archivedOnly && (!s.archived || s.closed)) continue;
 			const list = map.get(s.cwd);
 			if (list) list.push(s);
 			else map.set(s.cwd, [s]);
@@ -140,22 +137,21 @@
 		}
 	}
 	const can = (list: Session[], keep: (s: Session) => boolean) => list.some((s) => picked[s.id] && keep(s));
-	const canArchive = (s: Session) => !s.closed && !s.archived;
-	/** Restore brings back what was tucked away (archived) and reopens what was closed. */
-	const canRestore = (s: Session) => !!s.archived || s.closed;
+	/** Reopen what was closed (the history stays on the server). */
+	const canRestore = (s: Session) => s.closed;
 	const canClose = (s: Session) => !s.closed;
 	const any = () => true;
 
-	/** Archive (or, with `on` false, restore) what is ticked in one folder; closed ones are left as they are. */
-	const archive = (list: Session[], on: boolean) =>
-		bulk(list, on ? canArchive : canRestore, async (ids) => {
-			for (const id of ids) await api!.patchSession(id, on ? { archived: true } : { archived: false, closed: false });
-			return on ? t("{n}개를 보관했습니다.", { n: ids.length }) : t("{n}개를 복원했습니다.", { n: ids.length });
+	/** Reopen what is ticked in one folder; the open ones are left as they are. */
+	const restore = (list: Session[]) =>
+		bulk(list, canRestore, async (ids) => {
+			for (const id of ids) await api!.patchSession(id, { closed: false });
+			return t("{n}개를 복원했습니다.", { n: ids.length });
 		});
-	/** Move what is ticked to the closed sessions (out of the list and the archive, still resumable). */
+	/** Move what is ticked to the closed sessions (out of the list, still resumable). */
 	const close = (list: Session[]) =>
 		bulk(list, canClose, async (ids) => {
-			for (const id of ids) await api!.patchSession(id, { closed: true, archived: false });
+			for (const id of ids) await api!.patchSession(id, { closed: true });
 			return t("{n}개를 닫았습니다.", { n: ids.length });
 		});
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
@@ -200,8 +196,7 @@
 						</button>
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
-								{#if !archivedOnly}<Button size="sm" onclick={() => void archive(g.list, true)} disabled={busy || !can(g.list, canArchive)}><Icon name="archive" /> {t("보관")}</Button>{/if}
-								<Button size="sm" onclick={() => void archive(g.list, false)} disabled={busy || !can(g.list, canRestore)}><Icon name="undo" /> {t("복원")}</Button>
+								<Button size="sm" onclick={() => void restore(g.list)} disabled={busy || !can(g.list, canRestore)}><Icon name="undo" /> {t("복원")}</Button>
 								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !can(g.list, canClose)}><Icon name="x" /> {t("닫기")}</Button>
 								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>
@@ -215,7 +210,7 @@
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />
 										<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
 									</label>
-									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{:else if s.archived}<Badge size="sm">{t("보관됨")}</Badge>{/if}
+									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
 									<span class="age" title={new Date(s.updatedAt).toLocaleString()}>{ageOf(s.updatedAt)}</span>
 								</li>
 							{/each}

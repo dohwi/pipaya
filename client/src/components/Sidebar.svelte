@@ -56,8 +56,8 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], archived: Session[], shared?: DirBlock[]): Pick<Node, "root" | "total" | "dirs" | "archived"> {
-		// a copy: the archived-only folders appended below must not leak into the shared list
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], shared?: DirBlock[]): Pick<Node, "root" | "total" | "dirs"> {
+		// a copy: a search builds its own list, and the caller's shared one must not be touched
 		const dirs = shared ? [...shared] : sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || sessionTitle(x.title).toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
@@ -69,16 +69,7 @@
 			pinnedTabs: ptabs,
 		});
 		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
-		// Archived conversations hang under their folder. A folder that has only archived ones (no open tab, not pinned)
-		// is not kept open for them; a search still lists those matches, after the others.
-		const byDir: Record<string, Session[]> = {};
-		for (const s of archived) if (!q || sessionTitle(s.title).toLowerCase().includes(q)) (byDir[s.cwd] ??= []).push(s);
-		for (const cwd of Object.keys(byDir)) {
-			if (dirs.some((d) => d.path === cwd)) continue;
-			if (q) dirs.push({ path: cwd, tabs: [] });
-			else delete byDir[cwd];
-		}
-		return { root: ws?.root, total, dirs, archived: byDir };
+		return { root: ws?.root, total, dirs };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
@@ -95,7 +86,7 @@
 			const d = link?.data;
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
 			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], d?.archived ?? [], shared);
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], shared);
 			return { server, current, state, loaded: Boolean(link?.loaded), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
@@ -239,7 +230,6 @@
 		renameGroup: startGroupRename,
 		groupWith: chooseGroup,
 		closeSession: (id) => void app.close(id),
-		archiveSession: (id) => void app.archive(id),
 		toggleMute: (id) => void app.toggleMute(id),
 		isMuted: (id) => !!app.link?.sessionById.get(id)?.muted,
 		closeTerminal: (id) => void app.closeTerminal(id),
@@ -596,7 +586,7 @@
 		padding-right: 0;
 	}
 	/* touch, folded split tab: its "⋯" only shows while the tab is open, so the count would land on x 256 when it is not; it keeps
-	   the list button's column (x 236, like the folder and archive counts) either way — 20 from the row's end puts its centre there */
+	   the list button's column (x 236, like a folder's count) either way — 20 from the row's end puts its centre there */
 	@media (pointer: coarse) {
 		:global(:where(.side) .grprow.gfolded .cbadge) {
 			position: absolute;

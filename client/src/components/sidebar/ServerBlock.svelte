@@ -36,7 +36,7 @@
 				{#if sfold && !off && (n.state === "online" || n.loaded)}<span class="cbadge tint {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
 			</button>
 			{#if !off}
-				<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (보관·삭제)")} />
+				<ListButton serverId={n.server.id} name={t("대화 목록 관리")} tip={t("대화 목록 관리 (닫기·삭제)")} />
 				<NewButton {n} workdir="." key={n.server.id} name={app.serverLabel(n.server)} tip={t("이 서버에서 새 대화 또는 터미널")} />
 			{/if}
 		</div>

@@ -106,10 +106,10 @@ Columns are **centres**, measured from the sidebar's left edge. Neighbouring col
 | Column | x (centre) | Holds |
 |---|---|---|
 | chevron | 28 | fold arrows of the server and folder rows |
-| folder icon | 48 | folder icon; the archive / group chevron |
-| tab icon | 68 | session logo, terminal, archive, group icons; archive header icon |
+| folder icon | 48 | folder icon; the group chevron |
+| tab icon | 68 | session logo, terminal, group icons |
 | pane icon | 88 | members of a split tab (one step in, past the tree line) |
-| list button | 236 | the conversation-list button of a server, folder, archive |
+| list button | 236 | the conversation-list button of a server or folder |
 | action | 256 | `+`, `⋯`, restore ↺ |
 
 - The card stays **8px** from the sidebar edges and its content stands **12px** inside it (the card's padding, left and right alike), so the left gutter is 28 (edge → chevron centre) and the right gutter 32 (edge → action centre).
@@ -118,11 +118,11 @@ Columns are **centres**, measured from the sidebar's left edge. Neighbouring col
 - The card is `margin: 0 8px` with a 1px border; its inner padding is **8px** left and **12px** right (the toggle adds 4 on the left), so the first and last columns both stand 12px inside the card; the server header strip bleeds to the card's edge.
 - Search box and fold button share the card's left and right edges (8px from the sidebar edge).
 - **Do not let a spacing clean-up touch these.** Values on the sidebar's column path are alignment values, not spacing: `.dirtoggle` / `.srvtoggle`
-  `gap: 6px` (a 14px chevron + 6 = the 20px step), `.gfold` and `.archtoggle` left offset 21, `.item .open` `padding-left: 39`, group member `59`. A 4px
+  `gap: 6px` (a 14px chevron + 6 = the 20px step), `.gfold` left offset 21, `.item .open` `padding-left: 39`, group member `59`. A 4px
   sweep once moved them to 4 and shifted the folder / tab icons to 42 / 66; `python3 scripts/ui-rulers.py x --seed` must still print 28 / 48 / 68 / 88 / 236 / 256.
-- A 14px icon inside a 16px column is centred in it (`place-items: center`), never nudged with a margin. The one `translate` in `DirBlock.svelte` (archive header) exists because the 14px svg is not the same width as the 16px logo; its comment says so.
+- A 14px icon inside a 16px column is centred in it (`place-items: center`), never nudged with a margin.
 - **A muted conversation's bell** (`.mutemark`, 20px box) sits in the list-button column: x 236 on a mouse, 268 in the 320px phone drawer, always, so it never jumps when the `⋯` appears. The row keeps the `⋯` box reserved (hidden) beside it for that reason.
-- Folded rows (`.dir.folded`, `.srvhead.folded`, a folded split tab, a folded archive) hide the list button and put their count in the column the row's button does not need. **On a mouse** the count sits on x 256 and the `+` (folders, servers) or `⋯` (split tab) comes back over it on hover. **On touch** the buttons stay visible on x 256, so the count moves onto the list button's column, x 236 (268 on the 320px phone drawer) — measured, never on a third x beside them. The badge is 20px wide like those buttons, so one and two digits both centre on the column. A split tab's `⋯` only appears while the tab is open, so on touch its count is pinned (`position: absolute`, `right: 28`, `inset-block: 0`, `margin-block: auto`) to that same column with or without the button, and the toggle keeps 40px of room for it. An archive's list button never leaves x 236: folded on touch there is no hover to bring it back, so the row shows its count alone; on a mouse it is revealed beside the count instead of over it.
+- Folded rows (`.dir.folded`, `.srvhead.folded`, a folded split tab) hide the list button and put their count in the column the row's button does not need. **On a mouse** the count sits on x 256 and the `+` (folders, servers) or `⋯` (split tab) comes back over it on hover. **On touch** the buttons stay visible on x 256, so the count moves onto the list button's column, x 236 (268 on the 320px phone drawer) — measured, never on a third x beside them. The badge is 20px wide like those buttons, so one and two digits both centre on the column. A split tab's `⋯` only appears while the tab is open, so on touch its count is pinned (`position: absolute`, `right: 28`, `inset-block: 0`, `margin-block: auto`) to that same column with or without the button, and the toggle keeps 40px of room for it.
 
 When you add an icon or a button to a sidebar row: pick the column it belongs to, give it that column's box, and **measure** (section 6) instead of eyeballing.
 
@@ -166,7 +166,7 @@ A control smaller than 44px stays visually small but must carry `.tap` (`app.css
 Eyeballing a screenshot hides 1–2px errors. Measure the DOM, then draw rulers on a plain screenshot.
 
 1. Start the worktree's own pair: `.agents/bin/dev-up.sh` (never a fixed port or someone else's server).
-2. Seed data so every row type exists (a folder with a conversation, an archived one, a terminal, a split tab with two panes).
+2. Seed data so every row type exists (a folder with a conversation, a closed one, a terminal, a split tab with two panes).
 3. Make hover-only controls visible for the shot:
    `.side .dirnew,.side .listbtn{opacity:1!important} .side .acts{display:flex!important}`
 4. Read centres with `getBoundingClientRect()` on the **svg/img** inside the control (`left + width/2`), not on the button. Compare columns; they must agree to the pixel.
@@ -243,7 +243,7 @@ Walk each screen and compare the **edges** of everything that has a border or fi
 - a vertical gap between two stacked boxes that is not a multiple of 4 (ignoring a 1px hairline) is off the scale.
 
 Run it for every screen at 1440 / 820 / 390 and treat any hit as a bug. A **right-edge cluster** check also runs: collect the right edge of every visible control and text, merge edges within 1px, and report any pair 2 to 16px apart. Scroll-strips of chips and switches are exempt (they have no shared edge).
-Screens to cover: every settings tab, the server form (add / edit), conversation list (all / folder / archive / selected),
+Screens to cover: every settings tab, the server form (add / edit), conversation list (all / folder / selected),
 skills, commands, folder picker, palette, confirmations (close, link, extension confirm / input / select), queue, file preview,
 sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 
