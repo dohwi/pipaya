@@ -44,6 +44,7 @@ export interface PreferenceValues {
   theme?: ThemePref;
   sound?: boolean;
   volume?: number;
+  recent?: boolean;
 }
 
 export class Preferences {
@@ -51,6 +52,8 @@ export class Preferences {
   prefersDark = $state(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
   soundOn = $state(read<boolean>(K.sound, true));
   soundVolume = $state(readVolume());
+  /** The sidebar lists the tabs closed in the last hour (see lib/recent-tabs). */
+  recentTabs = $state(read<boolean>(K.recentTabsOn, true));
   /** Whole-app zoom in percent (100 = normal). */
   uiScale = $state(clampScale(read<unknown>(K.uiScale, 100)));
   bindings = $state<Record<ActionId, string>>(readBindings());
@@ -74,6 +77,7 @@ export class Preferences {
     this.theme = readTheme();
     this.soundOn = read<boolean>(K.sound, true);
     this.soundVolume = readVolume();
+    this.recentTabs = read<boolean>(K.recentTabsOn, true);
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
     this.footer = sanitizeFooter(read<unknown>(K.footer, null));
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
@@ -152,8 +156,15 @@ export class Preferences {
     play("done", volumeGain(this.soundVolume));
   }
 
-  /* ---------- terminal ---------- */
+  /* ---------- recently closed tabs ---------- */
 
+  /** Show or hide the closed tabs the sidebar offers back. */
+  setRecentTabs(on: boolean) {
+    this.recentTabs = on;
+    write(K.recentTabsOn, on);
+  }
+
+  /* ---------- terminal ---------- */
   setTerminal(patch: Partial<TerminalPrefs>) {
     this.terminal = sanitizeTerminal({ ...this.terminal, ...patch });
     write(K.terminal, this.terminal);
@@ -247,7 +258,7 @@ export class Preferences {
   /* ---------- settings files ---------- */
 
   capture(): Required<PreferenceValues> {
-    return { theme: this.theme, sound: this.soundOn, volume: this.soundVolume };
+    return { theme: this.theme, sound: this.soundOn, volume: this.soundVolume, recent: this.recentTabs };
   }
 
   apply(p: PreferenceValues) {
@@ -257,5 +268,6 @@ export class Preferences {
       write(K.sound, p.sound);
     }
     if (p.volume !== undefined) this.setSoundVolume(p.volume);
+    if (p.recent !== undefined) this.setRecentTabs(p.recent);
   }
 }

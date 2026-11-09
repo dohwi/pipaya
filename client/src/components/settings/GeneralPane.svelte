@@ -46,6 +46,13 @@
 	<span class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</span>
 </section>
 
+<section class="set-group">
+	<div class="section-label">{t("사이드바")}</div>
+	<SettingRow label={t("최근 사용 탭")} hint={t("한 시간 안에 닫은 대화를 사이드바 위에 띄웁니다. 누르면 다시 열립니다")}>
+		<Switch checked={app.prefs.recentTabs} label={t("최근 사용 탭")} onchange={(on) => app.prefs.setRecentTabs(on)} />
+	</SettingRow>
+</section>
+
 <section class="set-group"><NotificationSettings /></section>
 <section class="set-group">
 	<div class="section-label">{t("알림음")}</div>

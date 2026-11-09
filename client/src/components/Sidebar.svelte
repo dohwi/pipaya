@@ -38,6 +38,7 @@
 	import { platformName, type TerminalInfo } from "../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../lib/sidebar-ctx";
 	import ServerBlock from "./sidebar/ServerBlock.svelte";
+	import RecentTabs from "./sidebar/RecentTabs.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	let query = $state("");
@@ -360,6 +361,7 @@
 	</div>
 
 	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+		{#if !searching}<RecentTabs />{/if}
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}
