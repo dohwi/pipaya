@@ -442,7 +442,7 @@ export default (pi) => {
 	test("settings are the shared /extensions/:id/settings object, and changes are reported", async () => {
 		expect((await method("settings", null)).result).toEqual({});
 		expect((await method("settings", { level: 2 })).result).toEqual({ level: 2 });
-		expect((await call("GET", "/extensions/settings")).json.settings.gen).toEqual({ level: 2 });
+		expect((await call("GET", "/extensions/settings")).json.settings.gen.value).toEqual({ level: 2 });
 		await call("PUT", "/extensions/gen/settings", { settings: { level: 3 } });
 		expect((await method("settings", null)).result).toEqual({ level: 3 });
 		expect((await method("changed")).result).toBe(2);

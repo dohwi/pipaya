@@ -45,7 +45,10 @@ export interface ExtensionHostOptions {
 	/** How long a client's method call may take (default 20 s; the client gives up after 15). */
 	methodTimeoutMs?: number;
 	/** The per-extension settings store (`/extensions/:id/settings`). */
-	settings?: { get(id: string): Record<string, unknown> | undefined; save(id: string, value: unknown): Record<string, unknown> };
+	settings?: {
+		get(id: string): Record<string, unknown> | undefined;
+		save(id: string, value: unknown): { value: Record<string, unknown>; updatedAt: number; applied: boolean };
+	};
 }
 
 export interface ExtensionInfo {
@@ -329,8 +332,8 @@ export class ExtensionHost {
 					get: () => store().get(id) ?? {},
 					set: (value) => {
 						const saved = store().save(id, value);
-						this.opts.bus.publish(null, "extension_settings_updated", { id, action: "saved" });
-						return saved;
+						if (saved.applied) this.opts.bus.publish(null, "extension_settings_updated", { id, action: "saved", updatedAt: saved.updatedAt });
+						return saved.value;
 					},
 					onChange: (handler) => {
 						const off = this.opts.bus.subscribe((e) => {

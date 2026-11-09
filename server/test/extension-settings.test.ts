@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
@@ -46,22 +46,27 @@ describe("extension settings", () => {
 		const value = { theme: "dark", nested: { n: [1, 2, { a: null }] }, flag: true };
 		const put = await api("PUT", "/extensions/my.ext/settings", { settings: value });
 		expect(put.status).toBe(200);
-		expect(put.json).toEqual({ settings: value });
+		expect(put.json.value).toEqual(value);
+		expect(put.json.applied).toBe(true);
+		expect(typeof put.json.updatedAt).toBe("number");
 		const other = await api("PUT", "/extensions/other-ext/settings", { settings: { x: 1 } });
 		expect(other.status).toBe(200);
 
 		const list = await api("GET", "/extensions/settings");
-		expect(list.json).toEqual({ settings: { "my.ext": value, "other-ext": { x: 1 } } });
+		expect(list.json.settings["my.ext"].value).toEqual(value);
+		expect(list.json.settings["my.ext"].updatedAt).toBe(put.json.updatedAt);
+		expect(list.json.settings["other-ext"].value).toEqual({ x: 1 });
 
 		expect(mode(root())).toBe(0o700);
 		expect(mode(join(root(), "my.ext"))).toBe(0o700);
 		expect(mode(join(root(), "my.ext", "settings.json"))).toBe(0o600);
-		// atomic write leaves no temp files behind
-		expect(readdirSync(join(root(), "my.ext"))).toEqual(["settings.json"]);
+		expect(mode(join(root(), "my.ext", "settings.at"))).toBe(0o600);
+		// atomic write leaves no temp files behind (the value and its timestamp only)
+		expect(readdirSync(join(root(), "my.ext")).sort()).toEqual(["settings.at", "settings.json"]);
 
 		const overwrite = await api("PUT", "/extensions/my.ext/settings", { settings: {} });
-		expect(overwrite.json).toEqual({ settings: {} });
-		expect((await api("GET", "/extensions/settings")).json.settings["my.ext"]).toEqual({});
+		expect(overwrite.json.value).toEqual({});
+		expect((await api("GET", "/extensions/my.ext/settings")).json.value).toEqual({});
 	});
 
 	test("save publishes extension_settings_updated and the event is catalogued", async () => {
@@ -71,7 +76,7 @@ describe("extension settings", () => {
 		await api("DELETE", "/extensions/evt.test");
 		off();
 		expect(seen.map((e) => [e.type, e.sessionId, e.data])).toEqual([
-			["extension_settings_updated", null, { id: "evt.test", action: "saved" }],
+			["extension_settings_updated", null, { id: "evt.test", action: "saved", updatedAt: expect.any(Number) }],
 			["extension_settings_updated", null, { id: "evt.test", action: "deleted" }],
 		]);
 		const catalog = (await api("GET", "/events/types")).json.events;
@@ -99,7 +104,7 @@ describe("extension settings", () => {
 		for (const id of ["sync", "a"]) {
 			const put = await api("PUT", `/extensions/${id}/settings`, { settings: { n: 1 } });
 			expect(put.status).toBe(200);
-			expect((await api("GET", "/extensions/settings")).json.settings[id]).toEqual({ n: 1 });
+			expect((await api("GET", "/extensions/settings")).json.settings[id].value).toEqual({ n: 1 });
 			expect((await api("DELETE", `/extensions/${id}`)).status).toBe(200);
 		}
 	});
@@ -161,15 +166,15 @@ describe("extension settings", () => {
 
 		const res = await api("GET", "/extensions/settings");
 		expect(res.status).toBe(200);
-		for (const id of Object.keys(cases)) expect(res.json.settings[id]).toEqual({});
+		for (const id of Object.keys(cases)) expect(res.json.settings[id].value).toEqual({});
 		expect(res.json.settings["Not_Valid"]).toBeUndefined();
 		expect(res.json.settings["no-file.here"]).toBeUndefined();
 		expect(res.json.settings["stray.file"]).toBeUndefined();
-		expect(res.json.settings["other-ext"]).toEqual({ x: 1 });
+		expect(res.json.settings["other-ext"].value).toEqual({ x: 1 });
 
 		// a corrupt file can still be overwritten
 		const fixed = await api("PUT", "/extensions/bad.json/settings", { settings: { ok: true } });
-		expect(fixed.json).toEqual({ settings: { ok: true } });
+		expect(fixed.json.value).toEqual({ ok: true });
 		for (const id of [...Object.keys(cases), "no-file.here"]) rmSync(join(root(), id), { recursive: true, force: true });
 		rmSync(join(root(), "Not_Valid"), { recursive: true, force: true });
 		rmSync(join(root(), "stray.file"), { force: true });
@@ -185,7 +190,7 @@ describe("extension settings", () => {
 		const over = await api("PUT", "/extensions/size.test/settings", { settings: { s: "x".repeat(MAX_SETTINGS_CHARS) } });
 		expect(over.status).toBe(413);
 		expect(over.json.error.code).toBe("payload_too_large");
-		expect((await api("GET", "/extensions/settings")).json.settings["size.test"]).toEqual({ keep: 1 });
+		expect((await api("GET", "/extensions/settings")).json.settings["size.test"].value).toEqual({ keep: 1 });
 		await api("DELETE", "/extensions/size.test");
 	});
 
@@ -223,18 +228,92 @@ describe("extension settings", () => {
 			for (let i = 0; i < MAX_EXTENSIONS; i++) store.save(`ext.n${i}`, { i });
 			expect(() => store.save("ext.extra", {})).toThrow();
 			expect(existsSync(join(fresh, "extensions", "ext.extra"))).toBe(false);
-			expect(store.save("ext.n3", { i: "again" })).toEqual({ i: "again" });
+			expect(store.save("ext.n3", { i: "again" }).value).toEqual({ i: "again" });
 			store.delete("ext.n0");
-			expect(store.save("ext.extra", {})).toEqual({});
+			expect(store.save("ext.extra", {}).value).toEqual({});
 			expect(Object.keys(store.list())).toHaveLength(MAX_EXTENSIONS);
 		} finally {
 			rmSync(fresh, { recursive: true, force: true });
 		}
 	});
 
+	test("a write older than the stored value is refused and the newer one is returned", async () => {
+		const t0 = Date.now() - 60_000;
+		const first = await api("PUT", "/extensions/lww.test/settings", { settings: { v: "new" }, at: t0 + 1000 });
+		expect(first.json.applied).toBe(true);
+		expect(first.json.updatedAt).toBe(t0 + 1000);
+
+		// an offline edit made before the stored one loses, and the caller learns the winner
+		const stale = await api("PUT", "/extensions/lww.test/settings", { settings: { v: "old" }, at: t0 });
+		expect(stale.json).toEqual({ value: { v: "new" }, updatedAt: t0 + 1000, applied: false });
+		expect((await api("GET", "/extensions/lww.test/settings")).json.value).toEqual({ v: "new" });
+
+		// equal times: the incoming write wins, so a resend is harmless
+		const same = await api("PUT", "/extensions/lww.test/settings", { settings: { v: "again" }, at: t0 + 1000 });
+		expect(same.json).toEqual({ value: { v: "again" }, updatedAt: t0 + 1000, applied: true });
+
+		// a device clock in the future cannot pin the value
+		const future = await api("PUT", "/extensions/lww.test/settings", { settings: { v: "future" }, at: Date.now() + 86_400_000 });
+		expect(future.json.updatedAt).toBeLessThanOrEqual(Date.now() + 1000);
+		expect((await api("PUT", "/extensions/lww.test/settings", { settings: { v: "now" } })).json.applied).toBe(true);
+		await api("DELETE", "/extensions/lww.test");
+	});
+
+	test("a refused write publishes nothing, so other devices do not refetch", async () => {
+		const t0 = Date.now() - 60_000;
+		await api("PUT", "/extensions/quiet.test/settings", { settings: { v: 2 }, at: t0 + 1000 });
+		const seen: any[] = [];
+		const off = app.bus.subscribe((e) => { if (e.type === "extension_settings_updated") seen.push(e.data); });
+		await api("PUT", "/extensions/quiet.test/settings", { settings: { v: 1 }, at: t0 });
+		off();
+		expect(seen).toEqual([]);
+		await api("DELETE", "/extensions/quiet.test");
+	});
+
+	test("the writing device is echoed in the event so it can skip its own change", async () => {
+		const seen: any[] = [];
+		const off = app.bus.subscribe((e) => { if (e.type === "extension_settings_updated") seen.push(e.data); });
+		await api("PUT", "/extensions/origin.test/settings", { settings: { a: 1 }, origin: "device-a" });
+		off();
+		expect(seen).toEqual([{ id: "origin.test", action: "saved", updatedAt: expect.any(Number), origin: "device-a" }]);
+		await api("DELETE", "/extensions/origin.test");
+	});
+
+	test("one extension's settings can be read on their own", async () => {
+		expect((await api("GET", "/extensions/missing.settings/settings")).status).toBe(404);
+		const put = await api("PUT", "/extensions/one.test/settings", { settings: { a: 1 } });
+		const one = await api("GET", "/extensions/one.test/settings");
+		expect(one.status).toBe(200);
+		expect(one.json).toEqual({ value: { a: 1 }, updatedAt: put.json.updatedAt });
+		await api("DELETE", "/extensions/one.test");
+		expect((await api("GET", "/extensions/one.test/settings")).status).toBe(404);
+	});
+
+	test("a settings file from before timestamps keeps its mtime as the time of its value", async () => {
+		const store = new ExtensionSettings(dir);
+		const folder = join(root(), "legacy.one");
+		mkdirSync(folder, { recursive: true });
+		writeFileSync(join(folder, "settings.json"), '{"old":true}');
+		const before = Date.now() - 3_600_000;
+		utimesSync(join(folder, "settings.json"), new Date(before), new Date(before));
+
+		const stored = store.getStored("legacy.one")!;
+		expect(stored.value).toEqual({ old: true });
+		expect(Math.abs(stored.updatedAt - before)).toBeLessThan(2000);
+		// an edit made now is newer than the migrated value
+		expect(store.save("legacy.one", { fresh: true }).applied).toBe(true);
+		// and an edit claimed to be older than the file is refused
+		writeFileSync(join(folder, "settings.json"), '{"old":true}');
+		rmSync(join(folder, "settings.at"), { force: true });
+		utimesSync(join(folder, "settings.json"), new Date(before), new Date(before));
+		expect(store.save("legacy.one", { stale: true }, before - 1000).applied).toBe(false);
+		store.delete("legacy.one");
+	});
+
 	test("authentication is required on every route", async () => {
 		const calls: [string, string, unknown?][] = [
 			["GET", "/extensions/settings"],
+			["GET", "/extensions/auth.test/settings"],
 			["PUT", "/extensions/auth.test/settings", { settings: { a: 1 } }],
 			["DELETE", "/extensions/auth.test"],
 		];

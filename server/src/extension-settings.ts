@@ -1,9 +1,19 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join, resolve, sep } from "node:path";
 import { HttpError, badRequest, conflict } from "./errors.ts";
 
 export type ExtensionSettingsValue = Record<string, unknown>;
+
+/** A stored value and when the user made the change (Unix ms). */
+export interface StoredExtensionSettings {
+	value: ExtensionSettingsValue;
+	updatedAt: number;
+}
+export interface ExtensionSaveResult extends StoredExtensionSettings {
+	/** false when a newer value was already stored; the caller should adopt the returned one */
+	applied: boolean;
+}
 
 /** Must accept exactly what the client's manifest validator accepts (client/src/lib/extensions/schema.ts `ID`), including one-word ids like `sync`. */
 export const EXTENSION_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -14,6 +24,8 @@ export const MAX_SETTINGS_CHARS = 16000;
 export const MAX_EXTENSIONS = 100;
 
 const FILE = "settings.json";
+/** The timestamp of a value, kept next to the file so the file itself stays the plain object extensions read. */
+const STAMP = "settings.at";
 
 /** Names the client refuses too (they would collide with object internals in id-keyed maps). */
 const RESERVED_IDS = new Set(["constructor", "prototype"]);
@@ -59,9 +71,44 @@ export class ExtensionSettings {
 		}
 	}
 
+	/**
+	 * When the stored value was written. A file from before timestamps existed has none: its own mtime is the closest
+	 * truth, and it is older than any write made after the upgrade.
+	 */
+	private readStamp(dir: string, file: string): number {
+		try {
+			const at = Number.parseInt(readFileSync(join(dir, STAMP), "utf8"), 10);
+			if (Number.isFinite(at) && at > 0) return at;
+		} catch { /* no stamp yet */ }
+		try {
+			return Math.floor(statSync(file).mtimeMs);
+		} catch {
+			return 0;
+		}
+	}
+
+	private writeStamp(dir: string, at: number): void {
+		const tmp = join(dir, `.${STAMP}.${randomBytes(6).toString("hex")}.tmp`);
+		try {
+			writeFileSync(tmp, String(at), { mode: 0o600 });
+			chmodSync(tmp, 0o600);
+			renameSync(tmp, join(dir, STAMP));
+		} catch (err) {
+			rmSync(tmp, { force: true });
+			throw err;
+		}
+	}
+
 	/** Map of every extension that has a settings file. Unreadable/corrupt files count as `{}`. */
 	list(): Record<string, ExtensionSettingsValue> {
 		const out: Record<string, ExtensionSettingsValue> = {};
+		for (const [id, stored] of Object.entries(this.listStored())) out[id] = stored.value;
+		return out;
+	}
+
+	/** `list()` with the time of each value, for clients that resolve conflicts themselves. */
+	listStored(): Record<string, StoredExtensionSettings> {
+		const out: Record<string, StoredExtensionSettings> = {};
 		let entries: import("node:fs").Dirent[];
 		try {
 			entries = readdirSync(this.root, { withFileTypes: true });
@@ -70,17 +117,31 @@ export class ExtensionSettings {
 		}
 		for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
 			if (!entry.isDirectory() || !isValidExtensionId(entry.name)) continue;
-			const value = this.readFile(join(this.dir(entry.name), FILE));
-			if (value) out[entry.name] = value;
+			const dir = this.dir(entry.name);
+			const file = join(dir, FILE);
+			const value = this.readFile(file);
+			if (value) out[entry.name] = { value, updatedAt: this.readStamp(dir, file) };
 		}
 		return out;
 	}
 
 	get(id: string): ExtensionSettingsValue | undefined {
-		return this.readFile(join(this.dir(id), FILE));
+		return this.getStored(id)?.value;
 	}
 
-	save(id: string, settings: unknown): ExtensionSettingsValue {
+	getStored(id: string): StoredExtensionSettings | undefined {
+		const dir = this.dir(id);
+		const file = join(dir, FILE);
+		const value = this.readFile(file);
+		return value ? { value, updatedAt: this.readStamp(dir, file) } : undefined;
+	}
+
+	/**
+	 * Last write wins by the time the user made the change: `at` is that time (an offline edit keeps its own), and a write
+	 * older than what is stored is not applied. Equal times: the incoming write wins, so a resend is harmless.
+	 * `now` is the server clock; a device clock in the future must not pin the value forever.
+	 */
+	save(id: string, settings: unknown, at?: number, now = Date.now()): ExtensionSaveResult {
 		const dir = this.dir(id);
 		if (!isPlainObject(settings)) throw badRequest("settings must be a JSON object");
 		const json = JSON.stringify(settings);
@@ -90,6 +151,9 @@ export class ExtensionSettings {
 		if (!existsSync(dir) && this.count() >= MAX_EXTENSIONS) {
 			throw conflict(`at most ${MAX_EXTENSIONS} extensions can store settings`);
 		}
+		const stamp = Math.min(at ?? now, now);
+		const current = this.getStored(id);
+		if (current && current.updatedAt > stamp) return { ...current, applied: false };
 		mkdirSync(this.root, { recursive: true, mode: 0o700 });
 		chmodSync(this.root, 0o700);
 		mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -104,7 +168,8 @@ export class ExtensionSettings {
 			rmSync(tmp, { force: true });
 			throw err;
 		}
-		return JSON.parse(json) as ExtensionSettingsValue;
+		this.writeStamp(dir, stamp);
+		return { value: JSON.parse(json) as ExtensionSettingsValue, updatedAt: stamp, applied: true };
 	}
 
 	/**
@@ -114,6 +179,7 @@ export class ExtensionSettings {
 	delete(id: string): void {
 		const dir = this.dir(id);
 		rmSync(join(dir, FILE), { force: true });
+		rmSync(join(dir, STAMP), { force: true });
 		try { if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true }); } catch { /* no folder */ }
 	}
 

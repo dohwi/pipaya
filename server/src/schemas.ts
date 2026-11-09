@@ -420,8 +420,13 @@ export const EVENTS: EventDef[] = [
 	},
 	{
 		type: "extension_settings_updated", persisted: true,
-		description: "An extension's settings were saved or deleted (sessionId is null; refetch GET /extensions/settings)",
-		data: Type.Object({ id: Type.String(), action: Type.Union([Type.Literal("saved"), Type.Literal("deleted")]) }),
+		description: "An extension's settings were saved or deleted (sessionId is null; refetch GET /extensions/settings/:id or GET /extensions/settings). `origin` is the device that wrote it, so it can skip its own echo",
+		data: Type.Object({
+			id: Type.String(),
+			action: Type.Union([Type.Literal("saved"), Type.Literal("deleted")]),
+			updatedAt: Type.Optional(Type.Integer({ description: "Unix ms of the write (saved only)" })),
+			origin: Type.Optional(Type.String()),
+		}),
 	},
 	{
 		type: "client_settings_updated", persisted: true,
