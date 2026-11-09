@@ -73,6 +73,9 @@ share one left and one right line. Never write a raw side padding in a dialog; u
   `--fs-2xs`, weight 600, `--text-faint`, on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
   It sits between the agent badge and the title (4px gaps, the row's own), never after the title. It does not shrink (`flex: none`): a tab
   too narrow for both shows the handle whole and ellipsises the title, which is what the tab's `max-width: 220px` leaves room for.
+  It also carries the activity colour (`working` `--info`, `asking` `--warn`, `done` `--ok`, `failed` `--danger`, idle `--text-faint`) in
+  all four places, so a running conversation reads blue in the tab bar exactly as in the sidebar row; a group chip shows its own state even
+  while its group is not the open tab.
 - Audit: render at `device_scale_factor` 4-8 with `scripts/ui-ink.py`, find the painted pixels inside each pill and compare their centre with the box centre; flag anything over 0.5px. Differences up to 0.5px represent the physical half-pixel grid limit of an odd-pixel glyph in an even-content box.
 
 ## 2. Vertical rhythm

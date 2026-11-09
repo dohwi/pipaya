@@ -70,8 +70,8 @@
 				/>
 			{:else}
 				<button class="gchip tap" tabindex={!open || x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
-					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={open ? st : "idle"} size={16} />{/if}
-					{#if who}<span class="who mono">{who.text}</span>{/if}<span class="t">{sessionTitle(x.title)}</span>
+					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
+					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>
 			{/if}
 		{/each}
@@ -153,12 +153,24 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* the `@name` handle, as in the tab bar and the sidebar row (11px on a 16px line box) */
+	/* the `@name` handle, as in the tab bar and the sidebar row (11px on a 16px line box), in the same activity colour */
 	.who {
 		flex: none;
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
 		line-height: 16px;
+	}
+	.who.working {
+		color: var(--info);
+	}
+	.who.asking {
+		color: var(--warn);
+	}
+	.who.done {
+		color: var(--ok);
+	}
+	.who.failed {
+		color: var(--danger);
 	}
 </style>

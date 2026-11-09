@@ -249,7 +249,7 @@
 						}}
 					/>
 				{:else}
-					{#if who}<span class="who mono">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>
+					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
@@ -451,13 +451,26 @@
 		left: 0;
 	}
 	/* the `@name` other sessions call this one by, before its title: the same small dim handle the sidebar row and the
-	   split tab's title bar carry (11px on a 16px line box, so it centres on the 28px tab like the title does) */
+	   split tab's title bar carry (11px on a 16px line box, so it centres on the 28px tab like the title does). It takes the
+	   same activity colour as the sidebar's handle, so a working conversation reads blue in both places. */
 	.who {
 		flex: none;
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
 		line-height: 16px;
+	}
+	.who.working {
+		color: var(--info);
+	}
+	.who.asking {
+		color: var(--warn);
+	}
+	.who.done {
+		color: var(--ok);
+	}
+	.who.failed {
+		color: var(--danger);
 	}
 	.t {
 		min-width: 0;
