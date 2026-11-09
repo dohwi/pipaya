@@ -1772,11 +1772,35 @@ class AppStore {
   }
 
   /**
-   * `/new` (alias `/clear`): start a fresh conversation in the focused pane only. The pane's session is swapped for a new
-   * one (same working directory and model settings), in a group as well as outside one, and the rest of the group stays
-   * as it is. The old chat goes to the archive. Without an open chat this is a plain `startChat`.
+   * `/new` (and the new-chat shortcut): start another conversation beside the open one, which stays where it is (in the
+   * sidebar and, in a group, in its pane). The newcomer starts in the focused session's working directory and with its
+   * model settings. Without an open chat this is a plain `startChat`.
    */
   async newChatInPane(): Promise<void> {
+    const api = this.api;
+    const from = this.session(this.activeId);
+    if (!api || !from) return this.startChat();
+    let made: Session;
+    try {
+      made = await api.createSession({
+        cwd: from.cwd,
+        provider: from.provider,
+        model: from.model,
+        thinkingLevel: from.thinkingLevel,
+      });
+    } catch (e) {
+      return this.fail(e, t("새 대화를 만들지 못했습니다"));
+    }
+    if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
+    await this.openSession(made.id, true);
+  }
+
+  /**
+   * `/clear` (and its shortcut): start over in the focused pane only. The pane's session is swapped for a new one (same
+   * working directory and model settings), in a group as well as outside one, and the rest of the group stays as it is.
+   * The old chat goes to the archive. Without an open chat this is a plain `startChat`.
+   */
+  async clearChatInPane(): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);

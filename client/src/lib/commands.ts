@@ -167,10 +167,13 @@ const DEFINITIONS: SlashCommand[] = [
 	},
 	{
 		name: "new",
-		aliases: ["clear"],
-		desc: msg("새 대화 시작 · 이전 대화는 보관함으로"),
-		// With an open chat it is swapped for a new one in place (the old one goes to the archive); without one, a blank chat.
+		desc: msg("새 대화 열기 · 지금 대화는 그대로"),
 		run: () => app.newChatInPane(),
+	},
+	{
+		name: "clear",
+		desc: msg("이 창에서 새 대화로 비우기 · 이전 대화는 보관함으로"),
+		run: () => app.clearChatInPane(),
 	},
 	{
 		name: "model",
@@ -271,7 +274,7 @@ const DEFINITIONS: SlashCommand[] = [
 ];
 
 // Stable default order: conversations → settings → execution → history → utilities.
-const DEFAULT_ORDER = ["new", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"];
+const DEFAULT_ORDER = ["new", "clear", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"];
 export const COMMANDS: SlashCommand[] = DEFAULT_ORDER.map((name) => DEFINITIONS.find((c) => c.name === name)!);
 
 /** Run a built-in command by name, as a shortcut would: with its "needs an open chat" rule applied. */
@@ -306,7 +309,7 @@ export function allCommands(): SlashCommand[] {
 export function matchCommands(query: string): SlashCommand[] {
 	const q = query.trim().toLowerCase();
 	const hasChat = !!app.activeId;
-	// A command is as good as its best-matching name, so an alias (`/clear`) brings its command (`/new`) to the top.
+	// A command is as good as its best-matching name, so an alias (`/reopen`) brings its command (`/resume`) to the top.
 	const scoreOf = (n: string): number => (n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 9);
 	const score = (c: SlashCommand): number => (q ? Math.min(scoreOf(c.name), ...(c.aliases ?? []).map(scoreOf)) : 3);
 	return allCommands().filter((c) => score(c) < 9 && (!c.needsChat || hasChat))

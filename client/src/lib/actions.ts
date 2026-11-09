@@ -226,6 +226,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     else app.sidebar.toggleCollapsed();
   },
   newChat: () => app.newChatInPane(),
+  clearChat: () => app.clearChatInPane(),
   closeSession: () => app.closeActive(),
   archiveSession: () => app.archiveActive(),
   prevSession: () => stepSession(-1),

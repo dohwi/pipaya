@@ -12,6 +12,7 @@ export type ActionId =
   | "toggleSidebar"
   | "renameTab"
   | "newChat"
+  | "clearChat"
   | "closeSession"
   | "archiveSession"
   | "prevSession"
@@ -102,8 +103,14 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "newChat",
     label: msg("새 대화"),
-    hint: msg("빈 새 대화를 엽니다. 그룹에서는 선택한 창만 바뀝니다"),
+    hint: msg("지금 대화는 그대로 두고 새 대화를 엽니다. 그룹은 그대로 남습니다"),
     default: "Mod+N",
+  },
+  {
+    id: "clearChat",
+    label: msg("새 대화로 비우기"),
+    hint: msg("보고 있는 대화를 새 대화로 갈아 끼웁니다. 이전 대화는 보관함으로 가고 그룹의 나머지 창은 그대로입니다"),
+    default: "Mod+Shift+N",
   },
   {
     id: "closeSession",

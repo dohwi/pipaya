@@ -142,6 +142,15 @@ describe("shortcut catalogue", () => {
 		expect(keyCount(buildCombo(all, ["A", "B", "C", "D"]))).toBe(4); // one too many: rejected by the recorder and the handler
 	});
 
+	test("a new chat and starting over are two actions", () => {
+		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
+		expect(by.newChat.default).toBe("Mod+N");
+		expect(by.clearChat.default).toBe("Mod+Shift+N");
+		expect(by.clearChat.fixed).toBeUndefined(); // rebindable like the rest
+		expect(by.newChat.group).toBe("general");
+		expect(by.clearChat.group).toBe("general");
+	});
+
 	test("stopping the agent is fixed to Esc", () => {
 		const stop = ACTIONS.find((a) => a.id === "stop")!;
 		expect(stop.default).toBe("Escape");

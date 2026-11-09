@@ -87,7 +87,7 @@ describe("default commands", () => {
 
 	test("uses one English name per command with a stable default order", () => {
 		const names = commands.COMMANDS.map((c) => c.name);
-		expect(names).toEqual(["new", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"]);
+		expect(names).toEqual(["new", "clear", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"]);
 		expect(new Set(names).size).toBe(names.length);
 		for (const cmd of commands.COMMANDS) {
 			expect(cmd.name).toMatch(/^[a-z]+$/);
@@ -97,16 +97,18 @@ describe("default commands", () => {
 		}
 	});
 
-	test("an alias reaches its command: /clear parses as /new and suggests it first", () => {
-		expect(commands.COMMANDS.some((c) => c.name === "clear")).toBe(false);
-		expect(commands.parseSlash("/clear")?.cmd.name).toBe("new");
-		expect(commands.matchCommands("clear")[0]?.name).toBe("new");
-		expect(commands.matchCommands("cle")[0]?.name).toBe("new");
+	test("/new and /clear are two commands: new opens a chat, clear starts over in the open pane", () => {
+		expect(commands.parseSlash("/new")?.cmd.name).toBe("new");
+		expect(commands.parseSlash("/clear")?.cmd.name).toBe("clear");
+		expect(commands.matchCommands("clear")[0]?.name).toBe("clear");
 		expect(commands.matchCommands("new")[0]?.name).toBe("new");
+		// "cl" reaches clear, and "ne" new: neither is an alias of the other
+		expect(commands.matchCommands("cle")[0]?.name).toBe("clear");
+		expect(commands.COMMANDS.find((c) => c.name === "new")?.aliases).toBeUndefined();
 	});
 
 	test("aliases: each reaches its command, suggests it first, and no name is used twice", () => {
-		const table: Record<string, string[]> = { new: ["clear"], resume: ["reopen"], fork: ["branch"], retry: ["regenerate"], stop: ["abort"], cd: ["cwd"], compact: ["compress"], delete: ["remove", "rm"] };
+		const table: Record<string, string[]> = { resume: ["reopen"], fork: ["branch"], retry: ["regenerate"], stop: ["abort"], cd: ["cwd"], compact: ["compress"], delete: ["remove", "rm"] };
 		const seen = new Set(commands.COMMANDS.map((c) => c.name));
 		for (const [name, aliases] of Object.entries(table)) {
 			expect(commands.COMMANDS.find((c) => c.name === name)?.aliases).toEqual(aliases);
