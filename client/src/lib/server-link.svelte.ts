@@ -148,8 +148,49 @@ export class ServerLink {
 	}
 
 	/**
+	 * The events that are never persisted (a read mark, a terminal opening, an extension reloading, a run starting or
+	 * finishing) are the ones a replay cannot bring back, so they are read again here: one small request each, and only
+	 * the state that actually changed is written, so nothing on screen is rebuilt. Without this a wake left the unread
+	 * marks, the terminal tabs and a run that started while the window was away frozen at what they were before.
+	 */
+	private async catchUp(): Promise<void> {
+		const token = this.token;
+		const api = this.api;
+		try {
+			const [activity, terminals, support] = await Promise.all([
+				api.activity().catch(() => null),
+				api.terminals().catch(() => null),
+				api.terminalSupport().catch(() => null),
+			]);
+			if (token !== this.token) return;
+			if (activity) {
+				const running: Record<string, boolean> = {};
+				const awaiting: Record<string, number> = {};
+				const unread: Record<string, boolean> = {};
+				const failed: Record<string, boolean> = {};
+				for (const a of activity.sessions) {
+					if (a.running) running[a.sessionId] = true;
+					if (a.pendingQuestions) awaiting[a.sessionId] = a.pendingQuestions;
+				}
+				for (const u of activity.unread) (u.kind === "failed" ? failed : unread)[u.sessionId] = true;
+				const d = this.data;
+				// Written one field at a time: a whole new object re-renders every badge that reads the lists.
+				if (!sameMap(d.running, running)) d.running = running;
+				if (!sameMap(d.awaiting, awaiting)) d.awaiting = awaiting;
+				if (!sameMap(d.unread, unread)) d.unread = unread;
+				if (!sameMap(d.failed, failed)) d.failed = failed;
+			}
+			if (terminals && !sameTerminals(this.data.terminals, terminals)) this.data.terminals = terminals;
+			if (support) this.terminalSupport = support;
+		} catch {
+			/* the lists stay as they were; the next wake tries again */
+		}
+	}
+
+	/**
 	 * Reopen the event stream from the last id seen, keeping everything already loaded. `wake` = the window came back, so
-	 * the app re-attaches (settings, extensions, notifications) as well; a plain retry leaves all that alone.
+	 * the app re-attaches (settings, extensions, notifications) and reads the state a replay cannot carry, as well; a
+	 * plain retry after a dropped stream leaves all that alone.
 	 */
 	private reopen(wake: boolean): void {
 		if (this.stopped || !this.loaded) {
@@ -172,7 +213,10 @@ export class ServerLink {
 					this.retryDelay = 1000;
 					// Only a wake re-attaches: the app is in front again, so settings, extensions and notifications follow.
 					// A plain retry after a dropped stream changes nothing on screen and must not re-render it.
-					if (wake) this.hooks.ready(this, true);
+					if (wake) {
+						void this.catchUp();
+						this.hooks.ready(this, true);
+					}
 				},
 				onError: () => {
 					if (token !== this.token) return;
@@ -329,4 +373,16 @@ export class ServerLink {
 			/* offline: keep what we have */
 		}
 	}
+}
+
+/** Two of these maps say the same thing (so writing one over the other would only re-render what reads it). */
+function sameMap(a: Record<string, boolean | number>, b: Record<string, boolean | number>): boolean {
+	const keys = Object.keys(a);
+	if (keys.length !== Object.keys(b).length) return false;
+	return keys.every((k) => a[k] === b[k]);
+}
+
+/** The same terminals, in the same order, with the same titles (a renamed shell must still show through). */
+function sameTerminals(a: readonly TerminalInfo[], b: readonly TerminalInfo[]): boolean {
+	return a.length === b.length && a.every((x, i) => x.id === b[i]!.id && x.title === b[i]!.title && x.pid === b[i]!.pid);
 }

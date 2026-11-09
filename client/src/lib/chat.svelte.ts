@@ -335,6 +335,60 @@ export class ChatState {
 		else this.reduce(e);
 	}
 
+	/**
+	 * The window was in the background and the stream replayed what it missed. Two things a replay cannot carry are read
+	 * here, and only when they are actually out of step, so a wake never rebuilds the transcript:
+	 *
+	 *  - a run that started or finished while we were away (its `run_started`/`run_finished` were not persisted), which
+	 *    would otherwise leave the typing indicator, the running outline and the stop button on a run that is over;
+	 *  - a reply that streamed while we were away: `message_update` is live-only, so the bubble would sit at the text it
+	 *    had when the window went to the background. The server keeps the partial message, so it is taken from there.
+	 *
+	 * Everything else (messages that ended, tool results, questions) is persisted and arrives in the replay.
+	 */
+	async catchUp(): Promise<void> {
+		if (!this.ready || this.syncing) return;
+		const token = this.token;
+		let detail: Awaited<ReturnType<Api["getSession"]>>;
+		try {
+			detail = await this.api.getSession(this.id);
+		} catch {
+			return; // offline again: the next wake tries
+		}
+		if (token !== this.token || !this.ready) return;
+		const st = detail.status;
+		if (st.running !== this.running) {
+			this.running = st.running;
+			if (st.running) this.runStartedAt = this.runStartedAt ?? Date.now();
+			else {
+				this.runStartedAt = null;
+				const s = this.streamItem();
+				if (s) s.streaming = false;
+			}
+		}
+		this.serverCompacting = st.compacting ?? false;
+		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text }));
+		const partial = st.streamingMessage as AssistantMessage | null;
+		if (st.running && partial && partial.role === "assistant") this.catchUpStream(partial);
+	}
+
+	/** Put the server's partial reply in place of the one on screen, keeping the item (and its place) when there is one. */
+	private catchUpStream(partial: AssistantMessage): void {
+		const blocks = blocksOf(partial);
+		const item = this.streamItem();
+		if (!item) {
+			// The run began while we were away: the bubble it was writing never arrived (its `message_start` is persisted,
+			// but the deltas that follow it are not), so start one where it belongs.
+			this.items.push({ kind: "assistant", key: `s${uid()}`, seq: null, streaming: true, ...assistantFields(partial) });
+			return;
+		}
+		// Same text already: nothing to do (the replay's own message_end may have settled it a moment ago).
+		const same = blocks.length === item.blocks.length && blocks.every((b, i) => JSON.stringify(b) === JSON.stringify(item.blocks[i]));
+		if (!same) item.blocks = blocks;
+		item.streaming = true;
+		if (partial.stopReason) item.stopReason = partial.stopReason;
+	}
+
 	addOptimisticUser(text: string, images: ImageBlock[], files: FileRef[] = []): void {
 		this.items.push({ kind: "user", key: `u${uid()}`, seq: null, text, images, files, ts: Date.now(), fresh: true });
 	}

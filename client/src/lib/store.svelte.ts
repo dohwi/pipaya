@@ -924,8 +924,10 @@ class AppStore {
       this.pendingChat = false;
       void this.startChat();
     }
-    // Panes of the open group missed events while we were away: reload them too (a warm reconnect replayed them).
-    if (!warm) for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
+    // Panes of the open group missed events while we were away. A warm reconnect replayed them, so only the two things a
+    // replay cannot carry are read (a run that started or ended, a reply that streamed); a cold one reloads them.
+    if (warm) for (const id of this.visibleIds) void this.chats[id]?.catchUp();
+    else for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
     notifications.connect(api);
     if (!warm) void serverUpdater.check(api, link.id);
   }
