@@ -40,7 +40,6 @@
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
 	/** Sections whose extensions the user folded away; everything starts unfolded. */
 	let collapsed = $state<Record<string, boolean>>({});
-	const extScope = (id: string) => (id === "extensions" ? "device" : id === "srvext" ? "server" : null);
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
 	$effect(() => {
@@ -63,18 +62,17 @@
 		return () => { live = false; };
 	});
 	type Kid = ExtensionRow;
-	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount(server?.id) : id === "extensions" ? extensionUpdates.deviceCount : 0) > 0;
+	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount(server?.id) : 0) > 0;
 	const extsOf = (id: string): Kid[] => {
 		if (id === "mcp") {
 			const rows = mcpSide && mcpSide.id === server?.id ? mcpSide.rows : [];
 			return rows.map((m, i) => ({ id: `mcp:${m.name}`, name: m.name, live: m.ready, half: m.failed, halfLabel: t("오류"), builtin: false, end: i === rows.length - 1 }));
 		}
-		const sc = extScope(id);
-		if (!sc) return [];
+		if (id !== "srvext") return [];
 		void app.extensionStoreTick;
-		const installed = app.clientExtensionsOf(server?.id).map((e) => ({ id: e.id, name: e.name, scope: e.scope, live: e.live }));
-		return extensionRows(sc, installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, {
-			clientIds: (s) => extensionUpdates.clientIds(s, server?.id),
+		const installed = app.clientExtensionsOf(server?.id).map((e) => ({ id: e.id, name: e.name, live: e.live }));
+		return extensionRows(installed, serverSide && serverSide.id === server?.id ? serverSide.names : null, {
+			clientIds: () => extensionUpdates.clientIds(server?.id),
 			serverNames: extensionUpdates.serverNames(server?.id),
 			missingServerFor: (cid) => extensionUpdates.missingServerFor(cid, server?.id),
 			clientName: (cid) => extensionUpdates.clientName(cid),

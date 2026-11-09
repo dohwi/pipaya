@@ -442,7 +442,7 @@
 	{#key app.serverId}<Lazy load={load.commands} dialog={app.commandsDialog} api={app.api} onclose={() => (app.commandsDialog = null)} />{/key}
 {/if}
 {#if app.servers.length === 0}
-	<button class="extension-entry" onclick={() => app.openSettings("extensions")}>{t("설정 · 확장")}</button>
+	<button class="extension-entry" onclick={() => app.openSettings("srvext")}>{t("설정 · 확장")}</button>
 {/if}
 
 {#if app.viewer}

@@ -79,8 +79,8 @@
 	/** The manifest can force device-only settings; then the switch has nothing to decide. */
 	const forcedLocal = $derived(entry.package.manifest.settingsScope === "local");
 	const local = $derived(forcedLocal || extensions.isSettingsLocal(id));
-	/** Only a server extension shares its settings with the server, so only it gets the choice. */
-	const canChooseLocal = $derived(entry.scope === "server" && !!onsettingslocal);
+	/** An extension shares its settings with the server, so it gets the choice. */
+	const canChooseLocal = $derived(!!onsettingslocal);
 </script>
 
 <ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>

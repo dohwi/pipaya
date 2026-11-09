@@ -24,7 +24,6 @@
 		replacement,
 		willResume,
 		filename,
-		target,
 		serverName,
 		busy,
 		oncancel,
@@ -39,7 +38,6 @@
 		/** The replacement keeps running without a second consent (same id, no new permission) */
 		willResume: boolean;
 		filename: string;
-		target: "server" | "device";
 		serverName: string;
 		busy: Record<string, boolean>;
 		oncancel: () => void;
@@ -120,12 +118,12 @@
 						</div>
 					</div>
 					{#if !replacement}
-						<p class="hint">{target === "server" ? t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName }) : t("이 기기에만 설치되고 서버를 바꿔도 남습니다")}</p>
+						<p class="hint">{t("{name}에 접속한 모든 기기가 공유합니다", { name: serverName })}</p>
 					{/if}
 					<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
 					<PermissionList pkg={p} />
 					{#if replacement}
-						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {replacement.scope === "device" ? t("(이 기기의 확장)") : t("(이 서버의 확장)")} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
+						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
 					{/if}
 				</div>
 				<div class="rfoot">

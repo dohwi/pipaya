@@ -6,7 +6,7 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import type { ExtensionHost as ExtensionHostType, HostAdapter } from "../src/lib/extensions/host.svelte";
 
-// Server vs device scope: where an extension is installed and what a server switch or sync touches.
+// The installed list belongs to the server: what a server switch, a sync or an import touches.
 // The real rune module is compiled with Svelte. Only the iframe/Worker runtime is replaced by a
 // recording fake, so host logic (permissions, generations, cleanup, persistence) is the real code.
 const FAKE_RUNTIME = `
@@ -103,150 +103,119 @@ function newHost() {
 }
 const flush = () => new Promise<void>(r => setTimeout(r, 0));
 const pkg = (id: string) => ({ manifest: { id, name: `Name ${id}`, version: "1.0.0", sdkVersion: 1, permissions: ["commands", "composer"] }, commands: [{ name: id, description: "d", template: "t {{args}}" }] });
-const ids = (host: Host, scope?: "server" | "device") => host.installed.filter(e => !scope || e.scope === scope).map(e => e.package.manifest.id).sort();
+const ids = (host: Host) => host.installed.map(e => e.package.manifest.id).sort();
 beforeEach(() => { server = "a"; shared = 0; });
 
-describe("extension scope", () => {
-	test("a server extension goes to the open server's list, a device extension to the device's", () => {
+describe("the installed list belongs to the server", () => {
+	test("an installed extension is kept under the open server", () => {
 		const host = newHost();
-		host.install(pkg("on-server"));
-		host.install(pkg("on-device"), "device");
-		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!).map((e: any) => e.package.manifest.id)).toEqual(["on-server"]);
-		expect(JSON.parse(storage.get("pipaya.extensions.device.v1")!).map((e: any) => e.package.manifest.id)).toEqual(["on-device"]);
-	});
-
-	test("both lists come back after a reload, each with its scope", async () => {
-		newHost().install(pkg("on-server")); 
-		const first = newHost(); first.install(pkg("on-device"), "device");
-		const again = newHost(); await flush();
-		expect(ids(again, "server")).toEqual(["on-server"]);
-		expect(ids(again, "device")).toEqual(["on-device"]);
-	});
-
-	test("the list a device had before scopes existed is all server extensions", () => {
-		storage.set("pipaya.extensions.v1.a", JSON.stringify([{ package: pkg("old"), enabled: false, settings: {}, configured: true }]));
-		const host = newHost();
-		expect(host.installed.map(e => [e.package.manifest.id, e.scope])).toEqual([["old", "server"]]);
+		host.install(pkg("one"));
+		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!).map((e: any) => e.package.manifest.id)).toEqual(["one"]);
 		expect(storage.has("pipaya.extensions.device.v1")).toBe(false);
 	});
 
-	test("only server extensions are shared with the server", () => {
-		const host = newHost();
-		host.install(pkg("on-server"));
-		host.install(pkg("on-device"), "device");
-		expect((host.packages() as any[]).map(p => p.manifest.id)).toEqual(["on-server"]);
+	test("the list comes back after a reload", async () => {
+		newHost().install(pkg("one"));
+		const again = newHost(); await flush();
+		expect(ids(again)).toEqual(["one"]);
 	});
 
-	test("changing a device extension does not tell the server anything", () => {
+	test("the list a device had before scopes existed is read as the server's", () => {
+		storage.set("pipaya.extensions.v1.a", JSON.stringify([{ package: pkg("old"), enabled: false, settings: {}, configured: true }]));
 		const host = newHost();
-		host.install(pkg("on-server"));
+		expect(ids(host)).toEqual(["old"]);
+	});
+
+	test("a device-only list from before is folded into the open server's list once", () => {
+		storage.set("pipaya.extensions.device.v1", JSON.stringify([{ package: pkg("mine"), enabled: false, settings: {}, configured: true }]));
+		storage.set("pipaya.extensions.v1.a", JSON.stringify([{ package: pkg("theirs"), enabled: false, settings: {}, configured: true }]));
+		const host = newHost();
+		expect(ids(host)).toEqual(["mine", "theirs"]);
+		expect(storage.has("pipaya.extensions.device.v1")).toBe(false);
+		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!).map((e: any) => e.package.manifest.id).sort()).toEqual(["mine", "theirs"]);
+	});
+
+	test("every extension is shared with the server", () => {
+		const host = newHost();
+		host.install(pkg("one"));
+		host.install(pkg("two"));
+		expect((host.packages() as any[]).map(p => p.manifest.id)).toEqual(["one", "two"]);
+	});
+
+	test("installing or removing tells the server", () => {
+		const host = newHost();
+		host.install(pkg("one"));
 		const before = shared;
-		host.install(pkg("on-device"), "device");
-		host.remove("on-device", { keepSettings: true });
-		expect(shared).toBe(before);
-		host.remove("on-server", { keepSettings: true });
+		host.remove("one", { keepSettings: true });
 		expect(shared).toBe(before + 1);
 	});
 
-	test("switching server swaps the server extensions and keeps the device ones", async () => {
+	test("switching server swaps the whole list", async () => {
 		const host = newHost();
 		host.install(pkg("a-only"));
-		host.install(pkg("mine"), "device");
 		server = "b";
 		storage.set("pipaya.extensions.v1.b", JSON.stringify([{ package: pkg("b-only"), enabled: false, settings: {}, configured: true }]));
 		await host.switchServer();
-		expect(ids(host, "server")).toEqual(["b-only"]);
-		expect(ids(host, "device")).toEqual(["mine"]);
+		expect(ids(host)).toEqual(["b-only"]);
 		server = "a"; await host.switchServer();
-		expect(ids(host, "server")).toEqual(["a-only"]);
-		expect(ids(host, "device")).toEqual(["mine"]);
+		expect(ids(host)).toEqual(["a-only"]);
 	});
 
-	test("a device extension keeps running across a server switch", async () => {
+	test("an extension of the server that is left stops running on a switch", async () => {
 		const host = newHost();
-		const id = host.install({ ...pkg("mine"), code: "/* fake */" }, "device");
+		const id = host.install({ ...pkg("one"), code: "/* fake */" });
 		await host.enable(id);
 		const runtime = (globalThis as any).__fakeRuntimes.at(-1);
 		server = "b"; await host.switchServer();
-		expect(host.find(id).state).toBe("active");
-		expect(runtime.stopped).toBe(false);
+		expect(runtime.stopped).toBe(true);
+		expect(host.installed).toEqual([]);
 	});
 
-	test("the server's list never removes or replaces a device extension", () => {
+	test("the server's list adds new packages switched off and drops the ones it no longer has", () => {
 		const host = newHost();
-		host.install(pkg("mine"), "device");
-		host.install(pkg("shared-one"));
-		host.applyPackages([{ ...pkg("mine"), manifest: { ...pkg("mine").manifest, version: "9.9.9" } }]); // same id, from the server
-		expect(host.find("mine").scope).toBe("device");
-		expect(host.find("mine").package.manifest.version).toBe("1.0.0");
-		expect(ids(host, "server")).toEqual([]); // shared-one is gone from the server's list, as before
-		expect(ids(host, "device")).toEqual(["mine"]);
-	});
-
-	test("the server adds new packages as server extensions, switched off", () => {
-		const host = newHost();
+		host.install(pkg("gone"));
 		host.applyPackages([pkg("fresh")]);
-		expect(host.find("fresh").scope).toBe("server");
+		expect(ids(host)).toEqual(["fresh"]);
 		expect(host.find("fresh").enabled).toBe(false);
 	});
 
-	test("a device extension with the same id as a server one wins when both are stored", () => {
-		storage.set("pipaya.extensions.device.v1", JSON.stringify([{ package: pkg("dup"), enabled: false, settings: {}, configured: true }]));
-		storage.set("pipaya.extensions.v1.a", JSON.stringify([{ package: pkg("dup"), enabled: false, settings: {}, configured: true }]));
+	test("an unreadable entry stays in the list, and is written back unchanged", () => {
+		storage.set("pipaya.extensions.v1.a", JSON.stringify([{ package: { manifest: { id: "future" } }, enabled: true }]));
 		const host = newHost();
-		expect(host.installed.map(e => [e.package.manifest.id, e.scope])).toEqual([["dup", "device"]]);
-		expect(host.unreadable.length).toBe(1); // the server's copy is kept, not deleted
+		expect(host.unreadable.map(u => u.id)).toEqual(["future"]);
+		host.install(pkg("another"));
+		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!).length).toBe(2);
 	});
 
-	test("with no server open an extension can still be installed on the device", () => {
-		server = null;
+	test("a backup keeps the entries and the device-only settings ids", () => {
 		const host = newHost();
-		host.install(pkg("mine"), "device");
-		expect(ids(host, "device")).toEqual(["mine"]);
-		expect(host.packages() ?? []).toEqual([]); // nothing of the device's goes to a server
+		host.install(pkg("one"));
+		const backup = (host as any).configIO("").backup();
+		expect(backup.entries.map((e: any) => e.package.manifest.id)).toEqual(["one"]);
+		expect(backup.entries[0].scope).toBeUndefined();
 	});
 
-	test("an unreadable entry stays in the list it came from", () => {
-		storage.set("pipaya.extensions.device.v1", JSON.stringify([{ package: { manifest: { id: "future" } }, enabled: true }]));
+	test("the settings file carries shortcuts and servers, never extensions", () => {
 		const host = newHost();
-		expect(host.unreadable.map(u => [u.id, u.scope])).toEqual([["future", "device"]]);
-		host.install(pkg("another"), "device");
-		expect(JSON.parse(storage.get("pipaya.extensions.device.v1")!).length).toBe(2);
-		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!)).toEqual([]);
-	});
-
-	test("a backup keeps each extension's scope", () => {
-		const host = newHost();
-		host.install(pkg("on-server"));
-		host.install(pkg("on-device"), "device");
-		const entries = (host as any).configIO("").backup().entries as any[];
-		expect(entries.map(e => [e.package.manifest.id, e.scope]).sort()).toEqual([["on-device", "device"], ["on-server", "server"]]);
-	});
-
-	test("the settings file carries this device's extensions and shortcuts, not the server's extensions", () => {
-		const host = newHost();
-		host.install(pkg("on-server"));
-		host.install(pkg("on-device"), "device");
+		host.install(pkg("one"));
 		const doc = host.exportConfiguration({ servers: true, extensions: true, preferences: true });
-		expect(doc.extensions.map(e => e.package.manifest.id)).toEqual(["on-device"]);
+		expect(doc.extensions).toEqual([]);
 		expect(doc.keybindings).toEqual({ newChat: "Mod+K" });
 		expect(doc.servers.map(s => s.baseUrl)).toEqual(["http://a.test"]);
 		expect(host.exportConfiguration({ servers: false, extensions: false, preferences: false, keybindings: false }).keybindings).toBeUndefined();
 	});
 
-	test("importing a file installs its extensions on the device, switched off", () => {
+	test("importing a file installs its extensions on the server, switched off", () => {
 		const host = newHost();
 		host.importConfiguration({ schemaVersion: 1, servers: [], preferences: {}, extensions: [{ package: pkg("from-file") as any, enabled: true, settings: {} }] });
-		expect(host.find("from-file").scope).toBe("device");
 		expect(host.find("from-file").enabled).toBe(false);
-		expect(storage.has("pipaya.extensions.device.v1")).toBe(true);
+		expect(JSON.parse(storage.get("pipaya.extensions.v1.a")!).map((e: any) => e.package.manifest.id)).toEqual(["from-file"]);
 	});
 
-	test("importing a file over a server extension keeps it on the server", () => {
+	test("importing a file over an installed extension replaces it in place", () => {
 		const host = newHost();
 		host.install(pkg("shared"));
 		host.importConfiguration({ schemaVersion: 1, servers: [], preferences: {}, extensions: [{ package: { ...pkg("shared"), manifest: { ...pkg("shared").manifest, version: "2.0.0" } } as any, enabled: false, settings: {} }] });
-		expect(host.find("shared").scope).toBe("server");
 		expect(host.find("shared").package.manifest.version).toBe("2.0.0");
 	});
 

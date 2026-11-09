@@ -285,11 +285,11 @@ class AppStore {
     if (!this.api) return;
     this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
-  settingsTab = $state<"general" | "servers" | "keys" | "extensions" | "backup" | "agent">("general");
+  settingsTab = $state<"general" | "servers" | "keys" | "srvext" | "backup" | "agent">("general");
   /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
   settingsServer = $state<string | "new" | null>(null);
   openSettings(
-    tab: "general" | "servers" | "keys" | "extensions" | "backup" | "agent" = "general",
+    tab: "general" | "servers" | "keys" | "srvext" | "backup" | "agent" = "general",
     server: string | "new" | null = null,
   ) {
     this.settingsTab = tab;
@@ -1360,23 +1360,23 @@ class AppStore {
     return e.sync.flush().catch(() => {}).finally(() => e.sync.dispose());
   }
   /**
-   * The client extensions as one server sees them: this device's own, plus that server's (the host's when it is open, the
-   * idle editor's otherwise). Never another server's: the host only holds the open server's.
+   * The client extensions as one server sees them: the host's when it is open, the idle editor's otherwise. Never
+   * another server's: the host only holds the open server's.
    */
-  clientExtensionsOf(serverId: string | null | undefined): { id: string; name: string; version: string; scope: "server" | "device"; live: boolean; enabled: boolean }[] {
+  clientExtensionsOf(serverId: string | null | undefined): { id: string; name: string; version: string; live: boolean; enabled: boolean }[] {
     const open = !serverId || serverId === this.serverId;
-    const own = extensions.installed
-      .filter((e) => e.scope === "device" || open)
-      .map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, scope: e.scope, live: e.state === "active" || e.state === "starting", enabled: e.enabled }));
+    const own = open
+      ? extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.state === "active" || e.state === "starting", enabled: e.enabled }))
+      : [];
     const idle = open ? [] : (this.extensionStoreOf(serverId)?.installed ?? []).filter((e) => !own.some((o) => o.id === e.package.manifest.id));
-    return [...own, ...idle.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, scope: "server" as const, live: e.enabled, enabled: e.enabled }))];
+    return [...own, ...idle.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.enabled, enabled: e.enabled }))];
   }
   listChanged() {
     this.settingsSync?.changed("extensions");
   }
   /** Lets the update hints read each server's own client extensions (never the open server's for another server). */
   private bindUpdateHints() {
-    extensionUpdates.clientsOf = (id) => { void this.extensionStoreTick; return this.clientExtensionsOf(id).map((e) => ({ id: e.id, version: e.version, scope: e.scope })); };
+    extensionUpdates.clientsOf = (id) => { void this.extensionStoreTick; return this.clientExtensionsOf(id).map((e) => ({ id: e.id, version: e.version })); };
   }
   statesChanged() {
     this.settingsSync?.changed("extensionStates");

@@ -1,6 +1,5 @@
 import type { Api } from "./api";
 import { compareVersions, fetchCatalog, DEFAULT_MARKETPLACE_URL, type MarketCatalog } from "./extensions/marketplace";
-import { extensions } from "./extensions/host.svelte";
 
 const RECHECK_MS = 30 * 60 * 1000;
 
@@ -42,22 +41,16 @@ class ExtensionUpdates {
 		}
 		return out;
 	};
-	/** Ids of this device's client extensions with a newer entry. */
-	clientIds = (scope: "device" | "server", serverId?: string | null): Set<string> => {
-		if (scope === "device") return this.newerClients(extensions.installed.filter((e) => e.scope === "device").map((e) => ({ id: e.package.manifest.id, version: e.package.manifest.version })));
-		return this.newerClients(this.clientsOf(serverId).filter((e) => e.scope === "server"));
-	};
+	/** Ids of a server's client extensions with a newer entry. */
+	clientIds = (serverId?: string | null): Set<string> => this.newerClients(this.clientsOf(serverId));
 	/** The client extensions of a server, set by whoever owns the stores (the app store): the open server's host, or an idle editor. */
-	clientsOf: (serverId: string | null | undefined) => readonly { id: string; version: string; scope: "server" | "device" }[] = () => [];
+	clientsOf: (serverId: string | null | undefined) => readonly { id: string; version: string }[] = () => [];
 	serverCount(serverId: string | null | undefined): number {
-		return this.serverNames(serverId).size + this.clientIds("server", serverId).size;
+		return this.serverNames(serverId).size + this.clientIds(serverId).size;
 	}
-	get deviceCount(): number {
-		return this.clientIds("device").size;
-	}
-	/** Anything to update on this device or on any saved server. */
+	/** Anything to update on any saved server. */
 	get any(): boolean {
-		return this.deviceCount > 0 || Object.keys(this.servers).some((id) => this.serverCount(id) > 0);
+		return Object.keys(this.servers).some((id) => this.serverCount(id) > 0);
 	}
 
 	/** Reads every saved server's extensions each time (`apis`: server id to its connection); the catalog at most every 30 minutes. */

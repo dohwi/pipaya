@@ -22,18 +22,16 @@
 	import { fileStamp } from "../lib/format";
 
 	/* ---------- export ---------- */
-	let parts = $state({ servers: true, extensions: true, preferences: true, keybindings: true });
+	let parts = $state({ servers: true, preferences: true, keybindings: true });
 	const counts = $derived({
 		servers: app.servers.length,
-		extensions: extensions.installed.filter((e) => e.scope === "device").length,
 		preferences: 3,
 		keybindings: Object.keys(app.prefs.changedBindings()).length,
 	});
-	const nothing = $derived(!parts.servers && !parts.extensions && !parts.preferences && !parts.keybindings);
+	const nothing = $derived(!parts.servers && !parts.preferences && !parts.keybindings);
 
 	const rows = [
 		{ key: "servers", title: msg("서버 연결"), sub: msg("이름과 주소만. 토큰은 들어가지 않습니다") },
-		{ key: "extensions", title: msg("이 기기의 확장"), sub: msg("이 기기에 설치한 확장과 설정 (서버 확장 제외)") },
 		{ key: "preferences", title: msg("앱 설정"), sub: msg("테마, 알림음 사용 여부와 크기") },
 		{ key: "keybindings", title: msg("단축키"), sub: msg("기본값에서 바꾼 것만 담깁니다") },
 	] as const;
@@ -43,7 +41,7 @@
 		try {
 			const doc = extensions.exportConfiguration(parts);
 			download(doc, `pipaya-settings-${fileStamp()}.json`, true);
-			exported = t("서버 {servers}개 · 확장 {extensions}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, extensions: doc.extensions.length, keys: Object.keys(doc.keybindings ?? {}).length });
+			exported = t("서버 {servers}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, keys: Object.keys(doc.keybindings ?? {}).length });
 		} catch (e) {
 			app.toast(errorText(e, t("내보내지 못했습니다")), "error");
 		}
@@ -90,8 +88,6 @@
 	}
 
 	let applied = $state<string[] | null>(null);
-	/** Whether the import brought in extensions (they arrive switched off, and the note points to the tab). */
-	let appliedExtensions = $state(false);
 	let restoredNote = $state("");
 	function applyLoaded() {
 		if (!loaded || loaded.plan.blocked) return;
@@ -99,7 +95,6 @@
 		try {
 			extensions.importConfiguration(doc);
 			applied = planSummary(plan);
-			appliedExtensions = plan.extensions.install.length + plan.extensions.replace.length > 0;
 			loaded = null;
 			savedAt = backupSavedAt();
 			canRestore = hasBackup();
@@ -175,7 +170,6 @@
 	{#if applied}
 		<Notice tone="ok" size="sm">
 			<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
-			{#if appliedExtensions}{t("확장은 꺼진 상태입니다.")} <button type="button" class="textlink" onclick={() => app.openSettings("extensions")}>{t("확장 탭에서 켜기")}</button>{/if}
 		</Notice>
 	{/if}
 	{#if restoredNote}<Notice tone="ok" size="sm" role="status">{restoredNote}</Notice>{/if}

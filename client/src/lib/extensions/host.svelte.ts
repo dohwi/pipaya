@@ -70,14 +70,8 @@ export interface HostAdapter {
     confirm(message: string): Promise<boolean>;
   };
 }
-/**
- * Where an extension is installed. "server": part of the open server's work, shared by every device connected to it;
- * "device": only on this device, kept whichever server is open, never sent to a server.
- */
-export type ExtensionScope = "server" | "device";
 export interface InstalledExtension {
   package: ExtensionPackage;
-  scope: ExtensionScope;
   enabled: boolean;
   state: "disabled" | "starting" | "active" | "error";
   error?: string;
@@ -86,7 +80,7 @@ export interface InstalledExtension {
   configured: boolean;
 }
 /** A stored entry this version cannot read. Kept untouched so a newer version can still read it. */
-export interface UnreadableExtension { raw: unknown; id?: string; name?: string; reason: string; scope?: ExtensionScope }
+export interface UnreadableExtension { raw: unknown; id?: string; name?: string; reason: string }
 export interface ExtensionCommand { owner: string; name: string; desc: string; args?: string; run(arg: string): Promise<void> }
 export interface ComposerAction { owner: string; id: string; label: string; run(): Promise<void> }
 export interface StatusItem { owner: string; id: string; text: string }
@@ -145,9 +139,8 @@ const SAFE = "pipaya.extensions.safe";
 const BOOT = "pipaya.extensions.booting";
 const KEPT = "pipaya.extensions.kept";
 const CORRUPT = "pipaya.extensions.v1.corrupt";
-/** The extensions installed on this device only (the server ones live under `KEY.<serverId>`). */
-const DEVICE_KEY = "pipaya.extensions.device.v1";
-const DEVICE_CORRUPT = "pipaya.extensions.device.v1.corrupt";
+/** Where the old device-only list lived (`pipaya.extensions.device.v1`); read once at start to fold it into the server's list. */
+const LEGACY_DEVICE_KEY = "pipaya.extensions.device.v1";
 const MAX_ENTRIES = 50;
 /** Shortcut overrides the user made in Settings > Shortcuts: { "<extension id>:<shortcut id>": combo | "" } ("" = unbound). */
 const SHORTCUT_KEYS = "pipaya.extensions.shortcut-keys";
@@ -220,8 +213,7 @@ export class ExtensionHost {
   private booting = new Map<string, number>();
   /** Raw storage text of a corrupt list; backed up once before the first write over it. */
   private corruptRaw: string | null = null;
-  private deviceCorruptRaw: string | null = null;
-  /** The shared list as last reported to the server sync, so a change to a device extension does not trigger an upload. */
+  /** The list as last reported to the server sync, so a change that leaves the packages alone does not trigger an upload. */
   private lastShared: string | null = null;
   private notificationTimes = new Map<string, number[]>();
   /** Non-blocking message shown while settings exist only in this browser. */
@@ -244,9 +236,9 @@ export class ExtensionHost {
     if (pkg?.manifest.settingsScope === "local") return true;
     return this.localIds.includes(id);
   }
-  /** Settings of this extension go to the server (a server extension that does not keep them local). */
+  /** Settings of this extension go to the server (unless the user keeps them on this device). */
   private sharesSettings(entry: InstalledExtension): boolean {
-    return entry.scope === "server" && !this.keepsSettingsLocal(entry.package.manifest.id, entry.package);
+    return !this.keepsSettingsLocal(entry.package.manifest.id, entry.package);
   }
   /** The user's choice for one extension; `false` puts it back on the server (and uploads what is here). */
   setSettingsLocal(id: string, local: boolean) {
@@ -285,7 +277,7 @@ export class ExtensionHost {
     let legacy = false;
     try { legacy = localStorage.getItem(LEGACY_SOURCE) === "local"; } catch { /* no storage */ }
     if (!legacy) return;
-    const ids = this.installed.filter((e) => e.scope === "server").map((e) => e.package.manifest.id);
+    const ids = this.installed.map((e) => e.package.manifest.id);
     this.localIds = [...new Set([...this.localIds, ...ids])];
     this.saveLocalIds();
     try { localStorage.removeItem(LEGACY_SOURCE); } catch { /* no storage */ }
@@ -310,8 +302,8 @@ export class ExtensionHost {
   /** Resolves once init() has loaded the list of the server that was open at launch */
   whenReady(): Promise<void> { return this.readyPromise; }
 
-  /** Parse one stored list into `installed` / `unreadable`. A device extension wins over a server one with the same id. */
-  private readList(text: string | null, scope: ExtensionScope) {
+  /** Parse the stored list into `installed` / `unreadable`. */
+  private readList(text: string | null) {
     try {
       const raw: unknown = JSON.parse(text ?? "[]");
       if (!Array.isArray(raw) || raw.length > MAX_ENTRIES) throw new LocalizedError(t("잘못된 확장 목록"));
@@ -320,29 +312,40 @@ export class ExtensionHost {
           const entry = object(item);
           const pkg = parsePackage(entry.package);
           if (this.installed.some(e => e.package.manifest.id === pkg.manifest.id)) throw new LocalizedError(t("중복 확장 ID"));
-          this.installed.push({ package: pkg, scope, enabled: entry.enabled === true, state: "disabled", configured: entry.configured !== false, settings: plain(entry.settings) ?? {} });
-        } catch (e) { this.unreadable.push({ raw: item, scope, ...identify(item), reason: e instanceof Error ? e.message : String(e) }); }
+          this.installed.push({ package: pkg, enabled: entry.enabled === true, state: "disabled", configured: entry.configured !== false, settings: plain(entry.settings) ?? {} });
+        } catch (e) { this.unreadable.push({ raw: item, ...identify(item), reason: e instanceof Error ? e.message : String(e) }); }
       }
     } catch (e) {
       this.loadError = t("확장 설정을 읽지 못했습니다: {error}", { error: e instanceof Error ? e.message : String(e) });
-      if (scope === "device") this.deviceCorruptRaw = text; else this.corruptRaw = text;
+      this.corruptRaw = text;
     }
   }
 
   /**
-   * Read the installed lists and the recovery state. Called at launch (both lists) and whenever the open server
-   * changes (only the server's list: the device's own extensions stay as they are).
+   * The list used to have a device half (`pipaya.extensions.device.v1`): extensions that stayed on this device whichever
+   * server was open. Every extension now belongs to the server, so those are folded into the open server's list once and
+   * the old key is dropped. An entry this version cannot read is kept as unreadable, exactly as in the main list.
    */
-  private loadList(opts: { device: boolean } = { device: true }) {
+  private migrateDeviceList() {
+    let text: string | null = null;
+    try { text = localStorage.getItem(LEGACY_DEVICE_KEY); } catch { return; }
+    if (text === null) return;
+    const before = this.installed.length;
+    this.readList(text);
+    try { localStorage.removeItem(LEGACY_DEVICE_KEY); } catch { /* the list is already read */ }
+    if (this.installed.length !== before) { try { this.save(); } catch { /* ignore */ } }
+  }
+
+  /** Read the installed list and the recovery state. Called at launch and whenever the open server changes. */
+  private loadList() {
     let booting: string[] = [];
     try {
       this.safeMode = localStorage.getItem(SAFE) === "1" || new URLSearchParams(location.search).get("extensions") === "off";
       booting = this.bootingIds();
     } catch { /* treat as normal mode */ }
     this.lastShared = null;
-    // Device extensions first, so one that shares an id with a server extension is the one that stays.
-    if (opts.device) this.readList(localStorage.getItem(DEVICE_KEY), "device");
-    this.readList(this.storedList(), "server");
+    this.readList(this.storedList());
+    this.migrateDeviceList();
     this.readLocalIds();
     this.pending = new PendingWrites(localStorage, this.pendingKey());
     this.migrateLegacySource();
@@ -557,19 +560,11 @@ export class ExtensionHost {
       localStorage.setItem(CORRUPT, this.corruptRaw);
       this.corruptRaw = null;
     }
-    if (this.deviceCorruptRaw !== null) {
-      localStorage.setItem(DEVICE_CORRUPT, this.deviceCorruptRaw);
-      this.deviceCorruptRaw = null;
-    }
-    const stored = (scope: ExtensionScope) => [
-      ...this.installed.filter(e => e.scope === scope).map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured })),
-      ...this.unreadable.filter(u => (u.scope ?? "server") === scope).map(u => u.raw),
-    ];
-    localStorage.setItem(this.listKey(), JSON.stringify(stored("server")));
-    const device = stored("device");
-    if (device.length) localStorage.setItem(DEVICE_KEY, JSON.stringify(device));
-    else localStorage.removeItem(DEVICE_KEY);
-    // Only a change to the shared (server) list is worth telling the server about.
+    localStorage.setItem(this.listKey(), JSON.stringify([
+      ...this.installed.map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured })),
+      ...this.unreadable.map(u => u.raw),
+    ]));
+    // Only a change to the list itself is worth telling the server about.
     const shared = JSON.stringify(this.packages() ?? null);
     if (shared === this.lastShared) return;
     this.lastShared = shared;
@@ -585,12 +580,12 @@ export class ExtensionHost {
   /** On/off choices of this server's extensions, or undefined while none was ever made. */
   states(): Record<string, boolean> | undefined {
     const out: Record<string, boolean> = {};
-    for (const e of this.installed) { const id = e.package.manifest.id; if (e.scope === "server" && Object.hasOwn(this.wanted, id)) out[id] = this.wanted[id]!; }
+    for (const e of this.installed) { const id = e.package.manifest.id; if (Object.hasOwn(this.wanted, id)) out[id] = this.wanted[id]!; }
     return Object.keys(out).length ? out : undefined;
   }
   private choose(id: string, on: boolean) {
     const e = this.installed.find(x => x.package.manifest.id === id);
-    if (!e || e.scope !== "server" || this.wanted[id] === on) return;
+    if (!e || this.wanted[id] === on) return;
     this.wanted[id] = on;
     if (!this.applyingRemote) this.adapter?.statesChanged?.();
   }
@@ -607,7 +602,7 @@ export class ExtensionHost {
     try {
       for (const e of [...this.installed]) {
         const id = e.package.manifest.id;
-        if (e.scope !== "server" || !Object.hasOwn(this.wanted, id)) continue;
+        if (!Object.hasOwn(this.wanted, id)) continue;
         if (this.wanted[id] && !e.enabled && e.state !== "starting") void this.enable(id).catch(() => {});
         else if (!this.wanted[id] && e.enabled) this.disable(id);
       }
@@ -616,9 +611,8 @@ export class ExtensionHost {
 
   /** Installed packages in a stable order: what is shared with the other clients of this server. Activation and consent stay on the device. */
   packages(): unknown[] | undefined {
-    const shared = this.installed.filter(e => e.scope === "server");
-    if (localStorage.getItem(this.listKey()) === null && !shared.length) return undefined;
-    return shared.map(e => clone(e.package)).sort((a, b) => (a.manifest.id < b.manifest.id ? -1 : 1));
+    if (localStorage.getItem(this.listKey()) === null && !this.installed.length) return undefined;
+    return this.installed.map(e => clone(e.package)).sort((a, b) => (a.manifest.id < b.manifest.id ? -1 : 1));
   }
 
   /** Make this device's installed list match the server's: new packages arrive switched off, changed ones lose consent, removed ones go. */
@@ -630,14 +624,12 @@ export class ExtensionHost {
     try {
       for (const e of [...this.installed]) {
         const id = e.package.manifest.id;
-        if (e.scope !== "server") continue; // this device's own extensions are not the server's to remove
         if (!wanted.has(id)) { try { this.remove(id, { keepSettings: true }); } catch { /* keep what is there */ } }
       }
       for (const [id, pkg] of wanted) {
         const old = this.installed.find(e => e.package.manifest.id === id);
-        if (old && old.scope !== "server") continue; // a device extension with this id stays as it is
         if (old && canonical(old.package) === canonical(pkg)) continue;
-        try { this.install(pkg, "server"); } catch { /* over the limit: leave it out */ }
+        try { this.install(pkg); } catch { /* over the limit: leave it out */ }
       }
     } finally { this.applyingRemote = false; }
     try { this.save(); } catch { /* cache only */ }
@@ -648,14 +640,14 @@ export class ExtensionHost {
   async switchServer() {
     if (!this.initialized) return;
     this.booting.clear(); this.writeBooting([]);
-    for (const e of this.installed) if (e.scope === "server") this.cleanup(e.package.manifest.id);
-    this.installed = this.installed.filter(e => e.scope === "device");
-    this.unreadable = this.unreadable.filter(u => u.scope === "device");
+    for (const e of this.installed) this.cleanup(e.package.manifest.id);
+    this.installed = [];
+    this.unreadable = [];
     this.remote = {}; this.wanted = {}; this.unsynced.clear(); this.clock = new WriteClock();
     this.pending = new PendingWrites(localStorage, this.pendingKey());
     this.readLocalIds();
     this.loadError = ""; this.syncNotice = ""; this.corruptRaw = null; this.panelOpen = false; this.activePanel = null;
-    this.loadList({ device: false });
+    this.loadList();
     this.applyThemes();
     await this.boot();
   }
@@ -698,7 +690,7 @@ export class ExtensionHost {
     if (!old || !old.enabled || this.safeMode) return false;
     return next.manifest.permissions.every(p => old.package.manifest.permissions.includes(p));
   }
-  install(input: unknown, scope: ExtensionScope = "server") {
+  install(input: unknown) {
     const pkg = parsePackage(input);
     const id = pkg.manifest.id;
     const old = this.installed.find(e => e.package.manifest.id === id);
@@ -713,14 +705,14 @@ export class ExtensionHost {
       // A reinstalled id gets back what it had: the unreadable entry's own settings, else the server's, else the kept copy.
       const rawEntry = takeover >= 0 ? plain(this.unreadable[takeover]!.raw) : undefined;
       const stored = plain(rawEntry?.settings);
-      const remote = scope === "server" && !this.keepsSettingsLocal(id, pkg) && Object.hasOwn(this.remote, id) ? plain(this.remote[id]) : undefined;
+      const remote = !this.keepsSettingsLocal(id, pkg) && Object.hasOwn(this.remote, id) ? plain(this.remote[id]) : undefined;
       const kept = this.keptMap().get(id);
       const known = (stored && Object.keys(stored).length ? stored : undefined) ?? remote ?? kept;
       const fromLocalOnly = known !== undefined && known !== remote;
       const base: Record<string, unknown> = known ? clone(known) : {};
       const configured = !fields || (takeover >= 0 ? rawEntry?.configured !== false : known !== undefined);
       if (takeover >= 0) this.unreadable = this.unreadable.filter((_, i) => i !== takeover);
-      this.installed.push({ package: pkg, scope, enabled: false, state: "disabled", configured, settings: fields ? fillSettingDefaults(fields, base) : base });
+      this.installed.push({ package: pkg, enabled: false, state: "disabled", configured, settings: fields ? fillSettingDefaults(fields, base) : base });
       this.dropKept(id);
       if (fromLocalOnly && Object.keys(base).length) void this.push(id); // the server does not have these yet
     }
@@ -994,14 +986,12 @@ export class ExtensionHost {
     if (!adapter) throw new LocalizedError(t("이 클라이언트는 설정 내보내기를 지원하지 않습니다"));
     return {
       capture: () => ({ schemaVersion: 1 as const, ...withoutKeybindings(adapter.capture(), id !== ""), extensions: this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: clone(e.package), enabled: e.enabled, settings: publicSettings(e.settings, e.package.manifest.settings ?? []) })) }),
-      backup: () => ({ app: adapter.backup(), entries: clone(this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: e.package, scope: e.scope, enabled: e.enabled, settings: e.settings, configured: e.configured }))), unreadable: clone(this.unreadable), localIds: [...this.localIds] }),
+      backup: () => ({ app: adapter.backup(), entries: clone(this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured }))), unreadable: clone(this.unreadable), localIds: [...this.localIds] }),
       apply: document => {
         const newCount = document.extensions.filter(e => !this.installed.some(old => old.package.manifest.id === e.package.manifest.id) && !this.unreadable.some(old => old.id === e.package.manifest.id)).length;
         if (this.installed.length + this.unreadable.length + newCount > MAX_ENTRIES) throw new LocalizedError(t("확장 최대 50개 한도를 초과합니다"));
         for (const entry of document.extensions) {
-          // A file carries this device's extensions, so they come back as device extensions. One that already exists
-          // keeps the place it has (replacing a server extension from a file must not move it off the server).
-          const target = this.install(entry.package, this.installed.find(e => e.package.manifest.id === entry.package.manifest.id)?.scope ?? "device");
+          const target = this.install(entry.package);
           const installed = this.find(target);
           // Preserve local secrets / schema-less values. Only public settings are replaced.
           installed.settings = { ...installed.settings, ...clone(entry.settings) };
@@ -1014,7 +1004,7 @@ export class ExtensionHost {
       restore: value => {
         const raw = object(value);
         if (!Array.isArray(raw.entries) || !Array.isArray(raw.unreadable)) throw new LocalizedError(t("잘못된 로컬 백업"));
-        const entries = raw.entries.map(item => { const e = object(item); return { package: parsePackage(e.package), scope: (e.scope === "device" ? "device" : "server") as ExtensionScope, enabled: false, state: "disabled" as const, settings: clone(object(e.settings)), configured: e.configured !== false }; });
+        const entries = raw.entries.map(item => { const e = object(item); return { package: parsePackage(e.package), enabled: false, state: "disabled" as const, settings: clone(object(e.settings)), configured: e.configured !== false }; });
         const kept = this.installed.filter(e => e.package.manifest.id === id);
         if (entries.some(e => e.package.manifest.id === id) || entries.length + raw.unreadable.length + kept.length > MAX_ENTRIES) throw new LocalizedError(t("잘못된 로컬 백업"));
         for (const e of this.installed) if (e.package.manifest.id !== id) this.cleanup(e.package.manifest.id);
@@ -1023,7 +1013,7 @@ export class ExtensionHost {
         // An older backup kept every extension's settings here (`localSettings: true`): those ids become local.
         const localIds = Array.isArray(raw.localIds)
           ? raw.localIds.filter((x): x is string => typeof x === "string")
-          : raw.localSettings === true ? entries.filter(e => e.scope === "server").map(e => e.package.manifest.id) : [];
+          : raw.localSettings === true ? entries.map(e => e.package.manifest.id) : [];
         this.localIds = [...new Set(localIds)];
         this.saveLocalIds();
         this.save(); this.applyThemes(); adapter.restore(raw.app);
@@ -1080,16 +1070,14 @@ export class ExtensionHost {
   /* ---------- settings transfer driven by the user (the same engine as the SDK, with no extension in between) ---------- */
 
   /** The settings as a document, limited to the parts the user ticked. */
-  exportConfiguration(parts: { servers: boolean; extensions: boolean; preferences: boolean; keybindings?: boolean }): ConfigurationDocument {
+  exportConfiguration(parts: { servers: boolean; preferences: boolean; keybindings?: boolean }): ConfigurationDocument {
     const doc = this.configIO("").capture();
-    // Only what belongs to this device goes into the file. Server extensions are the server's: a device that connects
-    // to that server gets them from it, so they are left out here.
-    const device = new Set(this.installed.filter(e => e.scope === "device").map(e => e.package.manifest.id));
+    // Extensions belong to the server: a device that connects to it gets them from there, so they are left out of the file.
     const { keybindings, ...rest } = doc;
     return parseConfiguration({
       ...rest,
       servers: parts.servers ? doc.servers : [],
-      extensions: parts.extensions ? doc.extensions.filter(e => device.has(e.package.manifest.id)) : [],
+      extensions: [],
       preferences: parts.preferences ? doc.preferences : {},
       ...(parts.keybindings !== false && keybindings ? { keybindings } : {}),
     });

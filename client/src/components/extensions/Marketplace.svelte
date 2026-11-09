@@ -15,7 +15,7 @@
 	import type { ExtensionSource } from "../../lib/extensions/source";
 	import { app } from "../../lib/store.svelte";
 
-	let { scope, api, serverId = null, src, onchanged, onclose, onpick, initialQuery = "" }: { scope: "server" | "device"; /** Connection of the server being listed (the one picked in settings), not necessarily the open one */ api: Api | null; /** Id of that server; the open one when unset */ serverId?: string | null; /** Where client extensions are removed from: the host, or that server's idle list */ src: ExtensionSource; /** A server extension was installed or removed there: the caller reads its own lists again */ onchanged: () => void | Promise<void>; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
+	let { api, serverId = null, src, onchanged, onclose, onpick, initialQuery = "" }: { /** Connection of the server being listed (the one picked in settings), not necessarily the open one */ api: Api | null; /** Id of that server; the open one when unset */ serverId?: string | null; /** Where client extensions are removed from: the host, or that server's idle list */ src: ExtensionSource; /** A server extension was installed or removed there: the caller reads its own lists again */ onchanged: () => void | Promise<void>; onclose: () => void; onpick: (pkg: ExtensionPackage, entry: MarketEntry) => void; initialQuery?: string } = $props();
 
 	let catalog = $state<MarketCatalog | null>(null);
 	// svelte-ignore state_referenced_locally
@@ -28,10 +28,7 @@
 
 	/** Whether a client extension is installed where it would go: this device's own, or the listed server's */
 	const installed = (id: string) => (void app.extensionStoreTick, app.clientExtensionsOf(serverId ?? app.serverId)).find((e) => e.id === id);
-	/** A server tab lists server extensions only, a device tab client ones only. */
-	const kind = $derived(scope === "server" ? "server" : "client");
 	const shown = $derived((catalog?.extensions ?? []).filter((e) => {
-		if (e.kind !== kind) return false;
 		const q = query.trim().toLowerCase();
 		return !q || `${e.id} ${e.name} ${e.description} ${Object.values(e.descriptions ?? {}).join(" ")} ${e.author ?? ""}`.toLowerCase().includes(q);
 	}));
@@ -39,7 +36,7 @@
 	let stars = $state<Record<string, number>>({});
 
 	$effect(() => {
-		const list = (catalog?.extensions ?? []).filter((e) => e.kind === kind);
+		const list = catalog?.extensions ?? [];
 		let live = true;
 		for (const e of list) {
 			const repo = repoLoc(e)?.repo;
@@ -185,7 +182,7 @@
 		</div>
 		<div class="hints">
 			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
-			{#if scope === "server"}<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>{/if}
+			<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>
 		</div>
 		<SearchField label={t("확장 검색")} bind:value={query} />
 		{#if error}<Notice tone="danger" size="sm" role="alert">{error}</Notice>{/if}

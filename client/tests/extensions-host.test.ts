@@ -1318,11 +1318,11 @@ describe("workspace", () => {
 		await call(host, id, "workspace.sidebar", [{ collapsed: true, width: 300 }]);
 		await call(host, id, "workspace.openTab", ["g1"]);
 		await call(host, id, "workspace.moveTab", ["a", "b", "after"]);
-		await call(host, id, "workspace.openSettings", ["extensions"]);
+		await call(host, id, "workspace.openSettings", ["srvext"]);
 		await call(host, id, "workspace.closeSettings", []);
 		await call(host, id, "workspace.open", ["skills"]);
 		await call(host, id, "workspace.runCommand", ["compact", "keep it"]);
-		expect(log).toEqual([["sidebar", { collapsed: true, width: 300 }], ["openTab", "g1"], ["moveTab", "a", "b", true], ["openSettings", "extensions"], ["closeSettings"], ["open", "skills"], ["run", "compact", "keep it"]]);
+		expect(log).toEqual([["sidebar", { collapsed: true, width: 300 }], ["openTab", "g1"], ["moveTab", "a", "b", true], ["openSettings", "srvext"], ["closeSettings"], ["open", "skills"], ["run", "compact", "keep it"]]);
 		for (const [m, a] of [
 			["workspace.sidebar", [{ hidden: true }]], ["workspace.sidebar", [{ open: "yes" }]], ["workspace.moveTab", ["a", "b", "inside"]],
 			["workspace.openSettings", ["secrets"]], ["workspace.open", ["terminal"]], ["workspace.runCommand", ["Bad Name"]],

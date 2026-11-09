@@ -10,7 +10,7 @@
 	import { download } from "../lib/download";
 	import { tick } from "svelte";
 	import { app } from "../lib/store.svelte";
-		import { CONFIG_REQUIRED, extensions, type ExtensionScope } from "../lib/extensions/host.svelte";
+	import { CONFIG_REQUIRED, extensions } from "../lib/extensions/host.svelte";
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
 	import type { StoredExtensionSettings } from "../lib/extensions/settings-store";
@@ -27,31 +27,27 @@
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
 	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
-	let { scope: view, selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), ongoserver, ongoclient, onopenserverext, serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; scope: ExtensionScope; selected?: string | null; /** Server tab: a server extension to look up in the marketplace as soon as it opens */ marketFor?: string | null; /** Device tab: a client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null; /** Device tab: send the user to the server tab to install this server extension */ ongoserver?: (id: string) => void; /** Server tab: open a client extension that lives on the device tab */ ongoclient?: (id: string) => void; /** Device tab: open this server extension (by name) on the server tab */ onopenserverext?: (name: string) => void } = $props();
+	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
 	let marketQuery = $state("");
-	$effect(() => { if (installFor && view === "device") { const id = installFor; installFor = null; void installCompanion(id); } });
-	$effect(() => { if (marketFor && view === "server") { marketQuery = marketFor; market = true; marketFor = null; } });
+	$effect(() => { if (installFor) { const id = installFor; installFor = null; void installCompanion(id); } });
+	$effect(() => { if (marketFor) { marketQuery = marketFor; market = true; marketFor = null; } });
 	let preview = $state<ExtensionPackage | null>(null);
-	/** Where the package being imported will be installed: the scope of the tab it is imported from. */
-	/** A package from the marketplace is a client extension: it goes to this device (the client extensions tab), even when picked from the server tab as the client half of a pair. */
-	let fromMarket = $state(false);
-	const target = $derived<ExtensionScope>(fromMarket ? "device" : view);
 	/** The connection of the server being listed: the one picked in the settings window, else the open one. */
 	const srvApi = $derived((serverId ? app.links[serverId]?.api : null) ?? app.api);
 	const serverName = $derived(app.servers.find((s) => s.id === (serverId ?? app.serverId))?.name ?? "");
 	/**
-	 * Where this pane reads and writes. The open server (and this device) is the extension host. Any other saved server
-	 * is its own idle editor: its list, its connection, its sync, so nothing here can touch the open server.
+	 * Where this pane reads and writes. The open server is the extension host. Any other saved server is its own idle
+	 * editor: its list, its connection, its sync, so nothing here can touch the open server.
 	 */
-	const store = $derived(view === "server" ? app.extensionStoreOf(serverId) : null);
-	const src = $derived(store ? storeSource(store, extensions) : hostSource(extensions));
+	const store = $derived(app.extensionStoreOf(serverId));
+	const src = $derived(store ? storeSource(store) : hostSource(extensions));
 	/** A server other than the open one whose editor is not ready yet (its list is still being read) */
-	const pendingStore = $derived(view === "server" && !!serverId && serverId !== app.serverId && !store);
+	const pendingStore = $derived(!!serverId && serverId !== app.serverId && !store);
 	// Re-run when the open server changes: the one just left now needs its own editor, the one just opened has the host.
-	$effect(() => { void app.serverId; if (view === "server" && serverId) void app.attachExtensionStore(serverId); });
-	const rows = $derived((void app.extensionStoreTick, src.list(view)));
+	$effect(() => { void app.serverId; if (serverId) void app.attachExtensionStore(serverId); });
+	const rows = $derived((void app.extensionStoreTick, src.list()));
 	const list = $derived(rows);
-	const unreadable = $derived((void app.extensionStoreTick, src.unreadable(view)).map((item) => ({ item, index: item.index })));
+	const unreadable = $derived((void app.extensionStoreTick, src.unreadable()).map((item) => ({ item, index: item.index })));
 	let filename = $state("");
 	let market = $state(false);
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
@@ -114,7 +110,7 @@
 	/** Every extension of this tab that has a newer catalog entry. */
 	const pending = $derived<MarketEntry[]>([
 		...list.map(clientUpdate),
-		...(view === "server" ? serverSide.map(serverUpdate) : []),
+		...serverSide.map(serverUpdate),
 	].filter((e): e is MarketEntry => !!e));
 	/**
 	 * Update everything at once. A client extension whose new version asks for no permission it did not already have is
@@ -131,7 +127,7 @@
 						const pkg = await fetchPackage(entry);
 						if (!old || !pkg.manifest.permissions.every((p) => old.package.manifest.permissions.includes(p))) { needsConsent++; continue; }
 						const resume = src.canResume(pkg);
-						src.install(pkg, old.scope);
+						src.install(pkg);
 						if (resume) await src.enable(entry.id);
 					} else {
 						const api = srvApi;
@@ -153,7 +149,6 @@
 	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
 	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
 		market = false;
-		fromMarket = true;
 		preview = pkg;
 		filename = `${entry.id}.json`;
 	}
@@ -176,7 +171,7 @@
 	let drafts = $state<Record<string, string>>({});
 	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
 	/** The server extension that carries the open client extension as its client half. */
-	const bundleOwner = $derived(selected && view === "server" ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
+	const bundleOwner = $derived(selected ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
 	/** The server extension on the open server that pairs with the open client extension */
 	const pairedServer = $derived(selected ? serverSide.find((e) => e.companion === selected) : undefined);
 	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
@@ -202,7 +197,6 @@
 		void run("$import", async () => {
 			preview = null;
 			filename = "";
-			fromMarket = false;
 			if (file.size > MAX_PACKAGE_BYTES) throw new LocalizedError(t("패키지는 최대 {n}KB까지 가져올 수 있습니다.", { n: MAX_PACKAGE_BYTES / 1024 }));
 			let json: unknown;
 			try { json = JSON.parse(await file.text()); } catch { throw new LocalizedError(t("JSON 형식이 아닌 파일입니다.")); }
@@ -226,7 +220,7 @@
 			const replaced = !!replacement;
 			// Same id, was running, and no new permission: swap in place and start it again without a second consent.
 			const resume = src.canResume(pkg);
-			src.install(pkg, replacement?.scope ?? target);
+			src.install(pkg);
 			delete drafts[id];
 			if (tasks.removing === id) tasks.closeRemove();
 			preview = null;
@@ -267,8 +261,6 @@
 		const id = tasks.result?.pkg?.manifest.id;
 		tasks.result = null;
 		if (!id) return;
-		// a client extension installed from the server tab lives on the device tab
-		if (src.find(id)?.scope !== view) { ongoclient?.(id); return; }
 		selected = id;
 		void tick().then(() => document.getElementById(`extension-${id}`)?.focus({ preventScroll: true }));
 	}
@@ -325,7 +317,7 @@
 
 	function exportRaw(index: number) {
 		void run(`unreadable:${index}`, () => {
-			const item = src.unreadable(view).find((u) => u.index === index);
+			const item = src.unreadable().find((u) => u.index === index);
 			if (item) download(item.raw, `${item.id ?? "extension"}-raw.json`);
 		});
 	}
@@ -392,10 +384,6 @@
 	{@render needLine(t("클라이언트 확장 ‘{name}’ 필요", { name: extensionUpdates.clientName(id) ?? id }), disabled, () => installCompanion(id))}
 {/snippet}
 
-{#snippet serverLine(need: { id: string; name: string }, disabled: boolean)}
-	{@render needLine(t("서버 확장 ‘{name}’ 필요", { name: need.name }), disabled, () => ongoserver?.(need.id))}
-{/snippet}
-
 {#snippet installedRow(entry: Installed)}
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
@@ -403,7 +391,7 @@
 	{@const on = src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled}
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
-	{@const needServer = view === "device" && ongoserver ? extensionUpdates.missingServerFor(id, serverId ?? app.serverId) : undefined}
+	{@const needServer = extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
 		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
 		{#snippet control()}
@@ -419,7 +407,6 @@
 		{#snippet notices()}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
 			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
-			{#if needServer}{@render serverLine(needServer, false)}{/if}
 		{/snippet}
 	</ExtensionRow>
 {/snippet}
@@ -443,9 +430,8 @@
 			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			pairedServer={pairedServer ? (pairedServer.title ?? pairedServer.name) : undefined}
 			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
-			needsServer={view === "device" ? extensionUpdates.missingServerFor(id, serverId ?? app.serverId) : undefined}
-			oninstallserver={ongoserver ? () => { const m = extensionUpdates.missingServerFor(id, serverId ?? app.serverId); if (m) ongoserver(m.id); } : undefined}
-			onopenserver={pairedServer ? () => (view === "server" ? (selected = srvKey(pairedServer.name)) : onopenserverext?.(pairedServer.name)) : undefined}
+			needsServer={extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
+			onopenserver={pairedServer ? () => (selected = srvKey(pairedServer.name)) : undefined}
 			onback={closeDetail}
 			onenable={() => enable(id)}
 			ondisable={() => disable(id)}
@@ -467,7 +453,7 @@
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}
-			onopenclient={(id) => (list.some((e) => e.package.manifest.id === id) ? (selected = id) : ongoclient?.(id))}
+			onopenclient={(id) => (selected = id)}
 			onenableclient={enable}
 			removing={tasks.removing === srvKey(openServer.name)}
 			onaskremove={(event) => askRemove(srvKey(openServer.name), event)}
@@ -477,7 +463,7 @@
 	{:else}
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
-			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + (view === "server" ? serverSide.length : 0) })}</h3>
+			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + serverSide.length })}</h3>
 			<Button size="sm" class="add" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn sm add" class:disabled={tasks.busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
@@ -492,11 +478,7 @@
 		{#if unreadable.length}
 			<Notice tone="warn" size="sm" role="status">{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</Notice>
 		{/if}
-		{#if view === "server"}
-			<p class="hint">{t("{name}에 설치되어 접속한 모든 기기가 함께 씁니다.", { name: serverName })}</p>
-		{:else}
-			<p class="hint">{t("이 기기에만 설치되며 모든 서버에서 쓸 수 있습니다.")}</p>
-		{/if}
+		<p class="hint">{t("{name}에 설치되어 접속한 모든 기기가 함께 씁니다.", { name: serverName })}</p>
 		{#each list as entry (entry.package.manifest.id)}
 			{@render installedRow(entry)}
 		{/each}
@@ -511,8 +493,7 @@
 				onremove={(keepSettings) => removeUnreadable(index, keepSettings)}
 			/>
 		{/each}
-		{#if view === "server"}
-			{#each serverSide as ext (ext.name)}
+		{#each serverSide as ext (ext.name)}
 				{@const upd = serverUpdate(ext)}
 				{@const half = missingClient(ext.companion)}
 				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
@@ -526,14 +507,12 @@
 						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
 					{/snippet}
 				</ExtensionRow>
-			{/each}
-		{/if}
-		{#if !list.length && !unreadable.length && !(view === "server" && serverSide.length)}
-			<p class="none">{view === "server" ? t("이 서버에 설치된 확장이 없습니다") : t("이 기기에 설치된 확장이 없습니다")}</p>
+		{/each}
+		{#if !list.length && !unreadable.length && !serverSide.length}
+			<p class="none">{t("이 서버에 설치된 확장이 없습니다")}</p>
 		{/if}
 	</section>
 
-	{#if view === "device"}
 	<Accordion variant="line">
 		{#snippet head()}{t("고급")}{/snippet}
 		<div class="adv">
@@ -544,18 +523,16 @@
 				</span>
 				<Switch checked={extensions.safeMode} label={t("모든 확장 실행 중지")} disabled={tasks.busy.$safe} onchange={setSafeMode} />
 			</div>
-			{#if extensions.installed.some((e) => e.scope === "device")}<p class="hint">{t("내보내기에는 패키지만 포함되며, 개인 설정과 확장 저장 데이터는 포함되지 않습니다.")}</p>{/if}
 		</div>
 	</Accordion>
-	{/if}
 	{/if}
 </div>
 
 {#if market}
-	<Marketplace scope={view} api={srvApi} {serverId} {src} onchanged={async () => { await reloadServer(); }} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
+	<Marketplace api={srvApi} {serverId} {src} onchanged={async () => { await reloadServer(); }} initialQuery={marketQuery} onclose={() => (market = false)} onpick={pickFromMarket} />
 {/if}
 
-<ImportDialogs {preview} result={tasks.result} {replacement} {willResume} {filename} {target} {serverName} busy={tasks.busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />
+<ImportDialogs {preview} result={tasks.result} {replacement} {willResume} {filename} {serverName} busy={tasks.busy} oncancel={cancelPreview} onimport={importPackage} onclose={closeResult} onshow={showInstalled} />
 
 <style>
 	.extensions,

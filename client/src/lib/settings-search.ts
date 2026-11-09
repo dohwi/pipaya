@@ -5,14 +5,13 @@ export const SETTINGS_TABS = [
 	{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
 	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
-	{ id: "extensions", label: msg("클라이언트 확장"), icon: "bolt", sub: "", server: false },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 도우미 위임"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
-	{ id: "srvext", label: msg("서버 확장"), icon: "bolt", sub: "", server: true },
+	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
 	{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
 ] as const;
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
