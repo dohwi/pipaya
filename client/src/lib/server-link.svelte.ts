@@ -14,8 +14,11 @@ export type NetState = "idle" | "connecting" | "online" | "offline" | "unauthori
 export interface LinkHooks {
 	/** An event arrived on this server's stream. */
 	event(link: ServerLink, e: PipayaEvent): void;
-	/** Everything was (re)loaded and the stream is open. */
-	ready(link: ServerLink): void;
+	/**
+	 * Everything was (re)loaded and the stream is open. `warm` is true for a reconnect that only had to catch up: the
+	 * lists were already there and the events since the last cursor were replayed, so nothing has to be reloaded.
+	 */
+	ready(link: ServerLink, warm: boolean): void;
 }
 
 /** How long the initial lists may take before the attempt counts as a network failure (and is retried). */
@@ -71,6 +74,8 @@ export class ServerLink {
 	private retryDelay = 1000;
 	private token = 0;
 	private stopped = false;
+	/** The newest event id that reached `hooks.event`: where a reopened stream resumes from. */
+	private cursor = 0;
 
 	constructor(
 		readonly server: Server,
@@ -105,10 +110,14 @@ export class ServerLink {
 		this.unsubscribe = null;
 	}
 
+	/**
+	 * Try again after a failure. A stream that dropped only needs its stream back (the replay covers the gap), so once the
+	 * lists are loaded a retry reopens the stream instead of reading everything again and rebuilding the open transcript.
+	 */
 	private scheduleRetry(): void {
 		clearTimeout(this.retryTimer);
 		if (this.stopped) return;
-		this.retryTimer = setTimeout(() => void this.sync(), this.retryDelay);
+		this.retryTimer = setTimeout(() => void (this.loaded ? this.reopen(false) : this.sync()), this.retryDelay);
 		this.retryDelay = Math.min(this.retryDelay * 2, 15_000);
 	}
 
@@ -116,16 +125,63 @@ export class ServerLink {
 	 * The app came back to the foreground. A mobile OS may have killed the stream without telling us, so a link that
 	 * still says "online" is checked with a short ping and resynced if it does not answer. Backoff starts over.
 	 */
-	async resume(forceSync: boolean): Promise<void> {
+	async resume(force: boolean): Promise<void> {
 		if (this.stopped) return;
 		this.retryDelay = 1000;
-		if (forceSync || !this.online) return this.sync();
-		const token = this.token;
-		try {
-			await this.api.health(AbortSignal.timeout(3000));
-		} catch {
-			if (token === this.token) void this.sync();
+		if (!this.online) return this.sync();
+		if (!force) {
+			// A short absence: the socket is probably fine, so only check that the server answers at all.
+			const token = this.token;
+			try {
+				await this.api.health(AbortSignal.timeout(3000));
+			} catch {
+				if (token === this.token) void this.sync();
+				return;
+			}
+			if (token !== this.token) return;
 		}
+		// The server answers and the page was only in the background: the stream itself may still be dead (a phone OS
+		// kills sockets silently, and a ping on a fresh connection says nothing about the old one), but the lists do not
+		// have to be read again. Reopening from the last event id replays what was missed, so neither the transcript nor
+		// the sidebar is rebuilt. That reload was the "wriggle" on coming back to the window.
+		this.reopen(true);
+	}
+
+	/**
+	 * Reopen the event stream from the last id seen, keeping everything already loaded. `wake` = the window came back, so
+	 * the app re-attaches (settings, extensions, notifications) as well; a plain retry leaves all that alone.
+	 */
+	private reopen(wake: boolean): void {
+		if (this.stopped || !this.loaded) {
+			void this.sync();
+			return;
+		}
+		const token = ++this.token;
+		clearTimeout(this.retryTimer);
+		this.unsubscribe?.();
+		this.unsubscribe = null;
+		this.unsubscribe = this.api.subscribe(
+			{
+				onEvent: (e) => {
+					if (e.id > this.cursor) this.cursor = e.id;
+					this.hooks.event(this, e);
+				},
+				onOpen: () => {
+					this.net = "online";
+					this.netError = "";
+					this.retryDelay = 1000;
+					// Only a wake re-attaches: the app is in front again, so settings, extensions and notifications follow.
+					// A plain retry after a dropped stream changes nothing on screen and must not re-render it.
+					if (wake) this.hooks.ready(this, true);
+				},
+				onError: () => {
+					if (token !== this.token) return;
+					this.net = "offline";
+					this.scheduleRetry();
+				},
+			},
+			this.cursor,
+		);
 	}
 
 	/** (Re)load everything and (re)open the event stream. Safe to call repeatedly. */
@@ -197,11 +253,17 @@ export class ServerLink {
 			this.workdirInfo = config?.workdir ?? null;
 			this.toolsInfo = config?.tools ?? null;
 			this.loaded = true;
+			// Where a reopened stream resumes from: the newest event id the server has, so a wake does not replay the
+			// whole history (it did: 1.7s of re-rendering in one frame).
+			this.cursor = cursor;
 			void this.refreshModelSettings();
 
 			this.unsubscribe = api.subscribe(
 				{
-					onEvent: (e) => this.hooks.event(this, e),
+					onEvent: (e) => {
+						if (e.id > this.cursor) this.cursor = e.id;
+						this.hooks.event(this, e);
+					},
 					onOpen: () => {
 						this.net = "online";
 						this.netError = "";
@@ -218,7 +280,7 @@ export class ServerLink {
 			this.net = "online";
 			this.netError = "";
 			this.retryDelay = 1000;
-			this.hooks.ready(this);
+			this.hooks.ready(this, false);
 		} catch (e) {
 			if (token !== this.token) return;
 			if (e instanceof ApiError && isClientTooOld(e.status, e.code)) {

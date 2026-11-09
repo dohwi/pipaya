@@ -518,10 +518,11 @@ class AppStore {
       extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() });
     });
     // Mobile OSes silently kill background sockets (EventSource gets no error), and a /health ping succeeds on a fresh
-    // connection while the old stream is dead. So coming back always reopens the streams, however short the absence.
+    // connection while the old stream is dead. So coming back reopens the streams, however short the absence.
     // Android WebViews sometimes skip visibilitychange, so focus/pageshow wake too; `wake` merges the bursts.
-    // A short absence (alt-tab) only pings: a forced sync reloads the open transcript and re-renders every message (visible jitter).
-    // The stream is rebuilt without a reload only when the ping fails; a long absence still forces the full resync.
+    // Coming back never reloads the lists or the open transcript: the stream reopens from the last event id and replays
+    // what was missed, so nothing on screen is rebuilt. A full resync is left to a stream that really failed (its own
+    // retry does it) and to the network coming back on a dead route.
     let wokeAt = 0;
     let leftAt = 0;
     const left = () => {
@@ -533,7 +534,9 @@ class AppStore {
       wokeAt = now;
       const away = leftAt ? now - leftAt : Infinity;
       leftAt = 0;
-      this.resyncLinks(away < LONG_AWAY_MS);
+      // A long absence may have cost the socket on a phone (the OS drops it without an error): reopen it outright
+      // instead of trusting it. Still no reload: the replay covers the gap.
+      this.resyncLinks(away >= LONG_AWAY_MS);
     };
     window.addEventListener("blur", left);
     document.addEventListener("visibilitychange", () => {
@@ -544,7 +547,7 @@ class AppStore {
     window.addEventListener("pageshow", wake);
     window.addEventListener(
       "online",
-      () => this.resyncLinks(false), // the network changed: the old stream is on a dead route
+      () => this.resyncLinks(true), // the network changed: the old stream is on a dead route
     );
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
@@ -748,7 +751,7 @@ class AppStore {
       old?.stop();
       const link = new ServerLink(s, {
         event: (l, e) => this.onLinkEvent(l, e),
-        ready: (l) => void this.attach(l),
+        ready: (l, warm) => void this.attach(l, warm),
       });
       next[s.id] = link;
       changed = true;
@@ -857,9 +860,12 @@ class AppStore {
     return `${K.active}.${this.serverId}`;
   }
 
-  /** Reconnect every server that is not live (the window was away, or the network came back). */
-  private resyncLinks(onlyDown: boolean) {
-    for (const l of Object.values(this.links)) void l.resume(!onlyDown);
+  /**
+   * The window came back. `force` reopens every stream outright (a long absence: the socket is probably gone); otherwise
+   * a link that still says "online" is only pinged and reopens its stream when the ping fails. Neither reloads anything.
+   */
+  private resyncLinks(force: boolean) {
+    for (const l of Object.values(this.links)) void l.resume(force);
   }
 
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
@@ -879,8 +885,13 @@ class AppStore {
     }
   }
 
-  /** The server in view is loaded and streaming: restore its open conversation and start what belongs to the open server. */
-  private async attach(link: ServerLink): Promise<void> {
+  /**
+   * The server in view is loaded and streaming: restore its open conversation and start what belongs to the open server.
+   * `warm`: the link only reopened its stream after the window was in the background and replayed the events it missed,
+   * so the lists and the open transcript are already current. Reloading them anyway re-rendered every message and every
+   * sidebar row for nothing (that was the "wriggle" on coming back to the window, worst on Windows).
+   */
+  private async attach(link: ServerLink, warm = false): Promise<void> {
     if (link.id !== this.serverId) return;
     const token = ++this.attachToken;
     const api = link.api;
@@ -891,12 +902,17 @@ class AppStore {
     // Bounded: an unreachable server must not hold up opening it.
     await Promise.race([this.handover, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
     if (link.id !== this.serverId || token !== this.attachToken) return;
-    this.startSettingsSync(api, link.id);
-    // Restore (or refresh) the open conversation.
+    // A warm reconnect already has its settings sync running (and the editor holds nothing new): rebuilding it here made
+    // every client of this server pull all of its settings again on each return to the window.
+    if (!warm) this.startSettingsSync(api, link.id);
+    // Restore (or refresh) the open conversation. A warm reconnect keeps what is on screen: the replayed events already
+    // brought it up to date, and a reload would rebuild the whole transcript under the reader.
     const want = this.activeId ?? read<string | null>(this.activeKey, null);
     const had = Object.keys(this.chats);
-    // restoring what was open is not the user opening something: the tree stays as they folded it
-    if (want && this.shows(want)) await this.openSession(want, true, false);
+    // Restoring what was open is not the user opening something: the tree stays as they folded it.
+    if (warm) {
+      if (want && !this.chats[want] && this.shows(want)) await this.openSession(want, false, false);
+    } else if (want && this.shows(want)) await this.openSession(want, true, false);
     else if (this.activeId) this.newChat();
     if (token !== this.attachToken) return;
     if (this.pendingTerminal !== null) {
@@ -908,10 +924,10 @@ class AppStore {
       this.pendingChat = false;
       void this.startChat();
     }
-    // Panes of the open group missed events while we were away: reload them too.
-    for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
+    // Panes of the open group missed events while we were away: reload them too (a warm reconnect replayed them).
+    if (!warm) for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
     notifications.connect(api);
-    void serverUpdater.check(api, link.id);
+    if (!warm) void serverUpdater.check(api, link.id);
   }
 
   /** The user is looking at this window right now (so a sound or badge would only be noise). */
