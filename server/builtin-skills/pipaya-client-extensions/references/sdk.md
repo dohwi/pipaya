@@ -43,6 +43,7 @@ Examples: `examples/extensions/focus.json` (declarative), `session-tools.json` (
 - `code` is the body of an async function with `sdk` injected. No imports, no npm.
 - `settingsScope`: `"server"` (default) or `"local"` (this device only). Credentials do not need it: a `secret: true`
   field, and any key that looks like one (`token`, `password`, `apiKey`, …), never leaves the device whatever the scope says.
+  A single field can be device-only too (`"device": true`): a local path, this machine's own setting.
 
 ### Settings schema (`manifest.settings`)
 

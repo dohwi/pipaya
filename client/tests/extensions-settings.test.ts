@@ -20,6 +20,9 @@ describe("manifest settings schema", () => {
 		expect(() => parsePackage({ ...input, manifest: { ...input.manifest, settingsScope: "cloud" } })).toThrow();
 		expect(() => parsePackage(withSettings([field({ secret: true, default: "secret" })]))).toThrow();
 		expect(() => parsePackage(withSettings([field({ type: "number", secret: true })]))).toThrow();
+		// a field can be device-only without being a secret; the two cannot be combined
+		expect(parsePackage(withSettings([field({ key: "path", device: true })])).manifest.settings![0]!.device).toBe(true);
+		expect(() => parsePackage(withSettings([field({ key: "path", device: true, secret: true })]))).toThrow();
 	});
 	test("accepts every field type and round-trips as fresh data", () => {
 		const input = withSettings([
@@ -363,6 +366,19 @@ describe("server sync", () => {
 		// the device keeps them, so the extension still sees them
 		expect(host.find(id).settings).toEqual({ httpOrigin: "https://a.test", httpToken: "t-1", apiKey: "k-1", interval: 15 });
 		expect(JSON.parse(storage.get("pipaya.extensions.v1")!)[0].settings.httpToken).toBe("t-1");
+	});
+	test("a field the extension marks device-only stays here too", async () => {
+		const schema = [
+			{ key: "httpOrigin", type: "string", label: "서버 주소", format: "origin" },
+			{ key: "localPath", type: "string", label: "로컬 경로", device: true },
+			{ key: "interval", type: "number", label: "간격", default: 30 },
+		];
+		const { host } = await boot();
+		const id = host.install(cfg("example.cfg", schema));
+		requests.length = 0;
+		await host.setSettings(id, { httpOrigin: "https://a.test", localPath: "/home/me/notes", interval: 15 });
+		expect(requests.filter(r => r.method === "PUT").at(-1)!.body.settings).toEqual({ httpOrigin: "https://a.test", interval: 15 });
+		expect(host.find(id).settings.localPath).toBe("/home/me/notes");
 	});
 	test("a value from the server keeps the secrets this device holds", async () => {
 		const schema = [

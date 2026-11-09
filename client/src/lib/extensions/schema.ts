@@ -83,6 +83,8 @@ export interface SettingField {
 	default?: SettingValue;
 	required?: boolean;
 	secret?: boolean;
+	/** This field belongs to the device, not the server: a local path, a screen size, this machine's own setting. */
+	device?: boolean;
 	format?: "origin";
 	min?: number;
 	max?: number;
@@ -228,7 +230,7 @@ function finite(source: Record<string, unknown>, name: string, path: string): nu
 }
 
 function settingField(value: unknown, path: string, keys: Set<string>): SettingField {
-	const source = object(value, path, ["key", "type", "label", "description", "placeholder", "default", "required", "secret", "format", "min", "max", "options"]);
+	const source = object(value, path, ["key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "format", "min", "max", "options"]);
 	const key = text(source.key, `${path}.key`, 40);
 	if (!matches(SETTING_KEY, key)) fail(`${path}.key`, "expected a letter followed by letters, digits or underscores (max 40)");
 	if (keys.has(key)) fail(`${path}.key`, `duplicate setting key ${key}`);
@@ -243,6 +245,8 @@ function settingField(value: unknown, path: string, keys: Set<string>): SettingF
 	const secret = optionalFlag(source, "secret", path);
 	if (secret !== undefined) { if (type !== "string") fail(`${path}.secret`, "secret requires a string"); field.secret = secret; }
 	if (secret && Object.hasOwn(source, "default")) fail(`${path}.default`, "secret fields must not contain defaults");
+	const device = optionalFlag(source, "device", path);
+	if (device !== undefined) { if (secret && device) fail(`${path}.device`, "a secret field is already device-only"); field.device = device; }
 
 	if (type !== "string" && Object.hasOwn(source, "format")) fail(`${path}.format`, "format is only allowed for string settings");
 	if (type !== "number") for (const name of ["min", "max"]) if (Object.hasOwn(source, name)) fail(`${path}.${name}`, "min/max are only allowed for number settings");

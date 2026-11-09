@@ -26,8 +26,12 @@ export interface ExtensionSaveResult extends StoredExtensionSettings {
  */
 const CREDENTIAL_KEY = /token|secret|password|credential|authorization|api.?key|cookie|private|constructor|prototype|__proto__/i;
 
-/** True when this field of the schema must stay on the device. */
-export const isDeviceOnlyField = (field: Pick<SettingField, "key" | "secret">): boolean => field.secret === true || CREDENTIAL_KEY.test(field.key);
+/**
+ * True when this field of the schema must stay on the device: a secret, a key that looks like a credential, or a field the
+ * extension itself marked `device` (a local path, this machine's own setting).
+ */
+export const isDeviceOnlyField = (field: Pick<SettingField, "key" | "secret" | "device">): boolean =>
+	field.secret === true || field.device === true || CREDENTIAL_KEY.test(field.key);
 
 /**
  * Split the values that may be shared from the ones that stay here.
