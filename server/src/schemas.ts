@@ -49,7 +49,6 @@ const sessionFields = {
 	tools: Type.Array(Type.String()),
 	parentId: Nullable(Type.String()),
 	closed: Type.Boolean({ description: "Closed sessions are hidden from the active list; reopen with PATCH closed=false" }),
-	archived: Type.Boolean({ description: "Archived sessions stay open but are tucked away by the apps; PATCH archived=false (or a new message) brings them back" }),
 	muted: Type.Boolean({ description: "Muted sessions raise no OS / push notification; PATCH muted=false turns them back on" }),
 	createdAt: Type.Integer({ description: "Unix ms" }),
 	updatedAt: Type.Integer({ description: "Unix ms" }),
@@ -178,9 +177,8 @@ export const PatchSessionBody = Type.Object({
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
-	archived: Type.Optional(Type.Boolean({ description: "true archives the session (it stays open); false restores it" })),
 	muted: Type.Optional(Type.Boolean({ description: "true silences this session's notifications (run ended, question); false turns them back on" })),
-});
+}, { additionalProperties: false });
 
 export const ListSessionsQuery = Type.Object({
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, default: 50 })),

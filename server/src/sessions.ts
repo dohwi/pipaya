@@ -123,7 +123,6 @@ export class SessionManager {
 			isRunning: (id) => this.isRunning(id),
 			deliver: (id, text, mode) => this.send(id, { text, mode }),
 			rename: (id, name) => void this.update(id, { name }),
-			archive: (id, archived) => void this.update(id, { archived }),
 			abort: (id) => this.abort(id),
 			onRunFinished: (fn) => {
 				this.bus.subscribe((e) => {
@@ -208,7 +207,6 @@ export class SessionManager {
 			tools,
 			parentId,
 			closed: false,
-			archived: false,
 			muted: input.muted ?? false,
 			createdAt: now,
 			updatedAt: now,
@@ -500,7 +498,6 @@ export class SessionManager {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		this.assertChatModel(record.provider, record.model);
-		if (record.archived) this.store.update(id, { archived: false }), this.bus.publish(id, "session_updated", this.get(id)); // new activity brings it back
 		const mode = input.mode ?? "prompt";
 		let extraParts: { type: "text"; text: string }[] = [];
 		let inputTitle: string | undefined;
@@ -1005,7 +1002,6 @@ export class SessionManager {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),
-			archive: (name, archived) => this.peers.archive(sessionId, name, archived),
 			abort: (name) => this.peers.abort(sessionId, name),
 			answer: (name, a) => this.peers.answer(sessionId, name, a),
 			create: (input) => this.peers.create(sessionId, input),

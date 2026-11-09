@@ -27,8 +27,6 @@ export interface SessionRecord {
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list until resumed. */
 	closed: boolean;
-	/** Archived sessions stay open but are tucked away by the apps; a new message brings them back. */
-	archived: boolean;
 	/** Muted sessions raise no OS / push notification (a run ended, a question). */
 	muted: boolean;
 	createdAt: number;
@@ -48,7 +46,6 @@ interface SessionRow {
 	tools: string;
 	parent_id: string | null;
 	closed: number;
-	archived: number;
 	muted: number;
 	created_at: number;
 	updated_at: number;
@@ -67,14 +64,13 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	tools: parseJson<string[]>(r.tools, []), // a damaged list reads as no tools rather than hiding the session
 	parentId: r.parent_id,
 	closed: r.closed === 1,
-	archived: r.archived === 1,
 	muted: r.muted === 1,
 	createdAt: r.created_at,
 	updatedAt: r.updated_at,
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed" | "archived" | "muted">
+	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed" | "muted">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
@@ -87,7 +83,6 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	systemPrompt: "system_prompt",
 	tools: "tools",
 	closed: "closed",
-	archived: "archived",
 	muted: "muted",
 };
 
@@ -196,9 +191,10 @@ export class SessionStore {
 		const params: Record<string, string | number> = { id, updated: Date.now() };
 		for (const key of Object.keys(patch) as (keyof SessionPatch)[]) {
 			const value = patch[key];
-			if (value === undefined) continue;
+			// a field this server does not know (an older client, a newer extension): leave the row alone rather than build bad SQL
+			if (value === undefined || !(key in PATCH_COLUMNS)) continue;
 			sets.push(`${PATCH_COLUMNS[key]} = $${key}`);
-			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" || key === "archived" || key === "muted" ? (value ? 1 : 0) : (value as string);
+			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" || key === "muted" ? (value ? 1 : 0) : (value as string);
 		}
 		this.db.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $id`).run(params);
 		return this.get(id);

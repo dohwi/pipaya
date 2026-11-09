@@ -138,8 +138,6 @@ export interface PeerHost {
 	deliver(id: string, text: string, mode: "prompt" | "steer" | "follow_up"): Promise<unknown>;
 	/** Change a session's name and tell the clients. */
 	rename(id: string, name: string): void;
-	/** Tuck a session away in the archive (or bring it back). */
-	archive(id: string, archived: boolean): void;
 	/** Stop a session's current run; false when there was nothing to stop. */
 	abort(id: string): boolean;
 	/** Calls `fn` whenever any session's run ends. */
@@ -203,7 +201,7 @@ export class PeerService {
 		const b = this.brief(id);
 		const name = b?.name ?? this.host.store.get(id)?.name ?? "session";
 		const state = result.status === "ok" || !result.status ? "finished its run" : `ended its run (${result.status}${result.error ? `: ${oneLine(result.error, 200)}` : ""})`;
-		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer(action=read) for more, peer(action=send) for follow-up work, peer(action=archive) when it is done.`;
+		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer(action=read) for more, peer(action=send) for follow-up work, peer(action=close) when it is done.`;
 		for (const w of watching) {
 			const r = this.host.store.get(w);
 			if (!r || r.closed) continue;
@@ -303,27 +301,18 @@ export class PeerService {
 		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; ${opts.notify ? "you get one report when each ends its run" : "use peer(action=read) to check on them later"}.`;
 	}
 
-	/** `peer(action=list)`: every other open session with its state, so an orchestrator sees who is working, idle or archived. */
+	/** `peer(action=list)`: every other open session with its state, so an orchestrator sees who is working or idle. */
 	list(selfId: string): string {
 		const rows = this.others(selfId);
 		if (!rows.length) return "No other sessions.";
 		return rows.map((r) => {
 			const parts = [`@${r.name}`, this.host.isRunning(r.id) ? "working" : "idle"];
-			if (r.archived) parts.push("archived");
 			if (r.title) parts.push(`"${oneLine(r.title, 60)}"`);
 			const branch = branchOf(r.cwd);
 			if (branch) parts.push(`branch ${branch}`);
 			parts.push(r.cwd);
 			return `- ${parts.join(" · ")}`;
 		}).join("\n");
-	}
-
-	/** `peer(action=archive)`: tuck a finished session away (or bring it back). A working session is refused: stop it first. */
-	archive(selfId: string, name: string, archived: boolean): string {
-		const peer = this.find(selfId, name.replace(/^@/, ""));
-		if (archived && this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; wait for its report or stop it with peer(action=abort) first`);
-		this.host.archive(peer.id, archived);
-		return `@${peer.name} ${archived ? "archived" : "restored"}.`;
 	}
 
 	/** `peer(action=abort)`: stop the current run of another session. */

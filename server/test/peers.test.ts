@@ -109,7 +109,7 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(g.name.toLowerCase()).not.toBe(taken.toLowerCase());
 	});
 
-	test("peer_list, notify report and peer_archive let a session manage the others", async () => {
+	test("peer_list and the notify report let a session manage the others", async () => {
 		const [boss, worker] = [await mk(), await mk()];
 		const wName = await nameOf(worker);
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };
@@ -121,11 +121,6 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		await Bun.sleep(300);
 		await idle(boss);
 		expect(await said(boss)).toContain(`@${wName} finished its run`);
-		// archive: the finished worker is tucked away, then restored
-		await call("peer", { action: "archive", name: wName });
-		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(true);
-		await call("peer", { action: "restore", name: wName });
-		expect((await api("GET", `/sessions/${worker}`)).json.archived).toBe(false);
 		// a session that was not asked to notify does not report
 		const before = (await said(boss)).split("finished its run").length;
 		await call("peer", { action: "send", to: wName, message: "again" });

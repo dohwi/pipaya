@@ -408,16 +408,11 @@ describe("sessions", () => {
 		expect(m.json.muted).toBe(true);
 	});
 
-	test("archived sessions stay open and come back with a new message", async () => {
-		const id = (await api("POST", "/sessions", { title: "archiveme", cwd: "proj/arch" })).json.id as string;
-		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(false);
-		const a = await api("PATCH", `/sessions/${id}`, { archived: true });
-		expect(a.json.archived).toBe(true);
-		expect(a.json.closed).toBe(false);
-		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(true);
-		expect((await api("POST", `/sessions/${id}/messages`, { text: "hello" })).status).toBeLessThan(300);
-		await untilIdle(id);
-		expect((await api("GET", `/sessions/${id}`)).json.archived).toBe(false);
+	test("the archive is gone: a session is listed, closed or deleted", async () => {
+		const id = (await api("POST", "/sessions", { title: "noarchive", cwd: "proj/arch" })).json.id as string;
+		expect((await api("GET", `/sessions/${id}`)).json.archived).toBeUndefined();
+		// a patch that still carries it is refused rather than silently ignored
+		expect((await api("PATCH", `/sessions/${id}`, { archived: true })).status).toBe(400);
 	});
 
 	test("closed sessions leave the active list, refuse work, and can be resumed", async () => {

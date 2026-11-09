@@ -200,6 +200,12 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	);`,
 	// v28: a session can be muted: its runs and questions raise no OS / push notification.
 	(db) => addColumn(db, "sessions", "muted", "INTEGER NOT NULL DEFAULT 0"),
+	// v29: the archive is gone. A session is either in the active list or closed; whatever was tucked away is closed, so
+	// nothing the apps listed disappears, and the column goes with the feature.
+	(db) => {
+		db.exec("UPDATE sessions SET closed = 1 WHERE archived = 1 AND closed = 0");
+		dropColumn(db, "sessions", "archived");
+	},
 ];
 
 export function openDb(path: string): Database {

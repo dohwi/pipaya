@@ -38,7 +38,6 @@ export interface ToolContext {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
 		read(from: string, count: number, detail?: boolean): string;
 		list(): string;
-		archive(name: string, archived: boolean): string;
 		abort(name: string): string;
 		answer(name: string, a: { answer?: string; answers?: string[]; toolCallId?: string }): string;
 		create(input: PeerCreateInput): Promise<string>;
@@ -505,7 +504,7 @@ const askUserTool: ToolDef = {
 // The tool list is built once per session, but sessions come and go later: never put names in a description (they would go stale).
 const PEER_NOTE = " Sessions are the user's @names; an unknown name is rejected with the current list.";
 
-const PEER_ACTIONS = ["send", "read", "list", "archive", "restore", "abort", "answer", "create", "close", "resume", "delete", "cancel_queued", "rename", "set", "group_create", "group_add", "group_remove", "group_dissolve"] as const;
+const PEER_ACTIONS = ["send", "read", "list", "abort", "answer", "create", "close", "resume", "delete", "cancel_queued", "rename", "set", "group_create", "group_add", "group_remove", "group_dissolve"] as const;
 type PeerAction = (typeof PEER_ACTIONS)[number];
 const need = <T>(v: T | undefined, what: string, action: string): T => {
 	if (v === undefined || v === "") throw new Error(`peer ${action} needs \`${what}\``);
@@ -514,7 +513,7 @@ const need = <T>(v: T | undefined, what: string, action: string): T => {
 
 const peerTool: ToolDef = {
 	name: "peer",
-	description: "Work with the other sessions (agents) on this server: message, read, list, create, archive, stop, answer, manage, group.",
+	description: "Work with the other sessions (agents) on this server: message, read, list, create, stop, answer, manage, group.",
 	create(_cwd, _roots, ctx) {
 		return defineTool({
 			name: "peer",
@@ -523,17 +522,16 @@ const peerTool: ToolDef = {
 				"Work with the other sessions on this server. Pick `action`; each uses only the parameters named here.",
 				"send (to, message, mode?, notify?): message another active session, or every other session of a group when `to` is a group name. It runs independently, sees only what you write, and does not answer unless you ask it to reply with peer send. mode only matters when the target is working: follow_up (default) is delivered after its run, steer is injected into the run now. notify true: you get one report when the target ends its run.",
 				"read (name, count?, detail?): what the session recently said and did, text only, newest last; detail also shows tool call arguments and results.",
-				"list: every other open session with name, working or idle, archived, title, branch and directory.",
-				"archive / restore (name): tuck a finished session away (a new message brings it back) or bring it back. Only archive sessions whose work is done and merged; a working session is refused; never archive one that stopped on a problem, report it instead.",
+				"list: every other open session with name, working or idle, title, branch and directory.",
 				"abort (name): stop what it is doing right now, like the user pressing stop. Only when it is stuck or going the wrong way; prefer send with mode steer first.",
 				"answer (name, answer | answers, toolCallId?): answer the ask_user question it waits on. Answer only what you can decide with what you know; anything that needs the user's judgment goes back to the user.",
 				"create (message, title?, purpose?, cwd?, provider?, model?, thinkingLevel?, notify?, muted?): start a new session on `message` and get its @name back. Include all the context it needs; it sees nothing else. You get a report when it ends or asks (notify defaults to true). With notify the new session is created muted (no OS/push notification to the user, you report to them instead); pass muted=false to keep its notifications on. The directory defaults to yours; for code changes give each session its own git worktree.",
-				"close (stops its work, hides it, keeps the transcript) / resume (reopens a closed one) / delete (erases the transcript for good; only sessions you made with create, not working) (name); cancel_queued (name, mode?, text?): lists steer/follow_up messages not yet delivered, with `text` takes one back; rename (name, newName); set (name, purpose?, provider?, model?, thinkingLevel?, muted?).",
+				"close (hides it from the sidebar, keeps the transcript; only sessions whose work is done and merged, a working one is refused, and never one that stopped on a problem: report it instead) / resume (reopens a closed one) / delete (erases the transcript for good; only sessions you made with create, not working) (name); cancel_queued (name, mode?, text?): lists steer/follow_up messages not yet delivered, with `text` takes one back; rename (name, newName); set (name, purpose?, provider?, model?, thinkingLevel?, muted?).",
 				"group_create (members, name?), group_add / group_remove (group, members), group_dissolve (group): put sessions side by side in a named group (tag them all with @group, or send to the group name). A session is in one group at a time; a group of fewer than 2 dissolves.",
 			].join("\n") + PEER_NOTE,
 			parameters: Type.Object({
 				action: Type.Unsafe<PeerAction>({ type: "string", enum: [...PEER_ACTIONS] }),
-				name: Type.Optional(Type.String({ maxLength: 60, description: "The session's name, without @ (read, archive, restore, abort, answer, close, resume, delete, cancel_queued, rename, set)" })),
+				name: Type.Optional(Type.String({ maxLength: 60, description: "The session's name, without @ (read, abort, answer, close, resume, delete, cancel_queued, rename, set)" })),
 				to: Type.Optional(Type.String({ maxLength: 60, description: "send: session or group name, without @" })),
 				message: Type.Optional(Type.String({ maxLength: 8000, description: "send, create: what to tell or ask; include all context it needs" })),
 				mode: Type.Optional(Type.Union([Type.Literal("follow_up"), Type.Literal("steer")], { description: "send, cancel_queued: which delivery / queue" })),
@@ -565,7 +563,6 @@ const peerTool: ToolDef = {
 					case "send": return text(await peers.send(need(p.to, "to", a), need(p.message, "message", a), { mode: p.mode, notify: p.notify }), { action: a, to: p.to });
 					case "read": return text(peers.read(name(), p.count ?? 10, p.detail), { action: a, name: p.name });
 					case "list": return text(peers.list(), { action: a });
-					case "archive": case "restore": return text(peers.archive(name(), a === "archive"), { action: a, name: p.name });
 					case "abort": return text(peers.abort(name()), { action: a, name: p.name });
 					case "answer": return text(peers.answer(name(), { answer: p.answer, answers: p.answers, toolCallId: p.toolCallId }), { action: a, name: p.name });
 					case "create": {
