@@ -182,15 +182,23 @@ function refresh() {
 	apply(resolveLang(pref, browserLanguages()), true);
 }
 
-/** Replace the packs received from the server (every sync, and on `locales_updated`) and remember them for offline use. */
+/**
+ * Replace the packs received from the server (every sync, and on `locales_updated`) and remember them for offline use.
+ * Only a real change notifies: `refresh()` tells every listener the language may have changed, and the app answers that by
+ * re-rendering every translated string. It used to fire on every reconnect, even when the packs were byte-identical, so
+ * coming back to the window re-rendered the whole page for nothing.
+ */
 export function setRemotePacks(packs: readonly unknown[]): void {
+	const before = JSON.stringify([...remote.values()]);
 	remote.clear();
 	for (const raw of packs) {
 		const p = cleanPack(raw);
 		if (p) remote.set(p.tag, p);
 	}
+	const after = JSON.stringify([...remote.values()]);
+	if (before === after) return;
 	try {
-		localStorage.setItem(PACKS_KEY, JSON.stringify([...remote.values()]));
+		localStorage.setItem(PACKS_KEY, after);
 	} catch {
 		/* storage unavailable or full: the packs just are not cached */
 	}
