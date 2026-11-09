@@ -6,6 +6,8 @@
 	import ExtensionPanels from "./extensions/ExtensionPanels.svelte";
 	import ExtensionPart from "./extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
+	import { schedule, unschedule } from "../lib/frame";
+	import { ms } from "../lib/motion";
 	import Pin from "./Pin.svelte";
 	import Badge from "./Badge.svelte";
 	import { updater } from "../lib/updater.svelte";
@@ -111,6 +113,37 @@
 
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
+
+	/**
+	 * Keep the open row in view: the list scrolls to it when something else opens (a new conversation in a folder far
+	 * down, a terminal started from the "+"), so the row it belongs to is on screen and not merely unfolded. The folder
+	 * is unfolded first (store `revealRow`), so the row exists by the time this runs.
+	 */
+	let listEl: HTMLElement | undefined = $state();
+	/** The open row, when the list has it out of view (null while it is visible or missing). */
+	function offscreen(host: HTMLElement): HTMLElement | null {
+		const row = host.querySelector<HTMLElement>(".item.active");
+		if (!row) return null;
+		const box = host.getBoundingClientRect();
+		const r = row.getBoundingClientRect();
+		return r.top >= box.top && r.bottom <= box.bottom ? null : row;
+	}
+	$effect(() => {
+		void app.activeId;
+		void app.sidebar.folded;
+		const host = listEl;
+		if (!host) return;
+		schedule(host, () => {
+			const row = offscreen(host);
+			return row ? () => row.scrollIntoView({ block: "nearest" }) : undefined;
+		});
+		// A folder unfolds over `normal` and the open row keeps moving under it: look once more when it has settled.
+		const settled = setTimeout(() => offscreen(host)?.scrollIntoView({ block: "nearest" }), ms("normal") + 50);
+		return () => {
+			clearTimeout(settled);
+			unschedule(host);
+		};
+	});
 
 	const startRename = (id: string, title: string) => rename.start(id, title);
 	/**
@@ -326,7 +359,7 @@
 		<SearchField label={t("대화 검색")} data-sidebar-search bind:value={query} />
 	</div>
 
-	<nav class="list" use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}

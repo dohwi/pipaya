@@ -62,6 +62,22 @@ describe("sidebar moveDir", () => {
 	});
 });
 
+describe("sidebar reveal", () => {
+	test("unfolds the one node that holds the row and leaves the rest folded", () => {
+		const sb = new SidebarState();
+		sb.folded = ["s1", "s1\u0000/a", "s1\u0000/b", "s2"];
+		sb.reveal("s1\u0000/a");
+		expect(sb.folded).toEqual(["s1", "s1\u0000/b", "s2"]);
+	});
+	test("a node that is already open is not touched", () => {
+		const sb = new SidebarState();
+		sb.folded = ["s1"];
+		const before = sb.folded;
+		sb.reveal("s1\u0000/a");
+		expect(sb.folded).toBe(before);
+	});
+});
+
 describe("sidebar shared part", () => {
 	test("edits are reported; the server's value replaces one server's pins only", () => {
 		(globalThis as any).localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };

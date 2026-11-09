@@ -69,6 +69,16 @@ export class SidebarState {
     write(K.folded, this.folded);
   }
 
+  /**
+   * Unfold the one node that holds `key` (a folder's `dirKey`, or a server's id), so the row it stands for can be seen
+   * when something opens in it. Nothing else in the tree moves: the rest stays as the user folded it.
+   */
+  reveal(key: string) {
+    if (!this.folded.includes(key)) return;
+    this.folded = this.folded.filter((p) => p !== key);
+    write(K.folded, this.folded);
+  }
+
   isPinned(serverId: string, path: string): boolean {
     return (this.pinned[serverId] ?? []).includes(path);
   }

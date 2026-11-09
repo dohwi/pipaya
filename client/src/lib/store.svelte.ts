@@ -22,6 +22,7 @@ import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent } from "./server-link-model";
 import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
+import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
 import { extensionUpdates } from "./extension-updates.svelte";
@@ -894,7 +895,8 @@ class AppStore {
     // Restore (or refresh) the open conversation.
     const want = this.activeId ?? read<string | null>(this.activeKey, null);
     const had = Object.keys(this.chats);
-    if (want && this.shows(want)) await this.openSession(want, true);
+    // restoring what was open is not the user opening something: the tree stays as they folded it
+    if (want && this.shows(want)) await this.openSession(want, true, false);
     else if (this.activeId) this.newChat();
     if (token !== this.attachToken) return;
     if (this.pendingTerminal !== null) {
@@ -1471,6 +1473,7 @@ class AppStore {
   openTab(id: string) {
     const g = this.groups.find((x) => x.id === id);
     if (!g) return void this.openSession(id);
+    this.revealRow(id);
     const panes = panesOf(g.layout).filter((x) => this.shows(x));
     const last = this.lastPane[id];
     const to = last && panes.includes(last) ? last : panes[0];
@@ -1762,10 +1765,28 @@ class AppStore {
     }
   }
 
-  /** Focus a session (showing its group if it has one). */
-  async openSession(id: string, force = false) {
+  /**
+   * Unfold the sidebar rows that hold `id` (its folder and its server), so whatever is opened there is listed rather than
+   * hidden under a folded node. Only those two nodes move: the rest of the tree stays as the user folded it.
+   */
+  private revealRow(id: string): void {
+    const sid = this.serverId;
+    if (!sid) return;
+    // the folder as the sidebar lists it (a group's is the one it was placed under), else the pane's own directory
+    const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    if (path) this.sidebar.reveal(dirKey(sid, path));
+    this.sidebar.reveal(sid);
+  }
+
+  /**
+   * Focus a session (showing its group if it has one). `reveal` false leaves the sidebar's folds alone (restoring what
+   * was open on connect is not the user opening something).
+   */
+  async openSession(id: string, force = false, reveal = true) {
     if (!this.api) return;
     if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
+      // already open: only make sure its row can be seen (it may sit under a fold the user made since)
+      if (reveal) this.revealRow(id);
       this.sidebar.open = false;
       return;
     }
@@ -1776,6 +1797,7 @@ class AppStore {
     if (g) this.lastPane[g.id] = id;
     const at = this.serverId ? tabOf(this.dirs, id) : null;
     if (at && this.serverId) this.lastTabIn[`${this.serverId}\u0000${at.dir.path}`] = at.tab.id;
+    if (reveal) this.revealRow(id);
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
