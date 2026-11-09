@@ -41,7 +41,8 @@ Examples: `examples/extensions/focus.json` (declarative), `session-tools.json` (
 - Package ≤256 KiB, code ≤128 KiB (UTF-8), ≤50 extensions.
 - Unknown fields, duplicate permissions/commands and wrong types are rejected. Types: `src/lib/extensions/schema.ts`, public SDK: `src/lib/extensions/sdk.ts`.
 - `code` is the body of an async function with `sdk` injected. No imports, no npm.
-- `settingsScope`: `"server"` (default) or `"local"` (this device only; recommended for credentials).
+- `settingsScope`: `"server"` (default) or `"local"` (this device only). Credentials do not need it: a `secret: true`
+  field, and any key that looks like one (`token`, `password`, `apiKey`, …), never leaves the device whatever the scope says.
 
 ### Settings schema (`manifest.settings`)
 
@@ -81,19 +82,29 @@ Behaviour:
 
 ## Settings storage and sync
 
-Server-scope settings are stored on the connected server (`<dataDir>/extensions/<id>/settings.json`); `localStorage` is a cache.
+Server-scope settings are stored on the connected server (`<dataDir>/extensions/<id>/settings.json`, with the time of the
+write in `settings.at`); `localStorage` is a cache. The server is the source of truth: a device never wins by being offline.
 
 | Request | Use |
 |---|---|
-| `GET /extensions/settings` → `{settings:{[id]:object}}` | read all at start |
-| `PUT /extensions/:id/settings` `{settings}` | save |
+| `GET /extensions/settings` → `{settings:{[id]:{value,updatedAt}}}` | read all at start |
+| `GET /extensions/:id/settings` → `{value,updatedAt}` | read one (what an event triggers) |
+| `PUT /extensions/:id/settings` `{settings, at?, origin?}` → `{value,updatedAt,applied}` | save; `at` is when the user made the change |
 | `DELETE /extensions/:id` | delete (local delete proceeds on failure) |
 
 - **Start**: before enabling anything, `GET` with a 3 s timeout; server values win and refresh the cache. On failure, start from the cache and show a non-blocking notice.
-- **Save**: update locally, then `PUT`; on failure say it was saved on this browser only and retry on the next save.
+- **Save**: update locally, then `PUT` with `at`. On failure say it was saved on this browser only and retry on the next save.
+- **Last write wins**: a write older than the stored `updatedAt` is refused (`applied: false`) and the newer value comes back;
+  the client adopts it. An offline edit keeps its own time, so it still wins over anything older once it is uploaded.
+- **Live**: `extension_settings_updated` (`{id, action, updatedAt, origin}`) arrives on every device. The writing device skips
+  its own echo by `origin`, and a change older than what the device holds is ignored.
+- **Secrets stay here**: `secret: true` fields and credential-looking keys are split out before the `PUT` and merged back on
+  top of what the server returns.
+- **Per-extension switch**: the user can keep one extension's settings on this device (`pipaya.extensions.local-ids`, per
+  server). Turning it off uploads what the device holds.
 - **Migration**: no server value but a non-empty local one → `PUT` once.
 - **Delete** asks: keep settings / delete settings / cancel. Both remove the package and `pipaya.extension.storage.<id>`. "Delete settings" sends `DELETE`; "keep" stores a copy in `pipaya.extensions.kept` (≤50) restored on reinstall (server value first).
-- Importing a configuration switches to shared local settings and stops server mirroring.
+- Importing a configuration uploads the imported values to the server (it no longer pins every extension to this device).
 
 ### Unreadable entries
 

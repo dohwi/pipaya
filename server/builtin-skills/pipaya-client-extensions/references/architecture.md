@@ -101,7 +101,8 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 | `pipaya.extensions.device.v1` (`.corrupt`) | device-scope list |
 | `pipaya.extensions.safe`, `.booting`, `.kept`, `.v1.corrupt` | safe mode, IDs mid-start, settings kept on delete, corrupt backup |
 | `pipaya.extension.storage.<id>` | `sdk.storage` |
-| `pipaya.extensions.settings-source` | `local` stops mirroring server settings |
+| `pipaya.extensions.local-ids.<serverId>` | ids whose settings stay on this device (the per-extension switch) |
+| `pipaya.extensions.pending.<serverId>` | `{ <id>: { at, dirty } }`: the time of a local edit that has not reached the server |
 | `pipaya.extensions.configuration-backup(-at)`, `.background-grant.<id>` | import backup, background grant |
 
 ## User-chosen combos
@@ -116,11 +117,16 @@ A shortcut's `combo` is its default; what works is `shortcutCombo(s)`: the user'
 
 | Request | Use |
 |---|---|
-| `GET /extensions/settings` | all settings `{settings:{[id]:object}}` |
-| `PUT /extensions/:id/settings` | save (≤16,000 chars, ≤100 extensions) |
+| `GET /extensions/settings` | all settings `{settings:{[id]:{value,updatedAt}}}` |
+| `GET /extensions/:id/settings` | one extension's `{value,updatedAt}` |
+| `PUT /extensions/:id/settings` | save `{settings, at?, origin?}` (≤16,000 chars, ≤100 extensions) → `{value,updatedAt,applied}` |
 | `DELETE /extensions/:id` | delete settings |
 
-Stored at `<dataDir>/extensions/<id>/settings.json`; saving emits SSE `extension_settings_updated`. The client reads with a 3 s timeout at start and falls back to its localStorage cache.
+Stored at `<dataDir>/extensions/<id>/settings.json`, with the write time in `settings.at` next to it (a file from before that
+keeps its mtime). Last write wins by that time, so a stale offline edit cannot overwrite a newer value. Saving emits SSE
+`extension_settings_updated` (`{id, action, updatedAt, origin}`), which every device uses to fetch just that one id; the
+writing device skips its own echo by `origin`. The client reads with a 3 s timeout at start and falls back to its
+localStorage cache. `secret: true` fields and credential-looking keys are never uploaded (`settings-store.ts`).
 
 ## Change checklists
 
