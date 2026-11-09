@@ -289,7 +289,7 @@ describe("settings gating, defaults and sdk semantics", () => {
 describe("server sync", () => {
 	test("server value wins and is applied before extensions start; requests are authenticated", async () => {
 		seed([{ package: parsePackage(cfg()), enabled: true, settings: { httpOrigin: "https://local.test", interval: 11 } }]);
-		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { httpOrigin: "https://server.test", interval: 22 } } }) : json({ settings: {} });
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://server.test", interval: 22 }, updatedAt: 1000 } } }) : json({ settings: {} });
 		const { host } = await boot();
 		expect(requests[0]).toMatchObject({ method: "GET", path: "/extensions/settings", auth: "Bearer tok" });
 		expect(host.installed[0]!.settings).toEqual({ httpOrigin: "https://server.test", interval: 22 });
@@ -338,11 +338,100 @@ describe("server sync", () => {
 			{ package: parsePackage(cfg("example.two")), settings: {} },
 			{ package: parsePackage(cfg("example.three")), settings: { httpOrigin: "https://three.test" } },
 		]);
-		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.three": { httpOrigin: "https://server.test" } } }) : json({ settings: {} });
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.three": { value: { httpOrigin: "https://server.test" }, updatedAt: 1000 } } }) : json({ settings: {} });
 		const { host } = await boot();
 		const puts = requests.filter(r => r.method === "PUT");
-		expect(puts).toEqual([{ method: "PUT", path: "/extensions/example.one/settings", body: { settings: { httpOrigin: "https://one.test" } }, auth: "Bearer tok" }]);
+		expect(puts).toHaveLength(1);
+		expect(puts[0]).toMatchObject({ method: "PUT", path: "/extensions/example.one/settings", auth: "Bearer tok" });
+		expect(puts[0]!.body.settings).toEqual({ httpOrigin: "https://one.test" });
+		expect(typeof puts[0]!.body.at).toBe("number");
 		expect(host.installed.find(e => e.package.manifest.id === "example.three")!.settings.httpOrigin).toBe("https://server.test");
+	});
+	test("secret fields never leave the device, even when the manifest does not ask for it", async () => {
+		const schema = [
+			{ key: "httpOrigin", type: "string", label: "서버 주소", format: "origin" },
+			{ key: "httpToken", type: "string", label: "토큰", secret: true },
+			{ key: "apiKey", type: "string", label: "키" }, // not marked secret, but the key name says it is
+			{ key: "interval", type: "number", label: "간격", default: 30 },
+		];
+		const { host } = await boot();
+		const id = host.install(cfg("example.cfg", schema));
+		requests.length = 0;
+		await host.setSettings(id, { httpOrigin: "https://a.test", httpToken: "t-1", apiKey: "k-1", interval: 15 });
+		const put = requests.filter(r => r.method === "PUT").at(-1)!;
+		expect(put.body.settings).toEqual({ httpOrigin: "https://a.test", interval: 15 });
+		// the device keeps them, so the extension still sees them
+		expect(host.find(id).settings).toEqual({ httpOrigin: "https://a.test", httpToken: "t-1", apiKey: "k-1", interval: 15 });
+		expect(JSON.parse(storage.get("pipaya.extensions.v1")!)[0].settings.httpToken).toBe("t-1");
+	});
+	test("a value from the server keeps the secrets this device holds", async () => {
+		const schema = [
+			{ key: "httpOrigin", type: "string", label: "서버 주소", format: "origin" },
+			{ key: "httpToken", type: "string", label: "토큰", secret: true },
+		];
+		seed([{ package: parsePackage(cfg("example.cfg", schema)), enabled: false, settings: { httpOrigin: "https://local.test", httpToken: "mine" } }]);
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://server.test" }, updatedAt: 1000 } } }) : json({ settings: {} });
+		const { host } = await boot();
+		expect(host.installed[0]!.settings).toEqual({ httpOrigin: "https://server.test", httpToken: "mine" });
+	});
+	test("a newer edit made here is not overwritten by an older server value", async () => {
+		seed([{ package: parsePackage(cfg()), enabled: false, settings: { httpOrigin: "https://local.test", interval: 11 } }]);
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://old.test", interval: 1 }, updatedAt: 1 } } }) : json({ settings: {} });
+		const { host } = await boot(() => null); // offline: the edit cannot be uploaded yet
+		await host.setSettings("example.cfg", { httpOrigin: "https://new.test", interval: 22 });
+		// the server comes back with an older value: ours is newer and still on its way, so it stays
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://old.test", interval: 1 }, updatedAt: 1 } } }) : json({ settings: {} });
+		await host.onSettingsEvent({ id: "example.cfg", action: "saved", updatedAt: 1, origin: "other-device" });
+		expect(host.find("example.cfg").settings).toEqual({ httpOrigin: "https://new.test", interval: 22 });
+	});
+	test("a newer value from another device is taken, and the local edit is dropped", async () => {
+		const { host } = await boot();
+		const id = host.install(cfg());
+		await host.setSettings(id, { httpOrigin: "https://mine.test", interval: 11 });
+		respond = req => req.path === "/extensions/example.cfg/settings" ? json({ value: { httpOrigin: "https://theirs.test", interval: 99 }, updatedAt: Date.now() + 60_000 }) : json({ settings: {} });
+		await host.onSettingsEvent({ id, action: "saved", updatedAt: Date.now() + 60_000, origin: "other-device" });
+		expect(host.find(id).settings).toEqual({ httpOrigin: "https://theirs.test", interval: 99 });
+	});
+	test("our own echo is ignored, and so is an extension that keeps its settings here", async () => {
+		const { host, adapter } = await boot();
+		(adapter as HostAdapter).deviceId = () => "device-a";
+		const id = host.install(cfg());
+		await host.setSettings(id, { httpOrigin: "https://mine.test", interval: 11 });
+		requests.length = 0;
+		await host.onSettingsEvent({ id, action: "saved", updatedAt: Date.now(), origin: "device-a" });
+		await host.onSettingsEvent({ id, action: "saved", updatedAt: Date.now(), origin: "device-b" });
+		// the first is our own write (the adapter reports "device-a"), the second is someone else's and is fetched
+		expect(requests.map(r => r.path)).toEqual(["/extensions/example.cfg/settings"]);
+	});
+	test("a write the server refuses is resolved by taking the server's value", async () => {
+		const { host } = await boot();
+		const id = host.install(cfg());
+		respond = req => req.method === "PUT" ? json({ value: { httpOrigin: "https://winner.test", interval: 77 }, updatedAt: 5000, applied: false }) : json({ settings: {} });
+		await host.setSettings(id, { httpOrigin: "https://loser.test", interval: 11 });
+		expect(host.find(id).settings).toEqual({ httpOrigin: "https://winner.test", interval: 77 });
+	});
+	test("the per-extension switch keeps settings here, and putting it back uploads what this device holds", async () => {
+		const { host } = await boot();
+		const id = host.install(cfg());
+		expect(host.isSettingsLocal(id)).toBe(false);
+		host.setSettingsLocal(id, true);
+		expect(host.isSettingsLocal(id)).toBe(true);
+		requests.length = 0;
+		await host.setSettings(id, { httpOrigin: "https://here.test", interval: 15 });
+		expect(requests.filter(r => r.method === "PUT")).toEqual([]);
+		host.setSettingsLocal(id, false);
+		await flush();
+		const put = requests.filter(r => r.method === "PUT").at(-1)!;
+		expect(put.body.settings).toEqual({ httpOrigin: "https://here.test", interval: 15 });
+	});
+	test("the old all-or-nothing switch becomes a per-extension list on the next start", async () => {
+		seed([{ package: parsePackage(cfg("example.one")), settings: { httpOrigin: "https://one.test" } }, { package: parsePackage(cfg("example.two")), settings: {} }]);
+		storage.set("pipaya.extensions.settings-source", "local");
+		const { host } = await boot();
+		expect(host.isSettingsLocal("example.one")).toBe(true);
+		expect(host.isSettingsLocal("example.two")).toBe(true);
+		expect(storage.has("pipaya.extensions.settings-source")).toBe(false); // the old switch is gone
+		expect(JSON.parse(storage.get("pipaya.extensions.local-ids")!)).toEqual(["example.one", "example.two"]);
 	});
 	test("setSettings updates local state immediately and PUTs to the server", async () => {
 		const { host } = await boot();
@@ -416,7 +505,7 @@ describe("server sync", () => {
 		expect(JSON.parse(storage.get("pipaya.extensions.kept") ?? "{}")["example.cfg"]).toBeUndefined();
 	});
 	test("reinstall prefers the server copy over the kept copy", async () => {
-		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { httpOrigin: "https://server.test", interval: 40 } } }) : json({ settings: {} });
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://server.test", interval: 40 }, updatedAt: 1000 } } }) : json({ settings: {} });
 		const { host } = await boot();
 		storage.set("pipaya.extensions.kept", JSON.stringify({ "example.cfg": { httpOrigin: "https://kept.test" } }));
 		host.install(cfg());
@@ -480,7 +569,7 @@ describe("configured gate for new packages with a settings schema", () => {
 		expect(host.find("example.cfg").state).toBe("active");
 	});
 	test("a reinstall finds the settings on the server and counts as configured", async () => {
-		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { httpOrigin: "https://server.test" } } }) : json({ settings: {} });
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { httpOrigin: "https://server.test" }, updatedAt: 1000 } } }) : json({ settings: {} });
 		const { host } = await boot();
 		host.install(cfg());
 		expect(host.find("example.cfg").configured).toBe(true);
@@ -496,7 +585,7 @@ describe("configured gate for new packages with a settings schema", () => {
 	});
 	test("a server sync that supplies settings marks the entry configured", async () => {
 		storage.set("pipaya.extensions.v1", JSON.stringify([{ package: parsePackage(cfg("example.cfg", [{ key: "interval", type: "number", label: "간격", default: 30 }])), enabled: false, settings: {}, configured: false }]));
-		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { interval: 12 } } }) : json({ settings: {} });
+		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value: { interval: 12 }, updatedAt: 1000 } } }) : json({ settings: {} });
 		const { host } = await boot();
 		expect(host.installed[0]!.configured).toBe(true);
 	});

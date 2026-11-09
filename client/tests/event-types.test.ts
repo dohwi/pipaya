@@ -15,7 +15,7 @@ const serverEventNames = (): string[] => {
 };
 
 /** Events the app has no use for yet. Listing one here is a decision, not an oversight. */
-const NOT_USED = ["extension_settings_updated"];
+const NOT_USED: string[] = [];
 
 test("the server's event list can be read (guards the check below from passing on nothing)", () => {
 	const names = serverEventNames();

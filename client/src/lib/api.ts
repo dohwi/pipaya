@@ -1,3 +1,4 @@
+import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
 import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
@@ -188,9 +189,11 @@ export class Api {
 
 	/* ---------- extension settings (server is the source of truth) ---------- */
 	extensionSettings = (signal?: AbortSignal) =>
-		this.req<{ settings: Record<string, Record<string, unknown>> }>("GET", "/extensions/settings", undefined, signal);
-	saveExtensionSettings = (id: string, settings: Record<string, unknown>, signal?: AbortSignal) =>
-		this.req<{ settings: Record<string, unknown> }>("PUT", `/extensions/${encodeURIComponent(id)}/settings`, { settings }, signal);
+		this.req<{ settings: Record<string, StoredExtensionSettings> }>("GET", "/extensions/settings", undefined, signal);
+	extensionSetting = (id: string, signal?: AbortSignal) =>
+		this.req<StoredExtensionSettings>("GET", `/extensions/${encodeURIComponent(id)}/settings`, undefined, signal);
+	saveExtensionSettings = (id: string, settings: Record<string, unknown>, at?: number, origin?: string, signal?: AbortSignal) =>
+		this.req<ExtensionSaveResult>("PUT", `/extensions/${encodeURIComponent(id)}/settings`, { settings, ...(at !== undefined ? { at } : {}), ...(origin ? { origin } : {}) }, signal);
 	deleteExtension = (id: string, signal?: AbortSignal) =>
 		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
 
@@ -501,6 +504,7 @@ export const EVENT_TYPES = [
 	"mcp_updated",
 	"locales_updated",
 	"client_settings_updated",
+	"extension_settings_updated",
 	"extensions_updated",
 	"extension_error",
 	"extension_event",

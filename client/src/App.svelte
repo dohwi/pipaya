@@ -179,6 +179,7 @@
 			reservedCommands: () => COMMANDS.map(c => c.name),
 			connection: () => app.conn,
 			serverId: () => app.serverId,
+			deviceId: () => notifications.id,
 			listChanged: () => app.listChanged(),
 			statesChanged: () => app.statesChanged(),
 			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.confirmExtension(message) },

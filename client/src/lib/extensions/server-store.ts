@@ -1,6 +1,6 @@
 import { describeSettingErrors, parsePackage, resolveSettings, type ExtensionPackage } from "./schema";
 import { canonical } from "./fingerprint";
-import { SETTINGS_SOURCE } from "./configuration";
+import { mergeSettings, PendingWrites, splitSettings, WriteClock } from "./settings-store";
 import { clone, identify, plain, within } from "./host-values";
 import { LocalizedError, t } from "../i18n";
 import type { ServerSettingsSync } from "../server-settings";
@@ -8,6 +8,10 @@ import type { Api } from "../api";
 
 /** Same key the open server's list lives under (`ExtensionHost`), so both always read and write the one stored list. */
 export const SERVER_LIST_KEY = "pipaya.extensions.v1";
+/** Extension ids kept on this device only, per server (`<id>` appended). Mirrors `ExtensionHost`'s own key. */
+const LOCAL_IDS = "pipaya.extensions.local-ids";
+/** Unconfirmed writes per server (`<serverId>` appended). Mirrors `ExtensionHost`'s own key. */
+const PENDING = "pipaya.extensions.pending";
 const MAX_ENTRIES = 50;
 const PUT_MS = 10000;
 const FETCH_MS = 3000;
@@ -26,6 +30,7 @@ export interface StoredUnreadable { raw: unknown; id?: string; name?: string; re
 export interface ListStorage {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
+	removeItem(key: string): void;
 }
 
 export interface ServerStoreOptions {
@@ -51,12 +56,56 @@ export class ServerExtensionStore {
 	private remote: Record<string, unknown> = {};
 	/** What the user chose per extension (true = on), shared with the server: only ids with a real choice are in it. */
 	private wanted: Record<string, boolean> = {};
-	/** The user keeps extension settings on this device only: nothing about them goes to the server. */
-	private localSettings() { return this.o.storage.getItem(SETTINGS_SOURCE) === "local"; }
+	/** This extension's settings stay on this device: its manifest says so, or the user switched it here. */
+	private keepsSettingsLocal(id: string, pkg?: ExtensionPackage): boolean {
+		if (pkg?.manifest.settingsScope === "local") return true;
+		return this.localIds.includes(id);
+	}
+	private localIdsKey() { return `${LOCAL_IDS}.${this.o.serverId}`; }
+	private readLocalIds(): string[] {
+		try {
+			const raw: unknown = JSON.parse(this.o.storage.getItem(this.localIdsKey()) ?? "[]");
+			return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
+		} catch { return []; }
+	}
+	/** The ids this server keeps on this device only. */
+	localIds: string[] = [];
+	/** True when this extension's settings stay here (its manifest says so, or the user switched it). */
+	isSettingsLocal(id: string): boolean { return this.keepsSettingsLocal(id, this.installed.find((e) => e.package.manifest.id === id)?.package); }
+	/** Keep this extension's settings here, or put them back on the server (what is here becomes the server's value). */
+	setSettingsLocal(id: string, local: boolean) {
+		const e = this.find(id);
+		if (e.package.manifest.settingsScope === "local") return; // the manifest decides
+		this.localIds = local ? [...new Set([...this.localIds, id])] : this.localIds.filter((x) => x !== id);
+		try {
+			if (this.localIds.length) this.o.storage.setItem(this.localIdsKey(), JSON.stringify(this.localIds));
+			else this.o.storage.removeItem(this.localIdsKey());
+		} catch { /* storage unavailable */ }
+		if (!local) void this.pushSettings(id);
+	}
+	/** Upload what this device holds for one id (used when it stops being device-only). */
+	private async pushSettings(id: string) {
+		const e = this.installed.find((x) => x.package.manifest.id === id);
+		const api = this.o.api();
+		if (!e || !api) return;
+		const at = this.clock.next(id);
+		const { shared } = splitSettings(e.settings, e.package.manifest.settings);
+		try {
+			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal));
+			this.pending.confirm(id, res?.updatedAt ?? at);
+			this.remote[id] = clone(res?.value ?? shared);
+			this.save();
+		} catch { /* the next save or open retries */ }
+	}
 
 	constructor(private o: ServerStoreOptions) {
+		this.localIds = this.readLocalIds();
+		this.pending = new PendingWrites(o.storage, `${PENDING}.${o.serverId}`);
 		this.load();
 	}
+	/** Unconfirmed writes of this server, so an edit made here while it was not open still wins when it is opened. */
+	private pending: PendingWrites;
+	private clock = new WriteClock();
 
 	get serverId() { return this.o.serverId; }
 	private get key() { return `${SERVER_LIST_KEY}.${this.o.serverId}`; }
@@ -185,11 +234,14 @@ export class ServerExtensionStore {
 			if (!ok) throw new LocalizedError(t("설정이 올바르지 않습니다 — {detail}", { detail: describeSettingErrors(fields, errors) }));
 			next = { ...values };
 		}
-		if (e.package.manifest.settingsScope !== "local" && !this.localSettings()) {
+		if (!this.keepsSettingsLocal(id, e.package)) {
 			const api = this.o.api();
 			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
-			await within(PUT_MS, (signal) => api.saveExtensionSettings(id, next, signal));
-			this.remote[id] = clone(next);
+			const at = this.clock.next(id);
+			const { shared } = splitSettings(next, fields);
+			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal));
+			this.remote[id] = clone(res?.value ?? shared);
+			this.pending.confirm(id, res?.updatedAt ?? at);
 		}
 		e.settings = next; e.configured = true;
 		this.save();
@@ -198,15 +250,25 @@ export class ServerExtensionStore {
 	/** Read what the server holds for each extension's settings (after which a newly listed package starts from them). */
 	async loadRemoteSettings() {
 		const api = this.o.api();
-		if (!api || this.localSettings()) return;
+		if (!api) return;
 		try {
 			const res = await within(FETCH_MS, (signal) => api.extensionSettings(signal));
 			if (!res || typeof res.settings !== "object" || !res.settings || Array.isArray(res.settings)) return;
-			this.remote = res.settings;
+			this.remote = {};
 			let changed = false;
 			for (const e of this.installed) {
-				const value = plain(this.remote[e.package.manifest.id]);
-				if (value && e.package.manifest.settingsScope !== "local") { e.settings = clone(value); e.configured = true; changed = true; }
+				const id = e.package.manifest.id;
+				const stored = res.settings[id];
+				if (!stored || typeof stored.value !== "object" || !stored.value) continue;
+				this.remote[id] = clone(stored.value);
+				if (this.keepsSettingsLocal(id, e.package)) continue;
+				const pending = this.pending.get(id);
+				if (pending?.dirty && pending.at > stored.updatedAt) continue; // ours is newer and still on its way
+				this.pending.confirm(id, stored.updatedAt);
+				const { local } = splitSettings(e.settings, e.package.manifest.settings);
+				const next = mergeSettings(clone(stored.value), local);
+				if (JSON.stringify(next) === JSON.stringify(e.settings)) continue;
+				e.settings = next; e.configured = true; changed = true;
 			}
 			if (changed) this.save();
 		} catch { /* unreachable: the stored copy stays */ }
@@ -214,8 +276,9 @@ export class ServerExtensionStore {
 
 	private async deleteRemote(id: string) {
 		delete this.remote[id];
+		this.pending.forget(id);
 		const api = this.o.api();
-		if (!api || this.localSettings()) return;
+		if (!api || this.keepsSettingsLocal(id)) return;
 		await within(PUT_MS, (signal) => api.deleteExtension(id, signal)).catch(() => {});
 	}
 

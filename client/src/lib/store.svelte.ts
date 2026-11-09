@@ -1106,6 +1106,10 @@ class AppStore {
       case "client_settings_updated":
         void this.settingsSync?.onEvent(e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
         break;
+      case "extension_settings_updated":
+        // Another device saved or deleted an extension's settings: take that one value, not the whole list.
+        void extensions.onSettingsEvent(e.data as { id?: unknown; action?: unknown; updatedAt?: unknown; origin?: unknown });
+        break;
       case "configuration_updated":
         this.configTick++;
         void this.refreshProviders();
