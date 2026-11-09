@@ -6,7 +6,7 @@ Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair). Writes u
   <name>-plain.png   the sidebar, hover-only buttons forced visible, no guides
   <name>.png         the same with column lines, a top ruler (gap between columns) and a left ruler
                      (teal = element height, magenta = space between), plus the numbers printed on stdout.
---seed adds one folder with a conversation, an archived one, a terminal and a split tab, so every row type exists.
+--seed adds folders with conversations, a closed one, a terminal and a split tab, so every row type exists.
 Expected result on a clean tree: columns 28 / 48 / 68 / 236 / 256 on a 288px sidebar, every row 32px.
 """
 import json, pathlib, subprocess, sys, urllib.request
@@ -37,8 +37,7 @@ def seed():
                                                   "models": [{"id": "m1", "contextWindow": 100000, "maxTokens": 4000, "reasoning": False, "vision": False}]})
     mk = lambda cwd, title: api("POST", "/sessions", {"cwd": cwd, "title": title})["id"]
     mk("alpha", "로그인 버그 수정")
-    for t in ("API 리팩터링", "테스트 추가"):
-        api("PATCH", f"/sessions/{mk('alpha', t)}", {"archived": True})
+    api("PATCH", f"/sessions/{mk('alpha', 'API 리팩터링')}", {"closed": True})
     a, b = mk("beta", "문서 정리"), mk("beta", "차트 컴포넌트")
     pane = lambda i: {"type": "pane", "sessionId": i}
     api("POST", "/groups", {"layout": {"type": "split", "dir": "row", "ratio": 0.5, "a": pane(a), "b": pane(b)}})
@@ -55,9 +54,9 @@ MEASURE = """()=>{const R=e=>e.getBoundingClientRect();const q=s=>[...document.q
  const box=s=>{const e=q(s)[0];if(!e)return null;const r=R(e);return [r.left,r.top,r.right,r.bottom]};
  return {W:R(q('.side')[0]).width,
   cols:[['chevron',cx('.dir .chev')],['folder icon',cx('.dir .dicon')],['tab icon',cx('.item.nested.tab .lead')],['list button',cx('.dir .listbtn')],['+ ⋯ ↺',cx('.dir .dirnew:not(.listbtn)')]],
-  extra:[['archive icon',cx('.archtoggle .dicon')],['group icon',cx('.grprow .lead')],['pane icon',cx('.item.member .lead')],['⋯ (tab)',cx('.item.tab .more')],['↺ (archived)',cx('.archived .more')],['server chevron',cx('.srvhead .chev')],['server +',cx('.srvhead .dirnew:not(.listbtn)')]],
+  extra:[['group icon',cx('.grprow .lead')],['pane icon',cx('.item.member .lead')],['⋯ (tab)',cx('.item.tab .more')],['server chevron',cx('.srvhead .chev')],['server +',cx('.srvhead .dirnew:not(.listbtn)')]],
   brand:box('.brandrow'),search:box('.tools input'),tools:box('.tools'),card:box('.srv.band'),
-  rows:q('.srvhead,.dir,.archtoggle,.item').map(e=>{const b=R(e);return [b.top,b.bottom]})}}"""
+  rows:q('.srvhead,.dir,.item').map(e=>{const b=R(e);return [b.top,b.bottom]})}}"""
 S, H = 3, 520
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -66,11 +65,6 @@ with sync_playwright() as p:
     pg = c.new_page()
     pg.goto(f"http://127.0.0.1:{env['CLIENT_PORT']}", wait_until="networkidle")
     pg.wait_for_timeout(1200)
-    try:
-        pg.locator(".archtoggle").first.click(timeout=2000)
-    except Exception:
-        pass
-    pg.wait_for_timeout(400)
     pg.evaluate(FORCE)
     pg.wait_for_timeout(300)
     m = pg.evaluate(MEASURE)
