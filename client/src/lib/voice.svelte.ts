@@ -10,9 +10,10 @@
 import { Api, ApiError, type VoiceSettings, type VoiceView } from "./api";
 import { app } from "./store.svelte";
 import { t } from "./i18n";
+import { swallowClick } from "./press-menu";
 import {
 	MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType,
-	serverFailure, voiceState, type VoiceFailure, type VoiceState,
+	PressToTalk, serverFailure, voiceState, type VoiceFailure, type VoiceState,
 } from "./voice";
 
 /**
@@ -53,6 +54,10 @@ class VoiceStore {
 	transcribeStartedAt = 0;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private stream: MediaStream | null = null;
+	/** The microphone is being opened (a permission prompt may be up); `recording` follows once it is. */
+	private opening = false;
+	/** A stop or cancel came while the microphone was still opening: close it as soon as it opens instead of recording. */
+	private stopRequested = false;
 	/** The pane the recording belongs to: the text goes back into that composer. */
 	paneId = $state<string | null>(null);
 
@@ -111,6 +116,11 @@ class VoiceStore {
 		});
 	}
 
+	/** Recording, or the microphone is still being opened for a recording. */
+	get busy() {
+		return this.recording || this.opening;
+	}
+
 	/** The button in the composer: shown whenever voice input is on, disabled while it cannot record. */
 	get visible() {
 		return this.state !== "off";
@@ -164,16 +174,26 @@ class VoiceStore {
 
 	/** Starts recording into `paneId`. Returns a failure kind when the microphone could not be opened. */
 	async start(paneId: string): Promise<VoiceFailure | null> {
-		if (this.recording || this.transcribing) return null;
+		if (this.recording || this.opening || this.transcribing) return null;
 		this.failure = null;
 		this.paneId = paneId;
+		this.opening = true;
+		this.stopRequested = false;
 		let stream: MediaStream;
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
 		} catch (cause) {
+			this.opening = false;
 			const failure = micFailure(cause);
 			this.fail(failure);
 			return failure;
+		}
+		this.opening = false;
+		// let go (or cancelled) while the permission prompt was up: nothing of what was meant to be said got recorded
+		if (this.stopRequested) {
+			this.stopRequested = false;
+			for (const track of stream.getTracks()) track.stop();
+			return null;
 		}
 		const mimeType = pickMimeType((type) => MediaRecorder.isTypeSupported(type));
 		const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -195,6 +215,7 @@ class VoiceStore {
 
 	/** Stops recording; what was recorded is transcribed and inserted into the composer it started from. */
 	stop() {
+		if (this.opening) this.stopRequested = true;
 		if (!this.recording) return;
 		this.recording = false;
 		clearInterval(this.timer);
@@ -202,24 +223,37 @@ class VoiceStore {
 		const duration = performance.now() - this.startedAt;
 		const recorder = this.recorder;
 		this.recorder = null;
-		if (recorder && recorder.state !== "inactive") recorder.stop();
 		if (duration < MIN_RECORD_MS) {
-			this.chunks = [];
-			this.releaseStream();
+			this.discard(recorder);
 			this.fail("tooShort");
+			return;
 		}
+		if (recorder && recorder.state !== "inactive") recorder.stop();
 	}
 
 	/** Throws the recording away (the pill's cancel). */
 	cancel() {
+		if (this.opening) this.stopRequested = true;
 		if (!this.recording) return;
 		this.recording = false;
 		clearInterval(this.timer);
 		this.timer = undefined;
 		const recorder = this.recorder;
 		this.recorder = null;
+		this.discard(recorder);
+	}
+
+	/**
+	 * Ends a recording without transcribing it. `stop()` still hands over the last chunk (`dataavailable`) and then
+	 * `onstop` uploads it, so the handlers go first; emptying `chunks` alone let a cancelled recording be transcribed.
+	 */
+	private discard(recorder: MediaRecorder | null) {
+		if (recorder) {
+			recorder.ondataavailable = null;
+			recorder.onstop = null;
+			if (recorder.state !== "inactive") recorder.stop();
+		}
 		this.chunks = [];
-		if (recorder && recorder.state !== "inactive") recorder.stop();
 		this.releaseStream();
 	}
 
@@ -298,3 +332,63 @@ function readTest(test: VoiceView["test"] | undefined): Tested | null {
 }
 
 export const voice = new VoiceStore();
+
+/** The voice shortcut's press (see `onShortcut` / `onShortcutUpCapture`): it records into the open pane. */
+export const voiceKeyPress = new PressToTalk({ busy: () => voice.busy, start: () => voice.start(app.activeId ?? ""), stop: () => voice.stop() });
+
+/** The composer the microphone button was pressed in. */
+let buttonPane = "";
+const buttonPress = new PressToTalk({ busy: () => voice.busy, start: () => voice.start(buttonPane), stop: () => voice.stop() });
+
+/**
+ * The microphone button went down. The press is followed here, on the window, not on the button: the button leaves the
+ * page as soon as recording starts (the toolbar row becomes the recording row), so its own pointerup never comes.
+ * While the press lasts a long-press context menu is held off, and the click that follows the lift is swallowed so it
+ * cannot land on the recording row's buttons that took the button's place. A touch also ends on the button itself: a
+ * touch's events keep going to the node it began on even after that node left the page (iOS sends `touchend` only
+ * there), so whichever of the two arrives first ends the press.
+ */
+export function pressMic(e: PointerEvent, paneId: string) {
+	if (buttonPress.active || !voice.ready) return;
+	voice.clearFailure();
+	buttonPane = paneId;
+	const id = e.pointerId;
+	const node = e.currentTarget as HTMLElement | null;
+	const noMenu = (ev: Event) => ev.preventDefault();
+	const off = () => {
+		node?.removeEventListener("touchend", touchEnd);
+		node?.removeEventListener("touchcancel", touchEnd);
+		window.removeEventListener("pointerup", end, true);
+		window.removeEventListener("pointercancel", end, true);
+		window.removeEventListener("blur", lost);
+		window.removeEventListener("contextmenu", noMenu, true);
+	};
+	const end = (ev: PointerEvent) => {
+		if (ev.pointerId !== id) return;
+		off();
+		if (ev.type === "pointerup") {
+			buttonPress.up();
+			swallowClick();
+		} else buttonPress.cancel();
+	};
+	const touchEnd = (ev: TouchEvent) => {
+		off();
+		if (ev.type === "touchend") {
+			buttonPress.up();
+			swallowClick();
+		} else buttonPress.cancel();
+	};
+	const lost = () => {
+		off();
+		buttonPress.cancel();
+	};
+	if (e.pointerType === "touch") {
+		node?.addEventListener("touchend", touchEnd);
+		node?.addEventListener("touchcancel", touchEnd);
+	}
+	window.addEventListener("pointerup", end, true);
+	window.addEventListener("pointercancel", end, true);
+	window.addEventListener("blur", lost);
+	window.addEventListener("contextmenu", noMenu, true);
+	buttonPress.down();
+}

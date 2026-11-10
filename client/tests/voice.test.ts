@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	CONFIG_FAILURES, FAILURE_TEXT, failureHasFix, failureTone, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
-	micFailure, pickMimeType, serverFailure, voiceState,
+	micFailure, pickMimeType, PressToTalk, serverFailure, voiceState,
 } from "../src/lib/voice";
 
 describe("voiceState", () => {
@@ -94,5 +94,75 @@ describe("recording helpers", () => {
 	test("a tap and a hold are told apart at 300 ms, and a recording may run five minutes", () => {
 		expect(TAP_MS).toBe(300);
 		expect(MAX_RECORD_MS).toBe(5 * 60 * 1000);
+	});
+});
+
+describe("press to talk", () => {
+	function rig(recording = false) {
+		let clock = 0;
+		const log: string[] = [];
+		const state = { recording };
+		const press = new PressToTalk({
+			busy: () => state.recording,
+			start: () => { log.push("start"); state.recording = true; },
+			stop: () => { log.push("stop"); state.recording = false; },
+			now: () => clock,
+		});
+		return { press, log, state, wait: (ms: number) => (clock += ms) };
+	}
+	test("recording starts as the press goes down, before it is known to be a tap or a hold", () => {
+		const { press, log } = rig();
+		press.down();
+		expect(log).toEqual(["start"]);
+		expect(press.active).toBe(true);
+	});
+	test("a tap starts recording and keeps it going", () => {
+		const { press, log, state, wait } = rig();
+		press.down();
+		wait(TAP_MS - 1);
+		expect(press.up()).toBe("keep");
+		expect(log).toEqual(["start"]);
+		expect(state.recording).toBe(true);
+	});
+	test("a hold records only while held", () => {
+		const { press, log, state, wait } = rig();
+		press.down();
+		wait(TAP_MS);
+		expect(press.up()).toBe("stop");
+		expect(log).toEqual(["start", "stop"]);
+		expect(state.recording).toBe(false);
+	});
+	test("a tap while recording stops it, and so does a hold", () => {
+		for (const ms of [10, TAP_MS * 3]) {
+			const { press, log, wait } = rig(true);
+			press.down();
+			wait(ms);
+			expect(press.up()).toBe("stop");
+			expect(log).toEqual(["stop"]);
+		}
+	});
+	test("tap, tap: on then off", () => {
+		const { press, log, state, wait } = rig();
+		press.down(); wait(50); press.up();
+		wait(2000);
+		press.down(); wait(50); press.up();
+		expect(log).toEqual(["start", "stop"]);
+		expect(state.recording).toBe(false);
+	});
+	test("a cancelled press stops what it started, even a tap's", () => {
+		const { press, log } = rig();
+		press.down();
+		press.cancel();
+		expect(log).toEqual(["start", "stop"]);
+		expect(press.active).toBe(false);
+	});
+	test("a second down (key repeat) and an up without a press do nothing", () => {
+		const { press, log, wait } = rig();
+		press.down(); press.down(); press.down();
+		expect(log).toEqual(["start"]);
+		wait(TAP_MS); press.up();
+		expect(press.up()).toBeNull();
+		press.cancel();
+		expect(log).toEqual(["start", "stop"]);
 	});
 });

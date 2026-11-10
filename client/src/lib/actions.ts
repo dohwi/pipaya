@@ -28,8 +28,7 @@ import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { composing, releasedByKeyUp, type ShortcutUpReason } from "./extensions/shortcuts";
-import { voice } from "./voice.svelte";
-import { TAP_MS } from "./voice";
+import { voice, voiceKeyPress } from "./voice.svelte";
 import { THINKING_LEVELS, type ThinkingLevel } from "./types";
 import { t } from "./i18n";
 
@@ -278,38 +277,6 @@ export function runAction(id: ActionId) {
   void RUN[id]();
 }
 
-/** When the voice shortcut went down: a press shorter than this is a tap (toggle), a longer one records while held. */
-let holdStartedAt = 0;
-/** The voice shortcut is down and recording because of it (letting go stops). */
-let voiceHolding = false;
-/** The keydown started the recording (a tap keeps it; a tap while already recording stops it). */
-let voiceStartedOnDown = false;
-
-/**
- * The voice shortcut's keys went down ("both" mode): recording starts at once, so a long press records from the start.
- * The keyup tells a tap from a hold — a tap keeps what it started (toggle on) or stops a recording that was already
- * running (toggle off); a hold stops when the key comes up.
- */
-function startVoiceHold() {
-  if (!voice.ready) return;
-  voiceHolding = true;
-  voiceStartedOnDown = !voice.recording;
-  if (voiceStartedOnDown) void voice.start(app.activeId ?? "").then((failure) => { if (failure) voiceStartedOnDown = false; });
-}
-
-/** The key came up: a tap toggles, a hold stops the recording it made. */
-function endVoiceHold() {
-  if (!voiceHolding) return;
-  voiceHolding = false;
-  const held = performance.now() - holdStartedAt;
-  holdStartedAt = 0;
-  const started = voiceStartedOnDown;
-  voiceStartedOnDown = false;
-  if (!voice.ready) return;
-  if (held < TAP_MS && started) return; // a tap that started recording: keep recording until the next tap
-  if (voice.recording) voice.stop();
-}
-
 /** Plain keys currently held, by physical code. Cleared on blur so a missed keyup cannot stick. */
 const held = new Set<string>();
 let fired = false;
@@ -504,9 +471,9 @@ export function onShortcut(e: KeyboardEvent) {
       if (id) armPrefixAction(id);
     } else {
       fired = true;
+      // "both" mode: recording starts on the way down; the keyup tells a tap (keep) from a hold (stop)
       if (id === "voiceInput") {
-        holdStartedAt = performance.now();
-        startVoiceHold();
+        if (voice.ready || voice.busy) voiceKeyPress.down();
       } else runAction(id!);
     }
     return;
@@ -527,6 +494,9 @@ export function endExtensionHold(reason: ShortcutUpReason) {
  * terminal or field that swallows the keyup cannot leave the extension holding (a microphone that never turns off).
  */
 export function onShortcutUpCapture(e: KeyboardEvent) {
+  // The voice shortcut's key came up: a tap keeps the recording it started, a hold stops it. Capture for the same
+  // reason as below: a terminal that swallows the keyup must not leave the microphone open.
+  if (voiceKeyPress.active && !MODIFIER_CODE.test(e.code)) voiceKeyPress.up();
   const held = extensions.heldShortcut;
   if (!held) return;
   // The working combo (the user may have changed it while the key was down), not the snapshot taken at registration.
@@ -537,7 +507,6 @@ export function onShortcutUpCapture(e: KeyboardEvent) {
 }
 
 export function onShortcutUp(e: KeyboardEvent) {
-  if (voiceHolding && !MODIFIER_CODE.test(e.code)) endVoiceHold();
   if (MODIFIER_CODE.test(e.code)) {
     // macOS sends no keyup for other keys while ⌘ is down, so letting go of ⌘ is the only chance to forget them.
     if (e.key === "Meta") held.clear();
@@ -558,5 +527,5 @@ export function resetKeyboard() {
   cancelChord();
   endExtensionHold("blur");
   // The keyup of a held voice recording will not arrive either: stop it rather than leave the microphone open.
-  if (voiceHolding) { voiceHolding = false; voiceStartedOnDown = false; holdStartedAt = 0; if (voice.recording) voice.stop(); }
+  voiceKeyPress.cancel();
 }

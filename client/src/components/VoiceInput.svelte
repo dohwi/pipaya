@@ -2,8 +2,7 @@
 	import Icon from "./Icon.svelte";
 	import { t } from "../lib/i18n";
 	import { app } from "../lib/store.svelte";
-	import { voice } from "../lib/voice.svelte";
-	import { TAP_MS } from "../lib/voice";
+	import { pressMic, voice } from "../lib/voice.svelte";
 
 	/**
 	 * The composer's microphone button. Shown whenever voice input is on (`voice.visible`), and disabled while it cannot
@@ -11,52 +10,26 @@
 	 * the reason as its tooltip and a tap that opens Settings > Voice. Hiding it left the user with no microphone and no
 	 * way to learn why.
 	 *
-	 * While recording, the whole input becomes the recording surface (`VoiceRecording`); this button then only stops it.
+	 * While recording, the whole input becomes the recording surface (`VoiceRecording`); the button in another pane's composer stops it.
 	 *
-	 * Press: a tap toggles recording, a longer press records while held (the same "both" behaviour as the shortcut).
+	 * Press: recording starts as the button goes down. A tap keeps it going until the next tap; a longer press records
+	 * while held and stops when let go (the same "both" behaviour as the shortcut, `PressToTalk`). The lift is read on the
+	 * window (`pressMic`), since the button is replaced by the recording row the moment recording starts.
 	 */
 	/** The composer this button belongs to; "" on the new-chat screen, where the transcript goes to the open pane. */
 	let { paneId }: { paneId: string } = $props();
 
-	let pressedAt = 0;
-	let holding = false;
-	/** The hold started recording, so letting go stops it (a tap keeps recording until the next tap). */
-	let holdRecords = false;
-
 	function down(e: PointerEvent) {
 		if (e.button !== 0 && e.pointerType === "mouse") return;
-		voice.clearFailure();
-		pressedAt = performance.now();
-		holding = true;
-		holdRecords = false;
-	}
-
-	async function up() {
-		if (!holding) return;
-		holding = false;
-		const held = performance.now() - pressedAt;
-		if (voice.recording) {
-			// already recording (a tap started it): a short press stops it, a held press was the hold's own stop
-			if (!holdRecords) voice.stop();
-			holdRecords = false;
-			return;
-		}
-		if (held >= TAP_MS) {
-			// a long press records only while held
-			holdRecords = true;
-			const failure = await voice.start(paneId);
-			if (failure) holdRecords = false;
-			return;
-		}
-		const failure = await voice.start(paneId);
-		if (failure) return;
+		// no focus ring, text selection or touch emulation from the press: the press is followed on the window
+		e.preventDefault();
+		pressMic(e, paneId);
 	}
 
 </script>
 
 {#if voice.visible}
 	<div class="voice">
-		{#if voice.visible}
 		{#if voice.ready}
 			<button
 				class="mic tap"
@@ -66,9 +39,7 @@
 				aria-pressed={voice.recording}
 				title={t("음성으로 입력 (짧게 누르면 시작/정지, 길게 누르면 누르는 동안)")}
 				onpointerdown={down}
-				onpointerup={up}
-				onpointercancel={() => (holding = false)}
-				onpointerleave={() => { if (voice.recording && !holdRecords) return; holding = false; }}
+				oncontextmenu={(e) => e.preventDefault()}
 				onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void (voice.recording ? voice.stop() : voice.start(paneId)); } }}
 			>
 				<Icon name={voice.recording ? "mic-rec" : "mic"} />
@@ -86,7 +57,6 @@
 			>
 				<Icon name="mic" />
 			</button>
-		{/if}
 		{/if}
 	</div>
 {/if}
@@ -108,6 +78,12 @@
 		border-radius: 50%;
 		color: var(--text-dim);
 		background: transparent;
+	}
+	/* a long press is push-to-talk: no callout, text selection or double-tap zoom on the way */
+	.mic:not(.blocked) {
+		-webkit-touch-callout: none;
+		user-select: none;
+		touch-action: manipulation;
 	}
 	.mic :global(svg) {
 		width: 19px;

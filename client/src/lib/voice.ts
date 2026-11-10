@@ -14,6 +14,64 @@ export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 /** A tap shorter than this toggles recording; a longer press records while held (the "both" shortcut mode). */
 export const TAP_MS = 300;
 
+/** What a press of the microphone button or the voice shortcut needs from the recorder. */
+export type PressHooks = {
+	/** Recording, or the microphone is still being opened (a press then belongs to that recording). */
+	busy: () => boolean;
+	start: () => unknown;
+	stop: () => void;
+	now?: () => number;
+};
+
+/**
+ * One press of the microphone button or the voice shortcut ("both" mode): recording starts when the press goes down, so
+ * a hold records from its first moment. How long it was held decides the rest:
+ * - a tap (< TAP_MS) that started the recording keeps it going until the next press (toggle on);
+ * - a hold stops the recording when it ends (push-to-talk);
+ * - any press while already recording stops it (toggle off).
+ * A cancelled press (the window lost focus, the browser took the touch) stops what it started rather than leave the
+ * microphone open with nothing to end it.
+ */
+export class PressToTalk {
+	private downAt = 0;
+	private pressing = false;
+	private startedHere = false;
+	constructor(private hooks: PressHooks) {}
+
+	private now() {
+		return this.hooks.now ? this.hooks.now() : performance.now();
+	}
+
+	/** A press is in progress (its end is still to come). */
+	get active() {
+		return this.pressing;
+	}
+
+	down() {
+		if (this.pressing) return;
+		this.pressing = true;
+		this.downAt = this.now();
+		this.startedHere = !this.hooks.busy();
+		if (this.startedHere) void this.hooks.start();
+	}
+
+	/** The press ended normally. Returns what it did, or null when no press was in progress. */
+	up(): "keep" | "stop" | null {
+		if (!this.pressing) return null;
+		this.pressing = false;
+		if (this.startedHere && this.now() - this.downAt < TAP_MS) return "keep";
+		this.hooks.stop();
+		return "stop";
+	}
+
+	/** The press will never get its end (blur, pointercancel): stop rather than keep recording. */
+	cancel() {
+		if (!this.pressing) return;
+		this.pressing = false;
+		this.hooks.stop();
+	}
+}
+
 /** Preference order: what Chrome/Firefox (webm, ogg) and Safari (mp4) record. The server sniffs the container anyway. */
 export const MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
 
