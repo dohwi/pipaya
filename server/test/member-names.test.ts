@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentioned, nameInLang, nextMemberName, poolForLang, poolOfName, romanize } from "../src/member-names.ts";
+import { groupHandle, koreanName, MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentioned, nameInLang, nextMemberName, romanize } from "../src/member-names.ts";
 
 describe("member names", () => {
 	test("romanizes Hangul syllable by syllable and keeps anything else", () => {
@@ -8,13 +8,11 @@ describe("member names", () => {
 		expect(MEMBER_NAMES_EN).toHaveLength(MEMBER_NAMES_KO.length);
 	});
 
-	test("the pool follows the UI language: Korean for ko*, English otherwise, Korean without a tag", () => {
-		expect(poolForLang()).toBe(MEMBER_NAMES_KO);
-		expect(poolForLang("ko-KR")).toBe(MEMBER_NAMES_KO);
-		expect(poolForLang("en")).toBe(MEMBER_NAMES_EN);
-		expect(poolForLang("kok")).toBe(MEMBER_NAMES_EN); // not Korean: only `ko` and `ko-…`
-		expect(poolOfName("Minsu")).toBe(MEMBER_NAMES_EN);
-		expect(poolOfName("민수")).toBe(MEMBER_NAMES_KO);
+	test("a stored name is always the Korean one, whatever form it was saved in", () => {
+		expect(koreanName("민수")).toBe("민수");
+		expect(koreanName("Minsu")).toBe("민수"); // saved by an older server that renamed on a language switch
+		expect(koreanName("minsu2")).toBe("민수2");
+		expect(koreanName("custom")).toBe("custom");
 	});
 
 	test("hands out the first free name, then numbers the first one", () => {
@@ -25,15 +23,18 @@ describe("member names", () => {
 		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}3`);
 	});
 
-	test("translates a name between languages, numbered ones included, and leaves strangers alone", () => {
+	test("shows a name in the language asked for, numbered ones included, and leaves strangers alone", () => {
 		const ko = MEMBER_NAMES_KO[0]!;
 		const en = MEMBER_NAMES_EN[0]!;
 		expect(nameInLang(ko, "en")).toBe(en);
 		expect(nameInLang(`${ko}2`, "en")).toBe(`${en}2`);
+		expect(nameInLang(ko, "ko")).toBe(ko);
+		expect(nameInLang(ko, "ko-KR")).toBe(ko);
+		expect(nameInLang(ko)).toBe(ko);
+		expect(nameInLang("custom", "en")).toBe("custom");
+		// a name stored in the old romanized form still shows as the Korean one in Korean
 		expect(nameInLang(en, "ko")).toBe(ko);
 		expect(nameInLang(`${en.toLowerCase()}3`, "ko")).toBe(`${ko}3`);
-		expect(nameInLang("custom", "en")).toBe("custom");
-		expect(nameInLang(ko, "ko")).toBe(ko);
 	});
 
 	test("a group handle is one token", () => {

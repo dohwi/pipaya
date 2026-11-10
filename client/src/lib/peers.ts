@@ -1,5 +1,6 @@
 /** Sessions that address each other by `@name`: the label, the `@` completions and the sender of a message. Free of components so it can be unit-tested. */
 import { t } from "./i18n";
+import { nameInLang } from "./member-names";
 import { panesOf } from "./layout";
 import type { Group, Session } from "./types";
 
@@ -9,7 +10,8 @@ export const groupHandle = (name: string): string => name.trim().replace(/\s+/g,
 /** The label shown before a session's title in the sidebar and the pane header. */
 export function peerLabel(s: Pick<Session, "name" | "purpose"> | undefined): { text: string; title: string } | undefined {
 	if (!s?.name) return undefined;
-	return { text: `@${s.name}`, title: s.purpose ? `@${s.name} · ${s.purpose}` : `@${s.name}` };
+	const shown = `@${nameInLang(s.name)}`;
+	return { text: shown, title: s.purpose ? `${shown} · ${s.purpose}` : shown };
 }
 
 export interface PeerMention { insert: string; desc: string; group: string; keywords: string; except: string }
@@ -28,7 +30,7 @@ export function peerMentions(sessions: readonly Session[], groups: readonly Grou
 	for (const s of live) {
 		if (s.id === self) continue;
 		const dir = s.cwd.split("/").slice(-2).join("/");
-		items.push({ insert: `@${s.name}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("세션"), keywords: `${s.title} ${s.purpose}`, except: "" });
+		items.push({ insert: `@${nameInLang(s.name)}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("세션"), keywords: `${s.title} ${s.purpose}`, except: "" });
 	}
 	return items;
 }

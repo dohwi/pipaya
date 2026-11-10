@@ -33,3 +33,16 @@ describe("peers", () => {
 		expect(r?.body).toBe("@도하 finished its run. This is a report you asked for; no reply needed.\nlast words: \"끝\"\nUse peer(action=read).");
 	});
 });
+
+import { nameInLang, romanize } from "../src/lib/member-names";
+import { describe as d2, expect as e2, test as t2 } from "bun:test";
+d2("member names follow the UI language at display time", () => {
+	t2("Korean shows the stored name, English its romanization, numbers kept", () => {
+		e2(nameInLang("민수", "ko")).toBe("민수");
+		e2(nameInLang("민수", "ko-KR")).toBe("민수");
+		e2(nameInLang("민수", "en")).toBe("Minsu");
+		e2(nameInLang("철수2", "en")).toBe("Cheolsu2");
+		e2(nameInLang("custom", "en")).toBe("custom");
+		e2(romanize("영희")).toBe("Yeonghui");
+	});
+});

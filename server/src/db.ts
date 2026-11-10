@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { groupHandle, nextMemberName } from "./member-names.ts";
+import { groupHandle, koreanName, nextMemberName } from "./member-names.ts";
 
 /** SQLite has no `ADD COLUMN IF NOT EXISTS`, and a database stepped back and reopened runs a migration again: these make a step safe to repeat. */
 const columns = (db: Database, table: string): string[] => (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
@@ -205,6 +205,16 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	(db) => {
 		db.exec("UPDATE sessions SET closed = 1 WHERE archived = 1 AND closed = 0");
 		dropColumn(db, "sessions", "archived");
+	},
+	// v30: session @names are stored once, in Korean, and only shown in another language (민수 / Minsu). Until now the UI
+	// language switch renamed them on the server, so a database holds a mix of both forms; the romanized ones go back to
+	// their Korean twin, which is what the UI now derives anyway.
+	(db) => {
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const r of db.query("SELECT id, name FROM sessions WHERE name != ''").all() as { id: string; name: string }[]) {
+			const name = koreanName(r.name);
+			if (name !== r.name) set.run({ id: r.id, name });
+		}
 	},
 ];
 

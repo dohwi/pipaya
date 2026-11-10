@@ -450,10 +450,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { params: S.IdParams, response: { 200: Type.Object({ ok: Type.Boolean() }), ...S.errors(401) } },
 		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },
 	});
-	app.post("/sessions/localize-names", {
-		schema: { body: S.LocalizeNamesBody, response: { 200: Type.Object({ renamed: Type.Integer() }), ...S.errors(400, 401) } },
-		handler: async (req) => ({ renamed: sessions.peers.localize(req.body.lang) }),
-	});
 	app.post("/sessions", {
 		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },
 		handler: async (req, reply) => reply.status(201).send(await sessions.create(req.body)),

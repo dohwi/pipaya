@@ -14,7 +14,7 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 	};
 	const pane = (sessionId: string) => ({ type: "pane", sessionId });
 	const split = (a: unknown, b: unknown) => ({ type: "split", dir: "row", ratio: 0.5, a, b });
-	const mk = async (lang?: string) => (await api("POST", "/sessions", lang ? { lang } : {})).json.id as string;
+	const mk = async () => (await api("POST", "/sessions", {})).json.id as string;
 	const nameOf = async (id: string) => (await api("GET", `/sessions/${id}`)).json.name as string;
 	const idle = async (id: string) => { for (let i = 0; i < 200; i++) { if (!(await api("GET", `/sessions/${id}/status`)).json.running) return; await Bun.sleep(25); } };
 	const said = async (id: string) => JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json);
@@ -81,7 +81,7 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(body).toContain("Group @Hint-Crew");
 	});
 
-	test("every active session has its own name, a closed one gives it up, and names follow the UI language", async () => {
+	test("every active session has its own name, a closed one gives it up, and a name does not follow the UI language", async () => {
 		const [a, b, c] = [await mk(), await mk(), await mk()];
 		const names = async () => Object.fromEntries(await Promise.all([a, b, c].map(async (id) => [id, await nameOf(id)] as const)));
 		const before = await names();
@@ -93,13 +93,8 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		const after = await nameOf(c);
 		expect(after).toBeTruthy();
 		expect([before[a]!, before[b]!, await nameOf(d)]).not.toContain(after);
-		// the UI language switched: names become their romanized twins and back
-		expect((await api("POST", "/sessions/localize-names", { lang: "en" })).json.renamed).toBeGreaterThan(0);
-		expect(await nameOf(a)).toMatch(/^[A-Za-z]+\d*$/);
-		await api("POST", "/sessions/localize-names", { lang: "ko" });
-		expect(await nameOf(a)).toBe(before[a]!);
-		// a session made from an English UI gets an English name
-		expect(await nameOf(await mk("en"))).toMatch(/^[A-Za-z]+\d*$/);
+		// a name is stored once, in Korean: the UI language only changes how it is written (see member-names.test.ts)
+		expect(await nameOf(a)).toMatch(/^[가-힣]+\d*$/);
 	});
 
 	test("a group cannot take a session's name", async () => {

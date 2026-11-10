@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { conflict, notFound } from "./errors.ts";
-import { groupHandle, mentioned, nameInLang, nextMemberName, poolForLang, poolOfName } from "./member-names.ts";
+import { groupHandle, mentioned, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
 
@@ -221,28 +221,14 @@ export class PeerService {
 		return taken;
 	}
 
-	/** A free name for a new session in the language of the UI that made it. */
-	newName(lang?: string): string {
-		return nextMemberName(this.taken(), poolForLang(lang));
+	/** A free name for a new session. Names are stored in Korean whatever the UI language (see member-names.ts). */
+	newName(): string {
+		return nextMemberName(this.taken());
 	}
 
 	/** The name a session takes back when reopened: its own, unless another session has it by now (or it never had one). */
 	resumedName(r: SessionRecord): string {
-		return r.name && !this.taken().has(r.name.toLowerCase()) ? r.name : nextMemberName(this.taken(), poolOfName(r.name));
-	}
-
-	/** The UI language changed: every session gets the twin of its name in it (민수 <-> Minsu). Returns how many were renamed. */
-	localize(lang: string): number {
-		const pool = poolForLang(lang);
-		let renamed = 0;
-		for (const r of this.host.store.list({ limit: 1000 })) {
-			let name = nameInLang(r.name, lang);
-			if (name === r.name) continue;
-			if (!r.closed && this.taken().has(name.toLowerCase())) name = nextMemberName(this.taken(), pool);
-			this.host.rename(r.id, name);
-			renamed++;
-		}
-		return renamed;
+		return r.name && !this.taken().has(r.name.toLowerCase()) ? r.name : nextMemberName(this.taken());
 	}
 
 	// ── addressing ──────────────────────────────────────────────────────────
@@ -254,7 +240,7 @@ export class PeerService {
 
 	private find(selfId: string, name: string): SessionRecord {
 		const all = this.others(selfId);
-		const peer = all.find((p) => p.name.toLowerCase() === name.toLowerCase());
+		const peer = all.find((p) => sameName(p.name, name));
 		if (!peer) throw notFound(`session @${name} (sessions: ${all.map((p) => `@${p.name}`).join(", ") || "none"})`);
 		return peer;
 	}
@@ -275,7 +261,7 @@ export class PeerService {
 	async send(selfId: string, to: string, message: string, opts: { mode?: "steer" | "follow_up"; notify?: boolean } = {}): Promise<string> {
 		const name = to.replace(/^@/, "");
 		const all = this.others(selfId);
-		const isSession = all.some((p) => p.name.toLowerCase() === name.toLowerCase());
+		const isSession = all.some((p) => sameName(p.name, name));
 		const group = isSession ? undefined : this.host.groups().find((g) => groupHandle(g.name).toLowerCase() === name.toLowerCase());
 		const targets = group ? all.filter((p) => group.sessionIds.includes(p.id)) : [this.find(selfId, name)];
 		if (group && !targets.length) throw notFound(`active sessions in group @${name} other than yourself`);
@@ -355,9 +341,9 @@ export class PeerService {
 	/** A session of this server by name, closed ones too (`peer(action=close|resume|delete|rename|set)` resume). */
 	private findAny(selfId: string, name: string): SessionRecord {
 		const n = name.replace(/^@/, "").toLowerCase();
-		const active = this.others(selfId).find((p) => p.name.toLowerCase() === n);
+		const active = this.others(selfId).find((p) => sameName(p.name, n));
 		if (active) return active;
-		const closed = this.host.store.list({ limit: 1000, closed: true }).filter((r) => r.id !== selfId && r.name.toLowerCase() === n).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+		const closed = this.host.store.list({ limit: 1000, closed: true }).filter((r) => r.id !== selfId && sameName(r.name, n)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
 		if (!closed) throw notFound(`session @${n}`);
 		return closed;
 	}
@@ -412,7 +398,7 @@ export class PeerService {
 		const own = this.host.store.get(selfId);
 		const ids = [...new Set((a.members ?? []).map((m) => {
 			const n = m.replace(/^@/, "").toLowerCase();
-			return own && own.name.toLowerCase() === n ? own.id : this.find(selfId, n).id;
+			return own && sameName(own.name, n) ? own.id : this.find(selfId, n).id;
 		}))];
 		const need = (): string => {
 			if (!a.group) throw conflict("pass `group` (the group name)");

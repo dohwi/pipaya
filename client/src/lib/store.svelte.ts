@@ -520,14 +520,12 @@ class AppStore {
       }
     });
     this.prefs.init();
-    // Session @names follow the UI language (민수 <-> Minsu); the server renames, and session_updated events refresh the list.
+    // Session @names are stored once (Korean) and written per UI language at render (lib/member-names), so a switch renames nothing.
     // Client extensions hear the change too (they may keep text in it).
     let language = getLang();
     onLangChange(() => {
       if (getLang() === language) return;
-      const wasKorean = /^ko(?:-|$)/i.test(language);
       language = getLang();
-      if (wasKorean !== /^ko(?:-|$)/i.test(language)) void this.api?.localizeNames(language).catch(() => {}); // offline: names just stay
       extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() });
     });
     // Mobile OSes silently kill background sockets (EventSource gets no error), and a /health ping succeeds on a fresh

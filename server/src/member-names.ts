@@ -1,4 +1,5 @@
-// Names for sessions (`@name`): Korean, or the same names romanized for other UI languages. The first one not taken is used.
+// Names for sessions (`@name`). Stored once, in Korean: the UI language only decides which form is shown (민수 / Minsu),
+// so switching the language never renames anything and two clients in different languages still agree on the name.
 
 /** Korean names, given to sessions in order; the first one not taken by an active session is used. */
 export const MEMBER_NAMES_KO = [
@@ -38,36 +39,46 @@ export function romanize(name: string): string {
 	return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
-/** English names for sessions made from a non-Korean UI: the Korean pool, romanized (민수 -> Minsu), so each name has a twin. */
+/** The Korean pool romanized (민수 -> Minsu): the same name in a Latin-script UI, never a second name of its own. */
 export const MEMBER_NAMES_EN = MEMBER_NAMES_KO.map(romanize);
 
-/** The pool for a UI language tag: Korean for `ko*`, English for everything else. No tag = Korean. */
-export function poolForLang(lang?: string): readonly string[] {
-	return lang && !/^ko(?:-|$)/i.test(lang) ? MEMBER_NAMES_EN : MEMBER_NAMES_KO;
-}
+const SUFFIX = /\d+$/;
 
-/** The pool a given name came from (Latin letters = English), so a reopened or forked session stays in its language. */
-export const poolOfName = (name: string): readonly string[] => (/^[a-z]/i.test(name) ? MEMBER_NAMES_EN : MEMBER_NAMES_KO);
-
-/** The next free name given the lower-cased names in use: the pool first, then 철수2, 철수3, ... (Cheolsu2, ...) */
+/** The next free name given the lower-cased names in use, then 철수2, 철수3, ... (the pool is always the stored, Korean one). */
 export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string[] = MEMBER_NAMES_KO): string {
 	const free = pool.find((n) => !taken.has(n.toLowerCase()));
 	if (free) return free;
 	for (let n = 2; ; n++) if (!taken.has(`${pool[0]}${n}`.toLowerCase())) return `${pool[0]}${n}`;
 }
 
-const SUFFIX = /\d+$/;
-
-/**
- * The same member name in another UI language: 민수 <-> Minsu (a numbered 민수2 <-> Minsu2). A name that is not from the
- * pools (or is already in that language) is returned unchanged.
- */
-export function nameInLang(name: string, lang?: string): string {
+/** The Korean name a stored name stands for: a name saved before names became language-neutral may still be romanized. */
+export function koreanName(name: string): string {
+	if (MEMBER_NAMES_KO.includes(name)) return name;
 	const base = name.replace(SUFFIX, "");
 	const suffix = name.slice(base.length);
-	if (poolForLang(lang) === MEMBER_NAMES_EN) return MEMBER_NAMES_KO.includes(base) ? romanize(base) + suffix : name;
 	const i = MEMBER_NAMES_EN.findIndex((n) => n.toLowerCase() === base.toLowerCase());
 	return i >= 0 ? MEMBER_NAMES_KO[i]! + suffix : name;
+}
+
+/**
+ * The name as one language writes it: the Korean name itself, or its romanization (민수 <-> Minsu, 민수2 <-> Minsu2).
+ * Display only — the stored name stays Korean. A name from outside the pool is returned as it is.
+ */
+export function nameInLang(name: string, lang?: string): string {
+	if (!lang || /^ko(?:-|$)/i.test(lang)) return koreanName(name);
+	const ko = koreanName(name);
+	const base = ko.replace(SUFFIX, "");
+	return MEMBER_NAMES_KO.includes(base) ? romanize(base) + ko.slice(base.length) : ko;
+}
+
+/**
+ * Whether a name someone wrote means this session: the stored name itself, or the form an English UI shows
+ * (Minsu = 민수), so a model that read `@Minsu` off the screen can address it.
+ */
+export function sameName(a: string, b: string): boolean {
+	const x = a.toLowerCase();
+	const y = b.toLowerCase();
+	return x === y || nameInLang(a, "en").toLowerCase() === nameInLang(b, "en").toLowerCase();
 }
 
 /** What a group is called in a message: its name with whitespace turned into "-" so the tag stays one token. */

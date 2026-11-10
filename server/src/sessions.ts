@@ -17,7 +17,6 @@ import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMess
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
-import { MEMBER_NAMES_EN, poolOfName } from "./member-names.ts";
 import { PeerService, type GroupOps, type GroupRef } from "./peers.ts";
 import type { QuestionRequest } from "./questions.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
@@ -197,7 +196,7 @@ export class SessionManager {
 		const record: SessionRecord = {
 			id,
 			title: input.title?.trim() || "New session",
-			name: this.peers.newName(input.lang),
+			name: this.peers.newName(),
 			purpose: "",
 			cwd,
 			provider,
@@ -478,7 +477,6 @@ export class SessionManager {
 				thinkingLevel: src.thinkingLevel,
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
-				lang: poolOfName(src.name) === MEMBER_NAMES_EN ? "en" : "ko",
 			},
 			src.id,
 		);
