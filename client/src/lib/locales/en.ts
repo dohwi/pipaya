@@ -984,7 +984,6 @@ export const en: Record<string, string> = {
 	"바꿀 다른 즐겨찾기 모델이 없습니다": "No other favorite model to switch to",
 	"이 모델은 추론 단계를 지원하지 않습니다": "This model doesn't support reasoning levels",
 	"돌아갈 이전 대화가 없습니다": "No previous chat to go back to",
-	"전환할 다른 서버가 없습니다": "No other server to switch to",
 	"그룹에 속한 대화가 아닙니다": "This chat isn't in a group",
 
 	/* ---- activity ---- */
@@ -1291,7 +1290,6 @@ export const en: Record<string, string> = {
 	"다음 탭으로 이동": "Go to next tab",
 	"스킬 열기": "Open skills",
 	"지금 대화(또는 새 대화)의 스킬 목록을 엽니다": "Opens the skill list for the current chat (or a new one)",
-	"다음 서버로 전환": "Switch to next server",
 	"알림음 켜기 / 끄기": "Turn notification sound on / off",
 	"설정 열기": "Open settings",
 	"라이트 / 다크 전환": "Switch light / dark",
@@ -1590,7 +1588,6 @@ export const en: Record<string, string> = {
 	"대화에서 쓰는 모델이 요약합니다.": "The chat's own model writes the summary.",
 	"대화의 처음으로 스크롤합니다": "Scrolls to the start of the chat",
 	"두 대화를 오갈 때 씁니다": "For switching between two chats",
-	"등록한 서버를 차례로 넘깁니다": "Steps through your servers",
 	"분할 화면으로 되돌립니다": "Back to the split view",
 	"지금 대화는 그대로 두고 새 대화를 엽니다. 그룹은 그대로 남습니다": "Opens a new chat and leaves the current one as it is. A group stays as it is",
 	"새 대화로 비우기": "Start over as a new chat",

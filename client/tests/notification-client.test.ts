@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, test } from "bun:test";
 const listeners = new Map<string, Set<() => void>>();
 const store = (): Storage => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, String(v)), removeItem: (k: string) => void m.delete(k), clear: () => m.clear(), key: () => null, length: 0 } as Storage; };
 const state = { visible: "hidden" as "hidden" | "visible", focus: false, permission: "granted" };
-const shown: { title: string; tag?: string }[] = [];
+const shown: { title: string; tag?: string; click?: () => void }[] = [];
 Object.assign(globalThis, {
   localStorage: store(), sessionStorage: store(),
   navigator: { userAgent: "Linux x86_64", platform: "Linux", maxTouchPoints: 0 },
   document: { documentElement: {}, get visibilityState() { return state.visible; }, hasFocus: () => state.focus, addEventListener: (n: string, f: () => void) => { (listeners.get(n) ?? listeners.set(n, new Set()).get(n)!).add(f); }, removeEventListener: (n: string, f: () => void) => void listeners.get(n)?.delete(f) },
   window: { addEventListener: (n: string, f: () => void) => { (listeners.get(`w:${n}`) ?? listeners.set(`w:${n}`, new Set()).get(`w:${n}`)!).add(f); }, removeEventListener: () => {}, focus: () => {} },
-  Notification: class { static get permission() { return state.permission; } static requestPermission = async () => state.permission; onclick: (() => void) | null = null; constructor(public title: string, o?: { tag?: string }) { shown.push({ title, tag: o?.tag }); } close() {} },
+  Notification: class { static get permission() { return state.permission; } static requestPermission = async () => state.permission; onclick: (() => void) | null = null; constructor(public title: string, o?: { tag?: string }) { const rec: { title: string; tag?: string; click?: () => void } = { title, tag: o?.tag }; shown.push(rec); Object.defineProperty(this, "onclick", { set: (f: () => void) => { rec.click = f; } }); } close() {} },
 });
 const { NotificationClient } = await import("../src/lib/notifications");
 
@@ -85,6 +85,29 @@ describe("notification client", () => {
     expect(calls.presence.length).toBeGreaterThan(before);
     expect(calls.presence.at(-1)!.focused).toBe(true);
     c.stop();
+  });
+
+  test("a notice from a server not in view is shown even while the app is looked at, and its click names that server", async () => {
+    const c = new NotificationClient(); const open = fakeApi(), other = fakeApi();
+    const opened: { sid: string; api?: unknown }[] = [];
+    c.init(() => [], (sid, api) => void opened.push({ sid, api }));
+    c.connect(open.api); c.track([open.api, other.api]); await c.setEnabled(true);
+    state.visible = "visible"; state.focus = true;
+    await c.receive(c.id, payload("bg1", { sessionId: "sx" }), other.api);
+    expect(shown).toHaveLength(1); expect(other.calls.received).toEqual(["bg1"]); expect(open.calls.received).toEqual([]);
+    shown[0]!.click!();
+    expect(opened).toEqual([{ sid: "sx", api: other.api }]);
+    c.stop();
+  });
+
+  test("presence goes to every tracked server, and only the one in view is looked at", async () => {
+    const c = new NotificationClient(); const open = fakeApi(), other = fakeApi();
+    c.connect(open.api); c.track([open.api, other.api]); await c.setEnabled(true);
+    state.visible = "visible"; state.focus = true;
+    open.calls.presence.length = 0; other.calls.presence.length = 0;
+    await c.heartbeat();
+    expect(open.calls.presence.at(-1)!.focused).toBe(true);
+    expect(other.calls.presence.at(-1)!.focused).toBe(false);
   });
 
   test("turning notifications on without OS permission is refused with a message", async () => {

@@ -111,8 +111,13 @@
 	// Taskbar / dock: count of sessions waiting for the user (asking, failed, finished unread).
 	const setAttention = createAttention();
 	$effect(() => {
-		const n = summarize(app, app.sessions);
-		setAttention(n.asking + n.failed + n.done);
+		// every connected server, not only the one in view
+		let waiting = 0;
+		for (const l of Object.values(app.links)) {
+			const n = summarize(l.data, l.data.sessions);
+			waiting += n.asking + n.failed + n.done;
+		}
+		setAttention(waiting);
 	});
 
 	// The right sidebar's git panel: read when it opens, when the session changes and when a turn ends (no polling).

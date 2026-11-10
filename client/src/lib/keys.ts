@@ -45,7 +45,6 @@ export type ActionId =
   | "splitTerminalRight"
   | "workdir"
   | "skills"
-  | "cycleServer"
   | "toggleSound"
   | "voiceInput"
   | "modelPicker"
@@ -370,12 +369,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("스킬 열기"),
     hint: msg("지금 대화(또는 새 대화)의 스킬 목록을 엽니다"),
     default: "",
-  },
-  {
-    id: "cycleServer",
-    label: msg("다음 서버로 전환"),
-    hint: msg("등록한 서버를 차례로 넘깁니다"),
-    default: "Mod+Backquote",
   },
   { id: "voiceInput", label: msg("음성 입력"), hint: msg("짧게 누르면 녹음 시작/정지, 길게 누르면 누르는 동안 녹음합니다"), default: "" },
   { id: "toggleSound", label: msg("알림음 켜기 / 끄기"), hint: "", default: "" },

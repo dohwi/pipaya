@@ -13,12 +13,13 @@
 	// Whatever the user focuses no longer needs a strip, however they got there (a pane of a group needs one until focused).
 	$effect(() => {
 		const focused = app.activeId;
-		for (const n of app.feedback.notices) if (n.sid === focused) app.feedback.dismissNotice(n.id);
+		for (const n of app.feedback.notices) if (n.sid === focused && (n.server ?? app.serverId) === app.serverId) app.feedback.dismissNotice(n.id);
 	});
 
-	function go(id: number, sid: string) {
+	function go(id: number, sid: string, server?: string) {
 		app.feedback.dismissNotice(id);
-		void app.openSession(sid);
+		if (server && server !== app.serverId) app.openIn(server, { session: sid });
+		else void app.openSession(sid);
 	}
 </script>
 
@@ -27,9 +28,9 @@
 		{#each app.feedback.notices as n (n.id)}
 			{@const failed = n.tone === "failed"}
 			<div class="row" class:failed role={failed ? "alert" : "status"} animate:reflow in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }}>
-				<button class="go" onclick={() => go(n.id, n.sid)}>
-					<AgentBadge id={n.sid} state={n.tone} size={18} />
-					<span class="title">{app.session(n.sid)?.title ?? t("대화")}</span>
+				<button class="go" onclick={() => go(n.id, n.sid, n.server)}>
+					<AgentBadge id={n.sid} state={n.tone} size={18} server={n.server} />
+					<span class="title">{(n.server ? app.links[n.server]?.sessionById.get(n.sid) : app.session(n.sid))?.title ?? t("대화")}</span>
 					<span class="verdict">{failed ? t("실패") : t("완료")}</span>
 				</button>
 				<CountdownClose ms={n.ms} onclick={() => app.feedback.dismissNotice(n.id)} />

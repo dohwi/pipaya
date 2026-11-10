@@ -4,7 +4,8 @@ import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
-import { dirKey, groupKey } from "./sidebar-model";
+import { connectionState, orderServers, unreachable } from "./sidebar-model";
+import { stepSessionTarget } from "./step-session";
 import { firstUnseen, sessionOrder, stepDir, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
@@ -74,34 +75,21 @@ async function cycleThinking() {
   if (l) await app.configure({ thinkingLevel: l });
 }
 
-/** Previous / next conversation in sidebar order, skipping rows hidden by a folded folder or split group. */
+/**
+ * Previous / next conversation in sidebar order (server bands → folders → tabs), skipping rows hidden by a folded server,
+ * folder or split group. Crossing into another server's band switches to that server (see `stepSessionTarget`).
+ */
 function stepSession(step: 1 | -1) {
-  const sid = app.serverId;
-  if (!sid) return;
-  const folded = app.sidebar.folded;
-  const order: string[] = [];
-  const hidden = new Set<string>();
-  for (const d of app.dirs) {
-    const dirFolded = folded.includes(dirKey(sid, d.path));
-    for (const t of d.tabs) {
-      const panes = tabPanes(t);
-      // a folded split group still shows its own row, which stands for its first pane
-      const groupFolded = t.kind === "group" && folded.includes(groupKey(t.id));
-      panes.forEach((id, i) => {
-        order.push(id);
-        if (dirFolded || (groupFolded && i > 0)) hidden.add(id);
-      });
-    }
-  }
-  const at = app.activeId ? order.indexOf(app.activeId) : -1;
-  // walk from the open one (even when it sits in a folded folder) to the next row that is shown
-  for (let k = 1; k <= order.length; k++) {
-    const i = at < 0 ? (step === 1 ? k - 1 : order.length - k) : (((at + step * k) % order.length) + order.length) % order.length;
-    const id = order[i]!;
-    if (hidden.has(id)) continue;
-    if (id !== app.activeId) void app.openSession(id);
-    return;
-  }
+  const bands = orderServers(
+    app.servers.map((s) => {
+      const link = app.links[s.id];
+      return { id: s.id, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
+    }),
+  ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state) }));
+  const to = stepSessionTarget(bands, app.sidebar.folded, { server: app.serverId, id: app.activeId }, step);
+  if (!to) return;
+  if (to.server === app.serverId) void app.openSession(to.id);
+  else app.openIn(to.server, { session: to.id });
 }
 
 /** Previous / next workspace (folder block in the sidebar): opens its first tab. */
@@ -197,14 +185,6 @@ function scrollTo(where: "top" | "bottom") {
   if (el) el.scrollTo({ top: where === "top" ? 0 : el.scrollHeight, behavior: "smooth" });
 }
 
-function cycleServer() {
-  const list = app.servers;
-  if (list.length < 2) return void app.toast(t("전환할 다른 서버가 없습니다"), "error");
-  const i = list.findIndex((s) => s.id === app.serverId);
-  const to = list[(i + 1) % list.length];
-  if (to) app.openServer(to.id);
-}
-
 /** The desktop app switches its window; a browser uses the Fullscreen API. */
 async function toggleFullscreen() {
   try {
@@ -261,7 +241,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   toggleFull,
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
-  cycleServer,
   toggleSound: () => app.prefs.setSound(!app.prefs.soundOn),
   // A tap: start recording, or stop a recording the tap started. A longer press is the hold path below.
   voiceInput: () => {

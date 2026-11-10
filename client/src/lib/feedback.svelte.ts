@@ -18,6 +18,8 @@ export interface Toast {
 export interface Notice {
   id: number;
   sid: string;
+  /** The server the session lives on; left out = the one in view. */
+  server?: string;
   tone: "done" | "failed";
   /** how long it stays, in ms (also the length of the countdown ring) */
   ms: number;
@@ -48,11 +50,11 @@ export class Feedback {
     this.toasts = this.toasts.filter((t) => t.id !== id);
   }
 
-  announce(sid: string, tone: Notice["tone"]) {
+  announce(sid: string, tone: Notice["tone"], server?: string) {
     // one strip per session: a fresh result replaces the old one and restarts its countdown
-    for (const n of this.notices) if (n.sid === sid) this.dismissNotice(n.id);
+    for (const n of this.notices) if (n.sid === sid && n.server === server) this.dismissNotice(n.id);
     const id = seq++;
-    this.notices = [{ id, sid, tone, ms: NOTICE_MS }, ...this.notices];
+    this.notices = [{ id, sid, tone, ms: NOTICE_MS, ...(server ? { server } : {}) }, ...this.notices];
     this.noticeTimers.set(id, setTimeout(() => this.dismissNotice(id), NOTICE_MS));
     for (const old of this.notices.slice(NOTICE_MAX)) this.dismissNotice(old.id);
   }

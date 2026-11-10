@@ -881,6 +881,23 @@ class AppStore {
     for (const l of Object.values(this.links)) void l.resume(force);
   }
 
+  /**
+   * Sound and in-app strip for a server that is not in view, with the same rules as the one in view: a stopped run is
+   * silent, and an agent-to-agent run is silent while that server's own "quiet peers" is on (read from its stored value,
+   * since `serverPrefs` holds only the open server's). Runs before `applyLinkEvent`, which changes the counts it reads.
+   */
+  private cueBackground(link: ServerLink, e: PipayaEvent) {
+    const sid = e.sessionId;
+    if (!sid) return;
+    if (e.type === "run_finished") {
+      const quiet = e.data.origin === "peer" && read<unknown>(`${K.quietPeers}.${link.id}`, null) !== false;
+      if (e.data.status === "aborted" || quiet) return;
+      const bad = e.data.status === "error";
+      this.prefs.cue(bad ? "failed" : "done");
+      this.feedback.announce(sid, bad ? "failed" : "done", link.id);
+    } else if (e.type === "question_requested" && !link.data.awaiting[sid]) this.prefs.cue("ask");
+  }
+
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
     if (link.id === this.serverId) return this.handle(e);
@@ -891,6 +908,7 @@ class AppStore {
       const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
       void notifications.receive(data.deviceId, data.notification, link.api).catch(() => {});
     } else if (e.type === "device_revoked") notifications.revoked((e.data as { deviceId: string }).deviceId, link.api);
+    this.cueBackground(link, e);
     applyLinkEvent(link.data, e);
     if (e.type === "provider_updated" || e.type === "configuration_updated") {
       void link.refreshCatalog();
