@@ -7,9 +7,7 @@ const server = await Bun.file(new URL("../../server/src/git-routes.ts", import.m
 const num = (key: string) => Number(new RegExp(`${key}: (\\d+)`).exec(server.slice(server.indexOf("export const GIT_LIMITS")))?.[1]);
 
 test("the client's limits equal the server's", () => {
-	expect(GIT_LIMITS.files).toBe(num("files"));
 	expect(GIT_LIMITS.branches).toBe(num("branches"));
-	expect(GIT_LIMITS.commitFiles).toBe(num("commitFiles"));
 	expect(GIT_LIMITS.commitsPage).toBe(num("commitsPage"));
 	expect(GIT_LIMITS.commitsMax).toBe(num("commitsMax"));
 });

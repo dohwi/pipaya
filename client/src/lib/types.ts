@@ -415,20 +415,6 @@ export interface WorkdirInfo {
 	fallback: string;
 }
 
-/** A changed file of a session's working directory, as the server read `git status --porcelain=v2`. */
-export interface GitFile {
-	/** Relative to the working directory; a rename carries its old path in `from`. */
-	path: string;
-	from?: string;
-	/** staged: the index differs from HEAD; unstaged: the working tree differs from the index. */
-	state: "staged" | "unstaged" | "untracked" | "conflict";
-	/** The porcelain letter: M A D R C T U, or ? for untracked. */
-	code: string;
-	/** Lines added / removed; absent for an untracked or binary file. */
-	add?: number;
-	del?: number;
-}
-
 export interface GitWorktree {
 	path: string;
 	branch: string | null;
@@ -454,27 +440,6 @@ export interface GitBranch {
 	head: string;
 }
 
-export interface GitCommitFile {
-	path: string;
-	from?: string;
-	code: string;
-	add?: number;
-	del?: number;
-}
-
-/** What one commit changed against its first parent. */
-export interface GitCommitDetail {
-	hash: string;
-	subject: string;
-	body: string;
-	author: string;
-	email: string;
-	at: number;
-	parents: string[];
-	files: GitCommitFile[];
-	truncated: boolean;
-}
-
 /** One commit of the history graph. */
 export interface GitCommit {
 	hash: string;
@@ -488,13 +453,6 @@ export interface GitCommit {
 	refs: string[];
 }
 
-/** The working-tree files that match a search, read on the server because the status page holds only the first ones. */
-export interface GitFiles {
-	files: GitFile[];
-	matched: number;
-	truncated: boolean;
-}
-
 /** One page of the history graph, newest first, children before parents. */
 export interface GitLog {
 	commits: GitCommit[];
@@ -502,16 +460,15 @@ export interface GitLog {
 	more: boolean;
 }
 
+/** How many files changed, by kind (a file staged and edited again counts as staged). */
 export interface GitCounts {
 	conflict: number;
 	staged: number;
 	unstaged: number;
 	untracked: number;
-	add: number;
-	del: number;
 }
 
-/** What the right sidebar's git panel shows: read-only, read on the server. */
+/** What the right sidebar's git panel shows: read-only, read on the server, small whatever the repository. */
 export interface GitStatus {
 	/** False when the working directory is not in a repository (or git is missing): the rest is then empty. */
 	repo: boolean;
@@ -524,27 +481,17 @@ export interface GitStatus {
 	ahead: number;
 	behind: number;
 	detached: boolean;
-	files: GitFile[];
-	/** More files than the server's list cap: the list was cut. */
-	truncated: boolean;
-	/** Every changed file by kind before the cap, and the line totals; absent from an older server. */
-	counts?: GitCounts;
+	/** Changed files by kind; null when `git status` ran out of time (a repository too big to count). */
+	counts: GitCounts | null;
+	/** Changed lines of the tracked files; null when skipped (too many changed files, or too slow). */
+	lines: { add: number; del: number } | null;
 	worktrees: GitWorktree[];
-	/** Local branches (current first), then remote-tracking ones; absent from an older server. */
-	branches?: GitBranch[];
-	stashes?: number;
+	/** Local branches (current first), then remote-tracking ones. */
+	branches: GitBranch[];
+	stashes: number;
 	/** More branches than the picker's cap: the list was cut. */
-	branchesCut?: boolean;
+	branchesCut: boolean;
 	at: number;
-}
-
-export interface GitDiff {
-	path: string;
-	staged: boolean;
-	/** Unified diff text; empty for a binary or a pure mode change. */
-	patch: string;
-	truncated: boolean;
-	binary: boolean;
 }
 
 export interface DirListing {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT, capBranches, GIT_LIMITS, once } from "../src/git-routes.ts";
+import { parseStatus, parseWorktrees, parseLog, parseBranches, sumNumstat, BRANCH_FORMAT, capBranches, GIT_LIMITS, once } from "../src/git-routes.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -14,7 +14,6 @@ let repo: string;
 let plain: string;
 let rich: string;
 let mergeHash: string;
-let rootHash: string;
 let upstream: EchoUpstream;
 const auth = { authorization: "Bearer t" };
 const api = async (method: string, path: string) => {
@@ -32,6 +31,17 @@ const sessionIn = async (cwd: string) =>
 		headers: { ...auth, "content-type": "application/json" },
 		body: JSON.stringify({ cwd }),
 	})).json()) as { id: string }).id;
+/** A repository with one commit, ready for the test to dirty. */
+const initRepo = (name: string) => {
+	const r = join(dir, name);
+	sh(["git", "init", "-q", "-b", "main", r], dir);
+	sh(["git", "config", "user.email", "t@t"], r);
+	sh(["git", "config", "user.name", "t"], r);
+	writeFileSync(join(r, "tracked.txt"), "a\nb\n");
+	sh(["git", "add", "-A"], r);
+	sh(["git", "commit", "-qm", "init"], r);
+	return r;
+};
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-git-"));
@@ -82,7 +92,6 @@ beforeAll(async () => {
 	writeFileSync(join(rich, "bin.dat"), Buffer.from([0, 1, 2, 0, 255]));
 	sh(["git", "add", "bin.dat"], rich);
 	mergeHash = Bun.spawnSync(["git", "log", "--merges", "-1", "--format=%H"], { cwd: rich }).stdout.toString().trim();
-	rootHash = Bun.spawnSync(["git", "rev-list", "--max-parents=0", "HEAD"], { cwd: rich }).stdout.toString().trim();
 
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: dir, logLevel: "silent" };
 	upstream = startEchoUpstream();
@@ -100,7 +109,7 @@ afterAll(async () => {
 });
 
 describe("parseStatus", () => {
-	test("reads the branch header, ahead/behind and every entry kind", () => {
+	test("reads the branch header, ahead/behind and counts every entry kind", () => {
 		const raw = [
 			"# branch.oid 1234567",
 			"# branch.head main",
@@ -111,6 +120,8 @@ describe("parseStatus", () => {
 			"2 R. N... 100644 100644 100644 abc abc R100 moved.txt",
 			"gone.txt",
 			"? untracked.txt",
+			"? other.txt",
+			"u UU N... 100644 100644 100644 100644 a b c conflict.txt",
 			"",
 		].join("\0");
 		const s = parseStatus(raw);
@@ -119,23 +130,45 @@ describe("parseStatus", () => {
 		expect(s.ahead).toBe(2);
 		expect(s.behind).toBe(3);
 		expect(s.detached).toBe(false);
-		expect(s.files.map((f) => [f.path, f.state, f.from])).toEqual([
-			["moved.txt", "staged", "gone.txt"],
-			["staged.txt", "staged", undefined],
-			["a.txt", "unstaged", undefined],
-			["untracked.txt", "untracked", undefined],
-		]);
+		// the rename's second record ("gone.txt") is its old path, not a file of its own
+		expect(s.counts).toEqual({ conflict: 1, staged: 2, unstaged: 1, untracked: 2 });
+	});
+	test("a file staged and edited again counts once, as staged", () => {
+		expect(parseStatus("1 MM N... 100644 100644 100644 abc abc a.txt\0").counts).toEqual({ conflict: 0, staged: 1, unstaged: 0, untracked: 0 });
+	});
+	test("conflicts of every shape are conflicts", () => {
+		const raw = ["1 UU N... 1 1 1 a b x", "1 AA N... 1 1 1 a b y", "1 DD N... 1 1 1 a b z", "1 .U N... 1 1 1 a b w"].join("\0");
+		expect(parseStatus(raw).counts.conflict).toBe(4);
+	});
+	test("a path with spaces or a newline is one entry", () => {
+		const raw = ["? a file with spaces.txt", "? two\nlines.txt", "1 .M N... 100644 100644 100644 abc abc dir/with space.txt"].join("\0");
+		expect(parseStatus(raw).counts).toEqual({ conflict: 0, staged: 0, unstaged: 1, untracked: 2 });
 	});
 	test("a detached head has no branch", () => {
 		const s = parseStatus("# branch.oid abc\0# branch.head (detached)\0");
 		expect(s.branch).toBeNull();
 		expect(s.detached).toBe(true);
 	});
-	test("caps the list and says it was cut", () => {
-		const raw = Array.from({ length: GIT_LIMITS.files + 100 }, (_, i) => `? f${i}.txt`).join("\0");
+	test("nothing changed counts nothing", () => {
+		expect(parseStatus("# branch.oid abc\0# branch.head main\0").counts).toEqual({ conflict: 0, staged: 0, unstaged: 0, untracked: 0 });
+		expect(parseStatus("").counts).toEqual({ conflict: 0, staged: 0, unstaged: 0, untracked: 0 });
+	});
+	test("a hundred thousand entries are a loop, not a problem", () => {
+		const raw = Array.from({ length: 100_000 }, (_, i) => (i % 2 ? `? f${i}.txt` : `1 .M N... 100644 100644 100644 abc abc f${i}.txt`)).join("\0");
+		const t0 = performance.now();
 		const s = parseStatus(raw);
-		expect(s.files.length).toBe(GIT_LIMITS.files);
-		expect(s.truncated).toBe(true);
+		expect(performance.now() - t0).toBeLessThan(500);
+		expect(s.counts).toEqual({ conflict: 0, staged: 0, unstaged: 50_000, untracked: 50_000 });
+	});
+});
+
+describe("sumNumstat", () => {
+	test("adds the counts, skips binary files and reads a rename's three records", () => {
+		const raw = "3\t1\ta.txt\0-\t-\tbin.dat\0" + "2\t0\t\0old.txt\0new.txt\0" + "5\t0\tdir/with space.txt\0";
+		expect(sumNumstat(raw)).toEqual({ add: 10, del: 1 });
+	});
+	test("empty input is zero", () => {
+		expect(sumNumstat("")).toEqual({ add: 0, del: 0 });
 	});
 });
 
@@ -159,7 +192,7 @@ describe("parseWorktrees", () => {
 });
 
 describe("GET /sessions/:id/git", () => {
-	test("reports the changes of the session's working directory", async () => {
+	test("summarises the changes of the session's working directory", async () => {
 		const id = await sessionIn(repo);
 		const { status, json } = await api("GET", `/sessions/${id}/git`);
 		expect(status).toBe(200);
@@ -167,14 +200,18 @@ describe("GET /sessions/:id/git", () => {
 		expect(json.root).toBe(repo);
 		expect(json.branch).toBe("main");
 		expect(json.reason).toBeNull();
-		const files = json.files.map((f: { path: string; state: string }) => [f.path, f.state]);
-		expect(files).toContainEqual(["moved.txt", "staged"]);
-		expect(files).toContainEqual(["staged.txt", "staged"]);
-		expect(files).toContainEqual(["a.txt", "unstaged"]);
-		expect(files).toContainEqual(["untracked.txt", "untracked"]);
+		// staged: staged.txt and the rename; unstaged: a.txt; untracked: untracked.txt
+		expect(json.counts).toEqual({ conflict: 0, staged: 2, unstaged: 1, untracked: 1 });
+		expect(json.lines).toEqual({ add: 2, del: 0 });
 		expect(json.worktrees.length).toBe(2);
 		expect(json.worktrees[0].main).toBe(true);
 		expect(json.worktrees.map((w: { branch: string }) => w.branch)).toContain("side");
+	});
+	test("the answer carries no file list and no history, whatever the size of the change", async () => {
+		const id = await sessionIn(repo);
+		const { json } = await api("GET", `/sessions/${id}/git`);
+		expect(json.files).toBeUndefined();
+		expect(json.commits).toBeUndefined();
 	});
 	test("a directory that is not a repository answers with an empty state, not an error", async () => {
 		const id = await sessionIn(plain);
@@ -182,45 +219,26 @@ describe("GET /sessions/:id/git", () => {
 		expect(status).toBe(200);
 		expect(json.repo).toBe(false);
 		expect(json.reason).toBe("not-a-repo");
-		expect(json.files).toEqual([]);
+		expect(json.counts).toEqual({ conflict: 0, staged: 0, unstaged: 0, untracked: 0 });
+		expect(json.lines).toBeNull();
 	});
 	test("an unknown session is 404", async () => {
 		expect((await api("GET", "/sessions/nope/git")).status).toBe(404);
 	});
-});
-
-describe("GET /sessions/:id/git/diff", () => {
-	test("an unstaged edit comes back as a unified diff", async () => {
+	test("the removed routes are gone", async () => {
 		const id = await sessionIn(repo);
-		const { status, json } = await api("GET", `/sessions/${id}/git/diff?path=a.txt`);
-		expect(status).toBe(200);
-		expect(json.patch).toContain("+two");
-		expect(json.binary).toBe(false);
-		expect(json.truncated).toBe(false);
-	});
-	test("an untracked file reads as an addition", async () => {
-		const id = await sessionIn(repo);
-		const { json } = await api("GET", `/sessions/${id}/git/diff?path=untracked.txt`);
-		expect(json.patch).toContain("+loose");
-	});
-	test("the staged side of a rename shows the move", async () => {
-		const id = await sessionIn(repo);
-		const { json } = await api("GET", `/sessions/${id}/git/diff?path=moved.txt&staged=true`);
-		expect(json.patch).toContain("moved.txt");
-	});
-	test("a path that walks out of the directory is refused", async () => {
-		const id = await sessionIn(repo);
-		expect((await api("GET", `/sessions/${id}/git/diff?path=../../etc/passwd`)).status).toBe(400);
-		expect((await api("GET", `/sessions/${id}/git/diff?path=/etc/passwd`)).status).toBe(400);
+		for (const p of ["git/diff?path=a.txt", "git/files", "git/commit?hash=deadbeef"]) expect((await api("GET", `/sessions/${id}/${p}`)).status).toBe(404);
 	});
 });
 
-test("parseLog reads hash, parents, refs and a subject", () => {
-	const raw = "aaa\x1fbbb ccc\x1fAnn\x1f100\x1fHEAD -> main, tag: v1\x1fmerge it\x1e\nbbb\x1f\x1fBob\x1f50\x1f\x1froot\x1e\n";
-	const [a, b] = parseLog(raw);
-	expect(a).toEqual({ hash: "aaa", parents: ["bbb", "ccc"], author: "Ann", at: 100, refs: ["HEAD -> main", "tag: v1"], subject: "merge it" });
-	expect(b!.parents).toEqual([]);
-	expect(b!.refs).toEqual([]);
+describe("parseLog", () => {
+	test("reads hash, parents, refs and a subject", () => {
+		const raw = "aaa\x1fbbb ccc\x1fAnn\x1f100\x1fHEAD -> main, tag: v1\x1fmerge it\x1e\nbbb\x1f\x1fBob\x1f50\x1f\x1froot\x1e\n";
+		const [a, b] = parseLog(raw);
+		expect(a).toEqual({ hash: "aaa", parents: ["bbb", "ccc"], author: "Ann", at: 100, refs: ["HEAD -> main", "tag: v1"], subject: "merge it" });
+		expect(b!.parents).toEqual([]);
+		expect(b!.refs).toEqual([]);
+	});
 });
 
 describe("parseBranches", () => {
@@ -246,32 +264,17 @@ describe("parseBranches", () => {
 	test("the format asks for the fields it reads", () => {
 		expect(BRANCH_FORMAT.split("\x1f").length).toBe(8);
 	});
-});
-
-describe("parseNumstat / parseNameStatus", () => {
-	test("numstat keeps counts, skips binary and follows a rename to the new path", () => {
-		const raw = "3\t1\ta.txt\0-\t-\tbin.dat\0" + "0\t0\t\0old.txt\0new.txt\0" + "5\t0\tdir/with space.txt\0";
-		const m = parseNumstat(raw);
-		expect(m.get("a.txt")).toEqual({ add: 3, del: 1 });
-		expect(m.has("bin.dat")).toBe(false);
-		expect(m.get("new.txt")).toEqual({ add: 0, del: 0 });
-		expect(m.get("dir/with space.txt")).toEqual({ add: 5, del: 0 });
-	});
-	test("name-status reads plain and renamed entries", () => {
-		expect(parseNameStatus("M\0a.txt\0R100\0old\0new\0A\0b\0")).toEqual([
-			{ path: "a.txt", code: "M" },
-			{ path: "new", from: "old", code: "R" },
-			{ path: "b", code: "A" },
-		]);
-	});
-	test("empty input is an empty list", () => {
-		expect(parseNameStatus("")).toEqual([]);
-		expect(parseNumstat("").size).toBe(0);
+	test("capBranches keeps the order and reports a cut", () => {
+		const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `b${i}` }) as never);
+		expect(capBranches(mk(GIT_LIMITS.branches))).toMatchObject({ cut: false });
+		const r = capBranches(mk(GIT_LIMITS.branches + 5));
+		expect(r.cut).toBe(true);
+		expect(r.branches.length).toBe(GIT_LIMITS.branches);
 	});
 });
 
 describe("git panel on a repository with history", () => {
-	test("branches, upstream, stash and line counts", async () => {
+	test("branches, upstream, stash and the counts", async () => {
 		const id = await sessionIn(rich);
 		const { status, json } = await api("GET", `/sessions/${id}/git`);
 		expect(status).toBe(200);
@@ -279,6 +282,10 @@ describe("git panel on a repository with history", () => {
 		expect(json.ahead).toBe(4);
 		expect(json.behind).toBe(0);
 		expect(json.stashes).toBe(1);
+		// bin.dat staged; renamed.txt edited
+		expect(json.counts).toEqual({ conflict: 0, staged: 1, unstaged: 1, untracked: 0 });
+		// the binary file has no line counts; the text edit adds one line
+		expect(json.lines).toEqual({ add: 1, del: 0 });
 		const names = json.branches.map((b: { name: string }) => b.name);
 		expect(names[0]).toBe("main");
 		expect(names).toContain("feature");
@@ -286,17 +293,6 @@ describe("git panel on a repository with history", () => {
 		expect(names).not.toContain("origin");
 		expect(json.branches.find((b: { name: string }) => b.name === "main")).toMatchObject({ current: true, upstream: "origin/main", ahead: 4 });
 		expect(json.branches.find((b: { name: string }) => b.name === "origin/main").remote).toBe(true);
-		const edit = json.files.find((f: { path: string }) => f.path === "renamed.txt");
-		expect(edit).toMatchObject({ state: "unstaged", add: 1, del: 0 });
-		// a staged binary has no line counts
-		const bin = json.files.find((f: { path: string }) => f.path === "bin.dat");
-		expect(bin.state).toBe("staged");
-		expect(bin.add).toBeUndefined();
-	});
-	test("the status no longer carries the history (it has its own route)", async () => {
-		const id = await sessionIn(rich);
-		const { json } = await api("GET", `/sessions/${id}/git`);
-		expect(json.commits).toBeUndefined();
 		expect(json.branchesCut).toBe(false);
 	});
 	test("a repository without a commit has an empty graph and no error", async () => {
@@ -308,46 +304,10 @@ describe("git panel on a repository with history", () => {
 		expect(json.repo).toBe(true);
 		expect(json.branches).toEqual([]);
 		expect(json.stashes).toBe(0);
+		expect(json.counts).toEqual({ conflict: 0, staged: 0, unstaged: 0, untracked: 0 });
 		const log = await api("GET", `/sessions/${id}/git/log`);
 		expect(log.status).toBe(200);
 		expect(log.json).toEqual({ commits: [], more: false });
-	});
-});
-
-describe("GET /sessions/:id/git/commit", () => {
-	test("a merge lists what it brought in against its first parent", async () => {
-		const id = await sessionIn(rich);
-		const { status, json } = await api("GET", `/sessions/${id}/git/commit?hash=${mergeHash}`);
-		expect(status).toBe(200);
-		expect(json.subject).toBe("merge feature");
-		expect(json.parents.length).toBe(2);
-		expect(json.files).toEqual([{ path: "b.txt", code: "A", add: 1, del: 0 }]);
-		expect(json.truncated).toBe(false);
-	});
-	test("the root commit lists every file it added", async () => {
-		const id = await sessionIn(rich);
-		const { json } = await api("GET", `/sessions/${id}/git/commit?hash=${rootHash}`);
-		expect(json.parents).toEqual([]);
-		expect(json.files).toEqual([{ path: "a.txt", code: "A", add: 3, del: 0 }]);
-	});
-	test("a rename carries its old path", async () => {
-		const id = await sessionIn(rich);
-		const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: rich }).stdout.toString().trim();
-		const { json } = await api("GET", `/sessions/${id}/git/commit?hash=${head}`);
-		expect(json.files).toEqual([{ path: "renamed.txt", from: "a.txt", code: "R", add: 0, del: 0 }]);
-	});
-	test("a hash that is not a hash is 400, an unknown one is 404", async () => {
-		const id = await sessionIn(rich);
-		expect((await api("GET", `/sessions/${id}/git/commit?hash=--output=x`)).status).toBe(400);
-		expect((await api("GET", `/sessions/${id}/git/commit?hash=deadbeef`)).status).toBe(404);
-		expect((await api("GET", `/sessions/nope/git/commit?hash=deadbeef`)).status).toBe(404);
-	});
-	test("one file of a commit comes back as a diff", async () => {
-		const id = await sessionIn(rich);
-		const { status, json } = await api("GET", `/sessions/${id}/git/diff?path=b.txt&commit=${mergeHash}`);
-		expect(status).toBe(200);
-		expect(json.patch).toContain("+side");
-		expect(json.staged).toBe(false);
 	});
 });
 
@@ -372,8 +332,7 @@ describe("GET /sessions/:id/git/log", () => {
 		const { json } = await log("?limit=2");
 		expect(json.commits.length).toBe(2);
 		expect(json.more).toBe(true);
-		const all = (await log("?limit=500")).status;
-		expect(all).toBe(400);
+		expect((await log("?limit=500")).status).toBe(400);
 		expect((await log("?limit=0")).status).toBe(400);
 	});
 	test("a branch shows only its own history", async () => {
@@ -396,79 +355,48 @@ describe("GET /sessions/:id/git/log", () => {
 	});
 });
 
-describe("limits", () => {
-	test("capBranches keeps the order and reports a cut", () => {
-		const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `b${i}` }) as never);
-		expect(capBranches(mk(GIT_LIMITS.branches))).toMatchObject({ cut: false });
-		const r = capBranches(mk(GIT_LIMITS.branches + 5));
-		expect(r.cut).toBe(true);
-		expect(r.branches.length).toBe(GIT_LIMITS.branches);
-	});
-	test("a status with more files than the cap is cut and says so", () => {
-		const raw = Array.from({ length: GIT_LIMITS.files + 20 }, (_, i) => `? f${i}.txt`).join("\0");
-		const s = parseStatus(raw);
-		expect(s.files.length).toBe(GIT_LIMITS.files);
-		expect(s.truncated).toBe(true);
-	});
-});
-
 describe("a big working tree", () => {
-	const untracked = (n: number, prefix = "f") => Array.from({ length: n }, (_, i) => `? ${prefix}${i}.txt`);
-	test("counts every file by kind before the cap cuts the list", () => {
-		const raw = [
-			...untracked(250),
-			"1 .M N... 100644 100644 100644 abc abc a.txt",
-			"1 M. N... 100644 100644 100644 abc abc zzz-staged.txt",
-			"u UU N... 100644 100644 100644 100644 a b c conflict.txt",
-		].join("\0");
-		const s = parseStatus(raw, 10);
-		expect(s.counts).toEqual({ conflict: 1, staged: 1, unstaged: 1, untracked: 250, add: 0, del: 0 });
-		expect(s.files.length).toBe(10);
-		expect(s.truncated).toBe(true);
-	});
-	test("the cut keeps what matters: conflicts, then staged, then unstaged, then untracked", () => {
-		// `zzz-staged` is read last and sorts last by name, and used to be the one thrown away
-		const raw = [...untracked(250, "a"), "1 M. N... 100644 100644 100644 abc abc zzz-staged.txt", "1 .M N... 100644 100644 100644 abc abc zzz-edit.txt"].join("\0");
-		const s = parseStatus(raw, 5);
-		expect(s.files.map((f) => f.state)).toEqual(["staged", "unstaged", "untracked", "untracked", "untracked"]);
-		expect(s.files[0]!.path).toBe("zzz-staged.txt");
-	});
-	test("paths sort by code unit, the same on every machine", () => {
-		const s = parseStatus(["? b.txt", "? B.txt", "? a.txt", "? \u00e4.txt"].join("\0"));
-		expect(s.files.map((f) => f.path)).toEqual(["B.txt", "a.txt", "b.txt", "\u00e4.txt"]);
-	});
-	test("a list under the cap is not truncated", () => {
-		const s = parseStatus(untracked(GIT_LIMITS.files).join("\0"));
-		expect(s.truncated).toBe(false);
-		expect(s.files.length).toBe(GIT_LIMITS.files);
-	});
-	test("parsing thousands of entries stays fast", () => {
-		const raw = untracked(20000).join("\0");
-		const t0 = performance.now();
-		const s = parseStatus(raw);
-		expect(performance.now() - t0).toBeLessThan(500);
-		expect(s.counts.untracked).toBe(20000);
-	});
-	test("an untracked folder is listed as its files and the totals cover every file", async () => {
-		const big = join(dir, "big");
-		sh(["git", "init", "-q", "-b", "main", big], dir);
-		sh(["git", "config", "user.email", "t@t"], big);
-		sh(["git", "config", "user.name", "t"], big);
-		writeFileSync(join(big, "tracked.txt"), "a\nb\n");
-		sh(["git", "add", "-A"], big);
-		sh(["git", "commit", "-qm", "init"], big);
+	test("an untracked folder is counted by its files", async () => {
+		const big = initRepo("big");
 		sh(["mkdir", "-p", join(big, "deep/er")], big);
 		for (let i = 0; i < 30; i++) writeFileSync(join(big, "deep/er", `n${i}.txt`), "x\n");
 		writeFileSync(join(big, "tracked.txt"), "a\nb\nc\nd\n");
 		const id = await sessionIn(big);
 		const { json } = await api("GET", `/sessions/${id}/git`);
-		expect(json.counts).toMatchObject({ untracked: 30, unstaged: 1, staged: 0, add: 2, del: 0 });
-		const paths = json.files.map((f: { path: string }) => f.path);
-		expect(paths).toContain("deep/er/n0.txt");
-		expect(paths.some((p: string) => p.endsWith("/"))).toBe(false);
-		// the folder's file opens as a diff (it used to be a bare `deep/` that answered with nothing)
-		const d = await api("GET", `/sessions/${id}/git/diff?path=deep/er/n0.txt`);
-		expect(d.json.patch).toContain("+x");
+		expect(json.counts).toEqual({ conflict: 0, staged: 0, unstaged: 1, untracked: 30 });
+		expect(json.lines).toEqual({ add: 2, del: 0 });
+	});
+	test("thousands of untracked files stay a few numbers, and the reply stays small", async () => {
+		const big = initRepo("many");
+		sh(["mkdir", "-p", join(big, "vendor")], big);
+		for (let i = 0; i < 3000; i++) writeFileSync(join(big, "vendor", `v${i}.js`), "x\n");
+		const id = await sessionIn(big);
+		const res = await fetch(base + `/sessions/${id}/git`, { headers: auth });
+		const text = await res.text();
+		expect(JSON.parse(text).counts.untracked).toBe(3000);
+		expect(text.length).toBeLessThan(2000);
+	});
+	test("past the limit the changed lines are skipped, not guessed", async () => {
+		const many = initRepo("lines");
+		const n = GIT_LIMITS.linesMaxFiles + 20;
+		// the tracked files are made in one commit, then all edited: more tracked changes than the limit
+		for (let i = 0; i < n; i++) writeFileSync(join(many, `t${i}.txt`), "a\n");
+		sh(["git", "add", "-A"], many);
+		sh(["git", "commit", "-qm", "many"], many);
+		for (let i = 0; i < n; i++) writeFileSync(join(many, `t${i}.txt`), "a\nb\n");
+		const id = await sessionIn(many);
+		const { json } = await api("GET", `/sessions/${id}/git`);
+		expect(json.counts.unstaged).toBe(n);
+		expect(json.lines).toBeNull();
+	}, 30_000);
+	test("a repository that is all binary has zero lines, not an error", async () => {
+		const r = initRepo("binary");
+		writeFileSync(join(r, "b.bin"), Buffer.from([0, 1, 2, 0, 255, 0]));
+		sh(["git", "add", "b.bin"], r);
+		const id = await sessionIn(r);
+		const { json } = await api("GET", `/sessions/${id}/git`);
+		expect(json.counts.staged).toBe(1);
+		expect(json.lines).toEqual({ add: 0, del: 0 });
 	});
 });
 
@@ -494,50 +422,5 @@ describe("once", () => {
 		const results = await Promise.allSettled([once("f", boom), once("f", boom)]);
 		expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
 		expect(await once("f", async () => "ok")).toBe("ok");
-	});
-});
-
-describe("GET /sessions/:id/git/files", () => {
-	test("searches the whole working tree by words in the path, past the status cap", async () => {
-		const wide = join(dir, "wide");
-		sh(["git", "init", "-q", "-b", "main", wide], dir);
-		sh(["git", "config", "user.email", "t@t"], wide);
-		sh(["git", "config", "user.name", "t"], wide);
-		writeFileSync(join(wide, "base.txt"), "x\n");
-		sh(["git", "add", "-A"], wide);
-		sh(["git", "commit", "-qm", "init"], wide);
-		sh(["mkdir", "-p", join(wide, "pkg/one"), join(wide, "pkg/two")], wide);
-		for (let i = 0; i < GIT_LIMITS.files + 50; i++) writeFileSync(join(wide, i % 2 ? "pkg/one" : "pkg/two", `f${String(i).padStart(4, "0")}.txt`), "x\n");
-		writeFileSync(join(wide, "zz-needle.txt"), "n\n");
-		const id = await sessionIn(wide);
-		const status = (await api("GET", `/sessions/${id}/git`)).json;
-		expect(status.counts.untracked).toBe(GIT_LIMITS.files + 51);
-		expect(status.truncated).toBe(true);
-		expect(status.files.length).toBe(GIT_LIMITS.files);
-		// the needle sorts last, so the status page does not hold it
-		expect(status.files.some((f: { path: string }) => f.path === "zz-needle.txt")).toBe(false);
-		const found = (await api("GET", `/sessions/${id}/git/files?q=NEEDLE`)).json;
-		expect(found.files.map((f: { path: string }) => f.path)).toEqual(["zz-needle.txt"]);
-		expect(found.matched).toBe(1);
-		expect(found.truncated).toBe(false);
-		const words = (await api("GET", `/sessions/${id}/git/files?q=${encodeURIComponent("one f01")}`)).json;
-		expect(words.matched).toBeGreaterThan(0);
-		expect(words.files.every((f: { path: string }) => f.path.includes("one") && f.path.includes("f01"))).toBe(true);
-		const none = (await api("GET", `/sessions/${id}/git/files?q=nothing-like-this`)).json;
-		expect(none).toEqual({ files: [], matched: 0, truncated: false });
-		const kind = (await api("GET", `/sessions/${id}/git/files?kind=staged`)).json;
-		expect(kind.matched).toBe(0);
-	});
-	test("a folder that is not a repository, and a bad kind", async () => {
-		const id = await sessionIn(plain);
-		expect((await api("GET", `/sessions/${id}/git/files?q=x`)).json).toEqual({ files: [], matched: 0, truncated: false });
-		expect((await api("GET", `/sessions/${id}/git/files?kind=bogus`)).status).toBe(400);
-		expect((await api("GET", "/sessions/nope/git/files")).status).toBe(404);
-	});
-	test("a query that is all spaces lists everything", async () => {
-		const id = await sessionIn(rich);
-		const all = (await api("GET", `/sessions/${id}/git/files?q=%20%20`)).json;
-		expect(all.matched).toBeGreaterThan(0);
-		expect(all.truncated).toBe(false);
 	});
 });

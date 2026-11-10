@@ -13,9 +13,6 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	CompactionResult,
 	ConnectionResult,
 	DirListing,
-	GitCommitDetail,
-	GitDiff,
-	GitFiles,
 	GitLog,
 	GitStatus,
 	Group,
@@ -394,18 +391,9 @@ export class Api {
 	listIcons = () => this.req<{ icons: string[] }>("GET", "/configuration/icons");
 	/** Read-only git of the session's working directory, read on the server (the client may be on another machine). */
 	gitStatus = (id: string, signal?: AbortSignal) => this.req<GitStatus>("GET", `/sessions/${encodeURIComponent(id)}/git`, undefined, signal);
-	/** The unified diff of one changed file; `staged` diffs the index against HEAD. */
-	gitDiff = (id: string, path: string, staged = false, signal?: AbortSignal, commit?: string) =>
-		this.req<GitDiff>("GET", `/sessions/${encodeURIComponent(id)}/git/diff?${new URLSearchParams({ path, ...(staged ? { staged: "true" } : {}), ...(commit ? { commit } : {}) })}`, undefined, signal);
 	/** The history graph: every branch, or just `ref` (a full ref name from the branch list), newest `limit` commits. */
 	gitLog = (id: string, opts: { ref?: string; limit?: number } = {}, signal?: AbortSignal) =>
 		this.req<GitLog>("GET", `/sessions/${encodeURIComponent(id)}/git/log?${new URLSearchParams({ ...(opts.ref ? { ref: opts.ref } : {}), ...(opts.limit ? { limit: String(opts.limit) } : {}) })}`, undefined, signal);
-	/** Changed files matching `q` (every word, in the path) and/or of one kind, from the whole working tree. */
-	gitFiles = (id: string, opts: { q?: string; kind?: "staged" | "unstaged" | "untracked" } = {}, signal?: AbortSignal) =>
-		this.req<GitFiles>("GET", `/sessions/${encodeURIComponent(id)}/git/files?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.kind ? { kind: opts.kind } : {}) })}`, undefined, signal);
-	/** One commit: its message and the files it changed against its first parent. */
-	gitCommit = (id: string, hash: string, signal?: AbortSignal) =>
-		this.req<GitCommitDetail>("GET", `/sessions/${encodeURIComponent(id)}/git/commit?${new URLSearchParams({ hash })}`, undefined, signal);
 	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
 	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
 		let res: Response;

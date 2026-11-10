@@ -3,38 +3,25 @@
 	import IconButton from "./IconButton.svelte";
 	import Badge from "./Badge.svelte";
 	import EmptyState from "./EmptyState.svelte";
+	import Select from "./Select.svelte";
 	import { t } from "../lib/i18n";
 	import { formatCombo } from "../lib/keys";
 	import { app } from "../lib/store.svelte";
 	import { gitPanel, refOf } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
-	import Select from "./Select.svelte";
-	import GitFileList from "./GitFileList.svelte";
 	import { layoutGraph } from "../lib/git-graph";
 	import { GIT_LIMITS } from "../lib/git-limits";
-	import { agoParts, compact, lineCounts, refChips, trackState } from "../lib/git-view";
-	import type { GitFile } from "../lib/types";
+	import { agoParts, compact, refChips, summarize, trackState } from "../lib/git-view";
 
 	/**
-	 * The right sidebar: what the working directory of the session on screen looks like in git, read-only.
-	 * Branch and its ahead/behind, the changed files (staged / unstaged / untracked), the worktrees of the repository, and
-	 * the diff of one file on click. Nothing here writes: no stage, no discard, no commit.
+	 * The right sidebar: what the working directory of the session on screen looks like in git, read-only and at a glance.
+	 * Which branch and how far it is from its remote, how much changed (counts and lines, not a file list: a repository
+	 * with 80,000 changed files costs the same as one with two), the worktrees, and the history graph, which is the page.
+	 * Nothing here writes: no stage, no discard, no commit.
 	 */
 	const hint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const status = $derived(gitPanel.status);
-	const files = $derived(status?.files ?? []);
-	/** Per-kind counts from the server (before its cap); an older server has none, so they are counted from the list. */
-	const fileCounts = $derived.by(() => {
-		if (status?.counts) return status.counts;
-		const c = { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 };
-		for (const f of files) {
-			c[f.state]++;
-			c.add += f.add ?? 0;
-			c.del += f.del ?? 0;
-		}
-		return c;
-	});
-	const fileTotal = $derived(fileCounts.conflict + fileCounts.staged + fileCounts.unstaged + fileCounts.untracked);
+	const summary = $derived(summarize(status?.counts ?? null));
 	/** The folder the panel is about, as the header shows it ("work/app"). */
 	const folder = $derived.by(() => {
 		const cwd = app.current?.cwd;
@@ -75,11 +62,16 @@
 		if (unit === "mo") return t("{n}달 전", { n });
 		return t("{n}년 전", { n });
 	};
-	const branches = $derived(status?.branches ?? []);
+	const kindLabel = (kind: "conflict" | "staged" | "unstaged" | "untracked") => {
+		if (kind === "conflict") return t("충돌");
+		if (kind === "staged") return t("스테이징됨");
+		if (kind === "unstaged") return t("변경됨");
+		return t("추적 안 됨");
+	};
 	/** The picker: every branch, then each one (remote-tracking ones marked), the hint saying where it stands. */
 	const branchOptions = $derived.by(() => {
 		const opts: { value: string; label: string; hint?: string; disabled?: boolean }[] = [{ value: "", label: t("모든 브랜치") }];
-		for (const b of branches) {
+		for (const b of status?.branches ?? []) {
 			const st = trackState(b);
 			const hint = [b.current ? t("현재") : "", st === "ahead" || st === "diverged" ? `↑${b.ahead}` : "", st === "behind" || st === "diverged" ? `↓${b.behind}` : "", st === "gone" ? t("삭제됨") : "", b.elsewhere ? t("워크트리") : "", ago(b.at)].filter(Boolean).join(" ");
 			opts.push({ value: refOf(b), label: b.name, hint });
@@ -87,20 +79,7 @@
 		if (status?.branchesCut) opts.push({ value: "\0cut", label: t("브랜치가 많아 {n}개만 표시합니다", { n: GIT_LIMITS.branches }), disabled: true });
 		return opts;
 	});
-	/** The changed files fold into one row: the graph is the page, the working tree is a glance. */
-	let filesOpen = $state(false);
 	let treesOpen = $state(false);
-	const pick = (f: GitFile) => void gitPanel.pick({ path: f.path, staged: f.state === "staged" });
-	const pickInCommit = (hash: string, path: string) => void gitPanel.pick({ path, staged: false, commit: hash });
-
-	/** The diff's lines, with the file header lines dropped: the panel already says which file it is. */
-	const lines = $derived.by(() => {
-		const patch = gitPanel.diff?.patch ?? "";
-		return patch
-			.split("\n")
-			.filter((l) => !l.startsWith("diff --git ") && !l.startsWith("index ") && !l.startsWith("--- ") && !l.startsWith("+++ ") && !l.startsWith("new file mode ") && !l.startsWith("deleted file mode ") && !l.startsWith("similarity index ") && !l.startsWith("rename from ") && !l.startsWith("rename to "))
-			.filter((l, i, all) => !(l === "" && i === all.length - 1));
-	});
 </script>
 
 <aside class="right" id="right-sidebar" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
@@ -132,30 +111,39 @@
 		{:else}
 			<div class="branch">
 				<span class="glyph" aria-hidden="true"><Icon name="fork" /></span>
-				<span class="name mono">{status.detached ? t("분리된 HEAD") : status.branch}</span>
+				<span class="name mono">{status.detached ? t("분리된 HEAD") : (status.branch ?? t("브랜치 없음"))}</span>
 				{#if status.ahead}<Badge tone="neutral" size="sm" mono>↑{status.ahead}</Badge>{/if}
 				{#if status.behind}<Badge tone="neutral" size="sm" mono>↓{status.behind}</Badge>{/if}
 				{#if status.stashes}<span class="flag" title={t("보관된 변경(stash)")}>{t("보관 {n}", { n: status.stashes })}</span>{/if}
 			</div>
 			{#if status.upstream}<div class="up mono">{status.upstream}</div>{/if}
 
+			<!-- The working tree in one block: how many files and how many lines, then the kinds. A number, never a list. -->
+			<div class="summary" aria-label={t("변경 요약")}>
+				{#if !summary}
+					<span class="muted">{t("변경 사항이 너무 많아 세지 못했습니다")}</span>
+				{:else if !summary.total}
+					<span class="muted">{t("변경된 파일이 없습니다")}</span>
+				{:else}
+					<div class="line">
+						<span class="strong">{t("파일 {n}개", { n: summary.total.toLocaleString() })}</span>
+						{#if status.lines}
+							<span class="num mono"><span class="plus">+{compact(status.lines.add)}</span><span class="minus">−{compact(status.lines.del)}</span></span>
+						{:else}
+							<span class="muted" title={t("변경이 많아 줄 수는 세지 않습니다")}>{t("줄 수 생략")}</span>
+						{/if}
+					</div>
+					<div class="kinds">
+						{#each summary.kinds as k (k.kind)}
+							<span class="kind" data-kind={k.kind}>{kindLabel(k.kind)} <b>{compact(k.n)}</b></span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
 			<div class="pickrow">
 				<Select size="sm" mono label={t("브랜치")} value={gitPanel.logRef} options={branchOptions} onchange={(v) => gitPanel.selectRef(v)} />
 			</div>
-
-			<section class="fold" aria-label={t("변경된 파일")}>
-				<button class="foldhead" aria-expanded={filesOpen} disabled={!fileTotal} onclick={() => (filesOpen = !filesOpen)}>
-					<span class="chev" class:open={filesOpen} aria-hidden="true"><Icon name="chevron-down" /></span>
-					<span class="gtitle">{t("변경된 파일")}</span>
-					<span class="count">{fileTotal.toLocaleString()}</span>
-					{#if fileCounts.add || fileCounts.del}<span class="num mono"><span class="plus">+{compact(fileCounts.add)}</span> <span class="minus">−{compact(fileCounts.del)}</span></span>{/if}
-				</button>
-				{#if filesOpen && files.length}
-					<GitFileList {files} counts={fileCounts} truncated={status.truncated} cap={GIT_LIMITS.files} picked={gitPanel.picked && !gitPanel.picked.commit ? gitPanel.picked : null} onpick={pick}>
-						{#snippet diff()}{@render diffView()}{/snippet}
-					</GitFileList>
-				{/if}
-			</section>
 
 			<section class="graphbox" aria-label={t("그래프")}>
 				<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}{gitPanel.more ? "+" : ""}</span></div>
@@ -167,9 +155,8 @@
 					{:else}
 						<ul>
 							{#each graph.rows as r (r.commit.hash)}
-								{@const opened = gitPanel.openCommit === r.commit.hash}
-								<li class="commit-wrap">
-									<button class="commit" class:on={opened} aria-expanded={opened} onclick={() => void gitPanel.toggleCommit(r.commit.hash)} title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
+								<li>
+									<div class="commit" title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
 										<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
 											{#each r.segs as s, i (i)}
 												<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
@@ -181,38 +168,7 @@
 											<span class="ref mono" data-kind={chip.kind}>{chip.label}</span>
 										{/each}
 										<span class="when">{ago(r.commit.at)}</span>
-									</button>
-									{#if opened}
-										<div class="detail">
-											{#if gitPanel.commitLoading}
-												<EmptyState tone="plain" as="p" loading />
-											{:else if gitPanel.commitError}
-												<EmptyState tone="plain" as="p">{gitPanel.commitError}</EmptyState>
-											{:else if gitPanel.commit}
-												<p class="meta mono">{gitPanel.commit.hash.slice(0, 8)} · {gitPanel.commit.author} · {when(gitPanel.commit.at)}</p>
-												{#if gitPanel.commit.parents.length > 1}<p class="meta">{t("병합 커밋: 첫 부모와 비교한 변경입니다")}</p>{/if}
-												{#if gitPanel.commit.body}<p class="msg">{gitPanel.commit.body}</p>{/if}
-												{#if !gitPanel.commit.files.length}
-													<p class="meta">{t("변경된 파일이 없습니다")}</p>
-												{:else}
-													<ul class="cfiles">
-														{#each gitPanel.commit.files as f (f.path)}
-															{@const openFile = gitPanel.picked?.commit === r.commit.hash && gitPanel.picked.path === f.path}
-															<li>
-																<button class="file" class:on={openFile} onclick={() => pickInCommit(r.commit.hash, f.path)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
-																	<span class="code" data-state={f.code === "A" ? "staged" : f.code === "D" ? "conflict" : undefined}>{f.code}</span>
-																	<span class="path">{f.path}</span>
-																	{@render counts(f)}
-																</button>
-																{#if openFile}{@render diffView()}{/if}
-															</li>
-														{/each}
-													</ul>
-													{#if gitPanel.commit.truncated}<p class="cut">{t("파일이 많아 {n}개만 표시합니다", { n: GIT_LIMITS.commitFiles })}</p>{/if}
-												{/if}
-											{/if}
-										</div>
-									{/if}
+									</div>
 								</li>
 							{/each}
 						</ul>
@@ -235,17 +191,15 @@
 						<span class="count">{status.worktrees.length}</span>
 					</button>
 					{#if treesOpen}
-						<div class="foldbody" style:max-height="{4 * 33}px">
-							<ul>
-								{#each status.worktrees as w (w.path)}
-									<li class="tree" class:here={w.path === status.root} aria-current={w.path === status.root ? "true" : undefined}>
-										<span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
-										<span class="path">{shortName(w.path, app.workspace?.home)}</span>
-										<span class="wbranch mono">{w.branch ?? t("분리됨")}</span>
-									</li>
-								{/each}
-							</ul>
-						</div>
+						<ul class="foldbody">
+							{#each status.worktrees as w (w.path)}
+								<li class="tree" class:here={w.path === status.root} aria-current={w.path === status.root ? "true" : undefined}>
+									<span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
+									<span class="path">{shortName(w.path, app.workspace?.home)}</span>
+									<span class="wbranch mono">{w.branch ?? t("분리됨")}</span>
+								</li>
+							{/each}
+						</ul>
 					{/if}
 				</section>
 			{/if}
@@ -253,30 +207,139 @@
 	</div>
 </aside>
 
-{#snippet counts(f: { add?: number; del?: number })}
-	{@const n = lineCounts(f)}
-	{#if n}<span class="num mono"><span class="plus">+{n.add}</span> <span class="minus">−{n.del}</span></span>{/if}
-{/snippet}
-
-{#snippet diffView()}
-	<div class="diff">
-		{#if gitPanel.diffLoading}
-			<EmptyState tone="plain" as="p" loading />
-		{:else if gitPanel.diffError}
-			<EmptyState tone="plain" as="p">{gitPanel.diffError}</EmptyState>
-		{:else if gitPanel.diff?.binary}
-			<EmptyState tone="plain" as="p">{t("바이너리 파일이라 미리 볼 수 없습니다")}</EmptyState>
-		{:else if !lines.length}
-			<EmptyState tone="plain" as="p">{t("표시할 변경 내용이 없습니다")}</EmptyState>
-		{:else}
-			<pre class="patch"><code>{#each lines as line, i (i)}<span class:add={line.startsWith("+")} class:del={line.startsWith("-")} class:hunk={line.startsWith("@@")}>{line}
-</span>{/each}</code></pre>
-			{#if gitPanel.diff?.truncated}<p class="cut">{t("변경 내용이 길어 앞부분만 표시합니다")}</p>{/if}
-		{/if}
-	</div>
-{/snippet}
-
 <style>
+	.body {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 12px 0 0;
+		overflow-y: auto;
+	}
+	/* the working tree's changes in one block: the numbers are the answer, so they are the biggest thing in it */
+	.summary {
+		flex: none;
+		margin: 8px 16px 0;
+		padding: 8px 12px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
+	.summary .line {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 8px;
+	}
+	.summary .strong {
+		font-weight: 600;
+	}
+	.summary .muted {
+		color: var(--text-faint);
+		font-size: var(--fs-xs);
+	}
+	.summary .num {
+		font-size: var(--fs-xs);
+	}
+	.kinds {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 12px;
+		margin-top: 4px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.kind b {
+		font-weight: 600;
+		color: var(--text-dim);
+	}
+	.kind[data-kind="staged"] b {
+		color: var(--ok);
+	}
+	.kind[data-kind="conflict"] b {
+		color: var(--warn);
+	}
+	.pickrow {
+		flex: none;
+		margin-top: 8px;
+		padding: 0 16px;
+	}
+	.fold {
+		flex: none;
+		margin-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.foldhead {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		height: 32px;
+		padding: 0 16px;
+		text-align: left;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.foldhead:hover {
+		background: var(--bg-hover);
+	}
+	.foldbody {
+		margin: 0;
+		padding: 0 0 8px;
+		list-style: none;
+		max-height: 132px;
+		overflow-y: auto;
+	}
+	.graphbox {
+		flex: 1 0 240px; /* never squeezed below ~7 rows: the body scrolls instead */
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		margin-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.ghead {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 32px;
+		padding: 0 16px;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.gtitle {
+		font-weight: 600;
+		color: var(--text);
+	}
+	.count {
+		color: var(--text-faint);
+	}
+	.graphscroll {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding-bottom: 16px;
+	}
+	ul {
+		display: flex;
+		flex-direction: column;
+		gap: 1px; /* the 1px between rows of one list */
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.path {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
 	.right {
 		display: flex;
 		flex-direction: column;
@@ -305,12 +368,10 @@
 		height: 20px;
 		flex: none;
 	}
-	/* both glyphs 16px so the two ends match (a 19px one beside a 16px one differ in weight) */
 	.head :global(.iconbtn svg) {
 		width: 16px;
 		height: 16px;
 	}
-	/* the title and its folder: a 20px line over a 16px line = 36px in the 44px row, centred, whole pixels */
 	.titles {
 		flex: 1;
 		min-width: 0;
@@ -334,83 +395,6 @@
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
-	}
-	/* A column: the picker and the folds take their own height, the graph takes the rest and scrolls inside itself */
-	.body {
-		flex: 1;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		padding: 12px 0 0;
-		overflow-y: auto;
-	}
-	.pickrow {
-		flex: none;
-		margin-top: 8px;
-		padding: 0 16px;
-	}
-	.fold {
-		flex: none;
-		margin-top: 8px;
-		border-top: 1px solid var(--border);
-	}
-	.foldhead {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		height: 32px;
-		padding: 0 16px;
-		text-align: left;
-		font-size: var(--fs-xs);
-		line-height: 20px;
-	}
-	.foldhead:hover:not(:disabled) {
-		background: var(--bg-hover);
-	}
-	.foldhead:disabled .gtitle {
-		color: var(--text-faint);
-	}
-	.foldhead .num {
-		margin-left: auto;
-	}
-	.chev {
-		display: grid;
-		place-items: center;
-		flex: none;
-		color: var(--text-faint);
-		transform: rotate(-90deg);
-		transition: transform var(--motion-fast) var(--ease-std);
-	}
-	.chev.open {
-		transform: none;
-	}
-	.chev :global(svg) {
-		width: 16px;
-		height: 16px;
-	}
-	.foldbody {
-		overflow-y: auto;
-		padding-bottom: 8px;
-	}
-	.graphbox {
-		flex: 1 0 240px; /* never squeezed below ~7 rows, even with the folds open: the body scrolls instead */
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		margin-top: 8px;
-		border-top: 1px solid var(--border);
-	}
-	.graphbox > .ghead {
-		flex: none;
-		height: 32px;
-		align-items: center;
-	}
-	.graphscroll {
-		flex: 1;
-		min-height: 0;
-		overflow-y: auto;
-		padding-bottom: 16px;
 	}
 	.branch {
 		display: flex;
@@ -446,73 +430,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.ghead {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-		padding: 0 16px;
-		font-size: var(--fs-xs);
-		line-height: 20px;
-	}
-	.gtitle {
-		font-weight: 600;
-		color: var(--text);
-	}
-	.count {
-		color: var(--text-faint);
-	}
-	ul {
-		display: flex;
-		flex-direction: column;
-		gap: 1px; /* the 1px between rows of one list */
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	.file {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		height: 32px; /* the app's row height */
-		padding: 0 16px;
-		text-align: left;
-		color: var(--text);
-	}
-	.file:hover {
-		background: var(--bg-hover);
-	}
-	.file.on {
-		background: var(--bg-active);
-	}
-	.code {
-		flex: none;
-		width: 16px;
-		text-align: center;
-		font-family: var(--mono);
-		font-size: var(--fs-2xs);
-		font-weight: 700;
-		line-height: 20px;
-		color: var(--text-dim);
-	}
-	.code[data-state="staged"] {
-		color: var(--ok);
-	}
-	.code[data-state="untracked"] {
-		color: var(--text-faint);
-	}
-	.code[data-state="conflict"] {
-		color: var(--warn);
-	}
-	.path {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-		line-height: 20px;
-	}
 	.tree {
 		display: flex;
 		align-items: center;
@@ -537,9 +454,6 @@
 		height: 16px;
 		stroke-width: 1.8;
 	}
-	.tree .path {
-		font-size: var(--fs-sm);
-	}
 	.wbranch {
 		flex: none;
 		max-width: 40%;
@@ -560,68 +474,6 @@
 		color: var(--text-dim);
 	}
 	.commit:hover {
-		background: var(--bg-hover);
-	}
-	.commit.on {
-		background: var(--bg-active);
-	}
-	.when {
-		flex: none;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		color: var(--text-faint);
-	}
-	.detail {
-		padding: 8px 16px 12px;
-	}
-	.detail .meta {
-		margin: 0 0 4px;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		color: var(--text-faint);
-	}
-	.detail .msg {
-		margin: 0 0 8px;
-		font-size: var(--fs-xs);
-		line-height: 20px;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		color: var(--text-dim);
-	}
-	.cfiles {
-		margin: 0 -16px; /* the file rows run edge to edge like the changed-file rows above */
-	}
-	.num {
-		flex: none;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-	}
-	.plus {
-		color: var(--ok);
-	}
-	.minus {
-		color: var(--danger);
-	}
-	.flag {
-		flex: none;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		color: var(--text-faint);
-	}
-	.more {
-		width: 100%;
-		height: 32px;
-		padding: 0 16px;
-		text-align: left;
-		font-size: var(--fs-xs);
-		line-height: 20px;
-		color: var(--text-faint);
-	}
-	.more:disabled {
-		opacity: 0.5;
-	}
-	.more:hover:not(:disabled) {
-		color: var(--text);
 		background: var(--bg-hover);
 	}
 	.lanes {
@@ -659,29 +511,59 @@
 	.ref[data-kind="tag"] {
 		color: var(--warn);
 	}
-	.diff {
-		padding: 0 16px 12px;
-	}
-	.patch {
-		margin: 0;
-		max-height: 320px;
-		overflow: auto;
-		padding: 8px 12px;
-		border-radius: var(--radius-sm);
-		background: var(--bg-code);
-		font-family: var(--mono);
+	.when {
+		flex: none;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
-		white-space: pre;
+		color: var(--text-faint);
 	}
-	.patch .add {
+	.flag {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.more {
+		width: 100%;
+		height: 32px;
+		padding: 0 16px;
+		text-align: left;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		color: var(--text-faint);
+	}
+	.more:disabled {
+		opacity: 0.5;
+	}
+	.more:hover:not(:disabled) {
+		color: var(--text);
+		background: var(--bg-hover);
+	}
+	.num {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+	}
+	.plus {
 		color: var(--ok);
 	}
-	.patch .del {
+	.minus {
 		color: var(--danger);
 	}
-	.patch .hunk {
+	.chev {
+		display: grid;
+		place-items: center;
+		flex: none;
 		color: var(--text-faint);
+		transform: rotate(-90deg);
+		transition: transform var(--motion-fast) var(--ease-std);
+	}
+	.chev.open {
+		transform: none;
+	}
+	.chev :global(svg) {
+		width: 16px;
+		height: 16px;
 	}
 	.cut {
 		margin: 8px 16px 0;

@@ -6,26 +6,13 @@ import { errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
 /**
- * Read-only git for the right sidebar: what the working directory of a session looks like right now. Nothing here writes
- * (no stage, no discard, no commit): the client only reads, and the agent does the changing.
+ * Read-only git summary for the right sidebar: how big the working directory's changes are (counts, not a file list), the
+ * branches, and the history graph. Nothing here writes (no stage, no discard, no commit): the client only reads, and the
+ * agent does the changing.
  *
- * Every command runs on the server, in the session's own directory, because the client may be on another machine.
+ * Every command runs on the server, in the session's own directory, because the client may be on another machine. The
+ * answer's size never depends on the size of the repository: counts are numbers, lists are capped.
  */
-
-/** A changed file of the working tree, as `git status --porcelain=v2` reports it. */
-export interface GitFile {
-	/** Path relative to the working directory; a rename carries its old path in `from`. */
-	path: string;
-	/** The old path of a rename or copy. */
-	from?: string;
-	/** `staged` = the index differs from HEAD, `unstaged` = the working tree differs from the index, `untracked`, `conflict`. */
-	state: "staged" | "unstaged" | "untracked" | "conflict";
-	/** The porcelain letter: M A D R C T U (or ? for untracked). */
-	code: string;
-	/** Lines added / removed (`git diff --numstat`); absent for untracked and binary files. */
-	add?: number;
-	del?: number;
-}
 
 /** A local or remote-tracking branch. */
 export interface GitBranch {
@@ -44,30 +31,6 @@ export interface GitBranch {
 	/** Tip commit time, seconds since the epoch. */
 	at: number;
 	head: string;
-}
-
-/** What one commit changed, against its first parent (a root commit against the empty tree). */
-export interface GitCommitDetail {
-	hash: string;
-	subject: string;
-	/** The message after the subject line, trimmed. */
-	body: string;
-	author: string;
-	email: string;
-	at: number;
-	parents: string[];
-	files: GitCommitFile[];
-	/** More files than the list cap: the list was cut. */
-	truncated: boolean;
-}
-
-export interface GitCommitFile {
-	path: string;
-	from?: string;
-	/** A M D R C T. */
-	code: string;
-	add?: number;
-	del?: number;
 }
 
 export interface GitWorktree {
@@ -93,12 +56,16 @@ export interface GitCommit {
 	refs: string[];
 }
 
+/** How many files changed, by kind. Every changed file is counted once: a file staged and edited again counts as staged. */
 export interface GitCounts {
 	conflict: number;
 	staged: number;
 	unstaged: number;
 	untracked: number;
-	/** Lines added / removed over every changed file, binary ones left out (the sums of `git diff --numstat`). */
+}
+
+/** Lines added / removed over every changed tracked file, binary ones left out (the sums of `git diff --numstat`). */
+export interface GitLines {
 	add: number;
 	del: number;
 }
@@ -117,11 +84,10 @@ export interface GitStatus {
 	ahead: number;
 	behind: number;
 	detached: boolean;
-	files: GitFile[];
-	/** More files than the list cap: the list was cut (the cut keeps conflicts, then staged, unstaged, untracked). */
-	truncated: boolean;
-	/** How many changed files there really are, per kind, before the cap: the panel says "2850", not "200+". */
-	counts: GitCounts;
+	/** Changed files by kind; null when `git status` itself timed out (a repository too big to count in time). */
+	counts: GitCounts | null;
+	/** Changed lines; null when they were skipped (too many changed files, or git needed too long): the panel says so. */
+	lines: GitLines | null;
 	worktrees: GitWorktree[];
 	/** Local branches first (current on top, then newest), then remote-tracking ones. */
 	branches: GitBranch[];
@@ -133,51 +99,33 @@ export interface GitStatus {
 	at: number;
 }
 
-export interface GitDiff {
-	path: string;
-	staged: boolean;
-	/** Unified diff text; empty when the file has no textual change (binary, or a pure mode change). */
-	patch: string;
-	truncated: boolean;
-	binary: boolean;
-}
-
-/** Caps: a status list and a diff are for reading, not for loading a whole repository into the client. */
+/**
+ * Caps and time limits: the panel is for a glance, not for loading a whole repository into the client. The client
+ * mirrors the commit numbers (client/src/lib/git-limits.ts); a test keeps the two equal.
+ */
 export const GIT_LIMITS = {
-	/** Changed files listed in the panel (`truncated` says the rest was cut). */
-	files: 1000,
-	/** Files listed for one commit. */
-	commitFiles: 100,
 	/** Branches offered in the picker, local ones first (`branchesCut` says the rest was cut). */
 	branches: 60,
 	worktrees: 20,
 	/** Commits per page of the graph, and the most a client can ask for in total. */
 	commitsPage: 50,
 	commitsMax: 300,
-	diffBytes: 200 * 1024,
+	/** Any one git command. */
 	timeoutMs: 8000,
+	/**
+	 * Changed lines need a real diff of every changed file, which costs time in proportion to their size (a 20,000-file
+	 * change took 5 s). Past this many changed tracked files the sums are skipped, and a diff that is still running after
+	 * `linesTimeoutMs` is dropped: no number beats a panel that waits.
+	 */
+	linesMaxFiles: 5000,
+	linesTimeoutMs: 3000,
 } as const;
-export const MAX_FILES = GIT_LIMITS.files;
 export const MAX_WORKTREES = GIT_LIMITS.worktrees;
 export const MAX_BRANCHES = GIT_LIMITS.branches;
-export const MAX_DIFF_BYTES = GIT_LIMITS.diffBytes;
 export const GIT_TIMEOUT_MS = GIT_LIMITS.timeoutMs;
 
 const SessionParam = Type.Object({ id: Type.String() });
-const DiffQuery = Type.Object({
-	path: Type.String({ minLength: 1, description: "Relative to the working directory, as `git status` reported it" }),
-	staged: Type.Optional(Type.Boolean({ description: "Diff the index against HEAD instead of the working tree against the index" })),
-	commit: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{7,64}$", description: "Diff this commit against its first parent instead of the working tree" })),
-});
 
-const GitFileSchema = Type.Object({
-	path: Type.String(),
-	from: Type.Optional(Type.String()),
-	state: Type.Union([Type.Literal("staged"), Type.Literal("unstaged"), Type.Literal("untracked"), Type.Literal("conflict")]),
-	code: Type.String(),
-	add: Type.Optional(Type.Integer()),
-	del: Type.Optional(Type.Integer()),
-});
 const GitBranchSchema = Type.Object({
 	name: Type.String(),
 	remote: Type.Boolean(),
@@ -190,25 +138,6 @@ const GitBranchSchema = Type.Object({
 	at: Type.Integer(),
 	head: Type.String(),
 });
-const GitCommitFileSchema = Type.Object({
-	path: Type.String(),
-	from: Type.Optional(Type.String()),
-	code: Type.String(),
-	add: Type.Optional(Type.Integer()),
-	del: Type.Optional(Type.Integer()),
-});
-export const GitCommitDetailSchema = Type.Object({
-	hash: Type.String(),
-	subject: Type.String(),
-	body: Type.String(),
-	author: Type.String(),
-	email: Type.String(),
-	at: Type.Integer(),
-	parents: Type.Array(Type.String()),
-	files: Type.Array(GitCommitFileSchema),
-	truncated: Type.Boolean(),
-});
-const HashQuery = Type.Object({ hash: Type.String({ pattern: "^[0-9a-fA-F]{7,64}$", description: "A commit id from the graph" }) });
 const GitCommitSchema = Type.Object({
 	hash: Type.String(),
 	parents: Type.Array(Type.String()),
@@ -224,6 +153,7 @@ const GitWorktreeSchema = Type.Object({
 	bare: Type.Boolean(),
 	main: Type.Boolean(),
 });
+const GitCountsSchema = Type.Object({ conflict: Type.Integer(), staged: Type.Integer(), unstaged: Type.Integer(), untracked: Type.Integer() });
 export const GitStatusSchema = Type.Object({
 	repo: Type.Boolean(),
 	root: Type.Union([Type.String(), Type.Null()]),
@@ -234,12 +164,8 @@ export const GitStatusSchema = Type.Object({
 	ahead: Type.Integer(),
 	behind: Type.Integer(),
 	detached: Type.Boolean(),
-	files: Type.Array(GitFileSchema),
-	truncated: Type.Boolean(),
-	counts: Type.Object({
-		conflict: Type.Integer(), staged: Type.Integer(), unstaged: Type.Integer(), untracked: Type.Integer(),
-		add: Type.Integer(), del: Type.Integer(),
-	}),
+	counts: Type.Union([GitCountsSchema, Type.Null()]),
+	lines: Type.Union([Type.Object({ add: Type.Integer(), del: Type.Integer() }), Type.Null()]),
 	worktrees: Type.Array(GitWorktreeSchema),
 	branches: Type.Array(GitBranchSchema),
 	stashes: Type.Integer(),
@@ -251,29 +177,18 @@ export const GitLogSchema = Type.Object({
 	/** Older commits exist beyond this page. */
 	more: Type.Boolean(),
 });
-const FilesQuery = Type.Object({
-	q: Type.Optional(Type.String({ maxLength: 200, description: "Words that must all appear in the path, case-insensitively" })),
-	kind: Type.Optional(Type.Union([Type.Literal("staged"), Type.Literal("unstaged"), Type.Literal("untracked")])),
-});
-export const GitFilesSchema = Type.Object({
-	files: Type.Array(GitFileSchema),
-	/** How many files match, before the cap. */
-	matched: Type.Integer(),
-	truncated: Type.Boolean(),
-});
 const LogQuery = Type.Object({
 	ref: Type.Optional(Type.String({ maxLength: 300, description: "A full ref name from the branch list (`refs/heads/x`, `refs/remotes/origin/x`); left out = every branch and tag" })),
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: GIT_LIMITS.commitsMax, description: "How many commits, newest first (default one page)" })),
 });
-export const GitDiffSchema = Type.Object({
-	path: Type.String(),
-	staged: Type.Boolean(),
-	patch: Type.String(),
-	truncated: Type.Boolean(),
-	binary: Type.Boolean(),
-});
 
-interface Run { code: number; out: string; err: string }
+interface Run {
+	code: number;
+	out: string;
+	err: string;
+	/** The command was killed for running past its time limit. */
+	timedOut: boolean;
+}
 
 /**
  * Identical git reads that overlap share one process: a refresh that lands while the last one still runs (a turn ending
@@ -293,30 +208,36 @@ export function once<T>(key: string, work: () => Promise<T>): Promise<T> {
  * One git command, with a timeout and no terminal prompt (a credential prompt would hang the request). `-c` settings keep
  * the output stable whatever the user's own git config says (colour, pager, quoting of non-ASCII paths).
  */
-async function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): Promise<Run> {
+async function git(cwd: string, args: string[], timeoutMs: number = GIT_TIMEOUT_MS): Promise<Run> {
 	const proc = Bun.spawn(
 		["git", "-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "core.pager=cat", ...args],
 		{ cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" } },
 	);
 	// A hung git (a network filesystem, a lock held by another process) must not hold the request open.
-	const timer = setTimeout(() => { try { proc.kill(); } catch { /* already gone */ } }, timeoutMs);
+	let timedOut = false;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		try { proc.kill(); } catch { /* already gone */ }
+	}, timeoutMs);
 	try {
 		const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-		return { code: await proc.exited, out, err };
+		return { code: await proc.exited, out, err, timedOut };
 	} finally {
 		clearTimeout(timer);
 	}
 }
 
+type Parsed = Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached"> & { counts: GitCounts };
+
 /**
- * `git status --porcelain=v2 -b -z`, parsed. NUL-separated because a path may hold a newline; a rename's second record is
- * the old path. Only the branch header and the entries are read: submodule and ignored records are skipped.
+ * `git status --porcelain=v2 -b -z`, counted. NUL-separated because a path may hold a newline; a rename's second record
+ * is the old path and is skipped. Only the branch header and the kind of every entry are read: no path is kept, so a
+ * hundred thousand changed files cost a loop, not a hundred thousand objects.
  */
-type Parsed = Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated" | "counts">;
-export function parseStatus(raw: string, cap: number = MAX_FILES): Parsed {
+export function parseStatus(raw: string): Parsed {
 	const out: Parsed = {
-		branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false, files: [], truncated: false,
-		counts: { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 },
+		branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
+		counts: { conflict: 0, staged: 0, unstaged: 0, untracked: 0 },
 	};
 	const records = raw.split("\0");
 	for (let i = 0; i < records.length; i++) {
@@ -343,43 +264,14 @@ export function parseStatus(raw: string, cap: number = MAX_FILES): Parsed {
 		if (kind === "1" || kind === "2") {
 			// 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
 			// 2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path>   (the old path is the next record)
-			const parts = rec.split(" ");
-			const xy = parts[1] ?? "..";
-			const rest = parts.slice(8).join(" ");
-			const path = kind === "2" ? rest.split(" ").slice(1).join(" ") : rest;
-			const from = kind === "2" ? records[++i] : undefined;
-			const entry: GitFile = { path, state: "unstaged", code: xy[1] ?? "." };
-			if (xy[0] !== ".") {
-				// staged: the index differs from HEAD, which is what the user sees as "to be committed"
-				entry.state = "staged";
-				entry.code = xy[0]!;
-			}
-			if (xy[0] === "U" || xy[1] === "U" || xy === "AA" || xy === "DD") {
-				entry.state = "conflict";
-				entry.code = "U";
-			}
-			if (from) entry.from = from;
-			out.files.push(entry);
-			continue;
-		}
-		if (kind === "u") {
-			// u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>: an unmerged (conflicted) entry
-			const parts = rec.split(" ");
-			out.files.push({ path: parts.slice(10).join(" "), state: "conflict", code: "U" });
-			continue;
-		}
-		if (kind === "?") out.files.push({ path: rec.slice(2), state: "untracked", code: "?" });
-	}
-	// Count, sort, and only then cut: cutting while reading would drop whatever git lists last (a staged file named
-	// `zzz`), and "200+" is no answer to "how many".
-	for (const f of out.files) out.counts[f.state]++;
-	// conflicts first, then staged, unstaged, untracked: the order the panel reads in. A plain code-unit compare: stable
-	// across machines (localeCompare is slow on thousands of paths and depends on the server's locale).
-	const rank = { conflict: 0, staged: 1, unstaged: 2, untracked: 3 } as const;
-	out.files.sort((a, b) => rank[a.state] - rank[b.state] || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-	if (out.files.length > cap) {
-		out.truncated = true;
-		out.files.length = cap;
+			const xy = rec.slice(2, 4);
+			if (kind === "2") i++;
+			if (xy[0] === "U" || xy[1] === "U" || xy === "AA" || xy === "DD") out.counts.conflict++;
+			// staged: the index differs from HEAD, which is what the user sees as "to be committed"
+			else if (xy[0] !== ".") out.counts.staged++;
+			else out.counts.unstaged++;
+		} else if (kind === "u") out.counts.conflict++; // an unmerged (conflicted) entry
+		else if (kind === "?") out.counts.untracked++;
 	}
 	return out;
 }
@@ -471,44 +363,22 @@ export function capBranches(all: GitBranch[]): { branches: GitBranch[]; cut: boo
 }
 
 /**
- * `git diff --numstat -z`: `add\tdel\tpath\0`, and for a rename `add\tdel\t\0old\0new\0`. Binary files report `-`
- * for both counts and are left out (no number is better than a wrong one). Keyed by the new path.
+ * `git diff --numstat -z`: `add\tdel\tpath\0`, and for a rename `add\tdel\t\0old\0new\0`, summed. Binary files report `-`
+ * for both counts and are left out (no number is better than a wrong one).
  */
-export function parseNumstat(raw: string): Map<string, { add: number; del: number }> {
-	const out = new Map<string, { add: number; del: number }>();
+export function sumNumstat(raw: string): GitLines {
+	const sum: GitLines = { add: 0, del: 0 };
 	const parts = raw.split("\0");
 	for (let i = 0; i < parts.length; i++) {
 		const rec = parts[i]!;
 		if (!rec) continue;
-		const m = /^(\d+|-)\t(\d+|-)\t(.*)$/s.exec(rec);
+		const m = /^(\d+|-)\t(\d+|-)\t/.exec(rec);
 		if (!m) continue;
-		let path = m[3]!;
-		if (path === "") {
-			i += 2; // a rename: the next two records are the old and the new path
-			path = parts[i] ?? "";
-		}
-		if (m[1] !== "-" && m[2] !== "-") out.set(path, { add: Number(m[1]), del: Number(m[2]) });
+		// a rename: the path is empty here and the next two records are the old and the new path
+		if (rec.length === m[0].length) i += 2;
+		if (m[1] !== "-" && m[2] !== "-") (sum.add += Number(m[1])), (sum.del += Number(m[2]));
 	}
-	return out;
-}
-
-/** `git show --name-status -z`: `X\0path\0`, and `R100\0old\0new\0` for a rename or copy. */
-export function parseNameStatus(raw: string): GitCommitFile[] {
-	const out: GitCommitFile[] = [];
-	const parts = raw.split("\0");
-	for (let i = 0; i < parts.length; i++) {
-		const code = parts[i];
-		if (!code) continue;
-		const letter = code[0]!;
-		if (letter === "R" || letter === "C") {
-			const from = parts[++i] ?? "";
-			const path = parts[++i] ?? "";
-			out.push({ path, from, code: letter });
-		} else {
-			out.push({ path: parts[++i] ?? "", code: letter });
-		}
-	}
-	return out.filter((f) => f.path);
+	return sum;
 }
 
 /** Whether `dir` is a directory at all: a session may point at a folder that has since been deleted. */
@@ -520,10 +390,30 @@ async function isDir(dir: string): Promise<boolean> {
 	}
 }
 
+const NO_COUNTS: GitCounts = { conflict: 0, staged: 0, unstaged: 0, untracked: 0 };
+
+/**
+ * Changed lines of the tracked files (the index against HEAD plus the working tree against the index), or null when it
+ * would cost too much: too many changed files, or git still running at the time limit.
+ */
+async function readLines(root: string, tracked: number): Promise<GitLines | null> {
+	if (tracked === 0) return { add: 0, del: 0 };
+	if (tracked > GIT_LIMITS.linesMaxFiles) return null;
+	const args = ["diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv"];
+	const [cached, work] = await Promise.all([
+		git(root, [...args, "--cached"], GIT_LIMITS.linesTimeoutMs),
+		git(root, args, GIT_LIMITS.linesTimeoutMs),
+	]);
+	if (cached.timedOut || work.timedOut || cached.code !== 0 || work.code !== 0) return null;
+	const a = sumNumstat(cached.out);
+	const b = sumNumstat(work.out);
+	return { add: a.add + b.add, del: a.del + b.del };
+}
+
 async function readStatus(cwd: string): Promise<GitStatus> {
 	const empty = (reason: string): GitStatus => ({
 		repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
-		files: [], truncated: false, counts: { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 }, worktrees: [], branches: [], branchesCut: false, stashes: 0, at: Date.now(),
+		counts: NO_COUNTS, lines: null, worktrees: [], branches: [], branchesCut: false, stashes: 0, at: Date.now(),
 	});
 	if (!(await isDir(cwd))) return empty("missing");
 	const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
@@ -532,40 +422,35 @@ async function readStatus(cwd: string): Promise<GitStatus> {
 		return empty(top.err.includes("not a git repository") ? "not-a-repo" : "no-git");
 	}
 	const root = top.out.trim();
-	// `-uall`: an untracked folder is listed as its files (a bare `new/` is one row that cannot be opened). The cap and
-	// the counts keep a 10,000-file folder from flooding anything.
-	const status = await git(root, ["status", "--porcelain=v2", "-b", "-z", "--untracked-files=all"]);
-	if (status.code !== 0) return empty("no-git");
-	const trees = await git(root, ["worktree", "list", "--porcelain"]);
-	const parsed = parseStatus(status.out);
-	// line counts for the listed files: the index against HEAD, and the working tree against the index
-	const [cachedStat, workStat, refs, stash] = await Promise.all([
-		git(root, ["diff", "--numstat", "-z", "--cached", "--no-ext-diff", "--no-textconv"]),
-		git(root, ["diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv"]),
+	// `-uall` counts an untracked folder by its files (a bare `new/` would count as one)
+	const [status, trees, refs, stash] = await Promise.all([
+		git(root, ["status", "--porcelain=v2", "-b", "-z", "--untracked-files=all"]),
+		git(root, ["worktree", "list", "--porcelain"]),
 		git(root, ["for-each-ref", `--format=${BRANCH_FORMAT}`, "refs/heads", "refs/remotes"]),
 		git(root, ["stash", "list"]),
 	]);
-	const cached = parseNumstat(cachedStat.out);
-	const work = parseNumstat(workStat.out);
-	// the totals cover every changed file, not just the listed ones
-	for (const m of [cached, work]) for (const n of m.values()) (parsed.counts.add += n.add), (parsed.counts.del += n.del);
-	for (const f of parsed.files) {
-		const n = (f.state === "staged" ? cached : work).get(f.path);
-		if (n) {
-			f.add = n.add;
-			f.del = n.del;
-		}
-	}
+	// a repository too big for `git status` to answer in time is still a repository: the branches and the graph work
+	if (status.code !== 0 && !status.timedOut) return empty("no-git");
+	const parsed = status.timedOut ? null : parseStatus(status.out);
+	const counts = parsed?.counts ?? null;
+	const lines = counts ? await readLines(root, counts.staged + counts.unstaged + counts.conflict) : null;
+	const { branches, cut } = capBranches(refs.code === 0 ? parseBranches(refs.out) : []);
 	return {
 		repo: true,
 		root,
 		reason: null,
-		...parsed,
+		// when status timed out the current branch is still known from the branch list
+		branch: parsed?.branch ?? branches.find((b) => b.current)?.name ?? null,
+		head: parsed?.head ?? null,
+		upstream: parsed?.upstream ?? null,
+		ahead: parsed?.ahead ?? 0,
+		behind: parsed?.behind ?? 0,
+		detached: parsed?.detached ?? false,
+		counts,
+		lines,
 		worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
-		...(() => {
-			const { branches, cut } = capBranches(refs.code === 0 ? parseBranches(refs.out) : []);
-			return { branches, branchesCut: cut };
-		})(),
+		branches,
+		branchesCut: cut,
 		stashes: stash.code === 0 ? stash.out.split("\n").filter(Boolean).length : 0,
 		at: Date.now(),
 	};
@@ -581,42 +466,6 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			if (!cwd) throw notFound("session");
 			// two readers of one folder (or a refresh on top of a refresh) share the one set of git processes
 			return once(`status\0${cwd}`, () => readStatus(cwd));
-		},
-	});
-
-	// Search the whole working tree, not just the page the status listed: with thousands of changed files the one you want
-	// is rarely in the first thousand.
-	app.get("/sessions/:id/git/files", {
-		schema: { params: SessionParam, querystring: FilesQuery, response: { 200: GitFilesSchema, ...errors(400, 401, 404) } },
-		handler: async (req) => {
-			const cwd = cwdOf(req.params.id);
-			if (!cwd) throw notFound("session");
-			if (!(await isDir(cwd))) return { files: [], matched: 0, truncated: false };
-			const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
-			if (top.code !== 0) return { files: [], matched: 0, truncated: false };
-			const { q = "", kind } = req.query;
-			return once(`files\0${top.out.trim()}\0${kind ?? ""}\0${q}`, async () => {
-				const root = top.out.trim();
-				const status = await git(root, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
-				if (status.code !== 0) return { files: [], matched: 0, truncated: false };
-				const all = parseStatus(status.out, Infinity).files;
-				const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-				const hit = all.filter((f) => (!kind || (kind === "unstaged" ? f.state === "unstaged" || f.state === "conflict" : f.state === kind)) && words.every((w) => f.path.toLowerCase().includes(w)));
-				const files = hit.slice(0, GIT_LIMITS.files);
-				if (files.length) {
-					const [c, w] = await Promise.all([
-						git(root, ["diff", "--numstat", "-z", "--cached", "--no-ext-diff", "--no-textconv"]),
-						git(root, ["diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv"]),
-					]);
-					const cached = parseNumstat(c.out);
-					const work = parseNumstat(w.out);
-					for (const f of files) {
-						const n = (f.state === "staged" ? cached : work).get(f.path);
-						if (n) (f.add = n.add), (f.del = n.del);
-					}
-				}
-				return { files, matched: hit.length, truncated: hit.length > files.length };
-			});
 		},
 	});
 
@@ -639,65 +488,6 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			const log = await git(cwd, ["log", "--topo-order", `--max-count=${limit + 1}`, `--format=${LOG_FORMAT}`, ...roots, "--"]);
 			const commits = log.code === 0 ? parseLog(log.out) : [];
 			return { commits: commits.slice(0, limit), more: commits.length > limit };
-		},
-	});
-
-	app.get("/sessions/:id/git/commit", {
-		schema: { params: SessionParam, querystring: HashQuery, response: { 200: GitCommitDetailSchema, ...errors(400, 401, 404) } },
-		handler: async (req) => {
-			const cwd = cwdOf(req.params.id);
-			if (!cwd) throw notFound("session");
-			const hash = req.query.hash;
-			const meta = await git(cwd, ["show", "--no-patch", "-s", `--format=%H${FS}%P${FS}%an${FS}%ae${FS}%at${FS}%s${FS}%b`, hash]);
-			if (meta.code !== 0) throw notFound("commit");
-			const [full, parents, author, email, at, subject, ...body] = meta.out.replace(/\n$/, "").split(FS) as string[];
-			// against the first parent, so a merge lists what it brought in; `--root` makes the first commit list everything
-			const names = await git(cwd, ["show", "--first-parent", "-m", "--format=", "--name-status", "-z", "--find-renames", "--root", hash]);
-			const stats = await git(cwd, ["show", "--first-parent", "-m", "--format=", "--numstat", "-z", "--find-renames", "--root", hash]);
-			const num = parseNumstat(stats.out);
-			const all = parseNameStatus(names.out);
-			const files = all.slice(0, GIT_LIMITS.commitFiles).map((f) => {
-				const n = num.get(f.path);
-				return n ? { ...f, add: n.add, del: n.del } : f;
-			});
-			return {
-				hash: full!,
-				subject: subject ?? "",
-				body: body.join(FS).trim(),
-				author: author ?? "",
-				email: email ?? "",
-				at: Number(at) || 0,
-				parents: parents ? parents.split(" ") : [],
-				files,
-				truncated: all.length > GIT_LIMITS.commitFiles,
-			};
-		},
-	});
-
-	app.get("/sessions/:id/git/diff", {
-		schema: { params: SessionParam, querystring: DiffQuery, response: { 200: GitDiffSchema, ...errors(400, 401, 404) } },
-		handler: async (req) => {
-			const cwd = cwdOf(req.params.id);
-			if (!cwd) throw notFound("session");
-			const path = req.query.path;
-			// a path from the status list only: no absolute paths, no walking out of the repository
-			if (path.startsWith("/") || path.split(/[\\/]/).includes("..")) throw badRequest("path must be inside the working directory");
-			const staged = req.query.staged ?? false;
-			const commit = req.query.commit;
-			if (commit) {
-				const shown = await git(cwd, ["show", "--first-parent", "-m", "--format=", "--no-color", "--no-ext-diff", "--no-textconv", commit, "--", path]);
-				let patch = shown.code === 0 ? shown.out : "";
-				const truncated = patch.length > MAX_DIFF_BYTES;
-				if (truncated) patch = patch.slice(0, MAX_DIFF_BYTES);
-				return { path, staged: false, patch, truncated, binary: /^Binary files |^GIT binary patch/m.test(patch) };
-			}
-			const run = await git(cwd, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", ...(staged ? ["--cached"] : []), "--", path]);
-			let patch = run.out;
-			// an untracked file has no diff: show its content as an addition, so a click on it still says something
-			if (!patch.trim() && !staged) patch = (await git(cwd, ["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", path])).out;
-			const truncated = patch.length > MAX_DIFF_BYTES;
-			if (truncated) patch = patch.slice(0, MAX_DIFF_BYTES);
-			return { path, staged, patch, truncated, binary: /^Binary files |^GIT binary patch/m.test(patch) };
 		},
 	});
 }
