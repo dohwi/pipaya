@@ -47,7 +47,7 @@ export interface PushTransport {
 }
 export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
-export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined; muted?(sessionId: string): boolean }
+export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined; muted?(sessionId: string): boolean; /** The "quiet peers" setting: agent-to-agent runs stay silent */ quietPeers?(): boolean }
 export const DEFAULT_TITLES: Record<string, string> = { user_request: "Answer needed", task_failed: "Task failed", task_completed: "Task completed" };
 const LEASE_MS = 45_000;
 /** How long to wait for a PC/browser to confirm it showed a notification before pushing to the phone. A receipt normally takes well under a second. */
@@ -283,6 +283,9 @@ export class NotificationService {
     if (e.type === "question_resolved") { this.cancelQueued(p => p.sessionId === e.sessionId && p.kind === "user_request"); if (e.sessionId) this.clearPushed([e.sessionId], null); }
     if (e.type === "run_started") { this.cancelQueued(p => p.sessionId === e.sessionId && ["task_completed", "task_failed"].includes(p.kind ?? "")); if (e.sessionId) this.clearPushed([e.sessionId], null); }
     if (!e.sessionId || !isNotifying(e.type)) return;
+    // Agent-to-agent traffic: a run that a peer message started (origin "peer") ends silently when the setting is on.
+    // Questions still reach the user: they are addressed to the person, whoever started the run.
+    if (e.type === "run_finished" && (e.data as { origin?: string }).origin === "peer" && this.sessions?.quietPeers?.()) return;
     const kind = NOTIFYING_EVENTS[e.type].kind((e.data ?? {}) as { status?: string });
     if (!kind) return;
     if (this.sessions?.muted?.(e.sessionId)) return; // a muted chat stays quiet, built-in notices and extension rules alike

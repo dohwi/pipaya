@@ -47,6 +47,8 @@
 {#if busy}<p class="hint" in:collapseIn out:collapseOut>{t("알림 권한을 확인하는 중…")}</p>{/if}
 {#if error}<p class="hint danger" role="alert" in:collapseIn out:collapseOut>{error}</p>{/if}
 
+<SettingRow label={t("에이전트 간 대화는 알림 안 함")} hint={t("다른 세션의 메시지로 시작된 작업은 알리지 않습니다. 내 메시지에 대한 답과 확인 질문만 알립니다 · 모든 기기 공통")}><Switch checked={app.quietPeers} label={t("에이전트 간 대화는 알림 안 함")} onchange={(on) => app.setQuietPeers(on)} /></SettingRow>
+
 <SettingRow label={t("폰으로 다시 알림")} hint={t("어느 기기에서도 확인하지 않으면 이 시간 뒤 폰으로 보냅니다 · 모든 기기 공통")} for="escalate">
   <Select id="escalate" size="sm" width="auto" value={app.escalateMinutes} disabled={!app.api} onchange={(m) => app.setEscalateMinutes(m)} options={ESCALATE_CHOICES.map((m) => ({ value: m, label: label(m) }))} />
 </SettingRow>

@@ -17,7 +17,7 @@ const isChoice = (v: unknown): v is number => typeof v === "number" && (ESCALATE
 const modelKey = (provider: string, id: string) => `${provider}\u0000${id}`;
 
 /** Every localStorage key this class keeps for a server (the store clears them when the server is removed). */
-export const serverPrefKeys = (serverId: string): string[] => [`${K.favModels}.${serverId}`, `${K.favDirs}.${serverId}`, `${K.escalate}.${serverId}`];
+export const serverPrefKeys = (serverId: string): string[] => [`${K.favModels}.${serverId}`, `${K.favDirs}.${serverId}`, `${K.escalate}.${serverId}`, `${K.quietPeers}.${serverId}`];
 
 export class ServerPrefs {
   /** Starred models of the open server: `<provider>\u0000<modelId>`. */
@@ -26,6 +26,12 @@ export class ServerPrefs {
   favDirs = $state<string[]>([]);
   /** Minutes an unread PC notification waits before the phone is pushed too (the server acts on it). */
   escalateMinutes = $state<number>(DEFAULT_ESCALATE);
+  /**
+   * No notification (OS / push / unread mark / sound) for agent-to-agent runs: runs that another session's message
+   * started (`origin: "peer"` on run_started / run_finished). A user message's run notifies even if it used peer tools.
+   * The server applies it too; the client uses it for the in-app sound and banner. Default on.
+   */
+  quietPeers = $state<boolean>(true);
 
   private serverId: string | null = null;
 
@@ -42,6 +48,7 @@ export class ServerPrefs {
     this.favDirs = strings(read<unknown>(`${K.favDirs}.${serverId}`, []), MAX_FAV_DIRS);
     const v = read<unknown>(`${K.escalate}.${serverId}`, null);
     this.escalateMinutes = isChoice(v) ? v : DEFAULT_ESCALATE;
+    this.quietPeers = read<unknown>(`${K.quietPeers}.${serverId}`, null) !== false;
   }
 
   /** No server is in view. */
@@ -50,6 +57,7 @@ export class ServerPrefs {
     this.favModels = [];
     this.favDirs = [];
     this.escalateMinutes = DEFAULT_ESCALATE;
+    this.quietPeers = true;
   }
 
   /** Starred models that still exist, in the order they were starred (the picker's order, and the quick-switch slots). */
@@ -83,11 +91,19 @@ export class ServerPrefs {
     this.changed("notificationPolicy");
   }
 
+  setQuietPeers(on: boolean) {
+    if (on === this.quietPeers) return;
+    this.quietPeers = on;
+    if (this.serverId) write(`${K.quietPeers}.${this.serverId}`, on);
+    this.changed("notificationPolicy");
+  }
+
   /** How each shared key reads from and writes to this browser, for `ServerSettingsSync`. */
   adapters(serverId: string): Partial<Record<SyncKey, SyncAdapter>> {
     const favKey = `${K.favModels}.${serverId}`;
     const favDirKey = `${K.favDirs}.${serverId}`;
     const escKey = `${K.escalate}.${serverId}`;
+    const quietKey = `${K.quietPeers}.${serverId}`;
     return {
       favModels: {
         // undefined = this device has never had a list for this server, so there is nothing to offer yet
@@ -106,12 +122,21 @@ export class ServerPrefs {
       },
       notificationPolicy: {
         // only offer what the user actually chose on this device; otherwise the server's value (or its default) stands
-        read: () => (localStorage.getItem(escKey) !== null ? { escalateMinutes: this.escalateMinutes } : undefined),
+        read: () => {
+          const esc = localStorage.getItem(escKey) !== null;
+          const quiet = localStorage.getItem(quietKey) !== null;
+          if (!esc && !quiet) return undefined;
+          return { ...(esc ? { escalateMinutes: this.escalateMinutes } : {}), ...(quiet ? { quietPeers: this.quietPeers } : {}) };
+        },
         apply: (v) => {
-          const m = (v as { escalateMinutes?: unknown } | null)?.escalateMinutes;
+          const { escalateMinutes: m, quietPeers: q } = (v ?? {}) as { escalateMinutes?: unknown; quietPeers?: unknown };
           if (isChoice(m)) {
             this.escalateMinutes = m;
             write(escKey, m);
+          }
+          if (typeof q === "boolean") {
+            this.quietPeers = q;
+            write(quietKey, q);
           }
         },
       },

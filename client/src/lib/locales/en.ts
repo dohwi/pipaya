@@ -1593,6 +1593,8 @@ export const en: Record<string, string> = {
 	"소리 재생": "Play a sound",
 	"시험 알림": "Test notification",
 	"알림 보내기": "Send notifications",
+	"에이전트 간 대화는 알림 안 함": "No notifications for agent-to-agent chat",
+	"다른 세션의 메시지로 시작된 작업은 알리지 않습니다. 내 메시지에 대한 답과 확인 질문만 알립니다 · 모든 기기 공통": "Work started by another session's message is not announced. Only replies to your messages and questions for you are · shared by all devices",
 	"어느 기기에서도 확인하지 않으면 이 시간 뒤 폰으로 보냅니다 · 모든 기기 공통": "Pushed to the phone after this long if no device has seen it · shared by all devices",
 	"이 모델이 대화 이름과 역할을 붙입니다. 가볍고 저렴한 모델을 권장합니다.": "This model names chats and their roles. A light, cheap model is best.",
 	"이 모델이 요약합니다. 가볍고 저렴한 모델을 권장합니다.": "This model writes the summary. A light, cheap model is best.",

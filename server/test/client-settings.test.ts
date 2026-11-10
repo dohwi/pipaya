@@ -92,6 +92,9 @@ describe("client settings (server scoped)", () => {
 			expect((await api("PUT", "/client-settings/notificationPolicy", { value })).status).toBe(400);
 		}
 		expect((await api("GET", "/client-settings/notificationPolicy")).json.value).toEqual({ escalateMinutes: 5 });
+		expect((await api("PUT", "/client-settings/notificationPolicy", { value: { escalateMinutes: 5, quietPeers: false } })).status).toBe(200);
+		expect((await api("PUT", "/client-settings/notificationPolicy", { value: { quietPeers: true } })).status).toBe(200);
+		expect((await api("PUT", "/client-settings/notificationPolicy", { value: { escalateMinutes: 5, quietPeers: "yes" } })).status).toBe(400);
 	});
 
 	test("oversized values are refused", async () => {

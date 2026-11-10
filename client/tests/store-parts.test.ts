@@ -177,6 +177,25 @@ describe("server preferences", () => {
 		expect(store.get("pipaya.notify.escalate.s")).toBe("10");
 	});
 
+	test("quiet peers defaults on, persists per server and syncs inside notificationPolicy", () => {
+		store.clear();
+		const { prefs, changed } = make();
+		prefs.load("s");
+		expect(prefs.quietPeers).toBe(true);
+		prefs.setQuietPeers(true); // unchanged
+		expect(changed).toEqual([]);
+		prefs.setQuietPeers(false);
+		expect(changed).toEqual(["notificationPolicy"]);
+		expect(store.get("pipaya.notify.quietPeers.s")).toBe("false");
+		const ad = prefs.adapters("s");
+		expect(ad.notificationPolicy!.read()).toEqual({ quietPeers: false });
+		ad.notificationPolicy!.apply({ escalateMinutes: 5, quietPeers: true });
+		expect(prefs.quietPeers).toBe(true);
+		expect(ad.notificationPolicy!.read()).toEqual({ escalateMinutes: 5, quietPeers: true });
+		prefs.load("s");
+		expect(prefs.quietPeers).toBe(true);
+	});
+
 	test("damaged stored values fall back instead of breaking the load", () => {
 		store.clear();
 		store.set("pipaya.fav.models.s", JSON.stringify([1, "ok", null]));

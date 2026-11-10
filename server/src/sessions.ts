@@ -31,7 +31,7 @@ import { DEFAULT_UPSTREAM_RETRY, sleepAbortable, STREAM_RETRY, withUpstreamRetry
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
-import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type SessionStatus } from "./session-types.ts";
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
@@ -121,7 +121,7 @@ export class SessionManager {
 			store,
 			groups: () => this.groupSource(),
 			isRunning: (id) => this.isRunning(id),
-			deliver: (id, text, mode) => this.send(id, { text, mode }),
+			deliver: (id, text, mode) => this.send(id, { text, mode, origin: "peer" }),
 			rename: (id, name) => void this.update(id, { name }),
 			abort: (id) => this.abort(id),
 			onRunFinished: (fn) => {
@@ -493,7 +493,7 @@ export class SessionManager {
 
 	async send(
 		id: string,
-		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode },
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin },
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
@@ -532,9 +532,12 @@ export class SessionManager {
 			content.push({ type: "text", text: filesNote(saved) });
 		}
 		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
+		const origin: RunOrigin = input.origin ?? "user";
 
 		if (mode === "steer" || mode === "follow_up") {
 			if (!live.running) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
+			// A person joining a run that another session started makes it a run for the person; a peer never takes it back.
+			if (origin === "user") live.origin = "user";
 			if (mode === "steer") live.agent.steer(message);
 			else live.agent.followUp(message);
 			this.bus.publish(id, "message_queued", { mode, text: input.text });
@@ -546,7 +549,7 @@ export class SessionManager {
 		const shortTitle = autoTitle(inputTitle ?? input.text);
 		if (record.title === "New session" && first) this.update(id, { title: shortTitle });
 		this.describe(id, first ? input.text : undefined, input.text, shortTitle);
-		this.run(id, live, "prompt", async () => {
+		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
 			live.runSystem = undefined;
 			if (this.ext?.has("before_agent_start")) {
@@ -707,7 +710,7 @@ export class SessionManager {
 		}
 		const tail = live.agent.state.messages[live.agent.state.messages.length - 1];
 		if (!tail || tail.role === "assistant" || tail.role === "system") throw conflict("nothing to retry");
-		this.run(id, live, "retry", () => live.agent.continue());
+		this.run(id, live, "retry", "user", () => live.agent.continue());
 	}
 
 	abort(id: string): boolean {
@@ -741,6 +744,7 @@ export class SessionManager {
 				status: "aborted",
 				error: "The run did not stop in time and was forced to stop.",
 				durationMs: Date.now() - live.runStartedAt,
+				origin: live.origin,
 				usage: this.store.usage(id),
 				cause: "force",
 			});
@@ -787,16 +791,22 @@ export class SessionManager {
 
 	// ── Internals ───────────────────────────────────────────────────────────
 
-	private run(id: string, live: Live, mode: string, start: () => Promise<void>): void {
+	/**
+	 * `origin` says who this run is for (see RunOrigin): "peer" when another session's message (or a server report to a
+	 * watcher) started it, "user" otherwise. It is stamped on run_started and run_finished so notifications can be decided
+	 * from the event alone.
+	 */
+	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>): void {
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
+		live.origin = origin;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
 		live.recentCalls = [];
 		live.stopCause = undefined;
 		live.limitReason = undefined;
-		this.bus.publish(id, "run_started", { mode });
+		this.bus.publish(id, "run_started", { mode, origin });
 
 		const settled = (async () => {
 			let error: string | null = null;
@@ -851,6 +861,7 @@ export class SessionManager {
 				status,
 				error,
 				durationMs: Date.now() - live.runStartedAt,
+				origin: live.origin,
 				usage: this.store.usage(id),
 				...(live.stopCause ? { cause: live.stopCause } : {}),
 			});
@@ -953,6 +964,7 @@ export class SessionManager {
 			nextSeq: this.store.nextSeq(record.id),
 			running: false,
 			runStartedAt: 0,
+			origin: "user",
 			lastActive: Date.now(),
 			unsubscribe: () => {},
 			promptKey: promptKey(skills, instructions),

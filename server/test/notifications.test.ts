@@ -48,6 +48,18 @@ describe("notification policy", () => {
     expect((events[1]!.data as any).notification.kind).toBe("user_request");
     expect((events[1]!.data as any).notification.body).toBe("Which file?");
   });
+  test("quietPeers: a peer-started run ends silently, a user run notifies; questions always notify", () => {
+    const db = openDb(":memory:"); const bus = new EventBus(db); let quiet = true;
+    const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined, quietPeers: () => quiet });
+    const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
+    disposals.push(async () => { await service.close(); db.close(); });
+    service.heartbeat("pc", presence("desktop"));
+    bus.publish("s1", "run_finished", { status: "ok", origin: "peer" }); expect(events).toHaveLength(0);
+    bus.publish("s1", "question_requested", { toolCallId: "c", question: "?" }); expect(events).toHaveLength(1);
+    bus.publish("s1", "run_finished", { status: "ok", origin: "user" }); expect(events).toHaveLength(2);
+    bus.publish("s1", "run_finished", { status: "ok" }); expect(events).toHaveLength(3); // older record: a user run
+    quiet = false; bus.publish("s1", "run_finished", { status: "ok", origin: "peer" }); expect(events).toHaveLength(4);
+  });
   test("a muted session raises no notice, built-in or from a rule; others still do", () => {
     const db = openDb(":memory:"); const bus = new EventBus(db); const muted = new Set(["quiet"]);
     const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined, muted: id => muted.has(id) });

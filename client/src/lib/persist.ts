@@ -16,6 +16,7 @@ export const K = {
   sound: "pipaya.sound", // notification sounds on/off
   volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
   escalate: "pipaya.notify.escalate", // per server: pipaya.notify.escalate.<serverId>
+  quietPeers: "pipaya.notify.quietPeers", // per server: pipaya.notify.quietPeers.<serverId>, "false" = also notify about agent-to-agent runs
   favModels: "pipaya.fav.models", // per server: pipaya.fav.models.<serverId>, entries "<provider>\u0000<modelId>"
   favDirs: "pipaya.fav.dirs", // per server: pipaya.fav.dirs.<serverId>, absolute directory paths
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }

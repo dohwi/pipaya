@@ -23,6 +23,16 @@ function setup() {
 const pc = (visible: string[], focused = true, active?: string): DevicePresence => ({ platform: "desktop", focused, enabled: true, visibleSessionIds: visible, activeSessionId: active });
 
 describe("server-side unread marks", () => {
+	test("quietPeers leaves no unread mark after a peer-started run; a user run still does", () => {
+		const db = openDb(":memory:"); const bus = new EventBus(db);
+		const unread = new UnreadTracker(db, bus, () => false, () => true);
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s1', 't', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
+		disposals.push(async () => { unread.dispose(); db.close(); });
+		bus.publish("s1", "run_finished", { status: "ok", error: null, durationMs: 1, usage: {}, origin: "peer" });
+		expect(unread.list()).toEqual([]);
+		bus.publish("s1", "run_finished", { status: "ok", error: null, durationMs: 1, usage: {}, origin: "user" });
+		expect(unread.list()).toEqual([{ sessionId: "s1", kind: "done" }]);
+	});
 	test("a run that finishes while nobody is looking stays unread until a device reads it", () => {
 		const { service, unread, marks, finish } = setup();
 		finish("s1"); finish("s2", "error");

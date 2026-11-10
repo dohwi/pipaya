@@ -13,6 +13,14 @@ Files the user attaches are saved in the working directory and listed in the mes
 export const IDLE_EVICT_MS = 30 * 60_000;
 
 export type PromptMode = "prompt" | "steer" | "follow_up";
+/**
+ * Who a run is for. "peer": started by another session's message (peer send/create) or by a server report to a
+ * watching session, so its result is agent-to-agent traffic. "user": everything else (the person's message, retry,
+ * extension). A person's message joining a running peer run turns it into a "user" run. This is the one criterion
+ * for the "no notifications for peer talk" setting: the origin of the run, not what the run did (a user run that
+ * used peer tools still notifies when it ends).
+ */
+export type RunOrigin = "user" | "peer";
 
 export interface CreateSessionInput {
 	/** Start with notifications off. */
@@ -53,6 +61,8 @@ export interface Live {
 	nextSeq: number;
 	running: boolean;
 	runStartedAt: number;
+	/** Who the current run is for. */
+	origin: RunOrigin;
 	lastActive: number;
 	unsubscribe: () => void;
 	/** Fingerprint of the skills and AGENTS.md files currently written into the system prompt. */

@@ -559,6 +559,20 @@ describe("events", () => {
 		expect(replayed.map((e) => e.id)).toEqual(ids.slice(3));
 	});
 
+	test("run_started/run_finished carry who the run is for (origin): peer message vs user message", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const seen = async (origin?: "peer") => {
+			const sse = collectSse(`/sessions/${id}/events?after=0&types=run_started,run_finished`, (ev) => ev.filter((e: any) => e.type === "run_finished").length >= (origin ? 1 : 2));
+			await app.sessions.send(id, { text: origin ? "from a peer" : "from the user", ...(origin ? { origin } : {}) });
+			await app.sessions.idle();
+			return (await sse) as any[];
+		};
+		const peer = await seen("peer");
+		expect(peer.map((e) => e.data.origin)).toEqual(["peer", "peer"]);
+		const both = await seen();
+		expect(both.slice(-2).map((e) => e.data.origin)).toEqual(["user", "user"]);
+	});
+
 	test("type filter", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const sse = collectSse(`/sessions/${id}/events?types=run_started,run_finished`, (ev) => ev.length >= 2);

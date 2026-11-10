@@ -462,7 +462,7 @@ export const EVENTS: EventDef[] = [
 	{ type: "compaction_failed", persisted: true, description: "A compaction failed or was cancelled; the context is unchanged", data: Type.Object({ aborted: Type.Boolean(), errorMessage: Type.Optional(Type.String()) }) },
 	{ type: "context_updated", persisted: true, description: "The size of what the model will see changed", data: Type.Object({ context: ContextUsage }) },
 	{ type: "run_retrying", persisted: false, description: "The model provider failed for a moment (e.g. 502); the call is retried after delayMs. Live only: cleared by the next message_start or run_finished. `restart` means a reply that had already streamed was dropped and is requested again, so the client discards the partial message it showed", data: Type.Object({ attempt: Type.Integer(), maxRetries: Type.Integer(), delayMs: Type.Integer(), restart: Type.Optional(Type.Boolean()) }) },
-	{ type: "run_started", persisted: true, description: "The agent began working", data: Type.Object({ mode: Type.String() }) },
+	{ type: "run_started", persisted: true, description: "The agent began working. `origin` peer = started by another session's message or a server report to a watcher (absent in older records = user)", data: Type.Object({ mode: Type.String(), origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer")])) }) },
 	{
 		type: "run_finished",
 		persisted: true,
@@ -471,6 +471,7 @@ export const EVENTS: EventDef[] = [
 			status: Type.Union([Type.Literal("ok"), Type.Literal("error"), Type.Literal("aborted")]),
 			error: Nullable(Type.String()),
 			durationMs: Type.Integer(),
+			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent" })),
 			usage: Usage,
 			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
 		}),

@@ -157,6 +157,8 @@ class AppStore {
   /** Minutes an unread PC notification waits before the phone is pushed too (server scope: the server acts on it) */
   get escalateMinutes() { return this.serverPrefs.escalateMinutes; }
   setEscalateMinutes(minutes: number) { this.serverPrefs.setEscalateMinutes(minutes); }
+  get quietPeers() { return this.serverPrefs.quietPeers; }
+  setQuietPeers(on: boolean) { this.serverPrefs.setQuietPeers(on); }
   get favModelList() { return this.serverPrefs.favModelList; }
   isFavModel(provider: string, id: string) { return this.serverPrefs.isFavModel(provider, id); }
   toggleFavModel(provider: string, id: string) { this.serverPrefs.toggleFavModel(provider, id); }
@@ -1094,11 +1096,13 @@ class AppStore {
           this.awaiting[sid] = 0;
           const bad = e.data.status === "error";
           // The unread mark itself comes from the server (`session_unread`), so every device agrees on it.
-          // A stopped run is the user's own doing: no sound
-          if (e.data.status !== "aborted")
+          // A stopped run is the user's own doing: no sound.
+          // A run another session started (origin "peer") is agent-to-agent traffic: silent while "quiet peers" is on.
+          const quiet = e.data.origin === "peer" && this.serverPrefs.quietPeers;
+          if (e.data.status !== "aborted" && !quiet)
             this.prefs.cue(bad ? "failed" : "done");
           // Say it when the user is on another session (a phone shows only one) or on another pane of the group
-          if (sid !== this.activeId && (viewport.narrow || this.isShown(sid)) && e.data.status !== "aborted")
+          if (!quiet && sid !== this.activeId && (viewport.narrow || this.isShown(sid)) && e.data.status !== "aborted")
             this.feedback.announce(sid, bad ? "failed" : "done");
         }
         break;

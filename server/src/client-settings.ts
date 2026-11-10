@@ -40,8 +40,10 @@ const VALIDATORS: Partial<Record<ClientSettingKey, (value: unknown) => string | 
 	notificationPolicy: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "notificationPolicy must be an object";
 		const keys = Object.keys(v);
-		if (keys.some((k) => k !== "escalateMinutes")) return "notificationPolicy only has escalateMinutes";
-		const m = (v as { escalateMinutes?: unknown }).escalateMinutes;
+		if (keys.some((k) => k !== "escalateMinutes" && k !== "quietPeers")) return "notificationPolicy only has escalateMinutes and quietPeers";
+		const { escalateMinutes: m, quietPeers: q } = v as { escalateMinutes?: unknown; quietPeers?: unknown };
+		if (q !== undefined && typeof q !== "boolean") return "quietPeers must be a boolean";
+		if (m === undefined && q !== undefined) return null;
 		return (ESCALATE_MINUTES as readonly unknown[]).includes(m) ? null : `escalateMinutes must be one of ${ESCALATE_MINUTES.join(", ")}`;
 	},
 };
@@ -66,6 +68,15 @@ export class ClientSettings {
 		const v = this.get("notificationPolicy")?.value as { escalateMinutes?: unknown } | undefined;
 		const m = (ESCALATE_MINUTES as readonly unknown[]).includes(v?.escalateMinutes) ? (v!.escalateMinutes as number) : DEFAULT_ESCALATE_MINUTES;
 		return m * 60_000;
+	}
+
+	/**
+	 * "No notifications for agent-to-agent talk" (default ON): runs started by a peer message and their end raise no
+	 * OS / push notification, sound or unread mark. See RunOrigin in session-types.ts for the criterion.
+	 */
+	quietPeers(): boolean {
+		const v = this.get("notificationPolicy")?.value as { quietPeers?: unknown } | undefined;
+		return typeof v?.quietPeers === "boolean" ? v.quietPeers : true;
 	}
 
 	private check(key: string): ClientSettingKey {

@@ -118,8 +118,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		title: (id) => store.get(id)?.title ?? "",
 		lastAnswer: (id) => lastAnswer(store, id),
 		muted: (id) => store.get(id)?.muted ?? false,
+		quietPeers: () => clientSettings.quietPeers(),
 	});
-	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id));
+	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id), () => clientSettings.quietPeers());
 	notifications.onLook = (ids) => unread.read(ids);
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
