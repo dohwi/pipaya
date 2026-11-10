@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
+	import DialogFooter from "./DialogFooter.svelte";
 	import Icon from "./Icon.svelte";
 	import type { Snippet } from "svelte";
 	import { t } from "../lib/i18n";
@@ -86,11 +87,9 @@
 		</div>
 		{@render after?.()}
 	</div>
-	<footer class="pk-foot">
-		{@render footerStart?.()}
-		<span class="grow"></span>
+	<DialogFooter rule compact safe start={footerStart}>
 		<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
-	</footer>
+	</DialogFooter>
 </Modal>
 
 <style>
@@ -149,17 +148,6 @@
 		text-align: center;
 		color: var(--text-faint);
 		font-size: var(--fs-sm);
-	}
-	.pk-foot {
-		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 16px calc(8px + var(--sab));
-		border-top: 1px solid var(--border);
-	}
-	.grow {
-		flex: 1;
 	}
 	@media (max-width: 640px) {
 		.pk-search {

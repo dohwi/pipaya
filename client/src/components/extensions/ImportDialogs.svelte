@@ -6,6 +6,8 @@
 
 <script lang="ts">
 	import Button from "../Button.svelte";
+	import DialogBody from "../DialogBody.svelte";
+	import DialogFooter from "../DialogFooter.svelte";
 	import { t } from "../../lib/i18n";
 	import { featuresOf } from "../../lib/extensions/labels";
 	import { extensions, type InstalledExtension } from "../../lib/extensions/host.svelte";
@@ -75,6 +77,7 @@
 		{#if result}
 			{@const r = result}
 			<div class="rmodal {r.tone}" use:focusOk>
+				<DialogBody gap rule={false}>
 				<div class="rhead">
 					<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
 					<h2 id="import-result-title">{r.title}</h2>
@@ -92,18 +95,20 @@
 					{/if}
 					<p id="import-result-detail" class="rdetail">{r.detail}</p>
 				</div>
-				<div class="rfoot">
+				</DialogBody>
+				<DialogFooter>
 					{#if r.pkg}
 						<Button variant="primary" size="sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</Button>
 						<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
 					{:else}
 						<Button variant="primary" size="sm" data-ok onclick={onclose}>{t("확인")}</Button>
 					{/if}
-				</div>
+				</DialogFooter>
 			</div>
 		{:else if preview}
 			{@const p = preview}
 			<div class="rmodal" use:focusOk>
+				<DialogBody gap rule={false}>
 				<div class="rhead">
 					<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
 					<h2 id="import-preview-title">{replacement ? t("확장 교체") : t("확장 가져오기")}</h2>
@@ -126,10 +131,11 @@
 						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
 					{/if}
 				</div>
-				<div class="rfoot">
+				</DialogBody>
+				<DialogFooter rule wrap>
 					<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
 					<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</Button>
-				</div>
+				</DialogFooter>
 			</div>
 		{/if}
 	</Modal>
@@ -137,7 +143,8 @@
 
 <style>
 	/* above the settings window (z 60/61) it is opened from */
-	.rmodal { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px 16px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
+	/* body and footer on the dialog gutters (DialogBody / DialogFooter); the footer stays put while the body scrolls */
+	.rmodal { display: flex; flex-direction: column; min-height: 0; font-size: var(--fs-md); line-height: 1.5; }
 	.rmark.info { background: var(--accent-soft, var(--bg-hover)); color: var(--accent, var(--text)); }
 	.rdesc { color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.rsub { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
@@ -151,8 +158,7 @@
 	.rpkg { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--bg-code); min-width: 0; }
 	.rpkg strong { font-weight: 600; overflow-wrap: anywhere; }
 	.rdetail { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-	.rfoot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.rfoot :global(.btn) { min-width: 76px; }
+	.rmodal :global(.df .btn) { min-width: 76px; }
 
 	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }

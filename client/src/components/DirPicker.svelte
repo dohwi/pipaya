@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from "./Button.svelte";
+	import DialogFooter from "./DialogFooter.svelte";
 	import FilterChip from "./FilterChip.svelte";
 	import { splitTyped } from "../lib/workdir-path";
 	import { DirBrowser } from "../lib/dir-browser.svelte";
@@ -203,17 +204,18 @@
 		</form>
 	{/if}
 
-	<footer>
-		<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
-		<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing || browser.creating}><Icon name="plus" /> {t("새 폴더")}</Button>
-		<span class="grow"></span>
+	<DialogFooter rule wrap>
+		{#snippet start()}
+			<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
+			<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing || browser.creating}><Icon name="plus" /> {t("새 폴더")}</Button>
+		{/snippet}
 		{#if mode === "default" && current?.saved}
 			<Button variant="ghost" disabled={saving} onclick={async () => (await saveDefault(null)) && onclose()}>{t("처음 설정으로")}</Button>
 		{/if}
 		<Button variant="primary" disabled={!browser.listing || saving} onclick={() => browser.listing && void choose(browser.listing.path)}>
 			{mode === "default" ? t("기본값으로 저장") : t("여기서 시작")}
 		</Button>
-	</footer>
+	</DialogFooter>
 </Modal>
 
 <style>
@@ -361,13 +363,5 @@
 		align-items: center;
 		gap: 8px;
 		cursor: pointer;
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--dlg-gap-sm);
-		padding: var(--dlg-foot-t) var(--dlg-px) var(--dlg-foot-b);
-		border-top: 1px solid var(--border);
 	}
 </style>

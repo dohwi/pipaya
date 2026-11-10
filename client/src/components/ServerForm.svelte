@@ -10,6 +10,7 @@
 	import Modal from "./Modal.svelte";
 	import ModalHeader from "./ModalHeader.svelte";
 	import ConfirmButton from "./ConfirmButton.svelte";
+	import DialogFooter from "./DialogFooter.svelte";
 	import ModelConnections from "./ModelConnections.svelte";
 	import ToolSettings from "./ToolSettings.svelte";
 	import McpSettings from "./McpSettings.svelte";
@@ -215,16 +216,17 @@
 				{#if editing?.local}<section class="set-group"><LocalServerSettings /></section>{/if}
 			</div>
 
-			<footer>
-				{#if editing}
-					<ConfirmButton danger confirmLabel={t("정말 삭제")} onconfirm={remove}>{t("삭제")}</ConfirmButton>
-				{/if}
-				<span class="grow"></span>
+			<DialogFooter safe>
+				{#snippet start()}
+					{#if editing}
+						<ConfirmButton danger confirmLabel={t("정말 삭제")} onconfirm={remove}>{t("삭제")}</ConfirmButton>
+					{/if}
+				{/snippet}
 				<Button variant="ghost" onclick={close}>{t("취소")}</Button>
 				<Button variant="primary" type="submit" disabled={busy}>
 					{#if busy}<span class="spinner"></span>{t("확인 중…")}{:else}{editing ? t("저장") : t("추가")}{/if}
 				</Button>
-			</footer>
+			</DialogFooter>
 		</form>
 	{/if}
 {/snippet}
@@ -269,7 +271,8 @@
 		margin: 0 -4px;
 		padding: 0 4px 8px; /* the settings pane already spaces its title from the content */
 	}
-	.embedded footer {
+	/* in the settings pane the page already has the gutters: no side padding of its own (footer.df outranks DialogFooter's .safe) */
+	.embedded :global(footer.df) {
 		padding: 12px 0 0;
 	}
 	.back {
@@ -396,15 +399,6 @@
 	}
 	.hint {
 		margin: 0;
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: var(--dlg-foot-t) var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab));
-	}
-	.grow {
-		flex: 1;
 	}
 	@media (max-width: 640px) {
 		.body.pane {

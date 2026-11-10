@@ -53,6 +53,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 ### Shared dialog parts (use these, do not re-write the CSS)
 
 - `DialogBody`: the scrolling body of a dialog (`--dlg-px` gutters, body top/bottom, rule under the header). Skills, commands, MCP and the context view (`SessionContext`) all use it.
+- `DialogFooter`: the button row at the bottom of a dialog (`--dlg-px` gutters, `--dlg-foot-t` / `--dlg-foot-b`, `start` slot on the left, actions on the right; `rule`, `safe`, `compact`, `wrap`). Server form, folder picker, pickers, import and extension dialogs use it.
 - `ListItem`: one card row (12px padding, 12px gap): optional leading `Switch`, title line (name + `Badge size="sm"`), body lines (`.meta`, `.desc`), trailing actions. The first row shares one centre line (22px with a switch, 34px with action buttons; actions drop below on a phone). Animate the keyed `<li>` around it (`animate:reflow in:rowIn out:rowOut`).
 - `Notice`: the one boxed message. Flat by default (a tinted fill of its tone, no border). Add `raised` when it stands **on a tinted settings group** (`.set-group`): the fill is then an opaque mix of the tone over `--bg-lift` (one step above `--bg-set`, so the box reads as above the card, not painted on it), with a 1px ring of its own colour and `--shadow-soft`. The ring is a shadow, never a `border`, so the text keeps the flat notice's 12px inset and the box its height.
 - `FormField`: label (20px line) + 8px + control = 68px with a 40px field. `group` for a control that is not one input (`Segmented`).

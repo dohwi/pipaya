@@ -6,6 +6,7 @@
 	import Icon from "../Icon.svelte";
 	import Notice from "../Notice.svelte";
 	import Modal from "../Modal.svelte";
+	import DialogBody from "../DialogBody.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
 	import StatusChip from "../StatusChip.svelte";
@@ -174,12 +175,8 @@
 	$effect(() => { void api; void refreshServer(); });
 </script>
 
-<Modal {onclose} labelledby="market-title" width="1120px" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
-	<div class="market">
-		<div class="mhead">
-			<h2 id="market-title">{t("마켓플레이스")}</h2>
-			<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
-		</div>
+<Modal {onclose} title={t("마켓플레이스")} width="1120px" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
+	<DialogBody gap>
 		<div class="hints">
 			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
 			<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>
@@ -253,7 +250,7 @@
 				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
 			{/each}
 		</ul>
-	</div>
+	</DialogBody>
 </Modal>
 
 {#if removing}
@@ -277,14 +274,11 @@
 {/if}
 
 <style>
-	.market { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px 16px; overflow-y: auto; font-size: var(--fs-md); line-height: 1.5; }
-	.mhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-	.mhead h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 	.hints { display: flex; flex-direction: column; gap: 4px; }
 	.hints .hint { margin: 0; }
 	.hint, .meta { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
-	.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+	.list { font-size: var(--fs-md); line-height: 1.5; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
 	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
@@ -293,7 +287,7 @@
 	.foot .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 4px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.market :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 4px; vertical-align: -2px; stroke-width: 2; }
+	.list :global(.btn svg) { width: 13px; height: 13px; flex: none; margin-right: 4px; vertical-align: -2px; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
 	.acts { display: flex; align-items: center; gap: 4px; flex: none; }
