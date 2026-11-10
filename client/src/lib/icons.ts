@@ -59,7 +59,6 @@ export const ICON_PATHS: Record<IconName, string> = {
 	list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
 	more: "M5 12h.01M12 12h.01M19 12h.01",
 	sidebar: "M4 5h16v14H4zM9.5 5v14",
-	// the same frame with the panel on the right: the right sidebar's toggle
 	download: "M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14",
 	cache: "M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
 	clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",

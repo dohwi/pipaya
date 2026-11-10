@@ -22,7 +22,6 @@ export const en: Record<string, string> = {
 	"저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.": "Saved secret values show as ••••••••. Leave them as they are to keep the stored value.",
 	"다시 연결": "Reconnect",
 	"MCP 서버 추가": "Add MCP server",
-	/* ---- right sidebar (git) ---- */
 	/* ---- app shell ---- */
 	"서버에 연결해 주세요": "Connect to a server first",
 	"사이드바 너비 조절": "Resize sidebar",

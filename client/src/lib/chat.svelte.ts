@@ -131,8 +131,6 @@ export class ChatState {
 	}
 	/** True once the first load finished. */
 	ready = $state(false);
-	/** Bumped when a run ends: what the working directory looks like can have changed (the right sidebar's git panel). */
-	turns = $state(0);
 	loadError = $state("");
 	/** The session no longer exists on the server. */
 	notFound = $state(false);
@@ -541,7 +539,6 @@ export class ChatState {
 			case "run_finished": {
 				this.retrying = null;
 				this.running = false;
-				this.turns++;
 				this.runStartedAt = null;
 				const s = this.streamItem();
 				if (s) s.streaming = false;
