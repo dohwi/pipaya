@@ -340,7 +340,7 @@
 	/** A saved model that no longer works outranks an update: chats, compaction or naming fail until it is fixed. */
 	const problems = $derived(app.problemCount);
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
-	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible || serverUpdater.available ? t("업데이트 있음") : "");
+	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible ? t("업데이트 있음") : serverUpdater.available ? t("서버 업데이트 있음") : "");
 </script>
 
 

@@ -11,6 +11,7 @@
 	import Icon from "../Icon.svelte";
 	import Pin from "../Pin.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
+	import { serverUpdater } from "../../lib/server-update.svelte";
 
 	/**
 	 * The column of sections on the left (a row of tabs on a phone). A section with extensions lists them under it as a
@@ -66,7 +67,9 @@
 		return () => { live = false; };
 	});
 	type Kid = ExtensionRow;
-	const hasUpdate = (id: string) => (id === "srvext" ? extensionUpdates.serverCount(server?.id) : 0) > 0;
+	/** The server's own update lives in "정보": its dot there says where the dot on the server chip leads (only the open server is known). */
+	const serverHasUpdate = $derived(!!server && server.id === app.serverId && serverUpdater.available);
+	const hasUpdate = (id: string) => (id === "info" ? serverHasUpdate : (id === "srvext" ? extensionUpdates.serverCount(server?.id) : 0) > 0);
 	const extsOf = (id: string): Kid[] => {
 		if (id === "mcp") {
 			const rows = mcpSide && mcpSide.id === server?.id ? mcpSide.rows : [];
@@ -127,7 +130,7 @@
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
 				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
-					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
+					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={x.id === "info" ? t("서버 업데이트 있음") : t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
 					</span>

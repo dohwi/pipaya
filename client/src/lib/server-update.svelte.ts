@@ -22,6 +22,8 @@ class ServerUpdater {
 	updatedTo = $state("");
 	phase = $state<Phase>("idle");
 	error = $state("");
+	/** The last update was refused because conversations are running: the screen can offer to stop them and go on. */
+	blockedByRuns = $state(false);
 	/** Update the server whenever the app is updated (the checkbox in the update dialog). */
 	withApp = $state(localStorage.getItem(WITH_APP) !== "0");
 	private checkedFor = "";
@@ -52,6 +54,7 @@ class ServerUpdater {
 		this.updatedTo = "";
 		this.phase = "idle";
 		this.error = "";
+		this.blockedByRuns = false;
 		this.checkedFor = "";
 	}
 
@@ -83,6 +86,7 @@ class ServerUpdater {
 	async apply(api: Api, force = false): Promise<boolean> {
 		if (this.busy || !this.available) return false;
 		this.error = "";
+		this.blockedByRuns = false;
 		this.phase = "updating";
 		this.updatedTo = "";
 		try {
@@ -90,6 +94,7 @@ class ServerUpdater {
 		} catch (e) {
 			this.phase = "error";
 			this.error = failureText(e);
+			this.blockedByRuns = e instanceof ApiError && e.code === "sessions_running";
 			return false;
 		}
 		this.phase = "restarting";
@@ -108,7 +113,7 @@ class ServerUpdater {
 
 function failureText(e: unknown): string {
 	if (e instanceof ApiError) {
-		if (e.code === "sessions_running") return t("실행 중인 대화가 있어 서버를 다시 시작하면 중단됩니다");
+		if (e.code === "sessions_running") return t("실행 중인 대화가 있어 업데이트하지 않았습니다. 대화가 끝난 뒤 다시 누르거나, 중단하고 업데이트하세요");
 		if (e.code === "up_to_date") return t("서버가 이미 최신 버전입니다");
 		if (e.code === "update_failed") return t("서버를 업데이트하지 못해 이전 버전으로 되돌렸습니다");
 		if (e.code === "update_restore_failed") return t("서버를 업데이트하지 못했고 이전 버전도 완전히 복원하지 못했습니다. 서버의 체크아웃을 확인하세요");

@@ -8,6 +8,7 @@
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import UpdateHeader from "./UpdateHeader.svelte";
 	import StatusChip from "./StatusChip.svelte";
+	import ConfirmButton from "./ConfirmButton.svelte";
 
 	/** Only the server the app is connected to can be asked: it is the one `updater.connection` talks to. */
 	const busy = $derived(serverUpdater.busy);
@@ -24,6 +25,8 @@
 	}
 
 	const update = () => app.updateServerSoftware(updater.connection?.().api ?? null);
+	/** Running conversations block the update (the restart would cut them off); this goes ahead anyway, after a second press. */
+	const forceUpdate = () => app.updateServerSoftware(updater.connection?.().api ?? null, true);
 </script>
 
 {#if status || version}
@@ -42,6 +45,9 @@
 			<StatusChip tone="warn">{t("앱보다 오래된 버전입니다")}</StatusChip>
 		{:else if status || release === "current"}
 			<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
+		{/if}
+		{#if isNew && serverUpdater.blockedByRuns && !busy}
+			<ConfirmButton size="sm" confirmLabel={t("정말 중단")} onconfirm={forceUpdate}>{t("중단하고 업데이트")}</ConfirmButton>
 		{/if}
 		{#if isNew}
 			<Button size="sm" variant="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
