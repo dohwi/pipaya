@@ -214,8 +214,9 @@
 	.actions :global(.iconbtn) {
 		margin-inline: -2px;
 	}
+	/* the buttons are IconButton's markup: `:global`, or the compiler drops the rule and Tab never reveals them */
 	.row.user:hover .actions,
-	.actions:has(:focus-visible) {
+	.actions:has(:global(:focus-visible)) {
 		opacity: 1;
 	}
 	@media (pointer: coarse) {

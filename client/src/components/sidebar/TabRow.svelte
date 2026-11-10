@@ -3,6 +3,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { type DropOpts } from "../../lib/dnd.svelte";
 	import { getSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
+	import RowOpen from "./RowOpen.svelte";
 	import RowShell from "./RowShell.svelte";
 
 	/**
@@ -48,7 +49,7 @@
 	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-	<svelte:element this={n.current && sb.rename.is(x.id) ? "div" : "button"} class="open wide" onclick={() => !sb.rename.is(x.id) && app.openIn(n.server.id, { session: x.id })} title={tip}>
+	<RowOpen renaming={n.current && sb.rename.is(x.id)} onopen={() => app.openIn(n.server.id, { session: x.id })} title={tip}>
 		{@render body(pinned)}
-	</svelte:element>
+	</RowOpen>
 </RowShell>
