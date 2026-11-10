@@ -7,11 +7,13 @@
 export interface Toast {
   id: number;
   text: string;
-  tone: "info" | "error" | "ok";
+  tone: "info" | "warn" | "error" | "ok";
   /** The session it is about: shown inside that session's pane while it is on screen, else as a normal strip. */
   sid?: string;
   /** How long it stays, for the ring on its close button. */
   ms: number;
+  /** A link beside the message (e.g. "fix it in Settings"); running it also closes the toast. */
+  action?: { label: string; run: () => void };
 }
 
 /** A strip under the nav saying another session (or another pane of the open group) finished; a tap jumps to it. */
@@ -37,10 +39,10 @@ export class Feedback {
   private noticeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
-  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null) {
+  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
     const id = seq++;
     const ms = tone === "error" ? 6000 : 4000;
-    this.toasts.push({ id, text, tone, ms, ...(sid ? { sid } : {}) });
+    this.toasts.push({ id, text, tone, ms, ...(sid ? { sid } : {}), ...(action ? { action } : {}) });
     this.toastTimers.set(id, setTimeout(() => this.dismissToast(id), ms));
   }
 

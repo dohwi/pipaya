@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-	CONFIG_FAILURES, FAILURE_SUMMARY, FAILURE_TEXT, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
+	CONFIG_FAILURES, FAILURE_TEXT, failureHasFix, failureTone, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
 	micFailure, pickMimeType, serverFailure, voiceState,
 } from "../src/lib/voice";
 
@@ -66,12 +66,15 @@ describe("failures", () => {
 	test("every failure has a sentence", () => {
 		for (const [kind, text] of Object.entries(FAILURE_TEXT)) expect({ kind, empty: !text }).toEqual({ kind, empty: false });
 	});
-	test("every failure has a short chip form, and it is shorter than the sentence", () => {
-		for (const kind of Object.keys(FAILURE_TEXT) as (keyof typeof FAILURE_TEXT)[]) {
-			const short = FAILURE_SUMMARY[kind];
-			expect({ kind, empty: !short }).toEqual({ kind, empty: false });
-			expect({ kind, shorter: short.length < FAILURE_TEXT[kind].length }).toEqual({ kind, shorter: true });
-		}
+	test("severity: nothing heard is a warning, a rejected key or timeout an error, a cancel a note", () => {
+		expect(failureTone("empty")).toBe("warn");
+		expect(failureTone("tooShort")).toBe("warn");
+		for (const kind of ["bad_key", "timeout", "upstream_error", "network", "micDenied"] as const) expect(failureTone(kind)).toBe("error");
+		expect(failureTone("aborted")).toBe("info");
+	});
+	test("settings problems and timeouts offer the way to Settings; the rest do not", () => {
+		for (const kind of [...CONFIG_FAILURES, "timeout"] as const) expect(failureHasFix(kind)).toBe(true);
+		for (const kind of ["empty", "tooShort", "micDenied", "network", "aborted"] as const) expect(failureHasFix(kind)).toBe(false);
 	});
 });
 

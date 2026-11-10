@@ -11,7 +11,7 @@ import { Api, ApiError, type VoiceSettings, type VoiceView } from "./api";
 import { app } from "./store.svelte";
 import { t } from "./i18n";
 import {
-	MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, isConfigFailure, micAvailability, micFailure, pickMimeType,
+	MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType,
 	serverFailure, voiceState, type VoiceFailure, type VoiceState,
 } from "./voice";
 
@@ -172,7 +172,7 @@ class VoiceStore {
 			stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
 		} catch (cause) {
 			const failure = micFailure(cause);
-			this.failure = failure;
+			this.fail(failure);
 			return failure;
 		}
 		const mimeType = pickMimeType((type) => MediaRecorder.isTypeSupported(type));
@@ -275,7 +275,11 @@ class VoiceStore {
 	/** Records a failure: the pill says it, and a settings problem also takes the button away until it is fixed. */
 	fail(failure: VoiceFailure) {
 		this.failure = failure;
-		app.toast(FAILURE_TEXT[failure], failure === "aborted" ? "info" : "error", this.paneId ?? undefined);
+		// severity: nothing heard or too short is a nudge (warn); a rejected key, a timeout, a server error is an error,
+		// and a settings problem carries the way to Settings > Voice
+		const tone = failureTone(failure);
+		const fix = failureHasFix(failure) ? { label: t("설정에서 고치기"), run: () => app.openSettings("voice") } : undefined;
+		app.toast(t(FAILURE_TEXT[failure]), tone, this.paneId ?? undefined, fix);
 		// The server records a settings failure it finds itself (see POST /voice/transcribe), so every device hides the
 		// microphone at once; here the local state follows without a round trip.
 		if (isConfigFailure(failure)) this.tested = { at: Date.now(), ok: false, reason: failure };

@@ -557,6 +557,9 @@
 		}
 	}
 
+	/** This pane's input is the recording surface (recording or transcribing). */
+	const voiceActive = $derived((voice.recording || voice.transcribing) && voice.paneId === (pane.id ?? ""));
+
 	function onDrop(e: DragEvent) {
 		if (!pane.focused) return;
 		e.preventDefault();
@@ -606,11 +609,6 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
-		{#if (voice.recording || voice.transcribing) && voice.paneId === (pane.id ?? "")}
-			<!-- Recording: the whole input of the pane that started it is the recording surface, so the wave and the two
-			     answers have the room. Another pane keeps its own input (its microphone stops the recording). -->
-			<VoiceRecording />
-		{:else}
 		<div class="field-wrap">
 		{#if promptHint}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>{promptHint}</div>
@@ -630,6 +628,7 @@
 			oncompositionstart={() => (composing = true)}
 			oncompositionend={onCompositionEnd}
 			rows="1"
+			readonly={voiceActive}
 			placeholder={promptHint ? "" : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
@@ -638,6 +637,11 @@
 		></textarea>
 </div>
 
+		{#if voiceActive}
+			<!-- Recording or transcribing: only the toolbar's row is swapped, so the box keeps the height it has when idle
+			     (the draft above stays where it is, read-only). Another pane keeps its own toolbar (its microphone stops it). -->
+			<VoiceRecording />
+		{:else}
 		<div class="bar" data-part="composer.bar">
 			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
 			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void attached.add(picked); }} />

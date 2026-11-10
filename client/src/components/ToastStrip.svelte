@@ -14,6 +14,10 @@
 {#each toasts as t (t.id)}
 	<div class="strip {t.tone}" class:compact role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }} animate:reflow>
 		<span class="msg">{t.text}</span>
+		{#if t.action}
+			{@const act = t.action}
+			<button class="act" onclick={() => { act.run(); app.feedback.dismissToast(t.id); }}>{act.label}</button>
+		{/if}
 		<CountdownClose ms={t.ms} onclick={() => app.feedback.dismissToast(t.id)} />
 	</div>
 {/each}
@@ -40,8 +44,23 @@
 	.strip.ok {
 		--tone: var(--ok);
 	}
+	.strip.warn {
+		--tone: var(--warn);
+	}
 	.strip.error {
 		--tone: var(--danger);
+	}
+	.act {
+		flex: none;
+		padding: 4px 8px;
+		border-radius: var(--radius-control);
+		color: var(--text);
+		font-weight: 500;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.act:hover {
+		background: color-mix(in srgb, var(--tone) 16%, transparent);
 	}
 	.msg {
 		flex: 1;

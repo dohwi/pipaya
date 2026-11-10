@@ -1939,8 +1939,8 @@ class AppStore {
     this.insertText = { paneId, text };
   }
 
-  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null) {
-    this.feedback.toast(text, tone, sid);
+  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
+    this.feedback.toast(text, tone, sid, action);
   }
 
   private fail(e: unknown, prefix?: string, sid?: string | null) {
