@@ -22,6 +22,17 @@ describe("server extension helpers", () => {
 		expect(r.fields).toHaveLength(1);
 		expect(r.fields![0]!.key).toBe("greeting");
 	});
+	test("a key this client does not know is dropped and the rest of the form survives", () => {
+		// A server extension can be newer than the app reading it: one unknown key must not hide every setting.
+		const r = serverFields({
+			settings: [
+				{ key: "statusText", type: "string", label: "연결 상태", readonly: true, futureThing: 1 },
+				{ key: "role", type: "string", label: "역할", default: "primary" },
+			],
+		} as never);
+		expect(r.problem).toBeUndefined();
+		expect(r.fields!.map((f) => f.key)).toEqual(["statusText", "role"]);
+	});
 	test("a broken form is reported as text instead of throwing", () => {
 		const r = serverFields({ settings: [{ key: "x", type: "nope", label: "X" }] });
 		expect(r.fields).toBeUndefined();

@@ -234,8 +234,16 @@ function finite(source: Record<string, unknown>, name: string, path: string): nu
 	return value as number;
 }
 
+/**
+ * The keys a settings field may carry. A server extension can be newer than the app reading it, so this list is also
+ * what `serverFields` uses to drop a key it does not know instead of failing the field.
+ */
+export const SETTING_FIELD_KEYS: readonly string[] = Object.freeze([
+	"key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "format", "min", "max", "options",
+]);
+
 function settingField(value: unknown, path: string, keys: Set<string>): SettingField {
-	const source = object(value, path, ["key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "format", "min", "max", "options"]);
+	const source = object(value, path, SETTING_FIELD_KEYS);
 	const key = text(source.key, `${path}.key`, 40);
 	if (!matches(SETTING_KEY, key)) fail(`${path}.key`, "expected a letter followed by letters, digits or underscores (max 40)");
 	if (keys.has(key)) fail(`${path}.key`, `duplicate setting key ${key}`);
