@@ -31,6 +31,13 @@
 		holdRecords = false;
 	}
 
+	// The notice goes away by itself: it is a reminder, the toast already said the whole sentence.
+	$effect(() => {
+		if (!voice.failure) return;
+		const timer = setTimeout(() => voice.clearFailure(), 8000);
+		return () => clearTimeout(timer);
+	});
+
 	async function up() {
 		if (!holding) return;
 		holding = false;
@@ -57,16 +64,19 @@
 {#if voice.visible || voice.failure}
 	<div class="voice">
 		{#if voice.failure}
-			<!-- The toast carries the whole sentence: the chip is a short reminder, so it never crowds the composer. -->
-			<button
-				class="pill error"
+			<!-- The toast carries the whole sentence: the notice is a short reminder, so it never crowds the composer. -->
+			<div
+				class="notice"
 				role="status"
 				title={t(FAILURE_TEXT[voice.failure])}
 				aria-label={`${t(FAILURE_SUMMARY[voice.failure])}. ${t(FAILURE_TEXT[voice.failure])}`}
-				onclick={() => voice.clearFailure()}
 			>
-				<span>{t(FAILURE_SUMMARY[voice.failure])}</span>
-			</button>
+				<Icon name="alert" />
+				<span class="msg">{t(FAILURE_SUMMARY[voice.failure])}</span>
+				<button class="close tap" onclick={() => voice.clearFailure()} title={t("닫기")} aria-label={t("닫기")}>
+					<Icon name="x" />
+				</button>
+			</div>
 		{/if}
 		{#if voice.visible}
 		{#if voice.ready}
@@ -148,28 +158,54 @@
 		color: var(--text-dim);
 		background: var(--bg-hover);
 	}
-	.pill {
+	/* A warning notice beside the microphone: warn tone, icon + short text + a close, 8px between the parts and from the mic */
+	.notice {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		height: 32px;
-		padding: 0 12px;
-		border-radius: 999px;
-		background: var(--bg-active);
-		color: var(--danger);
+		padding: 0 4px 0 12px;
+		margin-right: 4px; /* 4 + the row's 4 gap = 8px from the microphone */
+		border-radius: 16px;
+		background: var(--warn-soft);
+		color: var(--text);
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		white-space: nowrap;
 		min-width: 0;
 		max-width: 320px;
 	}
-	.pill.error span {
+	.notice > :global(svg) {
+		width: 16px;
+		height: 16px;
+		flex: none;
+		color: var(--warn);
+	}
+	.msg {
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	/* a narrow pane keeps the toolbar on one line: the error chip keeps its short word rather than emptying the pill */
+	.close {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		flex: none;
+		border-radius: 50%;
+		color: var(--text-dim);
+	}
+	.close :global(svg) {
+		width: 14px; /* optical: a 14px x in a 24px target reads as the 16px alert beside it */
+		height: 14px;
+	}
+	.close:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	/* a narrow pane keeps the toolbar on one line: the notice keeps its short word rather than emptying */
 	@container (max-width: 480px) {
-		.pill.error {
-			max-width: 152px;
+		.notice {
+			max-width: 176px;
 		}
 	}
 </style>

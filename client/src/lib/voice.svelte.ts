@@ -47,6 +47,10 @@ class VoiceStore {
 	private recorder: MediaRecorder | null = null;
 	private chunks: Blob[] = [];
 	private startedAt = 0;
+	/** The running transcription's controller, so its cancel can stop the request. */
+	private transcribeAbort: AbortController | null = null;
+	/** When the transcription began (performance.now), for the panel's elapsed clock. */
+	transcribeStartedAt = 0;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private stream: MediaStream | null = null;
 	/** The pane the recording belongs to: the text goes back into that composer. */
@@ -230,17 +234,32 @@ class VoiceStore {
 		if (!this.api) return this.fail("network");
 		const paneId = this.paneId;
 		this.transcribing = true;
+		this.transcribeStartedAt = performance.now();
+		const abort = new AbortController();
+		this.transcribeAbort = abort;
+		let timedOut = false;
+		// not AbortSignal.timeout/any: older webviews lack them
+		const limit = setTimeout(() => { timedOut = true; abort.abort(); }, 70_000);
 		try {
-			const text = await this.api.transcribe(blob, this.settings.language, AbortSignal.timeout(70_000));
+			const text = await this.api.transcribe(blob, this.settings.language, abort.signal);
 			if (!text.trim()) return this.fail("empty");
 			// "" is the new-chat composer: the text goes there, and a fresh chat becomes a pane when it is sent.
 			app.insertIntoComposer(paneId ?? "", text.trim());
 		} catch (cause) {
-			const failure = cause instanceof ApiError ? serverFailure(cause.code) : (cause as Error)?.name === "AbortError" ? "aborted" : "network";
+			// the user's own cancel is an answer, not a failure: no chip, no toast
+			if (abort.signal.aborted && !timedOut) return;
+			const failure = timedOut ? "timeout" : cause instanceof ApiError ? serverFailure(cause.code) : (cause as Error)?.name === "AbortError" ? "aborted" : "network";
 			this.fail(failure);
 		} finally {
+			clearTimeout(limit);
+			this.transcribeAbort = null;
 			this.transcribing = false;
 		}
+	}
+
+	/** Gives up on the transcription in flight (the panel's cancel): nothing is inserted. */
+	cancelTranscribe() {
+		this.transcribeAbort?.abort();
 	}
 
 	private releaseStream() {
