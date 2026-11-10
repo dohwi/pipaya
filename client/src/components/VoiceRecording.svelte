@@ -107,7 +107,7 @@
 	{#if voice.recording}
 		<span class="mark"><span class="dot" aria-hidden="true"></span></span>
 		<span class="meta">
-			<span class="label opt">{t("녹음 중")}</span>
+			<span class="label">{t("녹음 중")}</span>
 			<span class="time" aria-label={t("녹음 중 {time}", { time: formatTime(voice.elapsed) })}>{formatTime(voice.elapsed)}</span>
 		</span>
 		<canvas bind:this={canvas} class="wave" aria-hidden="true"></canvas>
@@ -117,7 +117,7 @@
 	{:else if voice.transcribing}
 		<span class="mark"><span class="spinner" aria-hidden="true"></span></span>
 		<span class="meta">
-			<span class="label" role="status" aria-live="polite">{t("변환 중…")}</span>
+			<span class="label" role="status" aria-live="polite">{t("변환 중")}<span class="ellipsis" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span>
 			<span class="time" aria-hidden="true">{formatTime(waited)}</span>
 		</span>
 		<span class="ghost" aria-hidden="true"></span>
@@ -148,11 +148,36 @@
 		flex: none;
 	}
 	.label {
+		flex: none;
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		font-weight: 500;
 		color: var(--text);
 		white-space: nowrap;
+	}
+	/* the three dots of "Transcribing…" pulse one after the other, so the word itself never gets cut by an ellipsis */
+	.ellipsis i {
+		font-style: normal;
+		animation: blink 1.2s infinite both;
+	}
+	.ellipsis i:nth-child(2) {
+		animation-delay: 0.2s;
+	}
+	.ellipsis i:nth-child(3) {
+		animation-delay: 0.4s;
+	}
+	@keyframes pulse {
+		50% {
+			opacity: 0.35;
+		}
+	}
+	@keyframes blink {
+		0%, 80%, 100% {
+			opacity: 0.2;
+		}
+		30% {
+			opacity: 1;
+		}
 	}
 	.time {
 		font-size: var(--fs-sm);
@@ -160,16 +185,6 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--text-dim);
 		min-width: 32px; /* "0:04" never changes width, and "10:00" does not push the wave */
-	}
-	/* a phone's row is full: the dot and the clock say "recording", the word goes (it stays for screen readers) */
-	@container (max-width: 480px) {
-		.label.opt {
-			position: absolute;
-			width: 1px;
-			height: 1px;
-			overflow: hidden;
-			clip-path: inset(50%);
-		}
 	}
 	/* the row arrives with a short fade and rise, so the swap from the toolbar is not a cut */
 	.rec-row {
@@ -190,6 +205,7 @@
 		flex: none;
 	}
 	.dot {
+		animation: pulse 1.6s ease-in-out infinite;
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
@@ -209,7 +225,7 @@
 	   The wave takes the room the row leaves. */
 	.wave {
 		flex: 1;
-		min-width: 0;
+		min-width: 64px; /* the wave always has room to read, even at 360px */
 		height: 38px;
 		margin-right: 4px; /* the wave ends 4px before the finish button, the 8px gap + this = 12px of air */
 		/* calm: the wave is the room's ink, red stays on the dot (the one "live" signal) */
@@ -270,6 +286,8 @@
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.spinner,
+		.dot,
+		.ellipsis i,
 		.ghost,
 		.rec-row {
 			animation: none;

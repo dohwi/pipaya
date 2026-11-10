@@ -609,7 +609,7 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
-		<div class="field-wrap" class:calm={voiceActive}>
+		<div class="field-wrap" class:calm={voiceActive && !!text}>
 		{#if promptHint && !voiceActive}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>{promptHint}</div>
 		{/if}
@@ -629,7 +629,7 @@
 			oncompositionend={onCompositionEnd}
 			rows="1"
 			readonly={voiceActive}
-			placeholder={promptHint || voiceActive ? "" : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			placeholder={promptHint ? "" : voice.recording && voiceActive ? t("말씀하세요… 끝나면 ✓를 누르세요") : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
 			autocapitalize="sentences"
@@ -774,7 +774,7 @@
 		color: var(--text-faint);
 	}
 	/* mirror and textarea share one cell; the mirror (same metrics, trailing newline) is in flow and sets the height */
-	/* recording or transcribing: the draft above is only context, so it steps back (the placeholder is gone) */
+	/* recording or transcribing: a draft above is only context, so it steps back; an empty line says what is happening instead */
 	.field-wrap {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
