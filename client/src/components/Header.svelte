@@ -114,6 +114,17 @@
 		</ExtensionPart>
 
 		<NavbarItems />
+		<!-- The right sidebar's toggle: the left one's twin, at the other end of the bar -->
+		<button
+			class="tool right"
+			class:on={app.right.open}
+			onclick={() => app.right.toggle()}
+			aria-label={t("우측 사이드바 열기")}
+			aria-pressed={app.right.open}
+			title={t("우측 사이드바 열기")}
+		>
+			<Icon name="sidebar-right" />
+		</button>
 		<ExtensionMount slot="header.end" />
 
 	</div>
@@ -236,6 +247,16 @@
 	.menu {
 		display: none;
 	}
+	/* The right sidebar's toggle: always there, and lit while the panel is open. Measured, not guessed: the capsule pads
+	   12px on the right, so the 40px button bleeds -8px and its 19px glyph (10.5px in, its ink a further 2.4px) ends
+	   16.9px from the window, exactly where the left menu button's ink starts. At 32px the inset is 6.5px, so -4px. */
+	.right {
+		margin-right: -8px;
+	}
+	.right.on {
+		color: var(--text);
+		background: var(--bg-hover);
+	}
 	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */
 		.capsule { padding-right: 12px; }
@@ -246,6 +267,11 @@
 		.capsule { padding-left: 4px; }
 		.menu {
 			display: grid;
+		}
+		/* the drawer's own button is in the sidebar; the right one opens a sheet, so it stays */
+		.right {
+			width: 32px;
+			margin-right: -4px; /* the 32px box holds the glyph 6.5px in: the ink still ends 16.9px from the window */
 		}
 	}
 	@media (max-width: 640px) {
