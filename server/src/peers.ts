@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { conflict, notFound } from "./errors.ts";
-import { groupHandle, mentioned, nextMemberName, sameName } from "./member-names.ts";
+import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
 
@@ -217,7 +217,7 @@ export class PeerService {
 	/** Lower-cased names a session must not take: the active sessions' and the tags of the groups. */
 	taken(): Set<string> {
 		const taken = this.host.store.activeNames();
-		for (const g of this.host.groups()) taken.add(groupHandle(g.name).toLowerCase());
+		for (const g of this.host.groups()) taken.add(nameKey(groupHandle(g.name)));
 		return taken;
 	}
 
@@ -228,7 +228,7 @@ export class PeerService {
 
 	/** The name a session takes back when reopened: its own, unless another session has it by now (or it never had one). */
 	resumedName(r: SessionRecord): string {
-		return r.name && !this.taken().has(r.name.toLowerCase()) ? r.name : nextMemberName(this.taken());
+		return r.name && !this.taken().has(nameKey(r.name)) ? r.name : nextMemberName(this.taken());
 	}
 
 	// ── addressing ──────────────────────────────────────────────────────────
@@ -376,9 +376,9 @@ export class PeerService {
 			case "rename": {
 				const to = (a.newName ?? "").replace(/^@/, "");
 				if (!NAME_RE.test(to)) throw conflict("the new name must be 1-30 letters, digits, - or _");
-				if (to.toLowerCase() !== peer.name.toLowerCase() && this.taken().has(to.toLowerCase())) throw conflict(`@${to} is already taken by a session or a group`);
-				this.host.rename(peer.id, to);
-				return `Renamed @${peer.name} to @${to}.`;
+				if (!sameName(to, peer.name) && this.taken().has(nameKey(to))) throw conflict(`@${to} is already taken by a session or a group`);
+				this.host.rename(peer.id, koreanName(to));
+				return `Renamed @${peer.name} to @${koreanName(to)}.`;
 			}
 			case "set": {
 				const patch: SessionPatch = {};
@@ -459,7 +459,7 @@ export class PeerService {
 		const handles = groups.map((g) => groupHandle(g.name)).filter(Boolean);
 		// A token that is both a session name and a group handle belongs to the session.
 		const named = mentioned(text, names);
-		const tagged = mentioned(text, handles).filter((h) => !named.some((n) => n.toLowerCase() === h.toLowerCase()));
+		const tagged = mentioned(text, handles).filter((h) => !named.some((n) => sameName(n, h)));
 		const found = tagged.map((h) => {
 			const g = groups.find((x) => groupHandle(x.name) === h)!;
 			return { handle: h, members: g.sessionIds.filter((sid) => sid !== selfId).flatMap((sid) => { const b = this.brief(sid); return b ? [b] : []; }) };

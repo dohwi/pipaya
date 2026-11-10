@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, koreanName, MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentioned, nameInLang, nextMemberName, romanize } from "../src/member-names.ts";
+import { groupHandle, koreanName, nameKey, sameName, MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentioned, nameInLang, nextMemberName, romanize } from "../src/member-names.ts";
 
 describe("member names", () => {
 	test("romanizes Hangul syllable by syllable and keeps anything else", () => {
@@ -48,5 +48,22 @@ describe("member names", () => {
 		expect(memberAt("MINA", ["mina"])).toBe("mina");
 		expect(mentioned("hi @mina and @bo, @mina again, @nobody", ["mina", "bo"])).toEqual(["mina", "bo"]);
 		expect(mentioned("mail me@mina.com", ["mina"])).toEqual([]); // not at a word start
+	});
+
+	test("a name and its romanized twin are one name, whichever language wrote it", () => {
+		expect(nameKey("철수")).toBe(nameKey("Cheolsu"));
+		expect(nameKey("철수2")).toBe(nameKey("cheolsu2"));
+		expect(nameKey("철수")).not.toBe(nameKey("철수2"));
+		expect(sameName("Mina", "미나")).toBe(true);
+		expect(sameName("미나", "가온")).toBe(false);
+		expect(sameName("builder-1", "Builder-1")).toBe(true);
+	});
+
+	test("@mentions in either script point at the same stored name", () => {
+		expect(memberAt("Mina", ["미나", "가온"])).toBe("미나");
+		expect(memberAt("미나랑", ["미나"])).toBe("미나");
+		expect(memberAt("mina2", ["미나", "미나2"])).toBe("미나2");
+		expect(memberAt("Minah", ["미나"])).toBeNull(); // still not cut out of a longer ASCII word
+		expect(mentioned("hi @Cheolsu and @가온, @철수 again", ["철수", "가온"])).toEqual(["철수", "가온"]);
 	});
 });

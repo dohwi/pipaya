@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
+import { nameInLang } from "../src/member-names.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 describe("peer sessions: names, peer / peer read and @mentions", () => {
@@ -95,6 +96,29 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect([before[a]!, before[b]!, await nameOf(d)]).not.toContain(after);
 		// a name is stored once, in Korean: the UI language only changes how it is written (see member-names.test.ts)
 		expect(await nameOf(a)).toMatch(/^[가-힣]+\d*$/);
+	});
+
+	test("a romanized spelling of a taken name is taken too, and addresses the same session", async () => {
+		const [a, b, boss] = [await mk(), await mk(), await mk()];
+		const ko = await nameOf(a); // always Korean
+		const en = nameInLang(ko, "en");
+		expect(en).not.toBe(ko);
+		// renaming b to the English spelling of a's name is a collision
+		const bName = await nameOf(b);
+		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: bName, newName: en })}` });
+		await idle(boss);
+		expect(await nameOf(b)).toBe(bName); // refused: unchanged
+		// a group cannot take the English spelling either
+		const g = (await api("POST", "/groups", { name: en, layout: split(pane(a), pane(b)) })).json;
+		expect(g.name.toLowerCase()).not.toBe(en.toLowerCase());
+		// peer(action=send) by the English spelling reaches a
+		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: en, message: "hi by romaji" })}` });
+		await idle(boss); await Bun.sleep(100); await idle(a);
+		expect(await said(a)).toContain("hi by romaji");
+		// a rename to an English spelling is stored in Korean
+		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: bName, newName: "Cheolsu99" })}` });
+		await idle(boss);
+		expect(await nameOf(b)).toBe("철수99");
 	});
 
 	test("a group cannot take a session's name", async () => {

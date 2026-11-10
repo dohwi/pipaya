@@ -20,4 +20,29 @@ describe("migrations", () => {
 		const db = openDb(":memory:");
 		expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: MIGRATIONS.length });
 	});
+
+	test("a pair like Cheolsu / 철수 among the active sessions is split: the oldest keeps the name, closed ones are left alone", () => {
+		const db = openDb(":memory:");
+		const add = db.query("INSERT INTO sessions (id, title, name, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES ($id, 't', $name, '/', 'p', 'm', 'off', '', '[]', $closed, $at, $at)");
+		add.run({ id: "a", name: "Cheolsu", closed: 0, at: 1 });
+		add.run({ id: "b", name: "철수", closed: 0, at: 2 });
+		add.run({ id: "c", name: "Mina", closed: 0, at: 3 });
+		add.run({ id: "d", name: "미나", closed: 0, at: 4 });
+		add.run({ id: "e", name: "철수", closed: 1, at: 5 }); // closed: gave its name up, stays as it is
+		add.run({ id: "f", name: "가온", closed: 0, at: 6 });
+		for (let i = MIGRATIONS.length - 2; i < MIGRATIONS.length; i++) { // the last two steps: Korean names, then pairs
+			const step = MIGRATIONS[i]!;
+			if (typeof step !== "string") step(db);
+		}
+		const names = Object.fromEntries((db.query("SELECT id, name FROM sessions").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]));
+		expect(names.a).toBe("철수");
+		expect(names.c).toBe("미나"); // keeps its name: only the duplicates (b, d) move
+		expect(names.e).toBe("철수");
+		expect(names.f).toBe("가온");
+		expect(names.b).not.toBe("철수");
+		expect(names.d).not.toBe("미나");
+		const active = ["a", "b", "c", "d", "f"].map((id) => names[id]!);
+		expect(new Set(active).size).toBe(5); // no two active sessions share a name any more
+		expect(db.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 6 }); // nothing deleted
+	});
 });

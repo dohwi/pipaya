@@ -1,5 +1,5 @@
 import { mapRows } from "./json-column.ts";
-import { groupHandle } from "./member-names.ts";
+import { groupHandle, nameKey } from "./member-names.ts";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import Type, { type Static } from "typebox";
@@ -200,10 +200,10 @@ export class GroupManager {
 	/** `name`, or `name 2`, `name 3`, ... when its tag (the name with dashes, any case) is already a group's or a session's @name. */
 	private uniqueName(name: string, exceptId?: string): string {
 		const taken = new Set(this.sessionNames());
-		for (const g of this.list()) if (g.id !== exceptId) taken.add(groupHandle(g.name).toLowerCase());
+		for (const g of this.list()) if (g.id !== exceptId) taken.add(nameKey(groupHandle(g.name)));
 		for (let n = 1; ; n++) {
 			const cand = n === 1 ? name : `${name} ${n}`;
-			if (!taken.has(groupHandle(cand).toLowerCase())) return cand;
+			if (!taken.has(nameKey(groupHandle(cand)))) return cand;
 		}
 	}
 

@@ -11,6 +11,8 @@ import type { ContextSnapshot } from "./context.ts";
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
+import { nameKey } from "./member-names.ts";
+
 export interface SessionRecord {
 	id: string;
 	title: string;
@@ -147,9 +149,9 @@ export class SessionStore {
 		return rows.map(toRecord);
 	}
 
-	/** Lower-cased names of the active sessions (closed ones give theirs up). */
+	/** `nameKey`s of the active sessions' names (closed ones give theirs up): 철수 and Cheolsu are one key. */
 	activeNames(): Set<string> {
-		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => r.name.toLowerCase()));
+		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
 	}
 
 	/** `watcher` wants a report about `target` (its end, its questions). */

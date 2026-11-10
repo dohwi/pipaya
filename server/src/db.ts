@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { groupHandle, koreanName, nextMemberName } from "./member-names.ts";
+import { groupHandle, koreanName, nameKey, nextMemberName } from "./member-names.ts";
 
 /** SQLite has no `ADD COLUMN IF NOT EXISTS`, and a database stepped back and reopened runs a migration again: these make a step safe to repeat. */
 const columns = (db: Database, table: string): string[] => (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
@@ -214,6 +214,24 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		for (const r of db.query("SELECT id, name FROM sessions WHERE name != ''").all() as { id: string; name: string }[]) {
 			const name = koreanName(r.name);
 			if (name !== r.name) set.run({ id: r.id, name });
+		}
+	},
+	// v31: 철수 and Cheolsu are one name. Databases that switched language a few times hold both at once among the active
+	// sessions (and v30 turns such a pair into two 철수). The oldest session keeps the name; each later one takes the next
+	// free name. Only the name column of an active session changes: closed sessions give theirs up anyway, nothing is deleted.
+	(db) => {
+		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => nameKey(groupHandle(g.name))));
+		const dupes: string[] = [];
+		for (const s of db.query("SELECT id, name FROM sessions WHERE closed = 0 AND name != '' ORDER BY created_at, id").all() as { id: string; name: string }[]) {
+			if (taken.has(nameKey(s.name))) dupes.push(s.id); // a later holder of a name already in use
+			else taken.add(nameKey(s.name));
+		}
+		// only the duplicates move, and only after every kept name is reserved, so nobody else's name is taken from them
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const id of dupes) {
+			const name = nextMemberName(taken);
+			taken.add(nameKey(name));
+			set.run({ id, name });
 		}
 	},
 ];

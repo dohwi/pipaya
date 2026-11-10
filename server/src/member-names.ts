@@ -72,27 +72,33 @@ export function nameInLang(name: string, lang?: string): string {
 }
 
 /**
- * Whether a name someone wrote means this session: the stored name itself, or the form an English UI shows
- * (Minsu = 민수), so a model that read `@Minsu` off the screen can address it.
+ * The key two names are compared by: the Korean form, lower-cased. 철수, Cheolsu and cheolsu2-less variants all map to one
+ * key, so a language never makes two sessions look different (or lets two sessions share a name). Taken-name sets,
+ * lookups, renames and `@mentions` all go through this.
  */
-export function sameName(a: string, b: string): boolean {
-	const x = a.toLowerCase();
-	const y = b.toLowerCase();
-	return x === y || nameInLang(a, "en").toLowerCase() === nameInLang(b, "en").toLowerCase();
-}
+export const nameKey = (name: string): string => koreanName(name).toLowerCase();
+
+/** Whether two written names mean the same session: either one's stored form or the form an English UI shows (민수 = Minsu). */
+export const sameName = (a: string, b: string): boolean => nameKey(a) === nameKey(b);
 
 /** What a group is called in a message: its name with whitespace turned into "-" so the tag stays one token. */
 export const groupHandle = (name: string): string => name.trim().replace(/\s+/g, "-");
 
-/** The member a `@name` token starts with: the longest known name, not cut out of a longer ASCII word (Korean particles may follow: @미나랑). */
+/**
+ * The member a `@name` token starts with, written in either language (@미나, @Mina): the longest known name, not cut out of
+ * a longer ASCII word (Korean particles may follow: @미나랑). Returns the name as it is in `names`.
+ */
 export function memberAt(token: string, names: readonly string[]): string | null {
 	const low = token.toLowerCase();
 	let best: string | null = null;
+	let bestLen = 0;
 	for (const n of names) {
-		const l = n.toLowerCase();
-		if (!low.startsWith(l) || (best && n.length <= best.length)) continue;
-		if (/[a-z0-9_-]$/.test(l) && /^[a-z0-9_-]/.test(low.slice(l.length))) continue;
-		best = n;
+		for (const written of new Set([n.toLowerCase(), nameInLang(n, "ko").toLowerCase(), nameInLang(n, "en").toLowerCase()])) {
+			if (!low.startsWith(written) || written.length <= bestLen) continue;
+			if (/[a-z0-9_-]$/.test(written) && /^[a-z0-9_-]/.test(low.slice(written.length))) continue;
+			best = n;
+			bestLen = written.length;
+		}
 	}
 	return best;
 }
