@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isAbs, isWinAbs, sepOf, trimSep, absoluteWorkdir, breadcrumbs, cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab, commonPrefix, expandHome, filterDirs, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
+import { isAbs, isWinAbs, sepOf, trimSep, absoluteWorkdir, breadcrumbs, cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab, commonPrefix, expandHome, filterDirs, relativeToRoot, splitTyped, tabComplete, typedMatches } from "../src/lib/workdir-path";
 
 const ctx = { root: "/home/u/workspace", home: "/home/u" };
 
@@ -159,5 +159,20 @@ describe("Windows paths", () => {
 	test("tabComplete uses the path's separator", () => {
 		expect(tabComplete("C:\\Users", ["alice"], undefined)).toEqual({ text: "C:\\Users\\alice\\", whole: true });
 		expect(tabComplete("C:\\", ["Users"], undefined).text).toBe("C:\\Users\\");
+	});
+});
+
+describe("relativeToRoot", () => {
+	test("a folder under the root is relative, the root itself is '.', anything else is kept", () => {
+		expect(relativeToRoot("/w/proj/a", "/w")).toBe("proj/a");
+		expect(relativeToRoot("/w", "/w")).toBe(".");
+		expect(relativeToRoot("/other", "/w")).toBe("/other");
+		expect(relativeToRoot("/wx/a", "/w")).toBe("/wx/a");
+		expect(relativeToRoot("/w/a", null)).toBe("/w/a");
+	});
+	test("Windows roots match either slash and any letter case", () => {
+		expect(relativeToRoot("c:/Work/Proj", "C:\\work\\")).toBe("Proj");
+		expect(relativeToRoot("C:\\work", "C:\\work")).toBe(".");
+		expect(relativeToRoot("D:\\x", "C:\\work")).toBe("D:\\x");
 	});
 });

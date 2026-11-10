@@ -147,3 +147,19 @@ export function cdTab(target: CdHint | null, names: readonly string[], arrowed: 
 	const pre = commonPrefix([...names]);
 	return pre.length > target.filter.length ? { do: "text", text: `${target.prefix}${pre}` } : { do: "row" };
 }
+
+/** `/home/x/workspace/proj/a` -> `proj/a` under the server's workspace `root`; the root itself is ".", anything else is kept. */
+export function relativeToRoot(cwd: string, root: string | null | undefined): string {
+	if (!root) return cwd;
+	if (isWinAbs(root)) {
+		// Windows: either slash, any letter case; the result uses "/" like every relative workdir
+		const r = trimSep(root).replace(/\\/g, "/").toLowerCase();
+		const c = trimSep(cwd).replace(/\\/g, "/");
+		if (c.toLowerCase() === r) return ".";
+		if (c.toLowerCase().startsWith(`${r}/`)) return c.slice(r.length + 1);
+		return cwd;
+	}
+	if (cwd === root) return ".";
+	if (cwd.startsWith(`${root}/`)) return cwd.slice(root.length + 1);
+	return cwd;
+}

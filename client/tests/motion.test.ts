@@ -213,8 +213,8 @@ describe("modals mounted by their parent animate", () => {
 			expect(s, f).not.toContain("<dialog");
 		}
 		// the buttons only settle the request; the {#if} on the request closes the modal, so Esc and code paths animate too
-		expect(read("components/extensions/ExtensionApproval.svelte")).toContain("{#if app.extensionApproval}");
-		expect(read("components/extensions/ExtensionDialog.svelte")).toContain("{#if app.extensionDialog}");
+		expect(read("components/extensions/ExtensionApproval.svelte")).toContain("{#if app.extensionRequests.approval}");
+		expect(read("components/extensions/ExtensionDialog.svelte")).toContain("{#if app.extensionRequests.dialog}");
 	});
 	test("every component that is a bare modal root (no {#if} of its own) uses |global", () => {
 		// DirPicker: the modal sits at the top level of the file, outside any block

@@ -181,7 +181,7 @@
 			},
 			panes: paneAdapter(app),
 			workspace: workspaceAdapter(app, { names: () => COMMANDS.map(c => c.name), run: (name, arg) => runCommand(name, arg) }),
-			dialog: request => app.askExtension(request),
+			dialog: request => app.extensionRequests.ask(request),
 			dark: () => app.prefs.resolvedDark,
 			reservedCommands: () => COMMANDS.map(c => c.name),
 			connection: () => app.conn,
@@ -189,7 +189,7 @@
 			deviceId: () => notifications.id,
 			listChanged: () => app.listChanged(),
 			statesChanged: () => app.statesChanged(),
-			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.confirmExtension(message) },
+			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.extensionRequests.confirm(message) },
 		});
 		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); };
 	});

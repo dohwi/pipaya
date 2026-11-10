@@ -11,23 +11,23 @@
    * The shared Modal gives it the scrim, the layering, Esc / back / scrim
    * dismissal (each settles the request as "no") and the exit motion; the request going away closes it, whoever settled it.
    */
-  const deny = () => app.resolveExtension(false);
+  const deny = () => app.extensionRequests.approve(false);
   /** The last message, so the text stays on screen while the exit plays after the request was settled. */
   let last = $state("");
   $effect(() => {
-    if (app.extensionApproval) last = app.extensionApproval.message;
+    if (app.extensionRequests.approval) last = app.extensionRequests.approval.message;
   });
 </script>
 
-{#if app.extensionApproval}
+{#if app.extensionRequests.approval}
   <Modal onclose={deny} title={`pipaya · ${t("확장 설정 접근 승인")}`} width="l" layer={5} portal>
     <DialogBody gap>
       <p class="lead">{t("확장 요청입니다. 승인한 범위만 앱에서 수행합니다.")}</p>
-      <pre class="message">{app.extensionApproval?.message ?? last}</pre>
+      <pre class="message">{app.extensionRequests.approval?.message ?? last}</pre>
     </DialogBody>
     <DialogFooter rule safe>
       <Button onclick={deny}>{t("취소")}</Button>
-      <Button variant="primary" onclick={() => app.resolveExtension(true)}>{t("승인하고 진행")}</Button>
+      <Button variant="primary" onclick={() => app.extensionRequests.approve(true)}>{t("승인하고 진행")}</Button>
     </DialogFooter>
   </Modal>
 {/if}

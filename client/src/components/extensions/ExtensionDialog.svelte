@@ -10,28 +10,28 @@
    * `ui.confirm` / `ui.select` / `ui.input` from an extension. The shared Modal gives it the scrim, the layering, Esc / back /
    * scrim dismissal (each cancels) and the exit motion; the request going away closes it, whoever settled it.
    */
-  type Pending = NonNullable<typeof app.extensionDialog>;
+  type Pending = NonNullable<typeof app.extensionRequests.dialog>;
   /** The last request, so the text stays on screen while the exit plays after the request was settled. */
   let last = $state<Pending | null>(null);
   let typed = $state("");
   let picked = $state("");
 
   $effect(() => {
-    const pending = app.extensionDialog;
+    const pending = app.extensionRequests.dialog;
     if (!pending || pending === last) return;
     last = pending;
     typed = pending.request.kind === "input" ? (pending.request.value ?? "") : "";
     picked = pending.request.kind === "select" ? (pending.request.options[0]?.value ?? "") : "";
   });
 
-  const cancel = () => app.resolveExtensionDialog(app.extensionDialog?.request.kind === "confirm" ? false : null);
+  const cancel = () => app.extensionRequests.answer(app.extensionRequests.dialog?.request.kind === "confirm" ? false : null);
   function ok() {
-    const r = app.extensionDialog?.request;
+    const r = app.extensionRequests.dialog?.request;
     if (!r) return;
-    app.resolveExtensionDialog(r.kind === "confirm" ? true : r.kind === "select" ? picked : typed);
+    app.extensionRequests.answer(r.kind === "confirm" ? true : r.kind === "select" ? picked : typed);
   }
   function enter(event: KeyboardEvent) {
-    const r = app.extensionDialog?.request;
+    const r = app.extensionRequests.dialog?.request;
     if (event.key === "Enter" && !event.isComposing && (r?.kind !== "input" || !r.multiline || event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       ok();
@@ -41,8 +41,8 @@
   const focusFirst = (node: HTMLElement, first: boolean) => { if (first) autofocus(node); };
 </script>
 
-{#if app.extensionDialog}
-  {@const r = (app.extensionDialog ?? last)!.request}
+{#if app.extensionRequests.dialog}
+  {@const r = (app.extensionRequests.dialog ?? last)!.request}
   <Modal onclose={cancel} title={r.title} sub={r.ownerName} width="l" layer={5} portal>
     <DialogBody gap>
       {#if r.message}<pre class="message">{r.message}</pre>{/if}

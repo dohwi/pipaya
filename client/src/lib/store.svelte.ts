@@ -7,12 +7,14 @@ import {
   normalizeUrl,
   verifyServer,
 } from "./api";
-import { expandHome, isAbs, isWinAbs, sepOf, trimSep } from "./workdir-path";
+import { expandHome, isAbs, isWinAbs, relativeToRoot, sepOf, trimSep } from "./workdir-path";
 import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
 import { ChatState } from "./chat.svelte";
+import { ExtensionRequests } from "./extension-requests.svelte";
+import { mergeServers, replaceServers } from "./configuration-servers";
 
 /** How many off-screen transcripts stay loaded so switching back to them is instant. */
 const KEEP_CHATS = 8;
@@ -30,7 +32,8 @@ import { deviceIdentity, notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { ServerExtensionStore } from "./extensions/server-store";
 import { PairingError, redeemPairing, type PairingLink } from "./pairing";
-import { getLang, LocalizedError, onLangChange, remotePack, remotePackVersions, setRemotePacks, t } from "./i18n";
+import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
+import { fetchLocalePacks } from "./locale-sync";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
@@ -1196,22 +1199,9 @@ class AppStore {
     const api = this.api;
     if (!api) return;
     try {
-      const list = await api.locales();
-      if (api !== this.api) return;
-      const have = remotePackVersions();
-      const packs = await Promise.all(
-        list.map(async (info) => {
-          const cached = remotePack(info.tag);
-          if (cached && have[info.tag] === info.updatedAt) return cached;
-          try {
-            return await api.locale(info.tag);
-          } catch {
-            return cached; // keep what we have
-          }
-        }),
-      );
-      if (api !== this.api) return;
-      setRemotePacks(packs.filter((p) => p !== undefined));
+      const packs = await fetchLocalePacks(api);
+      if (api !== this.api) return; // switched servers meanwhile: these packs are not the open one's
+      setRemotePacks(packs);
     } catch {
       /* offline: keep the cached packs */
     }
@@ -1248,20 +1238,7 @@ class AppStore {
 
   /** `/home/x/workspace/proj/a` -> `proj/a`; the root itself is ".". */
   relPath(cwd: string): string {
-    const root = this.workspace?.root;
-    if (root) {
-      if (isWinAbs(root)) {
-        // Windows: either slash, any letter case; the result uses "/" like every relative workdir
-        const r = trimSep(root).replace(/\\/g, "/").toLowerCase();
-        const c = trimSep(cwd).replace(/\\/g, "/");
-        if (c.toLowerCase() === r) return ".";
-        if (c.toLowerCase().startsWith(`${r}/`)) return c.slice(r.length + 1);
-        return cwd;
-      }
-      if (cwd === root) return ".";
-      if (cwd.startsWith(`${root}/`)) return cwd.slice(root.length + 1);
-    }
-    return cwd;
+    return relativeToRoot(cwd, this.workspace?.root);
   }
 
   /** Human label for a `workdir` value: the server default, a sub-folder of it, or an absolute path. */
@@ -2097,18 +2074,8 @@ class AppStore {
     } catch { /* unreachable: nothing to show */ }
   }
 
-  /** Modal question asked by an extension (`sdk.dialog`). One at a time; a second request waits its turn. */
-  extensionDialog = $state<{ request: import("./extensions/host.svelte").ExtensionDialogRequest; resolve(value: unknown): void } | null>(null);
-  private dialogQueue: Promise<unknown> = Promise.resolve();
-  askExtension(request: import("./extensions/host.svelte").ExtensionDialogRequest): Promise<unknown> {
-    const run = () => new Promise<unknown>(resolve => { this.extensionDialog = { request, resolve }; });
-    const next = this.dialogQueue.then(run, run);
-    this.dialogQueue = next.catch(() => {});
-    return next;
-  }
-  resolveExtensionDialog(value: unknown) {
-    const pending = this.extensionDialog; this.extensionDialog = null; pending?.resolve(value);
-  }
+  /** Questions and settings approvals asked by extensions (`sdk.dialog`, configuration changes), one at a time. */
+  readonly extensionRequests = new ExtensionRequests();
 
   /** Queue manager dialog: the session whose queued messages are listed. null = closed. */
   queueDialog = $state<string | null>(null);
@@ -2626,14 +2593,6 @@ class AppStore {
 
   /* ---------- generic extension configuration capability ---------- */
 
-  extensionApproval = $state<{ message: string; resolve(value: boolean): void } | null>(null);
-  confirmExtension(message: string): Promise<boolean> {
-    if (this.extensionApproval) return Promise.resolve(false);
-    return new Promise(resolve => { this.extensionApproval = { message, resolve }; });
-  }
-  resolveExtension(approved: boolean) {
-    const pending = this.extensionApproval; this.extensionApproval = null; pending?.resolve(approved);
-  }
   captureConfiguration(): Pick<ConfigurationDocument, "servers" | "preferences" | "keybindings"> {
     return {
       servers: this.servers.map(s => ({ name: s.name, baseUrl: s.baseUrl })),
@@ -2646,36 +2605,29 @@ class AppStore {
   }
   applyConfiguration(document: ConfigurationDocument) {
     const checked = parseConfiguration(document);
-    for (const server of checked.servers) {
-      const existing = this.servers.find(s => normalizeUrl(s.baseUrl) === server.baseUrl);
-      if (existing) existing.name = server.name;
-      else this.servers.push({ ...server, id: uid(), token: "" });
-    }
-    localStorage.setItem(K.servers, JSON.stringify(this.servers));
+    mergeServers(this.servers, checked.servers);
+    this.saveServers();
     this.prefs.apply(checked.preferences);
     this.prefs.mergeBindings(checked.keybindings);
   }
   applyBackgroundConfiguration(document: ConfigurationDocument) {
     const checked = parseConfiguration(document);
-    const servers = checked.servers.map(s => {
-      const old = this.servers.find(x => normalizeUrl(x.baseUrl) === s.baseUrl);
-      return { ...s, id: old?.id ?? uid(), token: old?.token ?? "" };
-    });
+    this.replaceServerList(replaceServers(this.servers, checked.servers));
+    this.prefs.apply(checked.preferences);
+  }
+  /** A new server list from a document or a backup: save it, reconnect, and close the open server if it is gone. */
+  private replaceServerList(servers: Server[]) {
     this.servers = servers;
-    localStorage.setItem(K.servers, JSON.stringify(servers));
+    this.saveServers();
     this.syncLinks();
     if (this.serverId && !servers.some(s => s.id === this.serverId)) this.closeServer();
-    this.prefs.apply(checked.preferences);
   }
   restoreConfiguration(value: unknown) {
     const raw = value as { servers: Server[]; preferences: ConfigurationDocument["preferences"]; bindings?: Record<string, string> };
     if (!raw || !Array.isArray(raw.servers)) throw new LocalizedError(t("잘못된 앱 백업"));
     const checked = parseConfiguration({ schemaVersion: 1, servers: raw.servers.map(s => ({ name: s.name, baseUrl: s.baseUrl })), extensions: [], preferences: raw.preferences });
     if (raw.servers.some(s => typeof s.id !== "string" || typeof s.token !== "string")) throw new LocalizedError(t("잘못된 서버 백업"));
-    this.servers = raw.servers.map((s, i) => ({ ...checked.servers[i]!, id: s.id, token: s.token }));
-    localStorage.setItem(K.servers, JSON.stringify(this.servers));
-    this.syncLinks();
-    if (this.serverId && !this.servers.some(s => s.id === this.serverId)) this.closeServer();
+    this.replaceServerList(raw.servers.map((s, i) => ({ ...checked.servers[i]!, id: s.id, token: s.token })));
     this.prefs.apply(checked.preferences);
     // A backup taken before shortcuts were part of it has none: leave the current ones.
     if (raw.bindings && typeof raw.bindings === "object") {

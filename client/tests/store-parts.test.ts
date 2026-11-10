@@ -7,6 +7,8 @@ import ts from "typescript";
 import type * as FeedbackModule from "../src/lib/feedback.svelte";
 import type * as SidebarModule from "../src/lib/sidebar.svelte";
 import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
+import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
+import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
 let Feedback: typeof FeedbackModule.Feedback;
@@ -14,6 +16,7 @@ let NOTICE_MAX: number;
 let reorder: typeof SidebarModule.reorder;
 let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
+let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -39,6 +42,7 @@ beforeAll(async () => {
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };
 	({ reorder, SidebarState } = await loadRunes("sidebar"));
 	({ ServerPrefs } = await loadRunes("server-prefs"));
+	({ ExtensionRequests } = await loadRunes("extension-requests"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -233,5 +237,53 @@ describe("server preferences", () => {
 		expect(prefs.favDirs).toEqual([]);
 		prefs.toggleFavDir("/b"); // no server in view: kept in memory only
 		expect(store.get("pipaya.fav.dirs.s")).toBe(JSON.stringify(["/a"]));
+	});
+});
+
+describe("extension requests", () => {
+	const req = (title: string) => ({ owner: "x", ownerName: "X", kind: "confirm" as const, title });
+	test("questions wait their turn: the second shows once the first is answered", async () => {
+		const r = new ExtensionRequests();
+		const first = r.ask(req("one"));
+		const second = r.ask(req("two"));
+		await Promise.resolve();
+		expect(r.dialog?.request.title).toBe("one");
+		r.answer(true);
+		expect(await first).toBe(true);
+		await new Promise((f) => setTimeout(f, 0));
+		expect(r.dialog?.request.title).toBe("two");
+		r.answer(false);
+		expect(await second).toBe(false);
+		expect(r.dialog).toBeNull();
+	});
+	test("a second approval while one is open is refused, not queued", async () => {
+		const r = new ExtensionRequests();
+		const first = r.confirm("a");
+		expect(await r.confirm("b")).toBe(false);
+		expect(r.approval?.message).toBe("a");
+		r.approve(true);
+		expect(await first).toBe(true);
+		expect(r.approval).toBeNull();
+	});
+});
+
+describe("configuration servers", () => {
+	const held = () => [
+		{ id: "1", name: "home", baseUrl: "http://a:8787", token: "t1" },
+		{ id: "2", name: "work", baseUrl: "http://b:8787", token: "t2" },
+	];
+	test("merge renames known addresses in place, adds new ones without a token, removes nothing", () => {
+		const list = held();
+		const first = list[0];
+		mergeServers(list, [{ name: "Home", baseUrl: "http://a:8787" }, { name: "new", baseUrl: "http://c:8787" }]);
+		expect(list[0]).toBe(first!);
+		expect(list.map((s) => [s.name, s.token])).toEqual([["Home", "t1"], ["work", "t2"], ["new", ""]]);
+	});
+	test("replace keeps the document's list and order, ids and tokens of servers already held", () => {
+		const out = replaceServers(held(), [{ name: "w", baseUrl: "http://b:8787" }, { name: "n", baseUrl: "http://c:8787" }]);
+		expect(out.map((s) => s.name)).toEqual(["w", "n"]);
+		expect(out[0]).toMatchObject({ id: "2", token: "t2" });
+		expect(out[1]!.token).toBe("");
+		expect(out[1]!.id).not.toBe("2");
 	});
 });
