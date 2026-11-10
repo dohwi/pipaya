@@ -3,7 +3,7 @@
 	import Notice from "../Notice.svelte";
 	import SettingRow from "../SettingRow.svelte";
 	import Switch from "../Switch.svelte";
-	import { t } from "../../lib/i18n";
+	import { t, getLang } from "../../lib/i18n";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";
 	import type { VoiceSettings } from "../../lib/api";
@@ -12,6 +12,9 @@
 	 * Settings > Voice. The connection lives on the server (so every device shares it) and the key is written once and
 	 * never read back. The microphone button in the composer appears only when voice input is on and the connection test
 	 * passed; this page is where the user turns it on, fixes it and tests it.
+	 *
+	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, path,
+	 * model, language, key), then check it. The status block at the bottom only reports; nothing to fill in there.
 	 */
 	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
 	let key = $state("");
@@ -29,6 +32,12 @@
 
 	/** The old microphone extension, if it is installed: two microphones with two settings would confuse anyone. */
 	const oldExtension = $derived(extensions.installed.find((e) => e.package.manifest.id === "voice-input") ?? null);
+
+	/** Nothing set up yet: the placeholders then carry the whole example, so the first visit says what to type. */
+	const firstRun = $derived(!voice.settings.baseUrl && !voice.settings.model && !voice.hasKey);
+
+	/** The language the UI is in, as the hint a person most likely wants ("ko" for Korean). Only a placeholder, never a value. */
+	const uiLang = $derived(getLang().slice(0, 2));
 
 	const dirty = $derived(
 		keyTouched ||
@@ -82,22 +91,21 @@
 
 <section class="set-group">
 	<div class="section-label">{t("변환 서버")}</div>
+	<span class="hint">{t("위에서부터 채웁니다: 주소 · 모델 · API 키만 있으면 되고, 경로와 언어는 비워 두어도 됩니다. 다 채운 뒤 연결을 확인하세요.")}</span>
 	<label class="row">
 		<span>{t("서버 주소")}</span>
-		<input class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.openai.com" bind:value={draft.baseUrl} aria-label={t("변환 서버 주소")} />
+		<input class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder={firstRun ? "https://api.openai.com" : t("예: https://api.openai.com")} bind:value={draft.baseUrl} aria-label={t("변환 서버 주소")} />
 	</label>
 	<span class="hint">{t("OpenAI 호환이면 됩니다. 주소만 쓰고 경로는 아래에 따로 넣습니다.")}</span>
 	<label class="row">
-		<span>{t("변환 경로")}</span>
-		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={t("비우면 {path}", { path: "/v1/audio/transcriptions" })} bind:value={draft.path} aria-label={t("변환 경로")} />
-	</label>
-	<label class="row">
 		<span>{t("모델")}</span>
-		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder="whisper-1" bind:value={draft.model} aria-label={t("변환 모델")} />
-	</label>
-	<label class="row">
-		<span>{t("언어 (선택)")}</span>
-		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder="ko" bind:value={draft.language} aria-label={t("변환 언어")} />
+		<input class="field" type="text" autocomplete="off" spellcheck="false" list="voice-models" placeholder={firstRun ? "whisper-1" : t("비우면 서버 기본 모델")} bind:value={draft.model} aria-label={t("변환 모델")} />
+		<datalist id="voice-models">
+			<option value="whisper-1"></option>
+			<option value="gpt-4o-transcribe"></option>
+			<option value="gpt-transcribe"></option>
+			<option value="voxtral-mini-transcribe-3-0"></option>
+		</datalist>
 	</label>
 	<label class="row">
 		<span>{t("API 키")}</span>
@@ -113,6 +121,16 @@
 		/>
 	</label>
 	<span class="hint">{t("키는 서버에만 저장되고 다시 표시되지 않습니다. 비우고 저장하면 키를 지웁니다.")}</span>
+	<label class="row">
+		<span>{t("변환 경로 (선택)")}</span>
+		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={t("비우면 {path}", { path: "/v1/audio/transcriptions" })} bind:value={draft.path} aria-label={t("변환 경로")} />
+	</label>
+	<span class="hint">{t("게이트웨이가 변환을 다른 경로에 두었을 때만 넣습니다.")}</span>
+	<label class="row">
+		<span>{t("언어 (선택)")}</span>
+		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={uiLang} bind:value={draft.language} aria-label={t("변환 언어")} />
+	</label>
+	<span class="hint">{t("비우면 서버가 알아서 판단합니다. 두 글자 언어 코드를 넣으면 인식이 안정됩니다.")}</span>
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
 		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
