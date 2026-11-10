@@ -49,6 +49,7 @@
 </script>
 
 <aside class="right" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
+	<!-- The left sidebar's brand row, mirrored: the title where the wordmark is, the fold button at the far end. -->
 	<div class="head">
 		<span class="title">{t("변경 사항")}</span>
 		{#if folder}<span class="folder mono" title={app.current?.cwd}>{folder}</span>{/if}
@@ -61,7 +62,7 @@
 			disabled={gitPanel.loading}
 			onclick={() => void gitPanel.load()}
 		/>
-		<IconButton icon="x" size="sm" label={t("우측 사이드바 닫기")} tip onclick={() => app.right.toggle()} />
+		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기")} class="toggle" onclick={() => app.right.toggle()} />
 	</div>
 
 	<div class="body">
@@ -156,8 +157,12 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 45px; /* the header's bar (44 + its hairline): the two tops read as one line */
-		padding: 0 16px;
+		/* the same box as the main header (44px + its 1px hairline), so the two lines meet across the panel's edge */
+		box-sizing: content-box;
+		height: 44px;
+		/* 16px on the left like the rows below; on the right the 38px fold button's 19px glyph ends 14.5px from the window,
+		   the exact spot the header's own toggle has when the panel is shut (5px + the button's 9.5px inset) */
+		padding: 0 5px 0 16px;
 		border-bottom: 1px solid var(--border);
 	}
 	.title {
@@ -176,12 +181,13 @@
 		line-height: 20px;
 		color: var(--text-faint);
 	}
-	/* the two buttons sit on the panel's right line: a 32px button holds a 16px glyph 8px in */
 	.head :global(.refresh) {
 		margin-left: auto;
+		flex: none;
 	}
-	.head :global(.iconbtn:last-child) {
-		margin-right: -8px; /* the close glyph on the panel's 16px right line: a 32px button holds a 16px glyph 8px in */
+	/* a 38px button in the 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
+	.head :global(.toggle:focus-visible) {
+		outline-offset: -2px;
 	}
 	.body {
 		flex: 1;

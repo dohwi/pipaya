@@ -114,17 +114,13 @@
 		</ExtensionPart>
 
 		<NavbarItems />
-		<!-- The right sidebar's toggle: the left one's twin, at the other end of the bar -->
-		<button
-			class="tool right"
-			class:on={app.right.open}
-			onclick={() => app.right.toggle()}
-			aria-label={t("우측 사이드바 열기")}
-			aria-pressed={app.right.open}
-			title={t("우측 사이드바 열기")}
-		>
-			<Icon name="sidebar-right" />
-		</button>
+		<!-- The right sidebar's toggle, shown while it is shut. Open, it lives in the panel's own header row (the way the left
+		     sidebar's fold button lives in its brand row) at the very same screen position, so it never jumps. -->
+		{#if !app.right.open}
+			<button class="tool right" onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기")}>
+				<Icon name="sidebar-right" />
+			</button>
+		{/if}
 		<ExtensionMount slot="header.end" />
 
 	</div>
@@ -247,15 +243,11 @@
 	.menu {
 		display: none;
 	}
-	/* The right sidebar's toggle: always there, and lit while the panel is open. Measured, not guessed: the capsule pads
+	/* The right sidebar's toggle (only while it is shut). Measured, not guessed: the capsule pads
 	   12px on the right, so the 40px button bleeds -8px and its 19px glyph (10.5px in, its ink a further 2.4px) ends
 	   16.9px from the window, exactly where the left menu button's ink starts. At 32px the inset is 6.5px, so -4px. */
 	.right {
 		margin-right: -8px;
-	}
-	.right.on {
-		color: var(--text);
-		background: var(--bg-hover);
 	}
 	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */
