@@ -393,7 +393,7 @@
 	{@const upd = clientUpdate(entry)}
 	{@const needServer = extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
 	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
-		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="meta">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
+		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="facts">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
 		{#snippet control()}
 			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all)}{/if}
 			<Switch
@@ -502,8 +502,8 @@
 					{/snippet}
 					{#snippet control()}{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)] || !!tasks.busy.$all)}{/if}{/snippet}
 					{#snippet meta()}
-						{#if upd && ext.version}{@render updateMeta(ext.version, upd)}{:else if ext.version}<span class="meta">v{ext.version}</span>{/if}
-						<span class="meta">{t("서버에서 실행")}</span>
+						{#if upd && ext.version}{@render updateMeta(ext.version, upd)}{:else if ext.version}<span class="facts">v{ext.version}</span>{/if}
+						<span class="facts">{t("서버에서 실행")}</span>
 						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
 					{/snippet}
 				</ExtensionRow>
@@ -543,8 +543,7 @@
 	.feedback:not(:has(*)) { position: absolute; }
 	h3,
 	p { margin: 0; }
-	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
-	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
+	.hint { overflow-wrap: anywhere; }
 	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
 	.extensions :global(.btn.update) { flex: none; }
 	/* a missing half: the same amber bar as the notices above, with the action on the right */
@@ -558,7 +557,7 @@
 	.switch-title :global(svg) { width: 17px; height: 17px; stroke-width: 1.9; }
 	.switch-title :global(svg) { color: var(--text-dim); }
 
-	.extensions :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
+	.extensions :global(.btn.sm) { height: auto; min-height: var(--control-h-sm); padding: 4px 12px; white-space: normal; }
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }

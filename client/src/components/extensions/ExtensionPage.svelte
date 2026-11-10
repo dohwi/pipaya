@@ -49,7 +49,7 @@
 				<h4 class="ename">{name}</h4>
 				{#if meta}{@render meta()}{/if}
 			</span>
-			<span class="meta">{sub}</span>
+			<span class="facts">{sub}</span>
 		</div>
 		<div class="actions">
 			{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
@@ -74,7 +74,6 @@
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 4px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
-	.meta { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; font-family: var(--mono); }
 	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
 	.back:hover { color: var(--text); }
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */

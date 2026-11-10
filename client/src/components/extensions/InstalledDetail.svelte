@@ -84,7 +84,7 @@
 </script>
 
 <ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
-	{#snippet meta()}<span class="meta">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
+	{#snippet meta()}<span class="facts">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 	{#snippet control()}
 		<Switch
 			checked={on}
@@ -133,7 +133,7 @@
 			<label class="settings-label" for="extension-settings-{id}">{t("설정 JSON 객체")}</label>
 			<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={tasks.busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>
 			<p class="hint">{t("JSON 객체만 저장할 수 있습니다 (최대 16KB). 켜져 있는 확장은 다시 불러와 적용하고, 꺼져 있으면 다음에 켤 때 적용합니다.")}</p>
-			<div class="row">
+			<div class="btn-row">
 				<Button size="sm" disabled={tasks.busy[id] || entry.state === "starting"} onclick={() => onsave()}>{saveLabel}</Button>
 			</div>
 		{/if}
@@ -141,7 +141,7 @@
 
 	<section class="block set-group">
 		<h3 class="section-label">{t("관리")}</h3>
-		<div class="row">
+		<div class="btn-row">
 			{#if src.runs}<Button size="sm" disabled={extensions.safeMode || tasks.busy[id] || entry.state !== "active"} onclick={onreload}>{t("다시 불러오기")}</Button>{/if}
 			<Button size="sm" disabled={tasks.busy[id]} onclick={onexport}>{t("내보내기")}</Button>
 			<Button variant="danger" size="sm" class="end" disabled={tasks.busy[id]} aria-expanded={tasks.removing === id} onclick={onaskremove}>{t("삭제")}</Button>
@@ -153,20 +153,12 @@
 </ExtensionPage>
 
 <style>
-	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
-	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
+	.hint { overflow-wrap: anywhere; }
 	p { margin: 0; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.block { gap: 8px; }
-	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.settings-label { font-size: var(--fs-xs); font-weight: 550; }
 	textarea { display: block; width: 100%; box-sizing: border-box; min-height: 110px; resize: vertical; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
 	textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-	.row :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
-	.row :global(.btn.end) { margin-left: auto; }
-	@media (max-width: 640px) {
-		.row > :global(.btn) { flex: 1 1 auto; }
-		.row :global(.btn.end) { margin-left: 0; }
-	}
 </style>

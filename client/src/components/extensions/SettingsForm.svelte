@@ -112,7 +112,7 @@
 			{/if}
 		</div>
 	{/each}
-	<div class="row">
+	<div class="btn-row">
 		<Button size="sm" type="submit" disabled={disabled || !resolved.ok}>{saveLabel}</Button>
 		{#if !resolved.ok}<span class="hint" role="status">{t("입력값을 확인하세요.")}</span>{/if}
 	</div>
@@ -126,7 +126,7 @@
 		<textarea id={fieldId("$json")} rows="6" spellcheck="false" value={jsonText} {disabled} aria-invalid={jsonProblem ? "true" : undefined} aria-describedby={jsonProblem ? `${fieldId("$json")}-error` : undefined} oninput={(event) => { jsonDraft = event.currentTarget.value; }}></textarea>
 		{#if jsonProblem}<p class="hint danger" id="{fieldId("$json")}-error">{jsonProblem}</p>{/if}
 		<p class="hint">{t("같은 스키마로 검증하며, 선언되지 않은 키는 저장되지 않습니다 (최대 16KB).")}</p>
-		<div class="row">
+		<div class="btn-row">
 			<Button size="sm" disabled={disabled || jsonDraft === null || !!jsonProblem} onclick={saveJson}>{t("JSON 저장")}</Button>
 		</div>
 	</div>
@@ -136,7 +136,6 @@
 <style>
 	.settings, .field-row, .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.settings { gap: 12px; }
-	.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
 	.hint { margin: 0; overflow-wrap: anywhere; }
@@ -159,10 +158,6 @@
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
 	input:disabled, textarea:disabled { opacity: 0.6; }
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-	.settings :global(.btn.sm), .advanced :global(.btn.sm) { height: auto; min-height: 34px; padding: 4px 12px; white-space: normal; }
 	.advanced { margin-top: 4px; }
 	.body { gap: 8px; }
-	@media (max-width: 640px) {
-		.row > :global(.btn) { flex: 1 1 auto; }
-	}
 </style>

@@ -86,7 +86,7 @@
 					{#if r.pkg}
 						<div class="rpkg">
 							<strong>{r.pkg.manifest.name}</strong>
-							<span class="meta">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
+							<span class="facts">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
 							<div class="tags">
 								{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
 								<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("비활성")}</span>
@@ -116,7 +116,7 @@
 				<div class="rbody">
 					<div class="rpkg">
 						<strong>{p.manifest.name}</strong>
-						<span class="meta">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
+						<span class="facts">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
 						{#if p.manifest.description}<span class="rdesc">{p.manifest.description}</span>{/if}
 						<div class="tags" aria-label={t("포함 기능")}>
 							{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
@@ -160,7 +160,6 @@
 	.rdetail { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.rmodal :global(.df .btn) { min-width: 76px; }
 
-	.meta, .hint { font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
-	.meta { font-family: var(--mono); font-size: var(--fs-2xs); }
+	.hint { overflow-wrap: anywhere; }
 	.tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>

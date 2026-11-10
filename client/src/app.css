@@ -783,6 +783,39 @@ kbd {
 .hint.danger {
 	color: var(--danger);
 }
+/* A small mono line of facts about a thing (an id, a version, "runs on the server"): the extension screens used to copy
+   these two rules into every file. Long ids break anywhere instead of widening the card. */
+.facts {
+	font-family: var(--mono);
+	font-size: var(--fs-2xs);
+	color: var(--text-faint);
+	overflow-wrap: anywhere;
+}
+/* A row of small action buttons under a section: they wrap on a narrow pane, a long translated label wraps inside its
+   button instead of overflowing it, `.end` goes to the far right, and on a phone every button takes an equal share. */
+.btn-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.btn-row > .btn.sm {
+	height: auto;
+	min-height: var(--control-h-sm);
+	padding: 4px 12px;
+	white-space: normal;
+}
+.btn-row > .btn.end {
+	margin-left: auto;
+}
+@media (max-width: 640px) {
+	.btn-row > .btn {
+		flex: 1 1 auto;
+	}
+	.btn-row > .btn.end {
+		margin-left: 0;
+	}
+}
 .eyebrow {
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);
