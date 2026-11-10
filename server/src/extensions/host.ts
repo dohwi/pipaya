@@ -9,6 +9,7 @@ import { CATALOG_ID_PATTERN, MAX_EXTENSION_ID_LENGTH } from "../extension-settin
 import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import { RETIRED_EXTENSIONS } from "./retired.ts";
+import { markExtensionImports } from "./loader.ts";
 import type {
 	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
@@ -202,7 +203,10 @@ export class ExtensionHost {
 	async load(): Promise<ExtensionInfo[]> {
 		await this.unloadAll();
 		const v = ++this.version;
-		for (const { name, entry, meta } of this.discover()) {
+		const entries = this.discover();
+		// A reload must pick up the whole folder, not just the entry file (see loader.ts).
+		markExtensionImports(entries.map((e) => e.entry), v);
+		for (const { name, entry, meta } of entries) {
 			if (RETIRED_EXTENSIONS.has(name.split("/")[0]!)) { this.log(`extension ${name} is built into the server now; not loading it (you can delete it)`); continue; }
 			const ext = this.blank(name, entry);
 			Object.assign(ext, meta);

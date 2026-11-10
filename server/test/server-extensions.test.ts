@@ -79,6 +79,43 @@ afterAll(async () => {
 	rmSync(dir, { recursive: true, force: true });
 });
 
+describe("server extension reload", () => {
+	const folder = () => join(dir, "extensions", "multi");
+	const value = async () => (await api("POST", "/server-extensions/multi/methods/value")).json.result;
+	const write = (dep: string, entry = `import { V } from "./dep.js";\nexport default (pi) => { pi.registerMethod("value", () => V); };`) => {
+		mkdirSync(folder(), { recursive: true });
+		writeFileSync(join(folder(), "dep.js"), dep);
+		writeFileSync(join(folder(), "index.js"), entry);
+	};
+
+	test("a reload picks up an imported file, not just the entry", async () => {
+		write('export const V = "one";');
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		expect(await value()).toBe("one");
+		// Same entry, different import: without busting the import's cache the old dep.js keeps answering.
+		write('export const V = "two";');
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		expect(await value()).toBe("two");
+	});
+
+	test("an entry that imports a name its old dependency lacks loads cleanly", async () => {
+		// This is how the bug showed up in practice: the new index.js exported nothing the old dep.js had.
+		write('export const OLD = 1;', 'import { NEW } from "./dep.js";\nexport default (pi) => { pi.registerMethod("value", () => NEW); };');
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		const multi = (await api("GET", "/server-extensions")).json.extensions.find((e: any) => e.name === "multi");
+		expect(multi.error).toContain("NEW");
+		write('export const NEW = "fixed";', 'import { NEW } from "./dep.js";\nexport default (pi) => { pi.registerMethod("value", () => NEW); };');
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		expect(await value()).toBe("fixed");
+	});
+
+	test("a reload still leaves the server's own modules alone", async () => {
+		// The plugin only marks imports made from inside an extension folder; the server keeps one copy of its modules.
+		expect((await api("POST", "/server-extensions/reload")).status).toBe(200);
+		expect((await api("GET", "/server-extensions")).json.extensions.find((e: any) => e.name === "demo").error).toBeUndefined();
+	});
+});
+
 describe("server extension removal", () => {
 	const names = async () => ((await api("GET", "/server-extensions")).json.extensions as any[]).map((e) => e.name);
 	test("DELETE removes an installed folder, optionally keeping its settings", async () => {
