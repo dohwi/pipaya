@@ -5,6 +5,7 @@
 <script lang="ts">
 	import IconButton from "./IconButton.svelte";
 	import Button from "./Button.svelte";
+	import DialogFooter from "./DialogFooter.svelte";
 	import { t } from "../lib/i18n";
 	import { collapseIn, collapseOut } from "../lib/motion";
 	import { sheetPull } from "../lib/sheet";
@@ -292,127 +293,74 @@
 		{/if}
 {/snippet}
 
-{#if form}
-	{#if embedded}
-		<form class="fform" onsubmit={submit}>
-			{#if !embedded}
-				<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
-					{#if editing !== null}
-						{@const r = form.rows[editing]}
-						<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
-						<div class="ftitle">
-							<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
-							<span class="fsub">{t("모델 설정")}</span>
-						</div>
-					{:else}
-						<div class="ftitle">
-							<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
-							{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
-						</div>
-					{/if}
-					<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
-				</header>
-			{/if}
-
-			<div class="fbody">
+{#snippet editor(form: Form)}
+	<form class="fform" onsubmit={submit}>
+		{#if !embedded}
+			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
 				{#if editing !== null}
 					{@const r = form.rows[editing]}
-					{#if r}
-						<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
-					{/if}
+					<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
+					<div class="ftitle">
+						<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
+						<span class="fsub">{t("모델 설정")}</span>
+					</div>
 				{:else}
-					<ConnectionFields {form} onname={onName} />
-					<ModelList
-						{form}
-						connection={api()?.connection}
-						{busy}
-						{discovering}
-						note={discoverNote}
-						{catalogLoaded}
-						{matchedOf}
-						onopen={openModel}
-						onadd={addModel}
-						ondiscover={discover}
-						onremove={removeAt}
-						onprune={pruneMissing}
-					/>
+					<div class="ftitle">
+						<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
+						{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
+					</div>
 				{/if}
-			</div>
+				<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
+			</header>
+		{/if}
 
-			<footer>
+		<div class="fbody">
+			{#if editing !== null}
+				{@const r = form.rows[editing]}
+				{#if r}
+					<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
+				{/if}
+			{:else}
+				<ConnectionFields {form} onname={onName} />
+				<ModelList
+					{form}
+					connection={api()?.connection}
+					{busy}
+					{discovering}
+					note={discoverNote}
+					{catalogLoaded}
+					{matchedOf}
+					onopen={openModel}
+					onadd={addModel}
+					ondiscover={discover}
+					onremove={removeAt}
+					onprune={pruneMissing}
+				/>
+			{/if}
+		</div>
+
+		<DialogFooter rule safe wrap>
+			{#snippet above()}
 				{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
-				<div class="fbtns">
-					{#if editing !== null}
-						<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
-					{:else}
-						<Button variant="ghost" onclick={() => close()} disabled={busy}>{t("취소")}</Button>
-						<Button variant="primary" type="submit" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</Button>
-					{/if}
-				</div>
-			</footer>
-		</form>
-		{@render pickers(form)}
+			{/snippet}
+			{#if editing !== null}
+				<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
+			{:else}
+				<Button variant="ghost" onclick={() => close()} disabled={busy}>{t("취소")}</Button>
+				<Button variant="primary" type="submit" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</Button>
+			{/if}
+		</DialogFooter>
+	</form>
+	{@render pickers(form)}
+{/snippet}
+
+{#if form}
+	{#if embedded}
+		{@render editor(form)}
 	{:else}
 		<!-- nested inside another (transformed) modal, so lifted to <body> to stay fixed to the viewport -->
 		<Modal onclose={() => close()} onescape={escape} dismissible={!busy} label={form.isNew ? t("연결 추가") : t("연결 수정")} width="l" maxHeight="760px" layer={4} portal>
-			<form class="fform" onsubmit={submit}>
-				{#if !embedded}
-					<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
-						{#if editing !== null}
-							{@const r = form.rows[editing]}
-							<IconButton icon="chevron-left" label={t("연결로 돌아가기")} class="back" onclick={closeModel} />
-							<div class="ftitle">
-								<h3>{r?.name.trim() || r?.id.trim() || t("새 모델")}</h3>
-								<span class="fsub">{t("모델 설정")}</span>
-							</div>
-						{:else}
-							<div class="ftitle">
-								<h3>{form.isNew ? t("연결 추가") : t("연결 수정")}</h3>
-								{#if !form.isNew}<span class="mono fsub">{form.id}</span>{/if}
-							</div>
-						{/if}
-						<IconButton icon="x" label={t("닫기")} onclick={() => close()} disabled={busy} />
-					</header>
-				{/if}
-
-				<div class="fbody">
-					{#if editing !== null}
-						{@const r = form.rows[editing]}
-						{#if r}
-							<ModelPage {r} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
-						{/if}
-					{:else}
-						<ConnectionFields {form} onname={onName} />
-						<ModelList
-							{form}
-							connection={api()?.connection}
-							{busy}
-							{discovering}
-							note={discoverNote}
-							{catalogLoaded}
-							{matchedOf}
-							onopen={openModel}
-							onadd={addModel}
-							ondiscover={discover}
-							onremove={removeAt}
-							onprune={pruneMissing}
-						/>
-					{/if}
-				</div>
-
-				<footer>
-					{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
-					<div class="fbtns">
-						{#if editing !== null}
-							<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
-						{:else}
-							<Button variant="ghost" onclick={() => close()} disabled={busy}>{t("취소")}</Button>
-							<Button variant="primary" type="submit" disabled={busy}>{busy ? (form.isNew ? t("확인 중…") : t("저장 중…")) : t("저장")}</Button>
-						{/if}
-					</div>
-				</footer>
-			</form>
-			{@render pickers(form)}
+			{@render editor(form)}
 		</Modal>
 	{/if}
 {/if}
@@ -462,13 +410,6 @@
 	:global(.iconbtn.back) {
 		margin-left: -9.5px; /* the 38px button holds a 19px glyph 9.5px in: the glyph's left edge lands on the gutter, like the close glyph on the right (was -8: 1.5px in) */
 	}
-	.fform > footer {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: var(--dlg-foot-t) var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab));
-		border-top: 1px solid var(--border);
-	}
 	.ferr {
 		display: flex;
 		gap: 8px;
@@ -487,13 +428,6 @@
 		height: 17px;
 		margin-top: 0;
 		stroke-width: 1.8;
-	}
-	.fbtns {
-		align-items: center;
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: flex-end;
-		gap: 8px;
 	}
 
 </style>
