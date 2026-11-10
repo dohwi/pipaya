@@ -75,11 +75,16 @@ class VoiceStore {
 		}
 	}
 
+	/**
+	 * Takes the server's answer. The settings are applied first and on their own: an older server (before the test
+	 * moved into its database) answers without `test`, and an exception on that one field used to throw away the whole
+	 * answer — the pane stayed empty and the microphone stayed hidden although everything was configured.
+	 */
 	private apply(view: VoiceView) {
 		this.settings = view.settings;
 		this.hasKey = view.hasKey;
 		this.endpoint = view.endpoint;
-		this.tested = view.test.ok === null || view.test.at === null ? null : { ok: view.test.ok, at: view.test.at, reason: (view.test.reason as VoiceFailure | null) ?? undefined };
+		this.tested = readTest(view.test);
 		this.loaded = true;
 	}
 
@@ -102,17 +107,22 @@ class VoiceStore {
 		});
 	}
 
-	/** The button in the composer: on, usable and recordable here. */
+	/** The button in the composer: shown whenever voice input is on, disabled while it cannot record. */
 	get visible() {
+		return this.state !== "off";
+	}
+
+	/** The button records right now (on, configured and this browser can open a microphone). */
+	get ready() {
 		return this.state === "ready";
 	}
 
-	/** Why the settings screen shows the microphone as unusable, or null when it is fine. */
+	/** Why the microphone cannot be used, or null when it is fine. The button's tooltip and the settings row say it. */
 	get blockedReason(): string | null {
 		if (this.availability) return t(this.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.");
 		if (!this.settings.enabled) return null;
-		if (!this.settings.baseUrl) return t("서버 주소를 입력하세요.");
-		if (!this.hasKey) return t("API 키를 입력하세요.");
+		if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
+		if (!this.hasKey) return t("변환 API 키를 입력하세요.");
 		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
 		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason]) || t("연결 확인에 실패했습니다.");
 		return null;
@@ -255,6 +265,13 @@ class VoiceStore {
 	clearFailure() {
 		this.failure = null;
 	}
+}
+
+/** The server's `test` field, or null when it is missing (an older server) or says no test has run. */
+function readTest(test: VoiceView["test"] | undefined): Tested | null {
+	if (!test || typeof test !== "object") return null;
+	if (typeof test.ok !== "boolean" || typeof test.at !== "number") return null;
+	return { ok: test.ok, at: test.at, reason: (test.reason as VoiceFailure | null) ?? undefined };
 }
 
 export const voice = new VoiceStore();

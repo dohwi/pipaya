@@ -54,14 +54,15 @@ export const AVAILABILITY_TEXT = {
 export type VoiceState = "off" | "unusable" | "ready";
 
 /**
- * `off`: the user has not switched voice input on — no button. `unusable`: on, but not usable (no address, no key, the
- * last connection test failed, or the browser cannot record) — no button either, the reason lives in Settings. `ready`:
- * on and usable — the button shows.
+ * `off`: the user has not switched voice input on — no button at all. `unusable`: on, but not usable yet (no address,
+ * no key, the last connection test failed, or the browser cannot record) — the button is shown **disabled**, with the
+ * reason as its tooltip and a tap that opens Settings. `ready`: on and usable — the button records.
  *
- * A test that has not run yet is not a failure. The settings and the test live on the server, so a phone that never
- * opened Settings used to hide a microphone the desktop had already proved working; now the settings alone are enough,
- * and only a test that actually failed (`failed`) takes the button away. A wrong key still hides it on the first
- * recording, because the server records that failure for every device.
+ * Hiding the button on `unusable` was the bug: a configured setup that had not been tested (or whose test lived in
+ * another device's storage) left the user staring at a composer with no microphone and no way to find out why. Showing
+ * it disabled says "this exists, here is what it needs", and the reason is one hover (or one tap) away.
+ *
+ * A test that has not run yet is not a failure: the settings alone are enough to try a recording.
  */
 export function voiceState(o: { enabled: boolean; usable: boolean; failed: boolean; available: boolean }): VoiceState {
 	if (!o.enabled) return "off";

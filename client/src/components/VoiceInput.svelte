@@ -1,15 +1,17 @@
 <script lang="ts">
 	import Icon from "./Icon.svelte";
 	import { t } from "../lib/i18n";
+	import { app } from "../lib/store.svelte";
 	import { voice } from "../lib/voice.svelte";
 	import { FAILURE_SUMMARY, FAILURE_TEXT, TAP_MS } from "../lib/voice";
 
 	/**
-	 * The composer's microphone button. Shown only when voice input is on and usable (`voice.visible`), so a broken
-	 * setting never leaves a dead button behind.
+	 * The composer's microphone button. Shown whenever voice input is on (`voice.visible`), and disabled while it cannot
+	 * record (`voice.ready` false): a setup that is incomplete or whose last test failed keeps the button in place with
+	 * the reason as its tooltip and a tap that opens Settings > Voice. Hiding it left the user with no microphone and no
+	 * way to learn why.
 	 *
-	 * While recording, the whole input becomes the recording surface (`VoiceRecording`); this button then only stops it,
-	 * and the pill that used to sit beside it is gone — the panel says the time and shows the wave.
+	 * While recording, the whole input becomes the recording surface (`VoiceRecording`); this button then only stops it.
 	 *
 	 * Press: a tap toggles recording, a longer press records while held (the same "both" behaviour as the shortcut).
 	 */
@@ -67,21 +69,36 @@
 			</button>
 		{/if}
 		{#if voice.visible}
-		<button
-			class="mic tap"
-			class:rec={voice.recording}
-			disabled={voice.transcribing}
-			aria-label={voice.recording ? t("녹음 정지") : t("음성으로 입력")}
-			aria-pressed={voice.recording}
-			title={t("음성으로 입력 (짧게 누르면 시작/정지, 길게 누르면 누르는 동안)")}
-			onpointerdown={down}
-			onpointerup={up}
-			onpointercancel={() => (holding = false)}
-			onpointerleave={() => { if (voice.recording && !holdRecords) return; holding = false; }}
-			onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void (voice.recording ? voice.stop() : voice.start(paneId)); } }}
-		>
-			<Icon name={voice.recording ? "mic-rec" : "mic"} />
-		</button>
+		{#if voice.ready}
+			<button
+				class="mic tap"
+				class:rec={voice.recording}
+				disabled={voice.transcribing}
+				aria-label={voice.recording ? t("녹음 정지") : t("음성으로 입력")}
+				aria-pressed={voice.recording}
+				title={t("음성으로 입력 (짧게 누르면 시작/정지, 길게 누르면 누르는 동안)")}
+				onpointerdown={down}
+				onpointerup={up}
+				onpointercancel={() => (holding = false)}
+				onpointerleave={() => { if (voice.recording && !holdRecords) return; holding = false; }}
+				onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void (voice.recording ? voice.stop() : voice.start(paneId)); } }}
+			>
+				<Icon name={voice.recording ? "mic-rec" : "mic"} />
+			</button>
+		{:else}
+			<!-- Configured but not usable: the button stays, disabled, and says what is missing. A tap (or Enter) opens the
+			     settings that fix it, so the reason is never a dead end. A real <button disabled> would swallow the tap, so
+			     this one is aria-disabled and handles the click itself. -->
+			<button
+				class="mic tap blocked"
+				aria-disabled="true"
+				aria-label={`${t("음성 입력을 사용할 수 없습니다")}. ${voice.blockedReason ?? ""} ${t("설정에서 고치기")}`}
+				title={`${voice.blockedReason ?? t("음성 입력을 사용할 수 없습니다")} — ${t("설정에서 고치기")}`}
+				onclick={() => app.openSettings("voice")}
+			>
+				<Icon name="mic" />
+			</button>
+		{/if}
 		{/if}
 	</div>
 {/if}
@@ -118,6 +135,18 @@
 	}
 	.mic:disabled {
 		opacity: 0.4;
+	}
+	/* Configured but not usable: dimmed like a disabled control, yet still a target (its tap opens Settings). A dashed
+	   ring says "not working" without the button reading as a different control. */
+	.mic.blocked {
+		color: var(--text-faint);
+		opacity: 0.55;
+		box-shadow: inset 0 0 0 1px var(--border);
+	}
+	.mic.blocked:hover {
+		opacity: 0.85;
+		color: var(--text-dim);
+		background: var(--bg-hover);
 	}
 	.pill {
 		display: flex;

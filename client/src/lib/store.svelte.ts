@@ -37,6 +37,7 @@ import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
+import type { SettingsTabId } from "./settings-search";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
@@ -289,11 +290,15 @@ class AppStore {
     if (!this.api) return;
     this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
-  settingsTab = $state<"general" | "servers" | "keys" | "srvext" | "backup" | "agent">("general");
+  /**
+   * The section the settings window opens on. `"servers"` and `"agent"` are old links (the server list and the model
+   * connection); `Settings` maps them to the sections they became, so a stored or linked value still lands somewhere.
+   */
+  settingsTab = $state<SettingsTabId | "servers" | "agent">("general");
   /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
   settingsServer = $state<string | "new" | null>(null);
   openSettings(
-    tab: "general" | "servers" | "keys" | "srvext" | "backup" | "agent" = "general",
+    tab: SettingsTabId | "servers" | "agent" = "general",
     server: string | "new" | null = null,
   ) {
     this.settingsTab = tab;

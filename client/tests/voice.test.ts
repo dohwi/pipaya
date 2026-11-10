@@ -20,6 +20,12 @@ describe("voiceState", () => {
 		// the settings and the test live on the server: a device that never ran the test still gets the button
 		expect(voiceState({ ...base, failed: false })).toBe("ready");
 	});
+	test("only a switched-off voice input has no button; every other state keeps it (disabled)", () => {
+		// the button is drawn for "unusable" too — VoiceInput shows it disabled with the reason, never hidden
+		expect(voiceState({ ...base, usable: false })).not.toBe("off");
+		expect(voiceState({ ...base, failed: true })).not.toBe("off");
+		expect(voiceState({ ...base, available: false })).not.toBe("off");
+	});
 });
 
 describe("micAvailability", () => {

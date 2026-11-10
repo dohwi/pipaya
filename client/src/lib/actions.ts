@@ -265,7 +265,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   toggleSound: () => app.prefs.setSound(!app.prefs.soundOn),
   // A tap: start recording, or stop a recording the tap started. A longer press is the hold path below.
   voiceInput: () => {
-    if (!voice.visible) return;
+    if (!voice.ready) return;
     if (voice.recording) voice.stop();
     else void voice.start(app.activeId ?? "");
   },
@@ -312,7 +312,7 @@ let voiceStartedOnDown = false;
  * running (toggle off); a hold stops when the key comes up.
  */
 function startVoiceHold() {
-  if (!voice.visible) return;
+  if (!voice.ready) return;
   voiceHolding = true;
   voiceStartedOnDown = !voice.recording;
   if (voiceStartedOnDown) void voice.start(app.activeId ?? "").then((failure) => { if (failure) voiceStartedOnDown = false; });
@@ -326,7 +326,7 @@ function endVoiceHold() {
   holdStartedAt = 0;
   const started = voiceStartedOnDown;
   voiceStartedOnDown = false;
-  if (!voice.visible) return;
+  if (!voice.ready) return;
   if (held < TAP_MS && started) return; // a tap that started recording: keep recording until the next tap
   if (voice.recording) voice.stop();
 }

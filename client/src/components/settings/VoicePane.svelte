@@ -141,7 +141,7 @@
 <section class="set-group">
 	<div class="section-label">{t("상태")}</div>
 	<SettingRow label={t("입력창의 마이크")} hint={voice.blockedReason ?? t("사용할 수 있습니다")}>
-		<span class="state" class:on={voice.state === "ready"}>{voice.state === "ready" ? t("표시됨") : voice.state === "off" ? t("꺼짐") : t("숨김")}</span>
+		<span class="state" class:on={voice.state === "ready"} class:blocked={voice.state === "unusable"}>{voice.state === "ready" ? t("사용 가능") : voice.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
 	</SettingRow>
 	{#if voice.endpoint}<span class="hint mono">{voice.endpoint}</span>{/if}
 	{#if voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
@@ -182,6 +182,9 @@
 	}
 	.state.on {
 		color: var(--ok);
+	}
+	.state.blocked {
+		color: var(--danger);
 	}
 	.mono {
 		font-family: var(--mono);
