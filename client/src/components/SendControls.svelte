@@ -6,6 +6,9 @@
 	/**
 	 * The right end of the composer bar. Idle: send. While the agent works: queue (after the run), steer (into it) and
 	 * stop. While compacting: a status and cancel. Switching between them crossfades instead of jumping.
+	 *
+	 * `folded`: idle with nothing to send and a microphone beside it. The send circle then folds to nothing so the
+	 * microphone sits in its place, and unfolds (pushing the microphone left) once there is text or an attachment.
 	 */
 	let {
 		compacting,
@@ -19,6 +22,7 @@
 		queueKey = "",
 		onsteer,
 		onstop,
+		folded = false,
 	}: {
 		compacting: boolean;
 		running: boolean;
@@ -32,9 +36,11 @@
 		queueKey?: string;
 		onsteer: () => void;
 		onstop: () => void;
+		folded?: boolean;
 	} = $props();
 
 	const mode = $derived(compacting ? "compacting" : running ? "running" : "idle");
+	const fold = $derived(folded && mode === "idle");
 
 	// Touch: tap = steer, long-press = choose steer / queue. The queue circle is hidden there (see CSS).
 	let menu = $state(false);
@@ -81,7 +87,7 @@
 	});
 </script>
 
-<div class="sc">
+<div class="sc" class:folded={fold}>
 	{#key mode}
 		<div class="set" in:chipIn out:chipOut>
 			{#if mode === "compacting"}
@@ -127,9 +133,11 @@
 					<button class="send stop" onclick={onstop} aria-label={t("중지")} title={t("작업 중지")}><Icon name="stop" /></button>
 				</div>
 			{:else}
-				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
-					{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
-				</button>
+				<div class="slot" class:folded={fold} inert={fold}>
+					<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
+						{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
+					</button>
+				</div>
 			{/if}
 		</div>
 	{/key}
@@ -148,6 +156,42 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+	}
+	/* Idle send circle in a box that folds to zero width (see `folded`); the circle keeps its size and only fades.
+	   The 4px padding, cancelled by the margin, keeps the clip off the focus ring (2px outline + 2px offset). */
+	.slot {
+		--slot-w: 38px; /* the send circle */
+		display: flex;
+		justify-content: flex-end;
+		box-sizing: content-box;
+		width: var(--slot-w);
+		padding: 4px;
+		margin: -4px; /* cancels the ring padding above: the box takes exactly the circle's place */
+		overflow: hidden;
+		transition:
+			width var(--motion-fast) var(--ease-std),
+			padding var(--motion-fast) var(--ease-std),
+			margin var(--motion-fast) var(--ease-std),
+			opacity var(--motion-fast) var(--ease-std);
+	}
+	.slot.folded {
+		width: 0;
+		padding-inline: 0;
+		margin-inline: 0;
+		opacity: 0;
+	}
+	/* folded, the cell is 0 wide; pulling it over the bar's 4px gap lands the microphone exactly where the circle was */
+	.sc {
+		transition: margin var(--motion-fast) var(--ease-std);
+	}
+	.sc.folded {
+		margin-left: -4px; /* the bar's gap */
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.slot,
+		.sc {
+			transition: none;
+		}
 	}
 	.send {
 		display: grid;
@@ -344,6 +388,9 @@
 		}
 	}
 	@container (max-width: 340px) {
+		.slot {
+			--slot-w: 32px; /* the narrow send circle below */
+		}
 		.send {
 			width: 32px;
 			height: 32px;

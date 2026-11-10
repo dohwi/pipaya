@@ -664,6 +664,7 @@
 				{queueKey}
 				onsteer={() => during("steer")}
 				onstop={() => app.abort(pane.id)}
+				folded={voice.visible && !hasInput}
 			/>
 			</ExtensionPart>
 		</div>
