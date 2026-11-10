@@ -5,6 +5,7 @@
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/Icon.svelte";
 	import Sidebar from "./components/Sidebar.svelte";
+	import RightSidebar from "./components/RightSidebar.svelte";
 	import Rail from "./components/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
 	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
@@ -32,7 +33,8 @@
 	import { summarize } from "./lib/activity";
 	import ExtensionApproval from "./components/extensions/ExtensionApproval.svelte";
 	import ExtensionDialog from "./components/extensions/ExtensionDialog.svelte";
-	import { app, SIDEBAR_W } from "./lib/store.svelte";
+	import { app, RIGHT_W, SIDEBAR_W } from "./lib/store.svelte";
+	import { followGitPanel } from "./lib/git-panel.svelte";
 	import { armSound } from "./lib/sound";
 	import { extensions } from "./lib/extensions/host.svelte";
 	import { voice } from "./lib/voice.svelte";
@@ -113,8 +115,13 @@
 		setAttention(n.asking + n.failed + n.done);
 	});
 
+	// The right sidebar's git panel: read when it opens, when the session changes and when a turn ends (no polling).
+	followGitPanel();
+
 	// Back button / swipe: close the top modal, else the phone drawer, before leaving the app.
 	$effect(() => {
+		// the right sheet sits above the left drawer, so it closes first
+		if (viewport.narrow && app.right.open) return backLayer({ onclose: () => (app.right.open = false) });
 		if (!viewport.narrow || !app.sidebar.open) return;
 		return backLayer({ onclose: () => (app.sidebar.open = false) });
 	});
@@ -225,6 +232,31 @@
 		app.sidebar.setWidth(app.sidebar.width + d * (e.shiftKey ? 4 : 1));
 	}
 
+	// Drag the right sidebar's edge (desktop): the mirror of the left grip, so the width follows the pointer the same way.
+	let rresizing = $state(false);
+	let rgripFrom = { x: 0, w: 0 };
+	function rgripDown(e: PointerEvent) {
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		rgripFrom = { x: e.clientX, w: app.right.width };
+		rresizing = true;
+		document.body.style.userSelect = "none";
+	}
+	function rgripMove(e: PointerEvent) {
+		if (rresizing) app.right.setWidth(rgripFrom.w - (e.clientX - rgripFrom.x), false); // the edge is on the left: dragging left widens
+	}
+	function rgripUp() {
+		if (!rresizing) return;
+		rresizing = false;
+		document.body.style.userSelect = "";
+		app.right.setWidth(app.right.width); // persist once, at the end of the drag
+	}
+	function rgripKey(e: KeyboardEvent) {
+		const d = e.key === "ArrowLeft" ? 16 : e.key === "ArrowRight" ? -16 : 0;
+		if (!d) return;
+		e.preventDefault();
+		app.right.setWidth(app.right.width + d * (e.shiftKey ? 4 : 1));
+	}
+
 	// Phone drawer: a session carried out of it and let go on the dimmed page joins what is being viewed (its group, or a new one).
 	let scrimOver = $state(false);
 	const catchable = (id: string) => {
@@ -258,6 +290,10 @@
 	let locked = false; // decided: this gesture is a horizontal drag of the drawer
 	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
 	let drawerW = $state(320);
+	// The right sheet on a narrow screen: dragged out towards the right edge to close it.
+	let rightEl: HTMLElement | undefined = $state();
+	let rightSwipe: number | null = $state(null); // how far it has been pushed out, in px
+	let rightW = $state(320);
 	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging).
 	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip";
 	// pre / table are not listed: they only keep the swipe when they really scroll sideways (scrollsSideways below),
@@ -272,6 +308,7 @@
 	function touchStart(e: TouchEvent) {
 		tracking = locked = false;
 		swipe = null;
+		rightSwipe = null;
 		if (e.touches.length !== 1 || !viewport.narrow) return; // the drawer only exists on narrow screens
 		if (document.querySelector(MODAL)) return;
 		const t = e.touches[0]!;
@@ -279,6 +316,12 @@
 		startY = t.clientY;
 		lastT = e.timeStamp;
 		vx = 0;
+		// An open right sheet takes the sideways gesture: it is the top layer, and it closes towards the right edge.
+		if (app.right.open) {
+			rightW = rightEl?.offsetWidth || 320;
+			tracking = true;
+			return;
+		}
 		if (!app.sidebar.open && t.clientX >= 24) {
 			const el = e.target instanceof Element ? e.target : null;
 			if (el?.closest(NO_SWIPE) || scrollsSideways(el)) return;
@@ -296,6 +339,20 @@
 		const t = e.touches[0]!;
 		const dx = t.clientX - startX;
 		const dy = t.clientY - startY;
+		if (app.right.open) {
+			// the right sheet: only a drag towards the right edge closes it
+			if (!locked) {
+				if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return cancelSwipe();
+				if (dx < 8 || dx < Math.abs(dy) * 1.5) return;
+				locked = true;
+			}
+			const dt = e.timeStamp - lastT;
+			if (dt > 0) vx = 0.6 * vx + 0.4 * ((t.clientX - lastX) / dt);
+			lastX = t.clientX;
+			lastT = e.timeStamp;
+			rightSwipe = Math.max(0, Math.min(rightW, dx));
+			return;
+		}
 		if (!locked) {
 			if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return cancelSwipe(); // vertical scroll
 			if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
@@ -311,6 +368,7 @@
 	function cancelSwipe() {
 		tracking = locked = false;
 		swipe = null;
+		rightSwipe = null;
 	}
 	// Going to the background can swallow touchend/pointercancel: drop a half-done swipe or carried session so the
 	// next gesture starts clean (a stale `drag.id` makes every touchMove cancel the swipe).
@@ -321,7 +379,12 @@
 		if (drag.id) drag.end(false);
 	}
 	function touchEnd() {
-		if (!tracking || !locked || swipe === null) return cancelSwipe();
+		if (!tracking || !locked) return cancelSwipe();
+		if (app.right.open) {
+			if (rightSwipe !== null) app.right.open = !(rightSwipe / rightW > 0.35 ? vx > -0.35 : vx > 0.35);
+			return cancelSwipe();
+		}
+		if (swipe === null) return cancelSwipe();
 		const open = swipe / drawerW > 0.35 ? vx > -0.35 : vx > 0.35;
 		app.sidebar.open = open;
 		cancelSwipe();
@@ -425,6 +488,43 @@
 				</div>
 			</div>
 		</main>
+
+		<!-- The right sidebar: a column beside the conversation on a wide screen, a sheet over it on a narrow one. It stays
+		     mounted so the column can grow and shrink like the left one (the sheet slides in from the right edge). -->
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<div class="rscrim" class:show={app.right.open} class:dragging={rightSwipe !== null} style:opacity={rightSwipe !== null ? 1 - rightSwipe / rightW : undefined} onclick={() => (app.right.open = false)}></div>
+		<div
+			class="rside"
+			bind:this={rightEl}
+			class:open={app.right.open}
+			class:dragging={rightSwipe !== null}
+			class:resizing={rresizing}
+			style:--right-w="{app.right.width}px"
+			style:translate={rightSwipe !== null ? `${rightSwipe}px 0` : undefined}
+		>
+			{#if !viewport.narrow && app.right.open}
+				<!-- A window splitter, the left sidebar's grip mirrored: focusable, with value attributes and arrow keys. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+				<div
+					class="rgrip"
+					role="separator"
+					aria-orientation="vertical"
+					aria-label={t("우측 사이드바 너비 조절")}
+					aria-valuemin={RIGHT_W.min}
+					aria-valuemax={RIGHT_W.max}
+					aria-valuenow={app.right.width}
+					tabindex="0"
+					title={t("끌어서 너비 조절 · 더블 클릭으로 원래 크기")}
+					onpointerdown={rgripDown}
+					onpointermove={rgripMove}
+					onpointerup={rgripUp}
+					onpointercancel={rgripUp}
+					ondblclick={() => app.right.setWidth(RIGHT_W.def)}
+					onkeydown={rgripKey}
+				></div>
+			{/if}
+			<div class="rfull"><RightSidebar /></div>
+		</div>
 
 	</div>
 {/if}
@@ -623,6 +723,107 @@
 
 	.grip {
 		display: none;
+	}
+	/* ── the right sidebar ─────────────────────────────────────────────────────────────────────────────
+	   A column beside the conversation on a wide screen (the stage narrows by its width), a sheet over the
+	   page on a narrow one. The left sidebar's own rules above are the model: same motion, same grip. */
+	.rside {
+		flex: none;
+		position: relative;
+		width: 0; /* shut: no column at all, and nothing inside it in the tab order */
+		height: 100%;
+		visibility: hidden;
+		transition:
+			width var(--motion-normal) var(--ease),
+			visibility 0s var(--motion-normal); /* hidden only once the width has gone */
+	}
+	.rside.open {
+		width: var(--right-w);
+		visibility: visible;
+		transition:
+			width var(--motion-normal) var(--ease),
+			visibility 0s;
+	}
+	.rside.resizing,
+	.rside.dragging {
+		transition: none; /* follow the pointer exactly */
+	}
+	/* the content is clipped here, not on .rside: the grip sits 4px outside the panel's edge and must stay grabbable */
+	.rfull {
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+	}
+	.rscrim {
+		display: none;
+	}
+	.rgrip {
+		position: absolute;
+		z-index: var(--z-popover);
+		top: 0;
+		bottom: 0;
+		left: -4px;
+		width: 9px;
+		cursor: col-resize;
+		touch-action: none;
+	}
+	.rgrip::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 4px;
+		width: 2px;
+		background: var(--accent);
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.rgrip:hover::after,
+	.rgrip:focus-visible::after,
+	.rside.dragging .rgrip::after {
+		opacity: 0.55;
+	}
+	.rgrip:focus-visible {
+		outline: none;
+	}
+	@media (max-width: 860px) {
+		/* a sheet: the drawer's own size and motion, from the right edge instead of the left */
+		.rside {
+			position: fixed;
+			z-index: var(--z-drawer);
+			right: 0;
+			top: 0;
+			bottom: 0;
+			width: min(max(320px, 80vw), 90vw, 400px);
+			visibility: visible;
+			translate: 102% 0;
+			box-shadow: var(--shadow);
+			transition: translate var(--motion-normal) var(--ease);
+		}
+		.rside.open {
+			width: min(max(320px, 80vw), 90vw, 400px);
+			translate: 0 0;
+		}
+		.rside.dragging {
+			transition: none;
+		}
+		.rscrim {
+			display: block;
+			position: fixed;
+			inset: 0;
+			z-index: var(--z-drawer-scrim);
+			background: var(--scrim);
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity var(--motion-normal) var(--ease-std);
+		}
+		.rscrim.show {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		.rscrim.dragging {
+			transition: none;
+		}
 	}
 	@media (min-width: 861px) {
 		.side {

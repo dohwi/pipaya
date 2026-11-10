@@ -13,6 +13,8 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	CompactionResult,
 	ConnectionResult,
 	DirListing,
+	GitDiff,
+	GitStatus,
 	Group,
 	WorkdirInfo,
 	CustomProvider,
@@ -391,6 +393,11 @@ export class Api {
 	uploadIcon = (data: string) => this.req<{ icon: string }>("POST", "/configuration/icons", { data });
 	/** Icon values of the images already uploaded to this server, newest first. */
 	listIcons = () => this.req<{ icons: string[] }>("GET", "/configuration/icons");
+	/** Read-only git of the session's working directory, read on the server (the client may be on another machine). */
+	gitStatus = (id: string, signal?: AbortSignal) => this.req<GitStatus>("GET", `/sessions/${encodeURIComponent(id)}/git`, undefined, signal);
+	/** The unified diff of one changed file; `staged` diffs the index against HEAD. */
+	gitDiff = (id: string, path: string, staged = false, signal?: AbortSignal) =>
+		this.req<GitDiff>("GET", `/sessions/${encodeURIComponent(id)}/git/diff?${new URLSearchParams({ path, ...(staged ? { staged: "true" } : {}) })}`, undefined, signal);
 	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
 	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
 		let res: Response;

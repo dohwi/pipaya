@@ -415,6 +415,55 @@ export interface WorkdirInfo {
 	fallback: string;
 }
 
+/** A changed file of a session's working directory, as the server read `git status --porcelain=v2`. */
+export interface GitFile {
+	/** Relative to the working directory; a rename carries its old path in `from`. */
+	path: string;
+	from?: string;
+	/** staged: the index differs from HEAD; unstaged: the working tree differs from the index. */
+	state: "staged" | "unstaged" | "untracked" | "conflict";
+	/** The porcelain letter: M A D R C T U, or ? for untracked. */
+	code: string;
+}
+
+export interface GitWorktree {
+	path: string;
+	branch: string | null;
+	head: string | null;
+	bare: boolean;
+	/** The main worktree (the others were added from it). */
+	main: boolean;
+}
+
+/** What the right sidebar's git panel shows: read-only, read on the server. */
+export interface GitStatus {
+	/** False when the working directory is not in a repository (or git is missing): the rest is then empty. */
+	repo: boolean;
+	root: string | null;
+	/** Why there is no repository: "not-a-repo", "no-git" or "missing" (the folder is gone). */
+	reason: string | null;
+	branch: string | null;
+	head: string | null;
+	upstream: string | null;
+	ahead: number;
+	behind: number;
+	detached: boolean;
+	files: GitFile[];
+	/** More files than the server's list cap: the list was cut. */
+	truncated: boolean;
+	worktrees: GitWorktree[];
+	at: number;
+}
+
+export interface GitDiff {
+	path: string;
+	staged: boolean;
+	/** Unified diff text; empty for a binary or a pure mode change. */
+	patch: string;
+	truncated: boolean;
+	binary: boolean;
+}
+
 export interface DirListing {
 	path: string;
 	parent: string | null;
