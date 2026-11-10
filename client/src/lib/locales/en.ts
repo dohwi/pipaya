@@ -28,6 +28,8 @@ export const en: Record<string, string> = {
 	"우측 사이드바 닫기": "Close right sidebar",
 	"우측 사이드바 너비 조절": "Resize right sidebar",
 	"변경 사항": "Changes",
+	"서버를 업데이트해야 Git 정보를 볼 수 있어요 (서버 재시작이 필요합니다)": "Update the server to see Git info (a server restart is needed)",
+	"이 대화를 서버에서 찾을 수 없습니다": "The server cannot find this conversation",
 	"대화를 열면 그 작업 폴더의 변경 사항을 보여 줍니다": "Open a conversation to see the changes in its working folder",
 	"새로 고침": "Refresh",
 	"이 폴더는 git 저장소가 아닙니다": "This folder is not a git repository",

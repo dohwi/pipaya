@@ -49,17 +49,24 @@
 </script>
 
 <aside class="right" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
-	<!-- Icons first, from the panel's left edge: the fold toggle, then refresh, then the title and folder (focus order is the same). -->
+	<!-- The toggle at the left edge, the refresh at the right edge, the title and its folder between them (a second, quiet
+	     line like the main header's). Focus and reading order: toggle, refresh, then the body. -->
 	<div class="head">
 		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기")} class="toggle tap" onclick={() => app.right.toggle()} />
+		<div class="titles">
+			<span class="title">{t("변경 사항")}</span>
+			{#if folder}<span class="folder mono" title={app.current?.cwd}>{folder}</span>{/if}
+		</div>
 		<IconButton icon="retry" size="sm" label={t("새로 고침")} tip class="refresh tap" disabled={gitPanel.loading} onclick={() => void gitPanel.load()} />
-		<span class="title">{t("변경 사항")}</span>
-		{#if folder}<span class="folder mono" title={app.current?.cwd}>{folder}</span>{/if}
 	</div>
 
 	<div class="body">
 		{#if gitPanel.error}
-			<EmptyState tone="plain">{gitPanel.error}</EmptyState>
+			<EmptyState tone="plain">
+				{#if gitPanel.error.kind === "old-server"}{t("서버를 업데이트해야 Git 정보를 볼 수 있어요 (서버 재시작이 필요합니다)")}
+				{:else if gitPanel.error.kind === "gone"}{t("이 대화를 서버에서 찾을 수 없습니다")}
+				{:else}{gitPanel.error.message}{/if}
+			</EmptyState>
 		{:else if !app.readableId}
 			<!-- a terminal, or nothing open: there is no working directory to read -->
 			<EmptyState tone="plain">{t("대화를 열면 그 작업 폴더의 변경 사항을 보여 줍니다")}</EmptyState>
@@ -152,9 +159,10 @@
 		/* the same box as the main header (44px + its 1px hairline), so the two lines meet across the panel's edge */
 		box-sizing: content-box;
 		height: 44px;
-		/* Columns are centres from the panel's left edge, 20px apart like the left sidebar's: the toggle on 24 (the column of
-		   the branch glyph and the file codes below), refresh on 44. Each sits in a 20px square with no margin, so the row
-		   starts 14px in (24 - 10) and the title is 12px past the last box. */
+		/* Columns are centres from the panel's left edge, 20px apart like the left sidebar's. Left: the toggle on 25 (the
+		   branch glyph's and the file codes' column below), in a 20px box with no margin, so the row starts 14px in.
+		   Right: the refresh in the same 20px box ending 16px from the window, the row's right line (like the sidebar's
+		   `+` / `⋯` / ↺ column). The titles sit between them. */
 		padding: 0 16px 0 14px;
 		border-bottom: 1px solid var(--border);
 	}
@@ -163,27 +171,34 @@
 		height: 20px;
 		flex: none;
 	}
-	/* both glyphs 16px so the two sit as equals on the 20px steps (a 19px one beside a 16px one leaves 2.5px between them) */
+	/* both glyphs 16px so the two ends match (a 19px one beside a 16px one differ in weight) */
 	.head :global(.iconbtn svg) {
 		width: 16px;
 		height: 16px;
 	}
+	/* the title and its folder: a 20px line over a 16px line = 36px in the 44px row, centred, whole pixels */
+	.titles {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		margin: 0 12px; /* 12px of air from each icon, so a finger on one never lands on the other */
+	}
 	.title {
-		flex: none;
-		margin-left: 12px;
 		font-size: var(--fs-md);
 		font-weight: 600;
 		line-height: 20px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.folder {
-		flex: 1;
-		min-width: 0;
-		margin-left: 8px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-2xs);
-		line-height: 20px;
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.body {

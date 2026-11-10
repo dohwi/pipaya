@@ -6,6 +6,7 @@
  */
 import { viewport } from "./viewport.svelte";
 import { app } from "./store.svelte";
+import { gitFailure, type GitFailure } from "./git-error";
 import type { GitDiff, GitStatus } from "./types";
 
 /** The session whose folder the panel shows: the one on screen, and only when it is a chat (a terminal has no session). */
@@ -15,7 +16,8 @@ class GitPanel {
 	/** The reading on screen; `null` until the first answer for the current session. */
 	status = $state<GitStatus | null>(null);
 	loading = $state(false);
-	error = $state<string | null>(null);
+	/** Why the status could not be read: told apart so an old server gets a hint, not its raw "route not found". */
+	error = $state<GitFailure | null>(null);
 	/** The file whose diff is open, and the diff itself. */
 	picked = $state<{ path: string; staged: boolean } | null>(null);
 	diff = $state<GitDiff | null>(null);
@@ -51,7 +53,7 @@ class GitPanel {
 			this.status = next;
 		} catch (e) {
 			if (seq !== this.#seq || (e as Error).name === "AbortError") return;
-			this.error = (e as Error).message;
+			this.error = gitFailure(e);
 		} finally {
 			if (seq === this.#seq) this.loading = false;
 		}

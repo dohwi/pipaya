@@ -11,10 +11,13 @@
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
+	import { easeEnter, ms } from "../lib/motion";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../lib/rename-places";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
+	/** The open button of the right sidebar fades in quickly (and not at all for reduced motion): it takes over from the panel's own toggle. */
+	const swap = (_node: Element) => ({ duration: ms("fast"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
@@ -115,9 +118,10 @@
 
 		<NavbarItems />
 		<!-- The right sidebar's toggle, shown while it is shut. Open, it lives in the panel's own header row (the way the left
-		     sidebar's fold button lives in its brand row) at the very same screen position, so it never jumps. -->
-		{#if !app.right.open}
-			<button class="tool right" onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기")}>
+		     sidebar's fold button lives in its brand row). `shut` goes false the moment the panel starts to open and true only once
+		     it has finished closing, so the two buttons are never on screen together while the panel slides. -->
+		{#if app.right.shut}
+			<button class="tool right" in:swap onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기")}>
 				<Icon name="sidebar-right" />
 			</button>
 		{/if}

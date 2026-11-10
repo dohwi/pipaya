@@ -126,7 +126,7 @@
 	// Back button / swipe: close the top modal, else the phone drawer, before leaving the app.
 	$effect(() => {
 		// the right sheet sits above the left drawer, so it closes first
-		if (viewport.narrow && app.right.open) return backLayer({ onclose: () => (app.right.open = false) });
+		if (viewport.narrow && app.right.open) return backLayer({ onclose: () => app.right.setOpen(false) });
 		if (!viewport.narrow || !app.sidebar.open) return;
 		return backLayer({ onclose: () => (app.sidebar.open = false) });
 	});
@@ -386,7 +386,7 @@
 	function touchEnd() {
 		if (!tracking || !locked) return cancelSwipe();
 		if (app.right.open) {
-			if (rightSwipe !== null) app.right.open = !(rightSwipe / rightW > 0.35 ? vx > -0.35 : vx > 0.35);
+			if (rightSwipe !== null) app.right.setOpen(!(rightSwipe / rightW > 0.35 ? vx > -0.35 : vx > 0.35));
 			return cancelSwipe();
 		}
 		if (swipe === null) return cancelSwipe();
@@ -497,7 +497,7 @@
 		<!-- The right sidebar: a column beside the conversation on a wide screen, a sheet over it on a narrow one. It stays
 		     mounted so the column can grow and shrink like the left one (the sheet slides in from the right edge). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="rscrim" class:show={app.right.open} class:dragging={rightSwipe !== null} style:opacity={rightSwipe !== null ? 1 - rightSwipe / rightW : undefined} onclick={() => (app.right.open = false)}></div>
+		<div class="rscrim" class:show={app.right.open} class:dragging={rightSwipe !== null} style:opacity={rightSwipe !== null ? 1 - rightSwipe / rightW : undefined} onclick={() => app.right.setOpen(false)}></div>
 		<div
 			class="rside"
 			bind:this={rightEl}
