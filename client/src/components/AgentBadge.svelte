@@ -56,25 +56,21 @@
 	.failed {
 		color: var(--danger);
 	}
-	/* every state moves on one beat (--beat) and one easing, so several badges side by side stay calm and in step */
-	.agent {
-		--beat: 1.8s;
-		--dim: 0.5;
-	}
+	/* every state moves on one beat (--anim-working-duration) and one easing, so several badges side by side stay calm and in step */
 	.working .logo {
-		animation: pulse var(--beat) ease-in-out infinite;
+		animation: pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
 	.asking .logo {
-		animation: ask var(--beat) ease-in-out infinite;
+		animation: ask var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
 	/* failed: a short shake at the start of each beat, then rest */
 	.failed .logo {
-		animation: shake var(--beat) ease-in-out infinite;
+		animation: shake var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
 	/* working: bright, dims halfway, bright again */
 	@keyframes pulse {
 		50% {
-			opacity: var(--dim);
+			opacity: var(--anim-working-dim);
 		}
 	}
 	/* asking: the same breath and phase as working, plus a small swell while it is bright (no glow: it bled over the row) */
@@ -84,7 +80,7 @@
 			transform: scale(1.12);
 		}
 		50% {
-			opacity: var(--dim);
+			opacity: var(--anim-working-dim);
 			transform: scale(1);
 		}
 	}

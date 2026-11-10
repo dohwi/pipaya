@@ -125,6 +125,13 @@
 	--ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15); /* exit: emphasized-accelerate */
 	--ease-std: cubic-bezier(0.2, 0, 0, 1);
 	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	/* "Working / needs attention" beat, shared by agent logos (AgentBadge), pins and status dots. One duration, one easing, one dim
+	   depth, so every indicator breathes at the same speed whatever its shape; the elements are also pinned to the document timeline
+	   (lib/syncAnim), so they stay in phase. Logo, pin and dot all pulse opacity (no rotation), so the same duration feels the same.
+	   Deliberately different: the error shake (a short burst at the start of each beat) and loading spinners (continuous rotation). */
+	--anim-working-duration: 1.8s;
+	--anim-working-ease: ease-in-out;
+	--anim-working-dim: 0.5;
 
 	--sat: env(safe-area-inset-top, 0px);
 	--sab: env(safe-area-inset-bottom, 0px);

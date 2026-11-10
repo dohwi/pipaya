@@ -41,11 +41,11 @@
 		--dot: var(--text);
 	}
 	.pulse {
-		animation: dot-pulse 1.2s ease-in-out infinite;
+		animation: dot-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
 	@keyframes dot-pulse {
 		50% {
-			opacity: 0.3;
+			opacity: var(--anim-working-dim);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
