@@ -25,7 +25,7 @@ import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
-import { afterTurn, runawayReason } from "./run-guard.ts";
+import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, helperUsage, loadSubagents, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -424,7 +424,7 @@ export class SessionManager {
 		if (!updated) throw notFound("session");
 
 		const live = this.live.get(id);
-		if (patch.closed && live?.running) live.agent.abort(); // closing stops the work
+		if (patch.closed && live?.running) { live.stopCause ??= "close"; live.agent.abort(); } // closing stops the work
 		if (live) {
 			if (clean.provider || clean.model) {
 				const m = this.registry.models.getModel(updated.provider, updated.model);
@@ -461,7 +461,7 @@ export class SessionManager {
 	delete(id: string): void {
 		this.get(id);
 		const live = this.live.get(id);
-		if (live?.running) live.agent.abort();
+		if (live?.running) { live.stopCause ??= "close"; live.agent.abort(); }
 		this.describing.get(id)?.abort();
 		this.dispose(id);
 		this.store.delete(id);
@@ -716,7 +716,7 @@ export class SessionManager {
 		if (!live) return false;
 		let did = false;
 		if (live.compacting) { live.compacting.abort(); did = true; }
-		if (live.running) { this.abortRun(id, live); did = true; }
+		if (live.running) { this.abortRun(id, live, "user"); did = true; }
 		return did;
 	}
 
@@ -725,8 +725,9 @@ export class SessionManager {
 	 * ignores the signal), drop the stuck agent, publish run_finished ourselves and let the next message start fresh
 	 * from the stored transcript. Without this, Esc could leave a session "running" forever.
 	 */
-	private abortRun(id: string, live: Live): void {
+	private abortRun(id: string, live: Live, cause: RunStopCause): void {
 		const settled = live.settled;
+		live.stopCause ??= cause;
 		live.agent.abort();
 		// Waiting out a retry is idle work; stopping it there must not wait for the backoff to end.
 		live.retryWait?.abort();
@@ -741,6 +742,7 @@ export class SessionManager {
 				error: "The run did not stop in time and was forced to stop.",
 				durationMs: Date.now() - live.runStartedAt,
 				usage: this.store.usage(id),
+				cause: "force",
 			});
 		}, FORCE_STOP_MS);
 		timer.unref?.();
@@ -753,7 +755,7 @@ export class SessionManager {
 		for (const c of this.describing.values()) c.abort();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of this.live) {
-			if (live.running) live.agent.abort();
+			if (live.running) { live.stopCause ??= "shutdown"; live.agent.abort(); }
 			this.dispose(id);
 		}
 	}
@@ -792,6 +794,8 @@ export class SessionManager {
 		live.runStartedAt = Date.now();
 		live.turns = 0;
 		live.recentCalls = [];
+		live.stopCause = undefined;
+		live.limitReason = undefined;
 		this.bus.publish(id, "run_started", { mode });
 
 		const settled = (async () => {
@@ -834,15 +838,21 @@ export class SessionManager {
 			if (live.forceStopped) return; // run_finished was already published when it was cut loose
 			live.running = false;
 			live.lastActive = Date.now();
+			// Stopped by the run limit: the model call that was already under way was cut off and left an empty error reply.
+			// That is our doing, not a failure: remove it so it neither reaches the model nor shows as "aborted".
+			const limited = live.stopCause === "limit";
+			if (limited && isEmptyFailedReply(live.agent.state.messages[live.agent.state.messages.length - 1])) this.dropLastReply(id, live);
 			const last = live.agent.state.messages[live.agent.state.messages.length - 1];
 			const failed = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
 			error ??= failed ? (last.errorMessage ?? null) : null;
-			const status = interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
+			if (limited) error = live.limitReason ?? error;
+			const status = limited || interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
 			this.bus.publish(id, "run_finished", {
 				status,
 				error,
 				durationMs: Date.now() - live.runStartedAt,
 				usage: this.store.usage(id),
+				...(live.stopCause ? { cause: live.stopCause } : {}),
 			});
 		})();
 		live.settled = settled;
@@ -1087,8 +1097,9 @@ export class SessionManager {
 		({ turns: live.turns, recentCalls: live.recentCalls } = afterTurn(live, (event.message as { content?: unknown }).content, limits));
 		const reason = runawayReason(live, limits);
 		if (!reason || !live.running) return;
+		live.limitReason = reason;
 		this.bus.publish(sessionId, "run_limit", { reason, turns: live.turns });
-		this.abortRun(sessionId, live);
+		this.abortRun(sessionId, live, "limit");
 	}
 
 	/** `tool_call` hooks. Shared by the session agent and its helpers so a policy extension cannot be sidestepped. */

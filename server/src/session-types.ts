@@ -1,4 +1,5 @@
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { RunStopCause } from "./run-guard.ts";
 import type { ModelChoiceValue } from "./model-choice.ts";
 import type { SkillRef } from "./skills.ts";
 import type { ThinkingLevel } from "./store.ts";
@@ -71,6 +72,10 @@ export interface Live {
 	recentCalls: string[];
 	/** Set when abort did not take effect in time and the run was cut loose; its late wrap-up must stay silent. */
 	forceStopped?: boolean;
+	/** Who stopped the current run from outside (first one wins); undefined when it ends by itself. */
+	stopCause?: RunStopCause;
+	/** The run-limit message, set together with stopCause "limit". */
+	limitReason?: string;
 	/** Set by `before_agent_start` extensions; applies to the current run only. */
 	runSystem?: { replace?: string; append?: string };
 }

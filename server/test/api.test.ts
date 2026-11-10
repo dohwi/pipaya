@@ -503,6 +503,34 @@ describe("tools", () => {
 		expect(Date.now() - t0).toBeLessThan(5000);
 		expect((await api("POST", `/sessions/${id}/abort`)).json.aborted).toBe(false);
 	});
+
+	test("run_finished records who stopped the run (cause)", async () => {
+		const finished = async (id: string) => {
+			const events = await collectSse(`/sessions/${id}/events?after=0&types=run_finished`, (ev) => ev.length >= 1);
+			return events.find((e: any) => e.type === "run_finished").data;
+		};
+		const startSleep = async () => {
+			const id = (await api("POST", "/sessions", {})).json.id as string;
+			await api("POST", `/sessions/${id}/messages`, { text: "!bash sleep 30" });
+			for (let i = 0; i < 100; i++) {
+				if ((await api("GET", `/sessions/${id}/status`)).json.pendingToolCalls.length > 0) break;
+				await Bun.sleep(25);
+			}
+			return id;
+		};
+		const a = await startSleep();
+		await api("POST", `/sessions/${a}/abort`);
+		await untilIdle(a);
+		expect((await finished(a)).cause).toBe("user");
+		const b = await startSleep();
+		await api("PATCH", `/sessions/${b}`, { closed: true });
+		await untilIdle(b);
+		expect((await finished(b)).cause).toBe("close");
+		const c = (await api("POST", "/sessions", {})).json.id as string;
+		await api("POST", `/sessions/${c}/messages`, { text: "hello" });
+		await untilIdle(c);
+		expect((await finished(c)).cause).toBeUndefined();
+	});
 });
 
 describe("events", () => {

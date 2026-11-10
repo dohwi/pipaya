@@ -546,6 +546,11 @@ export class ChatState {
 					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
 				this.queued = [];
+				// The run-limit abort cut a model call short and left an empty error reply; the server drops it, so hide it here too.
+				if (d.cause === "limit") {
+					const tail = this.items[this.items.length - 1];
+					if (tail?.kind === "assistant" && (tail.stopReason === "error" || tail.stopReason === "aborted") && tail.blocks.length === 0) this.items.pop();
+				}
 				if (d.status === "error" && d.error) {
 					const last = this.lastAssistant;
 					if (!last || last.stopReason !== "error") {

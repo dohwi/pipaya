@@ -41,3 +41,14 @@ export function runawayReason(state: RunGuardState, limits: RunGuardLimits): str
 	}
 	return null;
 }
+
+/** Why a run was stopped from outside; recorded as `cause` on run_finished. A run that ends by itself has no cause. */
+export type RunStopCause = "user" | "limit" | "close" | "shutdown" | "force";
+
+/** True for the leftover of an aborted model call: an error/aborted assistant message with no text, thinking or tool call. */
+export function isEmptyFailedReply(message: unknown): boolean {
+	const m = message as { role?: string; stopReason?: string; content?: unknown } | null | undefined;
+	if (m?.role !== "assistant" || (m.stopReason !== "error" && m.stopReason !== "aborted")) return false;
+	if (!Array.isArray(m.content)) return true;
+	return !m.content.some((b) => b?.type === "toolCall" || (typeof b?.text === "string" && b.text.trim()) || (typeof b?.thinking === "string" && b.thinking.trim()));
+}

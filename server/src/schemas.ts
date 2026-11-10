@@ -472,6 +472,7 @@ export const EVENTS: EventDef[] = [
 			error: Nullable(Type.String()),
 			durationMs: Type.Integer(),
 			usage: Usage,
+			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
 		}),
 	},
 	{ type: "agent_start", persisted: true, description: "pi-agent-core lifecycle", data: Type.Object({}) },
