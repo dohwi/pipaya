@@ -1,93 +1,83 @@
 <script lang="ts">
   import Button from "../Button.svelte";
+  import DialogBody from "../DialogBody.svelte";
+  import DialogFooter from "../DialogFooter.svelte";
+  import Modal from "../Modal.svelte";
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
-  import { closeAnimated } from "../../lib/motion";
-  import { backLayer } from "../../lib/dialog";
-  let dialog: HTMLDialogElement;
+
+  /**
+   * `ui.confirm` / `ui.select` / `ui.input` from an extension. The shared Modal gives it the scrim, the layering, Esc / back /
+   * scrim dismissal (each cancels) and the exit motion; the request going away closes it, whoever settled it.
+   */
   type Pending = NonNullable<typeof app.extensionDialog>;
-  /** What the dialog shows while it plays its exit: the request is already cleared by then. */
-  let shown = $state<Pending | null>(null);
+  /** The last request, so the text stays on screen while the exit plays after the request was settled. */
+  let last = $state<Pending | null>(null);
   let typed = $state("");
   let picked = $state("");
-  let cancelClose = () => {};
 
   $effect(() => {
     const pending = app.extensionDialog;
-    if (pending) {
-      cancelClose();
-      shown = pending;
-      typed = pending.request.kind === "input" ? (pending.request.value ?? "") : "";
-      picked = pending.request.kind === "select" ? (pending.request.options[0]?.value ?? "") : "";
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog?.open) {
-      cancelClose = closeAnimated(dialog);
-    }
+    if (!pending || pending === last) return;
+    last = pending;
+    typed = pending.request.kind === "input" ? (pending.request.value ?? "") : "";
+    picked = pending.request.kind === "select" ? (pending.request.options[0]?.value ?? "") : "";
   });
 
-  const cancel = () => app.resolveExtensionDialog(shown?.request.kind === "confirm" ? false : null);
+  const cancel = () => app.resolveExtensionDialog(app.extensionDialog?.request.kind === "confirm" ? false : null);
   function ok() {
-    const r = shown?.request;
+    const r = app.extensionDialog?.request;
     if (!r) return;
     app.resolveExtensionDialog(r.kind === "confirm" ? true : r.kind === "select" ? picked : typed);
   }
   function enter(event: KeyboardEvent) {
-    if (event.key === "Enter" && !event.isComposing && (shown?.request.kind !== "input" || !shown.request.multiline || event.ctrlKey || event.metaKey)) {
+    const r = app.extensionDialog?.request;
+    if (event.key === "Enter" && !event.isComposing && (r?.kind !== "input" || !r.multiline || event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       ok();
     }
   }
   const autofocus = (node: HTMLElement) => { queueMicrotask(() => node.focus()); };
   const focusFirst = (node: HTMLElement, first: boolean) => { if (first) autofocus(node); };
-  // Back button / swipe settles the request like Esc does.
-  $effect(() => {
-    if (!app.extensionDialog) return;
-    return backLayer({ onclose: () => cancel() });
-  });
 </script>
 
-<dialog bind:this={dialog} oncancel={(event) => { event.preventDefault(); cancel(); }} onclose={() => { shown = null; if (app.extensionDialog) cancel(); }} aria-labelledby="extension-dialog-title">
-  {#if shown}
-    {@const r = shown.request}
-    <h2 id="extension-dialog-title">{r.title}</h2>
-    {#if r.ownerName}<p class="owner">{r.ownerName}</p>{/if}
-    {#if r.message}<pre>{r.message}</pre>{/if}
-    {#if r.kind === "select"}
-      <div class="options" role="radiogroup" aria-label={r.title}>
-        {#each r.options as option, i (option.value)}
-          <label class:on={picked === option.value}>
-            <input type="radio" name="extension-dialog" value={option.value} bind:group={picked} onkeydown={enter} use:focusFirst={i === 0} />
-            <span class="label">{option.label}</span>
-            {#if option.description}<span class="desc">{option.description}</span>{/if}
-          </label>
-        {/each}
-      </div>
-    {:else if r.kind === "input"}
-      {#if r.multiline}
-        <textarea bind:value={typed} placeholder={r.placeholder} rows="5" onkeydown={enter} use:autofocus></textarea>
-      {:else}
-        <input type="text" bind:value={typed} placeholder={r.placeholder} onkeydown={enter} use:autofocus />
+{#if app.extensionDialog}
+  {@const r = (app.extensionDialog ?? last)!.request}
+  <Modal onclose={cancel} title={r.title} sub={r.ownerName} width="l" layer={5} portal>
+    <DialogBody gap>
+      {#if r.message}<pre class="message">{r.message}</pre>{/if}
+      {#if r.kind === "select"}
+        <div class="options" role="radiogroup" aria-label={r.title}>
+          {#each r.options as option, i (option.value)}
+            <label class:on={picked === option.value}>
+              <input type="radio" name="extension-dialog" value={option.value} bind:group={picked} onkeydown={enter} use:focusFirst={i === 0} />
+              <span class="label">{option.label}</span>
+              {#if option.description}<span class="desc">{option.description}</span>{/if}
+            </label>
+          {/each}
+        </div>
+      {:else if r.kind === "input"}
+        {#if r.multiline}
+          <textarea class="field area" bind:value={typed} placeholder={r.placeholder} aria-label={r.title} rows="5" onkeydown={enter} use:autofocus></textarea>
+        {:else}
+          <input class="field" type="text" bind:value={typed} placeholder={r.placeholder} aria-label={r.title} onkeydown={enter} use:autofocus />
+        {/if}
       {/if}
-    {/if}
-    <div class="buttons">
+    </DialogBody>
+    <DialogFooter rule safe>
       <Button onclick={cancel}>{t("취소")}</Button>
       <Button variant="primary" onclick={ok}>{r.kind === "confirm" && r.confirmLabel ? r.confirmLabel : t("확인")}</Button>
-    </div>
-  {/if}
-</dialog>
+    </DialogFooter>
+  </Modal>
+{/if}
 
 <style>
-  dialog { width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter))); padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
-  dialog::backdrop { background: var(--scrim); }
-  h2 { margin: 0 0 4px; font-size: var(--fs-xl); }
-  .owner { margin: 0 0 12px; color: var(--text-faint); font-size: var(--fs-xs); }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; color: var(--text-dim); font-size: var(--fs-sm); margin: 0 0 12px; }
-  input[type="text"], textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
+  .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 24px; color: var(--text-dim); font-size: var(--fs-sm); }
+  .area { height: auto; padding: 8px 12px; resize: vertical; line-height: 24px; }
   .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-y: auto; }
   .options label { display: grid; grid-template-columns: 16px 1fr; gap: 0 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
   .options label.on { border-color: var(--accent); background: var(--accent-soft); }
   .options input { grid-row: span 2; align-self: start; margin: 4px 0 0; width: 16px; height: 16px; } /* centred on the label's first 24px line */
   .options .label { line-height: 24px; }
   .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); line-height: 16px; }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 </style>

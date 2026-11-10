@@ -1,47 +1,38 @@
 <script lang="ts">
   import Button from "../Button.svelte";
+  import DialogBody from "../DialogBody.svelte";
+  import DialogFooter from "../DialogFooter.svelte";
+  import Modal from "../Modal.svelte";
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
-  import { closeAnimated } from "../../lib/motion";
-  import { backLayer } from "../../lib/dialog";
-  let dialog: HTMLDialogElement;
-  /** What the dialog shows while it plays its exit: the request is already cleared by then. */
-  let shown = $state<NonNullable<typeof app.extensionApproval> | null>(null);
-  let cancelClose = () => {};
-  // The dialog follows the request: open when one arrives, play the exit and close when it is resolved
-  // (by a button, Esc, or anything else that settles it).
+
+  /**
+   * An extension asks to change app settings. Nothing is focused by default, so a stray Enter never approves.
+   * The shared Modal gives it the scrim, the layering, Esc / back / scrim
+   * dismissal (each settles the request as "no") and the exit motion; the request going away closes it, whoever settled it.
+   */
+  const deny = () => app.resolveExtension(false);
+  /** The last message, so the text stays on screen while the exit plays after the request was settled. */
+  let last = $state("");
   $effect(() => {
-    const request = app.extensionApproval;
-    if (request) {
-      cancelClose();
-      shown = request;
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog?.open) {
-      cancelClose = closeAnimated(dialog);
-    }
-  });
-  // Back button / swipe settles the request like Esc does.
-  $effect(() => {
-    if (!app.extensionApproval) return;
-    return backLayer({ onclose: () => app.resolveExtension(false) });
+    if (app.extensionApproval) last = app.extensionApproval.message;
   });
 </script>
-<dialog bind:this={dialog} oncancel={(event) => { event.preventDefault(); app.resolveExtension(false); }} onclose={() => { shown = null; app.extensionApproval && app.resolveExtension(false); }} aria-labelledby="extension-approval-title">
-  {#if shown}
-    <h2 id="extension-approval-title">pipaya · {t("확장 설정 접근 승인")}</h2>
-    <p>{t("확장 요청입니다. 승인한 범위만 앱에서 수행합니다.")}</p>
-    <pre>{shown.message}</pre>
-    <div class="buttons">
-      <Button onclick={() => app.resolveExtension(false)}>{t("취소")}</Button>
+
+{#if app.extensionApproval}
+  <Modal onclose={deny} title={`pipaya · ${t("확장 설정 접근 승인")}`} width="l" layer={5} portal>
+    <DialogBody gap>
+      <p class="lead">{t("확장 요청입니다. 승인한 범위만 앱에서 수행합니다.")}</p>
+      <pre class="message">{app.extensionApproval?.message ?? last}</pre>
+    </DialogBody>
+    <DialogFooter rule safe>
+      <Button onclick={deny}>{t("취소")}</Button>
       <Button variant="primary" onclick={() => app.resolveExtension(true)}>{t("승인하고 진행")}</Button>
-    </div>
-  {/if}
-</dialog>
+    </DialogFooter>
+  </Modal>
+{/if}
+
 <style>
-  dialog { width: min(var(--modal-w-l), calc(var(--vw) - var(--modal-gutter))); padding: 24px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--bg-side); box-shadow: var(--shadow); color: var(--text); }
-  dialog::backdrop { background: var(--scrim); }
-  h2 { margin: 0 0 12px; font-size: var(--fs-xl); }
-  p { color: var(--text-dim); font-size: var(--fs-sm); }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .lead { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: 20px; }
+  .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 24px; }
 </style>

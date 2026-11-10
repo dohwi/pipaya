@@ -206,11 +206,15 @@ describe("modals mounted by their parent animate", () => {
 		const s = markup(read("components/Lightbox.svelte"));
 		expect(s).toMatch(/class="lb"[^>]*in:fadeIn\|global out:fadeOut\|global/);
 	});
-	test("the extension approval dialog plays its exit instead of closing at once", () => {
-		const s = read("components/extensions/ExtensionApproval.svelte");
-		expect(s).toContain("closeAnimated(dialog)");
-		// the buttons only settle the request; closing is driven by the request going away, so Esc and code paths animate too
-		expect(s).not.toMatch(/resolveExtension\((true|false)\); dialog\.close\(\)/);
+	test("the extension approval and request dialogs are the shared Modal, closed by the request going away", () => {
+		for (const f of ["extensions/ExtensionApproval", "extensions/ExtensionDialog"]) {
+			const s = markup(read(`components/${f}.svelte`));
+			expect(s, f).toContain("<Modal");
+			expect(s, f).not.toContain("<dialog");
+		}
+		// the buttons only settle the request; the {#if} on the request closes the modal, so Esc and code paths animate too
+		expect(read("components/extensions/ExtensionApproval.svelte")).toContain("{#if app.extensionApproval}");
+		expect(read("components/extensions/ExtensionDialog.svelte")).toContain("{#if app.extensionDialog}");
 	});
 	test("every component that is a bare modal root (no {#if} of its own) uses |global", () => {
 		// DirPicker: the modal sits at the top level of the file, outside any block
