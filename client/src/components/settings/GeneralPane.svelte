@@ -36,7 +36,7 @@
 	<div class="zoom">
 		<div class="ztext"><span>{t("화면 배율")}</span><small class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</small></div>
 		<RangeField label="" ariaLabel={t("화면 배율")} min={50} max={200} step={10} value={app.prefs.uiScale} oninput={(v) => app.prefs.setUiScale(v)}>
-			{#snippet trailing()}<Button size="sm" variant="ghost" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
+			{#snippet trailing()}<Button size="sm" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
 		</RangeField>
 	</div>
 </section>
