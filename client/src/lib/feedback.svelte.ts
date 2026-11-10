@@ -41,7 +41,7 @@ export class Feedback {
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
   toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
     const id = seq++;
-    const ms = tone === "error" ? 6000 : 4000;
+    const ms = tone === "error" || tone === "warn" ? 6000 : 4000; // a warning is a whole sentence: as long to read as an error
     this.toasts.push({ id, text, tone, ms, ...(sid ? { sid } : {}), ...(action ? { action } : {}) });
     this.toastTimers.set(id, setTimeout(() => this.dismissToast(id), ms));
   }
