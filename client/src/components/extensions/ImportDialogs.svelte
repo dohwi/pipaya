@@ -76,7 +76,7 @@
 	>
 		{#if result}
 			{@const r = result}
-			<div class="rmodal {r.tone}" use:focusOk>
+			<div class="rmodal result {r.tone}" use:focusOk>
 				<DialogBody gap rule={false}>
 				<div class="rhead">
 					<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
@@ -159,6 +159,8 @@
 	.rpkg strong { font-weight: 600; overflow-wrap: anywhere; }
 	.rdetail { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.rmodal :global(.df .btn) { min-width: 76px; }
+	/* the result has no rule above its buttons: the footer's own 12px top is the whole gap (the body's 24px bottom made it 36) */
+	.result :global(.dbody) { padding-bottom: 0; }
 
 	.hint { overflow-wrap: anywhere; }
 	.tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
