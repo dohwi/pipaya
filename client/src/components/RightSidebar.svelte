@@ -9,7 +9,8 @@
 	import { gitPanel } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
 	import { layoutGraph } from "../lib/git-graph";
-	import type { GitFile } from "../lib/types";
+	import { agoParts, lineCounts, refChips, trackState } from "../lib/git-view";
+	import type { GitBranch, GitFile } from "../lib/types";
 
 	/**
 	 * The right sidebar: what the working directory of the session on screen looks like in git, read-only.
@@ -47,8 +48,38 @@
 	/** The lanes drawn: a repository with dozens of branches would push the subjects off the panel, so the rest is clipped. */
 	const gw = $derived(Math.min(graph.lanes, 8) * LANE);
 	const when = (at: number) => new Date(at * 1000).toLocaleString();
-	const refLabel = (r: string) => r.replace(/^HEAD -> /, "").replace(/^tag: /, "");
+	/** "3h ago": the clock is read once a minute, which is as fresh as the words are. */
+	let now = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 60_000);
+		return () => clearInterval(timer);
+	});
+	const ago = (at: number) => {
+		const { unit, n } = agoParts(at, now);
+		if (unit === "s") return t("{n}초 전", { n });
+		if (unit === "m") return t("{n}분 전", { n });
+		if (unit === "h") return t("{n}시간 전", { n });
+		if (unit === "d") return t("{n}일 전", { n });
+		if (unit === "mo") return t("{n}달 전", { n });
+		return t("{n}년 전", { n });
+	};
+	const branches = $derived(status?.branches ?? []);
+	const locals = $derived(branches.filter((b) => !b.remote));
+	const remotes = $derived(branches.filter((b) => b.remote));
+	/** Remote-tracking branches are many and rarely what you came for: folded until asked for. */
+	let showRemotes = $state(false);
+	const trackLabel = (b: GitBranch) => {
+		switch (trackState(b)) {
+			case "gone":
+				return t("원격에서 삭제됨");
+			case "local":
+				return t("원격 없음");
+			default:
+				return "";
+		}
+	};
 	const pick = (f: GitFile) => void gitPanel.pick({ path: f.path, staged: f.state === "staged" });
+	const pickInCommit = (hash: string, path: string) => void gitPanel.pick({ path, staged: false, commit: hash });
 
 	/** The diff's lines, with the file header lines dropped: the panel already says which file it is. */
 	const lines = $derived.by(() => {
@@ -92,6 +123,7 @@
 				<span class="name mono">{status.detached ? t("분리된 HEAD") : status.branch}</span>
 				{#if status.ahead}<Badge tone="neutral" size="sm" mono>↑{status.ahead}</Badge>{/if}
 				{#if status.behind}<Badge tone="neutral" size="sm" mono>↓{status.behind}</Badge>{/if}
+				{#if status.stashes}<span class="flag" title={t("보관된 변경(stash)")}>{t("보관 {n}", { n: status.stashes })}</span>{/if}
 			</div>
 			{#if status.upstream}<div class="up mono">{status.upstream}</div>{/if}
 
@@ -109,24 +141,9 @@
 										<button class="file" class:on={open} onclick={() => pick(f)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
 											<span class="code" data-state={f.state}>{f.code}</span>
 											<span class="path">{f.path}</span>
+											{@render counts(f)}
 										</button>
-										{#if open}
-											<div class="diff">
-												{#if gitPanel.diffLoading}
-													<EmptyState tone="plain" as="p" loading />
-												{:else if gitPanel.diffError}
-													<EmptyState tone="plain" as="p">{gitPanel.diffError}</EmptyState>
-												{:else if gitPanel.diff?.binary}
-													<EmptyState tone="plain" as="p">{t("바이너리 파일이라 미리 볼 수 없습니다")}</EmptyState>
-												{:else if !lines.length}
-													<EmptyState tone="plain" as="p">{t("표시할 변경 내용이 없습니다")}</EmptyState>
-												{:else}
-													<pre class="patch"><code>{#each lines as line, i (i)}<span class:add={line.startsWith("+")} class:del={line.startsWith("-")} class:hunk={line.startsWith("@@")}>{line}
-</span>{/each}</code></pre>
-													{#if gitPanel.diff?.truncated}<p class="cut">{t("변경 내용이 길어 앞부분만 표시합니다")}</p>{/if}
-												{/if}
-											</div>
-										{/if}
+										{#if open && !gitPanel.picked?.commit}{@render diffView()}{/if}
 									</li>
 								{/each}
 							</ul>
@@ -136,22 +153,80 @@
 				{#if status.truncated}<p class="cut">{t("파일이 많아 일부만 표시합니다")}</p>{/if}
 			{/if}
 
+			{#if locals.length}
+				<section class="group" aria-label={t("브랜치")}>
+					<div class="ghead"><span class="gtitle">{t("브랜치")}</span><span class="count">{locals.length}</span></div>
+					<ul>
+						{#each locals as b (b.name)}
+							{@render branchRow(b)}
+						{/each}
+					</ul>
+					{#if remotes.length}
+						<button class="more" aria-expanded={showRemotes} onclick={() => (showRemotes = !showRemotes)}>
+							{showRemotes ? t("원격 브랜치 접기") : t("원격 브랜치 {n}개 보기", { n: remotes.length })}
+						</button>
+						{#if showRemotes}
+							<ul>
+								{#each remotes as b (b.name)}
+									{@render branchRow(b)}
+								{/each}
+							</ul>
+						{/if}
+					{/if}
+				</section>
+			{/if}
+
 			{#if graph.rows.length}
 				<section class="group" aria-label={t("그래프")}>
 					<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}</span></div>
 					<ul>
 						{#each graph.rows as r (r.commit.hash)}
-							<li class="commit" title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
-								<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
-									{#each r.segs as s, i (i)}
-										<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
+							{@const opened = gitPanel.openCommit === r.commit.hash}
+							<li class="commit-wrap">
+								<button class="commit" class:on={opened} aria-expanded={opened} onclick={() => void gitPanel.toggleCommit(r.commit.hash)} title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
+									<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
+										{#each r.segs as s, i (i)}
+											<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
+										{/each}
+										<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
+									</svg>
+									<span class="subject">{r.commit.subject}</span>
+									{#each refChips(r.commit.refs).slice(0, 2) as chip (chip.label)}
+										<span class="ref mono" data-kind={chip.kind}>{chip.label}</span>
 									{/each}
-									<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
-								</svg>
-								<span class="subject">{r.commit.subject}</span>
-								{#each r.commit.refs.slice(0, 2) as ref (ref)}
-									<span class="ref mono" class:cur={ref.startsWith("HEAD")}>{refLabel(ref)}</span>
-								{/each}
+									<span class="when">{ago(r.commit.at)}</span>
+								</button>
+								{#if opened}
+									<div class="detail">
+										{#if gitPanel.commitLoading}
+											<EmptyState tone="plain" as="p" loading />
+										{:else if gitPanel.commitError}
+											<EmptyState tone="plain" as="p">{gitPanel.commitError}</EmptyState>
+										{:else if gitPanel.commit}
+											<p class="meta mono">{gitPanel.commit.hash.slice(0, 8)} · {gitPanel.commit.author} · {when(gitPanel.commit.at)}</p>
+											{#if gitPanel.commit.parents.length > 1}<p class="meta">{t("병합 커밋: 첫 부모와 비교한 변경입니다")}</p>{/if}
+											{#if gitPanel.commit.body}<p class="msg">{gitPanel.commit.body}</p>{/if}
+											{#if !gitPanel.commit.files.length}
+												<p class="meta">{t("변경된 파일이 없습니다")}</p>
+											{:else}
+												<ul class="cfiles">
+													{#each gitPanel.commit.files as f (f.path)}
+														{@const openFile = gitPanel.picked?.commit === r.commit.hash && gitPanel.picked.path === f.path}
+														<li>
+															<button class="file" class:on={openFile} onclick={() => pickInCommit(r.commit.hash, f.path)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
+																<span class="code" data-state={f.code === "A" ? "staged" : f.code === "D" ? "conflict" : undefined}>{f.code}</span>
+																<span class="path">{f.path}</span>
+																{@render counts(f)}
+															</button>
+															{#if openFile}{@render diffView()}{/if}
+														</li>
+													{/each}
+												</ul>
+												{#if gitPanel.commit.truncated}<p class="cut">{t("파일이 많아 일부만 표시합니다")}</p>{/if}
+											{/if}
+										{/if}
+									</div>
+								{/if}
 							</li>
 						{/each}
 					</ul>
@@ -175,6 +250,42 @@
 		{/if}
 	</div>
 </aside>
+
+{#snippet counts(f: { add?: number; del?: number })}
+	{@const n = lineCounts(f)}
+	{#if n}<span class="num mono"><span class="plus">+{n.add}</span> <span class="minus">−{n.del}</span></span>{/if}
+{/snippet}
+
+{#snippet branchRow(b: GitBranch)}
+	{@const state = trackState(b)}
+	<li class="branchrow" class:here={b.current} aria-current={b.current ? "true" : undefined} title={[b.name, b.upstream ? `→ ${b.upstream}` : "", trackLabel(b), b.elsewhere ? t("다른 워크트리에서 사용 중") : ""].filter(Boolean).join(" · ")}>
+		<span class="glyph" aria-hidden="true"><Icon name="fork" /></span>
+		<span class="bname mono">{b.name}</span>
+		{#if b.elsewhere}<span class="flag">{t("워크트리")}</span>{/if}
+		{#if state === "ahead" || state === "diverged"}<Badge tone="neutral" size="sm" mono>↑{b.ahead}</Badge>{/if}
+		{#if state === "behind" || state === "diverged"}<Badge tone="neutral" size="sm" mono>↓{b.behind}</Badge>{/if}
+		{#if state === "gone"}<span class="flag warn">{t("삭제됨")}</span>{/if}
+		<span class="when">{ago(b.at)}</span>
+	</li>
+{/snippet}
+
+{#snippet diffView()}
+	<div class="diff">
+		{#if gitPanel.diffLoading}
+			<EmptyState tone="plain" as="p" loading />
+		{:else if gitPanel.diffError}
+			<EmptyState tone="plain" as="p">{gitPanel.diffError}</EmptyState>
+		{:else if gitPanel.diff?.binary}
+			<EmptyState tone="plain" as="p">{t("바이너리 파일이라 미리 볼 수 없습니다")}</EmptyState>
+		{:else if !lines.length}
+			<EmptyState tone="plain" as="p">{t("표시할 변경 내용이 없습니다")}</EmptyState>
+		{:else}
+			<pre class="patch"><code>{#each lines as line, i (i)}<span class:add={line.startsWith("+")} class:del={line.startsWith("-")} class:hunk={line.startsWith("@@")}>{line}
+</span>{/each}</code></pre>
+			{#if gitPanel.diff?.truncated}<p class="cut">{t("변경 내용이 길어 앞부분만 표시합니다")}</p>{/if}
+		{/if}
+	</div>
+{/snippet}
 
 <style>
 	.right {
@@ -388,9 +499,108 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		width: 100%;
+		height: 32px;
+		padding: 0 16px;
+		text-align: left;
+		color: var(--text-dim);
+	}
+	.commit:hover {
+		background: var(--bg-hover);
+	}
+	.commit.on {
+		background: var(--bg-active);
+	}
+	.when {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.detail {
+		padding: 8px 16px 12px;
+	}
+	.detail .meta {
+		margin: 0 0 4px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.detail .msg {
+		margin: 0 0 8px;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		color: var(--text-dim);
+	}
+	.cfiles {
+		margin: 0 -16px; /* the file rows run edge to edge like the changed-file rows above */
+	}
+	.num {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+	}
+	.plus {
+		color: var(--ok);
+	}
+	.minus {
+		color: var(--danger);
+	}
+	.branchrow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		height: 32px;
 		padding: 0 16px;
 		color: var(--text-dim);
+	}
+	.branchrow.here {
+		color: var(--text);
+	}
+	.branchrow.here .bname {
+		font-weight: 600;
+	}
+	.branchrow .glyph {
+		display: grid;
+		place-items: center;
+		flex: none;
+	}
+	.branchrow .glyph :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke-width: 1.8;
+	}
+	.bname {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
+	.flag {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.flag.warn {
+		color: var(--warn);
+	}
+	.more {
+		height: 32px;
+		padding: 0 16px;
+		text-align: left;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		color: var(--text-faint);
+	}
+	.more:hover {
+		color: var(--text);
+		background: var(--bg-hover);
 	}
 	.lanes {
 		flex: none;
@@ -420,9 +630,12 @@
 		line-height: 16px;
 		color: var(--text-faint);
 	}
-	.ref.cur {
+	.ref[data-kind="head"] {
 		background: var(--info-soft);
 		color: var(--info);
+	}
+	.ref[data-kind="tag"] {
+		color: var(--warn);
 	}
 	.diff {
 		padding: 0 16px 12px;

@@ -424,6 +424,9 @@ export interface GitFile {
 	state: "staged" | "unstaged" | "untracked" | "conflict";
 	/** The porcelain letter: M A D R C T U, or ? for untracked. */
 	code: string;
+	/** Lines added / removed; absent for an untracked or binary file. */
+	add?: number;
+	del?: number;
 }
 
 export interface GitWorktree {
@@ -433,6 +436,43 @@ export interface GitWorktree {
 	bare: boolean;
 	/** The main worktree (the others were added from it). */
 	main: boolean;
+}
+
+/** A local or remote-tracking branch. */
+export interface GitBranch {
+	name: string;
+	remote: boolean;
+	current: boolean;
+	/** Checked out in another worktree. */
+	elsewhere: boolean;
+	upstream: string | null;
+	ahead: number;
+	behind: number;
+	/** The upstream no longer exists on the remote. */
+	gone: boolean;
+	at: number;
+	head: string;
+}
+
+export interface GitCommitFile {
+	path: string;
+	from?: string;
+	code: string;
+	add?: number;
+	del?: number;
+}
+
+/** What one commit changed against its first parent. */
+export interface GitCommitDetail {
+	hash: string;
+	subject: string;
+	body: string;
+	author: string;
+	email: string;
+	at: number;
+	parents: string[];
+	files: GitCommitFile[];
+	truncated: boolean;
 }
 
 /** One commit of the history graph. */
@@ -465,6 +505,9 @@ export interface GitStatus {
 	/** More files than the server's list cap: the list was cut. */
 	truncated: boolean;
 	worktrees: GitWorktree[];
+	/** Local branches (current first), then remote-tracking ones; absent from an older server. */
+	branches?: GitBranch[];
+	stashes?: number;
 	/** Newest commits of every branch, children before parents; absent from an older server. */
 	commits?: GitCommit[];
 	at: number;

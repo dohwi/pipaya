@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { parseStatus, parseWorktrees, parseLog } from "../src/git-routes.ts";
+import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT } from "../src/git-routes.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -12,6 +12,9 @@ let base: string;
 let dir: string;
 let repo: string;
 let plain: string;
+let rich: string;
+let mergeHash: string;
+let rootHash: string;
 let upstream: EchoUpstream;
 const auth = { authorization: "Bearer t" };
 const api = async (method: string, path: string) => {
@@ -49,6 +52,37 @@ beforeAll(async () => {
 	sh(["git", "mv", "gone.txt", "moved.txt"], repo);
 	sh(["git", "worktree", "add", "-q", "-b", "side", join(dir, "wt")], repo);
 	sh(["mkdir", "-p", plain], dir);
+
+	// a second repository with history: a merge, a remote, an upstream that is ahead/behind, a stash, a binary file
+	rich = join(dir, "rich");
+	const remote = join(dir, "remote.git");
+	sh(["git", "init", "-q", "--bare", "-b", "main", remote], dir);
+	sh(["git", "init", "-q", "-b", "main", rich], dir);
+	sh(["git", "config", "user.email", "t@t"], rich);
+	sh(["git", "config", "user.name", "t"], rich);
+	writeFileSync(join(rich, "a.txt"), "1\n2\n3\n");
+	sh(["git", "add", "-A"], rich);
+	sh(["git", "commit", "-qm", "root"], rich);
+	sh(["git", "remote", "add", "origin", remote], rich);
+	sh(["git", "push", "-q", "-u", "origin", "main"], rich);
+	sh(["git", "checkout", "-qb", "feature"], rich);
+	writeFileSync(join(rich, "b.txt"), "side\n");
+	sh(["git", "add", "-A"], rich);
+	sh(["git", "commit", "-qm", "feature: add b"], rich);
+	sh(["git", "checkout", "-q", "main"], rich);
+	writeFileSync(join(rich, "a.txt"), "1\n2\n3\n4\n");
+	sh(["git", "commit", "-qam", "main: extend a"], rich);
+	sh(["git", "merge", "-q", "--no-ff", "feature", "-m", "merge feature"], rich);
+	sh(["git", "mv", "a.txt", "renamed.txt"], rich);
+	sh(["git", "commit", "-qm", "rename a"], rich);
+	// main is now 3 ahead of origin/main; stash one change, then leave a binary and a text edit in the tree
+	writeFileSync(join(rich, "renamed.txt"), "stashed\n");
+	sh(["git", "stash", "-q"], rich);
+	writeFileSync(join(rich, "renamed.txt"), "1\n2\n3\n4\nfive\n");
+	writeFileSync(join(rich, "bin.dat"), Buffer.from([0, 1, 2, 0, 255]));
+	sh(["git", "add", "bin.dat"], rich);
+	mergeHash = Bun.spawnSync(["git", "log", "--merges", "-1", "--format=%H"], { cwd: rich }).stdout.toString().trim();
+	rootHash = Bun.spawnSync(["git", "rev-list", "--max-parents=0", "HEAD"], { cwd: rich }).stdout.toString().trim();
 
 	const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: dir, logLevel: "silent" };
 	upstream = startEchoUpstream();
@@ -187,4 +221,136 @@ test("parseLog reads hash, parents, refs and a subject", () => {
 	expect(a).toEqual({ hash: "aaa", parents: ["bbb", "ccc"], author: "Ann", at: 100, refs: ["HEAD -> main", "tag: v1"], subject: "merge it" });
 	expect(b!.parents).toEqual([]);
 	expect(b!.refs).toEqual([]);
+});
+
+describe("parseBranches", () => {
+	const line = (...f: (string | number)[]) => f.join("\x1f");
+	test("reads upstream tracking, remote branches and the current one", () => {
+		const raw = [
+			line("refs/heads/main", "main", "*", "origin/main", "ahead 2, behind 1", 300, "aaa", "/r"),
+			line("refs/heads/old", "old", " ", "origin/old", "gone", 100, "bbb", ""),
+			line("refs/heads/wt", "wt", " ", "", "", 200, "ccc", "/elsewhere"),
+			line("refs/remotes/origin/HEAD", "origin", " ", "", "", 300, "aaa", ""),
+			line("refs/remotes/origin/main", "origin/main", " ", "", "", 250, "ddd", ""),
+		].join("\n");
+		const b = parseBranches(raw);
+		expect(b.map((x) => x.name)).toEqual(["main", "wt", "old", "origin/main"]);
+		expect(b[0]).toMatchObject({ current: true, ahead: 2, behind: 1, upstream: "origin/main", gone: false });
+		expect(b[1]).toMatchObject({ elsewhere: true, current: false });
+		expect(b[2]).toMatchObject({ gone: true, ahead: 0, behind: 0 });
+		expect(b[3]).toMatchObject({ remote: true, elsewhere: false });
+	});
+	test("a repository with no branch yet has none", () => {
+		expect(parseBranches("")).toEqual([]);
+	});
+	test("the format asks for the fields it reads", () => {
+		expect(BRANCH_FORMAT.split("\x1f").length).toBe(8);
+	});
+});
+
+describe("parseNumstat / parseNameStatus", () => {
+	test("numstat keeps counts, skips binary and follows a rename to the new path", () => {
+		const raw = "3\t1\ta.txt\0-\t-\tbin.dat\0" + "0\t0\t\0old.txt\0new.txt\0" + "5\t0\tdir/with space.txt\0";
+		const m = parseNumstat(raw);
+		expect(m.get("a.txt")).toEqual({ add: 3, del: 1 });
+		expect(m.has("bin.dat")).toBe(false);
+		expect(m.get("new.txt")).toEqual({ add: 0, del: 0 });
+		expect(m.get("dir/with space.txt")).toEqual({ add: 5, del: 0 });
+	});
+	test("name-status reads plain and renamed entries", () => {
+		expect(parseNameStatus("M\0a.txt\0R100\0old\0new\0A\0b\0")).toEqual([
+			{ path: "a.txt", code: "M" },
+			{ path: "new", from: "old", code: "R" },
+			{ path: "b", code: "A" },
+		]);
+	});
+	test("empty input is an empty list", () => {
+		expect(parseNameStatus("")).toEqual([]);
+		expect(parseNumstat("").size).toBe(0);
+	});
+});
+
+describe("git panel on a repository with history", () => {
+	test("branches, upstream, stash and line counts", async () => {
+		const id = await sessionIn(rich);
+		const { status, json } = await api("GET", `/sessions/${id}/git`);
+		expect(status).toBe(200);
+		expect(json.branch).toBe("main");
+		expect(json.ahead).toBe(4);
+		expect(json.behind).toBe(0);
+		expect(json.stashes).toBe(1);
+		const names = json.branches.map((b: { name: string }) => b.name);
+		expect(names[0]).toBe("main");
+		expect(names).toContain("feature");
+		expect(names).toContain("origin/main");
+		expect(names).not.toContain("origin");
+		expect(json.branches.find((b: { name: string }) => b.name === "main")).toMatchObject({ current: true, upstream: "origin/main", ahead: 4 });
+		expect(json.branches.find((b: { name: string }) => b.name === "origin/main").remote).toBe(true);
+		const edit = json.files.find((f: { path: string }) => f.path === "renamed.txt");
+		expect(edit).toMatchObject({ state: "unstaged", add: 1, del: 0 });
+		// a staged binary has no line counts
+		const bin = json.files.find((f: { path: string }) => f.path === "bin.dat");
+		expect(bin.state).toBe("staged");
+		expect(bin.add).toBeUndefined();
+	});
+	test("the graph holds the merge with two parents, children before parents", async () => {
+		const id = await sessionIn(rich);
+		const { json } = await api("GET", `/sessions/${id}/git`);
+		const merge = json.commits.find((c: { hash: string }) => c.hash === mergeHash);
+		expect(merge.parents.length).toBe(2);
+		expect(merge.subject).toBe("merge feature");
+		const at = (h: string) => json.commits.findIndex((c: { hash: string }) => c.hash === h);
+		for (const c of json.commits as { hash: string; parents: string[] }[]) for (const p of c.parents) expect(at(p)).toBeGreaterThan(at(c.hash));
+		expect(json.commits[0].refs.some((r: string) => r.startsWith("HEAD -> main"))).toBe(true);
+		// the stash's own commits ("WIP on main", "index on main") are not history
+		expect(json.commits.some((c: { subject: string }) => /^(WIP|index) on /.test(c.subject))).toBe(false);
+	});
+	test("a repository without a commit has an empty graph and no error", async () => {
+		const fresh = join(dir, "fresh");
+		sh(["git", "init", "-q", "-b", "main", fresh], dir);
+		const id = await sessionIn(fresh);
+		const { status, json } = await api("GET", `/sessions/${id}/git`);
+		expect(status).toBe(200);
+		expect(json.repo).toBe(true);
+		expect(json.commits).toEqual([]);
+		expect(json.branches).toEqual([]);
+		expect(json.stashes).toBe(0);
+	});
+});
+
+describe("GET /sessions/:id/git/commit", () => {
+	test("a merge lists what it brought in against its first parent", async () => {
+		const id = await sessionIn(rich);
+		const { status, json } = await api("GET", `/sessions/${id}/git/commit?hash=${mergeHash}`);
+		expect(status).toBe(200);
+		expect(json.subject).toBe("merge feature");
+		expect(json.parents.length).toBe(2);
+		expect(json.files).toEqual([{ path: "b.txt", code: "A", add: 1, del: 0 }]);
+		expect(json.truncated).toBe(false);
+	});
+	test("the root commit lists every file it added", async () => {
+		const id = await sessionIn(rich);
+		const { json } = await api("GET", `/sessions/${id}/git/commit?hash=${rootHash}`);
+		expect(json.parents).toEqual([]);
+		expect(json.files).toEqual([{ path: "a.txt", code: "A", add: 3, del: 0 }]);
+	});
+	test("a rename carries its old path", async () => {
+		const id = await sessionIn(rich);
+		const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: rich }).stdout.toString().trim();
+		const { json } = await api("GET", `/sessions/${id}/git/commit?hash=${head}`);
+		expect(json.files).toEqual([{ path: "renamed.txt", from: "a.txt", code: "R", add: 0, del: 0 }]);
+	});
+	test("a hash that is not a hash is 400, an unknown one is 404", async () => {
+		const id = await sessionIn(rich);
+		expect((await api("GET", `/sessions/${id}/git/commit?hash=--output=x`)).status).toBe(400);
+		expect((await api("GET", `/sessions/${id}/git/commit?hash=deadbeef`)).status).toBe(404);
+		expect((await api("GET", `/sessions/nope/git/commit?hash=deadbeef`)).status).toBe(404);
+	});
+	test("one file of a commit comes back as a diff", async () => {
+		const id = await sessionIn(rich);
+		const { status, json } = await api("GET", `/sessions/${id}/git/diff?path=b.txt&commit=${mergeHash}`);
+		expect(status).toBe(200);
+		expect(json.patch).toContain("+side");
+		expect(json.staged).toBe(false);
+	});
 });
