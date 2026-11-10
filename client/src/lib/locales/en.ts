@@ -1280,6 +1280,7 @@ export const en: Record<string, string> = {
 	"재생": "Play",
 	"소리 켜기": "Unmute",
 	"음소거": "Mute",
+	"볼륨": "Volume",
 	"전체 화면 전환": "Toggle full screen",
 	"화면 배율 키우기": "Zoom in app",
 	"화면 배율 줄이기": "Zoom out app",

@@ -1451,6 +1451,43 @@ html.dnd {
 	appearance: none;
 	-webkit-appearance: none;
 }
+.wd-video-volbox {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	position: relative;
+}
+.wd-video-vol {
+	flex: none;
+	width: 72px;
+}
+.wd-video-volpop {
+	display: contents;
+}
+@media (pointer: coarse) {
+	/* no hover on touch: a tap on the speaker opens a vertical popup above it */
+	.wd-video-volpop {
+		display: none;
+		position: absolute;
+		bottom: 40px;
+		left: 0;
+		width: 32px;
+		height: 96px;
+		border-radius: var(--radius-control);
+		background: color-mix(in srgb, #000 70%, transparent);
+	}
+	.wd-video-volbox.open .wd-video-volpop {
+		display: block;
+	}
+	.wd-video-volpop .wd-video-vol {
+		position: absolute;
+		left: calc(50% - 40px); /* the 80px slider is centred in the popup, then turned upright about its centre */
+		top: calc(50% - 16px);
+		width: 80px;
+		transform: rotate(-90deg);
+	}
+}
 .wd-video-seek::-webkit-slider-runnable-track {
 	height: 4px;
 	border-radius: var(--radius-pill);

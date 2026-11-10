@@ -124,9 +124,33 @@ export function videoPlayer(src: string): HTMLDivElement {
 	speed.type = "button";
 	speed.className = "wd-video-btn wd-video-speed tap";
 	speed.addEventListener("click", () => (video.playbackRate = nextSpeed(video.playbackRate)));
-	const mute = button("wd-video-mute", "volume", () => (video.muted = !video.muted));
+	const coarse = () => matchMedia("(pointer: coarse)").matches;
+	// on a touch screen (no hover) a tap on the speaker opens the vertical slider instead of muting; 0 is mute there
+	const mute = button("wd-video-mute", "volume", () => {
+		if (coarse()) volBox.classList.toggle("open");
+		else video.muted = !video.muted;
+	});
 	const full = button("wd-video-full", "expand", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
-	bar.append(play, time, seek, speed, mute, full);
+	// the slider shares the seek bar's look (`.wd-video-seek`); `.wd-video-vol` only sizes it
+	const vol = document.createElement("input");
+	vol.type = "range";
+	vol.className = "wd-video-seek wd-video-vol";
+	vol.min = "0";
+	vol.max = "1";
+	vol.step = "0.05";
+	label(vol, t("볼륨"));
+	vol.addEventListener("input", () => {
+		video.volume = Number(vol.value);
+		video.muted = video.volume === 0;
+	});
+	const volBox = document.createElement("div");
+	volBox.className = "wd-video-volbox";
+	// on desktop the pop is transparent to layout (`display: contents`); on touch it is the vertical popup
+	const volPop = document.createElement("div");
+	volPop.className = "wd-video-volpop";
+	volPop.append(vol);
+	volBox.append(mute, volPop);
+	bar.append(play, time, seek, speed, volBox, full);
 	wrap.append(video, bar);
 
 	// ── state → bar
@@ -140,7 +164,12 @@ export function videoPlayer(src: string): HTMLDivElement {
 		wrap.classList.remove("idle");
 		clearTimeout(idle);
 		// a paused video keeps its bar; a playing one hides it a moment after the last touch
-		if (!video.paused && !dragging) idle = setTimeout(() => wrap.classList.add("idle"), IDLE_MS);
+		if (!video.paused && !dragging) {
+			idle = setTimeout(() => {
+				wrap.classList.add("idle");
+				volBox.classList.remove("open");
+			}, IDLE_MS);
+		}
 	};
 	const paint = () => {
 		const d = video.duration;
@@ -155,6 +184,9 @@ export function videoPlayer(src: string): HTMLDivElement {
 		label(play, playing ? t("일시정지") : t("재생"));
 		setGlyph(mute, video.muted || video.volume === 0 ? "muted" : "volume");
 		label(mute, video.muted ? t("소리 켜기") : t("음소거"));
+		const level = video.muted ? 0 : video.volume;
+		vol.value = String(level);
+		vol.style.setProperty("--p", `${level * 100}%`);
 		speed.textContent = speedLabel(video.playbackRate);
 		label(speed, t("재생 속도"));
 		const open = shown?.wrap === wrap;
@@ -173,7 +205,10 @@ export function videoPlayer(src: string): HTMLDivElement {
 	});
 	video.addEventListener("dblclick", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
 	wrap.addEventListener("pointermove", wake);
-	wrap.addEventListener("pointerdown", wake);
+	wrap.addEventListener("pointerdown", (e) => {
+		if (!volBox.contains(e.target as Node)) volBox.classList.remove("open");
+		wake();
+	});
 	wrap.addEventListener("focusin", wake);
 	seek.addEventListener("pointerdown", () => (dragging = true));
 	const drop = () => {
