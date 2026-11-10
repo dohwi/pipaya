@@ -12,6 +12,8 @@
 	 *  role     overrides the default (alert for danger, status for ok, note otherwise)
 	 *  animated slide open/closed when it appears or goes away (for notices that come and go inside a form)
 	 *  action   optional trailing control, e.g. a "retry" button
+	 *  raised   for a notice standing on a tinted settings group: a solid tone-tinted base, a 1px ring of its own colour and a
+	 *           soft shadow, so it reads as a box lifted off the card instead of a stripe painted inside it
 	 */
 	let {
 		tone = "info",
@@ -20,6 +22,7 @@
 		role,
 		id,
 		animated = false,
+		raised = false,
 		children,
 		action,
 	}: {
@@ -29,6 +32,7 @@
 		role?: "alert" | "status" | "note";
 		id?: string;
 		animated?: boolean;
+		raised?: boolean;
 		children: Snippet;
 		action?: Snippet;
 	} = $props();
@@ -43,6 +47,7 @@
 
 <div
 	class="notice {tone} {size}"
+	class:raised
 	{id}
 	role={role ?? (tone === "danger" ? "alert" : tone === "ok" ? "status" : "note")}
 	in:enter
@@ -90,6 +95,26 @@
 	}
 	.sm.danger {
 		font-weight: 400;
+	}
+	/* Raised: standing on a tinted settings group, the notice gets an opaque tinted base (the flat --*-soft over --bg-set reads as
+	   paint on the card), a 1px ring of its own colour and the app's soft shadow, so it lifts off the group. --bg-lift is one step
+	   lighter than --bg-set in both themes, which is what makes the box read as "above" the card. The ring is a shadow, not a
+	   border, so the text keeps the flat notice's 12px inset and the box its height. */
+	.raised {
+		background: color-mix(in srgb, var(--notice-tint) 14%, var(--bg-lift));
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--notice-tint) 34%, transparent), var(--shadow-soft);
+	}
+	.raised.info {
+		--notice-tint: var(--info);
+	}
+	.raised.ok {
+		--notice-tint: var(--ok);
+	}
+	.raised.warn {
+		--notice-tint: var(--warn);
+	}
+	.raised.danger {
+		--notice-tint: var(--danger);
 	}
 	.notice :global(svg) {
 		width: 17px;

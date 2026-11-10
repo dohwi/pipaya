@@ -70,13 +70,13 @@
 		<Switch checked={draft.enabled} label={t("음성 입력 사용")} onchange={(on) => (draft = { ...draft, enabled: on })} />
 	</SettingRow>
 	{#if oldExtension}
-		<Notice tone="warn" size="sm">
+		<Notice tone="warn" size="sm" raised>
 			{t("확장 voice-input이 설치되어 있습니다. 마이크가 두 개 보일 수 있으니 확장을 끄고 이 설정을 쓰세요.")}
 			{#if oldExtension.enabled}<span class="hint">{t("지금 켜져 있습니다")}</span>{:else}<span class="hint">{t("지금 꺼져 있습니다")}</span>{/if}
 		</Notice>
 	{/if}
 	{#if voice.availability}
-		<Notice tone="warn" size="sm">{t(voice.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.")}</Notice>
+		<Notice tone="warn" size="sm" raised>{t(voice.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.")}</Notice>
 	{/if}
 </section>
 
@@ -130,6 +130,12 @@
 </section>
 
 <style>
+	/* Same rhythm as the other settings panes: label, hint, row and notice are 8px apart instead of touching. */
+	section {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
 	/* Label over field: one 20px label line, an 8px gap, then the 40px field (the dialog's own spacing). */
 	.row {
 		display: flex;
