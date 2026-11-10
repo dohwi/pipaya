@@ -77,6 +77,20 @@
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 12px; /* rows with a hint line no longer touch the next row */
+	}
+	/* a block with nothing to show (app updates on the web) leaves no empty card */
+	section:empty {
+		display: none;
+	}
+	/* every block's title line is as tall as the ones that carry a button (34px), so the first row starts at the same distance in every card */
+	section > :global(.section-label),
+	section > :global(.head) {
+		display: flex;
+		align-items: center;
+		min-height: var(--control-h-sm);
+	}
+	section > :global(.head) {
+		justify-content: space-between;
 	}
 </style>
