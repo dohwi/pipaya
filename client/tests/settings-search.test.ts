@@ -19,9 +19,13 @@ describe("settings search", () => {
 	test("an empty query finds nothing", () => {
 		expect(find("")).toEqual([]);
 	});
-	test("a section is found by its name and opens that tab", () => {
+	test("a server section is found by its name and opens that tab", () => {
 		const hit = find("백업").find((h) => h.key === "tab:backup");
 		expect(hit?.target).toEqual({ tab: "backup" });
+	});
+	test("the voice fields are found by their own words", () => {
+		expect(find("whisper").some((h) => h.target.tab === "voice")).toBe(true);
+		expect(find("받아쓰기").some((h) => h.target.tab === "voice")).toBe(true);
 	});
 	test("a loose setting is found by an English keyword and opens the tab that holds it", () => {
 		const hit = find("zoom").find((h) => h.key.startsWith("item:"));
@@ -45,6 +49,16 @@ describe("tabs and tool labels", () => {
 	test("known tools are described; others show their name", () => {
 		expect(toolLabel("bash")).toBe("셸 명령 실행 (bash)");
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");
+	});
+	test("the sections follow setup order: device, the server, then what grows over time", () => {
+		const ids = SETTINGS_TABS.map((x) => x.id);
+		// the app-wide ones first, then the server's, and no server section in front of "정보"
+		expect(ids.slice(0, ids.indexOf("info"))).toEqual(["general", "keys", "backup"]);
+		expect(ids.indexOf("info")).toBeLessThan(ids.indexOf("models"));
+		// voice input is a connection like the models, so it sits right after them
+		expect(ids.indexOf("voice")).toBe(ids.indexOf("models") + 1);
+		// the sections that grow over time come last
+		expect(ids.slice(-2)).toEqual(["srvext", "devices"]);
 	});
 });
 

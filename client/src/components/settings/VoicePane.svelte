@@ -13,8 +13,8 @@
 	 * never read back. The microphone button in the composer appears only when voice input is on and the connection test
 	 * passed; this page is where the user turns it on, fixes it and tests it.
 	 *
-	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, path,
-	 * model, language, key), then check it. The status block at the bottom only reports; nothing to fill in there.
+	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, model,
+	 * key, then the optional path and language), then check it. The status block at the bottom only reports.
 	 */
 	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
 	let key = $state("");
