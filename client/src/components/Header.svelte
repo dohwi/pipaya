@@ -11,14 +11,10 @@
 	import { app } from "../lib/store.svelte";
 	import { panesOf } from "../lib/layout";
 	import { viewport } from "../lib/viewport.svelte";
-	import { easeEnter, ms } from "../lib/motion";
 	import { InlineRename } from "../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../lib/rename-places";
 	import { closeContextMenu, openContextMenu } from "../lib/context-menu";
 	import { pressMenu, type Point } from "../lib/press-menu";
-	/** The open button of the right sidebar fades in quickly (and not at all for reduced motion): it takes over from the panel's own toggle. */
-	const swap = (_node: Element) => ({ duration: ms("fast"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
-	const rightHint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
@@ -118,14 +114,6 @@
 		</ExtensionPart>
 
 		<NavbarItems />
-		<!-- The right sidebar's toggle, shown while it is shut. Open, it lives in the panel's own header row (the way the left
-		     sidebar's fold button lives in its brand row). `shut` goes false the moment the panel starts to open and true only once
-		     it has finished closing, so the two buttons are never on screen together while the panel slides. -->
-		{#if app.right.shut}
-			<button class="tool right" in:swap onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기") + rightHint} aria-expanded={false} aria-controls="right-sidebar">
-				<Icon name="sidebar-right" />
-			</button>
-		{/if}
 		<ExtensionMount slot="header.end" />
 
 	</div>
@@ -248,12 +236,6 @@
 	.menu {
 		display: none;
 	}
-	/* The right sidebar's toggle (only while it is shut). Measured, not guessed: the capsule pads
-	   12px on the right, so the 40px button bleeds -8px and its 19px glyph (10.5px in, its ink a further 2.4px) ends
-	   16.9px from the window, exactly where the left menu button's ink starts. At 32px the inset is 6.5px, so -4px. */
-	.right {
-		margin-right: -8px;
-	}
 	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */
 		.capsule { padding-right: 12px; }
@@ -264,11 +246,6 @@
 		.capsule { padding-left: 4px; }
 		.menu {
 			display: grid;
-		}
-		/* the drawer's own button is in the sidebar; the right one opens a sheet, so it stays */
-		.right {
-			width: 32px;
-			margin-right: -4px; /* the 32px box holds the glyph 6.5px in: the ink still ends 16.9px from the window */
 		}
 	}
 	@media (max-width: 640px) {

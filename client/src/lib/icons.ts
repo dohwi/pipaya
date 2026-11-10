@@ -6,7 +6,7 @@ export type IconName =
 	| "menu" | "plus" | "send" | "stop" | "mic" | "mic-rec" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 	| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 	| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
-	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off" | "sidebar-right";
+	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off";
 
 export const ICON_PATHS: Record<IconName, string> = {
 	menu: "M4 7h16M4 12h16M4 17h16",
@@ -60,7 +60,6 @@ export const ICON_PATHS: Record<IconName, string> = {
 	more: "M5 12h.01M12 12h.01M19 12h.01",
 	sidebar: "M4 5h16v14H4zM9.5 5v14",
 	// the same frame with the panel on the right: the right sidebar's toggle
-	"sidebar-right": "M4 5h16v14H4zM14.5 5v14",
 	download: "M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14",
 	cache: "M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
 	clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",

@@ -39,7 +39,6 @@ import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import type { SettingsTabId } from "./settings-search";
 import { SidebarState, reorder } from "./sidebar.svelte";
-import { RightSidebarState } from "./right-sidebar.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -66,7 +65,6 @@ export type { ThemePref } from "./prefs.svelte";
 export type { Toast, Notice } from "./feedback.svelte";
 export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
 export { SIDEBAR_W } from "./sidebar.svelte";
-export { RIGHT_W } from "./right-sidebar.svelte";
 export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
 import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
@@ -257,8 +255,6 @@ class AppStore {
   readonly feedback = new Feedback();
   /** Drawer, width, folded nodes, dragged order. */
   readonly sidebar = new SidebarState();
-  /** The right sidebar (the working directory's git): a column on a wide screen, a sheet on a narrow one. */
-  readonly right = new RightSidebarState();
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);

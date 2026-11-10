@@ -10,7 +10,6 @@ import { msg } from "./i18n";
 
 export type ActionId =
   | "toggleSidebar"
-  | "toggleRightSidebar"
   | "renameTab"
   | "newChat"
   | "clearChat"
@@ -91,12 +90,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("사이드바 접기 / 펼치기"),
     hint: msg("좁은 화면에서는 사이드바 서랍을 열고 닫습니다"),
     default: "Mod+B+B",
-  },
-  {
-    id: "toggleRightSidebar",
-    label: msg("우측 사이드바 열기 / 닫기"),
-    hint: msg("작업 폴더의 변경 사항을 보여 주는 오른쪽 사이드바입니다. 좁은 화면에서는 시트를 열고 닫습니다"),
-    default: "Mod+B+R",
   },
   {
     id: "renameTab",

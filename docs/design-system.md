@@ -189,10 +189,6 @@ and takes it back with `margin: 0 -4px` still has its content on the gutter. Ell
 Checked at 1440 / 820 / 390, light and dark: 223 bands over 29 screens, 0 off-rule sides (extension dialogs included, they are native `<dialog>` with
 `padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b)`).
 
-### The right sidebar's header row (`RightSidebar.svelte`)
-
-Mirror of the left sidebar's brand row, but its icons start at the panel's **left** edge: fold toggle (centre **25**), refresh (centre **45**), then the title 12px past, then the folder (ellipsis). 20px steps like the sidebar columns; both glyphs are 16px in 20px boxes with no margin. 25 is also the centre of the branch glyph and the file status codes below, so the whole panel hangs on one column. The row is `box-sizing: content-box; height: 44px` + 1px hairline, the main header's box, so the hairlines and the panel edge meet in a cross that is pixel-symmetric with the left sidebar's (y 44, x 1120 for a 320px panel at 1440). The shut state keeps the toggle in the main header's right end (it opens the panel).
-
 ### The conversation column (main screen)
 
 Header title, the first tab's label, the conversation text, the composer box and the status line share **one left and one right line**: 16px from the pane

@@ -31,7 +31,6 @@ import { Pairing } from "./pairing.ts";
 import { isAdminOnlyPath, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
-import { registerGitRoutes } from "./git-routes.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
@@ -597,8 +596,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerVoiceRoutes(server, voice, credentials, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => store.get(id)?.cwd);
-	// Read-only git for the right sidebar: the session's working directory, read on the server (the client may be remote).
-	registerGitRoutes(server, (id) => store.get(id)?.cwd);
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
 	registerGroupRoutes(server, groups, (rec) => {
 		if (!systemModel.resolve()) return;

@@ -131,12 +131,9 @@ describe("shortcut catalogue", () => {
 		const bound = ACTIONS.map((a) => a.default).filter(Boolean);
 		expect(new Set(bound).size).toBe(bound.length);
 	});
-	test("the right sidebar's toggle pairs with the left one's: the same chord start (Mod+B), then R", () => {
+	test("the left sidebar's toggle is Mod+B, B", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 		expect(by.toggleSidebar.default).toBe("Mod+B+B");
-		expect(by.toggleRightSidebar.default).toBe("Mod+B+R");
-		expect(by.toggleRightSidebar.group).toBe("general");
-		expect(by.toggleRightSidebar.fixed).toBeUndefined(); // rebindable in Settings like the left one
 	});
 	test("the four split directions exist and the common two are bound", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));

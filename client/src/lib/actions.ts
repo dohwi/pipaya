@@ -205,8 +205,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
       app.sidebar.open = !app.sidebar.open;
     else app.sidebar.toggleCollapsed();
   },
-  // The right sidebar opens and closes the same way on every width (a column on a wide screen, a sheet on a narrow one)
-  toggleRightSidebar: () => app.right.toggle(),
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
   closeSession: () => app.closeActive(),

@@ -12,8 +12,6 @@ export const K = {
   draft: "pipaya.draft",
   sidebar: "pipaya.sidebar", // "1" when collapsed (desktop)
   sidebarW: "pipaya.sidebar.w", // desktop width in px
-  rightSidebar: "pipaya.rightsidebar", // "1" when the right sidebar is open
-  rightSidebarW: "pipaya.rightsidebar.w", // right sidebar width in px (desktop)
   workdir: "pipaya.workdir", // per server: pipaya.workdir.<serverId>
   sound: "pipaya.sound", // notification sounds on/off
   volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
