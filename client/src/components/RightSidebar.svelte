@@ -4,6 +4,7 @@
 	import Badge from "./Badge.svelte";
 	import EmptyState from "./EmptyState.svelte";
 	import { t } from "../lib/i18n";
+	import { formatCombo } from "../lib/keys";
 	import { app } from "../lib/store.svelte";
 	import { gitPanel } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
@@ -14,6 +15,7 @@
 	 * Branch and its ahead/behind, the changed files (staged / unstaged / untracked), the worktrees of the repository, and
 	 * the diff of one file on click. Nothing here writes: no stage, no discard, no commit.
 	 */
+	const hint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const status = $derived(gitPanel.status);
 	const files = $derived(status?.files ?? []);
 	const staged = $derived(files.filter((f) => f.state === "staged"));
@@ -48,11 +50,11 @@
 	});
 </script>
 
-<aside class="right" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
+<aside class="right" id="right-sidebar" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
 	<!-- The toggle at the left edge, the refresh at the right edge, the title and its folder between them (a second, quiet
 	     line like the main header's). Focus and reading order: toggle, refresh, then the body. -->
 	<div class="head">
-		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기")} class="toggle tap" onclick={() => app.right.toggle()} />
+		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기") + hint} class="toggle tap" aria-expanded={true} aria-controls="right-sidebar" onclick={() => app.right.toggle()} />
 		<div class="titles">
 			<span class="title">{t("변경 사항")}</span>
 			{#if folder}<span class="folder mono" title={app.current?.cwd}>{folder}</span>{/if}

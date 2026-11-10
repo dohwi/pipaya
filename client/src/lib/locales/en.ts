@@ -26,6 +26,8 @@ export const en: Record<string, string> = {
 	"우측 사이드바": "Right sidebar",
 	"우측 사이드바 열기": "Toggle right sidebar",
 	"우측 사이드바 닫기": "Close right sidebar",
+	"우측 사이드바 열기 / 닫기": "Open / close right sidebar",
+	"작업 폴더의 변경 사항을 보여 주는 오른쪽 사이드바입니다. 좁은 화면에서는 시트를 열고 닫습니다": "The right sidebar that shows the working folder's changes. On a narrow screen it opens and closes a sheet",
 	"우측 사이드바 너비 조절": "Resize right sidebar",
 	"변경 사항": "Changes",
 	"서버를 업데이트해야 Git 정보를 볼 수 있어요 (서버 재시작이 필요합니다)": "Update the server to see Git info (a server restart is needed)",

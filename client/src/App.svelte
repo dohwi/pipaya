@@ -753,9 +753,11 @@
 	.rside.dragging {
 		transition: none; /* follow the pointer exactly */
 	}
-	/* the content is clipped here, not on .rside: the grip sits 4px outside the panel's edge and must stay grabbable */
+	/* The column animates its width; the content must not reflow (the left sidebar's rule): it keeps the full width and the
+	   shrinking column clips it, so a closing panel slides away instead of being squeezed. The clip is here, not on .rside:
+	   the grip sits 4px outside the panel's edge and must stay grabbable. */
 	.rfull {
-		width: 100%;
+		width: var(--right-w);
 		height: 100%;
 		overflow: hidden;
 	}
@@ -808,6 +810,9 @@
 		.rside.open {
 			width: min(max(320px, 80vw), 90vw, 400px);
 			translate: 0 0;
+		}
+		.rfull {
+			width: 100%; /* the sheet has its own width; nothing animates it */
 		}
 		.rside.dragging {
 			transition: none;

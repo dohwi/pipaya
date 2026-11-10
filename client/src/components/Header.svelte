@@ -18,6 +18,7 @@
 	import { pressMenu, type Point } from "../lib/press-menu";
 	/** The open button of the right sidebar fades in quickly (and not at all for reduced motion): it takes over from the panel's own toggle. */
 	const swap = (_node: Element) => ({ duration: ms("fast"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
+	const rightHint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
@@ -121,7 +122,7 @@
 		     sidebar's fold button lives in its brand row). `shut` goes false the moment the panel starts to open and true only once
 		     it has finished closing, so the two buttons are never on screen together while the panel slides. -->
 		{#if app.right.shut}
-			<button class="tool right" in:swap onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기")}>
+			<button class="tool right" in:swap onclick={() => app.right.toggle()} aria-label={t("우측 사이드바 열기")} title={t("우측 사이드바 열기") + rightHint} aria-expanded={false} aria-controls="right-sidebar">
 				<Icon name="sidebar-right" />
 			</button>
 		{/if}
