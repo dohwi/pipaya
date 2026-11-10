@@ -146,8 +146,6 @@
 			renameGroup: (g) => rename.start(g.id, g.name),
 			groupWith: chooseGroup,
 			closeSession: (id) => void app.close(id),
-			toggleMute: (id) => void app.toggleMute(id),
-			isMuted: (id) => !!app.link?.sessionById.get(id)?.muted,
 			closeTerminal: (id) => void app.closeTerminal(id),
 			togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 			isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),

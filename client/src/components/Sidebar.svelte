@@ -263,8 +263,6 @@
 		renameGroup: startGroupRename,
 		groupWith: chooseGroup,
 		closeSession: (id) => void app.close(id),
-		toggleMute: (id) => void app.toggleMute(id),
-		isMuted: (id) => !!app.link?.sessionById.get(id)?.muted,
 		closeTerminal: (id) => void app.closeTerminal(id),
 		dissolveGroup: (id) => void app.deleteGroup(id),
 		leaveGroup: (id) => void app.leaveGroup(id),
@@ -839,26 +837,6 @@
 		}
 		:global(:where(.side) .item:not(.active):not(.cur):not(.menuopen) .acts) {
 			display: none;
-		}
-	}
-	/* A row with a mute mark keeps the "more" box in the layout (hidden, not removed), so the bell stays on x 236 and the title never runs under it
-	   whether or not the button shows. The same conditions as the rules above decide when the box is visible. */
-	:global(.side .item:has(> .mutemark) > .acts) {
-		display: flex;
-		visibility: hidden;
-		min-width: 20px; /* the "more" button's box: another server's row has no button, and without this the bell's column (x 236) collapses to the right edge (x 256) */
-	}
-	:global(.side .item:has(> .mutemark):is(:hover, :has(:focus-visible), .menuopen) > .acts) {
-		visibility: visible;
-	}
-	@media (pointer: coarse) {
-		/* touch drops the box of rows that are not open; a muted row keeps it (hidden) so its bell stays on the list-button column, not the right edge */
-		:global(.side .item:has(> .mutemark):not(.active):not(.cur):not(.menuopen) > .acts) {
-			display: flex;
-			visibility: hidden;
-		}
-		:global(.side .item:has(> .mutemark):is(.active, .cur, .menuopen) > .acts) {
-			visibility: visible;
 		}
 	}
 	/* the three dots: same box and right edge as the + on the directory row above */

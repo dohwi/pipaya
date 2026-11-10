@@ -18,7 +18,6 @@
 		drop,
 		member = false,
 		body,
-		trail,
 	}: {
 		n: SidebarNode;
 		x: { id: string; title: string };
@@ -27,8 +26,6 @@
 		drop: DropOpts;
 		member?: boolean;
 		body: Snippet<[boolean]>;
-		/** A mark in the right-hand column left of the "more" button (x 236), e.g. the bell of a muted conversation */
-		trail?: Snippet;
 	} = $props();
 
 	const sb = getSidebarCtx();
@@ -54,5 +51,4 @@
 	<svelte:element this={n.current && sb.rename.is(x.id) ? "div" : "button"} class="open wide" onclick={() => !sb.rename.is(x.id) && app.openIn(n.server.id, { session: x.id })} title={tip}>
 		{@render body(pinned)}
 	</svelte:element>
-	{@render trail?.()}
 </RowShell>

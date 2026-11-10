@@ -198,7 +198,7 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		watcher_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 		PRIMARY KEY (target_id, watcher_id)
 	);`,
-	// v28: a session can be muted: its runs and questions raise no OS / push notification.
+	// v28: per-session mute. The feature is gone and nothing reads or writes the column any more; it stays (never dropped) so old rows and migrations are untouched.
 	(db) => addColumn(db, "sessions", "muted", "INTEGER NOT NULL DEFAULT 0"),
 	// v29: the archive is gone. A session is either in the active list or closed; whatever was tucked away is closed, so
 	// nothing the apps listed disappears, and the column goes with the feature.

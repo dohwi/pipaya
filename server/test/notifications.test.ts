@@ -60,17 +60,17 @@ describe("notification policy", () => {
     bus.publish("s1", "run_finished", { status: "ok" }); expect(events).toHaveLength(3); // older record: a user run
     quiet = false; bus.publish("s1", "run_finished", { status: "ok", origin: "peer" }); expect(events).toHaveLength(4);
   });
-  test("a muted session raises no notice, built-in or from a rule; others still do", () => {
-    const db = openDb(":memory:"); const bus = new EventBus(db); const muted = new Set(["quiet"]);
-    const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined, muted: id => muted.has(id) });
+  test("a session left with muted=1 in the database still raises notices (per-session mute is gone)", () => {
+    const db = openDb(":memory:"); const bus = new EventBus(db);
+    db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, closed, muted, created_at, updated_at) VALUES ('old', 't', '/', 'p', 'm', 'off', '', '[]', 0, 1, 1, 1)").run();
+    const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined });
     const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
     disposals.push(async () => { await service.close(); db.close(); });
     service.heartbeat("pc", presence("desktop"));
-    bus.publish("quiet", "run_finished", { status: "ok" }); bus.publish("quiet", "question_requested", { toolCallId: "c", question: "?" });
-    service.setRule("a", "done", { event: "run_finished", title: "custom" }); bus.publish("quiet", "run_finished", { status: "error" });
-    expect(events).toHaveLength(0);
-    bus.publish("loud", "run_finished", { status: "ok" }); expect(events).toHaveLength(1);
+    bus.publish("old", "run_finished", { status: "ok" }); bus.publish("old", "question_requested", { toolCallId: "c", question: "?" });
+    expect(events).toHaveLength(2);
   });
+
   test("durable rules override the default event notice, and revoke is owner-scoped", () => {
     const { service, bus, db, events } = setup(); service.heartbeat("pc", presence("desktop"));
     service.setRule("a", "done", { event: "run_finished", title: "custom" });

@@ -67,7 +67,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "bell" | "bell-off";
+export type MenuIcon = "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -90,9 +90,6 @@ export interface RowActions {
 	groupWith(tab: { id: string; title: string }): void;
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
-	/** Silence or re-enable a conversation's notifications; `isMuted` says which the entry offers */
-	toggleMute?(id: string): void;
-	isMuted?(id: string): boolean;
 	/** Dissolve a split tab. Only the sidebar passes it, and only the split tab's own row offers it: not its panes, the tab bar, the chips or the pane bars. */
 	dissolveGroup?(id: string): void;
 	/** Take a pane out of its split tab (only offered for a `member`) */
@@ -137,11 +134,6 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		// a pane of a split tab is pinned with its tab, not alone
 		...(member ? [] : pinEntry(x.id, act)),
-		...(act.toggleMute && target.kind === "session"
-			? [(act.isMuted?.(x.id)
-					? { icon: "bell", label: t("알림 켜기"), title: t("이 대화의 완료·질문 알림을 다시 받습니다"), run: () => act.toggleMute!(x.id) }
-					: { icon: "bell-off", label: t("알림 끄기"), title: t("이 대화의 완료·질문 알림을 받지 않습니다"), run: () => act.toggleMute!(x.id) }) satisfies MenuEntry]
-			: []),
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
 		close,

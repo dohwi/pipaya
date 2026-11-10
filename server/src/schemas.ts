@@ -49,7 +49,6 @@ const sessionFields = {
 	tools: Type.Array(Type.String()),
 	parentId: Nullable(Type.String()),
 	closed: Type.Boolean({ description: "Closed sessions are hidden from the active list; reopen with PATCH closed=false" }),
-	muted: Type.Boolean({ description: "Muted sessions raise no OS / push notification; PATCH muted=false turns them back on" }),
 	createdAt: Type.Integer({ description: "Unix ms" }),
 	updatedAt: Type.Integer({ description: "Unix ms" }),
 };
@@ -160,7 +159,6 @@ export const CreateSessionBody = Type.Object({
 	thinkingLevel: Type.Optional(Thinking),
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000 })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
-	muted: Type.Optional(Type.Boolean({ description: "Create the session with its notifications off" })),
 	lang: Type.Optional(Type.String({ maxLength: 35, description: "UI language tag (e.g. ko, en). Picks the language of the session's @name; omit for Korean names." })),
 });
 
@@ -177,7 +175,7 @@ export const PatchSessionBody = Type.Object({
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
-	muted: Type.Optional(Type.Boolean({ description: "true silences this session's notifications (run ended, question); false turns them back on" })),
+	muted: Type.Optional(Type.Boolean({ description: "Ignored. Per-session mute was removed; older clients may still send it (the quietPeers notification policy replaced it)", deprecated: true })),
 }, { additionalProperties: false });
 
 export const ListSessionsQuery = Type.Object({

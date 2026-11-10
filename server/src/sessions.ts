@@ -207,7 +207,6 @@ export class SessionManager {
 			tools,
 			parentId,
 			closed: false,
-			muted: input.muted ?? false,
 			createdAt: now,
 			updatedAt: now,
 		};

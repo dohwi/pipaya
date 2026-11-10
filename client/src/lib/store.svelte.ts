@@ -1571,18 +1571,6 @@ class AppStore {
     }
   }
 
-  /** Turn a conversation's notifications (run ended, question) off or on. */
-  async toggleMute(id: string) {
-    const api = this.api;
-    const s = this.link?.sessionById.get(id);
-    if (!api || !s) return;
-    try {
-      await api.patchSession(id, { muted: !s.muted }); // the session_updated event refreshes the list
-    } catch (e) {
-      this.fail(e, t("알림 설정을 바꾸지 못했습니다"), id);
-    }
-  }
-
   /**
    * The session that should take focus when `id` goes away. In a group: the next pane of that group, or the previous
    * when it was last. Otherwise (or when it was alone in its group): the next session in sidebar order, or the previous

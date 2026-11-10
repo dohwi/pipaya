@@ -75,8 +75,6 @@ export interface Session {
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list; reopen with PATCH closed=false */
 	closed: boolean;
-	/** Muted sessions raise no OS / push notification (run ended, question) */
-	muted?: boolean;
 	/** Unix ms */
 	createdAt: number;
 	/** Unix ms */

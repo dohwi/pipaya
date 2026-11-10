@@ -48,12 +48,10 @@ export interface PeerCreateInput {
 	thinkingLevel?: ThinkingLevel;
 	purpose?: string;
 	notify?: boolean;
-	/** Notifications of the new session. Default: off when the caller hears about it (`notify`), since the caller then reports to the user itself. */
-	muted?: boolean;
 }
 
 export type ManageAction = "close" | "resume" | "delete" | "cancel_queued" | "rename" | "set";
-export interface ManageArgs { mode?: "steer" | "follow_up"; text?: string; newName?: string; purpose?: string; provider?: string; model?: string; thinkingLevel?: ThinkingLevel; muted?: boolean }
+export interface ManageArgs { mode?: "steer" | "follow_up"; text?: string; newName?: string; purpose?: string; provider?: string; model?: string; thinkingLevel?: ThinkingLevel }
 
 /** A new name must stay readable as an @mention. */
 const NAME_RE = /^[\p{L}\p{N}_-]{1,30}$/u;
@@ -149,7 +147,7 @@ export interface PeerHost {
 	/** Answer a waiting question; false when nothing matched or the answer is invalid. */
 	answer(id: string, toolCallId: string, a: QuestionAnswer): "ok" | "not_found" | "invalid";
 	/** A new session; `send` starts its first run. */
-	create(input: { title?: string; cwd?: string; provider?: string; model?: string; thinkingLevel?: ThinkingLevel; muted?: boolean }, parentId: string): Promise<SessionRecord>;
+	create(input: { title?: string; cwd?: string; provider?: string; model?: string; thinkingLevel?: ThinkingLevel }, parentId: string): Promise<SessionRecord>;
 	/** Close (stops its work) / resume / delete a session. */
 	update(id: string, patch: SessionPatch): void;
 	remove(id: string): void;
@@ -341,8 +339,7 @@ export class PeerService {
 		this.sends.set(selfId, count);
 		const own = this.host.store.get(selfId);
 		const notify = input.notify ?? true;
-		const muted = input.muted ?? notify;
-		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? own?.cwd, provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel, muted }, selfId);
+		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? own?.cwd, provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
 		if (input.purpose) this.host.update(r.id, { purpose: input.purpose.slice(0, 200) });
 		if (notify) this.host.store.watch(r.id, selfId);
 		try {
@@ -352,7 +349,7 @@ export class PeerService {
 			this.host.remove(r.id); // a session that never got its task is of no use
 			throw e;
 		}
-		return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer(action=read) to check on it."}${muted ? " Its notifications to the user are off." : ""}`;
+		return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer(action=read) to check on it."}`;
 	}
 
 	/** A session of this server by name, closed ones too (`peer(action=close|resume|delete|rename|set)` resume). */
@@ -403,8 +400,7 @@ export class PeerService {
 				if (a.provider !== undefined) patch.provider = a.provider;
 				if (a.model !== undefined) patch.model = a.model;
 				if (a.thinkingLevel !== undefined) patch.thinkingLevel = a.thinkingLevel;
-				if (a.muted !== undefined) patch.muted = a.muted;
-				if (!Object.keys(patch).length) throw conflict("nothing to change: pass purpose, provider/model, thinkingLevel or muted");
+				if (!Object.keys(patch).length) throw conflict("nothing to change: pass purpose, provider/model or thinkingLevel");
 				this.host.update(peer.id, patch);
 				return `Updated @${peer.name}: ${Object.entries(patch).map(([k, v]) => `${k}=${oneLine(String(v), 60)}`).join(", ")}.`;
 			}

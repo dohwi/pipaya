@@ -398,14 +398,13 @@ describe("sessions", () => {
 		expect((await api("GET", `/sessions/${fork.json.id}`)).status).toBe(404);
 	});
 
-	test("a session can be muted at creation and by PATCH", async () => {
-		const id = (await api("POST", "/sessions", { title: "quiet", cwd: "proj/mute" })).json.id as string;
-		expect((await api("GET", `/sessions/${id}`)).json.muted).toBe(false);
-		expect((await api("PATCH", `/sessions/${id}`, { muted: true })).json.muted).toBe(true);
-		expect((await api("GET", `/sessions/${id}`)).json.muted).toBe(true);
-		expect((await api("PATCH", `/sessions/${id}`, { muted: false })).json.muted).toBe(false);
-		const m = await api("POST", "/sessions", { title: "born quiet", cwd: "proj/mute", muted: true });
-		expect(m.json.muted).toBe(true);
+	test("the removed muted field is ignored, not rejected (older clients)", async () => {
+		const id = (await api("POST", "/sessions", { title: "quiet", cwd: "proj/mute", muted: true })).json.id as string;
+		expect((await api("GET", `/sessions/${id}`)).json.muted).toBeUndefined();
+		const patched = await api("PATCH", `/sessions/${id}`, { muted: true, title: "still renamed" });
+		expect(patched.status).toBe(200);
+		expect(patched.json.title).toBe("still renamed");
+		expect(patched.json.muted).toBeUndefined();
 	});
 
 	test("the archive is gone: a session is listed, closed or deleted", async () => {

@@ -27,8 +27,6 @@ export interface SessionRecord {
 	parentId: string | null;
 	/** Closed sessions are hidden from the active list until resumed. */
 	closed: boolean;
-	/** Muted sessions raise no OS / push notification (a run ended, a question). */
-	muted: boolean;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -46,7 +44,6 @@ interface SessionRow {
 	tools: string;
 	parent_id: string | null;
 	closed: number;
-	muted: number;
 	created_at: number;
 	updated_at: number;
 }
@@ -64,13 +61,12 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	tools: parseJson<string[]>(r.tools, []), // a damaged list reads as no tools rather than hiding the session
 	parentId: r.parent_id,
 	closed: r.closed === 1,
-	muted: r.muted === 1,
 	createdAt: r.created_at,
 	updatedAt: r.updated_at,
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed" | "muted">
+	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
@@ -83,7 +79,6 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	systemPrompt: "system_prompt",
 	tools: "tools",
 	closed: "closed",
-	muted: "muted",
 };
 
 interface MessageRow { seq: number; role: string; data: string; created_at: number }
@@ -112,8 +107,8 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, muted, created_at, updated_at)
-				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $muted, $created, $updated)`,
+				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
@@ -127,7 +122,6 @@ export class SessionStore {
 				system: r.systemPrompt,
 				tools: JSON.stringify(r.tools),
 				parent: r.parentId,
-				muted: r.muted ? 1 : 0,
 				created: r.createdAt,
 				updated: r.updatedAt,
 			});
@@ -194,7 +188,7 @@ export class SessionStore {
 			// a field this server does not know (an older client, a newer extension): leave the row alone rather than build bad SQL
 			if (value === undefined || !(key in PATCH_COLUMNS)) continue;
 			sets.push(`${PATCH_COLUMNS[key]} = $${key}`);
-			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" || key === "muted" ? (value ? 1 : 0) : (value as string);
+			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" ? (value ? 1 : 0) : (value as string);
 		}
 		this.db.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $id`).run(params);
 		return this.get(id);
