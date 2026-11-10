@@ -27,6 +27,7 @@ import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } f
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
+import { appEventsOf, serverEventOf } from "./extensions/event-forward";
 import { extensionUpdates } from "./extension-updates.svelte";
 import { deviceIdentity, notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
@@ -34,6 +35,7 @@ import { ServerExtensionStore } from "./extensions/server-store";
 import { PairingError, redeemPairing, type PairingLink } from "./pairing";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { fetchLocalePacks } from "./locale-sync";
+import { groupNameFor } from "./group-name";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
@@ -1000,22 +1002,12 @@ class AppStore {
 
   private handle(e: PipayaEvent) {
     const sid = e.sessionId;
-    // Only metadata is forwarded, never event data, messages, tool args or credentials.
-    if (e.type === "run_started" || e.type === "run_finished" || e.type === "session_created" || e.type === "session_updated" || e.type === "session_deleted" || e.type === "compaction_finished" || e.type === "question_requested" || e.type === "question_resolved") {
-      extensions.emit({ type: e.type, sessionId: sid, at: e.ts, ...(e.type === "run_finished" && typeof e.data.status === "string" ? { status: e.data.status } : {}) });
-    }
-    if (e.type === "group_created" || e.type === "group_updated" || e.type === "group_deleted") extensions.emit({ type: e.type, sessionId: null, at: e.ts, groupId: String((e.data as { id?: unknown }).id ?? "") });
-    else if (e.type === "extensions_updated") extensions.emit({ type: "extensions_updated", sessionId: null, at: e.ts });
-    if (e.type === "turn_end") extensions.emit({ type: "turn_end", sessionId: sid, at: e.ts });
-    else if (e.type === "tool_execution_end") extensions.emit({ type: "tool_execution_end", sessionId: sid, at: e.ts, toolName: String((e.data as { toolName?: unknown }).toolName ?? ""), isError: (e.data as { isError?: unknown }).isError === true });
-    // What server extensions publish is meant for client extensions, so it is forwarded as is.
-    if (e.type === "extension_event") {
-      const d = e.data as { extension: string; type: string; data: unknown };
-      extensions.emitServer({ kind: "event", extension: d.extension, type: d.type, sessionId: sid, data: d.data });
-    } else if (e.type === "extension_entry") {
-      const d = e.data as { id: number; extension: string; type: string; data: unknown; createdAt?: number };
-      if (sid) this.chats[sid]?.addEntry(d);
-      extensions.emitServer({ kind: "entry", extension: d.extension, type: d.type, sessionId: sid, data: d.data, id: d.id });
+    // Client extensions hear only metadata (see extensions/event-forward.ts); what server extensions publish goes as is.
+    for (const ev of appEventsOf(e)) extensions.emit(ev);
+    const fromServer = serverEventOf(e);
+    if (fromServer) {
+      if (fromServer.kind === "entry" && sid) this.chats[sid]?.addEntry(e.data as { id: number; extension: string; type: string; data: unknown; createdAt?: number });
+      extensions.emitServer(fromServer);
     } else if (e.type === "extensions_updated") {
       void this.refreshServerExtensions();
     }
@@ -2442,33 +2434,12 @@ class AppStore {
     if (this.activeId === id) this.leave(next);
   }
 
-  /**
-   * Name a new group after its sessions' working folders: `pipaya` when they all share one,
-   * `pipaya / pipaya-wiki` when they differ. Falls back to "Group N" when no folder is known.
-   */
-  private nextGroupName(layout: Layout): string {
-    const dirs: string[] = [];
-    for (const id of panesOf(layout)) {
-      const cwd = this.session(id)?.cwd.replace(/\/+$/, "");
-      const dir = cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? "") : "";
-      if (dir && !dirs.includes(dir)) dirs.push(dir);
-    }
-    const taken = new Set(this.groups.map((g) => g.name));
-    if (dirs.length) {
-      const shown = dirs.length > 3 ? [...dirs.slice(0, 3), `+${dirs.length - 3}`] : dirs;
-      const base = shown.join(" / ");
-      if (!taken.has(base)) return base;
-      for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
-    }
-    for (let n = 1; ; n++) if (!taken.has(t("그룹 {n}", { n }))) return t("그룹 {n}", { n });
-  }
-
   async createGroup(layout: Layout, name?: string): Promise<Group | null> {
     if (!this.api) return null;
     try {
       // the new group's tab takes the place of the tab the drop landed on (the pane split; `pair` puts it first or second)
       const before = this.dirs;
-      const g = await this.api.createGroup({ layout, name: name || this.nextGroupName(layout), ...(name ? {} : { autoName: true }) });
+      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.session(id)?.cwd), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
       this.replaceTabs(before, panesOf(layout), [g.id]);
       // the server moved these sessions out of any group they were in
