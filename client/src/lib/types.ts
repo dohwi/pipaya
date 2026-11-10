@@ -488,6 +488,13 @@ export interface GitCommit {
 	refs: string[];
 }
 
+/** One page of the history graph, newest first, children before parents. */
+export interface GitLog {
+	commits: GitCommit[];
+	/** Older commits exist beyond this page. */
+	more: boolean;
+}
+
 /** What the right sidebar's git panel shows: read-only, read on the server. */
 export interface GitStatus {
 	/** False when the working directory is not in a repository (or git is missing): the rest is then empty. */
@@ -508,8 +515,8 @@ export interface GitStatus {
 	/** Local branches (current first), then remote-tracking ones; absent from an older server. */
 	branches?: GitBranch[];
 	stashes?: number;
-	/** Newest commits of every branch, children before parents; absent from an older server. */
-	commits?: GitCommit[];
+	/** More branches than the picker's cap: the list was cut. */
+	branchesCut?: boolean;
 	at: number;
 }
 

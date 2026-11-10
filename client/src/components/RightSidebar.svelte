@@ -6,11 +6,13 @@
 	import { t } from "../lib/i18n";
 	import { formatCombo } from "../lib/keys";
 	import { app } from "../lib/store.svelte";
-	import { gitPanel } from "../lib/git-panel.svelte";
+	import { gitPanel, refOf } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
+	import Select from "./Select.svelte";
 	import { layoutGraph } from "../lib/git-graph";
+	import { GIT_LIMITS } from "../lib/git-limits";
 	import { agoParts, lineCounts, refChips, trackState } from "../lib/git-view";
-	import type { GitBranch, GitFile } from "../lib/types";
+	import type { GitFile } from "../lib/types";
 
 	/**
 	 * The right sidebar: what the working directory of the session on screen looks like in git, read-only.
@@ -44,7 +46,7 @@
 	const LANE = 12;
 	const ROW = 32;
 	const PALETTE = ["var(--info)", "var(--ok)", "var(--warn)", "var(--danger)", "var(--text-dim)"];
-	const graph = $derived(layoutGraph(status?.commits ?? [], PALETTE.length));
+	const graph = $derived(layoutGraph(gitPanel.commits, PALETTE.length));
 	/** The lanes drawn: a repository with dozens of branches would push the subjects off the panel, so the rest is clipped. */
 	const gw = $derived(Math.min(graph.lanes, 8) * LANE);
 	const when = (at: number) => new Date(at * 1000).toLocaleString();
@@ -64,20 +66,29 @@
 		return t("{n}년 전", { n });
 	};
 	const branches = $derived(status?.branches ?? []);
-	const locals = $derived(branches.filter((b) => !b.remote));
-	const remotes = $derived(branches.filter((b) => b.remote));
-	/** Remote-tracking branches are many and rarely what you came for: folded until asked for. */
-	let showRemotes = $state(false);
-	const trackLabel = (b: GitBranch) => {
-		switch (trackState(b)) {
-			case "gone":
-				return t("원격에서 삭제됨");
-			case "local":
-				return t("원격 없음");
-			default:
-				return "";
+	/** The picker: every branch, then each one (remote-tracking ones marked), the hint saying where it stands. */
+	const branchOptions = $derived.by(() => {
+		const opts: { value: string; label: string; hint?: string; disabled?: boolean }[] = [{ value: "", label: t("모든 브랜치") }];
+		for (const b of branches) {
+			const st = trackState(b);
+			const hint = [b.current ? t("현재") : "", st === "ahead" || st === "diverged" ? `↑${b.ahead}` : "", st === "behind" || st === "diverged" ? `↓${b.behind}` : "", st === "gone" ? t("삭제됨") : "", b.elsewhere ? t("워크트리") : "", ago(b.at)].filter(Boolean).join(" ");
+			opts.push({ value: refOf(b), label: b.name, hint });
 		}
-	};
+		if (status?.branchesCut) opts.push({ value: "\0cut", label: t("브랜치가 많아 {n}개만 표시합니다", { n: GIT_LIMITS.branches }), disabled: true });
+		return opts;
+	});
+	/** The changed files fold into one row: the graph is the page, the working tree is a glance. */
+	let filesOpen = $state(false);
+	let treesOpen = $state(false);
+	const totals = $derived.by(() => {
+		let add = 0;
+		let del = 0;
+		for (const f of files) {
+			add += f.add ?? 0;
+			del += f.del ?? 0;
+		}
+		return { add, del };
+	});
 	const pick = (f: GitFile) => void gitPanel.pick({ path: f.path, staged: f.state === "staged" });
 	const pickInCommit = (hash: string, path: string) => void gitPanel.pick({ path, staged: false, commit: hash });
 
@@ -127,124 +138,132 @@
 			</div>
 			{#if status.upstream}<div class="up mono">{status.upstream}</div>{/if}
 
-			{#if !files.length}
-				<EmptyState tone="plain">{t("변경된 파일이 없습니다")}</EmptyState>
-			{:else}
-				{#each [{ title: t("스테이징됨"), list: staged }, { title: t("변경됨"), list: unstaged }, { title: t("추적 안 됨"), list: untracked }] as group (group.title)}
-					{#if group.list.length}
-						<section class="group" aria-label={group.title}>
-							<div class="ghead"><span class="gtitle">{group.title}</span><span class="count">{group.list.length}</span></div>
+			<div class="pickrow">
+				<Select size="sm" mono label={t("브랜치")} value={gitPanel.logRef} options={branchOptions} onchange={(v) => gitPanel.selectRef(v)} />
+			</div>
+
+			<section class="fold" aria-label={t("변경된 파일")}>
+				<button class="foldhead" aria-expanded={filesOpen} disabled={!files.length} onclick={() => (filesOpen = !filesOpen)}>
+					<span class="chev" class:open={filesOpen} aria-hidden="true"><Icon name="chevron-down" /></span>
+					<span class="gtitle">{t("변경된 파일")}</span>
+					<span class="count">{files.length}{status.truncated ? "+" : ""}</span>
+					{#if totals.add || totals.del}<span class="num mono"><span class="plus">+{totals.add}</span> <span class="minus">−{totals.del}</span></span>{/if}
+				</button>
+				{#if filesOpen && files.length}
+					<div class="foldbody" style:max-height="{GIT_LIMITS.filesVisible * 33 + 56}px">
+						{#each [{ title: t("스테이징됨"), list: staged }, { title: t("변경됨"), list: unstaged }, { title: t("추적 안 됨"), list: untracked }] as group (group.title)}
+							{#if group.list.length}
+								<div class="ghead"><span class="gtitle">{group.title}</span><span class="count">{group.list.length}</span></div>
+								<ul>
+									{#each group.list as f (f.state + f.path)}
+										{@const open = gitPanel.picked?.path === f.path && gitPanel.picked.staged === (f.state === "staged") && !gitPanel.picked.commit}
+										<li>
+											<button class="file" class:on={open} onclick={() => pick(f)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
+												<span class="code" data-state={f.state}>{f.code}</span>
+												<span class="path">{f.path}</span>
+												{@render counts(f)}
+											</button>
+											{#if open}{@render diffView()}{/if}
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						{/each}
+						{#if status.truncated}<p class="cut">{t("파일이 많아 {n}개만 표시합니다", { n: GIT_LIMITS.files })}</p>{/if}
+					</div>
+				{/if}
+			</section>
+
+			<section class="graphbox" aria-label={t("그래프")}>
+				<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}{gitPanel.more ? "+" : ""}</span></div>
+				<div class="graphscroll">
+					{#if gitPanel.logError}
+						<EmptyState tone="plain" as="p">{gitPanel.logError}</EmptyState>
+					{:else if !graph.rows.length}
+						<EmptyState tone="plain" as="p" loading={gitPanel.logLoading}>{t("커밋이 없습니다")}</EmptyState>
+					{:else}
+						<ul>
+							{#each graph.rows as r (r.commit.hash)}
+								{@const opened = gitPanel.openCommit === r.commit.hash}
+								<li class="commit-wrap">
+									<button class="commit" class:on={opened} aria-expanded={opened} onclick={() => void gitPanel.toggleCommit(r.commit.hash)} title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
+										<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
+											{#each r.segs as s, i (i)}
+												<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
+											{/each}
+											<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
+										</svg>
+										<span class="subject">{r.commit.subject}</span>
+										{#each refChips(r.commit.refs).slice(0, 2) as chip (chip.label)}
+											<span class="ref mono" data-kind={chip.kind}>{chip.label}</span>
+										{/each}
+										<span class="when">{ago(r.commit.at)}</span>
+									</button>
+									{#if opened}
+										<div class="detail">
+											{#if gitPanel.commitLoading}
+												<EmptyState tone="plain" as="p" loading />
+											{:else if gitPanel.commitError}
+												<EmptyState tone="plain" as="p">{gitPanel.commitError}</EmptyState>
+											{:else if gitPanel.commit}
+												<p class="meta mono">{gitPanel.commit.hash.slice(0, 8)} · {gitPanel.commit.author} · {when(gitPanel.commit.at)}</p>
+												{#if gitPanel.commit.parents.length > 1}<p class="meta">{t("병합 커밋: 첫 부모와 비교한 변경입니다")}</p>{/if}
+												{#if gitPanel.commit.body}<p class="msg">{gitPanel.commit.body}</p>{/if}
+												{#if !gitPanel.commit.files.length}
+													<p class="meta">{t("변경된 파일이 없습니다")}</p>
+												{:else}
+													<ul class="cfiles">
+														{#each gitPanel.commit.files as f (f.path)}
+															{@const openFile = gitPanel.picked?.commit === r.commit.hash && gitPanel.picked.path === f.path}
+															<li>
+																<button class="file" class:on={openFile} onclick={() => pickInCommit(r.commit.hash, f.path)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
+																	<span class="code" data-state={f.code === "A" ? "staged" : f.code === "D" ? "conflict" : undefined}>{f.code}</span>
+																	<span class="path">{f.path}</span>
+																	{@render counts(f)}
+																</button>
+																{#if openFile}{@render diffView()}{/if}
+															</li>
+														{/each}
+													</ul>
+													{#if gitPanel.commit.truncated}<p class="cut">{t("파일이 많아 {n}개만 표시합니다", { n: GIT_LIMITS.commitFiles })}</p>{/if}
+												{/if}
+											{/if}
+										</div>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+						{#if gitPanel.more}
+							{#if gitPanel.logLimit < GIT_LIMITS.commitsMax}
+								<button class="more" disabled={gitPanel.logLoading} onclick={() => gitPanel.showMore()}>{t("커밋 {n}개 더 보기", { n: GIT_LIMITS.commitsPage })}</button>
+							{:else}
+								<p class="cut">{t("최근 {n}개까지만 표시합니다", { n: GIT_LIMITS.commitsMax })}</p>
+							{/if}
+						{/if}
+					{/if}
+				</div>
+			</section>
+
+			{#if status.worktrees.length > 1}
+				<section class="fold" aria-label={t("워크트리")}>
+					<button class="foldhead" aria-expanded={treesOpen} onclick={() => (treesOpen = !treesOpen)}>
+						<span class="chev" class:open={treesOpen} aria-hidden="true"><Icon name="chevron-down" /></span>
+						<span class="gtitle">{t("워크트리")}</span>
+						<span class="count">{status.worktrees.length}</span>
+					</button>
+					{#if treesOpen}
+						<div class="foldbody" style:max-height="{4 * 33}px">
 							<ul>
-								{#each group.list as f (f.state + f.path)}
-									{@const open = gitPanel.picked?.path === f.path && gitPanel.picked.staged === (f.state === "staged")}
-									<li>
-										<button class="file" class:on={open} onclick={() => pick(f)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
-											<span class="code" data-state={f.state}>{f.code}</span>
-											<span class="path">{f.path}</span>
-											{@render counts(f)}
-										</button>
-										{#if open && !gitPanel.picked?.commit}{@render diffView()}{/if}
+								{#each status.worktrees as w (w.path)}
+									<li class="tree" class:here={w.path === status.root} aria-current={w.path === status.root ? "true" : undefined}>
+										<span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
+										<span class="path">{shortName(w.path, app.workspace?.home)}</span>
+										<span class="wbranch mono">{w.branch ?? t("분리됨")}</span>
 									</li>
 								{/each}
 							</ul>
-						</section>
+						</div>
 					{/if}
-				{/each}
-				{#if status.truncated}<p class="cut">{t("파일이 많아 일부만 표시합니다")}</p>{/if}
-			{/if}
-
-			{#if locals.length}
-				<section class="group" aria-label={t("브랜치")}>
-					<div class="ghead"><span class="gtitle">{t("브랜치")}</span><span class="count">{locals.length}</span></div>
-					<ul>
-						{#each locals as b (b.name)}
-							{@render branchRow(b)}
-						{/each}
-					</ul>
-					{#if remotes.length}
-						<button class="more" aria-expanded={showRemotes} onclick={() => (showRemotes = !showRemotes)}>
-							{showRemotes ? t("원격 브랜치 접기") : t("원격 브랜치 {n}개 보기", { n: remotes.length })}
-						</button>
-						{#if showRemotes}
-							<ul>
-								{#each remotes as b (b.name)}
-									{@render branchRow(b)}
-								{/each}
-							</ul>
-						{/if}
-					{/if}
-				</section>
-			{/if}
-
-			{#if graph.rows.length}
-				<section class="group" aria-label={t("그래프")}>
-					<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}</span></div>
-					<ul>
-						{#each graph.rows as r (r.commit.hash)}
-							{@const opened = gitPanel.openCommit === r.commit.hash}
-							<li class="commit-wrap">
-								<button class="commit" class:on={opened} aria-expanded={opened} onclick={() => void gitPanel.toggleCommit(r.commit.hash)} title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
-									<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
-										{#each r.segs as s, i (i)}
-											<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
-										{/each}
-										<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
-									</svg>
-									<span class="subject">{r.commit.subject}</span>
-									{#each refChips(r.commit.refs).slice(0, 2) as chip (chip.label)}
-										<span class="ref mono" data-kind={chip.kind}>{chip.label}</span>
-									{/each}
-									<span class="when">{ago(r.commit.at)}</span>
-								</button>
-								{#if opened}
-									<div class="detail">
-										{#if gitPanel.commitLoading}
-											<EmptyState tone="plain" as="p" loading />
-										{:else if gitPanel.commitError}
-											<EmptyState tone="plain" as="p">{gitPanel.commitError}</EmptyState>
-										{:else if gitPanel.commit}
-											<p class="meta mono">{gitPanel.commit.hash.slice(0, 8)} · {gitPanel.commit.author} · {when(gitPanel.commit.at)}</p>
-											{#if gitPanel.commit.parents.length > 1}<p class="meta">{t("병합 커밋: 첫 부모와 비교한 변경입니다")}</p>{/if}
-											{#if gitPanel.commit.body}<p class="msg">{gitPanel.commit.body}</p>{/if}
-											{#if !gitPanel.commit.files.length}
-												<p class="meta">{t("변경된 파일이 없습니다")}</p>
-											{:else}
-												<ul class="cfiles">
-													{#each gitPanel.commit.files as f (f.path)}
-														{@const openFile = gitPanel.picked?.commit === r.commit.hash && gitPanel.picked.path === f.path}
-														<li>
-															<button class="file" class:on={openFile} onclick={() => pickInCommit(r.commit.hash, f.path)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
-																<span class="code" data-state={f.code === "A" ? "staged" : f.code === "D" ? "conflict" : undefined}>{f.code}</span>
-																<span class="path">{f.path}</span>
-																{@render counts(f)}
-															</button>
-															{#if openFile}{@render diffView()}{/if}
-														</li>
-													{/each}
-												</ul>
-												{#if gitPanel.commit.truncated}<p class="cut">{t("파일이 많아 일부만 표시합니다")}</p>{/if}
-											{/if}
-										{/if}
-									</div>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/if}
-
-			{#if status.worktrees.length > 1}
-				<section class="group" aria-label={t("워크트리")}>
-					<div class="ghead"><span class="gtitle">{t("워크트리")}</span><span class="count">{status.worktrees.length}</span></div>
-					<ul>
-						{#each status.worktrees as w (w.path)}
-							<li class="tree" class:here={w.path === status.root} aria-current={w.path === status.root ? "true" : undefined}>
-								<span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
-								<span class="path">{shortName(w.path, app.workspace?.home)}</span>
-								<span class="wbranch mono">{w.branch ?? t("분리됨")}</span>
-							</li>
-						{/each}
-					</ul>
 				</section>
 			{/if}
 		{/if}
@@ -254,19 +273,6 @@
 {#snippet counts(f: { add?: number; del?: number })}
 	{@const n = lineCounts(f)}
 	{#if n}<span class="num mono"><span class="plus">+{n.add}</span> <span class="minus">−{n.del}</span></span>{/if}
-{/snippet}
-
-{#snippet branchRow(b: GitBranch)}
-	{@const state = trackState(b)}
-	<li class="branchrow" class:here={b.current} aria-current={b.current ? "true" : undefined} title={[b.name, b.upstream ? `→ ${b.upstream}` : "", trackLabel(b), b.elsewhere ? t("다른 워크트리에서 사용 중") : ""].filter(Boolean).join(" · ")}>
-		<span class="glyph" aria-hidden="true"><Icon name="fork" /></span>
-		<span class="bname mono">{b.name}</span>
-		{#if b.elsewhere}<span class="flag">{t("워크트리")}</span>{/if}
-		{#if state === "ahead" || state === "diverged"}<Badge tone="neutral" size="sm" mono>↑{b.ahead}</Badge>{/if}
-		{#if state === "behind" || state === "diverged"}<Badge tone="neutral" size="sm" mono>↓{b.behind}</Badge>{/if}
-		{#if state === "gone"}<span class="flag warn">{t("삭제됨")}</span>{/if}
-		<span class="when">{ago(b.at)}</span>
-	</li>
 {/snippet}
 
 {#snippet diffView()}
@@ -346,11 +352,85 @@
 		line-height: 16px;
 		color: var(--text-faint);
 	}
+	/* A column: the picker and the folds take their own height, the graph takes the rest and scrolls inside itself */
 	.body {
 		flex: 1;
 		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 12px 0 0;
 		overflow-y: auto;
-		padding: 12px 0 16px;
+	}
+	.pickrow {
+		flex: none;
+		margin-top: 8px;
+		padding: 0 16px;
+	}
+	.fold {
+		flex: none;
+		margin-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.foldhead {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		height: 32px;
+		padding: 0 16px;
+		text-align: left;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.foldhead:hover:not(:disabled) {
+		background: var(--bg-hover);
+	}
+	.foldhead:disabled .gtitle {
+		color: var(--text-faint);
+	}
+	.foldhead .num {
+		margin-left: auto;
+	}
+	.chev {
+		display: grid;
+		place-items: center;
+		flex: none;
+		color: var(--text-faint);
+		transform: rotate(-90deg);
+		transition: transform var(--motion-fast) var(--ease-std);
+	}
+	.chev.open {
+		transform: none;
+	}
+	.chev :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.foldbody {
+		overflow-y: auto;
+		padding-bottom: 8px;
+	}
+	.foldbody .ghead {
+		margin-top: 8px;
+	}
+	.graphbox {
+		flex: 1 0 240px; /* never squeezed below ~7 rows, even with the folds open: the body scrolls instead */
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		margin-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.graphbox > .ghead {
+		flex: none;
+		height: 32px;
+		align-items: center;
+	}
+	.graphscroll {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding-bottom: 16px;
 	}
 	.branch {
 		display: flex;
@@ -548,39 +628,6 @@
 	.minus {
 		color: var(--danger);
 	}
-	.branchrow {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		height: 32px;
-		padding: 0 16px;
-		color: var(--text-dim);
-	}
-	.branchrow.here {
-		color: var(--text);
-	}
-	.branchrow.here .bname {
-		font-weight: 600;
-	}
-	.branchrow .glyph {
-		display: grid;
-		place-items: center;
-		flex: none;
-	}
-	.branchrow .glyph :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke-width: 1.8;
-	}
-	.bname {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-		line-height: 20px;
-	}
 	.flag {
 		flex: none;
 		font-size: var(--fs-2xs);
@@ -591,6 +638,7 @@
 		color: var(--warn);
 	}
 	.more {
+		width: 100%;
 		height: 32px;
 		padding: 0 16px;
 		text-align: left;
@@ -598,7 +646,10 @@
 		line-height: 20px;
 		color: var(--text-faint);
 	}
-	.more:hover {
+	.more:disabled {
+		opacity: 0.5;
+	}
+	.more:hover:not(:disabled) {
 		color: var(--text);
 		background: var(--bg-hover);
 	}

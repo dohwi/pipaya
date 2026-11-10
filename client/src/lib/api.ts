@@ -15,6 +15,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	DirListing,
 	GitCommitDetail,
 	GitDiff,
+	GitLog,
 	GitStatus,
 	Group,
 	WorkdirInfo,
@@ -395,6 +396,9 @@ export class Api {
 	/** The unified diff of one changed file; `staged` diffs the index against HEAD. */
 	gitDiff = (id: string, path: string, staged = false, signal?: AbortSignal, commit?: string) =>
 		this.req<GitDiff>("GET", `/sessions/${encodeURIComponent(id)}/git/diff?${new URLSearchParams({ path, ...(staged ? { staged: "true" } : {}), ...(commit ? { commit } : {}) })}`, undefined, signal);
+	/** The history graph: every branch, or just `ref` (a full ref name from the branch list), newest `limit` commits. */
+	gitLog = (id: string, opts: { ref?: string; limit?: number } = {}, signal?: AbortSignal) =>
+		this.req<GitLog>("GET", `/sessions/${encodeURIComponent(id)}/git/log?${new URLSearchParams({ ...(opts.ref ? { ref: opts.ref } : {}), ...(opts.limit ? { limit: String(opts.limit) } : {}) })}`, undefined, signal);
 	/** One commit: its message and the files it changed against its first parent. */
 	gitCommit = (id: string, hash: string, signal?: AbortSignal) =>
 		this.req<GitCommitDetail>("GET", `/sessions/${encodeURIComponent(id)}/git/commit?${new URLSearchParams({ hash })}`, undefined, signal);

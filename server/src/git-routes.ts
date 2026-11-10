@@ -115,8 +115,8 @@ export interface GitStatus {
 	branches: GitBranch[];
 	/** Entries in `git stash list`. */
 	stashes: number;
-	/** The newest commits of every branch, topologically ordered (children before parents). */
-	commits: GitCommit[];
+	/** More branches than the picker's cap: the list was cut. */
+	branchesCut: boolean;
 	/** When this reading was taken (ms). */
 	at: number;
 }
@@ -131,12 +131,25 @@ export interface GitDiff {
 }
 
 /** Caps: a status list and a diff are for reading, not for loading a whole repository into the client. */
-export const MAX_FILES = 300;
-export const MAX_WORKTREES = 30;
-export const MAX_COMMITS = 80;
-export const MAX_BRANCHES = 100;
-export const MAX_DIFF_BYTES = 200 * 1024;
-export const GIT_TIMEOUT_MS = 8000;
+export const GIT_LIMITS = {
+	/** Changed files listed in the panel (`truncated` says the rest was cut). */
+	files: 200,
+	/** Files listed for one commit. */
+	commitFiles: 100,
+	/** Branches offered in the picker, local ones first (`branchesCut` says the rest was cut). */
+	branches: 60,
+	worktrees: 20,
+	/** Commits per page of the graph, and the most a client can ask for in total. */
+	commitsPage: 50,
+	commitsMax: 300,
+	diffBytes: 200 * 1024,
+	timeoutMs: 8000,
+} as const;
+export const MAX_FILES = GIT_LIMITS.files;
+export const MAX_WORKTREES = GIT_LIMITS.worktrees;
+export const MAX_BRANCHES = GIT_LIMITS.branches;
+export const MAX_DIFF_BYTES = GIT_LIMITS.diffBytes;
+export const GIT_TIMEOUT_MS = GIT_LIMITS.timeoutMs;
 
 const SessionParam = Type.Object({ id: Type.String() });
 const DiffQuery = Type.Object({
@@ -214,8 +227,17 @@ export const GitStatusSchema = Type.Object({
 	worktrees: Type.Array(GitWorktreeSchema),
 	branches: Type.Array(GitBranchSchema),
 	stashes: Type.Integer(),
-	commits: Type.Array(GitCommitSchema),
+	branchesCut: Type.Boolean(),
 	at: Type.Integer(),
+});
+export const GitLogSchema = Type.Object({
+	commits: Type.Array(GitCommitSchema),
+	/** Older commits exist beyond this page. */
+	more: Type.Boolean(),
+});
+const LogQuery = Type.Object({
+	ref: Type.Optional(Type.String({ maxLength: 300, description: "A full ref name from the branch list (`refs/heads/x`, `refs/remotes/origin/x`); left out = every branch and tag" })),
+	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: GIT_LIMITS.commitsMax, description: "How many commits, newest first (default one page)" })),
 });
 export const GitDiffSchema = Type.Object({
 	path: Type.String(),
@@ -394,7 +416,12 @@ export function parseBranches(raw: string): GitBranch[] {
 	}
 	// local before remote, the current one first, then the most recently committed to
 	out.sort((a, b) => Number(a.remote) - Number(b.remote) || Number(b.current) - Number(a.current) || b.at - a.at || a.name.localeCompare(b.name));
-	return out.slice(0, MAX_BRANCHES);
+	return out;
+}
+
+/** The branch list as the panel shows it: capped, and whether anything was cut. */
+export function capBranches(all: GitBranch[]): { branches: GitBranch[]; cut: boolean } {
+	return { branches: all.slice(0, MAX_BRANCHES), cut: all.length > MAX_BRANCHES };
 }
 
 /**
@@ -457,7 +484,7 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			if (!cwd) throw notFound("session");
 			const empty = (reason: string): GitStatus => ({
 				repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
-				files: [], truncated: false, worktrees: [], branches: [], stashes: 0, commits: [], at: Date.now(),
+				files: [], truncated: false, worktrees: [], branches: [], branchesCut: false, stashes: 0, at: Date.now(),
 			});
 			if (!(await isDir(cwd))) return empty("missing");
 			const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
@@ -486,19 +513,41 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 					f.del = n.del;
 				}
 			}
-			// a repository with no commit yet has no log: that is an empty graph, not an error
-			const log = await git(root, ["log", "--branches", "--tags", "--remotes", "HEAD", "--topo-order", `--max-count=${MAX_COMMITS}`, `--format=${LOG_FORMAT}`]);
 			return {
 				repo: true,
 				root,
 				reason: null,
 				...parsed,
 				worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
-				branches: refs.code === 0 ? parseBranches(refs.out) : [],
+				...(() => {
+					const { branches, cut } = capBranches(refs.code === 0 ? parseBranches(refs.out) : []);
+					return { branches, branchesCut: cut };
+				})(),
 				stashes: stash.code === 0 ? stash.out.split("\n").filter(Boolean).length : 0,
-				commits: log.code === 0 ? parseLog(log.out) : [],
 				at: Date.now(),
 			};
+		},
+	});
+
+	app.get("/sessions/:id/git/log", {
+		schema: { params: SessionParam, querystring: LogQuery, response: { 200: GitLogSchema, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const cwd = cwdOf(req.params.id);
+			if (!cwd) throw notFound("session");
+			const limit = req.query.limit ?? GIT_LIMITS.commitsPage;
+			const ref = req.query.ref;
+			let roots: string[] = ["--branches", "--tags", "--remotes", "HEAD"];
+			if (ref) {
+				// only a branch the picker offered: never an option, a range or a revision expression
+				if (!/^refs\/(heads|remotes)\/[^\s~^:?*\[\\]+$/.test(ref) || ref.includes("..") || ref.includes("@{")) throw badRequest("ref must be a branch name from the branch list");
+				const ok = await git(cwd, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]);
+				if (ok.code !== 0) throw notFound("branch");
+				roots = [ref];
+			}
+			// one more than asked, to know whether there is a next page; an empty repository has no log (not an error)
+			const log = await git(cwd, ["log", "--topo-order", `--max-count=${limit + 1}`, `--format=${LOG_FORMAT}`, ...roots, "--"]);
+			const commits = log.code === 0 ? parseLog(log.out) : [];
+			return { commits: commits.slice(0, limit), more: commits.length > limit };
 		},
 	});
 
@@ -516,7 +565,7 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			const stats = await git(cwd, ["show", "--first-parent", "-m", "--format=", "--numstat", "-z", "--find-renames", "--root", hash]);
 			const num = parseNumstat(stats.out);
 			const all = parseNameStatus(names.out);
-			const files = all.slice(0, MAX_FILES).map((f) => {
+			const files = all.slice(0, GIT_LIMITS.commitFiles).map((f) => {
 				const n = num.get(f.path);
 				return n ? { ...f, add: n.add, del: n.del } : f;
 			});
@@ -529,7 +578,7 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 				at: Number(at) || 0,
 				parents: parents ? parents.split(" ") : [],
 				files,
-				truncated: all.length > MAX_FILES,
+				truncated: all.length > GIT_LIMITS.commitFiles,
 			};
 		},
 	});

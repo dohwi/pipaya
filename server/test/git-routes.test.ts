@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT } from "../src/git-routes.ts";
+import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT, capBranches, GIT_LIMITS } from "../src/git-routes.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -134,7 +134,7 @@ describe("parseStatus", () => {
 	test("caps the list and says it was cut", () => {
 		const raw = Array.from({ length: 400 }, (_, i) => `? f${i}.txt`).join("\0");
 		const s = parseStatus(raw);
-		expect(s.files.length).toBe(300);
+		expect(s.files.length).toBe(GIT_LIMITS.files);
 		expect(s.truncated).toBe(true);
 	});
 });
@@ -293,17 +293,11 @@ describe("git panel on a repository with history", () => {
 		expect(bin.state).toBe("staged");
 		expect(bin.add).toBeUndefined();
 	});
-	test("the graph holds the merge with two parents, children before parents", async () => {
+	test("the status no longer carries the history (it has its own route)", async () => {
 		const id = await sessionIn(rich);
 		const { json } = await api("GET", `/sessions/${id}/git`);
-		const merge = json.commits.find((c: { hash: string }) => c.hash === mergeHash);
-		expect(merge.parents.length).toBe(2);
-		expect(merge.subject).toBe("merge feature");
-		const at = (h: string) => json.commits.findIndex((c: { hash: string }) => c.hash === h);
-		for (const c of json.commits as { hash: string; parents: string[] }[]) for (const p of c.parents) expect(at(p)).toBeGreaterThan(at(c.hash));
-		expect(json.commits[0].refs.some((r: string) => r.startsWith("HEAD -> main"))).toBe(true);
-		// the stash's own commits ("WIP on main", "index on main") are not history
-		expect(json.commits.some((c: { subject: string }) => /^(WIP|index) on /.test(c.subject))).toBe(false);
+		expect(json.commits).toBeUndefined();
+		expect(json.branchesCut).toBe(false);
 	});
 	test("a repository without a commit has an empty graph and no error", async () => {
 		const fresh = join(dir, "fresh");
@@ -312,9 +306,11 @@ describe("git panel on a repository with history", () => {
 		const { status, json } = await api("GET", `/sessions/${id}/git`);
 		expect(status).toBe(200);
 		expect(json.repo).toBe(true);
-		expect(json.commits).toEqual([]);
 		expect(json.branches).toEqual([]);
 		expect(json.stashes).toBe(0);
+		const log = await api("GET", `/sessions/${id}/git/log`);
+		expect(log.status).toBe(200);
+		expect(log.json).toEqual({ commits: [], more: false });
 	});
 });
 
@@ -352,5 +348,66 @@ describe("GET /sessions/:id/git/commit", () => {
 		expect(status).toBe(200);
 		expect(json.patch).toContain("+side");
 		expect(json.staged).toBe(false);
+	});
+});
+
+describe("GET /sessions/:id/git/log", () => {
+	const log = async (q = "") => api("GET", `/sessions/${await sessionIn(rich)}/git/log${q}`);
+	test("the merge has two parents and children come before parents", async () => {
+		const { status, json } = await log();
+		expect(status).toBe(200);
+		const merge = json.commits.find((c: { hash: string }) => c.hash === mergeHash);
+		expect(merge.parents.length).toBe(2);
+		expect(merge.subject).toBe("merge feature");
+		const at = (h: string) => json.commits.findIndex((c: { hash: string }) => c.hash === h);
+		for (const c of json.commits as { hash: string; parents: string[] }[]) for (const p of c.parents) expect(at(p)).toBeGreaterThan(at(c.hash));
+		expect(json.commits[0].refs.some((r: string) => r.startsWith("HEAD -> main"))).toBe(true);
+		expect(json.more).toBe(false);
+	});
+	test("the stash's own commits are not history", async () => {
+		const { json } = await log();
+		expect(json.commits.some((c: { subject: string }) => /^(WIP|index) on /.test(c.subject))).toBe(false);
+	});
+	test("limit cuts the page and says there is more", async () => {
+		const { json } = await log("?limit=2");
+		expect(json.commits.length).toBe(2);
+		expect(json.more).toBe(true);
+		const all = (await log("?limit=500")).status;
+		expect(all).toBe(400);
+		expect((await log("?limit=0")).status).toBe(400);
+	});
+	test("a branch shows only its own history", async () => {
+		const { json } = await log("?ref=refs/heads/feature");
+		expect(json.commits.map((c: { subject: string }) => c.subject)).toEqual(["feature: add b", "root"]);
+	});
+	test("a remote-tracking branch works too", async () => {
+		const { status, json } = await log("?ref=refs/remotes/origin/main");
+		expect(status).toBe(200);
+		expect(json.commits.map((c: { subject: string }) => c.subject)).toEqual(["root"]);
+	});
+	test("anything that is not a branch name is refused", async () => {
+		for (const ref of ["--all", "HEAD", "main", "refs/heads/../x", "refs/heads/a..b", "refs/heads/x@{1}", "refs/heads/-x y", "refs/tags/v1", "--output=/tmp/x"]) {
+			expect((await log(`?ref=${encodeURIComponent(ref)}`)).status).toBe(400);
+		}
+		expect((await log("?ref=refs/heads/nope")).status).toBe(404);
+	});
+	test("an unknown session is 404", async () => {
+		expect((await api("GET", "/sessions/nope/git/log")).status).toBe(404);
+	});
+});
+
+describe("limits", () => {
+	test("capBranches keeps the order and reports a cut", () => {
+		const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `b${i}` }) as never);
+		expect(capBranches(mk(GIT_LIMITS.branches))).toMatchObject({ cut: false });
+		const r = capBranches(mk(GIT_LIMITS.branches + 5));
+		expect(r.cut).toBe(true);
+		expect(r.branches.length).toBe(GIT_LIMITS.branches);
+	});
+	test("a status with more files than the cap is cut and says so", () => {
+		const raw = Array.from({ length: GIT_LIMITS.files + 20 }, (_, i) => `? f${i}.txt`).join("\0");
+		const s = parseStatus(raw);
+		expect(s.files.length).toBe(GIT_LIMITS.files);
+		expect(s.truncated).toBe(true);
 	});
 });
