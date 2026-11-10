@@ -6,6 +6,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
+	import { initialFolded } from "../../lib/settings-fold";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../Icon.svelte";
 	import Pin from "../Pin.svelte";
@@ -38,8 +39,8 @@
 
 	type TabId = SettingsTabId;
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
-	/** Sections whose extensions the user folded away; everything starts unfolded. */
-	let collapsed = $state<Record<string, boolean>>({});
+	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded (see `settings-fold`). */
+	let collapsed = $state<Record<string, boolean>>(initialFolded());
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
 	$effect(() => {
