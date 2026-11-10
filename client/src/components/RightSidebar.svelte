@@ -49,20 +49,12 @@
 </script>
 
 <aside class="right" data-part="right-sidebar" aria-label={t("우측 사이드바")}>
-	<!-- The left sidebar's brand row, mirrored: the title where the wordmark is, the fold button at the far end. -->
+	<!-- Icons first, from the panel's left edge: the fold toggle, then refresh, then the title and folder (focus order is the same). -->
 	<div class="head">
+		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기")} class="toggle tap" onclick={() => app.right.toggle()} />
+		<IconButton icon="retry" size="sm" label={t("새로 고침")} tip class="refresh tap" disabled={gitPanel.loading} onclick={() => void gitPanel.load()} />
 		<span class="title">{t("변경 사항")}</span>
 		{#if folder}<span class="folder mono" title={app.current?.cwd}>{folder}</span>{/if}
-		<IconButton
-			icon="retry"
-			size="sm"
-			label={t("새로 고침")}
-			tip
-			class="refresh"
-			disabled={gitPanel.loading}
-			onclick={() => void gitPanel.load()}
-		/>
-		<IconButton icon="sidebar-right" label={t("우측 사이드바 닫기")} title={t("우측 사이드바 닫기")} class="toggle" onclick={() => app.right.toggle()} />
 	</div>
 
 	<div class="body">
@@ -156,17 +148,29 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 0;
 		/* the same box as the main header (44px + its 1px hairline), so the two lines meet across the panel's edge */
 		box-sizing: content-box;
 		height: 44px;
-		/* 16px on the left like the rows below; on the right the 38px fold button's 19px glyph ends 14.5px from the window,
-		   the exact spot the header's own toggle has when the panel is shut (5px + the button's 9.5px inset) */
-		padding: 0 5px 0 16px;
+		/* Columns are centres from the panel's left edge, 20px apart like the left sidebar's: the toggle on 24 (the column of
+		   the branch glyph and the file codes below), refresh on 44. Each sits in a 20px square with no margin, so the row
+		   starts 14px in (24 - 10) and the title is 12px past the last box. */
+		padding: 0 16px 0 14px;
 		border-bottom: 1px solid var(--border);
+	}
+	.head :global(.iconbtn) {
+		width: 20px;
+		height: 20px;
+		flex: none;
+	}
+	/* both glyphs 16px so the two sit as equals on the 20px steps (a 19px one beside a 16px one leaves 2.5px between them) */
+	.head :global(.iconbtn svg) {
+		width: 16px;
+		height: 16px;
 	}
 	.title {
 		flex: none;
+		margin-left: 12px;
 		font-size: var(--fs-md);
 		font-weight: 600;
 		line-height: 20px;
@@ -174,20 +178,13 @@
 	.folder {
 		flex: 1;
 		min-width: 0;
+		margin-left: 8px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-2xs);
 		line-height: 20px;
 		color: var(--text-faint);
-	}
-	.head :global(.refresh) {
-		margin-left: auto;
-		flex: none;
-	}
-	/* a 38px button in the 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
-	.head :global(.toggle:focus-visible) {
-		outline-offset: -2px;
 	}
 	.body {
 		flex: 1;
