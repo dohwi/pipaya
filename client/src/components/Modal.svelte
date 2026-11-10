@@ -183,7 +183,8 @@
 		out:modalOut|global
 	>
 		{#if title}
-			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} closeDisabled={!dismissible} actions={headerActions} {titleExtra} />
+			<!-- a card that stays centred on phones (`sheet={false}`) is not pulled down: no handle -->
+			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} pull={sheet} closeDisabled={!dismissible} actions={headerActions} {titleExtra} />
 		{/if}
 		{@render children()}
 	</div>
