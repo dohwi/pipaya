@@ -34,6 +34,19 @@ export interface GitWorktree {
 	main: boolean;
 }
 
+/** One commit of the history graph (`git log --all --topo-order`): enough to draw lanes and a row, nothing more. */
+export interface GitCommit {
+	hash: string;
+	/** Parent hashes, first parent first; two or more = a merge. */
+	parents: string[];
+	subject: string;
+	author: string;
+	/** Author time, seconds since the epoch. */
+	at: number;
+	/** Branch, tag and HEAD names pointing here (`git log %D`), e.g. `HEAD -> main`, `origin/main`, `tag: v1`. */
+	refs: string[];
+}
+
 export interface GitStatus {
 	/** False when the directory is not inside a git repository (or git is not installed): everything else is then empty. */
 	repo: boolean;
@@ -52,6 +65,8 @@ export interface GitStatus {
 	/** More files than the list cap: the list was cut. */
 	truncated: boolean;
 	worktrees: GitWorktree[];
+	/** The newest commits of every branch, topologically ordered (children before parents). */
+	commits: GitCommit[];
 	/** When this reading was taken (ms). */
 	at: number;
 }
@@ -68,6 +83,7 @@ export interface GitDiff {
 /** Caps: a status list and a diff are for reading, not for loading a whole repository into the client. */
 export const MAX_FILES = 300;
 export const MAX_WORKTREES = 30;
+export const MAX_COMMITS = 80;
 export const MAX_DIFF_BYTES = 200 * 1024;
 export const GIT_TIMEOUT_MS = 8000;
 
@@ -82,6 +98,14 @@ const GitFileSchema = Type.Object({
 	from: Type.Optional(Type.String()),
 	state: Type.Union([Type.Literal("staged"), Type.Literal("unstaged"), Type.Literal("untracked"), Type.Literal("conflict")]),
 	code: Type.String(),
+});
+const GitCommitSchema = Type.Object({
+	hash: Type.String(),
+	parents: Type.Array(Type.String()),
+	subject: Type.String(),
+	author: Type.String(),
+	at: Type.Integer(),
+	refs: Type.Array(Type.String()),
 });
 const GitWorktreeSchema = Type.Object({
 	path: Type.String(),
@@ -103,6 +127,7 @@ export const GitStatusSchema = Type.Object({
 	files: Type.Array(GitFileSchema),
 	truncated: Type.Boolean(),
 	worktrees: Type.Array(GitWorktreeSchema),
+	commits: Type.Array(GitCommitSchema),
 	at: Type.Integer(),
 });
 export const GitDiffSchema = Type.Object({
@@ -229,6 +254,29 @@ export function parseWorktrees(raw: string): GitWorktree[] {
 	return out;
 }
 
+/** Field and record separators of the `git log` format below: control characters a subject cannot contain. */
+const FS = "\x1f";
+const RS = "\x1e";
+export const LOG_FORMAT = ["%H", "%P", "%an", "%at", "%D", "%s"].join(FS) + RS;
+
+/** `git log --format=LOG_FORMAT`, parsed. */
+export function parseLog(raw: string): GitCommit[] {
+	const out: GitCommit[] = [];
+	for (const rec of raw.split(RS)) {
+		const f = rec.replace(/^\n/, "").split(FS);
+		if (f.length < 6 || !f[0]) continue;
+		out.push({
+			hash: f[0],
+			parents: f[1] ? f[1].split(" ") : [],
+			author: f[2]!,
+			at: Number(f[3]) || 0,
+			refs: f[4] ? f[4].split(", ").filter(Boolean) : [],
+			subject: f.slice(5).join(FS),
+		});
+	}
+	return out;
+}
+
 /** Whether `dir` is a directory at all: a session may point at a folder that has since been deleted. */
 async function isDir(dir: string): Promise<boolean> {
 	try {
@@ -248,7 +296,7 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			if (!cwd) throw notFound("session");
 			const empty = (reason: string): GitStatus => ({
 				repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
-				files: [], truncated: false, worktrees: [], at: Date.now(),
+				files: [], truncated: false, worktrees: [], commits: [], at: Date.now(),
 			});
 			if (!(await isDir(cwd))) return empty("missing");
 			const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
@@ -260,12 +308,15 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 			const status = await git(root, ["status", "--porcelain=v2", "-b", "-z"]);
 			if (status.code !== 0) return empty("no-git");
 			const trees = await git(root, ["worktree", "list", "--porcelain"]);
+			// a repository with no commit yet has no log: that is an empty graph, not an error
+			const log = await git(root, ["log", "--all", "--topo-order", `--max-count=${MAX_COMMITS}`, `--format=${LOG_FORMAT}`]);
 			return {
 				repo: true,
 				root,
 				reason: null,
 				...parseStatus(status.out),
 				worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
+				commits: log.code === 0 ? parseLog(log.out) : [],
 				at: Date.now(),
 			};
 		},

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { parseStatus, parseWorktrees } from "../src/git-routes.ts";
+import { parseStatus, parseWorktrees, parseLog } from "../src/git-routes.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -179,4 +179,12 @@ describe("GET /sessions/:id/git/diff", () => {
 		expect((await api("GET", `/sessions/${id}/git/diff?path=../../etc/passwd`)).status).toBe(400);
 		expect((await api("GET", `/sessions/${id}/git/diff?path=/etc/passwd`)).status).toBe(400);
 	});
+});
+
+test("parseLog reads hash, parents, refs and a subject", () => {
+	const raw = "aaa\x1fbbb ccc\x1fAnn\x1f100\x1fHEAD -> main, tag: v1\x1fmerge it\x1e\nbbb\x1f\x1fBob\x1f50\x1f\x1froot\x1e\n";
+	const [a, b] = parseLog(raw);
+	expect(a).toEqual({ hash: "aaa", parents: ["bbb", "ccc"], author: "Ann", at: 100, refs: ["HEAD -> main", "tag: v1"], subject: "merge it" });
+	expect(b!.parents).toEqual([]);
+	expect(b!.refs).toEqual([]);
 });

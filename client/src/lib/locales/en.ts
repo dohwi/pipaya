@@ -47,6 +47,7 @@ export const en: Record<string, string> = {
 	"변경 내용이 길어 앞부분만 표시합니다": "The diff is long: only its beginning is shown",
 	"파일이 많아 일부만 표시합니다": "Many files: only some are listed",
 	"워크트리": "Worktrees",
+	"그래프": "Graph",
 	"분리됨": "detached",
 	/* ---- app shell ---- */
 	"서버에 연결해 주세요": "Connect to a server first",

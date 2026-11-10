@@ -8,6 +8,7 @@
 	import { app } from "../lib/store.svelte";
 	import { gitPanel } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
+	import { layoutGraph } from "../lib/git-graph";
 	import type { GitFile } from "../lib/types";
 
 	/**
@@ -38,6 +39,15 @@
 				return "";
 		}
 	});
+	/** Lane width and row height of the history graph, in px (the row is the app's 32px). */
+	const LANE = 12;
+	const ROW = 32;
+	const PALETTE = ["var(--info)", "var(--ok)", "var(--warn)", "var(--danger)", "var(--text-dim)"];
+	const graph = $derived(layoutGraph(status?.commits ?? [], PALETTE.length));
+	/** The lanes drawn: a repository with dozens of branches would push the subjects off the panel, so the rest is clipped. */
+	const gw = $derived(Math.min(graph.lanes, 8) * LANE);
+	const when = (at: number) => new Date(at * 1000).toLocaleString();
+	const refLabel = (r: string) => r.replace(/^HEAD -> /, "").replace(/^tag: /, "");
 	const pick = (f: GitFile) => void gitPanel.pick({ path: f.path, staged: f.state === "staged" });
 
 	/** The diff's lines, with the file header lines dropped: the panel already says which file it is. */
@@ -124,6 +134,28 @@
 					{/if}
 				{/each}
 				{#if status.truncated}<p class="cut">{t("파일이 많아 일부만 표시합니다")}</p>{/if}
+			{/if}
+
+			{#if graph.rows.length}
+				<section class="group" aria-label={t("그래프")}>
+					<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}</span></div>
+					<ul>
+						{#each graph.rows as r (r.commit.hash)}
+							<li class="commit" title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
+								<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
+									{#each r.segs as s, i (i)}
+										<line x1={s.x1 * LANE + LANE / 2} y1={s.y1 * ROW} x2={s.x2 * LANE + LANE / 2} y2={s.y2 * ROW} stroke={PALETTE[s.color]} stroke-width="1.5" />
+									{/each}
+									<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
+								</svg>
+								<span class="subject">{r.commit.subject}</span>
+								{#each r.commit.refs.slice(0, 2) as ref (ref)}
+									<span class="ref mono" class:cur={ref.startsWith("HEAD")}>{refLabel(ref)}</span>
+								{/each}
+							</li>
+						{/each}
+					</ul>
+				</section>
 			{/if}
 
 			{#if status.worktrees.length > 1}
@@ -351,6 +383,46 @@
 		white-space: nowrap;
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
+	}
+	.commit {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 32px;
+		padding: 0 16px;
+		color: var(--text-dim);
+	}
+	.lanes {
+		flex: none;
+		display: block;
+		overflow: hidden;
+	}
+	.subject {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+		color: var(--text);
+	}
+	.ref {
+		flex: none;
+		max-width: 40%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		padding: 0 4px;
+		border-radius: var(--radius-sm);
+		background: var(--bg-hover);
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.ref.cur {
+		background: var(--info-soft);
+		color: var(--info);
 	}
 	.diff {
 		padding: 0 16px 12px;

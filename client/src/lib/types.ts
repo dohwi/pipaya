@@ -435,6 +435,19 @@ export interface GitWorktree {
 	main: boolean;
 }
 
+/** One commit of the history graph. */
+export interface GitCommit {
+	hash: string;
+	/** First parent first; two or more = a merge. */
+	parents: string[];
+	subject: string;
+	author: string;
+	/** Seconds since the epoch. */
+	at: number;
+	/** Names pointing here: `HEAD -> main`, `origin/main`, `tag: v1`. */
+	refs: string[];
+}
+
 /** What the right sidebar's git panel shows: read-only, read on the server. */
 export interface GitStatus {
 	/** False when the working directory is not in a repository (or git is missing): the rest is then empty. */
@@ -452,6 +465,8 @@ export interface GitStatus {
 	/** More files than the server's list cap: the list was cut. */
 	truncated: boolean;
 	worktrees: GitWorktree[];
+	/** Newest commits of every branch, children before parents; absent from an older server. */
+	commits?: GitCommit[];
 	at: number;
 }
 
