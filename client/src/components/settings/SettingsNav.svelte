@@ -111,15 +111,15 @@
 			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
-				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
+				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
 					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
-						{#if x.sub}<span class="ns">{t(x.sub)}</span>{/if}
+						{#if kids.length && !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge">{kids.length}</span>{/if}<Icon name="chevron-left" /></button>
+					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
 				{/if}
 			</div>
 			{#if open}
@@ -170,28 +170,31 @@
 		min-width: 0;
 	}
 	.nav .row.has > button:first-child {
-		padding-right: 56px;
+		padding-right: 38px; /* the fold button's box, so a long label never runs under it */
 	}
+	/* the fold button is the row's right end, 32px tall like the row, 38px wide: its centred 14px arrow ends 12px from the row's edge, the
+	   mirror of the 19px icon's 12px inset on the left. Same chevron as the sidebar's folders (down = open, right = folded), so "fold" never
+	   reads as "go to". The hit area is the whole box; `.tap` widens it on touch */
 	.nav button.fold {
 		position: absolute;
-		top: 50%;
-		right: 6px;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		padding: 4px;
-		border-radius: var(--radius-sm);
+		top: 0;
+		right: 0;
+		display: grid;
+		place-items: center;
+		width: 38px;
+		height: 32px;
+		padding: 0;
+		border-radius: var(--radius-control);
 		color: var(--text-faint);
 	}
 	.nav button.fold :global(svg) {
-		width: 15px;
-		height: 15px;
-		transition: transform var(--motion-fast) var(--ease-std);
+		width: 14px;
+		height: 14px;
+		stroke-width: 2;
+		transition: rotate var(--motion-fast) var(--ease-std);
 	}
-	/* the arrow is always there: "<" = folded (can open), down = open; the shared count badge sits beside it only while folded */
-	.nav button.fold[aria-expanded="true"] :global(svg) {
-		transform: rotate(-90deg);
+	.nav button.fold[aria-expanded="false"] :global(svg) {
+		rotate: -90deg;
 	}
 	/* every child draws its stretch of a straight trunk (::after) and a short branch curving off it into itself (::before); the last trunk stops at its branch */
 	.nav .tree {
@@ -208,8 +211,9 @@
 	.nav button.sub {
 		flex: 1;
 		min-width: 0;
+		height: 32px; /* every row is 32px tall, tree rows too */
 		gap: 8px;
-		padding: 8px 8px;
+		padding: 0 8px;
 	}
 	.nav button.sub.linked {
 		padding-right: 40px; /* room for the 38px unlink button + 2px, so the label never runs under it */
@@ -293,6 +297,7 @@
 	}
 	.nav button.sub .nl {
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		font-weight: 500;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -311,9 +316,6 @@
 	.nav .dot.half {
 		background: var(--warn);
 	}
-	.nav button.srvtab {
-		padding: 8px 12px;
-	}
 	.nav {
 		position: relative;
 		display: flex;
@@ -331,7 +333,8 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 8px 12px;
+		height: 32px; /* the sidebar's row height; the description lives in the pane header (and the tooltip), not in the row */
+		padding: 0 12px;
 		border-radius: var(--radius-control);
 		text-align: left;
 		color: var(--text-dim);
@@ -359,17 +362,14 @@
 	}
 	.nt {
 		display: flex;
-		flex-direction: column;
-		gap: 1px;
+		align-items: center;
+		gap: 8px;
 		min-width: 0;
 	}
 	.nl {
 		font-size: var(--fs-md);
+		line-height: 20px;
 		font-weight: 600;
-	}
-	.ns {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -399,14 +399,12 @@
 			flex: 1 0 auto;
 			justify-content: center;
 			gap: 8px;
-			padding: 8px 12px;
+			height: 38px; /* a tab you touch keeps its 38px (it was 37.7 from the body line height) */
+			padding: 0 12px;
 			border-radius: var(--radius-control);
 			white-space: nowrap;
 		}
-		.ns {
-			display: none;
-		}
-		.nav .tree, .nav button.fold {
+		.nav .tree, .nav button.fold, .nav .cbadge {
 			display: none;
 		}
 		.nav .row.has > button:first-child {
