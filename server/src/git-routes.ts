@@ -1,0 +1,292 @@
+import type { FastifyInstance } from "fastify";
+import { stat } from "node:fs/promises";
+import Type from "typebox";
+import { badRequest, notFound } from "./errors.ts";
+import { errors } from "./schemas.ts";
+import type { TypeBoxProvider } from "./typebox-provider.ts";
+
+/**
+ * Read-only git for the right sidebar: what the working directory of a session looks like right now. Nothing here writes
+ * (no stage, no discard, no commit): the client only reads, and the agent does the changing.
+ *
+ * Every command runs on the server, in the session's own directory, because the client may be on another machine.
+ */
+
+/** A changed file of the working tree, as `git status --porcelain=v2` reports it. */
+export interface GitFile {
+	/** Path relative to the working directory; a rename carries its old path in `from`. */
+	path: string;
+	/** The old path of a rename or copy. */
+	from?: string;
+	/** `staged` = the index differs from HEAD, `unstaged` = the working tree differs from the index, `untracked`, `conflict`. */
+	state: "staged" | "unstaged" | "untracked" | "conflict";
+	/** The porcelain letter: M A D R C T U (or ? for untracked). */
+	code: string;
+}
+
+export interface GitWorktree {
+	path: string;
+	/** The checked-out branch, or null when the worktree is detached. */
+	branch: string | null;
+	head: string | null;
+	bare: boolean;
+	/** The worktree this one was added from, when it is a linked one. */
+	main: boolean;
+}
+
+export interface GitStatus {
+	/** False when the directory is not inside a git repository (or git is not installed): everything else is then empty. */
+	repo: boolean;
+	/** The top level of the repository, when it is one. */
+	root: string | null;
+	/** Why there is no repository, for the empty state ("git is not installed", "not a git repository"). */
+	reason: string | null;
+	branch: string | null;
+	/** The commit the branch points at, or the detached HEAD. */
+	head: string | null;
+	upstream: string | null;
+	ahead: number;
+	behind: number;
+	detached: boolean;
+	files: GitFile[];
+	/** More files than the list cap: the list was cut. */
+	truncated: boolean;
+	worktrees: GitWorktree[];
+	/** When this reading was taken (ms). */
+	at: number;
+}
+
+export interface GitDiff {
+	path: string;
+	staged: boolean;
+	/** Unified diff text; empty when the file has no textual change (binary, or a pure mode change). */
+	patch: string;
+	truncated: boolean;
+	binary: boolean;
+}
+
+/** Caps: a status list and a diff are for reading, not for loading a whole repository into the client. */
+export const MAX_FILES = 300;
+export const MAX_WORKTREES = 30;
+export const MAX_DIFF_BYTES = 200 * 1024;
+export const GIT_TIMEOUT_MS = 8000;
+
+const SessionParam = Type.Object({ id: Type.String() });
+const DiffQuery = Type.Object({
+	path: Type.String({ minLength: 1, description: "Relative to the working directory, as `git status` reported it" }),
+	staged: Type.Optional(Type.Boolean({ description: "Diff the index against HEAD instead of the working tree against the index" })),
+});
+
+const GitFileSchema = Type.Object({
+	path: Type.String(),
+	from: Type.Optional(Type.String()),
+	state: Type.Union([Type.Literal("staged"), Type.Literal("unstaged"), Type.Literal("untracked"), Type.Literal("conflict")]),
+	code: Type.String(),
+});
+const GitWorktreeSchema = Type.Object({
+	path: Type.String(),
+	branch: Type.Union([Type.String(), Type.Null()]),
+	head: Type.Union([Type.String(), Type.Null()]),
+	bare: Type.Boolean(),
+	main: Type.Boolean(),
+});
+export const GitStatusSchema = Type.Object({
+	repo: Type.Boolean(),
+	root: Type.Union([Type.String(), Type.Null()]),
+	reason: Type.Union([Type.String(), Type.Null()]),
+	branch: Type.Union([Type.String(), Type.Null()]),
+	head: Type.Union([Type.String(), Type.Null()]),
+	upstream: Type.Union([Type.String(), Type.Null()]),
+	ahead: Type.Integer(),
+	behind: Type.Integer(),
+	detached: Type.Boolean(),
+	files: Type.Array(GitFileSchema),
+	truncated: Type.Boolean(),
+	worktrees: Type.Array(GitWorktreeSchema),
+	at: Type.Integer(),
+});
+export const GitDiffSchema = Type.Object({
+	path: Type.String(),
+	staged: Type.Boolean(),
+	patch: Type.String(),
+	truncated: Type.Boolean(),
+	binary: Type.Boolean(),
+});
+
+interface Run { code: number; out: string; err: string }
+
+/**
+ * One git command, with a timeout and no terminal prompt (a credential prompt would hang the request). `-c` settings keep
+ * the output stable whatever the user's own git config says (colour, pager, quoting of non-ASCII paths).
+ */
+async function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): Promise<Run> {
+	const proc = Bun.spawn(
+		["git", "-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "core.pager=cat", ...args],
+		{ cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" } },
+	);
+	// A hung git (a network filesystem, a lock held by another process) must not hold the request open.
+	const timer = setTimeout(() => { try { proc.kill(); } catch { /* already gone */ } }, timeoutMs);
+	try {
+		const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+		return { code: await proc.exited, out, err };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * `git status --porcelain=v2 -b -z`, parsed. NUL-separated because a path may hold a newline; a rename's second record is
+ * the old path. Only the branch header and the entries are read: submodule and ignored records are skipped.
+ */
+export function parseStatus(raw: string): Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated"> {
+	const out: Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated"> = {
+		branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false, files: [], truncated: false,
+	};
+	const records = raw.split("\0");
+	for (let i = 0; i < records.length; i++) {
+		const rec = records[i]!;
+		if (!rec) continue;
+		if (rec.startsWith("# ")) {
+			const [key, ...rest] = rec.slice(2).split(" ");
+			const value = rest.join(" ");
+			if (key === "branch.oid") out.head = value === "(initial)" ? null : value;
+			else if (key === "branch.head") {
+				if (value === "(detached)") out.detached = true;
+				else out.branch = value;
+			} else if (key === "branch.upstream") out.upstream = value;
+			else if (key === "branch.ab") {
+				const m = /^\+(\d+) -(\d+)$/.exec(value);
+				if (m) {
+					out.ahead = Number(m[1]);
+					out.behind = Number(m[2]);
+				}
+			}
+			continue;
+		}
+		if (out.files.length >= MAX_FILES) {
+			out.truncated = true;
+			continue;
+		}
+		const kind = rec[0];
+		if (kind === "1" || kind === "2") {
+			// 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
+			// 2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path>   (the old path is the next record)
+			const parts = rec.split(" ");
+			const xy = parts[1] ?? "..";
+			const rest = parts.slice(8).join(" ");
+			const path = kind === "2" ? rest.split(" ").slice(1).join(" ") : rest;
+			const from = kind === "2" ? records[++i] : undefined;
+			const entry: GitFile = { path, state: "unstaged", code: xy[1] ?? "." };
+			if (xy[0] !== ".") {
+				// staged: the index differs from HEAD, which is what the user sees as "to be committed"
+				entry.state = "staged";
+				entry.code = xy[0]!;
+			}
+			if (xy[0] === "U" || xy[1] === "U" || xy === "AA" || xy === "DD") {
+				entry.state = "conflict";
+				entry.code = "U";
+			}
+			if (from) entry.from = from;
+			out.files.push(entry);
+			continue;
+		}
+		if (kind === "u") {
+			// u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>: an unmerged (conflicted) entry
+			const parts = rec.split(" ");
+			out.files.push({ path: parts.slice(10).join(" "), state: "conflict", code: "U" });
+			continue;
+		}
+		if (kind === "?") out.files.push({ path: rec.slice(2), state: "untracked", code: "?" });
+	}
+	// staged first, then unstaged, then untracked: the order the panel reads in
+	const rank = { conflict: 0, staged: 1, unstaged: 2, untracked: 3 } as const;
+	out.files.sort((a, b) => rank[a.state] - rank[b.state] || a.path.localeCompare(b.path));
+	return out;
+}
+
+/** `git worktree list --porcelain`: blank-line separated blocks of `key value` lines. */
+export function parseWorktrees(raw: string): GitWorktree[] {
+	const out: GitWorktree[] = [];
+	for (const block of raw.split(/\n\s*\n/)) {
+		let path: string | null = null;
+		let head: string | null = null;
+		let branch: string | null = null;
+		let bare = false;
+		for (const line of block.split("\n")) {
+			if (!line.trim()) continue;
+			const at = line.indexOf(" ");
+			const key = at < 0 ? line : line.slice(0, at);
+			const value = at < 0 ? "" : line.slice(at + 1);
+			if (key === "worktree") path = value;
+			else if (key === "HEAD") head = value;
+			else if (key === "branch") branch = value.replace(/^refs\/heads\//, "");
+			else if (key === "bare") bare = true;
+		}
+		if (path) out.push({ path, branch, head, bare, main: false });
+	}
+	// the first block is the main worktree; the rest were added from it
+	if (out.length) out[0]!.main = true;
+	return out;
+}
+
+/** Whether `dir` is a directory at all: a session may point at a folder that has since been deleted. */
+async function isDir(dir: string): Promise<boolean> {
+	try {
+		return (await stat(dir)).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: string) => string | undefined): void {
+	const app = server.withTypeProvider<TypeBoxProvider>();
+
+	app.get("/sessions/:id/git", {
+		schema: { params: SessionParam, response: { 200: GitStatusSchema, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const cwd = cwdOf(req.params.id);
+			if (!cwd) throw notFound("session");
+			const empty = (reason: string): GitStatus => ({
+				repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
+				files: [], truncated: false, worktrees: [], at: Date.now(),
+			});
+			if (!(await isDir(cwd))) return empty("missing");
+			const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
+			if (top.code !== 0) {
+				// git missing (127) is not the same as "not a repository": the panel says which
+				return empty(top.err.includes("not a git repository") ? "not-a-repo" : "no-git");
+			}
+			const root = top.out.trim();
+			const status = await git(root, ["status", "--porcelain=v2", "-b", "-z"]);
+			if (status.code !== 0) return empty("no-git");
+			const trees = await git(root, ["worktree", "list", "--porcelain"]);
+			return {
+				repo: true,
+				root,
+				reason: null,
+				...parseStatus(status.out),
+				worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
+				at: Date.now(),
+			};
+		},
+	});
+
+	app.get("/sessions/:id/git/diff", {
+		schema: { params: SessionParam, querystring: DiffQuery, response: { 200: GitDiffSchema, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const cwd = cwdOf(req.params.id);
+			if (!cwd) throw notFound("session");
+			const path = req.query.path;
+			// a path from the status list only: no absolute paths, no walking out of the repository
+			if (path.startsWith("/") || path.split(/[\\/]/).includes("..")) throw badRequest("path must be inside the working directory");
+			const staged = req.query.staged ?? false;
+			const run = await git(cwd, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", ...(staged ? ["--cached"] : []), "--", path]);
+			let patch = run.out;
+			// an untracked file has no diff: show its content as an addition, so a click on it still says something
+			if (!patch.trim() && !staged) patch = (await git(cwd, ["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", path])).out;
+			const truncated = patch.length > MAX_DIFF_BYTES;
+			if (truncated) patch = patch.slice(0, MAX_DIFF_BYTES);
+			return { path, staged, patch, truncated, binary: /^Binary files |^GIT binary patch/m.test(patch) };
+		},
+	});
+}
