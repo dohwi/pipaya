@@ -259,14 +259,14 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 - Markdown in messages: blocks are **12px** apart, a heading **24px above / 8px below**, list items 4px; all in px (em values gave 12.75 / 14.25 / 23.8 / 9.1px).
 - Text rows whose height adds up (conversation list, settings rows) use a whole-pixel `line-height` (20px), so a row is 36 + 1px hairline, never 37.14.
 - Run `python3 scripts/ui-lint.py` before committing a style change; it must print `clean`.
-- **Settings nav** (`SettingsNav.svelte`): every section row and tree row is **32px** (38px for a touch tab on a phone), one line, no description under the label (the pane header shows it; the row's tooltip repeats it). A section with children has one fold button at the row's right end, 38x32 with a centred 14px chevron (12px from the row's edge, like the 19px icon's 12px on the left): **down = open, right = folded**, the same chevron as the sidebar's folders. The count of a folded section is a quiet `.cbadge` in a fixed 20px column right before the arrow (same column rule as the sidebar's counts): badge centre 40px and arrow centre 19px from the row's right edge on every row, with or without a badge, one or two digits. MCP and 확장 start folded (`lib/settings-fold.ts`).
+- **Settings nav** (`SettingsNav.svelte`): every section row and tree row is **32px** (38px for a touch tab on a phone), one line, no description under the label (the pane header shows it; the row's tooltip repeats it). A section with children has one fold button at the row's right end, a 24x24 box around a centred 14px chevron (chevron centre 19px from the row's edge, like the 19px icon's 12px inset on the left), so its focus ring is a small square around the glyph: **down = open, right = folded**, the same chevron as the sidebar's folders. The count of a folded section is a quiet `.cbadge` in a fixed 20px column right before the arrow (same column rule as the sidebar's counts), display only (`pointer-events: none`, not a control, so it is never focused and a click on it reaches the section button): badge centre 46px and arrow centre 19px from the row's right edge on every row, with or without a badge, one or two digits. MCP and 확장 start folded (`lib/settings-fold.ts`).
 
 ## 한국어 요약
 
 - 간격은 **4 / 8 / 12 / 16 / 24**만 씁니다. 그 밖의 값(10, 6, 14, 22 …)은 이유를 주석으로 남깁니다. 1px(구분선, 행 사이)과 측정으로 정한 정렬 값, 안전 영역(`--sat` 등)은 예외입니다.
 - 행 높이는 **32px**, 같은 블록 안 행 사이는 **1px**, 블록 사이는 **4px**, 폴더 사이는 **12px**입니다.
 - 사이드바(288px)는 열의 **중심** 기준으로 **20px** 간격입니다: 화살표 28, 폴더 아이콘 48, 탭 아이콘 68, 분할 패널 아이콘 88, 목록 버튼 236, `+`/`⋯`/↺ 256. 카드는 사이드바 끝에서 8px, 카드 안쪽 첫 열·끝 열은 카드 끝에서 12px입니다. 우측 버튼은 20px, 마진 없음입니다.
-- 설정 왼쪽 내비: 모든 행 32px 한 줄(설명은 오른쪽 제목 아래와 툴팁), 접기 버튼은 행 오른쪽 끝 38x32에 14px 화살표(펼침 아래 v, 접힘 오른쪽 >, 사이드바 폴더와 같음), 접힌 섹션의 개수는 화살표 바로 앞 20px 칸의 약한 배지입니다(배지 중심 오른쪽에서 40px, 화살표 19px 고정).
+- 설정 왼쪽 내비: 모든 행 32px 한 줄(설명은 오른쪽 제목 아래와 툴팁), 접기 버튼은 14px 화살표를 감싼 24x24(포커스 링은 화살표 둘레 정사각형, 화살표 중심 오른쪽에서 19px)이고 방향은 펼침 아래 v, 접힘 오른쪽 >(사이드바 폴더와 같음), 접힌 섹션의 개수는 화살표 바로 앞 20px 칸의 약한 배지입니다(표시 전용, 포커스·클릭 대상 아님, 배지 중심 오른쪽에서 46px, 화살표 19px 고정).
 - 눈대중으로 맞추지 말고 DOM의 아이콘 중심을 재서 맞춥니다(6장). 결과 보고는 수정 전/후를 가이드 있는 것과 없는 것으로 나란히, 숫자와 함께 냅니다.
 - 공용 컴포넌트를 바꿀 때는 그것을 쓰는 모든 화면을 확인하고, 데스크톱 1440 · 태블릿 820 · 모바일 390 세 크기에서 확인합니다.
 - 맞춤용 `margin: -1px`이나 `translate`로 땜질하지 않습니다. 크기가 틀린 박스를 고칩니다.

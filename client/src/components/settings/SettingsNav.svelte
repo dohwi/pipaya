@@ -118,7 +118,8 @@
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}<Icon name="chevron-down" /></button>
+					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
+					{#if !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}
 				{/if}
 			</div>
 			{#if open}
@@ -169,30 +170,36 @@
 		min-width: 0;
 	}
 	.nav .row.has > button:first-child {
-		padding-right: 56px; /* the fold button's box (badge + arrow), so a long label never runs under it */
+		padding-right: 60px; /* room for the count and the arrow, so a long label never runs under them */
 	}
-	/* the fold button is the row's right end: [count][arrow], 56x32. The arrow is anchored to the right (its centre 19px from the row's edge,
-	   12px of padding: the mirror of the 19px icon's 12px on the left), so it never moves with the badge. The badge is a fixed 20px column like
-	   the sidebar's (one and two digits both centre in it), 4px left of the arrow, and only shows while folded: rows with and without it keep
-	   the arrow on the same x. Same chevron as the sidebar's folders (down = open, right = folded). The hit area is the whole box; `.tap` widens it on touch */
+	/* the row's right end holds [count][arrow]. The arrow is the only control: a 24x24 box around its 14px chevron (5px each side), so the
+	   focus ring (the global 2px + 2px offset, as on every other control) is a small square around the glyph and stops 12px short of the
+	   count. It sits 7px from the row's edge, which puts the chevron's centre 19px from it (12px of padding, the mirror of the 19px icon's
+	   12px on the left) whatever the badge does. `.tap` widens only the touch hit area (an invisible ::after), never the ring. */
 	.nav button.fold {
 		position: absolute;
-		top: 0;
-		right: 0;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 4px;
-		width: 56px;
-		height: 32px;
-		padding: 0 12px 0 0;
-		border-radius: var(--radius-control);
+		top: calc(50% - 12px);
+		right: 7px; /* 7 + 12 = the chevron's centre 19px from the row's edge */
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
-	.nav button.fold .cbadge {
+	/* the count is display only: it neither takes focus nor a click (a click on it falls through to the row's section button). A fixed 20px
+	   column like the sidebar's counts, 10px left of the chevron and clear of the focus ring, shown only while folded; the arrow's x does not
+	   depend on it */
+	.nav .row > .cbadge {
+		position: absolute;
+		top: calc(50% - 9px); /* the badge is 18px tall: centred on the row */
+		right: 36px; /* its 20px column ends 36px from the row's edge (centre 46): 7 + 24 = the button's left edge, + 5 = the ring's outer edge */
+		z-index: 1;
 		width: 20px;
 		min-width: 20px;
 		padding: 0 0 2px; /* the shared badge's 1px digit lift, without its side padding: 20px column, as in the sidebar */
+		pointer-events: none;
 	}
 	.nav button.fold :global(svg) {
 		width: 14px;
