@@ -890,9 +890,19 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	font-weight: 550;
 	transition: color var(--motion-fast) var(--ease-std);
 }
+/* .sm sits next to a small dropdown in a settings row, so it takes the dropdown's look: the same 34px height (1 border + 2 padding + 28),
+   border, corner and text size. Inner corner = outer - border - padding. */
+.seg.sm {
+	gap: 2px;
+	padding: 2px;
+	border-color: var(--border-strong);
+	border-radius: var(--radius-control);
+}
 .seg.sm > button {
 	height: 28px;
-	font-size: var(--fs-xs);
+	padding: 0 12px;
+	border-radius: calc(var(--radius-control) - 3px);
+	font-size: var(--fs-md);
 }
 .seg > button:hover:not(:disabled) {
 	color: var(--text);

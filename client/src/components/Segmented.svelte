@@ -39,7 +39,7 @@
 	const indicator = $derived(
 		variant === "cards"
 			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius-control)", mirror: ["data-tone"] }
-			: { selector: "button.on", variant: "fill" as const, radius: "calc(var(--radius) - 3px)" },
+			: { selector: "button.on", variant: "fill" as const, radius: size === "sm" ? "calc(var(--radius-control) - 3px)" : "calc(var(--radius) - 3px)" },
 	);
 </script>
 
