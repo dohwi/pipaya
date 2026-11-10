@@ -9,9 +9,10 @@
 	import { gitPanel, refOf } from "../lib/git-panel.svelte";
 	import { shortName } from "../lib/sidebar-model";
 	import Select from "./Select.svelte";
+	import GitFileList from "./GitFileList.svelte";
 	import { layoutGraph } from "../lib/git-graph";
 	import { GIT_LIMITS } from "../lib/git-limits";
-	import { agoParts, lineCounts, refChips, trackState } from "../lib/git-view";
+	import { agoParts, compact, lineCounts, refChips, trackState } from "../lib/git-view";
 	import type { GitFile } from "../lib/types";
 
 	/**
@@ -22,9 +23,18 @@
 	const hint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const status = $derived(gitPanel.status);
 	const files = $derived(status?.files ?? []);
-	const staged = $derived(files.filter((f) => f.state === "staged"));
-	const unstaged = $derived(files.filter((f) => f.state === "unstaged" || f.state === "conflict"));
-	const untracked = $derived(files.filter((f) => f.state === "untracked"));
+	/** Per-kind counts from the server (before its cap); an older server has none, so they are counted from the list. */
+	const fileCounts = $derived.by(() => {
+		if (status?.counts) return status.counts;
+		const c = { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 };
+		for (const f of files) {
+			c[f.state]++;
+			c.add += f.add ?? 0;
+			c.del += f.del ?? 0;
+		}
+		return c;
+	});
+	const fileTotal = $derived(fileCounts.conflict + fileCounts.staged + fileCounts.unstaged + fileCounts.untracked);
 	/** The folder the panel is about, as the header shows it ("work/app"). */
 	const folder = $derived.by(() => {
 		const cwd = app.current?.cwd;
@@ -80,15 +90,6 @@
 	/** The changed files fold into one row: the graph is the page, the working tree is a glance. */
 	let filesOpen = $state(false);
 	let treesOpen = $state(false);
-	const totals = $derived.by(() => {
-		let add = 0;
-		let del = 0;
-		for (const f of files) {
-			add += f.add ?? 0;
-			del += f.del ?? 0;
-		}
-		return { add, del };
-	});
 	const pick = (f: GitFile) => void gitPanel.pick({ path: f.path, staged: f.state === "staged" });
 	const pickInCommit = (hash: string, path: string) => void gitPanel.pick({ path, staged: false, commit: hash });
 
@@ -143,34 +144,16 @@
 			</div>
 
 			<section class="fold" aria-label={t("변경된 파일")}>
-				<button class="foldhead" aria-expanded={filesOpen} disabled={!files.length} onclick={() => (filesOpen = !filesOpen)}>
+				<button class="foldhead" aria-expanded={filesOpen} disabled={!fileTotal} onclick={() => (filesOpen = !filesOpen)}>
 					<span class="chev" class:open={filesOpen} aria-hidden="true"><Icon name="chevron-down" /></span>
 					<span class="gtitle">{t("변경된 파일")}</span>
-					<span class="count">{files.length}{status.truncated ? "+" : ""}</span>
-					{#if totals.add || totals.del}<span class="num mono"><span class="plus">+{totals.add}</span> <span class="minus">−{totals.del}</span></span>{/if}
+					<span class="count">{fileTotal.toLocaleString()}</span>
+					{#if fileCounts.add || fileCounts.del}<span class="num mono"><span class="plus">+{compact(fileCounts.add)}</span> <span class="minus">−{compact(fileCounts.del)}</span></span>{/if}
 				</button>
 				{#if filesOpen && files.length}
-					<div class="foldbody" style:max-height="{GIT_LIMITS.filesVisible * 33 + 56}px">
-						{#each [{ title: t("스테이징됨"), list: staged }, { title: t("변경됨"), list: unstaged }, { title: t("추적 안 됨"), list: untracked }] as group (group.title)}
-							{#if group.list.length}
-								<div class="ghead"><span class="gtitle">{group.title}</span><span class="count">{group.list.length}</span></div>
-								<ul>
-									{#each group.list as f (f.state + f.path)}
-										{@const open = gitPanel.picked?.path === f.path && gitPanel.picked.staged === (f.state === "staged") && !gitPanel.picked.commit}
-										<li>
-											<button class="file" class:on={open} onclick={() => pick(f)} title={f.from ? `${f.from} → ${f.path}` : f.path}>
-												<span class="code" data-state={f.state}>{f.code}</span>
-												<span class="path">{f.path}</span>
-												{@render counts(f)}
-											</button>
-											{#if open}{@render diffView()}{/if}
-										</li>
-									{/each}
-								</ul>
-							{/if}
-						{/each}
-						{#if status.truncated}<p class="cut">{t("파일이 많아 {n}개만 표시합니다", { n: GIT_LIMITS.files })}</p>{/if}
-					</div>
+					<GitFileList {files} counts={fileCounts} truncated={status.truncated} cap={GIT_LIMITS.files} picked={gitPanel.picked && !gitPanel.picked.commit ? gitPanel.picked : null} onpick={pick}>
+						{#snippet diff()}{@render diffView()}{/snippet}
+					</GitFileList>
 				{/if}
 			</section>
 
@@ -410,9 +393,6 @@
 		overflow-y: auto;
 		padding-bottom: 8px;
 	}
-	.foldbody .ghead {
-		margin-top: 8px;
-	}
 	.graphbox {
 		flex: 1 0 240px; /* never squeezed below ~7 rows, even with the folds open: the body scrolls instead */
 		min-height: 0;
@@ -465,12 +445,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.group {
-		display: flex;
-		flex-direction: column;
-		gap: 1px; /* a hairline between the rows of one group, as every list in the app */
-		margin-top: 12px;
 	}
 	.ghead {
 		display: flex;
@@ -633,9 +607,6 @@
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
-	}
-	.flag.warn {
-		color: var(--warn);
 	}
 	.more {
 		width: 100%;

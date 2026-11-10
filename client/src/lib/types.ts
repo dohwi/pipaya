@@ -488,11 +488,27 @@ export interface GitCommit {
 	refs: string[];
 }
 
+/** The working-tree files that match a search, read on the server because the status page holds only the first ones. */
+export interface GitFiles {
+	files: GitFile[];
+	matched: number;
+	truncated: boolean;
+}
+
 /** One page of the history graph, newest first, children before parents. */
 export interface GitLog {
 	commits: GitCommit[];
 	/** Older commits exist beyond this page. */
 	more: boolean;
+}
+
+export interface GitCounts {
+	conflict: number;
+	staged: number;
+	unstaged: number;
+	untracked: number;
+	add: number;
+	del: number;
 }
 
 /** What the right sidebar's git panel shows: read-only, read on the server. */
@@ -511,6 +527,8 @@ export interface GitStatus {
 	files: GitFile[];
 	/** More files than the server's list cap: the list was cut. */
 	truncated: boolean;
+	/** Every changed file by kind before the cap, and the line totals; absent from an older server. */
+	counts?: GitCounts;
 	worktrees: GitWorktree[];
 	/** Local branches (current first), then remote-tracking ones; absent from an older server. */
 	branches?: GitBranch[];

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT, capBranches, GIT_LIMITS } from "../src/git-routes.ts";
+import { parseStatus, parseWorktrees, parseLog, parseBranches, parseNumstat, parseNameStatus, BRANCH_FORMAT, capBranches, GIT_LIMITS, once } from "../src/git-routes.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
@@ -132,7 +132,7 @@ describe("parseStatus", () => {
 		expect(s.detached).toBe(true);
 	});
 	test("caps the list and says it was cut", () => {
-		const raw = Array.from({ length: 400 }, (_, i) => `? f${i}.txt`).join("\0");
+		const raw = Array.from({ length: GIT_LIMITS.files + 100 }, (_, i) => `? f${i}.txt`).join("\0");
 		const s = parseStatus(raw);
 		expect(s.files.length).toBe(GIT_LIMITS.files);
 		expect(s.truncated).toBe(true);
@@ -409,5 +409,135 @@ describe("limits", () => {
 		const s = parseStatus(raw);
 		expect(s.files.length).toBe(GIT_LIMITS.files);
 		expect(s.truncated).toBe(true);
+	});
+});
+
+describe("a big working tree", () => {
+	const untracked = (n: number, prefix = "f") => Array.from({ length: n }, (_, i) => `? ${prefix}${i}.txt`);
+	test("counts every file by kind before the cap cuts the list", () => {
+		const raw = [
+			...untracked(250),
+			"1 .M N... 100644 100644 100644 abc abc a.txt",
+			"1 M. N... 100644 100644 100644 abc abc zzz-staged.txt",
+			"u UU N... 100644 100644 100644 100644 a b c conflict.txt",
+		].join("\0");
+		const s = parseStatus(raw, 10);
+		expect(s.counts).toEqual({ conflict: 1, staged: 1, unstaged: 1, untracked: 250, add: 0, del: 0 });
+		expect(s.files.length).toBe(10);
+		expect(s.truncated).toBe(true);
+	});
+	test("the cut keeps what matters: conflicts, then staged, then unstaged, then untracked", () => {
+		// `zzz-staged` is read last and sorts last by name, and used to be the one thrown away
+		const raw = [...untracked(250, "a"), "1 M. N... 100644 100644 100644 abc abc zzz-staged.txt", "1 .M N... 100644 100644 100644 abc abc zzz-edit.txt"].join("\0");
+		const s = parseStatus(raw, 5);
+		expect(s.files.map((f) => f.state)).toEqual(["staged", "unstaged", "untracked", "untracked", "untracked"]);
+		expect(s.files[0]!.path).toBe("zzz-staged.txt");
+	});
+	test("paths sort by code unit, the same on every machine", () => {
+		const s = parseStatus(["? b.txt", "? B.txt", "? a.txt", "? \u00e4.txt"].join("\0"));
+		expect(s.files.map((f) => f.path)).toEqual(["B.txt", "a.txt", "b.txt", "\u00e4.txt"]);
+	});
+	test("a list under the cap is not truncated", () => {
+		const s = parseStatus(untracked(GIT_LIMITS.files).join("\0"));
+		expect(s.truncated).toBe(false);
+		expect(s.files.length).toBe(GIT_LIMITS.files);
+	});
+	test("parsing thousands of entries stays fast", () => {
+		const raw = untracked(20000).join("\0");
+		const t0 = performance.now();
+		const s = parseStatus(raw);
+		expect(performance.now() - t0).toBeLessThan(500);
+		expect(s.counts.untracked).toBe(20000);
+	});
+	test("an untracked folder is listed as its files and the totals cover every file", async () => {
+		const big = join(dir, "big");
+		sh(["git", "init", "-q", "-b", "main", big], dir);
+		sh(["git", "config", "user.email", "t@t"], big);
+		sh(["git", "config", "user.name", "t"], big);
+		writeFileSync(join(big, "tracked.txt"), "a\nb\n");
+		sh(["git", "add", "-A"], big);
+		sh(["git", "commit", "-qm", "init"], big);
+		sh(["mkdir", "-p", join(big, "deep/er")], big);
+		for (let i = 0; i < 30; i++) writeFileSync(join(big, "deep/er", `n${i}.txt`), "x\n");
+		writeFileSync(join(big, "tracked.txt"), "a\nb\nc\nd\n");
+		const id = await sessionIn(big);
+		const { json } = await api("GET", `/sessions/${id}/git`);
+		expect(json.counts).toMatchObject({ untracked: 30, unstaged: 1, staged: 0, add: 2, del: 0 });
+		const paths = json.files.map((f: { path: string }) => f.path);
+		expect(paths).toContain("deep/er/n0.txt");
+		expect(paths.some((p: string) => p.endsWith("/"))).toBe(false);
+		// the folder's file opens as a diff (it used to be a bare `deep/` that answered with nothing)
+		const d = await api("GET", `/sessions/${id}/git/diff?path=deep/er/n0.txt`);
+		expect(d.json.patch).toContain("+x");
+	});
+});
+
+describe("once", () => {
+	test("overlapping identical calls share one run, and a finished one is never reused", async () => {
+		let runs = 0;
+		const work = async () => {
+			const mine = ++runs;
+			await new Promise((r) => setTimeout(r, 20));
+			return mine;
+		};
+		const [a, b, c] = await Promise.all([once("k", work), once("k", work), once("other", work)]);
+		expect(a).toBe(b);
+		expect(c).not.toBe(a);
+		expect(runs).toBe(2);
+		expect(await once("k", work)).toBe(3);
+	});
+	test("a failure is shared by the callers that were waiting and does not stick", async () => {
+		const boom = async () => {
+			await new Promise((r) => setTimeout(r, 10));
+			throw new Error("boom");
+		};
+		const results = await Promise.allSettled([once("f", boom), once("f", boom)]);
+		expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+		expect(await once("f", async () => "ok")).toBe("ok");
+	});
+});
+
+describe("GET /sessions/:id/git/files", () => {
+	test("searches the whole working tree by words in the path, past the status cap", async () => {
+		const wide = join(dir, "wide");
+		sh(["git", "init", "-q", "-b", "main", wide], dir);
+		sh(["git", "config", "user.email", "t@t"], wide);
+		sh(["git", "config", "user.name", "t"], wide);
+		writeFileSync(join(wide, "base.txt"), "x\n");
+		sh(["git", "add", "-A"], wide);
+		sh(["git", "commit", "-qm", "init"], wide);
+		sh(["mkdir", "-p", join(wide, "pkg/one"), join(wide, "pkg/two")], wide);
+		for (let i = 0; i < GIT_LIMITS.files + 50; i++) writeFileSync(join(wide, i % 2 ? "pkg/one" : "pkg/two", `f${String(i).padStart(4, "0")}.txt`), "x\n");
+		writeFileSync(join(wide, "zz-needle.txt"), "n\n");
+		const id = await sessionIn(wide);
+		const status = (await api("GET", `/sessions/${id}/git`)).json;
+		expect(status.counts.untracked).toBe(GIT_LIMITS.files + 51);
+		expect(status.truncated).toBe(true);
+		expect(status.files.length).toBe(GIT_LIMITS.files);
+		// the needle sorts last, so the status page does not hold it
+		expect(status.files.some((f: { path: string }) => f.path === "zz-needle.txt")).toBe(false);
+		const found = (await api("GET", `/sessions/${id}/git/files?q=NEEDLE`)).json;
+		expect(found.files.map((f: { path: string }) => f.path)).toEqual(["zz-needle.txt"]);
+		expect(found.matched).toBe(1);
+		expect(found.truncated).toBe(false);
+		const words = (await api("GET", `/sessions/${id}/git/files?q=${encodeURIComponent("one f01")}`)).json;
+		expect(words.matched).toBeGreaterThan(0);
+		expect(words.files.every((f: { path: string }) => f.path.includes("one") && f.path.includes("f01"))).toBe(true);
+		const none = (await api("GET", `/sessions/${id}/git/files?q=nothing-like-this`)).json;
+		expect(none).toEqual({ files: [], matched: 0, truncated: false });
+		const kind = (await api("GET", `/sessions/${id}/git/files?kind=staged`)).json;
+		expect(kind.matched).toBe(0);
+	});
+	test("a folder that is not a repository, and a bad kind", async () => {
+		const id = await sessionIn(plain);
+		expect((await api("GET", `/sessions/${id}/git/files?q=x`)).json).toEqual({ files: [], matched: 0, truncated: false });
+		expect((await api("GET", `/sessions/${id}/git/files?kind=bogus`)).status).toBe(400);
+		expect((await api("GET", "/sessions/nope/git/files")).status).toBe(404);
+	});
+	test("a query that is all spaces lists everything", async () => {
+		const id = await sessionIn(rich);
+		const all = (await api("GET", `/sessions/${id}/git/files?q=%20%20`)).json;
+		expect(all.matched).toBeGreaterThan(0);
+		expect(all.truncated).toBe(false);
 	});
 });

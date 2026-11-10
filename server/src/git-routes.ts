@@ -93,6 +93,16 @@ export interface GitCommit {
 	refs: string[];
 }
 
+export interface GitCounts {
+	conflict: number;
+	staged: number;
+	unstaged: number;
+	untracked: number;
+	/** Lines added / removed over every changed file, binary ones left out (the sums of `git diff --numstat`). */
+	add: number;
+	del: number;
+}
+
 export interface GitStatus {
 	/** False when the directory is not inside a git repository (or git is not installed): everything else is then empty. */
 	repo: boolean;
@@ -108,8 +118,10 @@ export interface GitStatus {
 	behind: number;
 	detached: boolean;
 	files: GitFile[];
-	/** More files than the list cap: the list was cut. */
+	/** More files than the list cap: the list was cut (the cut keeps conflicts, then staged, unstaged, untracked). */
 	truncated: boolean;
+	/** How many changed files there really are, per kind, before the cap: the panel says "2850", not "200+". */
+	counts: GitCounts;
 	worktrees: GitWorktree[];
 	/** Local branches first (current on top, then newest), then remote-tracking ones. */
 	branches: GitBranch[];
@@ -133,7 +145,7 @@ export interface GitDiff {
 /** Caps: a status list and a diff are for reading, not for loading a whole repository into the client. */
 export const GIT_LIMITS = {
 	/** Changed files listed in the panel (`truncated` says the rest was cut). */
-	files: 200,
+	files: 1000,
 	/** Files listed for one commit. */
 	commitFiles: 100,
 	/** Branches offered in the picker, local ones first (`branchesCut` says the rest was cut). */
@@ -224,6 +236,10 @@ export const GitStatusSchema = Type.Object({
 	detached: Type.Boolean(),
 	files: Type.Array(GitFileSchema),
 	truncated: Type.Boolean(),
+	counts: Type.Object({
+		conflict: Type.Integer(), staged: Type.Integer(), unstaged: Type.Integer(), untracked: Type.Integer(),
+		add: Type.Integer(), del: Type.Integer(),
+	}),
 	worktrees: Type.Array(GitWorktreeSchema),
 	branches: Type.Array(GitBranchSchema),
 	stashes: Type.Integer(),
@@ -234,6 +250,16 @@ export const GitLogSchema = Type.Object({
 	commits: Type.Array(GitCommitSchema),
 	/** Older commits exist beyond this page. */
 	more: Type.Boolean(),
+});
+const FilesQuery = Type.Object({
+	q: Type.Optional(Type.String({ maxLength: 200, description: "Words that must all appear in the path, case-insensitively" })),
+	kind: Type.Optional(Type.Union([Type.Literal("staged"), Type.Literal("unstaged"), Type.Literal("untracked")])),
+});
+export const GitFilesSchema = Type.Object({
+	files: Type.Array(GitFileSchema),
+	/** How many files match, before the cap. */
+	matched: Type.Integer(),
+	truncated: Type.Boolean(),
 });
 const LogQuery = Type.Object({
 	ref: Type.Optional(Type.String({ maxLength: 300, description: "A full ref name from the branch list (`refs/heads/x`, `refs/remotes/origin/x`); left out = every branch and tag" })),
@@ -248,6 +274,20 @@ export const GitDiffSchema = Type.Object({
 });
 
 interface Run { code: number; out: string; err: string }
+
+/**
+ * Identical git reads that overlap share one process: a refresh that lands while the last one still runs (a turn ending
+ * while the user presses reload, two windows on one folder) must not start the same `git status` again. Only the
+ * in-flight call is shared, never a finished result, so nothing is ever stale.
+ */
+const inflight = new Map<string, Promise<unknown>>();
+export function once<T>(key: string, work: () => Promise<T>): Promise<T> {
+	const hit = inflight.get(key);
+	if (hit) return hit as Promise<T>;
+	const p = work().finally(() => inflight.delete(key));
+	inflight.set(key, p);
+	return p;
+}
 
 /**
  * One git command, with a timeout and no terminal prompt (a credential prompt would hang the request). `-c` settings keep
@@ -272,9 +312,11 @@ async function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): Pro
  * `git status --porcelain=v2 -b -z`, parsed. NUL-separated because a path may hold a newline; a rename's second record is
  * the old path. Only the branch header and the entries are read: submodule and ignored records are skipped.
  */
-export function parseStatus(raw: string): Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated"> {
-	const out: Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated"> = {
+type Parsed = Pick<GitStatus, "branch" | "head" | "upstream" | "ahead" | "behind" | "detached" | "files" | "truncated" | "counts">;
+export function parseStatus(raw: string, cap: number = MAX_FILES): Parsed {
+	const out: Parsed = {
 		branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false, files: [], truncated: false,
+		counts: { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 },
 	};
 	const records = raw.split("\0");
 	for (let i = 0; i < records.length; i++) {
@@ -295,10 +337,6 @@ export function parseStatus(raw: string): Pick<GitStatus, "branch" | "head" | "u
 					out.behind = Number(m[2]);
 				}
 			}
-			continue;
-		}
-		if (out.files.length >= MAX_FILES) {
-			out.truncated = true;
 			continue;
 		}
 		const kind = rec[0];
@@ -332,9 +370,17 @@ export function parseStatus(raw: string): Pick<GitStatus, "branch" | "head" | "u
 		}
 		if (kind === "?") out.files.push({ path: rec.slice(2), state: "untracked", code: "?" });
 	}
-	// staged first, then unstaged, then untracked: the order the panel reads in
+	// Count, sort, and only then cut: cutting while reading would drop whatever git lists last (a staged file named
+	// `zzz`), and "200+" is no answer to "how many".
+	for (const f of out.files) out.counts[f.state]++;
+	// conflicts first, then staged, unstaged, untracked: the order the panel reads in. A plain code-unit compare: stable
+	// across machines (localeCompare is slow on thousands of paths and depends on the server's locale).
 	const rank = { conflict: 0, staged: 1, unstaged: 2, untracked: 3 } as const;
-	out.files.sort((a, b) => rank[a.state] - rank[b.state] || a.path.localeCompare(b.path));
+	out.files.sort((a, b) => rank[a.state] - rank[b.state] || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+	if (out.files.length > cap) {
+		out.truncated = true;
+		out.files.length = cap;
+	}
 	return out;
 }
 
@@ -474,6 +520,57 @@ async function isDir(dir: string): Promise<boolean> {
 	}
 }
 
+async function readStatus(cwd: string): Promise<GitStatus> {
+	const empty = (reason: string): GitStatus => ({
+		repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
+		files: [], truncated: false, counts: { conflict: 0, staged: 0, unstaged: 0, untracked: 0, add: 0, del: 0 }, worktrees: [], branches: [], branchesCut: false, stashes: 0, at: Date.now(),
+	});
+	if (!(await isDir(cwd))) return empty("missing");
+	const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
+	if (top.code !== 0) {
+		// git missing (127) is not the same as "not a repository": the panel says which
+		return empty(top.err.includes("not a git repository") ? "not-a-repo" : "no-git");
+	}
+	const root = top.out.trim();
+	// `-uall`: an untracked folder is listed as its files (a bare `new/` is one row that cannot be opened). The cap and
+	// the counts keep a 10,000-file folder from flooding anything.
+	const status = await git(root, ["status", "--porcelain=v2", "-b", "-z", "--untracked-files=all"]);
+	if (status.code !== 0) return empty("no-git");
+	const trees = await git(root, ["worktree", "list", "--porcelain"]);
+	const parsed = parseStatus(status.out);
+	// line counts for the listed files: the index against HEAD, and the working tree against the index
+	const [cachedStat, workStat, refs, stash] = await Promise.all([
+		git(root, ["diff", "--numstat", "-z", "--cached", "--no-ext-diff", "--no-textconv"]),
+		git(root, ["diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv"]),
+		git(root, ["for-each-ref", `--format=${BRANCH_FORMAT}`, "refs/heads", "refs/remotes"]),
+		git(root, ["stash", "list"]),
+	]);
+	const cached = parseNumstat(cachedStat.out);
+	const work = parseNumstat(workStat.out);
+	// the totals cover every changed file, not just the listed ones
+	for (const m of [cached, work]) for (const n of m.values()) (parsed.counts.add += n.add), (parsed.counts.del += n.del);
+	for (const f of parsed.files) {
+		const n = (f.state === "staged" ? cached : work).get(f.path);
+		if (n) {
+			f.add = n.add;
+			f.del = n.del;
+		}
+	}
+	return {
+		repo: true,
+		root,
+		reason: null,
+		...parsed,
+		worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
+		...(() => {
+			const { branches, cut } = capBranches(refs.code === 0 ? parseBranches(refs.out) : []);
+			return { branches, branchesCut: cut };
+		})(),
+		stashes: stash.code === 0 ? stash.out.split("\n").filter(Boolean).length : 0,
+		at: Date.now(),
+	};
+}
+
 export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: string) => string | undefined): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 
@@ -482,50 +579,44 @@ export function registerGitRoutes(server: FastifyInstance, cwdOf: (sessionId: st
 		handler: async (req) => {
 			const cwd = cwdOf(req.params.id);
 			if (!cwd) throw notFound("session");
-			const empty = (reason: string): GitStatus => ({
-				repo: false, root: null, reason, branch: null, head: null, upstream: null, ahead: 0, behind: 0, detached: false,
-				files: [], truncated: false, worktrees: [], branches: [], branchesCut: false, stashes: 0, at: Date.now(),
-			});
-			if (!(await isDir(cwd))) return empty("missing");
+			// two readers of one folder (or a refresh on top of a refresh) share the one set of git processes
+			return once(`status\0${cwd}`, () => readStatus(cwd));
+		},
+	});
+
+	// Search the whole working tree, not just the page the status listed: with thousands of changed files the one you want
+	// is rarely in the first thousand.
+	app.get("/sessions/:id/git/files", {
+		schema: { params: SessionParam, querystring: FilesQuery, response: { 200: GitFilesSchema, ...errors(400, 401, 404) } },
+		handler: async (req) => {
+			const cwd = cwdOf(req.params.id);
+			if (!cwd) throw notFound("session");
+			if (!(await isDir(cwd))) return { files: [], matched: 0, truncated: false };
 			const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
-			if (top.code !== 0) {
-				// git missing (127) is not the same as "not a repository": the panel says which
-				return empty(top.err.includes("not a git repository") ? "not-a-repo" : "no-git");
-			}
-			const root = top.out.trim();
-			const status = await git(root, ["status", "--porcelain=v2", "-b", "-z"]);
-			if (status.code !== 0) return empty("no-git");
-			const trees = await git(root, ["worktree", "list", "--porcelain"]);
-			const parsed = parseStatus(status.out);
-			// line counts for the listed files: the index against HEAD, and the working tree against the index
-			const [cachedStat, workStat, refs, stash] = await Promise.all([
-				git(root, ["diff", "--numstat", "-z", "--cached"]),
-				git(root, ["diff", "--numstat", "-z"]),
-				git(root, ["for-each-ref", `--format=${BRANCH_FORMAT}`, "refs/heads", "refs/remotes"]),
-				git(root, ["stash", "list"]),
-			]);
-			const cached = parseNumstat(cachedStat.out);
-			const work = parseNumstat(workStat.out);
-			for (const f of parsed.files) {
-				const n = (f.state === "staged" ? cached : work).get(f.path);
-				if (n) {
-					f.add = n.add;
-					f.del = n.del;
+			if (top.code !== 0) return { files: [], matched: 0, truncated: false };
+			const { q = "", kind } = req.query;
+			return once(`files\0${top.out.trim()}\0${kind ?? ""}\0${q}`, async () => {
+				const root = top.out.trim();
+				const status = await git(root, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
+				if (status.code !== 0) return { files: [], matched: 0, truncated: false };
+				const all = parseStatus(status.out, Infinity).files;
+				const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+				const hit = all.filter((f) => (!kind || (kind === "unstaged" ? f.state === "unstaged" || f.state === "conflict" : f.state === kind)) && words.every((w) => f.path.toLowerCase().includes(w)));
+				const files = hit.slice(0, GIT_LIMITS.files);
+				if (files.length) {
+					const [c, w] = await Promise.all([
+						git(root, ["diff", "--numstat", "-z", "--cached", "--no-ext-diff", "--no-textconv"]),
+						git(root, ["diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv"]),
+					]);
+					const cached = parseNumstat(c.out);
+					const work = parseNumstat(w.out);
+					for (const f of files) {
+						const n = (f.state === "staged" ? cached : work).get(f.path);
+						if (n) (f.add = n.add), (f.del = n.del);
+					}
 				}
-			}
-			return {
-				repo: true,
-				root,
-				reason: null,
-				...parsed,
-				worktrees: trees.code === 0 ? parseWorktrees(trees.out).slice(0, MAX_WORKTREES) : [],
-				...(() => {
-					const { branches, cut } = capBranches(refs.code === 0 ? parseBranches(refs.out) : []);
-					return { branches, branchesCut: cut };
-				})(),
-				stashes: stash.code === 0 ? stash.out.split("\n").filter(Boolean).length : 0,
-				at: Date.now(),
-			};
+				return { files, matched: hit.length, truncated: hit.length > files.length };
+			});
 		},
 	});
 

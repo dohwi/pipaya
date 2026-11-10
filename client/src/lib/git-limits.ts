@@ -7,7 +7,7 @@ export const GIT_LIMITS = {
 	commitsPage: 50,
 	commitsMax: 300,
 	/** Changed files, branches in the picker and files of one commit: the server cuts and says so. */
-	files: 200,
+	files: 1000,
 	branches: 60,
 	commitFiles: 100,
 	/** Rows of the changed-files list shown before it scrolls. */

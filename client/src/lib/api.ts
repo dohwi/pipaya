@@ -15,6 +15,7 @@ import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultM
 	DirListing,
 	GitCommitDetail,
 	GitDiff,
+	GitFiles,
 	GitLog,
 	GitStatus,
 	Group,
@@ -399,6 +400,9 @@ export class Api {
 	/** The history graph: every branch, or just `ref` (a full ref name from the branch list), newest `limit` commits. */
 	gitLog = (id: string, opts: { ref?: string; limit?: number } = {}, signal?: AbortSignal) =>
 		this.req<GitLog>("GET", `/sessions/${encodeURIComponent(id)}/git/log?${new URLSearchParams({ ...(opts.ref ? { ref: opts.ref } : {}), ...(opts.limit ? { limit: String(opts.limit) } : {}) })}`, undefined, signal);
+	/** Changed files matching `q` (every word, in the path) and/or of one kind, from the whole working tree. */
+	gitFiles = (id: string, opts: { q?: string; kind?: "staged" | "unstaged" | "untracked" } = {}, signal?: AbortSignal) =>
+		this.req<GitFiles>("GET", `/sessions/${encodeURIComponent(id)}/git/files?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.kind ? { kind: opts.kind } : {}) })}`, undefined, signal);
 	/** One commit: its message and the files it changed against its first parent. */
 	gitCommit = (id: string, hash: string, signal?: AbortSignal) =>
 		this.req<GitCommitDetail>("GET", `/sessions/${encodeURIComponent(id)}/git/commit?${new URLSearchParams({ hash })}`, undefined, signal);
