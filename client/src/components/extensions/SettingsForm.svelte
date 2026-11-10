@@ -74,7 +74,12 @@
 <form class="settings" novalidate onsubmit={saveForm}>
 	{#each fields as field (field.key)}
 		{@const error = resolved.errors[field.key]}
-		<div class="field-row" class:invalid={!!error}>
+		<div class="field-row" class:invalid={!!error} class:readonly-field={field.readonly}>
+			{#if field.readonly}
+				<span class="name">{field.label}</span>
+				<p class="readonly-value" id={fieldId(field.key)}>{typeof draft[field.key] === "string" && draft[field.key] ? draft[field.key] : t("아직 없음")}</p>
+				{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
+			{:else}
 			{#if field.type === "boolean"}
 				<label class="check" for={fieldId(field.key)}>
 					<input id={fieldId(field.key)} type="checkbox" checked={draft[field.key] === true} {disabled} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(field)} onchange={(event) => { draft[field.key] = event.currentTarget.checked; }} />
@@ -104,6 +109,7 @@
 			{/if}
 			{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
 			{#if error}<p class="hint danger" id={errorId(field.key)}>{error}</p>{/if}
+			{/if}
 		</div>
 	{/each}
 	<div class="row">
@@ -134,6 +140,12 @@
 	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
 	.hint { margin: 0; overflow-wrap: anywhere; }
+	/* A value the extension wrote: shown like a field, never editable. */
+	.readonly-value {
+		margin: 0; padding: 8px 12px; box-sizing: border-box; border-radius: var(--radius-sm);
+		background: var(--bg-code); border: 1px dashed var(--border); color: var(--text-dim);
+		font-size: var(--fs-sm); overflow-wrap: anywhere; white-space: pre-wrap;
+	}
 	.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
 	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }
 	input[type="text"], input[type="password"], input[type="number"], textarea {

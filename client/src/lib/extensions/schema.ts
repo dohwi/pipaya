@@ -85,6 +85,11 @@ export interface SettingField {
 	secret?: boolean;
 	/** This field belongs to the device, not the server: a local path, a screen size, this machine's own setting. */
 	device?: boolean;
+	/**
+	 * Shown, never edited: the extension writes it (a status, a last-run time) and the form only displays the value.
+	 * A read-only field is skipped by validation and by the save, so a status line never blocks a save.
+	 */
+	readonly?: boolean;
 	format?: "origin";
 	min?: number;
 	max?: number;
@@ -230,7 +235,7 @@ function finite(source: Record<string, unknown>, name: string, path: string): nu
 }
 
 function settingField(value: unknown, path: string, keys: Set<string>): SettingField {
-	const source = object(value, path, ["key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "format", "min", "max", "options"]);
+	const source = object(value, path, ["key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "format", "min", "max", "options"]);
 	const key = text(source.key, `${path}.key`, 40);
 	if (!matches(SETTING_KEY, key)) fail(`${path}.key`, "expected a letter followed by letters, digits or underscores (max 40)");
 	if (keys.has(key)) fail(`${path}.key`, `duplicate setting key ${key}`);
@@ -247,6 +252,8 @@ function settingField(value: unknown, path: string, keys: Set<string>): SettingF
 	if (secret && Object.hasOwn(source, "default")) fail(`${path}.default`, "secret fields must not contain defaults");
 	const device = optionalFlag(source, "device", path);
 	if (device !== undefined) { if (secret && device) fail(`${path}.device`, "a secret field is already device-only"); field.device = device; }
+	const readonly = optionalFlag(source, "readonly", path);
+	if (readonly !== undefined) { if (readonly && secret) fail(`${path}.readonly`, "a secret field cannot be read-only"); field.readonly = readonly; }
 
 	if (type !== "string" && Object.hasOwn(source, "format")) fail(`${path}.format`, "format is only allowed for string settings");
 	if (type !== "number") for (const name of ["min", "max"]) if (Object.hasOwn(source, name)) fail(`${path}.${name}`, "min/max are only allowed for number settings");
@@ -323,6 +330,8 @@ export function resolveSettings(fields: readonly SettingField[], raw: unknown): 
 	const values: Record<string, SettingValue> = {};
 	const errors: Record<string, string> = {};
 	for (const field of fields) {
+		// A read-only field is the extension's own value: never required, never an error, never saved.
+		if (field.readonly) continue;
 		let value: unknown = Object.hasOwn(source, field.key) ? source[field.key] : undefined;
 		if (field.required && field.type === "string" && typeof value === "string" && !value.trim()) value = undefined;
 		if (unset(field, value)) {

@@ -952,6 +952,7 @@ export const en: Record<string, string> = {
 	"JSON 객체만 저장할 수 있습니다.": "Only a JSON object can be saved.",
 	"필수": "required",
 	"선택 안 함": "None",
+	"아직 없음": "Not yet",
 	"선택하세요": "Select…",
 	"입력값을 확인하세요.": "Check the values.",
 	"고급: JSON 직접 편집": "Advanced: edit JSON directly",

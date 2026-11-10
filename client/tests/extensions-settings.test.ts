@@ -24,6 +24,12 @@ describe("manifest settings schema", () => {
 		expect(parsePackage(withSettings([field({ key: "path", device: true })])).manifest.settings![0]!.device).toBe(true);
 		expect(() => parsePackage(withSettings([field({ key: "path", device: true, secret: true })]))).toThrow();
 	});
+	test("a read-only field is shown, never edited, and cannot be a secret", () => {
+		const parsed = parsePackage(withSettings([field({ key: "statusText", readonly: true })]));
+		expect(parsed.manifest.settings![0]!.readonly).toBe(true);
+		expect(() => parsePackage(withSettings([field({ key: "statusText", readonly: true, secret: true })]))).toThrow();
+		expect(() => parsePackage(withSettings([field({ key: "statusText", readonly: "yes" })]))).toThrow();
+	});
 	test("accepts every field type and round-trips as fresh data", () => {
 		const input = withSettings([
 			field({ key: "origin", label: "서버", format: "origin", required: true, placeholder: "https://x.test", description: "설명", default: "https://a.test" }),
@@ -84,6 +90,17 @@ describe("resolveSettings", () => {
 		field({ key: "note", label: "메모" }),
 	])).manifest.settings as SettingField[];
 
+	test("a read-only field is never required, never an error and never saved", () => {
+		const fields = parsePackage(withSettings([
+			field({ key: "statusText", readonly: true, required: true }),
+			field({ key: "url" }),
+		])).manifest.settings!;
+		// The extension's own value has the wrong type: it must not block the user's save.
+		const result = resolveSettings(fields, { statusText: 42, url: "http://a.test" });
+		expect(result.ok).toBe(true);
+		expect(result.errors).toEqual({});
+		expect(result.values).toEqual({ url: "http://a.test" });
+	});
 	test("applies defaults, drops unknown keys, leaves optional unset values out", () => {
 		const r = resolveSettings(fields, { origin: "https://a.test", extra: 1, __proto__x: 2 });
 		expect(r).toEqual({ values: { origin: "https://a.test", interval: 30, on: false, mode: "a" }, errors: {}, ok: true });
