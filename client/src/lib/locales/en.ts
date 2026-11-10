@@ -1648,6 +1648,10 @@ export const en: Record<string, string> = {
 
 	/* ---- built-in voice input ---- */
 	"녹음 중 {time}": "Recording {time}",
+	"음성 녹음": "Voice recording",
+	"녹음 중": "Recording",
+	"녹음 끝내기": "Finish recording",
+	"녹음을 글로 바꿔 입력창에 넣습니다": "Turns the recording into text and puts it in the message box",
 	"녹음 취소": "Cancel recording",
 	"변환 중…": "Transcribing…",
 	"녹음 정지": "Stop recording",

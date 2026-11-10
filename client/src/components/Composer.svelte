@@ -22,6 +22,7 @@
 	import ModelPicker from "./ModelPicker.svelte";
 	import SendControls from "./SendControls.svelte";
 	import VoiceInput from "./VoiceInput.svelte";
+	import VoiceRecording from "./VoiceRecording.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
 	import QueuedList from "./QueuedList.svelte";
 	import StatusLine from "./StatusLine.svelte";
@@ -42,6 +43,7 @@
 	import { shouldTakeFocus } from "../lib/focus-guard";
 	import { buildCombo, formatCombo, keyName } from "../lib/keys";
 	import { msg, t } from "../lib/i18n";
+	import { voice } from "../lib/voice.svelte";
 
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
@@ -604,6 +606,11 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
+		{#if (voice.recording || voice.transcribing) && voice.paneId === (pane.id ?? "")}
+			<!-- Recording: the whole input of the pane that started it is the recording surface, so the wave and the two
+			     answers have the room. Another pane keeps its own input (its microphone stops the recording). -->
+			<VoiceRecording />
+		{:else}
 		<div class="field-wrap">
 		{#if promptHint}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>{promptHint}</div>
@@ -656,6 +663,7 @@
 			/>
 			</ExtensionPart>
 		</div>
+		{/if}
 	</div>
 	{#if extensions.actions.length}
 		<div class="extension-actions" aria-label={t("확장 액션")}>
