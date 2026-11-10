@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { app, type ThemePref } from "../../lib/store.svelte";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t } from "../../lib/i18n";
 	import Icon from "../Icon.svelte";
 	import Button from "../Button.svelte";
+	import Select from "../Select.svelte";
 	import RangeField from "../RangeField.svelte";
 	import Segmented from "../Segmented.svelte";
 	import SettingRow from "../SettingRow.svelte";
@@ -15,8 +15,8 @@
 
 	/** The app-wide basics on this device: language, theme, zoom, notification sound, then the notification, terminal and update blocks. */
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [
-		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "light", label: msg("라이트"), icon: "sun" },
+		{ id: "system", label: msg("시스템"), icon: "monitor" },
 		{ id: "dark", label: msg("다크"), icon: "moon" },
 	];
 	/** Language names stay in their own language so they can be found from any other. */
@@ -24,26 +24,21 @@
 </script>
 
 <section class="set-group">
-	<div class="section-label">{t("언어")}</div>
-	<Segmented variant="cards" columns={3} label={t("언어")} value={getLangPref()} onchange={setLangPref} options={langOptions.map((l) => ({ id: l.tag, label: l.name, lang: l.tag === "system" ? undefined : l.tag }))} />
-	{#if getLangPref() === "system"}
-		<span class="hint" in:collapseIn out:collapseOut>{t("기기 언어를 따릅니다: {name}", { name: languageName(systemLang(navigator.languages)) })}</span>
-	{/if}
-</section>
-
-<section class="set-group">
-	<div class="section-label">{t("테마")}</div>
-	<Segmented variant="cards" label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
-		{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
-	</Segmented>
-</section>
-
-<section class="set-group">
-	<div class="section-label">{t("화면 배율")}</div>
-	<RangeField label={t("배율")} ariaLabel={t("화면 배율")} min={50} max={200} step={10} value={app.prefs.uiScale} oninput={(v) => app.prefs.setUiScale(v)}>
-		{#snippet trailing()}<Button size="sm" variant="ghost" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
-	</RangeField>
-	<span class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</span>
+	<div class="section-label">{t("화면")}</div>
+	<SettingRow label={t("언어")} for="lang-pref" hint={getLangPref() === "system" ? t("기기 언어를 따릅니다: {name}", { name: languageName(systemLang(navigator.languages)) }) : undefined}>
+		<Select id="lang-pref" size="sm" width="160px" value={getLangPref()} onchange={setLangPref} options={langOptions.map((l) => ({ value: l.tag, label: l.name }))} />
+	</SettingRow>
+	<SettingRow label={t("테마")}>
+		<Segmented size="sm" full={false} label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
+			{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
+		</Segmented>
+	</SettingRow>
+	<div class="zoom">
+		<div class="ztext"><span>{t("화면 배율")}</span><small class="hint">{t("단축키 Ctrl/⌘ + · − · 0")}</small></div>
+		<RangeField label="" ariaLabel={t("화면 배율")} min={50} max={200} step={10} value={app.prefs.uiScale} oninput={(v) => app.prefs.setUiScale(v)}>
+			{#snippet trailing()}<Button size="sm" variant="ghost" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
+		</RangeField>
+	</div>
 </section>
 
 <section class="set-group"><NotificationSettings /></section>
@@ -60,6 +55,25 @@
 
 
 <style>
+	.zoom {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: var(--fs-md);
+		line-height: 20px;
+	}
+	/* the row's own label sits above, so the slider's empty name column (and its 12px gap) goes away: the track starts on the label's line */
+	.zoom :global(.range .name) {
+		display: none;
+	}
+	.ztext {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.ztext .hint {
+		line-height: 16px;
+	}
 	section {
 		display: flex;
 		flex-direction: column;
