@@ -127,6 +127,13 @@
 		padding: 4px 8px 8px 7px; /* the toolbar's own: the 19px glyph in its 38px button lands on the text line */
 		min-width: 0;
 	}
+	/* narrow pane: the toolbar's own narrow padding, so the box is still the idle height */
+	@container (max-width: 480px) {
+		.rec-row {
+			gap: 4px;
+			padding: 4px 4px 4px 3px;
+		}
+	}
 	.label {
 		font-size: var(--fs-sm);
 		line-height: 20px;
