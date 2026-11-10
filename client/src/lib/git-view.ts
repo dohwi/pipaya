@@ -57,3 +57,23 @@ export function summarize(counts: { conflict: number; staged: number; unstaged: 
 	const kinds = (["conflict", "staged", "unstaged", "untracked"] as const).flatMap((kind) => (counts[kind] > 0 ? [{ kind, n: counts[kind] }] : []));
 	return { total: kinds.reduce((a, k) => a + k.n, 0), kinds };
 }
+
+/**
+ * The split of a change into its added and removed share, for the one-line bar of the summary: whole percents that
+ * always add to 100, and a share that exists never rounds down to nothing (3 lines against 100,000 still shows a sliver).
+ * Null when there are no changed lines at all.
+ */
+export function lineShare(add: number, del: number): { add: number; del: number } | null {
+	const total = add + del;
+	if (total <= 0) return null;
+	let a = Math.round((add / total) * 100);
+	if (add > 0 && a < 4) a = 4;
+	if (del > 0 && a > 96) a = 96;
+	return { add: a, del: 100 - a };
+}
+
+/** The ref chips a commit row has room for: one, and how many more there were (`+2`), so the subject keeps its width. */
+export function chipsFor(refs: string[]): { shown: { label: string; kind: "head" | "branch" | "tag" | "remote" } | null; more: number; all: string } {
+	const chips = refChips(refs);
+	return { shown: chips[0] ?? null, more: Math.max(0, chips.length - 1), all: chips.map((c) => c.label).join(", ") };
+}

@@ -11,7 +11,7 @@
 	import { shortName } from "../lib/sidebar-model";
 	import { layoutGraph } from "../lib/git-graph";
 	import { GIT_LIMITS } from "../lib/git-limits";
-	import { agoParts, compact, refChips, summarize, trackState } from "../lib/git-view";
+	import { agoParts, chipsFor, compact, lineShare, summarize, trackState } from "../lib/git-view";
 
 	/**
 	 * The right sidebar: what the working directory of the session on screen looks like in git, read-only and at a glance.
@@ -22,6 +22,7 @@
 	const hint = $derived(app.prefs.bindings.toggleRightSidebar ? ` (${formatCombo(app.prefs.bindings.toggleRightSidebar)})` : "");
 	const status = $derived(gitPanel.status);
 	const summary = $derived(summarize(status?.counts ?? null));
+	const share = $derived(status?.lines ? lineShare(status.lines.add, status.lines.del) : null);
 	/** The folder the panel is about, as the header shows it ("work/app"). */
 	const folder = $derived.by(() => {
 		const cwd = app.current?.cwd;
@@ -118,7 +119,8 @@
 			</div>
 			{#if status.upstream}<div class="up mono">{status.upstream}</div>{/if}
 
-			<!-- The working tree in one block: how many files and how many lines, then the kinds. A number, never a list. -->
+			<!-- The working tree in one block: the lines first and big (green added, red removed), the bar of their split, then
+			     how many files and of which kind. A number, never a list. -->
 			<div class="summary" aria-label={t("변경 요약")}>
 				{#if !summary}
 					<span class="muted">{t("변경 사항이 너무 많아 세지 못했습니다")}</span>
@@ -126,27 +128,35 @@
 					<span class="muted">{t("변경된 파일이 없습니다")}</span>
 				{:else}
 					<div class="line">
-						<span class="strong">{t("파일 {n}개", { n: summary.total.toLocaleString() })}</span>
 						{#if status.lines}
-							<span class="num mono"><span class="plus">+{compact(status.lines.add)}</span><span class="minus">−{compact(status.lines.del)}</span></span>
+							<span class="big mono" title={t("추가된 줄 {add}, 삭제된 줄 {del}", { add: status.lines.add.toLocaleString(), del: status.lines.del.toLocaleString() })}>
+								<span class="plus">+{compact(status.lines.add)}</span><span class="minus">−{compact(status.lines.del)}</span>
+							</span>
 						{:else}
 							<span class="muted" title={t("변경이 많아 줄 수는 세지 않습니다")}>{t("줄 수 생략")}</span>
 						{/if}
+						<span class="files">{t("파일 {n}개", { n: summary.total.toLocaleString() })}</span>
 					</div>
+					{#if share}
+						<div class="split" role="img" aria-label={t("추가 {a}% 삭제 {d}%", { a: share.add, d: share.del })}>
+							{#if share.add}<i class="add" style:width="{share.add}%"></i>{/if}
+							{#if share.del}<i class="del" style:width="{share.del}%"></i>{/if}
+						</div>
+					{/if}
 					<div class="kinds">
 						{#each summary.kinds as k (k.kind)}
-							<span class="kind" data-kind={k.kind}>{kindLabel(k.kind)} <b>{compact(k.n)}</b></span>
+							<span class="kind" data-kind={k.kind}><i aria-hidden="true"></i>{kindLabel(k.kind)} <b>{compact(k.n)}</b></span>
 						{/each}
 					</div>
 				{/if}
 			</div>
 
-			<div class="pickrow">
-				<Select size="sm" mono label={t("브랜치")} value={gitPanel.logRef} options={branchOptions} onchange={(v) => gitPanel.selectRef(v)} />
-			</div>
-
 			<section class="graphbox" aria-label={t("그래프")}>
-				<div class="ghead"><span class="gtitle">{t("그래프")}</span><span class="count">{graph.rows.length}{gitPanel.more ? "+" : ""}</span></div>
+				<div class="ghead">
+					<span class="gtitle">{t("그래프")}</span>
+					<span class="count">{graph.rows.length}{gitPanel.more ? "+" : ""}</span>
+					<span class="pick"><Select size="sm" mono width="100%" label={t("그래프에 보일 브랜치")} value={gitPanel.logRef} options={branchOptions} onchange={(v) => gitPanel.selectRef(v)} /></span>
+				</div>
 				<div class="graphscroll">
 					{#if gitPanel.logError}
 						<EmptyState tone="plain" as="p">{gitPanel.logError}</EmptyState>
@@ -155,6 +165,7 @@
 					{:else}
 						<ul>
 							{#each graph.rows as r (r.commit.hash)}
+								{@const chips = chipsFor(r.commit.refs)}
 								<li>
 									<div class="commit" title={`${r.commit.hash.slice(0, 8)} · ${r.commit.author} · ${when(r.commit.at)}\n${r.commit.subject}`}>
 										<svg class="lanes" width={gw} height={ROW} viewBox={`0 0 ${gw} ${ROW}`} aria-hidden="true">
@@ -164,9 +175,10 @@
 											<circle cx={r.col * LANE + LANE / 2} cy={ROW / 2} r="4" fill={PALETTE[r.color]} stroke="var(--bg-side)" stroke-width="1.5" />
 										</svg>
 										<span class="subject">{r.commit.subject}</span>
-										{#each refChips(r.commit.refs).slice(0, 2) as chip (chip.label)}
-											<span class="ref mono" data-kind={chip.kind}>{chip.label}</span>
-										{/each}
+										{#if chips.shown}
+											<span class="ref mono" data-kind={chips.shown.kind} title={chips.all}>{chips.shown.label}</span>
+											{#if chips.more}<span class="more-refs mono" title={chips.all}>+{chips.more}</span>{/if}
+										{/if}
 										<span class="when">{ago(r.commit.at)}</span>
 									</div>
 								</li>
@@ -216,15 +228,18 @@
 		padding: 12px 0 0;
 		overflow-y: auto;
 	}
-	/* the working tree's changes in one block: the numbers are the answer, so they are the biggest thing in it */
+	/* the working tree's changes in one card: the lines are the answer, so they are the biggest thing in it */
 	.summary {
 		flex: none;
 		margin: 8px 16px 0;
-		padding: 8px 12px;
+		padding: 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
-		font-size: var(--fs-sm);
 		line-height: 20px;
+	}
+	.summary .muted {
+		color: var(--text-faint);
+		font-size: var(--fs-xs);
 	}
 	.summary .line {
 		display: flex;
@@ -232,39 +247,75 @@
 		justify-content: space-between;
 		gap: 8px;
 	}
-	.summary .strong {
+	.summary .big {
+		display: flex;
+		gap: 8px;
+		font-size: var(--fs-lg);
 		font-weight: 600;
+		line-height: 24px;
 	}
-	.summary .muted {
-		color: var(--text-faint);
+	.summary .files {
 		font-size: var(--fs-xs);
+		color: var(--text-dim);
 	}
-	.summary .num {
-		font-size: var(--fs-xs);
+	/* one bar for the split of added against removed lines: green then red, always filling the width */
+	.split {
+		display: flex;
+		gap: 2px;
+		height: 8px; /* a bar, not a rule: 8px reads at a glance */
+		margin-top: 8px;
+		border-radius: 4px;
+		overflow: hidden;
+	}
+	.split i {
+		display: block;
+		height: 100%;
+		min-width: 4px;
+	}
+	.split .add {
+		background: var(--ok);
+	}
+	.split .del {
+		background: var(--danger);
 	}
 	.kinds {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px 12px;
-		margin-top: 4px;
+		margin-top: 8px;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
+	}
+	.kind {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.kind i {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--text-faint);
+	}
+	.kind[data-kind="staged"] i {
+		background: var(--ok);
+	}
+	.kind[data-kind="unstaged"] i {
+		background: var(--warn);
+	}
+	.kind[data-kind="conflict"] i {
+		background: var(--danger);
 	}
 	.kind b {
 		font-weight: 600;
 		color: var(--text-dim);
 	}
-	.kind[data-kind="staged"] b {
-		color: var(--ok);
-	}
-	.kind[data-kind="conflict"] b {
-		color: var(--warn);
-	}
-	.pickrow {
-		flex: none;
-		margin-top: 8px;
-		padding: 0 16px;
+	.pick {
+		flex: 1;
+		min-width: 0;
+		margin-left: auto;
+		max-width: 180px;
 	}
 	.fold {
 		flex: none;
@@ -305,7 +356,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 32px;
+		height: 44px; /* the 34px picker plus 5px above and below */
 		padding: 0 16px;
 		font-size: var(--fs-xs);
 		line-height: 20px;
@@ -482,7 +533,7 @@
 		overflow: hidden;
 	}
 	.subject {
-		flex: 1;
+		flex: 1 0 40%;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -491,9 +542,17 @@
 		line-height: 20px;
 		color: var(--text);
 	}
-	.ref {
+	.more-refs {
 		flex: none;
-		max-width: 40%;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	/* a chip is a label, not a second title: it gives way before the subject does (the subject keeps at least ~60%) */
+	.ref {
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 96px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { agoParts, compact, refChips, summarize, trackState } from "../src/lib/git-view";
+import { agoParts, chipsFor, compact, lineShare, refChips, summarize, trackState } from "../src/lib/git-view";
 
 test("agoParts walks up the scale", () => {
 	const now = 1_000_000_000_000;
@@ -47,4 +47,31 @@ test("summarize totals the kinds and drops the empty ones", () => {
 	expect(summarize({ conflict: 0, staged: 0, unstaged: 0, untracked: 0 })).toEqual({ total: 0, kinds: [] });
 	// git could not count in time: no summary, not "0 files"
 	expect(summarize(null)).toBeNull();
+});
+
+test("lineShare splits into whole percents that add to 100", () => {
+	expect(lineShare(0, 0)).toBeNull();
+	expect(lineShare(1, 1)).toEqual({ add: 50, del: 50 });
+	expect(lineShare(3, 1)).toEqual({ add: 75, del: 25 });
+	expect(lineShare(10, 0)).toEqual({ add: 100, del: 0 });
+	expect(lineShare(0, 10)).toEqual({ add: 0, del: 100 });
+	for (const [a, d] of [[1, 99999], [99999, 1], [333, 667], [7, 13]] as const) {
+		const s = lineShare(a, d)!;
+		expect(s.add + s.del).toBe(100);
+	}
+});
+
+test("a share that exists never vanishes in the bar", () => {
+	// 3 added against 100,000 removed would be 0%: it keeps a visible sliver
+	expect(lineShare(3, 100_000)!.add).toBeGreaterThanOrEqual(4);
+	expect(lineShare(100_000, 3)!.del).toBeGreaterThanOrEqual(4);
+});
+
+test("chipsFor keeps one chip and counts the rest", () => {
+	expect(chipsFor([])).toEqual({ shown: null, more: 0, all: "" });
+	expect(chipsFor(["HEAD -> main"])).toEqual({ shown: { label: "main", kind: "head" }, more: 0, all: "main" });
+	const c = chipsFor(["tag: v1", "origin/main", "feature", "HEAD -> main"]);
+	expect(c.shown).toEqual({ label: "main", kind: "head" });
+	expect(c.more).toBe(3);
+	expect(c.all).toBe("main, feature, origin/main, v1");
 });
