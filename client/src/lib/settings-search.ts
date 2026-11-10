@@ -1,7 +1,7 @@
 import { msg, t } from "./i18n";
 
 /**
- * The settings window's sections. `server: true` ones belong to the chosen server and sit between the app-wide ones.
+ * The settings window's sections. `server: false` ones are common to every server (the nav's top group, "내 설정" first); `server: true` ones belong to the chosen server (the group below).
  *
  * Order is the order a person sets the app up in: the device's own basics (general, keys, backup) first, then the server
  * as a whole (info), then what the agent needs to work (models, then voice input right after it: both are one
@@ -9,7 +9,7 @@ import { msg, t } from "./i18n";
  * finally the things that grow over time (extensions, devices).
  */
 export const SETTINGS_TABS = [
-	{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
+	{ id: "general", label: msg("내 설정"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },

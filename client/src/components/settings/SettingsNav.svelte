@@ -22,7 +22,7 @@
 		extId = $bindable(),
 		dir = $bindable(),
 		installFor = $bindable(null),
-		scoped,
+		serverName = "",
 		server,
 		serverOnline = true,
 	}: {
@@ -31,13 +31,16 @@
 		dir: number;
 		/** Set to a client extension id to open its install preview on the device tab (the clip of a pair whose client half is missing) */
 		installFor?: string | null;
-		scoped: readonly (typeof SETTINGS_TABS)[number][];
+		/** Label above the chosen server's sections, so it is clear which server they belong to */
+		serverName?: string;
 		server: Server | null;
 		/** False while the server does not answer: its sections (all but "정보") are greyed out and cannot be opened. */
 		serverOnline?: boolean;
 	} = $props();
 
 	type TabId = SettingsTabId;
+	const COMMON = SETTINGS_TABS.filter((x) => !x.server);
+	const PER_SERVER = SETTINGS_TABS.filter((x) => x.server);
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
 	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded (see `settings-fold`). */
 	let collapsed = $state<Record<string, boolean>>(initialFolded());
@@ -105,8 +108,20 @@
 	use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius-control)" }}
 	use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
 >
-	{#each scoped as x (x.id)}
-		{#if !x.server || server}
+	<div class="glabel" aria-hidden="true">{t("공통")}</div>
+	{#each COMMON as x (x.id)}
+		{@render item(x)}
+	{/each}
+	{#if server}
+		<div class="gsep" role="separator" aria-orientation="horizontal"></div>
+		<div class="glabel" aria-hidden="true" title={serverName}><span>{serverName}</span></div>
+		{#each PER_SERVER as x (x.id)}
+			{@render item(x)}
+		{/each}
+	{/if}
+</div>
+
+{#snippet item(x: (typeof SETTINGS_TABS)[number])}
 			{@const off = !serverOnline && needsOnlineServer(x.id)}
 			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
@@ -140,14 +155,30 @@
 					{/each}
 				</div>
 			{/if}
-		{/if}
-	{/each}
-</div>
+{/snippet}
 
 <style>
 	.nico {
 		position: relative;
 		display: inline-flex;
+	}
+	/* a small muted label over each group; the server's name says which server the sections below belong to */
+	.nav .glabel {
+		flex: none;
+		padding: 0 12px;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		font-weight: 600;
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.nav .gsep {
+		flex: none;
+		height: 1px;
+		margin: 8px 4px 4px; /* 4px nav gap + 8 = 12 above the rule, 4 + 4 = 8 below it, before the server's label */
+		background: var(--border);
 	}
 	.nav .upmark {
 		margin-left: auto;
@@ -417,6 +448,16 @@
 			padding: 0 12px;
 			border-radius: var(--radius-control);
 			white-space: nowrap;
+		}
+		.nav .glabel {
+			display: none;
+		}
+		.nav .gsep {
+			align-self: center;
+			flex: none;
+			width: 1px;
+			height: 24px;
+			margin: 0 4px;
 		}
 		.nav .tree, .nav button.fold, .nav .cbadge {
 			display: none;

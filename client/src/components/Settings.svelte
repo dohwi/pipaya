@@ -28,7 +28,7 @@
 	// svelte-ignore state_referenced_locally
 	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab === "agent" ? "models" : app.settingsTab); // "agent" (extensions, older links) is now "models"
 
-	/** Settings follow the open server: its own sections (`server: true`) sit between the app-wide ones. */
+	/** The nav lists the common sections (`server: false`, same for every server) first, then the chosen server's own. */
 	const tabs = SETTINGS_TABS;
 	type TabId = SettingsTabId;
 	/** The extension open in the "확장" panes; the sidebar lists them under their section. */
@@ -45,11 +45,6 @@
 		tab = next;
 	}
 	const current = $derived(tabs.find((x) => x.id === tab) ?? tabs[0]);
-	/** The chips above split the sections: "내 설정" shows the app-wide ones, a server chip shows that server's own. */
-	const scoped = $derived(tabs.filter((x) => x.server === current.server));
-	function showCommon() {
-		if (current.server) go("general");
-	}
 	/**
 	 * The server whose sections are shown. Picking one here only changes what this window shows: it never switches the
 	 * open server, and nothing in here touches the open chat.
@@ -57,8 +52,7 @@
 	// svelte-ignore state_referenced_locally
 	let sid = $state<string | null>(app.serverId);
 	function showServer(id: string) {
-		sid = id;
-		if (!current.server) go("info");
+		sid = id; // the section stays: a common one keeps showing, a server one now shows for this server
 	}
 	/** Update state is only known for the open server: a newer server build, or server and app out of step. */
 	const needsUpdate = (id: string) => id === app.serverId && (serverUpdater.available || app.compat !== "ok");
@@ -109,10 +103,9 @@
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={t("설정")} onclose={close} />
 	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
-		<FilterChip on={!current.server} title={t("이 기기에만 적용되고 모든 서버에서 같은 설정")} onclick={showCommon}>{t("내 설정")}</FilterChip>
 		{#each chips as { s, state } (s.id)}
 			<span class="chipwrap" class:off={unreachable(state)}>
-				<FilterChip on={current.server && s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
+				<FilterChip on={s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
 				{#if app.problemsOf(s.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(s.id).length })} />
 				{:else if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("업데이트 있음") : t("업데이트 필요")} />{/if}
 			</span>
@@ -125,7 +118,7 @@
 	</div>
 
 	<div class="layout">
-		<SettingsNav bind:tab bind:extId bind:dir bind:installFor {scoped} {server} {serverOnline} />
+		<SettingsNav bind:tab bind:extId bind:dir bind:installFor serverName={server ? app.serverLabel(server) : ""} {server} {serverOnline} />
 
 		<div class="body">
 			{#if words.length}

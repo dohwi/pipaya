@@ -46,6 +46,16 @@ describe("tabs and tool labels", () => {
 		const ids = SETTINGS_TABS.map((x) => x.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
+	test("the nav groups: common sections (내 설정 first) all precede the per-server ones", () => {
+		const flags = SETTINGS_TABS.map((x) => x.server);
+		expect(SETTINGS_TABS[0]).toMatchObject({ id: "general", label: "내 설정", server: false });
+		expect(flags.indexOf(true)).toBe(flags.lastIndexOf(false) + 1);
+		expect(SETTINGS_TABS.filter((x) => !x.server).map((x) => x.id)).toEqual(["general", "keys", "backup"]);
+	});
+	test("settings and shortcut hits land on common sections whatever server is chosen", () => {
+		expect(find("zoom").find((h) => h.key.startsWith("item:"))?.where).toBe("내 설정");
+		expect(find("ctrl+n", false).find((h) => h.key === "key:newChat")?.target.tab).toBe("keys");
+	});
 	test("known tools are described; others show their name", () => {
 		expect(toolLabel("bash")).toBe("셸 명령 실행 (bash)");
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");

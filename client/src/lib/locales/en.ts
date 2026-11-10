@@ -645,10 +645,10 @@ export const en: Record<string, string> = {
 	/* ---- settings ---- */
 	"일반": "General",
 	"내 설정": "My settings",
+	"공통": "Common",
 	"서버 확장": "Server extensions",
 	"클라이언트 확장": "Client extensions",
 	"설정 범위": "Settings scope",
-	"이 기기에만 적용되고 모든 서버에서 같은 설정": "Applies to this device only, the same on every server",
 	"언어 · 테마 · 알림 · 터미널": "Language · theme · alerts · terminal",
 	"에이전트 도구": "Agent tools",
 	"도우미 위임 (delegate)": "Helper delegation (delegate)",
