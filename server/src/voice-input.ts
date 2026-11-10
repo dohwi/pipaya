@@ -36,6 +36,19 @@ export const DEFAULT_VOICE_SETTINGS = (): VoiceSettingsValue => ({ enabled: fals
 /** What the client may know about the key: only whether one is stored. */
 export type VoiceSettingsView = VoiceSettingsValue & { hasKey: boolean };
 
+/**
+ * The last connection test, as the server remembers it. The test runs here (the key never leaves the server), so its
+ * result belongs here too: a phone and a desktop that share one server must agree on whether the microphone works.
+ * `ok: null` means no test has run since these settings were saved.
+ */
+export const VoiceTestResult = Type.Object({
+	ok: Type.Union([Type.Boolean(), Type.Null()]),
+	/** When the test ran (ms since the epoch), or null. */
+	at: Type.Union([Type.Number(), Type.Null()]),
+	/** Why it failed, as the failure kind the client explains; null when it passed or never ran. */
+	reason: Type.Union([Type.String(), Type.Null()]),
+});
+
 export const VoiceSettingsResult = Type.Object({
 	settings: VoiceSettingsSchema,
 	hasKey: Type.Boolean(),
@@ -43,6 +56,8 @@ export const VoiceSettingsResult = Type.Object({
 	defaultPath: Type.String(),
 	/** The address the audio would go to right now, or null while the settings are incomplete (never includes the key). */
 	endpoint: Type.Union([Type.String(), Type.Null()]),
+	/** The last connection test, shared by every device on this server. */
+	test: VoiceTestResult,
 });
 export const VoiceSettingsBody = Type.Object(
 	{
@@ -96,6 +111,15 @@ export function endpointOf(settings: Pick<VoiceSettingsValue, "baseUrl" | "path"
 /** OpenAI's `gpt-transcribe` takes `languages` (a list) instead of `language`, and the two must not be sent together. */
 export const usesLanguagesList = (model: string) => model.trim().toLowerCase() === "gpt-transcribe";
 
+/** The stored shape of the last connection test; `reason` is a failure kind the client knows. */
+export interface VoiceTest {
+	ok: boolean;
+	at: number;
+	reason: string | null;
+}
+
+const TEST_KEY = "voice_input_test";
+
 export class VoiceSettings {
 	constructor(private db: Database) {}
 
@@ -119,6 +143,33 @@ export class VoiceSettings {
 		const value: VoiceSettingsValue = { enabled: next.enabled, baseUrl, path: path === DEFAULT_PATH ? "" : path, model: next.model.trim(), language: next.language.trim() };
 		this.db.query("INSERT INTO settings (key, data) VALUES ($key, $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ key: KEY, data: JSON.stringify(value) });
 		return this.get();
+	}
+
+	/**
+	 * The last connection test (null before the first one). Kept next to the settings, not on the device: the test runs
+	 * on the server, so a phone and a desktop on the same server have to see the same answer.
+	 */
+	getTest(): VoiceTest | null {
+		const row = this.db.query("SELECT data FROM settings WHERE key = $key").get({ key: TEST_KEY }) as { data: string } | null;
+		if (!row) return null;
+		try {
+			const parsed: unknown = JSON.parse(row.data);
+			if (!parsed || typeof parsed !== "object") return null;
+			const { ok, at, reason } = parsed as Partial<VoiceTest>;
+			if (typeof ok !== "boolean" || typeof at !== "number") return null;
+			return { ok, at, reason: typeof reason === "string" ? reason : null };
+		} catch {
+			return null;
+		}
+	}
+
+	setTest(test: VoiceTest): void {
+		this.db.query("INSERT INTO settings (key, data) VALUES ($key, $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ key: TEST_KEY, data: JSON.stringify(test) });
+	}
+
+	/** A saved address, path, model, language or key makes the old test meaningless: forget it until the next one. */
+	clearTest(): void {
+		this.db.query("DELETE FROM settings WHERE key = $key").run({ key: TEST_KEY });
 	}
 }
 

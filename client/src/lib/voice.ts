@@ -54,13 +54,18 @@ export const AVAILABILITY_TEXT = {
 export type VoiceState = "off" | "unusable" | "ready";
 
 /**
- * `off`: the user has not switched voice input on — no button. `unusable`: on, but not usable yet (no address, no key,
- * the last test failed, or the browser cannot record) — no button either, the reason lives in Settings. `ready`: on and
- * the last connection test passed — the button shows.
+ * `off`: the user has not switched voice input on — no button. `unusable`: on, but not usable (no address, no key, the
+ * last connection test failed, or the browser cannot record) — no button either, the reason lives in Settings. `ready`:
+ * on and usable — the button shows.
+ *
+ * A test that has not run yet is not a failure. The settings and the test live on the server, so a phone that never
+ * opened Settings used to hide a microphone the desktop had already proved working; now the settings alone are enough,
+ * and only a test that actually failed (`failed`) takes the button away. A wrong key still hides it on the first
+ * recording, because the server records that failure for every device.
  */
-export function voiceState(o: { enabled: boolean; usable: boolean; tested: boolean; available: boolean }): VoiceState {
+export function voiceState(o: { enabled: boolean; usable: boolean; failed: boolean; available: boolean }): VoiceState {
 	if (!o.enabled) return "off";
-	if (!o.available || !o.usable || !o.tested) return "unusable";
+	if (!o.available || !o.usable || o.failed) return "unusable";
 	return "ready";
 }
 

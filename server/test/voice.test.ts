@@ -94,6 +94,8 @@ describe("voice settings", () => {
 		expect(json.settings).toEqual({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
 		expect(json.hasKey).toBe(false);
 		expect(json.endpoint).toBeNull();
+		// no test has run: every device reads "untested" from the server, not from its own storage
+		expect(json.test).toEqual({ ok: null, at: null, reason: null });
 		expect(JSON.stringify(json)).not.toContain(token);
 	});
 	test("saves the address, path, model and language; a key is stored but only reported as present", async () => {
@@ -121,6 +123,13 @@ describe("voice settings", () => {
 		const cleared = await api("PUT", "/voice", { settings: settings({ path: "/stt" }), apiKey: "" });
 		expect(cleared.json.hasKey).toBe(false);
 		await api("PUT", "/voice", { settings: settings({ path: "/stt" }), apiKey: "sk-test-123" });
+	});
+	test("a saved setting forgets the old test, so no device keeps showing a microphone that no longer works", async () => {
+		stt.answer = { status: 200, body: JSON.stringify({ text: "" }) };
+		expect((await api("POST", "/voice/test")).status).toBe(200);
+		expect((await api("GET", "/voice")).json.test.ok).toBe(true);
+		const saved = await api("PUT", "/voice", { settings: settings({ path: "/stt", model: "whisper-1" }) });
+		expect(saved.json.test).toEqual({ ok: null, at: null, reason: null });
 	});
 });
 
@@ -197,6 +206,20 @@ describe("POST /voice/test", () => {
 		expect(r.status).toBe(200);
 		expect(r.json).toEqual({ text: "", status: 200 });
 		expect(stt.requests[0]!.file).toEqual({ name: "test.wav", type: "audio/x-wav", size: SILENCE_WAV.length });
+	});
+	test("keeps the result on the server, so every device reads the same answer", async () => {
+		stt.answer = { status: 200, body: JSON.stringify({ text: "" }) };
+		await api("POST", "/voice/test");
+		const passed = (await api("GET", "/voice")).json.test;
+		expect(passed.ok).toBe(true);
+		expect(passed.reason).toBeNull();
+		expect(typeof passed.at).toBe("number");
+		// a failing test is stored too, with the kind the client explains (a sentence would be in one language only)
+		stt.answer = { status: 401, body: JSON.stringify({ error: "bad key" }) };
+		await api("POST", "/voice/test");
+		expect((await api("GET", "/voice")).json.test).toMatchObject({ ok: false, reason: "bad_key" });
+		stt.answer = { status: 200, body: JSON.stringify({ text: "ok" }) };
+		await api("POST", "/voice/test");
 	});
 	test("a wrong key or path is the specific error, not a silent success", async () => {
 		stt.answer = { status: 401, body: JSON.stringify({ error: "bad key" }) };

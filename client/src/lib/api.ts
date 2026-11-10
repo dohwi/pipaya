@@ -61,6 +61,16 @@ export interface VoiceSettings {
 	language: string;
 }
 
+/** What GET/PUT /voice answers: the settings, whether a key is stored, and the last connection test (kept on the server). */
+export interface VoiceView {
+	settings: VoiceSettings;
+	hasKey: boolean;
+	defaults: VoiceSettings;
+	defaultPath: string;
+	endpoint: string | null;
+	test: { ok: boolean | null; at: number | null; reason: string | null };
+}
+
 export interface Connection {
 	baseUrl: string;
 	token: string;
@@ -226,10 +236,9 @@ export class Api {
 		this.req<{ value: unknown; updatedAt: number; applied: boolean }>("PUT", `/client-settings/${encodeURIComponent(key)}`, { value, at, origin }, signal);
 
 	/* ---------- voice input (server/src/voice-routes.ts) ---------- */
-	voice = (signal?: AbortSignal) =>
-		this.req<{ settings: VoiceSettings; hasKey: boolean; defaults: VoiceSettings; defaultPath: string; endpoint: string | null }>("GET", "/voice", undefined, signal);
+	voice = (signal?: AbortSignal) => this.req<VoiceView>("GET", "/voice", undefined, signal);
 	saveVoice = (settings: VoiceSettings, apiKey: string | undefined, signal?: AbortSignal) =>
-		this.req<{ settings: VoiceSettings; hasKey: boolean; defaults: VoiceSettings; defaultPath: string; endpoint: string | null }>("PUT", "/voice", apiKey === undefined ? { settings } : { settings, apiKey }, signal);
+		this.req<VoiceView>("PUT", "/voice", apiKey === undefined ? { settings } : { settings, apiKey }, signal);
 	/** One recording in, its text out. The recording goes up as the browser made it (webm, mp4, ogg). */
 	async transcribe(blob: Blob, language: string, signal?: AbortSignal): Promise<string> {
 		const form = new FormData();

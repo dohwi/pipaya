@@ -5,18 +5,20 @@ import {
 } from "../src/lib/voice";
 
 describe("voiceState", () => {
-	const base = { enabled: true, usable: true, tested: true, available: true };
+	const base = { enabled: true, usable: true, failed: false, available: true };
 	test("off until the user switches it on", () => {
 		expect(voiceState({ ...base, enabled: false })).toBe("off");
-		expect(voiceState({ ...base, enabled: false, usable: false, tested: false, available: false })).toBe("off");
+		expect(voiceState({ ...base, enabled: false, usable: false, failed: true, available: false })).toBe("off");
 	});
-	test("unusable while the settings, the test or the browser are not ready", () => {
+	test("unusable while the settings, the browser or the last test say no", () => {
 		expect(voiceState({ ...base, usable: false })).toBe("unusable"); // no address or key
-		expect(voiceState({ ...base, tested: false })).toBe("unusable"); // never tested, or a test failed
+		expect(voiceState({ ...base, failed: true })).toBe("unusable"); // the last test failed
 		expect(voiceState({ ...base, available: false })).toBe("unusable"); // insecure page, no MediaRecorder
 	});
-	test("ready only when everything is in place", () => {
+	test("ready when everything is in place, and also before the first test", () => {
 		expect(voiceState(base)).toBe("ready");
+		// the settings and the test live on the server: a device that never ran the test still gets the button
+		expect(voiceState({ ...base, failed: false })).toBe("ready");
 	});
 });
 

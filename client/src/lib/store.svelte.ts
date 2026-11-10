@@ -172,6 +172,8 @@ class AppStore {
   findTick = $state(0);
   /** Bumped when the open server reports a model-connection change (any client) */
   configTick = $state(0);
+  /** Bumped when the open server reports a voice-input change (settings saved or a connection test run on any device) */
+  voiceTick = $state(0);
   /** Model new chats start with on this server (saved default, else the server's startup default) */
   get serverDefault(): DefaultModelSelection | null {
     return this.link?.serverDefault ?? null;
@@ -1132,6 +1134,8 @@ class AppStore {
         break;
       case "configuration_updated":
         this.configTick++;
+        // The connection test lives on the server, so a test on the phone must show the microphone here.
+        if ((e.data as { scope?: string } | undefined)?.scope === "voice") this.voiceTick++;
         void this.refreshProviders();
         if ((e.data as { scope?: string } | undefined)?.scope === "tools") {
           this.toolsInfo = e.data as ToolsInfo;

@@ -17,6 +17,12 @@ export const TranscribeTestResult = Type.Object({ text: Type.String(), status: T
 /** The kinds the client turns into a message of its own; anything else is a server error. */
 export type VoiceFailure = "not_configured" | "bad_key" | "not_found" | "too_large" | "timeout" | "upstream_error" | "bad_response";
 
+/**
+ * The failures that mean the settings are wrong (the same list as the client's `CONFIG_FAILURES`): they take the
+ * microphone away on every device until the user fixes the settings and tests again.
+ */
+export const CONFIG_FAILURES: ReadonlySet<string> = new Set(["not_configured", "bad_key", "not_found", "bad_response", "upstream_error"]);
+
 /** An upstream answer that is not a transcription, with the HTTP status the client should see. */
 export function failureStatus(kind: VoiceFailure): number {
 	switch (kind) {
@@ -142,7 +148,15 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 	};
 	const view = async () => {
 		const current = settings.get();
-		return { settings: current, hasKey: (await keyOf()).length > 0, defaults: DEFAULT_VOICE_SETTINGS(), defaultPath: DEFAULT_PATH, endpoint: endpointOf(current) };
+		const test = settings.getTest();
+		return {
+			settings: current,
+			hasKey: (await keyOf()).length > 0,
+			defaults: DEFAULT_VOICE_SETTINGS(),
+			defaultPath: DEFAULT_PATH,
+			endpoint: endpointOf(current),
+			test: test ? { ok: test.ok, at: test.at, reason: test.reason } : { ok: null, at: null, reason: null },
+		};
 	};
 	app.get("/voice", {
 		schema: { response: { 200: VoiceSettingsResult, ...errors(401) } },
@@ -157,6 +171,8 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 				if (key) await credentials.modify(VOICE_CREDENTIAL_ID, async () => ({ type: "api_key", key }));
 				else await credentials.delete(VOICE_CREDENTIAL_ID);
 			}
+			// any change of address, path, model, language or key invalidates the test
+			settings.clearTest();
 			bus.publish(null, "configuration_updated", { scope: "voice" });
 			return { ...(await view()), settings: saved };
 		},
@@ -175,17 +191,41 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 			const language = typeof form.get("language") === "string" ? String(form.get("language")).slice(0, 20) : undefined;
 			const controller = new AbortController();
 			req.raw.on("close", () => { if (!req.raw.complete) controller.abort(); });
-			const text = await transcribe({ settings: settings.get(), key: await keyOf(), audio, language, signal: controller.signal });
-			return { text };
+			try {
+				const text = await transcribe({ settings: settings.get(), key: await keyOf(), audio, language, signal: controller.signal });
+				return { text };
+			} catch (cause) {
+				// A settings problem found while transcribing is a failed test too, so the microphone goes away on every
+				// device until the user fixes it (a passing network error leaves the last result alone).
+				if (cause instanceof HttpError && CONFIG_FAILURES.has(cause.code)) {
+					settings.setTest({ ok: false, at: Date.now(), reason: cause.code });
+					bus.publish(null, "configuration_updated", { scope: "voice" });
+				}
+				throw cause;
+			}
 		},
 	});
-	/** The connection test: a second of silence as a WAV, so a wrong address, key or model is caught before the user speaks. */
+	/**
+	 * The connection test: a second of silence as a WAV, so a wrong address, key or model is caught before the user
+	 * speaks. The result is kept on the server (`voice_input_test`), so every device on this server sees the same
+	 * microphone state; a passing or failing test is also published, so another device that is open follows along.
+	 */
 	app.post("/voice/test", {
 		schema: { response: { 200: TranscribeTestResult, ...errors(400, 401, 502, 504) } },
 		handler: async (req) => {
 			const controller = new AbortController();
 			req.raw.on("close", () => { if (!req.raw.complete) controller.abort(); });
-			const text = await transcribe({ settings: settings.get(), key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
+			let text: string;
+			try {
+				text = await transcribe({ settings: settings.get(), key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
+			} catch (cause) {
+				const reason = cause instanceof HttpError ? cause.code : "upstream_error";
+				settings.setTest({ ok: false, at: Date.now(), reason });
+				bus.publish(null, "configuration_updated", { scope: "voice" });
+				throw cause;
+			}
+			settings.setTest({ ok: true, at: Date.now(), reason: null });
+			bus.publish(null, "configuration_updated", { scope: "voice" });
 			return { text, status: 200 };
 		},
 	});

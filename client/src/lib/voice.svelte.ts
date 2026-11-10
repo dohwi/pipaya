@@ -2,11 +2,12 @@
  * Voice input, client side: the server's settings, the connection test, and the recorder. One small store so the
  * composer button and Settings > Voice read the same state, and a change in Settings shows the button at once.
  *
- * The microphone is offered only when voice input is on and the last connection test passed (`voiceState`). A
- * configuration failure (a rejected key, a wrong path) turns it off again until the user fixes it and tests; a passing
- * network hiccup leaves it on, so a lost packet does not hide the button.
+ * The microphone is offered only when voice input is on and the last connection test passed (`voiceState`). The test
+ * runs on the server and its result is stored there, so a phone, a desktop and a browser on the same server agree on
+ * whether the microphone works; a configuration failure (a rejected key, a wrong path) turns it off again until the
+ * user fixes it and tests, and a passing network hiccup leaves it on, so a lost packet does not hide the button.
  */
-import { Api, ApiError, type VoiceSettings } from "./api";
+import { Api, ApiError, type VoiceSettings, type VoiceView } from "./api";
 import { app } from "./store.svelte";
 import { t } from "./i18n";
 import {
@@ -14,10 +15,11 @@ import {
 	serverFailure, voiceState, type VoiceFailure, type VoiceState,
 } from "./voice";
 
-const TESTED_KEY = "pipaya.voice.tested";
-
-/** What the last connection test concluded, kept per server so a restart does not hide a working button. */
-type Tested = { at: number; ok: boolean; reason?: string };
+/**
+ * What the last connection test concluded, as the server keeps it (null when no test has run since the settings were
+ * saved). `reason` is a failure kind (`VoiceFailure`), not a sentence, so each device says it in its own language.
+ */
+export type Tested = { at: number; ok: boolean; reason?: VoiceFailure };
 
 class VoiceStore {
 	settings = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
@@ -40,7 +42,8 @@ class VoiceStore {
 	elapsed = $state(0);
 
 	private api: Api | null = null;
-	private serverKey = "";
+	/** The server these settings came from, so switching servers clears what the other one had. */
+	private lastServer = "";
 	private recorder: MediaRecorder | null = null;
 	private chunks: Blob[] = [];
 	private startedAt = 0;
@@ -49,16 +52,16 @@ class VoiceStore {
 	/** The pane the recording belongs to: the text goes back into that composer. */
 	paneId = $state<string | null>(null);
 
-	/** Called when the open server changes (or on start): read its voice settings. */
+	/** Called when the open server changes (or on start, or when another device saved the settings): read its voice settings. */
 	async load(api: Api | null, serverKey: string) {
 		this.api = api;
-		if (serverKey !== this.serverKey) {
-			this.serverKey = serverKey;
+		if (serverKey !== this.lastServer) {
+			this.lastServer = serverKey;
 			this.settings = { enabled: false, baseUrl: "", path: "", model: "", language: "" };
 			this.hasKey = false;
 			this.endpoint = null;
 			this.loaded = false;
-			this.tested = readTested(serverKey);
+			this.tested = null;
 		}
 		if (!api) return;
 		this.loading = true;
@@ -72,10 +75,11 @@ class VoiceStore {
 		}
 	}
 
-	private apply(view: { settings: VoiceSettings; hasKey: boolean; endpoint: string | null }) {
+	private apply(view: VoiceView) {
 		this.settings = view.settings;
 		this.hasKey = view.hasKey;
 		this.endpoint = view.endpoint;
+		this.tested = view.test.ok === null || view.test.at === null ? null : { ok: view.test.ok, at: view.test.at, reason: (view.test.reason as VoiceFailure | null) ?? undefined };
 		this.loaded = true;
 	}
 
@@ -92,12 +96,13 @@ class VoiceStore {
 		return voiceState({
 			enabled: this.settings.enabled,
 			usable: !!this.endpoint && this.hasKey,
-			tested: this.tested?.ok === true,
+			// a test that has not run yet is not a failure: the settings alone are enough to try the microphone
+			failed: this.tested?.ok === false,
 			available: this.availability === null,
 		});
 	}
 
-	/** The button in the composer: on, usable, tested and recordable. */
+	/** The button in the composer: on, usable and recordable here. */
 	get visible() {
 		return this.state === "ready";
 	}
@@ -108,18 +113,17 @@ class VoiceStore {
 		if (!this.settings.enabled) return null;
 		if (!this.settings.baseUrl) return t("서버 주소를 입력하세요.");
 		if (!this.hasKey) return t("API 키를 입력하세요.");
-		if (!this.tested) return t("연결을 확인하면 입력창에 마이크가 나타납니다.");
-		if (!this.tested.ok) return this.tested.reason ?? t("연결 확인에 실패했습니다.");
+		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
+		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason]) || t("연결 확인에 실패했습니다.");
 		return null;
 	}
 
 	async save(next: VoiceSettings, apiKey: string | undefined): Promise<string | null> {
 		if (!this.api) return t("서버에 연결할 수 없습니다");
 		try {
+			// the server forgets the old test with the new settings, and answers with the cleared state
 			const view = await this.api.saveVoice(next, apiKey);
 			this.apply(view);
-			// any change of address, path, model or key invalidates the test
-			this.markUntested();
 			return null;
 		} catch (cause) {
 			return cause instanceof ApiError ? cause.message : t("저장하지 못했습니다");
@@ -134,22 +138,14 @@ class VoiceStore {
 			const result = await this.api.testVoice(AbortSignal.timeout(70_000));
 			// An empty transcript is a pass: silence has nothing to say, and the answer was well formed.
 			this.tested = { at: Date.now(), ok: true };
-			writeTested(this.serverKey, this.tested);
 			return { ok: true, message: result.text ? t("연결되었습니다: {text}", { text: result.text }) : t("연결되었습니다. 입력창에 마이크가 나타납니다.") };
 		} catch (cause) {
 			const failure = cause instanceof ApiError ? serverFailure(cause.code) : "network";
-			const message = FAILURE_TEXT[failure];
-			this.tested = { at: Date.now(), ok: false, reason: message };
-			writeTested(this.serverKey, this.tested);
-			return { ok: false, message };
+			this.tested = { at: Date.now(), ok: false, reason: failure };
+			return { ok: false, message: FAILURE_TEXT[failure] };
 		} finally {
 			this.testing = false;
 		}
-	}
-
-	private markUntested() {
-		this.tested = null;
-		writeTested(this.serverKey, null);
 	}
 
 	/** Starts recording into `paneId`. Returns a failure kind when the microphone could not be opened. */
@@ -251,33 +247,13 @@ class VoiceStore {
 	fail(failure: VoiceFailure) {
 		this.failure = failure;
 		app.toast(FAILURE_TEXT[failure], failure === "aborted" ? "info" : "error", this.paneId ?? undefined);
-		if (isConfigFailure(failure)) {
-			this.tested = { at: Date.now(), ok: false, reason: FAILURE_TEXT[failure] };
-			writeTested(this.serverKey, this.tested);
-		}
+		// The server records a settings failure it finds itself (see POST /voice/transcribe), so every device hides the
+		// microphone at once; here the local state follows without a round trip.
+		if (isConfigFailure(failure)) this.tested = { at: Date.now(), ok: false, reason: failure };
 	}
 
 	clearFailure() {
 		this.failure = null;
-	}
-}
-
-function readTested(serverKey: string): Tested | null {
-	try {
-		const raw: unknown = JSON.parse(localStorage.getItem(`${TESTED_KEY}.${serverKey}`) ?? "null");
-		if (raw && typeof raw === "object" && typeof (raw as Tested).ok === "boolean" && typeof (raw as Tested).at === "number") return raw as Tested;
-	} catch {
-		/* unreadable: untested */
-	}
-	return null;
-}
-
-function writeTested(serverKey: string, value: Tested | null) {
-	try {
-		if (value) localStorage.setItem(`${TESTED_KEY}.${serverKey}`, JSON.stringify(value));
-		else localStorage.removeItem(`${TESTED_KEY}.${serverKey}`);
-	} catch {
-		/* storage full: the in-memory state still works */
 	}
 }
 

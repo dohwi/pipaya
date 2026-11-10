@@ -137,10 +137,12 @@
 		};
 	});
 
-	// Voice input: read this server's settings, and keep them in step when the open server changes.
+	// Voice input: read this server's settings, and keep them in step when the open server changes or another device
+	// saves them (the connection test is kept on the server, so a test on the phone shows the microphone here too).
 	$effect(() => {
 		const api = app.api;
 		const serverId = app.serverId;
+		void app.voiceTick;
 		if (serverId) void voice.load(api, serverId);
 	});
 

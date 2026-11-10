@@ -75,7 +75,7 @@
 <section class="set-group">
 	<div class="section-label">{t("음성 입력")}</div>
 	<span class="hint">{t("말한 내용을 입력창에 글로 넣습니다. 녹음은 pipaya 서버를 거쳐 설정한 변환 서버로 보내고, 서버는 녹음을 저장하지 않습니다.")}</span>
-	<SettingRow label={t("음성 입력 사용")} hint={t("켜고 연결을 확인하면 입력창에 마이크가 나타납니다")}>
+	<SettingRow label={t("음성 입력 사용")} hint={t("켜면 입력창에 마이크가 나타납니다. 연결 확인은 키와 주소를 미리 점검합니다")}>
 		<Switch checked={draft.enabled} label={t("음성 입력 사용")} onchange={(on) => (draft = { ...draft, enabled: on })} />
 	</SettingRow>
 	{#if oldExtension}
