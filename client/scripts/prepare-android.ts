@@ -53,11 +53,19 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.webkit.ConsoleMessage
+import android.webkit.GeolocationPermissions
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
 import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.widget.FrameLayout
@@ -138,16 +146,55 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Gives the WebView a WebChromeClient that answers microphone requests. Tauri already installs one for other web
-   * permissions, so the existing client is kept and only onPermissionRequest is answered here.
+   * Gives the WebView a WebChromeClient that answers microphone requests. A WebView has only one, and Tauri's
+   * (RustWebChromeClient) also opens the file picker for <input type="file">, shows alert/confirm/prompt and hides the
+   * video poster, so it is wrapped, not replaced: everything but the microphone goes on to it. Replacing it left the
+   * attach button dead on Android. Reading the current client needs API 26; below that there is nothing to wrap.
    */
   private fun attachMicrophonePermission(web: WebView) {
-    if (web.webChromeClient is MicrophoneChromeClient) return
-    web.webChromeClient = MicrophoneChromeClient()
+    val current = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) web.webChromeClient else null
+    if (current is MicrophoneChromeClient) return
+    web.webChromeClient = MicrophoneChromeClient(current)
   }
 
-  /** Answers a WebView microphone request: audio from this app's page only, after Android's own permission. */
-  private inner class MicrophoneChromeClient : WebChromeClient() {
+  /**
+   * Answers a WebView microphone request: audio from this app's page only, after Android's own permission. Every other
+   * callback Tauri's client handles is passed on to it (base), so the page keeps its file picker and dialogs.
+   */
+  private inner class MicrophoneChromeClient(private val base: WebChromeClient?) : WebChromeClient() {
+    override fun onShowFileChooser(webView: WebView, filePathCallback: ValueCallback<Array<Uri>>, fileChooserParams: FileChooserParams): Boolean =
+      base?.onShowFileChooser(webView, filePathCallback, fileChooserParams) ?: super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+
+    override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+      if (base != null) base.onShowCustomView(view, callback) else super.onShowCustomView(view, callback)
+    }
+
+    override fun onHideCustomView() {
+      if (base != null) base.onHideCustomView() else super.onHideCustomView()
+    }
+
+    override fun getDefaultVideoPoster(): Bitmap? = base?.defaultVideoPoster ?: super.getDefaultVideoPoster()
+
+    override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean =
+      base?.onJsAlert(view, url, message, result) ?: super.onJsAlert(view, url, message, result)
+
+    override fun onJsConfirm(view: WebView, url: String, message: String, result: JsResult): Boolean =
+      base?.onJsConfirm(view, url, message, result) ?: super.onJsConfirm(view, url, message, result)
+
+    override fun onJsPrompt(view: WebView, url: String, message: String, defaultValue: String?, result: JsPromptResult): Boolean =
+      base?.onJsPrompt(view, url, message, defaultValue, result) ?: super.onJsPrompt(view, url, message, defaultValue, result)
+
+    override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
+      if (base != null) base.onGeolocationPermissionsShowPrompt(origin, callback) else super.onGeolocationPermissionsShowPrompt(origin, callback)
+    }
+
+    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean =
+      base?.onConsoleMessage(consoleMessage) ?: super.onConsoleMessage(consoleMessage)
+
+    override fun onReceivedTitle(view: WebView, title: String?) {
+      if (base != null) base.onReceivedTitle(view, title) else super.onReceivedTitle(view, title)
+    }
+
     override fun onPermissionRequest(request: PermissionRequest) {
       val ownPage = request.origin?.host == "tauri.localhost" || request.origin?.host == "localhost"
       val wantsAudio = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)

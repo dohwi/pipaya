@@ -159,4 +159,17 @@ describe("Android microphone permission", () => {
 		expect(kotlin).toContain("wrapInFocusKeepingShell(web)");
 		expect(kotlin).toContain("attachMicrophonePermission(web)");
 	});
+	test("the microphone client wraps Tauri's instead of replacing it, so the file picker and dialogs keep working", () => {
+		const kotlin = mainActivity("work.pipaya.app");
+		expect(kotlin).toContain("MicrophoneChromeClient(current)");
+		expect(kotlin).toContain("private inner class MicrophoneChromeClient(private val base: WebChromeClient?)");
+		// <input type="file"> goes through onShowFileChooser: without it the attach button does nothing
+		expect(kotlin).toContain("base?.onShowFileChooser(webView, filePathCallback, fileChooserParams)");
+		for (const fn of ["onShowCustomView", "onHideCustomView", "onJsAlert", "onJsConfirm", "onJsPrompt", "onGeolocationPermissionsShowPrompt", "onConsoleMessage", "onReceivedTitle"]) {
+			expect(kotlin).toMatch(new RegExp(`base\\??\\.${fn}\\(`));
+		}
+		expect(kotlin).toContain("base?.defaultVideoPoster");
+		// WebView.getWebChromeClient is API 26+
+		expect(kotlin).toContain("Build.VERSION.SDK_INT >= Build.VERSION_CODES.O");
+	});
 });
