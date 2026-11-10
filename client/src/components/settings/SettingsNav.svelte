@@ -115,11 +115,10 @@
 					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
-						{#if kids.length && !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}
 					</span>
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
+					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}>{#if !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}<Icon name="chevron-down" /></button>
 				{/if}
 			</div>
 			{#if open}
@@ -170,22 +169,30 @@
 		min-width: 0;
 	}
 	.nav .row.has > button:first-child {
-		padding-right: 38px; /* the fold button's box, so a long label never runs under it */
+		padding-right: 56px; /* the fold button's box (badge + arrow), so a long label never runs under it */
 	}
-	/* the fold button is the row's right end, 32px tall like the row, 38px wide: its centred 14px arrow ends 12px from the row's edge, the
-	   mirror of the 19px icon's 12px inset on the left. Same chevron as the sidebar's folders (down = open, right = folded), so "fold" never
-	   reads as "go to". The hit area is the whole box; `.tap` widens it on touch */
+	/* the fold button is the row's right end: [count][arrow], 56x32. The arrow is anchored to the right (its centre 19px from the row's edge,
+	   12px of padding: the mirror of the 19px icon's 12px on the left), so it never moves with the badge. The badge is a fixed 20px column like
+	   the sidebar's (one and two digits both centre in it), 4px left of the arrow, and only shows while folded: rows with and without it keep
+	   the arrow on the same x. Same chevron as the sidebar's folders (down = open, right = folded). The hit area is the whole box; `.tap` widens it on touch */
 	.nav button.fold {
 		position: absolute;
 		top: 0;
 		right: 0;
-		display: grid;
-		place-items: center;
-		width: 38px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 4px;
+		width: 56px;
 		height: 32px;
-		padding: 0;
+		padding: 0 12px 0 0;
 		border-radius: var(--radius-control);
 		color: var(--text-faint);
+	}
+	.nav button.fold .cbadge {
+		width: 20px;
+		min-width: 20px;
+		padding: 0 0 2px; /* the shared badge's 1px digit lift, without its side padding: 20px column, as in the sidebar */
 	}
 	.nav button.fold :global(svg) {
 		width: 14px;
