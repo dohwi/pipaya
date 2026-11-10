@@ -1,13 +1,20 @@
 import { msg, t } from "./i18n";
 
-/** The settings window's sections. `server: true` ones belong to the chosen server and sit between the app-wide ones. */
+/**
+ * The settings window's sections. `server: true` ones belong to the chosen server and sit between the app-wide ones.
+ *
+ * Order is the order a person sets the app up in: the device's own basics (general, keys, backup) first, then the server
+ * as a whole (info), then what the agent needs to work (models, then voice input right after it: both are one
+ * connection with an address, a model and a key), then what it may do (tools, mcp), where it works (sessions), and
+ * finally the things that grow over time (extensions, devices).
+ */
 export const SETTINGS_TABS = [
 	{ id: "general", label: msg("일반"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
-	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
 	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
+	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 도우미 위임"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
@@ -30,6 +37,8 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },
 	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" },
+	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" },
+	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" },
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" },
 	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" },
