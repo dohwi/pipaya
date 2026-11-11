@@ -20,6 +20,8 @@
 	let devices = $state<NotificationDevice[] | null>(null);
 	/** Tokens issued by QR pairing. null = not shown: this window connects with a paired device's own token, which may not manage them. */
 	let paired = $state<{ id: string; name: string; createdAt: number; lastUsedAt: number | null }[] | null>(null);
+	/** Days without a connection after which the server revokes a paired device by itself; 0 = it never does. */
+	let idleDays = $state(0);
 	let revoking = $state<string | null>(null);
 	let error = $state("");
 	let busy = $state<string | null>(null);
@@ -39,7 +41,9 @@
 			error = errorText(e);
 		}
 		try {
-			paired = (await a.deviceTokens()).tokens;
+			const listed = await a.deviceTokens();
+			paired = listed.tokens;
+			idleDays = listed.idleDays ?? 0; // absent on a server from before devices expired
 		} catch {
 			paired = null; // a paired device's token cannot manage tokens: nothing to show here
 		}
@@ -161,7 +165,7 @@
 	{#if paired && paired.length}
 		<div class="paired set-group">
 			<h4 class="section-label">{t("QR로 연결한 기기")}</h4>
-			<p class="hint">{t("기기마다 따로 발급된 접속 권한입니다. 취소하면 그 기기만 즉시 접속이 끊기고, 다른 기기와 서버 토큰은 그대로입니다.")}</p>
+			<p class="hint">{t("기기마다 따로 발급된 접속 권한입니다. 취소하면 그 기기만 즉시 접속이 끊기고, 다른 기기와 서버 토큰은 그대로입니다.")}{#if idleDays > 0}{" "}{t("{n}일 동안 접속하지 않은 기기는 자동으로 취소됩니다.", { n: idleDays })}{/if}</p>
 			<ul>
 				{#each paired as p (p.id)}
 					<li animate:reflow in:rowIn out:rowOut>

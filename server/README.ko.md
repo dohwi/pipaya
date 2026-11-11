@@ -37,12 +37,13 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PIPAYA_HOST` / `PIPAYA_PORT` | `0.0.0.0` / `8787` | 수신 주소 |
+| `PIPAYA_HOST` / `PIPAYA_PORT` | `127.0.0.1` / `8787` | 수신 주소. 기본은 루프백이라 이 컴퓨터에서만 접속됩니다. 다른 기기를 받으려면 사설 주소(Tailscale IP)나 `0.0.0.0`으로 지정하세요. `install.sh`와 Docker 이미지는 알아서 지정합니다 |
 | `PIPAYA_DATA_DIR` | `~/.pipaya` | 데이터베이스, 토큰, 기본 워크스페이스 |
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite 경로 |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | 시작 시 기본 작업 디렉터리. 실행 중에는 `PUT /configuration/workdir`로 바꿉니다(SQLite에 저장되고 이 값을 덮어씀) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | 처음 구성된 모델 | 시작 기본값. 등록된 커스텀 프로바이더/모델이어야 하며, 저장된 기본값이 우선합니다 |
 | `PIPAYA_MAX_SESSIONS` | `200` | 동시에 활성인(닫히지 않은) 세션의 최대 수. 넘으면 생성·재개가 409로 거절됨. `0`이면 제한 없음 |
+| `PIPAYA_DEVICE_TOKEN_IDLE_DAYS` | `90` | QR로 연결한 기기가 이 일수 동안 접속하지 않으면 접속 권한이 사라져 다시 연결해야 합니다. `0` = 만료 없음 |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify 로그 수준(`silent`는 로그 끔). `?ticket=`·`?token=`으로 전달된 값은 요청 로그에서 가려집니다 |
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. `server/builtin-skills/pipaya-client-extensions/references/notifications.md` 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |

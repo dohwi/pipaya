@@ -24,12 +24,16 @@ export interface Config {
 	pushEnabled?: boolean;
 	/** PIPAYA_TERMINAL=0 turns off the interactive shells clients can open on this server. */
 	terminals?: boolean;
+	/** PIPAYA_DEVICE_TOKEN_IDLE_DAYS: a paired device unused for this many days must pair again; 0 = never. Unset = 90. */
+	deviceTokenIdleDays?: number;
 	/** PIPAYA_MAX_SESSIONS: most active (not closed) sessions at once; 0 = no limit. Unset = DEFAULT_MAX_SESSIONS. */
 	maxActiveSessions?: number;
 }
 
 /** As many as there are member names, so every active session has its own name. */
 export const DEFAULT_MAX_SESSIONS = 200;
+/** Kept in step with DEFAULT_DEVICE_TOKEN_IDLE_DAYS in device-tokens.ts (config.ts imports nothing from the app). */
+const DEFAULT_DEVICE_TOKEN_IDLE_DAYS = 90;
 
 function int(value: string | undefined, fallback: number): number {
 	const n = value === undefined ? NaN : Number.parseInt(value, 10);
@@ -66,7 +70,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
 	return {
-		host: env.PIPAYA_HOST ?? "0.0.0.0",
+		// Loopback unless the operator says otherwise: the API is plain HTTP and its token runs commands, so a server
+		// somebody just started must not be listening on every network the machine happens to be on.
+		host: env.PIPAYA_HOST?.trim() || "127.0.0.1",
 		port: int(env.PIPAYA_PORT, 8787),
 		dataDir,
 		dbPath: env.PIPAYA_DB ?? join(dataDir, "pipaya.db"),
@@ -81,5 +87,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		pushEnabled: env.PIPAYA_PUSH_FCM !== "0",
 		terminals: env.PIPAYA_TERMINAL !== "0",
 		maxActiveSessions: Math.max(0, int(env.PIPAYA_MAX_SESSIONS, DEFAULT_MAX_SESSIONS)),
+		deviceTokenIdleDays: Math.max(0, int(env.PIPAYA_DEVICE_TOKEN_IDLE_DAYS, DEFAULT_DEVICE_TOKEN_IDLE_DAYS)),
 	};
 }

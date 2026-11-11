@@ -59,6 +59,7 @@ import { UnreadTracker } from "./unread.ts";
 import { registerNotificationRoutes } from "./notification-routes.ts";
 import { createCorsPolicy, redactUrl } from "./security.ts";
 import { StreamTickets } from "./stream-tickets.ts";
+import { AuthThrottle } from "./auth-throttle.ts";
 import { createPushTransports } from "./push.ts";
 import { ExtensionHost } from "./extensions/host.ts";
 import { registerServerExtensionRoutes } from "./extensions/routes.ts";
@@ -285,8 +286,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	if (corsPolicy.allowsAll) server.log.warn("PIPAYA_CORS_ORIGINS=* lets every web page call this server from a browser that holds a token; list exact origins instead");
 	await server.register(cors, { origin: (origin, cb) => cb(null, !origin || corsPolicy.allows(origin)), methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] });
 
-	const deviceTokens = new DeviceTokens(db);
+	const deviceTokens = new DeviceTokens(db, Date.now, cfg.deviceTokenIdleDays);
 	const streamTickets = new StreamTickets();
+	const authThrottle = new AuthThrottle();
 	/** The paired device a request was made by; absent for the admin token. */
 	const deviceOf = new WeakMap<object, string>();
 	const expected = Buffer.from(cfg.token);
@@ -296,7 +298,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		return token.length === expected.length && timingSafeEqual(token, expected);
 	};
 	const bearerOf = (header: string | undefined) => (header?.startsWith("Bearer ") ? header.slice(7) : undefined);
-	server.addHook("onRequest", async (req) => {
+	server.addHook("onRequest", async (req, reply) => {
 		if (req.method === "OPTIONS") return;
 		const path = req.url.split("?")[0];
 		if (req.method === "GET" && path === "/health") return;
@@ -309,6 +311,17 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		}
 		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
 		const bearer = bearerOf(req.headers.authorization);
+		// Too many wrong tokens from this address: nothing is checked until its minute has passed (auth-throttle.ts).
+		const wait = authThrottle.blockedFor(req.ip);
+		if (wait > 0) {
+			void reply.header("retry-after", Math.ceil(wait / 1000));
+			throw new HttpError(429, "auth_throttled", "too many wrong tokens from this address; wait a minute");
+		}
+		// A request that carries no credential at all is not a guess (a scanner, a monitor, a page without a server yet).
+		const refuse = (wrong: string | undefined) => {
+			if (wrong !== undefined) authThrottle.fail(req.ip, wrong);
+			return new HttpError(401, "unauthorized", "missing or invalid token");
+		};
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
 		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
 		const query = browserStream ? (req.query as { token?: string; ticket?: string } | undefined) : undefined;
@@ -316,16 +329,16 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		if (bearer === undefined && typeof query?.ticket === "string") {
 			// A one-time ticket (stream-tickets.ts) keeps the access token itself out of the URL.
 			const holder = streamTickets.redeem(query.ticket);
-			if (!holder) throw new HttpError(401, "unauthorized", "missing or invalid token");
+			if (!holder) throw refuse(query.ticket);
 			if (holder.device === null) return; // asked for with the admin token
 			// The device may have been revoked between asking for the ticket and using it.
-			if (!deviceTokens.has(holder.device)) throw new HttpError(401, "unauthorized", "missing or invalid token");
+			if (!deviceTokens.has(holder.device)) throw refuse(query.ticket);
 			device = holder.device;
 		} else {
 			const given = bearer ?? query?.token;
 			if (tokenMatches(given)) return; // the admin token
 			device = deviceTokens.verify(given);
-			if (!device) throw new HttpError(401, "unauthorized", "missing or invalid token");
+			if (!device) throw refuse(given);
 		}
 		if (isAdminOnlyPath(req.method, path ?? "")) throw new HttpError(403, "admin_only", "this needs the server's admin token, not a paired device's");
 		deviceTokens.track(device, req.raw.socket);
