@@ -7,6 +7,10 @@
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
 
+	/** Ties the search field to the list for assistive tech: focus stays in the field while the arrows move the selection. */
+	const uid = $props.id();
+	const optionId = (i: number) => `${uid}-opt-${i}`;
+
 	const spec = $derived(app.palette);
 	let query = $state("");
 	let index = $state(0);
@@ -79,14 +83,29 @@
 		</div>
 		<div class="sw">
 			<Icon name="search" />
-			<input bind:this={input} bind:value={query} onkeydown={onKey} placeholder={t("검색…")} spellcheck="false" autocomplete="off" />
+			<!-- A combobox (WAI-ARIA): the field keeps focus and names the highlighted option, so a screen reader reads each one as the arrows move. -->
+			<input
+				bind:this={input}
+				bind:value={query}
+				onkeydown={onKey}
+				placeholder={t("검색…")}
+				spellcheck="false"
+				autocomplete="off"
+				role="combobox"
+				aria-label={spec.title}
+				aria-expanded="true"
+				aria-autocomplete="list"
+				aria-controls="{uid}-list"
+				aria-activedescendant={items.length ? optionId(index) : undefined}
+			/>
 		</div>
-		<div class="list" bind:this={listEl} role="listbox">
+		<div class="list" id="{uid}-list" bind:this={listEl} role="listbox" aria-label={spec.title}>
 			{#each items as it, i (it.id)}
 				<div
 					class="it"
 					class:on={i === index}
 					class:dim={it.dim}
+					id={optionId(i)}
 					role="option"
 					tabindex={i === index ? 0 : -1}
 					aria-selected={i === index}
