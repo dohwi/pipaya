@@ -20,6 +20,7 @@
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../lib/composer-text";
 	import IconButton from "./IconButton.svelte";
 	import ModelPicker from "./ModelPicker.svelte";
+	import RetryNotice from "./RetryNotice.svelte";
 	import SendControls from "./SendControls.svelte";
 	import VoiceInput from "./VoiceInput.svelte";
 	import VoiceRecording from "./VoiceRecording.svelte";
@@ -80,7 +81,8 @@
 		}
 		return "";
 	});
-	const promptHint = $derived(!compacting && text.length === 0 && lastPrompt ? lastPrompt : "");
+	/** Idle only: while a run works the textarea shows the running hint, so the last prompt never reads as an unsent draft. */
+	const promptHint = $derived(!compacting && !running && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
 	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
 
@@ -589,10 +591,8 @@
 		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
+	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
-		{#if chat?.retrying}
-			<p class="retrying" role="status">{t("연결이 불안정해 다시 시도하는 중입니다 ({attempt}/{max})", { attempt: chat.retrying.attempt, max: chat.retrying.maxRetries })}</p>
-		{/if}
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
@@ -611,7 +611,7 @@
 
 		<div class="field-wrap" class:calm={voiceActive && !!text}>
 		{#if promptHint && !voiceActive}
-			<div class="prompt-hint" aria-hidden="true" title={promptHint}>{promptHint}</div>
+			<div class="prompt-hint" aria-hidden="true" title={promptHint}>↑ {promptHint}</div>
 		{/if}
 		<div class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}</div>
 		<textarea
@@ -683,7 +683,6 @@
 
 <style>
 	/* Floats in the gap above the box (4px clear of it) so showing or hiding it never moves the chat or the input */
-	.retrying { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--danger); pointer-events: none; }
 	.extension-widgets { max-height: min(40dvh, 320px); overflow-y: auto; overscroll-behavior: contain; }
 	.extension-widgets:not(:empty) { margin-bottom: 8px; }
 	.extension-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }

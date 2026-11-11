@@ -1,3 +1,4 @@
+import { parseRetrying, type RetryState } from "./retry-state";
 import { errorText, ApiError, type Api, type StoredMessage } from "./api";
 import { uid } from "./format";
 import { LocalizedError, t } from "./i18n";
@@ -123,7 +124,7 @@ export class ChatState {
 	/** When the current run started (ms), for the elapsed time in the status line; null while idle. */
 	runStartedAt = $state<number | null>(null);
 	/** Set while the server waits out a provider hiccup (502 …) before calling the model again; the chat itself stays untouched. */
-	retrying = $state<{ attempt: number; maxRetries: number } | null>(null);
+	retrying = $state<RetryState | null>(null);
 	/** Bumped when the user sends something (prompt / steer / queue): the list jumps to the bottom, even if it was scrolled up. */
 	bottomRequest = $state(0);
 	requestBottom(): void {
@@ -520,7 +521,7 @@ export class ChatState {
 				break;
 
 			case "run_retrying":
-				this.retrying = { attempt: Number(d.attempt) || 1, maxRetries: Number(d.maxRetries) || 1 };
+				this.retrying = parseRetrying(d, Date.now());
 				if (d.restart) this.dropPartialReply();
 				break;
 

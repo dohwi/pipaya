@@ -22,6 +22,20 @@ export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, bas
  */
 export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, baseDelayMs: 2000, maxDelayMs: 10_000 };
 
+/**
+ * A short, safe reason for the "retrying" notice: one line, at most 200 characters, with URL queries/credentials,
+ * bearer tokens, API keys and header-like `name: value` secrets removed. Empty when there is nothing to say.
+ */
+export function retryReason(message: string | undefined): string {
+	let s = (message ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); // gateways answer with HTML pages
+	s = s.replace(/(https?:\/\/)[^\s/@]*@/gi, "$1"); // user:pass@host
+	s = s.replace(/(https?:\/\/[^\s?#"')]*)[?#][^\s"')]*/gi, "$1"); // query and fragment
+	s = s.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 ***");
+	s = s.replace(/\b(authorization|api[-_]?key|x-api-key|token|secret|password|cookie)\b\s*["']?\s*[:=]\s*["']?[^\s,;"'}]+/gi, "$1: ***");
+	s = s.replace(/\b(sk|pk|rk|key|ghp|gho|xox[a-z])[-_][A-Za-z0-9_-]{12,}/g, "***");
+	return s.length > 200 ? `${s.slice(0, 199)}…` : s;
+}
+
 export const sleepAbortable = (ms: number, signal?: AbortSignal) =>
 	new Promise<void>((resolve) => {
 		if (signal?.aborted) return resolve();

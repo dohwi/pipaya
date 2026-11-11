@@ -26,7 +26,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, helperUsage, loadSubagents, subagentSystem } from "./subagents.ts";
-import { DEFAULT_UPSTREAM_RETRY, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
@@ -825,7 +825,7 @@ export class SessionManager {
 			// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
 			for (let attempt = 1; !error && !live.forceStopped && attempt <= STREAM_RETRY.maxRetries && this.droppedMidStream(live); attempt++) {
 				const delayMs = retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-				this.bus.publish(id, "run_retrying", { attempt, maxRetries: STREAM_RETRY.maxRetries, delayMs, restart: true }, { ephemeral: true });
+				this.bus.publish(id, "run_retrying", { attempt, maxRetries: STREAM_RETRY.maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
 				const wait = new AbortController();
 				live.retryWait = wait;
 				await sleepAbortable(delayMs, wait.signal);
@@ -905,6 +905,13 @@ export class SessionManager {
 		return isRetryableAssistantError(last);
 	}
 
+	/** `{ reason }` for run_retrying from the failed reply at the tail, or nothing. */
+	private retryReasonField(live: Live): { reason?: string } {
+		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
+		const reason = last?.role === "assistant" ? retryReason(last.errorMessage) : "";
+		return reason ? { reason } : {};
+	}
+
 	/** Throws the half-written reply away (`continue()` then replaces it, without asking the model to repeat itself). */
 	private dropLastReply(id: string, live: Live): void {
 		this.store.deleteLastMessage(id);
@@ -948,7 +955,7 @@ export class SessionManager {
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
 			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), {
 				...DEFAULT_UPSTREAM_RETRY,
-				onRetry: (attempt, maxRetries, delayMs) => this.bus.publish(record.id, "run_retrying", { attempt, maxRetries, delayMs }, { ephemeral: true }),
+				onRetry: (attempt, maxRetries, delayMs, errorMessage) => this.bus.publish(record.id, "run_retrying", { attempt, maxRetries, delayMs, ...(retryReason(errorMessage) ? { reason: retryReason(errorMessage) } : {}) }, { ephemeral: true }),
 			}),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
