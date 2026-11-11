@@ -19,7 +19,7 @@
 	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelPage from "./ModelPage.svelte";
-	import type { CatalogModel, CustomProvider } from "../lib/types";
+	import type { CatalogInfo, CatalogModel, CustomProvider } from "../lib/types";
 	import { applyMatch, collectModels, formFromProvider, headerError, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../lib/connection-form";
 
 	/**
@@ -75,15 +75,21 @@
 	/* ---------- OpenRouter catalog (autocomplete + match status) ---------- */
 
 	let catalog = $state<CatalogModel[]>([]);
+	/** How current the list is: when it was fetched, whether it came from OpenRouter, and why it did not. */
+	let catalogInfo = $state<Omit<CatalogInfo, "models"> | null>(null);
 	let catalogLoaded = $state(false);
 	let catalogPending: Promise<void> | null = null;
-	function ensureCatalog(): Promise<void> {
+	/** A refresh asked for by hand: the picker shows it instead of letting a second tap start another fetch. */
+	let catalogRefreshing = $state(false);
+	function loadCatalog(refresh: boolean): Promise<void> {
 		const a = api();
-		if (!a || catalogLoaded) return Promise.resolve();
+		if (!a || (catalogLoaded && !refresh)) return Promise.resolve();
 		catalogPending ??= a
-			.catalog()
+			.catalog(refresh)
 			.then((r) => {
-				catalog = r.models;
+				const { models, ...info } = r;
+				catalog = models;
+				catalogInfo = info;
 				catalogLoaded = true;
 			})
 			.catch(() => {
@@ -93,6 +99,16 @@
 				catalogPending = null;
 			});
 		return catalogPending;
+	}
+	const ensureCatalog = (): Promise<void> => loadCatalog(false);
+	async function refreshCatalog() {
+		if (catalogRefreshing) return;
+		catalogRefreshing = true;
+		try {
+			await loadCatalog(true);
+		} finally {
+			catalogRefreshing = false;
+		}
 	}
 
 	/* ---------- upstream model list ---------- */
@@ -281,6 +297,9 @@
 			{@const mr = form.rows[matchFor]!}
 			<CatalogPickerModal
 				{catalog}
+				info={catalogInfo}
+				refreshing={catalogRefreshing}
+				onrefresh={refreshCatalog}
 				value={matchedOf(mr)?.id ?? null}
 				suggested={matchOf(mr.id)}
 				onpick={(c) => { applyMatch(mr, c); matchFor = null; }}

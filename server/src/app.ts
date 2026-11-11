@@ -661,6 +661,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	retention.start();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
 	void configuration.refreshStale();
+	// Same for OpenRouter's own catalog: refreshed when it is stale, so the model picker opens on a current list.
+	void configuration.refreshCatalog();
 	return { server, sessions, bus, async close() {
 		clearInterval(prune);
 		retention.stop();

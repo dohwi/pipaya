@@ -47,6 +47,8 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | `PIPAYA_PUSH_FCM` | _(자격 증명이 있으면 켜짐)_ | `0`이면 끄고, 아니면 Google Application Default Credentials로 Firebase Cloud Messaging을 통해 Android 푸시를 보냅니다. `server/builtin-skills/pipaya-client-extensions/references/notifications.md` 참고 |
 | `PIPAYA_CORS_ORIGINS` | _(비어 있음)_ | 추가로 허용할 브라우저 origin(쉼표 구분, 정확히 일치, `*`는 전체). 루프백, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net`, Tauri origin은 항상 허용됩니다 |
 | `PIPAYA_TERMINAL` | `1` | `0`이면 터미널(클라이언트가 이 서버에서 여는 대화형 셸. Linux/macOS는 사용자 셸, Windows는 PowerShell)을 끕니다 |
+| `PIPAYA_OPENROUTER` | `1` | `0`이면 모델 고르기가 pi-ai에 포함된 OpenRouter 목록만 씁니다. 서버 밖으로 요청이 나가지 않습니다(오프라인 설치) |
+| `PIPAYA_OPENROUTER_URL` | `https://openrouter.ai/api/v1/models` | 실시간 목록을 읽어 올 주소(미러). 그림 모델 목록은 그 주소의 `/images/models`에서 읽습니다 |
 
 새 서버의 카탈로그는 비어 있습니다. 내장 프로바이더도, 환경변수 기반 인증도 없습니다.
 저장된 커스텀 프로바이더와 모델은 재시작해도 SQLite에서 복원됩니다.
@@ -60,6 +62,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | GET/POST | `/server/update` | 관리자 토큰 전용. GET: 이 체크아웃이 추적하는 브랜치에 새 커밋이 있는지, 서버가 스스로 재시작할 수 있는지. POST `{force?}`: 새 커밋으로 이동하고 의존성을 설치한 뒤 프로세스를 종료해 서비스 매니저가 새 코드로 다시 띄우게 합니다. `force`가 없으면 실행 중인 대화가 있을 때 409 `sessions_running` |
 | GET | `/tools` | 도구 목록과 기본값 |
 | GET | `/models?provider=&configured=true` | 모델 카탈로그 |
+| GET | `/configuration/catalog?refresh=1` | 모델 고르기가 쓰는 OpenRouter 목록: 실시간으로 받아 `<data>/openrouter-catalog.json`에 6시간 캐시. `refresh=1`이면 지금 다시 받습니다. `updatedAt`·`live`·`stale`·`error`도 함께 |
 | GET | `/providers` | 프로바이더 사용 가능 여부(키는 반환하지 않음) |
 | PUT | `/providers/:id/credential` | `{key}` |
 | DELETE | `/providers/:id/credential` | 저장된 키 삭제 |

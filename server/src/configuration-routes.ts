@@ -3,7 +3,6 @@ import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderP
 import { IdParams, Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
-import { catalogEntries } from "./thinking-catalog.ts";
 import { badRequest, notFound } from "./errors.ts";
 import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
@@ -43,7 +42,15 @@ const CatalogResult = Type.Object({
 	models: Type.Array(Type.Object({
 		id: Type.String(), name: Type.String(), contextWindow: Type.Integer(), maxTokens: Type.Integer(),
 		reasoning: Type.Boolean(), vision: Type.Boolean(), image: Type.Boolean(), levels: Type.Array(Type.String()),
-	}), { description: "Bundled OpenRouter catalog, for model id autocomplete" }),
+	}), { description: "OpenRouter catalog, for model id autocomplete" }),
+	/** When the live list was fetched (ms since the epoch); 0 = only the bundled snapshot is in hand. */
+	updatedAt: Type.Integer(),
+	/** The entries came from OpenRouter itself, not from the snapshot bundled with the server. */
+	live: Type.Boolean(),
+	/** The live list is older than its cache window, so a refresh is due. */
+	stale: Type.Boolean(),
+	/** Why the last fetch failed (the list in hand is then the cache, or the bundled snapshot). */
+	error: Type.Optional(Type.String()),
 });
 
 /** Authenticated configuration API for any client. No assets or frontend build. */
@@ -101,9 +108,16 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			return roles(req.query.cwd);
 		},
 	});
+	// The OpenRouter list the model picker autocompletes from: fetched live and cached for hours. Opening the dialog waits
+	// on the network only when there is nothing live in hand yet (first run); otherwise a stale list is refreshed in the
+	// background and this answer carries the one in hand, so the picker opens at once. `refresh=1` waits for a fresh fetch.
 	app.get("/configuration/catalog", {
-		schema: { response: { 200: CatalogResult, ...errors(401) } },
-		handler: async () => ({ models: catalogEntries() }),
+		schema: { description: "OpenRouter's model list (live, cached); `refresh=1` fetches it again now", querystring: Type.Object({ refresh: Type.Optional(Type.String()) }), response: { 200: CatalogResult, ...errors(401) } },
+		handler: async (req) => {
+			if (req.query.refresh === "1" || !config.catalog.isLive) await config.refreshCatalog(req.query.refresh === "1");
+			else void config.refreshCatalog();
+			return { models: config.catalog.list(), ...config.catalogState() };
+		},
 	});
 	app.post("/configuration/icons", {
 		schema: {
