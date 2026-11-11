@@ -221,3 +221,67 @@ describe("manifest: the component of a settings field and the page names", () =>
 		expect(form.fields?.[0]).toMatchObject({ key: "a", component: "Thing" });
 	});
 });
+
+// ── a server extension's own Svelte page (pipaya.components) ─────────────────────────────────────────────────────
+import { OWN_UI_CONSENT_KEY, ownUiFingerprint, ownUiKey, ownUiPackage, readOwnUiConsent, writeOwnUiConsent, type OwnUiSources } from "../src/lib/extensions/own-ui";
+
+const sources = (extra: Partial<OwnUiSources> = {}): OwnUiSources => ({
+	components: { Top: "<p>top</p>", Section: "<p>section</p>" },
+	mounts: [{ slot: "extension.page.top", component: "Top" }],
+	replaces: { "extension.settings": "Section" },
+	...extra,
+});
+
+describe("own-page components: what may run", () => {
+	test("the sources become a validated ui-components package with the one slot and the one part", () => {
+		const pkg = ownUiPackage("demo", "demo", sources());
+		expect(pkg.manifest.permissions).toEqual(["ui-components"]);
+		expect(Object.keys(pkg.components ?? {})).toEqual(["Top", "Section"]);
+		expect(pkg.mounts).toEqual([{ slot: "extension.page.top", component: "Top" }]);
+		expect(pkg.replaces).toEqual({ "extension.settings": "Section" });
+	});
+	test("any other slot or part is refused, whatever the server says", () => {
+		expect(() => ownUiPackage("demo", "demo", sources({ mounts: [{ slot: "app.overlay", component: "Top" }] }))).toThrow(/extension\.page\.top/);
+		expect(() => ownUiPackage("demo", "demo", sources({ mounts: [{ slot: "header.end", component: "Top" }] }))).toThrow();
+		expect(() => ownUiPackage("demo", "demo", sources({ replaces: { "composer.send": "Top" } }))).toThrow(/extension\.settings/);
+		expect(() => ownUiPackage("demo", "demo", sources({ replaces: { "message.assistant": "Top" } }))).toThrow();
+	});
+	test("the client's own component limits apply", () => {
+		expect(() => ownUiPackage("demo", "demo", sources({ components: { bad: "<p/>" } }))).toThrow(/PascalCase/);
+		expect(() => ownUiPackage("demo", "demo", sources({ components: { Top: "x".repeat(65 * 1024) } }))).toThrow();
+		expect(() => ownUiPackage("demo", "demo", sources({ components: {}, mounts: [], replaces: {} }))).toThrow();
+		expect(() => ownUiPackage("demo", "demo", sources({ mounts: [{ slot: "extension.page.top", component: "Missing" }] }))).toThrow(/unknown component/);
+		const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`C${i}`, "<p/>"]));
+		expect(() => ownUiPackage("demo", "demo", { components: many, mounts: [], replaces: {} })).toThrow();
+	});
+	test("a mount without the part, or the part without a mount, is fine; neither at all is just components for fields", () => {
+		expect(ownUiPackage("demo", "demo", sources({ replaces: {} })).replaces).toBeUndefined();
+		expect(ownUiPackage("demo", "demo", sources({ mounts: [] })).mounts).toBeUndefined();
+		expect(ownUiPackage("demo", "demo", { components: { Slider: "<p/>" }, mounts: [], replaces: {} }).components).toEqual({ Slider: "<p/>" });
+	});
+});
+
+describe("own-page components: the agreement of this device", () => {
+	test("is bound to exactly the code, the mounts and the part", () => {
+		const a = ownUiFingerprint(sources());
+		expect(a).toMatch(/^[0-9a-f]{64}$/);
+		expect(ownUiFingerprint(sources())).toBe(a);
+		expect(ownUiFingerprint(sources({ components: { Top: "<p>top!</p>", Section: "<p>section</p>" } }))).not.toBe(a);
+		expect(ownUiFingerprint(sources({ replaces: {} }))).not.toBe(a);
+		expect(ownUiFingerprint(sources({ mounts: [] }))).not.toBe(a);
+		// the order the server lists components in does not matter
+		expect(ownUiFingerprint(sources({ components: { Section: "<p>section</p>", Top: "<p>top</p>" } }))).toBe(a);
+	});
+	test("is kept per server and extension, and an unreadable store means nothing was agreed to", () => {
+		const mem = new Map<string, string>();
+		const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+		expect(readOwnUiConsent(storage)).toEqual({});
+		const fp = ownUiFingerprint(sources());
+		writeOwnUiConsent(storage, { [ownUiKey("s1", "demo")]: fp });
+		expect(readOwnUiConsent(storage)).toEqual({ "s1:demo": fp });
+		expect(readOwnUiConsent(storage)["s2:demo"]).toBeUndefined();
+		for (const bad of ["not json", "[]", "null", '{"a":1}', '{"a":"nothex"}', "42"]) { mem.set(OWN_UI_CONSENT_KEY, bad); expect(readOwnUiConsent(storage)).toEqual({}); }
+		mem.set(OWN_UI_CONSENT_KEY, JSON.stringify({ "__proto__": fp, ok: fp }));
+		expect(Object.keys(readOwnUiConsent(storage))).toEqual(["ok"]);
+	});
+});

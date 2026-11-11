@@ -70,6 +70,10 @@ A field's component gets `{ field, value, onchange(next), disabled, settings, er
   "mounts": [{ "slot": "extension.page.top", "component": "Status" }] }
 ```
 
+### A server extension's own components (no companion)
+
+A server extension may carry the same kind of components itself (`pipaya.components`, `pipaya.mounts`, `pipaya.replaces` in its package.json; see `pipaya-server-extensions`). They go through the same compiler and kit (`lib/extensions/own-ui.ts`, `own-ui.svelte.ts`) but with two differences: the reach is only `extension.page.top`, `extension.settings` and a field's `component` of that extension, and the consent is not a package install but a per-device agreement bound to the SHA-256 of the sources (`pipaya.extensions.own-ui`, `"<serverId>:<extension>"`). Changed sources ask again; safe mode runs none. They work on any saved server (the sources are read with that server's connection), unlike a companion, which runs only on the open one.
+
 ## Adding a slot or part
 0. A name that must not be open to every extension (a place that belongs to one extension) also goes in `OWNED_PAGE_NAMES`, and its `ExtensionMount` / `ExtensionPart` gets an `owners` list.
 1. Add the name to `UI_SLOTS` / `UI_PARTS` / `STYLE_PARTS` in `schema.ts` (`extensions-design.test.ts` checks that `STYLE_PARTS` and the app's `data-part` attributes match).

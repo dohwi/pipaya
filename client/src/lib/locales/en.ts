@@ -1751,4 +1751,11 @@ export const en: Record<string, string> = {
 	"잘못된 설정 이름": "Invalid setting name",
 	"선언되지 않은 설정입니다 — {key}": "Not a declared setting — {key}",
 	"{label}은(는) 확장이 직접 쓰는 값이라 바꿀 수 없습니다": "{label} is written by the extension itself and cannot be changed",
+	"이 확장이 화면 코드를 바꿨습니다.": "This extension changed its page code.",
+	"이 확장은 자기 설정 화면을 직접 그리는 코드를 가지고 있습니다.": "This extension carries code that draws its own settings page.",
+	"격리 없이 앱 안에서 직접 실행되어 대화와 서버 토큰을 포함한 모든 데이터에 접근합니다. 신뢰하는 확장만 허용하세요.": "It runs inside the app without isolation and can reach all data, including conversations and server tokens. Only allow extensions you trust.",
+	"이 기기에서 허용": "Allow on this device",
+	"이 기기에서 이 확장의 화면 코드를 실행 중입니다.": "This extension's page code is running on this device.",
+	"허용 취소": "Revoke",
+	"확장의 화면 코드를 실행하지 못했습니다: {message}": "Could not run the extension's page code: {message}",
 };

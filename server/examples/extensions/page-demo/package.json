@@ -1,0 +1,15 @@
+{
+  "name": "page-demo",
+  "version": "0.1.0",
+  "description": "Example: a status page (pi.ui) and a Svelte settings page without a client companion",
+  "pipaya": {
+    "title": "Page demo",
+    "translations": { "en": { "주기(분)": "Interval (min)", "상태": "Status" } },
+    "settings": [
+      { "key": "interval", "type": "number", "label": "주기(분)", "min": 1, "max": 60, "default": 5, "component": "Slider" },
+      { "key": "status", "type": "string", "label": "상태", "readonly": true }
+    ],
+    "components": { "Slider": "ui/Slider.svelte", "Banner": "ui/Banner.svelte" },
+    "mounts": [{ "slot": "extension.page.top", "component": "Banner" }]
+  }
+}

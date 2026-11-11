@@ -79,6 +79,11 @@ export interface ExtensionInfo {
 	settingsId: string;
 	/** The page this extension shows above its settings form (`pi.ui.setPanel`); absent when it has none. */
 	panel?: ExtensionPanelNode;
+	/**
+	 * Svelte components the extension carries for its own page (`pipaya.components`): names only here, the sources are
+	 * `GET /server-extensions/:name/ui`. The client runs them only after the user agreed on that device.
+	 */
+	ui?: { components: string[]; mounts: { slot: string; component: string; order?: number }[]; replaces: Record<string, string> };
 	/** True when the folder carries the client half itself (`pipaya.client`): `GET /server-extensions/:name/client` serves it. */
 	clientPackage?: boolean;
 	error?: string;
@@ -87,10 +92,51 @@ export interface ExtensionInfo {
 /** A client package a server extension carries is at most this big (the client's MAX_PACKAGE_BYTES plus slack for formatting). */
 export const MAX_CLIENT_PACKAGE_BYTES = 2 * 1024 * 1024;
 
-type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "translations" | "settings"> & { clientFile?: string };
+type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "translations" | "settings" | "ui"> & { clientFile?: string; uiFiles?: Record<string, string> };
+
+/** What a server extension may ask of its own page (`pipaya.components`, `pipaya.mounts`, `pipaya.replaces`). */
+export const OWN_PAGE_SLOT = "extension.page.top";
+export const OWN_PAGE_PART = "extension.settings";
+export const MAX_UI_COMPONENTS = 20;
+/** One component's source is at most this big: the client's limit for a `ui-components` component. */
+export const MAX_UI_SOURCE_BYTES = 64 * 1024;
+const COMPONENT_NAME = /^[A-Z][A-Za-z0-9]{0,39}$/;
+const SVELTE_PATH = /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*\.svelte$/;
+
+/**
+ * `pipaya.components` (name -> a `.svelte` file inside the folder), `pipaya.mounts` and `pipaya.replaces`, bounded and
+ * limited to the extension's own page: the one slot and the one part that draw it. Anything else is dropped.
+ */
+function ownUi(meta: any, dir?: string): { ui?: NonNullable<ExtensionInfo["ui"]>; files?: Record<string, string> } {
+	const raw = meta?.components;
+	if (!dir || !raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+	const files: Record<string, string> = {};
+	for (const [name, rel] of Object.entries(raw).slice(0, MAX_UI_COMPONENTS)) {
+		if (!COMPONENT_NAME.test(name) || typeof rel !== "string" || !SVELTE_PATH.test(rel)) continue;
+		const file = resolve(dir, rel);
+		if (!file.startsWith(resolve(dir) + sep)) continue;
+		// A file that is missing or too big is left out here, so one bad component never breaks the others.
+		try { const st = statSync(file); if (!st.isFile() || st.size > MAX_UI_SOURCE_BYTES) continue; } catch { continue; }
+		files[name] = file;
+	}
+	const components = Object.keys(files);
+	if (!components.length) return {};
+	const mounts: { slot: string; component: string; order?: number }[] = [];
+	if (Array.isArray(meta.mounts)) {
+		for (const m of meta.mounts.slice(0, MAX_UI_COMPONENTS)) {
+			if (m?.slot !== OWN_PAGE_SLOT || !components.includes(m.component)) continue;
+			mounts.push({ slot: OWN_PAGE_SLOT, component: m.component, ...(Number.isInteger(m.order) && Math.abs(m.order) <= 1000 ? { order: m.order } : {}) });
+		}
+	}
+	const replaces: Record<string, string> = {};
+	const wanted = meta.replaces?.[OWN_PAGE_PART];
+	if (typeof wanted === "string" && components.includes(wanted)) replaces[OWN_PAGE_PART] = wanted;
+	return { ui: { components, mounts, replaces }, files };
+}
 
 interface Loaded extends ExtensionInfo {
 	clientFile?: string;
+	uiFiles?: Record<string, string>;
 	handlers: Map<EventName, EventHandler<any>[]>;
 	toolDefs: Map<string, ExtensionTool>;
 	commandDefs: Map<string, ExtensionCommand>;
@@ -210,6 +256,8 @@ function packageMeta(json: any, dir?: string): PackageMeta {
 	}
 	const translations = translationTable(meta?.translations); if (translations) out.translations = translations;
 	if (Array.isArray(meta?.settings) && meta.settings.length <= 20) out.settings = meta.settings;
+	const own = ownUi(meta, dir);
+	if (own.ui) { out.ui = own.ui; out.uiFiles = own.files; }
 	// `pipaya.client`: a built client package inside the folder (relative, never outside it).
 	const client = meta?.client;
 	if (dir && typeof client === "string" && /^(?!.*(^|\/)\.\.?(\/|$))[\w.-]+(\/[\w.-]+)*\.json$/.test(client)) {
@@ -349,10 +397,10 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, panel, error }) => ({
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, panel, ui, error }) => ({
 			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
 			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(translations ? { translations } : {}), ...(settings ? { settings } : {}),
-			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(panel ? { panel } : {}), ...(error ? { error } : {}),
+			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(panel ? { panel } : {}), ...(ui ? { ui } : {}), ...(error ? { error } : {}),
 		}));
 	}
 
@@ -778,6 +826,20 @@ export class ExtensionHost {
 		).all({ sid: sessionId, ext: extension || null, type: type || null, after: page.after ?? 0, limit }) as
 			{ id: number; extension: string; type: string; data: string; created_at: number }[];
 		return rows.map((r) => ({ id: r.id, extension: r.extension, type: r.type, data: JSON.parse(r.data), createdAt: r.created_at }));
+	}
+
+	/** The sources of the Svelte components a server extension carries for its own page; undefined when it has none. */
+	ownUi(extension: string): { components: Record<string, string>; mounts: NonNullable<ExtensionInfo["ui"]>["mounts"]; replaces: Record<string, string> } | undefined {
+		const ext = this.active().find((e) => e.name === extension);
+		if (!ext?.ui || !ext.uiFiles) return undefined;
+		const components: Record<string, string> = {};
+		for (const [name, file] of Object.entries(ext.uiFiles)) {
+			let st;
+			try { st = statSync(file); } catch { throw new Error(`component ${name}: the file is missing`); }
+			if (!st.isFile() || st.size > MAX_UI_SOURCE_BYTES) throw new Error(`component ${name}: the file is missing or over ${MAX_UI_SOURCE_BYTES} bytes`);
+			components[name] = readFileSync(file, "utf8");
+		}
+		return { components, mounts: ext.ui.mounts, replaces: ext.ui.replaces };
 	}
 
 	/** The client package a server extension carries (`pipaya.client`), as parsed JSON; undefined when it has none. */
