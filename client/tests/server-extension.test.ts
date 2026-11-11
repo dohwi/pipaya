@@ -33,6 +33,14 @@ describe("server extension helpers", () => {
 		expect(r.problem).toBeUndefined();
 		expect(r.fields!.map((f) => f.key)).toEqual(["statusText", "role"]);
 	});
+	test("`when` can name an earlier field of a server form", () => {
+		const role = { key: "role", type: "select", label: "역할", default: "a", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] };
+		const r = serverFields({ settings: [role, { key: "url", type: "string", label: "주소", when: { key: "role", equals: "b" } }] } as never);
+		expect(r.problem).toBeUndefined();
+		expect(r.fields![1]!.when).toEqual({ key: "role", equals: "b" });
+		const later = serverFields({ settings: [{ key: "url", type: "string", label: "주소", when: { key: "role", equals: "b" } }, role] } as never);
+		expect(later.problem).toMatch(/^settings\[0\]\.when\.key/);
+	});
 	test("a broken form is reported as text instead of throwing", () => {
 		const r = serverFields({ settings: [{ key: "x", type: "nope", label: "X" }] });
 		expect(r.fields).toBeUndefined();

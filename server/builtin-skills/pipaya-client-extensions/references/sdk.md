@@ -71,6 +71,8 @@ Up to 20 fields; the settings page renders a form and validates. Without it, the
 | `format` | strings only, `"origin"`: http(s) origin without path, query or credentials |
 | `min` / `max` | numbers only |
 | `options` | `select` only, 2–20 of `{value ≤60, label ≤60}` |
+| `readonly` | shown, never edited: the extension writes it (a status line); never validated, never saved by the form |
+| `when` | `{ "key": "role", "equals": "follower" }` (or a list of values): shown only while that **earlier, editable** field holds one of them. A hidden field keeps its value but is never required or an error |
 
 `resolveSettings(fields, raw)` → `{values, errors, ok}` is strict: fills defaults, drops undeclared keys, never coerces (`"5"` is not a number).
 

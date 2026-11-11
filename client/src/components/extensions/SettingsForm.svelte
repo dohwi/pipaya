@@ -4,7 +4,8 @@
 	import { untrack } from "svelte";
 	import Accordion from "../Accordion.svelte";
 	import Select from "../Select.svelte";
-	import { describeSettingErrors, fillSettingDefaults, resolveSettings, type SettingField } from "../../lib/extensions/schema";
+	import { describeSettingErrors, fillSettingDefaults, resolveSettings, settingShown, type SettingField } from "../../lib/extensions/schema";
+	import { collapseIn, collapseOut } from "../../lib/motion";
 
 	interface Props {
 		id: string;
@@ -35,6 +36,8 @@
 	});
 	const resolved = $derived(resolveSettings(fields, clean));
 	const dirty = $derived(JSON.stringify(clean) !== signature);
+	/** The fields on the form right now: one with `when` comes and goes with the choice it depends on. */
+	const shown = $derived(fields.filter((field) => settingShown(field, resolved.values)));
 
 	// Follow saves and server syncs, but never overwrite what the user is typing.
 	$effect(() => {
@@ -72,9 +75,9 @@
 </script>
 
 <form class="settings" novalidate onsubmit={saveForm}>
-	{#each fields as field (field.key)}
+	{#each shown as field (field.key)}
 		{@const error = resolved.errors[field.key]}
-		<div class="field-row" class:invalid={!!error} class:readonly-field={field.readonly}>
+		<div class="field-row" class:invalid={!!error} class:readonly-field={field.readonly} in:collapseIn out:collapseOut>
 			{#if field.readonly}
 				<span class="name">{field.label}</span>
 				<p class="readonly-value" id={fieldId(field.key)}>{typeof draft[field.key] === "string" && draft[field.key] ? draft[field.key] : t("아직 없음")}</p>

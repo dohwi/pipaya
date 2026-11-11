@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { compileModule } from "svelte/compiler";
 import ts from "typescript";
-import { fillSettingDefaults, parsePackage, resolveSettings, type SettingField } from "../src/lib/extensions/schema";
+import { fillSettingDefaults, parsePackage, resolveSettings, settingShown, type SettingField } from "../src/lib/extensions/schema";
 import type { ExtensionHost as ExtensionHostType, ExtensionContext, HostAdapter } from "../src/lib/extensions/host.svelte";
 
 // ---------------------------------------------------------------- pure schema
@@ -29,6 +29,20 @@ describe("manifest settings schema", () => {
 		expect(parsed.manifest.settings![0]!.readonly).toBe(true);
 		expect(() => parsePackage(withSettings([field({ key: "statusText", readonly: true, secret: true })]))).toThrow();
 		expect(() => parsePackage(withSettings([field({ key: "statusText", readonly: "yes" })]))).toThrow();
+	});
+	test("`when` names an earlier editable field and values it can hold", () => {
+		const role = { key: "role", type: "select", label: "Role", default: "a", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] };
+		const parsed = parsePackage(withSettings([role, field({ key: "url", when: { key: "role", equals: "b" } }), field({ key: "x", when: { key: "role", equals: ["a", "b"] } })]));
+		expect(parsed.manifest.settings![1]!.when).toEqual({ key: "role", equals: "b" });
+		expect(parsed.manifest.settings![2]!.when).toEqual({ key: "role", equals: ["a", "b"] });
+		// a later field, an unknown one, itself, a value the select cannot hold, a wrong type, an empty list, a read-only target
+		expect(() => parsePackage(withSettings([field({ key: "url", when: { key: "role", equals: "b" } }), role]))).toThrow();
+		expect(() => parsePackage(withSettings([field({ key: "url", when: { key: "url", equals: "b" } })]))).toThrow();
+		expect(() => parsePackage(withSettings([role, field({ key: "url", when: { key: "role", equals: "c" } })]))).toThrow();
+		expect(() => parsePackage(withSettings([{ key: "on", type: "boolean", label: "On" }, field({ key: "url", when: { key: "on", equals: "true" } })]))).toThrow();
+		expect(() => parsePackage(withSettings([role, field({ key: "url", when: { key: "role", equals: [] } })]))).toThrow();
+		expect(() => parsePackage(withSettings([field({ key: "s", readonly: true }), field({ key: "url", when: { key: "s", equals: "x" } })]))).toThrow();
+		expect(() => parsePackage(withSettings([role, field({ key: "url", when: { key: "role", equals: "b", other: 1 } })]))).toThrow();
 	});
 	test("accepts every field type and round-trips as fresh data", () => {
 		const input = withSettings([
@@ -100,6 +114,21 @@ describe("resolveSettings", () => {
 		expect(result.ok).toBe(true);
 		expect(result.errors).toEqual({});
 		expect(result.values).toEqual({ url: "http://a.test" });
+	});
+	test("a hidden field keeps a good value but never blocks the save", () => {
+		const fields = parsePackage(withSettings([
+			{ key: "role", type: "select", label: "Role", default: "a", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
+			field({ key: "url", format: "origin", required: true, when: { key: "role", equals: "b" } }),
+		])).manifest.settings!;
+		expect(settingShown(fields[1]!, { role: "a" })).toBe(false);
+		expect(settingShown(fields[1]!, { role: "b" })).toBe(true);
+		// hidden: missing is fine, a bad value is dropped, a good one is kept for when it shows again
+		expect(resolveSettings(fields, {})).toEqual({ values: { role: "a" }, errors: {}, ok: true });
+		expect(resolveSettings(fields, { url: "nope" }).ok).toBe(true);
+		expect(resolveSettings(fields, { url: "https://a.test" }).values.url).toBe("https://a.test");
+		// shown: the usual rules apply
+		expect(resolveSettings(fields, { role: "b" }).errors.url).toBe("필수 항목입니다");
+		expect(resolveSettings(fields, { role: "b", url: "https://a.test" }).ok).toBe(true);
 	});
 	test("applies defaults, drops unknown keys, leaves optional unset values out", () => {
 		const r = resolveSettings(fields, { origin: "https://a.test", extra: 1, __proto__x: 2 });

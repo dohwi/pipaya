@@ -1,6 +1,6 @@
 import type { Api } from "./api";
 import { getLang } from "./i18n";
-import { parseSettingFields, SETTING_FIELD_KEYS, type SettingField } from "./extensions/schema";
+import { parseSettingField, SETTING_FIELD_KEYS, type SettingField } from "./extensions/schema";
 
 /** What the server says about an extension running inside it (`GET /server-extensions`). */
 export type ServerExt = Awaited<ReturnType<Api["serverExtensions"]>>["extensions"][number];
@@ -20,6 +20,8 @@ export function serverFields(ext: Pick<ServerExt, "settings">): { fields?: Setti
 	const declared = Array.isArray(ext.settings) ? ext.settings : [];
 	const fields: SettingField[] = [];
 	let problem: string | undefined;
+	// Shared across the fields, so `when` can name an earlier one.
+	const earlier = new Map<string, SettingField>();
 	declared.forEach((raw, index) => {
 		// Drop a key this client does not know (`readonly` on an older app) and keep the field: the extension is
 		// allowed to be newer than the app, and one unknown key must not hide every setting.
@@ -27,9 +29,9 @@ export function serverFields(ext: Pick<ServerExt, "settings">): { fields?: Setti
 			? Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([k]) => SETTING_FIELD_KEYS.includes(k)))
 			: raw;
 		try {
-			fields.push(...parseSettingFields([known]));
+			fields.push(parseSettingField(known, index, earlier));
 		} catch (cause) {
-			problem ??= `settings[${index}]: ${cause instanceof Error ? cause.message : String(cause)}`;
+			problem ??= cause instanceof Error && cause.message.startsWith("settings[") ? cause.message : `settings[${index}]: ${cause instanceof Error ? cause.message : String(cause)}`;
 		}
 	});
 	if (problem) return { problem };

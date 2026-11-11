@@ -73,6 +73,7 @@ export const SETTING_TYPES = Object.freeze(["string", "number", "boolean", "sele
 export type SettingType = (typeof SETTING_TYPES)[number];
 export type SettingValue = string | number | boolean;
 export interface SettingOption { value: string; label: string }
+export interface SettingCondition { key: string; equals: SettingValue | SettingValue[] }
 /** One user-editable setting declared by a manifest. The host renders the form and validates values. */
 export interface SettingField {
 	key: string;
@@ -90,6 +91,11 @@ export interface SettingField {
 	 * A read-only field is skipped by validation and by the save, so a status line never blocks a save.
 	 */
 	readonly?: boolean;
+	/**
+	 * Shown only while an earlier field holds one of these values (`{ key: "role", equals: "follower" }`). A hidden field
+	 * keeps its value but is never required and never an error, so a choice that hides it never blocks a save.
+	 */
+	when?: SettingCondition;
 	format?: "origin";
 	min?: number;
 	max?: number;
@@ -239,15 +245,14 @@ function finite(source: Record<string, unknown>, name: string, path: string): nu
  * what `serverFields` uses to drop a key it does not know instead of failing the field.
  */
 export const SETTING_FIELD_KEYS: readonly string[] = Object.freeze([
-	"key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "format", "min", "max", "options",
+	"key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "when", "format", "min", "max", "options",
 ]);
 
-function settingField(value: unknown, path: string, keys: Set<string>): SettingField {
+function settingField(value: unknown, path: string, keys: Map<string, SettingField>): SettingField {
 	const source = object(value, path, SETTING_FIELD_KEYS);
 	const key = text(source.key, `${path}.key`, 40);
 	if (!matches(SETTING_KEY, key)) fail(`${path}.key`, "expected a letter followed by letters, digits or underscores (max 40)");
 	if (keys.has(key)) fail(`${path}.key`, `duplicate setting key ${key}`);
-	keys.add(key);
 	const type = source.type;
 	if (typeof type !== "string" || !SETTING_TYPES.includes(type as SettingType)) fail(`${path}.type`, "expected string, number, boolean or select");
 	const field: SettingField = { key, type: type as SettingType, label: text(source.label, `${path}.label`, 60) };
@@ -262,6 +267,7 @@ function settingField(value: unknown, path: string, keys: Set<string>): SettingF
 	if (device !== undefined) { if (secret && device) fail(`${path}.device`, "a secret field is already device-only"); field.device = device; }
 	const readonly = optionalFlag(source, "readonly", path);
 	if (readonly !== undefined) { if (readonly && secret) fail(`${path}.readonly`, "a secret field cannot be read-only"); field.readonly = readonly; }
+	if (Object.hasOwn(source, "when")) field.when = settingCondition(source.when, `${path}.when`, keys);
 
 	if (type !== "string" && Object.hasOwn(source, "format")) fail(`${path}.format`, "format is only allowed for string settings");
 	if (type !== "number") for (const name of ["min", "max"]) if (Object.hasOwn(source, name)) fail(`${path}.${name}`, "min/max are only allowed for number settings");
@@ -309,7 +315,34 @@ function settingField(value: unknown, path: string, keys: Set<string>): SettingF
 		}
 		field.default = fallback as SettingValue;
 	}
+	keys.set(key, field);
 	return field;
+}
+
+/** `when` names an earlier, editable field and values that field can hold, so a typo never hides a field for good. */
+function settingCondition(input: unknown, path: string, earlier: Map<string, SettingField>): SettingCondition {
+	const source = object(input, path, ["key", "equals"]);
+	const key = text(source.key, `${path}.key`, 40);
+	const target = earlier.get(key);
+	if (!target) fail(`${path}.key`, `expected the key of an earlier field, got ${key}`);
+	if (target.readonly) fail(`${path}.key`, "cannot depend on a read-only field");
+	const raw = source.equals;
+	const list = Array.isArray(raw) ? array(raw, `${path}.equals`, 20) : [raw];
+	if (!list.length) fail(`${path}.equals`, "must not be empty");
+	const fits = (v: unknown) =>
+		target.type === "select" ? typeof v === "string" && target.options!.some(o => o.value === v)
+		: target.type === "number" ? typeof v === "number" && Number.isFinite(v)
+		: typeof v === target.type;
+	list.forEach((v, i) => { if (!fits(v)) fail(Array.isArray(raw) ? `${path}.equals[${i}]` : `${path}.equals`, `expected a value of ${key}`); });
+	return { key, equals: Array.isArray(raw) ? [...list] as SettingValue[] : raw as SettingValue };
+}
+
+/** Whether a field is on the form for these values: no `when`, or the field it names holds one of the listed values. */
+export function settingShown(field: SettingField, values: Record<string, unknown>): boolean {
+	if (!field.when) return true;
+	const { key, equals } = field.when;
+	const current = values[key];
+	return Array.isArray(equals) ? equals.includes(current as SettingValue) : equals === current;
 }
 
 export interface ResolvedSettings {
@@ -341,6 +374,13 @@ export function resolveSettings(fields: readonly SettingField[], raw: unknown): 
 		// A read-only field is the extension's own value: never required, never an error, never saved.
 		if (field.readonly) continue;
 		let value: unknown = Object.hasOwn(source, field.key) ? source[field.key] : undefined;
+		// A hidden field keeps a good value (switching back shows it again) but never blocks the save. `when` only names
+		// earlier fields, so `values` already holds what the form shows for the field it depends on.
+		if (!settingShown(field, values)) {
+			const kept = resolveSettings([{ ...field, when: undefined, required: false }], { [field.key]: value });
+			if (kept.ok && Object.hasOwn(kept.values, field.key)) values[field.key] = kept.values[field.key]!;
+			continue;
+		}
 		if (field.required && field.type === "string" && typeof value === "string" && !value.trim()) value = undefined;
 		if (unset(field, value)) {
 			if (field.default !== undefined) values[field.key] = field.default;
@@ -388,8 +428,13 @@ export function describeSettingErrors(fields: readonly SettingField[], errors: R
 /** Validate portable JSON data and return a fresh package with no input object references. */
 /** Validates the `settings` fields a server extension declares in its package.json (same rules as a client manifest's). Throws on a bad field. */
 export function parseSettingFields(input: unknown): SettingField[] {
-	const keys = new Set<string>();
+	const keys = new Map<string, SettingField>();
 	return array(input, "settings", MAX_SETTING_FIELDS).map((value, index) => settingField(value, `settings[${index}]`, keys));
+}
+
+/** One field of a list parsed field by field; `earlier` carries the fields before it, so `when` can name them. Throws on a bad field. */
+export function parseSettingField(input: unknown, index: number, earlier: Map<string, SettingField>): SettingField {
+	return settingField(input, `settings[${index}]`, earlier);
 }
 
 const COMPONENT_NAME = /^[A-Z][A-Za-z0-9]{0,39}$/;
@@ -482,7 +527,7 @@ export function parsePackage(input: unknown): ExtensionPackage {
 		result.manifest.settingsScope = manifest.settingsScope;
 	}
 	if (Object.hasOwn(manifest, "settings")) {
-		const keys = new Set<string>();
+		const keys = new Map<string, SettingField>();
 		result.manifest.settings = array(manifest.settings, "manifest.settings", MAX_SETTING_FIELDS).map((value, index) => settingField(value, `manifest.settings[${index}]`, keys));
 	}
 	if (Object.hasOwn(source, "theme")) {
