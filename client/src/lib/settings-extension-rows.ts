@@ -8,7 +8,7 @@ export type ExtensionRow = {
 	live: boolean;
 	builtin: boolean;
 	update?: boolean;
-	/** a server extension whose client half is not installed on this device (or a client one whose server half is missing) */
+	/** a server extension whose client half is not installed (or a client one whose server half is missing) */
 	half?: boolean;
 	halfLabel?: string;
 	/** one half of a server + client pair: shown with a clip, and a warning clip when the other half is missing */
@@ -56,7 +56,7 @@ export function extensionRows(
 		builtin: false,
 		update: updates.clientIds().has(e.id),
 		half: !!updates.missingServerFor(e.id),
-		halfLabel: t("서버 확장 필요"),
+		halfLabel: t("함께 쓰는 확장 필요"),
 	}));
 	const side: Row[] = (serverSide ?? []).map((n) => ({
 		id: `srv:${n.name}`,
@@ -65,11 +65,11 @@ export function extensionRows(
 		live: true,
 		builtin: false,
 		update: updates.serverNames.has(n.name),
-		halfLabel: t("클라이언트 확장 필요"),
+		halfLabel: t("함께 쓰는 확장 필요"),
 		half: !!n.companion && !have(n.companion),
 	}));
 	const owned = (id: string) => side.some((n) => n.companion === id);
-	// the open server's extensions, whichever tab is listed: a client extension on this device is paired with its server half
+	// a client extension is paired with the server extension that names it as its client half
 	const serverNow = serverSide ?? [];
 	const rows: Row[] = own
 		.filter((e) => !owned(e.id))

@@ -12,7 +12,7 @@
 	 *
 	 *  id        the page's DOM id, so the list can bring focus back to it
 	 *  name      heading
-	 *  meta      the small line next to the name (version, "runs on the server")
+	 *  meta      the small line next to the name (version, state)
 	 *  sub       the line under it (the extension's id)
 	 *  busy      a task is running on this extension
 	 *  control   what sits at the right of the heading

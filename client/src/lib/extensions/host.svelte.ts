@@ -374,7 +374,7 @@ export class ExtensionHost {
   private async boot() {
     if (!this.adapter) return;
     const connection = this.adapter.connection?.() ?? null;
-    // An extension that is already running (a device extension, across a server switch) is left alone.
+    // An extension that is already running is left alone.
     const enabled = this.safeMode ? [] : this.installed.filter(e => e.enabled && e.state !== "active" && e.state !== "starting");
     if (!connection && !enabled.length) return;
     await (async () => {
@@ -1256,7 +1256,7 @@ export class ExtensionHost {
         const connection = this.adapter?.connection?.() ?? null;
         if (!connection) throw new LocalizedError(t("서버에 연결해 주세요"));
         const extension = string(args[0], 80), method = string(args[1], 80);
-        if (!/^[A-Za-z0-9_./-]+$/.test(extension) || !/^[A-Za-z0-9_-]+$/.test(method)) throw new LocalizedError(t("잘못된 서버 확장 이름"));
+        if (!/^[A-Za-z0-9_./-]+$/.test(extension) || !/^[A-Za-z0-9_-]+$/.test(method)) throw new LocalizedError(t("잘못된 확장 이름"));
         const sessionId = args[3] === null || args[3] === undefined ? null : string(args[3], 80);
         const generation = this.generations.get(id);
         return within(15000, async signal => {

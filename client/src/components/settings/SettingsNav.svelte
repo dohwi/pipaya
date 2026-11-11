@@ -31,7 +31,7 @@
 		tab: string;
 		extId: string | null;
 		dir: number;
-		/** Set to a client extension id to open its install preview on the device tab (the clip of a pair whose client half is missing) */
+		/** Set to a client extension id to open its install preview in the 확장 section (the clip of a pair whose client half is missing) */
 		installFor?: string | null;
 		/** Label above the chosen server's sections, so it is clear which server they belong to */
 		serverName?: string;
@@ -86,7 +86,7 @@
 			clientName: (cid) => extensionUpdates.clientName(cid),
 		});
 	};
-	const clipTip = (e: Kid) => (e.half ? e.halfLabel : e.partner ? t("확장 ‘{name}’와 함께 작동합니다.", { name: e.partner }) : t("짝 확장과 함께 작동"));
+	const clipTip = (e: Kid) => (e.half ? e.halfLabel : e.partner ? t("‘{name}’ 확장과 함께 작동합니다.", { name: e.partner }) : t("다른 확장과 함께 작동"));
 	function openExt(tabId: TabId, id: string) {
 		if (tabId !== tab) { dir = order(tabId) > order(tab) ? 1 : -1; tab = tabId; }
 		extId = id;

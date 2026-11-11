@@ -11,7 +11,7 @@
 
 	/**
 	 * The page of one extension that runs inside the server: read-only except its settings, which every device shares.
-	 * It says so when the client half it needs is not installed here.
+	 * It says so when the client half it needs is not installed on the server.
 	 */
 	let {
 		ext,
@@ -54,7 +54,7 @@
 
 	const form = $derived(serverFields(ext));
 	const provides = $derived(serverProvides(ext));
-	/** A server extension that needs a client extension this device does not have runs only half. */
+	/** A server extension whose client half is not installed on this server runs only half. */
 	const clients = $derived((void app.extensionStoreTick, app.clientExtensionsOf(serverId ?? app.serverId)));
 	const client = $derived(ext.companion ? clients.find((e) => e.id === ext.companion) : undefined);
 	const clientOff = $derived(!!client && !client.live);
@@ -76,19 +76,19 @@
 	{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
 	{#if missingClient}
 		<Notice tone="warn" size="sm" icon="clip" role="status">
-			{t("클라이언트 확장 ‘{name}’도 설치해야 동작합니다.", { name: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
+			{t("‘{name}’ 확장도 설치해야 동작합니다.", { name: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
 			{#snippet action()}<button type="button" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("설치")}</button>{/snippet}
 		</Notice>
 	{/if}
 
 	{#if client && clientOff}
 		<Notice tone="warn" size="sm" icon="clip" role="status">
-			{t("클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.name })}
+			{t("함께 쓰는 ‘{name}’ 확장이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.name })}
 			{#snippet action()}{#if onenableclient}<button type="button" disabled={busy} onclick={() => onenableclient(client.id)}>{t("켜기")}</button>{/if}{/snippet}
 		</Notice>
 	{:else if client && onopenclient}
 		<Notice tone="info" size="sm" icon="clip" role="status">
-			{t("클라이언트 확장 ‘{name}’과 함께 작동합니다.", { name: client.name })}
+			{t("‘{name}’ 확장과 함께 작동합니다.", { name: client.name })}
 			{#snippet action()}<button type="button" onclick={() => onopenclient(client.id)}>{t("열기")}</button>{/snippet}
 		</Notice>
 	{/if}
