@@ -27,6 +27,12 @@ cd client && bun run check && bun run test && bun run build
 
 Screen smoke test (real browser, starts and removes its own server): `pip install playwright==1.63.0 && playwright install chromium`, then `python3 scripts/e2e-smoke.py --build`. On failure it leaves screenshots and a console log in `tmp/e2e/`.
 
+### Korean and English
+
+Every text a person reads ships in both. In the app, write `t("한국어 원문")` and add the English to
+`client/src/lib/locales/en.ts`; the client tests fail on a missing entry or Korean outside `t()`. Extensions carry
+their own `descriptions` and `translations`. The full rules: [docs/i18n.md](docs/i18n.md).
+
 ### Releases
 
 Users only get an update when a version bump reaches `main`. Only the rolling `latest` release exists; version tags are not created.
@@ -61,6 +67,12 @@ cd client && bun run check && bun run test && bun run build
 ```
 
 화면 스모크 테스트(실제 브라우저, 서버를 스스로 띄우고 지움): `pip install playwright==1.63.0 && playwright install chromium` 후 `python3 scripts/e2e-smoke.py --build`. 실패하면 `tmp/e2e/`에 스크린샷과 콘솔 로그가 남습니다.
+
+### 한국어와 영어
+
+사람이 읽는 문구는 모두 두 언어로 냅니다. 앱에서는 `t("한국어 원문")`으로 쓰고 영어를
+`client/src/lib/locales/en.ts`에 넣습니다. 번역이 빠지거나 `t()` 밖에 한국어가 있으면 클라이언트 테스트가 실패합니다.
+확장은 자체 `descriptions`와 `translations`를 담습니다. 전체 규칙: [docs/i18n.md](docs/i18n.md).
 
 ### 릴리스
 

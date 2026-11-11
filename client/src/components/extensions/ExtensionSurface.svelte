@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { manifestName } from "../../lib/extensions/translations";
 	import { errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
 	import { onDestroy, untrack } from "svelte";
@@ -12,7 +13,7 @@
 	let error = $state("");
 	const instanceId = $props.id();
 	const namespace = $derived(`${instanceId}-${panel.owner}:${panel.id}`);
-	const ownerName = $derived(extensions.installed.find((entry) => entry.package.manifest.id === panel.owner)?.package.manifest.name ?? panel.owner);
+	const ownerName = $derived(((m) => (m ? manifestName(m) : panel.owner))(extensions.installed.find((entry) => entry.package.manifest.id === panel.owner)?.package.manifest));
 	type Default = { type: string; value: UIFieldValue | undefined };
 	let defaults = new Map<string, Default>();
 	let identity = "";

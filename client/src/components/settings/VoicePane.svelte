@@ -85,7 +85,7 @@
 		</Notice>
 	{/if}
 	{#if voice.availability}
-		<Notice tone="warn" size="sm" raised>{t(voice.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.")}</Notice>
+		<Notice tone="warn" size="sm" raised>{voice.availability === "insecure" ? t("마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요.") : t("이 브라우저는 녹음을 지원하지 않습니다.")}</Notice>
 	{/if}
 </section>
 

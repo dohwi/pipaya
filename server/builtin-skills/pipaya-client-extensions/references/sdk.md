@@ -45,6 +45,19 @@ Examples: `examples/extensions/focus.json` (declarative), `session-tools.json` (
   field, and any key that looks like one (`token`, `password`, `apiKey`, …), never leaves the device whatever the scope says.
   A single field can be device-only too (`"device": true`): a local path, this machine's own setting.
 
+### Korean and English (`manifest.descriptions`, `manifest.translations`)
+
+Every text a person reads must exist in Korean and English (the rule book is `docs/i18n.md` in the app repository).
+Write `name`, `description` and the settings form in one language and add the other:
+
+- `descriptions`: `{ "en": "...", "ko": "..." }`, the whole description per language; `description` is the fallback.
+- `translations`: `{ "ko": { "<text as written>": "<translation>" } }` for `name` and every settings `label`,
+  `description`, `placeholder` and option `label`. Keys, option values and saved values are never translated.
+- Lookup: the reader's language, its base (`pt-br` -> `pt`), English for languages other than ko/en, then the text as
+  written. Limits: 10 languages, 300 entries, 2000 characters.
+- A `readonly` field's value may be `{ "ko": "...", "en": "..." }`; the form shows the reader's one.
+- Text the extension draws itself: read `sdk.context.language` (and the `language_changed` event) and pick from its own table.
+
 ### Settings schema (`manifest.settings`)
 
 Up to 20 fields; the settings page renders a form and validates. Without it, the page shows a raw JSON editor.

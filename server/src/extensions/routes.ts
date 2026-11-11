@@ -21,6 +21,7 @@ const Info = Type.Object({
 	version: Type.Optional(Type.String()),
 	description: Type.Optional(Type.String()),
 	descriptions: Type.Optional(Type.Record(Type.String(), Type.String())),
+	translations: Type.Optional(Type.Record(Type.String(), Type.Record(Type.String(), Type.String()), { description: "`pipaya.translations`: language tag -> { source text -> translation } for the title and the settings form" })),
 	settings: Type.Optional(Type.Array(Type.Unknown(), { description: "Fields of the settings form (`pipaya.settings` in package.json), same shape as a client manifest's `settings`" })),
 	settingsId: Type.String({ description: "Id of the shared settings object behind the form (`GET/PUT /extensions/:id/settings`)" }),
 	clientPackage: Type.Optional(Type.Boolean({ description: "The folder carries its client half (`pipaya.client`); `GET /server-extensions/:extension/client` serves it" })),

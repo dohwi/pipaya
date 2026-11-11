@@ -133,7 +133,7 @@ class VoiceStore {
 
 	/** Why the microphone cannot be used, or null when it is fine. The button's tooltip and the settings row say it. */
 	get blockedReason(): string | null {
-		if (this.availability) return t(this.availability === "insecure" ? "마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요." : "이 브라우저는 녹음을 지원하지 않습니다.");
+		if (this.availability) return this.availability === "insecure" ? t("마이크는 HTTPS 화면이나 앱에서만 켜집니다. pipaya를 https 주소로 열거나 앱에서 사용하세요.") : t("이 브라우저는 녹음을 지원하지 않습니다.");
 		if (!this.settings.enabled) return null;
 		if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
 		if (!this.hasKey) return t("변환 API 키를 입력하세요.");

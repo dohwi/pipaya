@@ -9,6 +9,12 @@ A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `pac
 
 A folder extension can describe itself in `package.json` so Settings shows a page like a client extension's: `version`, `description`, and under `"pipaya"`: `title`, `descriptions` (`{ "en": "...", "ko": "..." }`) and `settings`, a list of fields (`key`, `type` string/number/boolean/select, `label`, `description`, `default`, `required`, `secret`, `options`, `readonly`, `when` (show a field only for some values of an earlier one, e.g. `{ "key": "role", "equals": "follower" }`), max 20; same shape as a client manifest's `settings`). The form edits the object behind `pi.settings`.
 
+Korean and English are both required for anything a person reads (rule book: `docs/i18n.md` in the app repository):
+write `title`, `description` and the form in one language, then add `pipaya.descriptions` (`{ "en": "...", "ko": "..." }`)
+and `pipaya.translations` (`{ "ko": { "<text as written>": "<translation>" } }`) for the title, every `label`,
+`description`, `placeholder` and option `label`. A `readonly` status the extension writes is `{ "ko": "...", "en": "..." }`.
+Text for the agent (tool descriptions and results, command templates) stays English.
+
 A server extension that needs a client half names it with `pipaya.companion` (its client id) and can carry the built package itself with `pipaya.client` (a path to the package JSON inside the folder, e.g. `"dist/my-ui.json"`). Settings then installs the client half from the server (`GET /server-extensions/:extension/client`), the same version as the server half and without the marketplace; it falls back to the catalog otherwise.
 
 Where they are read from (each entry is a file or a folder; names starting with `.` and `node_modules` are skipped):

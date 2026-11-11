@@ -28,21 +28,21 @@ export const needsOnlineServer = (id: string) => SETTINGS_TABS.some((x) => x.id 
 
 /** Settings that are not a tab of their own; `words` are what a person may type to find them (any language). */
 export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string }[] = [
-	{ tab: "general", label: msg("언어"), words: "language 한국어 english" },
-	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" },
-	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" },
-	{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" },
-	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" },
-	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" },
-	{ tab: "general", label: msg("업데이트"), words: "update version 버전" },
-	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" },
-	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" },
-	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" },
-	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" },
-	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" },
-	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" },
-	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" },
-	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" },
+	{ tab: "general", label: msg("언어"), words: "language 한국어 english" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("알림음"), words: "sound volume notification 소리 볼륨 크기 알림" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("업데이트"), words: "update version 버전" }, // i18n-ok: search words in either language
+	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" }, // i18n-ok: search words in either language
+	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" }, // i18n-ok: search words in either language
+	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" }, // i18n-ok: search words in either language
+	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
+	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
+	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
+	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" }, // i18n-ok: search words in either language
+	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
 ];
 
 const norm = (s: string) => s.toLowerCase();

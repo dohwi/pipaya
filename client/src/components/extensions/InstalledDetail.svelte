@@ -11,6 +11,7 @@
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
+	import { localizeFields, manifestDescription, manifestName } from "../../lib/extensions/translations";
 
 	/**
 	 * The page of one installed extension: on/off switch, its settings (a form when it declares fields, else raw JSON),
@@ -72,6 +73,9 @@
 
 	const id = $derived(entry.package.manifest.id);
 	const fields = $derived(entry.package.manifest.settings);
+	const displayName = $derived(manifestName(entry.package.manifest));
+	const description = $derived(manifestDescription(entry.package.manifest));
+	const shownFields = $derived(fields ? localizeFields(fields, entry.package.manifest.translations) : undefined);
 	const gated = $derived(!!fields && src.configRequired(id));
 	const on = $derived(src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled);
 	const problem = $derived(on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id));
@@ -83,19 +87,19 @@
 	const canChooseLocal = $derived(!!onsettingslocal);
 </script>
 
-<ExtensionPage id="extension-{id}" name={entry.package.manifest.name} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
+<ExtensionPage id="extension-{id}" name={displayName} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
 	{#snippet meta()}<span class="facts">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
 	{#snippet control()}
 		<Switch
 			checked={on}
-			label={t("{name} 사용", { name: entry.package.manifest.name })}
+			label={t("{name} 사용", { name: displayName })}
 			disabled={tasks.busy[id] || entry.state === "starting" || (!on && ((src.runs && extensions.safeMode) || !!problem))}
 			describedby={problem ? `extension-blocked-${id}` : undefined}
 			onchange={(next) => (next ? onenable() : ondisable())}
 		/>
 	{/snippet}
 
-	{#if entry.package.manifest.description}<p class="description">{entry.package.manifest.description}</p>{/if}
+	{#if description}<p class="description">{description}</p>{/if}
 	{#if !src.runs}<Notice tone="info" size="sm" role="status">{on ? t("이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.") : t("이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.")}</Notice>{/if}
 	{#if pairedServer && !bundledBy}
 		<Notice tone={on ? "info" : "warn"} size="sm" icon="clip" role="status">
@@ -128,7 +132,7 @@
 		{/if}
 		{#if fields}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
-			<SettingsForm {id} {fields} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} />
+			<SettingsForm {id} fields={shownFields!} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} />
 		{:else}
 			<label class="settings-label" for="extension-settings-{id}">{t("설정 JSON 객체")}</label>
 			<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={tasks.busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>
@@ -147,7 +151,7 @@
 			<Button variant="danger" size="sm" class="end" disabled={tasks.busy[id]} aria-expanded={tasks.removing === id} onclick={onaskremove}>{t("삭제")}</Button>
 		</div>
 		{#if tasks.removing === id}
-			<RemoveExtensionConfirm name={entry.package.manifest.name} busy={tasks.busy[id]} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
+			<RemoveExtensionConfirm name={displayName} busy={tasks.busy[id]} onkeep={() => onremove(true)} onwipe={() => onremove(false)} oncancel={oncancelremove} />
 		{/if}
 	</section>
 </ExtensionPage>

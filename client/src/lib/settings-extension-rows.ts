@@ -1,5 +1,6 @@
 import type { SettingsTabId } from "./settings-search";
 import { t } from "./i18n";
+import { serverTitle } from "./server-extension";
 
 /** One extension as the settings sidebar lists it under "확장". */
 export type ExtensionRow = {
@@ -24,7 +25,7 @@ export type ExtensionRow = {
 /** A client extension of the listed server, reduced to what the list needs. */
 export type InstalledInfo = { id: string; name: string; live: boolean };
 /** An extension running inside the open server. */
-export type ServerSideInfo = { name: string; title?: string; companion?: string };
+export type ServerSideInfo = { name: string; title?: string; companion?: string; translations?: unknown };
 
 /** What the rows need to know about updates and missing halves (lib/extension-updates). */
 export interface UpdateLookup {
@@ -61,7 +62,7 @@ export function extensionRows(
 	const side: Row[] = (serverSide ?? []).map((n) => ({
 		id: `srv:${n.name}`,
 		companion: n.companion,
-		name: n.title ?? n.name,
+		name: serverTitle(n),
 		live: true,
 		builtin: false,
 		update: updates.serverNames.has(n.name),
@@ -79,7 +80,7 @@ export function extensionRows(
 			return {
 				...e,
 				paired: !!missing || !!here,
-				partner: missing?.name ?? here?.title ?? here?.name,
+				partner: missing?.name ?? (here ? serverTitle(here) : undefined),
 				link: { tab: "srvext" as SettingsTabId, id: here ? `srv:${here.name}` : null },
 			};
 		});

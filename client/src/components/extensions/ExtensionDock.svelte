@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { manifestName } from "../../lib/extensions/translations";
 	import IconButton from "../ui/IconButton.svelte";
 	import { t } from "../../lib/i18n";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
@@ -10,7 +11,7 @@
 	 * panel's `size.width` (default 360px) and the user can drag the edge. On a narrow screen it takes the whole stage.
 	 */
 	const key = (p: ExtensionPanel) => `${p.owner}:${p.id}`;
-	const ownerName = (owner: string) => extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest.name ?? owner;
+	const ownerName = (owner: string) => ((m) => (m ? manifestName(m) : owner))(extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest);
 	const shown = $derived(extensions.panels.filter((p) => p.placement === "side" && p.open && extensions.installed.some((e) => e.package.manifest.id === p.owner && e.state === "active")));
 	let picked = $state<string | null>(null);
 	const current = $derived(shown.find((p) => key(p) === picked) ?? shown.at(-1));
