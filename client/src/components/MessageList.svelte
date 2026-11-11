@@ -15,11 +15,6 @@
 	import type { ChatState } from "../lib/chat.svelte";
 	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../lib/types";
 	import EntryCard from "./extensions/EntryCard.svelte";
-	/** The loading outline: widths of the question's lines (px), of the work box's label and each paragraph's lines (% of the column) */
-	const SK_TURNS = [
-		{ ask: [220, 140], work: 32, paras: [[96, 92, 88, 54], [90, 72]], foot: true },
-		{ ask: [168], work: 0, paras: [[94, 86, 62]], foot: false },
-	];
 	import { extensions } from "../lib/extensions/host.svelte";
 
 	let { chat }: { chat: ChatState } = $props();
@@ -297,34 +292,12 @@
 >
 	<div class="inner" bind:this={content}>
 		{#if !chat.ready && !chat.loadError}
-			<!-- a conversation's outline while it loads: a question, a reply with a work box, paragraphs and its foot, then the next turn -->
+			<!-- a conversation's outline while it loads: a question on the right, the start of a reply under it -->
 			<div class="skeleton skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
-				{#each SK_TURNS as turn, ti (ti)}
-					<div class="skuser">
-						<div class="skbubble">
-							{#each turn.ask as w, i (i)}<i class="skeleton-bar skline" style:width="{w}px" style:--sk-i={ti * 8 + i}></i>{/each}
-						</div>
-					</div>
-					<div class="skreply">
-						{#if turn.work}
-							<div class="skwork">
-								<i class="skeleton-bar skico" style:--sk-i={ti * 8 + 2}></i>
-								<i class="skeleton-bar skline" style:width="{turn.work}%" style:--sk-i={ti * 8 + 2}></i>
-							</div>
-						{/if}
-						{#each turn.paras as para, pi (pi)}
-							<div class="skpara">
-								{#each para as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={ti * 8 + 3 + pi + i}></i>{/each}
-							</div>
-						{/each}
-						{#if turn.foot}
-							<div class="skfoot">
-								{#each [0, 1, 2] as i (i)}<i class="skeleton-bar skico" style:--sk-i={ti * 8 + 6}></i>{/each}
-								<i class="skeleton-bar skline skstats" style:--sk-i={ti * 8 + 6}></i>
-							</div>
-						{/if}
-					</div>
-				{/each}
+				<div class="skbubble"><i class="skeleton-bar skline" style:width="180px"></i></div>
+				<div class="skpara">
+					{#each [96, 88, 56] as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={i + 1}></i>{/each}
+				</div>
 			</div>
 		{:else if chat.loadError}
 			<div class="loaderr">
@@ -483,72 +456,27 @@
 	.skeleton {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: 24px;
 		padding-top: 8px;
-		/* the outline trails off toward the composer instead of ending on a hard edge */
-		mask-image: linear-gradient(to bottom, #000 55%, transparent);
 	}
 	.skline {
 		display: block;
 		height: 12px;
 		max-width: 100%;
 	}
-	.skico {
-		display: block;
-		flex: none;
-		width: 16px;
-		height: 16px;
-	}
 	/* the question: a bubble on the right, drawn like the real one (UserMessage .bubble) */
-	.skuser {
-		display: flex;
-		justify-content: flex-end;
-	}
 	.skbubble {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 8px;
+		align-self: flex-end;
 		max-width: min(85%, 560px);
 		padding: 12px 16px;
 		border-radius: var(--radius);
 		background: var(--user-bg);
 		border: 1px solid var(--border);
 	}
-	.skreply {
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-		padding-top: 4px; /* the reply card's own 4 (AssistantMessage .reply-card) */
-	}
-	/* the work box: a 44px card with an icon and a label, like WorkBox's folded group */
-	.skwork {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		height: 44px;
-		padding: 0 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-	}
-	/* a paragraph: 12px bones on a 24px line rhythm */
 	.skpara {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-	}
-	/* the reply's foot: copy / reply / fork glyphs (16px in 32px boxes, so 16 apart) and the model line, as in AssistantMessage .foot */
-	.skfoot {
-		display: flex;
-		align-items: center;
-		gap: 16px;
-		height: 32px;
-	}
-	.skstats {
-		width: 120px;
-		height: 8px;
-		margin-left: 8px;
 	}
 	.loaderr {
 		display: flex;

@@ -25,11 +25,6 @@
 	/** The most urgent state among the server's conversations: tints the count while folded */
 	const sstate = $derived(sfold ? mostUrgent(n.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))) : "idle");
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
-	/** Loading outline: two folders (name width, then each tab title's width, px) */
-	const SK_DIRS = [
-		{ name: 104, tabs: [128, 92] },
-		{ name: 80, tabs: [112] },
-	];
 </script>
 
 	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off>
@@ -49,20 +44,11 @@
 		{#if !sfold}
 		<div class="fold" in:collapseIn out:collapseOut>
 			{#if !n.loaded}
-				<!-- the server's folders and tabs as bones on the sidebar's columns (chevron 28, folder 48, tab icon 68), 32px rows like the real ones -->
+				<!-- a folder and two tabs as bones on the sidebar's columns (folder icon 48, titles from x 80), 32px rows like the real ones -->
 				<div class="sklist skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
-					{#each SK_DIRS as dir, di (di)}
-						<div class="skrow skdir">
-							<i class="skeleton-bar skglyph" style:--sk-i={di * 4}></i>
-							<i class="skeleton-bar skglyph" style:--sk-i={di * 4}></i>
-							<i class="skeleton-bar skbar" style:width="{dir.name}px" style:--sk-i={di * 4}></i>
-						</div>
-						{#each dir.tabs as w, i (i)}
-							<div class="skrow sktab">
-								<i class="skeleton-bar skglyph" style:--sk-i={di * 4 + i + 1}></i>
-								<i class="skeleton-bar skbar" style:width="{w}px" style:--sk-i={di * 4 + i + 1}></i>
-							</div>
-						{/each}
+					<div class="skrow skdir"><i class="skeleton-bar skglyph"></i><i class="skeleton-bar skbar" style:width="96px"></i></div>
+					{#each [128, 88] as w, i (i)}
+						<div class="skrow sktab"><i class="skeleton-bar skbar" style:width="{w}px" style:--sk-i={i + 1}></i></div>
 					{/each}
 				</div>
 			{:else if n.total === 0}
@@ -210,23 +196,16 @@
 	.skrow {
 		display: flex;
 		align-items: center;
-		gap: 6px; /* alignment, not spacing: glyph 14 + 6 = the 20px column step, as in .dirtoggle */
+		gap: 6px; /* alignment, not spacing: the folder glyph 14 + 6, so the name bone starts where .dname does (as in .dirtoggle) */
 		height: 32px;
 		margin: 1px 0; /* rows sit 1px apart, like .item */
-		padding-left: 4px; /* chevron centred on x 28, folder icon on x 48 (the .dirtoggle inset) */
 	}
 	.skdir {
-		margin-top: 12px; /* folders sit 12 apart, like .dir */
-	}
-	.skdir:first-child {
-		margin-top: 4px; /* the first folder sits 4 under the header, like .dirblock:first-child > .dir */
+		margin-top: 4px; /* the folder sits 4 under the header, like .dirblock:first-child > .dir */
+		padding-left: 24px; /* the folder glyph centres on x 48: .dirtoggle's 4 + the chevron's 14 + 6 */
 	}
 	.sktab {
-		padding-left: 43px; /* grid: the 16px lead box starts where the real one does (.item's 4 + .open's 39), so its glyph centres on x 68 */
-		gap: 4px; /* .open's gap: the title bone starts where the title does */
-	}
-	.sktab .skglyph {
-		margin: 0 1px; /* a 14px glyph centred in the 16px lead box */
+		padding-left: 63px; /* the bone starts where a row's text does, after its icon (x 80: .item 4 + .open 39 + the 16px lead + its 4 gap, measured) */
 	}
 	.skglyph {
 		display: block;
@@ -239,10 +218,6 @@
 		display: block;
 		height: 10px;
 		max-width: 100%;
-	}
-	/* a bone for a folder name is a shade stronger than a tab's, like the bold name over plain titles */
-	.skdir .skbar {
-		background: color-mix(in srgb, var(--text) 10%, transparent);
 	}
 	.sicon :global(svg) {
 		width: 14px;
