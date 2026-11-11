@@ -5,7 +5,6 @@
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import VersionBump from "./VersionBump.svelte";
-	import Accordion from "../ui/Accordion.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { download } from "../../lib/download";
 	import { tick } from "svelte";
@@ -513,9 +512,10 @@
 		{/if}
 	</section>
 
-	<Accordion variant="line">
-		{#snippet head()}{t("고급")}{/snippet}
-		<div class="adv">
+	<!-- Not folded: the safe-mode switch is the recovery path when an extension misbehaves, so it must be visible without a click -->
+	<section class="adv" aria-labelledby="extensions-advanced">
+		<h3 id="extensions-advanced" class="section-label">{t("고급")}</h3>
+		<div class="adv-body">
 			<div class="adv-row">
 				<span class="switch-text">
 					<span class="switch-title"><Icon name="shield" /> {t("안전 모드: 모든 확장 실행 중지")}</span>
@@ -524,7 +524,7 @@
 				<Switch checked={extensions.safeMode} label={t("모든 확장 실행 중지")} disabled={tasks.busy.$safe} onchange={setSafeMode} />
 			</div>
 		</div>
-	</Accordion>
+	</section>
 	{/if}
 </div>
 
@@ -565,10 +565,13 @@
 	.extensions .bar > :global(.add.disabled) { opacity: 0.5; cursor: default; }
 	.extensions .bar > :global(.add input) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.extensions .bar > :global(.add svg) { width: 16px; height: 16px; }
-	.adv { display: flex; flex-direction: column; gap: 8px; }
+	.adv { padding-top: 16px; border-top: 1px solid var(--border); }
+	.adv-body { display: flex; flex-direction: column; gap: 8px; }
 	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 
 	a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+	/* the recovery query is typed by hand: keep it on one line so it is never split at "?" */
+	.adv a { white-space: nowrap; }
 	.none {
 		margin: 4px 0 4px;
 		padding: 12px;
