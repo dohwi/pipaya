@@ -3,8 +3,8 @@
   import type { UISlot } from "../../lib/extensions/schema";
 
   /** A place in the app where trusted extension components (`ui-components`) can be mounted. `props` are handed to them as-is. */
-  let { slot, props = {} }: { slot: UISlot; props?: Record<string, unknown> } = $props();
-  const items = $derived(extensions.mountsIn(slot));
+  let { slot, props = {}, owners }: { slot: UISlot; props?: Record<string, unknown>; /** Extensions allowed to fill it; the slots of an extension's own page need this (only its owner may fill them) */ owners?: readonly string[] } = $props();
+  const items = $derived(extensions.mountsIn(slot, owners));
 </script>
 
 {#each items as item (item.key)}

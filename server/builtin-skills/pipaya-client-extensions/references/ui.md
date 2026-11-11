@@ -15,6 +15,7 @@ Extensions build screens by sending a JSON view tree; the host renders it with S
 | Status chip | under the composer | text | no | `StatusLine` |
 | Composer action | under the composer | small button | click | `Composer` |
 | Management | Settings > Extensions | list + detail page | yes | `Extensions.svelte`, `extensions/*` |
+| Server extension page | Settings > Extensions > a server extension, above "확장 설정" | a "현재 상태" section | yes (buttons, forms; sent to the server extension) | `ServerDetail` via `ExtensionSurface`; the tree comes from `pi.ui.setPanel` (see `pipaya-server-extensions`), texts may be `{ko,en}` |
 | Approval | app-wide | `<dialog>` | yes | `ExtensionApproval` |
 
 The app always labels a panel with its extension's name (header; the owner line is skipped when it equals the panel title). This stops an extension from posing as an app dialog; keep it when polishing.

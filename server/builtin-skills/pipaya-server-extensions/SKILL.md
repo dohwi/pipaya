@@ -7,7 +7,7 @@ description: Read this when the user wants to write, install, debug or change a 
 
 A server extension is a `.ts`/`.js` file (or a folder with `index.ts`, or a `package.json` with `"pipaya": { "extensions": ["./a.ts"] }`) that default-exports `(pi) => { ... }`. It runs **inside the server process with the server's full privileges**: it can read any file the server can, run commands and see every credential. Only install code you trust. That is why `POST /server-extensions/reload` needs the admin token, and why a paired phone can call extension methods but never reload or install anything.
 
-A folder extension can describe itself in `package.json` so Settings shows a page like a client extension's: `version`, `description`, and under `"pipaya"`: `title`, `descriptions` (`{ "en": "...", "ko": "..." }`) and `settings`, a list of fields (`key`, `type` string/number/boolean/select, `label`, `description`, `default`, `required`, `secret`, `options`, `readonly`, `when` (show a field only for some values of an earlier one, e.g. `{ "key": "role", "equals": "follower" }`), max 20; same shape as a client manifest's `settings`). The form edits the object behind `pi.settings`.
+A folder extension can describe itself in `package.json` so Settings shows a page like a client extension's: `version`, `description`, and under `"pipaya"`: `title`, `descriptions` (`{ "en": "...", "ko": "..." }`) and `settings`, a list of fields (`key`, `type` string/number/boolean/select, `label`, `description`, `default`, `required`, `secret`, `options`, `readonly`, `component` (a `ui-components` component of the companion client extension that draws this one field), `when` (show a field only for some values of an earlier one, e.g. `{ "key": "role", "equals": "follower" }`), max 20; same shape as a client manifest's `settings`). The form edits the object behind `pi.settings`.
 
 Korean and English are both required for anything a person reads (rule book: `docs/i18n.md` in the app repository):
 write `title`, `description` and the form in one language, then add `pipaya.descriptions` (`{ "en": "...", "ko": "..." }`)
@@ -25,6 +25,44 @@ Where they are read from (each entry is a file or a folder; names starting with 
 The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`; the default ones are folders of `pipaya-extensions`). `ask_user` and `peer` are built in, so the old `ask-user` and `peer-tools` extensions are not loaded. `examples/extensions/todo.ts` is a small one to copy from.
 
 Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors[?extension=name]`. A file that throws while loading is switched off alone; the others keep working.
+
+## Showing live state on the extension's page (`pi.ui`)
+
+A `readonly` field in `pipaya.settings` is for a value that really is a setting. A status ("connected 3 min ago", a last error, a button that runs something now) does not belong in the settings object: every write would fire `onChange` and a form save would write it back. Give the page its own tree instead. It is held by the host (not stored), served as `panel` in `GET /server-extensions`, shown in Settings → Extensions above "확장 설정", and pushed to open clients at once.
+
+```ts
+export default (pi) => {
+  if (typeof pi.ui?.setPanel !== "function") return fallbackToReadonlyField(pi);   // an older app: no pi.ui
+  const show = (s) => pi.ui.setPanel({
+    type: "card", id: "status", title: { ko: "동기화", en: "Sync" }, children: [
+      { type: "badge", id: "state", text: s.ok ? { ko: "연결됨", en: "Connected" } : { ko: "끊김", en: "Offline" }, tone: s.ok ? "success" : "danger" },
+      { type: "stat", id: "items", label: { ko: "가져온 항목", en: "Items" }, value: String(s.items) },
+      ...(s.error ? [{ type: "alert", id: "err", tone: "danger", text: s.error }] : []),
+      { type: "button", id: "sync", label: { ko: "지금 동기화", en: "Sync now" }, disabled: s.busy },
+    ],
+  });
+  pi.ui.onEvent(async (e) => { if (e.type === "action" && e.id === "sync") await runSync(); });
+  show(initial);                     // call setPanel again whenever the state changes; `null` removes the page
+};
+```
+
+| Member | What it does |
+|---|---|
+| `pi.ui` | absent on a server older than this feature. **Detect it with `typeof pi.ui?.setPanel === "function"`** and fall back to the old way |
+| `pi.ui.setPanel(node \| null)` | sets the page (one tree, replacing the last), `null` removes it. Throws on a bad tree. An identical tree is not pushed again. A reload clears it: set it again when the extension starts |
+| `pi.ui.onEvent(handler)` | one handler for what the user does: `{type:"action", id}` (a button), `{type:"change", id, value}` (a field), `{type:"submit", id, values}` (a form). The server checks it against the current page first (the node must exist, be of the right kind and not disabled). A throwing handler shows as an error on the page |
+
+The tree is the client's declarative UI (`pipaya-client-extensions`, `references/ui.md`): `stack grid card tabs form text badge divider code alert progress stat table list button input textarea select checkbox`; `icon` too. Limits are the client's: 200 nodes, 8 levels, 60 KB of JSON, ids `[a-z][a-z0-9-]{0,39}` unique in the tree. The server checks the shape and size when you call `setPanel`; the client validates every node again and shows nothing when it refuses one (for example a node type from a newer server). Every text (`text`, `title`, `label`, `description`, table cells, list titles, ...) is a string or `{ "ko": "...", "en": "..." }`; a plain string is also looked up in `pipaya.translations`. Values of fields and options are data and are not translated. No HTML, URLs or styles: it is data only and needs no consent.
+
+Live: `GET /server-extensions` has `panel`; a change is the live-only event `extension_panel_updated` (`{extension, panel}`, `panel` null when removed); the client posts events to `POST /server-extensions/:extension/panel/event` `{event}`. A page that must draw more than the nodes can (a slider, an editor) uses the client half, below.
+
+### A richer page: Svelte from the client half
+
+A server extension with `pipaya.companion` (and the client package, `pipaya.client`) can draw its own page with Svelte, using the client extension's `ui-components` (the user consents to that when installing it). Only the extension that owns the page can: the client extension named in `pipaya.companion`, never another one. The page then gets `extension.settings` (the whole settings section, with the generic form as `fallback`), `extension.page.top` (a block above the sections), and any settings field can name `"component": "Slider"` in `pipaya.settings` to draw just that one field. Props, `save(partial)` and `call(method, params)` are in `pipaya-client-extensions`, `references/trusted-ui.md`. It runs only when the client half is installed and on, and only on the server that is open in the app; elsewhere (and in safe mode, or on an older app, or if a component throws) the declarative page and the generic form are shown, so keep the essentials there.
+
+### What a settings form saves
+
+The form edits the declared fields that are not `readonly` and sends only those keys (`PUT /extensions/:id/settings` with `keys`): **the server replaces those keys and keeps everything else in the stored object**. A key you keep in your own settings that is not a form field, and a `readonly` value you wrote, survive any save; the form never writes a `readonly` field's value back. A write without `keys` (a client extension's own, `pi.settings.set`) still replaces the whole object. Your own `pi.settings.set` does not count as a person's edit, so it never makes a form save stale.
 
 ## A complete example
 
@@ -83,6 +121,7 @@ export default (pi) => {
 | `pi.models` | `list({provider?})` the usable models; `complete({role? \| provider+model, system?, input, maxTokens?, signal?})` one-shot text completion (no session, no tools) |
 | `pi.subscribe(handler, {sessionId?, types?})` | every server event (the `/events` stream) as it happens; returns the unsubscribe. Removed on reload |
 | `pi.notify({title, body?, sessionId?, key?, kind?})` | OS / push notification to the user's devices, under this extension's name (5 per 10 s) |
+| `pi.ui` | the extension's page in Settings: `setPanel(node \| null)`, `onEvent(handler)`; see "Showing live state". Absent on an older server |
 | `pi.settings` | `get()`, `set(obj)`, `onChange(fn)`: the object behind `/extensions/:id/settings` for this extension's id, shared with a client extension that has the same id and `settingsScope: "server"` |
 | `pi.home`, `pi.defaultCwd()` | the user's home and the server's default working directory |
 | `pi.dataDir` | a folder for this extension's own files |

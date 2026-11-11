@@ -49,6 +49,30 @@ export function splitSettings(
 	return { shared, local };
 }
 
+/**
+ * The keys a settings form edits: the declared fields the extension does not write itself (`readonly`). Sent as `keys`
+ * with a save, so the server replaces only these and keeps everything else (what the extension keeps for itself, a
+ * status it wrote). `undefined` without a schema: the raw object is the form, and it replaces the whole value.
+ */
+export const formKeys = (fields: readonly SettingField[] | undefined): string[] | undefined =>
+	fields?.length ? fields.filter((f) => !f.readonly).map((f) => f.key) : undefined;
+
+/**
+ * A form save replaces the keys the form edits and leaves the others as they were: a key the extension keeps for itself,
+ * and a `readonly` value it wrote. `next` is the validated form result, `existing` what is stored now.
+ */
+export function keepUnowned(fields: readonly SettingField[] | undefined, existing: Record<string, unknown>, next: Record<string, unknown>): Record<string, unknown> {
+	if (!fields?.length) return next;
+	const owned = new Set(formKeys(fields));
+	const out: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(existing)) if (!owned.has(key)) out[key] = value;
+	return { ...out, ...next };
+}
+
+/** `formKeys` of what a client extension shares with the server: its device-only fields (secrets, `device`) never leave the device. */
+export const writableKeys = (fields: readonly SettingField[] | undefined): string[] | undefined =>
+	formKeys(fields?.filter((f) => !isDeviceOnlyField(f)));
+
 /** The object a client may show or send: `splitSettings(...).shared`. */
 export const sharedSettings = (settings: Record<string, unknown>, fields: readonly SettingField[] | undefined): Record<string, unknown> =>
 	splitSettings(settings, fields).shared;

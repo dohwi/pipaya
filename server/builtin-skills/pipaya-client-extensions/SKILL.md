@@ -29,7 +29,8 @@ The docs are in `references/` next to this file. Source paths in them (`src/lib/
 7. **Show the source**: the app labels which extension a screen comes from.
 8. **Design tokens only** (`src/app.css`). UI copy is Korean source strings through `t()`/`msg()` with English in `src/lib/locales/en.ts`.
 9. **No node or component for one extension's look.** The core offers generic nodes, `ui-style` hooks and `ui-components` slots. A rings gauge, a usage popover, a branded card belongs in the extension that wants it. A test (`extensions-generic`) enforces it.
-10. **Modal `<dialog>` content is in the top layer**: popovers over it attach inside the open dialog, not `<body>`.
+10. **An extension's own page is for its owner only.** `extension.settings`, `extension.page.top` and a settings field's `component` (`OWNED_PAGE_NAMES`) render only for the extension whose page it is (a server extension's: its `pipaya.companion`). A server extension's live status is its declarative `pi.ui.setPanel` page (`pipaya-server-extensions`), not a Svelte component. See `references/trusted-ui.md`.
+11. **Modal `<dialog>` content is in the top layer**: popovers over it attach inside the open dialog, not `<body>`.
 
 ## Finish every change with
 

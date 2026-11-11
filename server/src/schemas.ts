@@ -447,6 +447,7 @@ export const EVENTS: EventDef[] = [
 		data: Type.Object({ from: Type.String(), atSeq: Nullable(Type.Integer()), messages: Type.Integer() }),
 	},
 	{ type: "extensions_updated", persisted: false, description: "Server extensions were (re)loaded; refetch GET /server-extensions (sessionId is null)", data: Type.Object({ names: Type.Array(Type.String()) }) },
+	{ type: "extension_panel_updated", persisted: false, description: "A server extension changed the page it shows above its settings form (`pi.ui.setPanel`); `panel` is the new tree or null (sessionId is null). Live only: GET /server-extensions has the current one", data: Type.Object({ extension: Type.String(), panel: Type.Unknown() }) },
 	{ type: "extension_error", persisted: false, description: "A server extension threw in a hook, command or method (sessionId is null)", data: Type.Object({ extension: Type.String(), where: Type.String(), message: Type.String() }) },
 	{ type: "extension_event", persisted: true, description: "A custom event an extension published for clients (`ephemeral` ones are live only)", data: Type.Object({ extension: Type.String(), type: Type.String(), data: Type.Unknown() }) },
 	{ type: "extension_entry", persisted: true, description: "An extension stored a custom entry on the session (see GET /sessions/:id/extension-entries)", data: Type.Object({ id: Type.Integer(), extension: Type.String(), type: Type.String(), data: Type.Unknown(), createdAt: Type.Integer() }) },

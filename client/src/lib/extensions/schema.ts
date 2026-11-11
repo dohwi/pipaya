@@ -19,14 +19,21 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const UI_SLOTS = Object.freeze([
 	"app.overlay", "header.start", "header.end", "header.below", "sidebar.top", "sidebar.bottom",
 	"pane.top", "pane.bottom", "composer.top", "composer.toolbar", "composer.bottom",
-	"message.user.after", "message.assistant.after",
+	"message.user.after", "message.assistant.after", "extension.page.top",
 ] as const);
 export type UISlot = (typeof UI_SLOTS)[number];
 /** Built-in pieces a trusted extension component may replace. The original is passed as the `fallback` snippet. */
 export const UI_PARTS = Object.freeze([
 	"header.title", "sidebar.brand", "pane.empty", "pane.welcome", "composer.send", "statusline", "message.user", "message.assistant",
+	"extension.settings",
 ] as const);
 export type UIPart = (typeof UI_PARTS)[number];
+/**
+ * The slot and part that draw an extension's OWN page in Settings → Extensions. Unlike the others they are not open to
+ * every extension: only the extension whose page it is (a server extension's page: the client extension it names in
+ * `pipaya.companion`) may fill them, so no extension can replace another's page.
+ */
+export const OWNED_PAGE_NAMES: ReadonlySet<string> = Object.freeze(new Set<string>(["extension.page.top", "extension.settings"]));
 /** `data-part` names the app puts on its main elements: the stable selectors for `ui-style` CSS. */
 export const STYLE_PARTS = Object.freeze([
 	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
@@ -91,6 +98,12 @@ export interface SettingField {
 	 * A read-only field is skipped by validation and by the save, so a status line never blocks a save.
 	 */
 	readonly?: boolean;
+	/**
+	 * Name of a `ui-components` component of the same package that draws this one field (value + onchange) instead of the
+	 * default control, e.g. a slider. A server extension's field names a component of its companion client extension.
+	 * Where it cannot run (not installed, off, safe mode, no permission, an older app) the default control is shown.
+	 */
+	component?: string;
 	/**
 	 * Shown only while an earlier field holds one of these values (`{ key: "role", equals: "follower" }`). A hidden field
 	 * keeps its value but is never required and never an error, so a choice that hides it never blocks a save.
@@ -249,7 +262,7 @@ function finite(source: Record<string, unknown>, name: string, path: string): nu
  * what `serverFields` uses to drop a key it does not know instead of failing the field.
  */
 export const SETTING_FIELD_KEYS: readonly string[] = Object.freeze([
-	"key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "when", "format", "min", "max", "options",
+	"key", "type", "label", "description", "placeholder", "default", "required", "secret", "device", "readonly", "component", "when", "format", "min", "max", "options",
 ]);
 
 function settingField(value: unknown, path: string, keys: Map<string, SettingField>): SettingField {
@@ -271,6 +284,11 @@ function settingField(value: unknown, path: string, keys: Map<string, SettingFie
 	if (device !== undefined) { if (secret && device) fail(`${path}.device`, "a secret field is already device-only"); field.device = device; }
 	const readonly = optionalFlag(source, "readonly", path);
 	if (readonly !== undefined) { if (readonly && secret) fail(`${path}.readonly`, "a secret field cannot be read-only"); field.readonly = readonly; }
+	if (Object.hasOwn(source, "component")) {
+		const name = text(source.component, `${path}.component`, 40);
+		if (!matches(COMPONENT_NAME, name)) fail(`${path}.component`, "expected a PascalCase component name (max 40)");
+		field.component = name;
+	}
 	if (Object.hasOwn(source, "when")) field.when = settingCondition(source.when, `${path}.when`, keys);
 
 	if (type !== "string" && Object.hasOwn(source, "format")) fail(`${path}.format`, "format is only allowed for string settings");
@@ -630,6 +648,9 @@ export function parsePackage(input: unknown): ExtensionPackage {
 		}
 	}
 	parseComponents(source, result, permissions);
+	result.manifest.settings?.forEach((field, index) => {
+		if (field.component && !(result.components && Object.hasOwn(result.components, field.component))) fail(`manifest.settings[${index}].component`, `unknown component ${field.component}; it must be one of the package's components`);
+	});
 	if (!result.theme && !result.commands?.length && !result.locales?.length && !result.code?.trim() && !result.styles && !result.components) {
 		fail("package", "must contain a theme, nonempty commands, language packs, styles, components, or nonempty code");
 	}

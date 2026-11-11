@@ -7,7 +7,8 @@
 	import { findNode, fieldsIn, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";
 	import ExtensionView from "./ExtensionView.svelte";
 
-	let { panel }: { panel: ExtensionPanel } = $props();
+	/** Only what is read here: a server extension's page has the same shape without the rest of a panel. */
+	let { panel }: { panel: Pick<ExtensionPanel, "owner" | "id" | "view" | "run"> } = $props();
 	let values = $state.raw<Record<string, UIFieldValue>>({});
 	let pending = $state(false);
 	let error = $state("");

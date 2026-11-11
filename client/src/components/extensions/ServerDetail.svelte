@@ -7,7 +7,12 @@
 	import { flagVariable, serverFields, serverProvides, serverText, serverTitle, srvKey, type ServerExt } from "../../lib/server-extension";
 	import { t } from "../../lib/i18n";
 	import ExtensionPage from "./ExtensionPage.svelte";
+	import ExtensionMount from "./ExtensionMount.svelte";
+	import ExtensionPart from "./ExtensionPart.svelte";
+	import ExtensionSurface from "./ExtensionSurface.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
+	import { serverPanelView } from "../../lib/server-panel";
+	import type { UIEvent } from "../../lib/extensions/ui";
 
 	/**
 	 * The page of one extension that runs inside the server: read-only except its settings, which every device shares.
@@ -16,6 +21,10 @@
 	let {
 		ext,
 		settings,
+		page,
+		onsavepartial,
+		oncall,
+		onpageevent,
 		busy,
 		upgrade,
 		onback,
@@ -39,6 +48,14 @@
 		serverId?: string | null;
 		/** Saved settings of this extension (`GET /extensions/settings`, by `settingsId`) */
 		settings: Record<string, unknown> | undefined;
+		/** The page the extension shows (`pi.ui.setPanel`) as the server holds it now; unset when it has none */
+		page?: unknown;
+		/** `save(partial)` of the extension's own settings section: validated like the form, only those keys are written */
+		onsavepartial: (partial: unknown) => Promise<void>;
+		/** `call(method, params)` of that section: one of the extension's methods, on the server this page belongs to */
+		oncall: (method: unknown, params: unknown) => Promise<unknown>;
+		/** What the user did on the page (a button, a form), for the server to hand to the extension */
+		onpageevent: (event: UIEvent) => Promise<unknown>;
 		busy: boolean;
 		/** A newer marketplace version of this extension, with what the button does */
 		upgrade?: { version: string; disabled: boolean; onclick: () => void };
@@ -59,7 +76,25 @@
 	const client = $derived(ext.companion ? clients.find((e) => e.id === ext.companion) : undefined);
 	const clientOff = $derived(!!client && !client.live);
 	const missingClient = $derived(!!ext.companion && !client);
+
+	/** The page, in the language in use and validated like a client extension's UI. */
+	const shownPage = $derived(serverPanelView(page, ext.translations));
+	const run = (event: UIEvent) => onpageevent(event).then(() => {});
+	const surface = $derived(shownPage.view ? { owner: ext.name, id: "page", view: shownPage.view, run } : null);
+	/**
+	 * Who may draw this page with Svelte: the client extension this one names as its client half (`pipaya.companion`). Its
+	 * components run in the open server's app, so another server's page, whose client half is not running here, gets the
+	 * plain form. Nobody else can replace or add to the page.
+	 */
+	const owners = $derived(ext.companion && (!serverId || serverId === app.serverId) ? [ext.companion] : []);
+	const pageProps = $derived({
+		id: ext.settingsId, extension: ext.name, serverId: serverId ?? app.serverId, settings: settings ?? {}, fields: form.fields ?? [],
+		panel: shownPage.view, disabled: busy, save: onsavepartial, call: oncall,
+	});
 </script>
+
+<!-- A snippet, because `slot=` directly inside another component reads as a named-slot assignment -->
+{#snippet top()}<ExtensionMount slot="extension.page.top" {owners} props={pageProps} />{/snippet}
 
 <ExtensionPage id="extension-{srvKey(ext.name)}" name={serverTitle(ext)} sub={ext.name} {busy} {upgrade} {onback}>
 	{#snippet meta()}
@@ -93,6 +128,17 @@
 		</Notice>
 	{/if}
 
+	{@render top()}
+
+	{#if surface}
+		<section class="block set-group">
+			<h3 class="section-label">{t("현재 상태")}</h3>
+			<ExtensionSurface panel={surface} />
+		</section>
+	{:else if shownPage.problem}
+		<Notice tone="warn" size="sm" role="status">{t("확장이 보낸 화면을 표시하지 못했습니다.")}</Notice>
+	{/if}
+
 	{#if ext.tools.length || ext.commands.length || ext.flags.length}
 		<section class="block set-group">
 			<h3 class="section-label">{t("제공 기능")}</h3>
@@ -105,13 +151,15 @@
 
 	<section class="block set-group">
 		<h3 class="section-label">{t("확장 설정")}</h3>
-		{#if form.fields}
-			<SettingsForm id={ext.settingsId} fields={form.fields} value={settings ?? {}} disabled={busy} saveLabel={t("설정 저장")} {onsave} />
-		{:else if form.problem}
-			<Notice tone="warn" size="sm" role="status">{form.problem}</Notice>
-		{:else}
-			<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
-		{/if}
+		<ExtensionPart part="extension.settings" {owners} props={pageProps}>
+			{#if form.fields}
+				<SettingsForm id={ext.settingsId} fields={form.fields} value={settings ?? {}} disabled={busy} saveLabel={t("설정 저장")} {onsave} componentOwners={owners} />
+			{:else if form.problem}
+				<Notice tone="warn" size="sm" role="status">{form.problem}</Notice>
+			{:else}
+				<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
+			{/if}
+		</ExtensionPart>
 	</section>
 </ExtensionPage>
 

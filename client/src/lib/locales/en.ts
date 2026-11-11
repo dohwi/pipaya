@@ -1743,4 +1743,12 @@ export const en: Record<string, string> = {
 	"확장 voice-input이 설치되어 있습니다. 마이크가 두 개 보일 수 있으니 확장을 끄고 이 설정을 쓰세요.": "The voice-input extension is installed. Two microphones may show up: turn the extension off and use this setting.",
 	"지금 켜져 있습니다": "It is on now",
 	"지금 꺼져 있습니다": "It is off now",
+	"이 확장에 없는 메서드입니다": "This extension has no such method",
+	"현재 상태": "Current status",
+	"확장이 보낸 화면을 표시하지 못했습니다.": "Could not show the page the extension sent.",
+	"설정은 객체여야 합니다": "Settings must be an object",
+	"한 번에 바꿀 수 있는 설정이 너무 많습니다": "Too many settings to change at once",
+	"잘못된 설정 이름": "Invalid setting name",
+	"선언되지 않은 설정입니다 — {key}": "Not a declared setting — {key}",
+	"{label}은(는) 확장이 직접 쓰는 값이라 바꿀 수 없습니다": "{label} is written by the extension itself and cannot be changed",
 };

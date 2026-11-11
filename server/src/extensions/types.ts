@@ -407,7 +407,34 @@ export interface ExtensionAPI {
 		set(value: Record<string, unknown>): Record<string, unknown>;
 		onChange(handler: (value: Record<string, unknown>) => void): () => void;
 	};
+	/**
+	 * The page of this extension in Settings → Extensions, above its settings form: live state and actions that do not
+	 * belong in the settings object. Absent on a server older than the feature: test `typeof pi.ui?.setPanel === "function"`.
+	 */
+	ui?: ExtensionUi;
 	log(...args: unknown[]): void;
+}
+
+/**
+ * A declarative node of the page (same data the client's extension UI renders): `{ type, id, ...fields, children? }` with
+ * the types `stack grid card tabs form text badge divider code alert progress stat table list button input textarea select
+ * checkbox` (see pipaya-client-extensions, ui.md). Every text field may be a string, or `{ "ko": "...", "en": "..." }`
+ * for the language in use; a plain string is also looked up in `pipaya.translations`. At most 200 nodes, 8 levels, 60 KB
+ * of JSON, ids `[a-z][a-z0-9-]{0,39}` unique in the tree. The client validates it again and shows nothing when it is refused.
+ */
+export type ExtensionPanelNode = { type: string; id: string; [field: string]: unknown };
+
+/** What the user did on the page: a button (`action`), a field (`change`) or a form (`submit`, with every field's value). */
+export type ExtensionPanelEvent =
+	| { type: "action"; id: string }
+	| { type: "change"; id: string; value: string | boolean }
+	| { type: "submit"; id: string; values: Record<string, string | boolean> };
+
+export interface ExtensionUi {
+	/** Show this tree on the extension's page, or `null` to remove it. Replaces the previous one and is pushed to open clients at once; an identical tree is not pushed again. Throws on a tree over the limits. */
+	setPanel(node: ExtensionPanelNode | null): void;
+	/** The handler for what the user does on the page (a button, a form). One handler; a later call replaces it. A throwing handler is reported to the user as an error on the page. */
+	onEvent(handler: (event: ExtensionPanelEvent) => void | Promise<void>): void;
 }
 
 export type ExtensionFactory = (pi: ExtensionAPI) => void | Promise<void>;

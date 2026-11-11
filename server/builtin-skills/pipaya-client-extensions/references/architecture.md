@@ -39,6 +39,8 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Toast | `sdk.notifications.show` | toast | 5 per 10 s, 300 chars | `HostAdapter.notify` |
 | Server bridge | `sdk.server.*` | `Api.callServerExtension`, `store.emitServer` | `server` | `host.svelte.ts` `emitServer` |
 | Entry card | `sdk.messages.*` | `EntryCard.svelte` in `MessageList` | `messages`, 20 | `messageRendererFor` |
+| Server extension page | `pi.ui.setPanel` (server) | `ServerDetail.svelte` renders `lib/server-panel.ts` (localize + `parseView`) through `ExtensionSurface`; live via `lib/server-extension-feed.svelte.ts` (events of every saved server) | the client's `UI_LIMITS` | `extensions-page`, server `extension-page` |
+| Own page in Settings (Svelte) | `replaces["extension.settings"]`, `mounts` slot `extension.page.top`, a field's `component` | `InstalledDetail` / `ServerDetail` / `SettingsForm`, owners only (`OWNED_PAGE_NAMES`) | `ui-components` | `extensions-host` ("own page") |
 | Header/footer slot | `sdk.slots.*` | `ExtensionSlot.svelte` (`Header`, `Pane`) | `slots`, 2 | `slots` |
 | Pre-send filter | `sdk.composerFilter.*` | `Composer.svelte` submit | `composer-filter`, 2 s | `filterComposer` |
 | Shortcut | `sdk.shortcuts.*`, or `shortcuts` of the `pipaya` kit in a component | `lib/actions.ts` `onShortcut` (after app shortcuts); editable list in `Shortcuts.svelte` | `shortcuts`, 10 per extension | `shortcutFor`, `pressShortcut`/`releaseShortcut`, `shortcutList`, `setShortcutCombo`/`resetShortcutCombo(s)`, `registerComponentShortcut`; rules in `lib/extensions/shortcuts.ts` |

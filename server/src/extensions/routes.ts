@@ -24,6 +24,7 @@ const Info = Type.Object({
 	translations: Type.Optional(Type.Record(Type.String(), Type.Record(Type.String(), Type.String()), { description: "`pipaya.translations`: language tag -> { source text -> translation } for the title and the settings form" })),
 	settings: Type.Optional(Type.Array(Type.Unknown(), { description: "Fields of the settings form (`pipaya.settings` in package.json), same shape as a client manifest's `settings`" })),
 	settingsId: Type.String({ description: "Id of the shared settings object behind the form (`GET/PUT /extensions/:id/settings`)" }),
+	panel: Type.Optional(Type.Unknown({ description: "The declarative page the extension shows above its settings form (`pi.ui.setPanel`); live changes arrive as the `extension_panel_updated` event. Text fields may be a string or { ko, en }" })),
 	clientPackage: Type.Optional(Type.Boolean({ description: "The folder carries its client half (`pipaya.client`); `GET /server-extensions/:extension/client` serves it" })),
 	error: Type.Optional(Type.String()),
 });
@@ -101,6 +102,23 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 		handler: async (req) => {
 			const name = req.query.extension;
 			return { errors: name ? host.errors.filter((e) => e.extension === name || e.extension.startsWith(`${name}/`)) : host.errors };
+		},
+	});
+	app.post("/server-extensions/:extension/panel/event", {
+		schema: {
+			params: Type.Object({ extension: Type.String() }),
+			body: Type.Object({ event: Type.Unknown({ description: "What the user did on the page: { type: 'action', id } for a button, { type: 'change', id, value } for a field, { type: 'submit', id, values } for a form. It must name a node of the current page" }) }),
+			response: { 200: Type.Object({ ok: Type.Boolean() }), ...errors(400, 401, 404) },
+		},
+		handler: async (req) => {
+			try {
+				const r = await host.panelEvent(req.params.extension, req.body.event);
+				if (!r.found) throw notFound("extension page");
+				return { ok: true };
+			} catch (e) {
+				if (e instanceof Error && "status" in e) throw e;
+				throw badRequest(e instanceof Error ? e.message : String(e));
+			}
 		},
 	});
 	app.post("/server-extensions/:extension/methods/:method", {

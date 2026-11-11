@@ -84,7 +84,8 @@ Up to 20 fields; the settings page renders a form and validates. Without it, the
 | `format` | strings only, `"origin"`: http(s) origin without path, query or credentials |
 | `min` / `max` | numbers only |
 | `options` | `select` only, 2–20 of `{value ≤60, label ≤60}` |
-| `readonly` | shown, never edited: the extension writes it (a status line); never validated, never saved by the form |
+| `readonly` | shown as plain text (not an input), never edited: the extension writes it (a status line, text or `{ko,en}`); a value it wrote appears live; never validated, never saved by the form |
+| `component` | PascalCase name of a component of this package (needs `ui-components`) that draws this field instead of the default control; the default control is used wherever it cannot run. See `trusted-ui.md` |
 | `when` | `{ "key": "role", "equals": "follower" }` (or a list of values): shown only while that **earlier, editable** field holds one of them. A hidden field keeps its value but is never required or an error |
 
 `resolveSettings(fields, raw)` → `{values, errors, ok}` is strict: fills defaults, drops undeclared keys, never coerces (`"5"` is not a number).
@@ -105,13 +106,14 @@ write in `settings.at`); `localStorage` is a cache. The server is the source of 
 |---|---|
 | `GET /extensions/settings` → `{settings:{[id]:{value,updatedAt}}}` | read all at start |
 | `GET /extensions/:id/settings` → `{value,updatedAt}` | read one (what an event triggers) |
-| `PUT /extensions/:id/settings` `{settings, at?, origin?}` → `{value,updatedAt,applied}` | save; `at` is when the user made the change |
+| `PUT /extensions/:id/settings` `{settings, at?, origin?, keys?}` → `{value,updatedAt,applied}` | save; `at` is when the user made the change. With `keys` (≤100 names) only those keys of the stored object are replaced (a listed key missing from `settings` is removed) and every other key stays; the settings forms send the keys of the declared, non-`readonly` fields. Without it the whole object is replaced |
 | `DELETE /extensions/:id` | delete (local delete proceeds on failure) |
 
 - **Start**: before enabling anything, `GET` with a 3 s timeout; server values win and refresh the cache. On failure, start from the cache and show a non-blocking notice.
 - **Save**: update locally, then `PUT` with `at`. On failure say it was saved on this browser only and retry on the next save.
 - **Last write wins**: a write older than the stored `updatedAt` is refused (`applied: false`) and the newer value comes back;
   the client adopts it. An offline edit keeps its own time, so it still wins over anything older once it is uploaded.
+- **Form saves keep what the form does not own**: an undeclared key, and a `readonly` value the extension wrote, survive a save. The form never sends a `readonly` field's value. A `keys` write is compared with the time of the last edit by a person, not with the extension's own `pi.settings.set`, so a status the extension wrote moments ago does not make a form save stale (`settings.at` holds `<updatedAt> <userAt>`; a file with one number reads as before).
 - **Live**: `extension_settings_updated` (`{id, action, updatedAt, origin}`) arrives on every device. The writing device skips
   its own echo by `origin`, and a change older than what the device holds is ignored.
 - **Secrets stay here**: `secret: true` fields and credential-looking keys are split out before the `PUT` and merged back on

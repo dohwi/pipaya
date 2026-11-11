@@ -8,7 +8,7 @@
  * `pt`), then English for a language other than Korean or English, then the text as written.
  * See docs/i18n.md.
  */
-import { getLang } from "../i18n";
+import { getLang, t } from "../i18n";
 import type { SettingField } from "./schema";
 
 /** Language tag -> { source text -> translation }. */
@@ -51,6 +51,8 @@ export function pickLang(value: LocalizedValue, lang = getLang()): string {
 /** A value an extension wrote for display: a plain string, or the same text in several languages. */
 export function displayValue(value: unknown, lang = getLang()): string {
 	if (typeof value === "string") return value;
+	if (typeof value === "number" && Number.isFinite(value)) return String(value);
+	if (typeof value === "boolean") return value ? t("켜짐") : t("꺼짐");
 	if (value && typeof value === "object" && !Array.isArray(value)) return pickLang(value as LocalizedValue, lang);
 	return "";
 }
