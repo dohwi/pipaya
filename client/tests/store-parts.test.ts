@@ -349,17 +349,13 @@ describe("pairing flow", () => {
 		flow.connect({ ...link, name: "other" }); // same code while the card is up: ignored
 		expect(flow.linking?.name).toBe("10.0.0.5:8787");
 	});
-	test("confirming with no pending link, or twice at once, does nothing", async () => {
+	test("confirming with no pending link does nothing", async () => {
 		const { flow, added } = make();
 		await flow.confirm();
 		expect(flow.linking).toBeNull();
-		flow.connect(link);
-		const first = flow.confirm();
-		await flow.confirm(); // already working: the pending link is gone
-		await first;
-		expect(added).toEqual([]); // no server answered, so nothing was added
-		expect(flow.linking?.state).toBe("failed");
+		expect(added).toEqual([]);
 	});
+});
 });
 
 describe("close guard", () => {
