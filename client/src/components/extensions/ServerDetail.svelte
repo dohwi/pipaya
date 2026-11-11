@@ -64,7 +64,6 @@
 <ExtensionPage id="extension-{srvKey(ext.name)}" name={ext.title ?? ext.name} sub={ext.name} {busy} {upgrade} {onback}>
 	{#snippet meta()}
 		{#if ext.version}<span class="facts">v{ext.version}</span>{/if}
-		<span class="facts">{t("서버에서 실행")}</span>
 	{/snippet}
 	{#snippet control()}
 		<Button variant="danger" size="sm" disabled={busy} aria-expanded={removing} onclick={onaskremove}>{t("삭제")}</Button>

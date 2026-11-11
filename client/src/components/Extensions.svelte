@@ -503,7 +503,6 @@
 					{#snippet control()}{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)] || !!tasks.busy.$all)}{/if}{/snippet}
 					{#snippet meta()}
 						{#if upd && ext.version}{@render updateMeta(ext.version, upd)}{:else if ext.version}<span class="facts">v{ext.version}</span>{/if}
-						<span class="facts">{t("서버에서 실행")}</span>
 						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
 					{/snippet}
 				</ExtensionRow>

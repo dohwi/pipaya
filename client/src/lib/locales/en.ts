@@ -824,7 +824,6 @@ export const en: Record<string, string> = {
 	/* ---- tool cards, work box ---- */
 	"준비 중": "Preparing",
 	"이 서버에 설치된 확장이 없습니다": "No extensions on this server",
-	"서버에서 실행": "Runs on the server",
 	"열기": "Open",
 	"서버 확장 필요": "Server extension needed",
 	"클라이언트 확장 ‘{name}’이 꺼져 있습니다. 켜야 제대로 동작합니다.": "The client extension “{name}” is off. Turn it on for this to work properly.",
