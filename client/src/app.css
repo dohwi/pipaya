@@ -1205,20 +1205,31 @@ dialog[data-closing]::backdrop {
 	}
 }
 
-/* Loading placeholder: a light band sweeps across a block while its content loads (sidebar, transcript). */
+/* Loading placeholder: grey bones in the shape of what is coming (rows, lines, bubbles); a light band sweeps across each one,
+   and `--sk-i` (the bone's order) delays it so the sweep travels down the block as one wave instead of flashing everywhere at once. */
 .skeleton-bar {
 	position: relative;
 	overflow: hidden;
-	border-radius: var(--radius);
-	background: var(--bg-elev);
+	border-radius: var(--radius-pill);
+	background: color-mix(in srgb, var(--text) 7%, transparent); /* translucent: reads on the page, the sidebar band and a bubble alike */
 }
 .skeleton-bar::after {
 	content: "";
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(90deg, transparent, var(--bg-hover), transparent);
+	background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
 	transform: translateX(-100%);
-	animation: skeleton-sweep 1.4s linear infinite;
+	animation: skeleton-sweep 1.6s var(--ease-std) infinite;
+	animation-delay: calc(var(--sk-i, 0) * 70ms);
+}
+/* a skeleton fades in after a beat, so a load that finishes quickly never flashes it */
+.skeleton-in {
+	animation: skeleton-in var(--motion-fast) var(--ease-std) 150ms both;
+}
+@keyframes skeleton-in {
+	from {
+		opacity: 0;
+	}
 }
 @keyframes skeleton-sweep {
 	to {
@@ -1359,6 +1370,9 @@ html.page-hidden .glow-working {
 
 @media (prefers-reduced-motion: reduce) {
 	.ripple {
+		display: none;
+	}
+	.skeleton-bar::after {
 		display: none;
 	}
 	.shimmer {
