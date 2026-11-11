@@ -328,6 +328,9 @@
 		line-height: 16px;
 		color: inherit;
 		flex: none;
+		/* "⋯" sits on the math axis, above the box's centre: measured at 4x its ink was 0.62px high; the 1px moves it down
+		   onto the row the items' values sit on (scripts/ui-ink.py, morebtn) */
+		padding-top: 1px;
 	}
 	.morebtn:focus-visible {
 		outline: 2px solid var(--accent);

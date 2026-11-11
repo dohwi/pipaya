@@ -68,6 +68,23 @@
 		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 48) */
 		border-radius: var(--radius-sm);
 	}
+	/* the toggle stays 14px wide (that width is what puts its chevron on the folder icon's column); on touch its hit area grows
+	   to 32x40 around it with an invisible ::after, so a finger does not have to land on a 14px strip. It reaches 9px into the
+	   lead icon's side, which is not a control of its own (the row's open button lies under both). */
+	@media (pointer: coarse) {
+		.gfold {
+			position: relative;
+		}
+		.gfold::after {
+			content: "";
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: 32px;
+			height: 40px;
+			translate: -50% -50%;
+		}
+	}
 	:global(:where(.side) .grprow.cur .title) {
 		font-weight: 600;
 	}

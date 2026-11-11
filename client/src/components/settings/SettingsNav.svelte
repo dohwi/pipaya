@@ -506,8 +506,22 @@
 			padding: 12px 4px;
 			border-right: 0;
 		}
-		.nav.phone button {
-			height: 40px; /* a touch row: 40 (the sidebar's 32 is for a mouse) */
+		/* a touch row: 40 (the sidebar's 32 is for a mouse). Not the fold arrow: it is a 24px box centred with `top: calc(50% - 12px)`,
+		   and at 40px tall it sat 8px below the row's centre */
+		.nav.phone button:not(.fold) {
+			height: 40px;
+		}
+		/* the fold arrow takes the place of the plain rows' `.go` arrow: same 16px glyph, same centre 20px from the row's edge, so
+		   every arrow in the list lines up; the count keeps its 8px gap to it */
+		.nav.phone button.fold {
+			right: 8px;
+		}
+		.nav.phone button.fold :global(svg) {
+			width: 16px;
+			height: 16px;
+		}
+		.nav.phone .row > .cbadge {
+			right: 36px;
 		}
 		.nav.phone .row.has > button:first-child {
 			padding-right: 60px;
