@@ -40,7 +40,7 @@ export interface LanguageInfo {
 }
 
 const BUILT_IN: Record<string, { name: string; dictionary: Record<string, string>; tag: string }> = {
-	ko: { name: "한국어", dictionary: {}, tag: "ko-KR" },
+	ko: { name: "한국어", dictionary: {}, tag: "ko-KR" }, // i18n-ok: a language is named in itself
 	en: { name: "English", dictionary: en, tag: "en-US" },
 };
 /** From the server (replaced as a whole on every sync). */

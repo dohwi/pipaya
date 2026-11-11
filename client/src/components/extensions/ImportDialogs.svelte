@@ -15,6 +15,7 @@
 	import Modal from "../ui/Modal.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import PermissionList from "./PermissionList.svelte";
+	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
 
 	/**
 	 * The two dialogs of importing an extension: the preview (what it is, what it asks for, where it will live) and,
@@ -85,7 +86,7 @@
 				<div class="rbody">
 					{#if r.pkg}
 						<div class="rpkg">
-							<strong>{r.pkg.manifest.name}</strong>
+							<strong>{manifestName(r.pkg.manifest)}</strong>
 							<span class="facts">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
 							<div class="tags">
 								{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
@@ -115,9 +116,9 @@
 				</div>
 				<div class="rbody">
 					<div class="rpkg">
-						<strong>{p.manifest.name}</strong>
+						<strong>{manifestName(p.manifest)}</strong>
 						<span class="facts">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
-						{#if p.manifest.description}<span class="rdesc">{p.manifest.description}</span>{/if}
+						{#if manifestDescription(p.manifest)}<span class="rdesc">{manifestDescription(p.manifest)}</span>{/if}
 						<div class="tags" aria-label={t("포함 기능")}>
 							{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
 						</div>

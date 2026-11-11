@@ -71,6 +71,8 @@ export interface ExtensionInfo {
 	description?: string;
 	/** `pipaya.descriptions` (language tag -> text). */
 	descriptions?: Record<string, string>;
+	/** `pipaya.translations`: language tag -> { source text -> translation } for the title and the settings form. */
+	translations?: Record<string, Record<string, string>>;
 	/** `pipaya.settings`: the fields of the form the settings page shows (same shape as a client manifest's `settings`; the client validates them). */
 	settings?: unknown[];
 	/** Id of the shared settings object (`GET/PUT /extensions/:id/settings`) behind `settings`. */
@@ -83,7 +85,7 @@ export interface ExtensionInfo {
 /** A client package a server extension carries is at most this big (the client's MAX_PACKAGE_BYTES plus slack for formatting). */
 export const MAX_CLIENT_PACKAGE_BYTES = 2 * 1024 * 1024;
 
-type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "settings"> & { clientFile?: string };
+type PackageMeta = Pick<ExtensionInfo, "companion" | "title" | "version" | "description" | "descriptions" | "translations" | "settings"> & { clientFile?: string };
 
 interface Loaded extends ExtensionInfo {
 	clientFile?: string;
@@ -114,6 +116,20 @@ const MAX_ENTRY_PAGE = 1000;
 
 const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.trim() && v.length <= max ? v : undefined);
 
+const LANG_TAG = /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/;
+/** `pipaya.translations`, bounded: at most 10 languages of 300 entries, each text at most 2000 characters. Bad entries are dropped. */
+function translationTable(raw: unknown): Record<string, Record<string, string>> | undefined {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+	const out: Record<string, Record<string, string>> = {};
+	for (const [tag, table] of Object.entries(raw).slice(0, 10)) {
+		if (!LANG_TAG.test(tag) || !table || typeof table !== "object" || Array.isArray(table)) continue;
+		const d: Record<string, string> = {};
+		for (const [k, v] of Object.entries(table).slice(0, 300)) { const t = str(v, 2000); if (t && k.trim() && k.length <= 2000) Object.defineProperty(d, k, { value: t, enumerable: true, writable: true, configurable: true }); }
+		if (Object.keys(d).length) out[tag] = d;
+	}
+	return Object.keys(out).length ? out : undefined;
+}
+
 /** What a folder extension's package.json tells the settings page (all optional, none of it trusted). */
 function packageMeta(json: any, dir?: string): PackageMeta {
 	const meta = json?.pipaya;
@@ -128,6 +144,7 @@ function packageMeta(json: any, dir?: string): PackageMeta {
 		for (const [k, v] of Object.entries(meta.descriptions).slice(0, 10)) { const t = str(v, 500); if (t && k.length <= 35) d[k] = t; }
 		if (Object.keys(d).length) out.descriptions = d;
 	}
+	const translations = translationTable(meta?.translations); if (translations) out.translations = translations;
 	if (Array.isArray(meta?.settings) && meta.settings.length <= 20) out.settings = meta.settings;
 	// `pipaya.client`: a built client package inside the folder (relative, never outside it).
 	const client = meta?.client;
@@ -267,9 +284,9 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, settings, settingsId, clientFile, error }) => ({
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, error }) => ({
 			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
-			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(settings ? { settings } : {}),
+			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(translations ? { translations } : {}), ...(settings ? { settings } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
 		}));
 	}

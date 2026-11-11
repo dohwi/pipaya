@@ -6,6 +6,7 @@
 	import Select from "../ui/Select.svelte";
 	import { describeSettingErrors, fillSettingDefaults, resolveSettings, settingShown, type SettingField } from "../../lib/extensions/schema";
 	import { collapseIn, collapseOut } from "../../lib/motion";
+	import { displayValue } from "../../lib/extensions/translations";
 
 	interface Props {
 		id: string;
@@ -80,7 +81,7 @@
 		<div class="field-row" class:invalid={!!error} class:readonly-field={field.readonly} in:collapseIn out:collapseOut>
 			{#if field.readonly}
 				<span class="name">{field.label}</span>
-				<p class="readonly-value" id={fieldId(field.key)}>{typeof draft[field.key] === "string" && draft[field.key] ? draft[field.key] : t("아직 없음")}</p>
+				<p class="readonly-value" id={fieldId(field.key)}>{displayValue(draft[field.key]) || t("아직 없음")}</p>
 				{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
 			{:else}
 			{#if field.type === "boolean"}

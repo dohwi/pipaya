@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { manifestName } from "../../lib/extensions/translations";
 	import { errorText } from "../../lib/api";
 	import IconButton from "../ui/IconButton.svelte";
 	import FilterChip from "../ui/FilterChip.svelte";
@@ -22,7 +23,7 @@
 	const uid = $props.id();
 	const titleId = `${uid}-title`;
 	const panelKey = (panel: ExtensionPanel) => `${panel.owner}:${panel.id}`;
-	const ownerName = (owner: string) => extensions.installed.find((entry) => entry.package.manifest.id === owner)?.package.manifest.name ?? owner;
+	const ownerName = (owner: string) => ((m) => (m ? manifestName(m) : owner))(extensions.installed.find((entry) => entry.package.manifest.id === owner)?.package.manifest);
 	const available = $derived(extensions.panels.filter((panel) =>
 		(panel.placement ?? "panel") === placement &&
 		extensions.installed.some((entry) => entry.package.manifest.id === panel.owner && entry.state === "active")

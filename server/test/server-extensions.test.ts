@@ -235,12 +235,12 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		const pkgDir = join(extDir, "described");
 		mkdirSync(pkgDir, { recursive: true });
 		const fields = [{ key: "language", type: "string", label: "Language" }];
-		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ version: "1.2.3", description: "d", pipaya: { title: "Described", descriptions: { ko: "설명", en: 5 }, settings: fields } }));
+		writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ version: "1.2.3", description: "d", pipaya: { title: "Described", descriptions: { ko: "설명", en: 5 }, translations: { ko: { Language: "언어", Bad: 1 }, "Not A Tag": { x: "y" } }, settings: fields } }));
 		writeFileSync(join(pkgDir, "index.js"), "export default () => {};");
 		await api("POST", "/server-extensions/reload");
 		const list = (await api("GET", "/server-extensions")).json.extensions as any[];
 		const e = list.find((x) => x.name === "described");
-		expect(e).toMatchObject({ title: "Described", version: "1.2.3", description: "d", descriptions: { ko: "설명" }, settings: fields, settingsId: "described" });
+		expect(e).toMatchObject({ title: "Described", version: "1.2.3", description: "d", descriptions: { ko: "설명" }, translations: { ko: { Language: "언어" } }, settings: fields, settingsId: "described" });
 		expect(list.find((x) => x.name === "demo")?.settings).toBeUndefined();
 		rmSync(pkgDir, { recursive: true });
 		await api("POST", "/server-extensions/reload");

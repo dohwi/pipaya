@@ -14,7 +14,7 @@
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../../lib/extensions/schema";
 	import type { StoredExtensionSettings } from "../../lib/extensions/settings-store";
-	import { serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
+	import { serverProvides, serverText, serverTitle, srvKey, type ServerExt } from "../../lib/server-extension";
 	import Marketplace from "./Marketplace.svelte";
 	import { fetchCompanion } from "../../lib/extensions/marketplace";
 	import { compareVersions, fetchCatalog, fetchPackage, DEFAULT_MARKETPLACE_URL, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
@@ -25,6 +25,7 @@
 	import ExtensionRow from "./ExtensionRow.svelte";
 	import UnreadableCard from "./UnreadableCard.svelte";
 	import { ExtensionTasks } from "../../lib/extension-tasks.svelte";
+	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
 
 	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
 	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
@@ -392,13 +393,13 @@
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
 	{@const needServer = extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
-	<ExtensionRow id="extension-{id}" name={entry.package.manifest.name} brief={entry.package.manifest.description} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
+	<ExtensionRow id="extension-{id}" name={manifestName(entry.package.manifest)} brief={manifestDescription(entry.package.manifest)} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
 		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="facts">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
 		{#snippet control()}
 			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all)}{/if}
 			<Switch
 				checked={on}
-				label={t("{name} 사용", { name: entry.package.manifest.name })}
+				label={t("{name} 사용", { name: manifestName(entry.package.manifest) })}
 				disabled={tasks.busy[id] || entry.state === "starting" || (!on && (extensions.safeMode || !!problem))}
 				describedby={problem ? `extension-blocked-${id}` : undefined}
 				onchange={(next) => (next ? enable(id) : disable(id))}
@@ -428,8 +429,8 @@
 			{tasks}
 			{drafts}
 			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
-			pairedServer={pairedServer ? (pairedServer.title ?? pairedServer.name) : undefined}
-			bundledBy={bundleOwner ? (bundleOwner.title ?? bundleOwner.name) : undefined}
+			pairedServer={pairedServer ? serverTitle(pairedServer) : undefined}
+			bundledBy={bundleOwner ? serverTitle(bundleOwner) : undefined}
 			needsServer={extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
 			onopenserver={pairedServer ? () => (selected = srvKey(pairedServer.name)) : undefined}
 			onback={closeDetail}
@@ -496,7 +497,7 @@
 		{#each serverSide as ext (ext.name)}
 				{@const upd = serverUpdate(ext)}
 				{@const half = missingClient(ext.companion)}
-				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverText(ext) || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
+				<ExtensionRow name={serverTitle(ext)} brief={ext.error || serverText(ext) || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
 						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
 					{/snippet}

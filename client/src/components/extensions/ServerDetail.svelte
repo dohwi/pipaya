@@ -4,7 +4,7 @@
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
-	import { flagVariable, serverFields, serverProvides, serverText, srvKey, type ServerExt } from "../../lib/server-extension";
+	import { flagVariable, serverFields, serverProvides, serverText, serverTitle, srvKey, type ServerExt } from "../../lib/server-extension";
 	import { t } from "../../lib/i18n";
 	import ExtensionPage from "./ExtensionPage.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
@@ -61,7 +61,7 @@
 	const missingClient = $derived(!!ext.companion && !client);
 </script>
 
-<ExtensionPage id="extension-{srvKey(ext.name)}" name={ext.title ?? ext.name} sub={ext.name} {busy} {upgrade} {onback}>
+<ExtensionPage id="extension-{srvKey(ext.name)}" name={serverTitle(ext)} sub={ext.name} {busy} {upgrade} {onback}>
 	{#snippet meta()}
 		{#if ext.version}<span class="facts">v{ext.version}</span>{/if}
 	{/snippet}

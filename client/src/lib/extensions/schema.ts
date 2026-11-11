@@ -110,6 +110,10 @@ export interface ExtensionPackage {
 		version: string;
 		sdkVersion: 1;
 		description?: string;
+		/** `description` in other languages, by tag (`{ "en": "..." }`). */
+		descriptions?: Record<string, string>;
+		/** Language tag -> { source text -> translation } for `name` and the settings form (see docs/i18n.md). */
+		translations?: Record<string, Record<string, string>>;
 		permissions: Permission[];
 		settings?: SettingField[];
 		settingsScope?: "local" | "server";
@@ -319,6 +323,27 @@ function settingField(value: unknown, path: string, keys: Map<string, SettingFie
 	return field;
 }
 
+/** `translations`: at most 10 languages of 300 entries; every key and text a non-empty string of at most 2000 characters. */
+function translationTable(input: unknown, path: string): Record<string, Record<string, string>> {
+	const raw = object(input, path, Object.keys(input && typeof input === "object" ? input : {}));
+	const tags = Object.keys(raw);
+	if (tags.length > 10) fail(path, "must contain at most 10 languages");
+	const out: Record<string, Record<string, string>> = {};
+	for (const tag of tags) {
+		if (!matches(LOCALE_TAG, tag)) fail(`${path}.${tag}`, "expected a lowercase language tag such as en or pt-br");
+		const entries = object(raw[tag], `${path}.${tag}`, Object.keys(raw[tag] && typeof raw[tag] === "object" ? raw[tag] as object : {}));
+		const keys = Object.keys(entries);
+		if (keys.length > 300) fail(`${path}.${tag}`, "must contain at most 300 entries");
+		const table: Record<string, string> = {};
+		for (const key of keys) {
+			if (!key.trim() || key.length > 2000) fail(`${path}.${tag}`, "keys must be non-empty and at most 2000 characters");
+			Object.defineProperty(table, key, { value: text(entries[key], `${path}.${tag}`, 2000), enumerable: true, writable: true, configurable: true });
+		}
+		out[tag] = table;
+	}
+	return out;
+}
+
 /** `when` names an earlier, editable field and values that field can hold, so a typo never hides a field for good. */
 function settingCondition(input: unknown, path: string, earlier: Map<string, SettingField>): SettingCondition {
 	const source = object(input, path, ["key", "equals"]);
@@ -504,7 +529,7 @@ function parseAssets(input: unknown, result: ExtensionPackage, permissions: Perm
 
 export function parsePackage(input: unknown): ExtensionPackage {
 	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "styles", "assets", "components", "mounts", "replaces", "code"]);
-	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "permissions", "settings", "settingsScope"]);
+	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "descriptions", "translations", "permissions", "settings", "settingsScope"]);
 	const id = text(manifest.id, "manifest.id", 80);
 	if (!matches(ID, id) || ["constructor", "prototype"].includes(id)) fail("manifest.id", "expected a safe lowercase extension ID");
 	const name = text(manifest.name, "manifest.name", 80);
@@ -522,6 +547,17 @@ export function parsePackage(input: unknown): ExtensionPackage {
 	if (Object.hasOwn(manifest, "description")) {
 		result.manifest.description = text(manifest.description, "manifest.description", 2000, false);
 	}
+	if (Object.hasOwn(manifest, "descriptions")) {
+		const raw = object(manifest.descriptions, "manifest.descriptions", Object.keys(manifest.descriptions && typeof manifest.descriptions === "object" ? manifest.descriptions : {}));
+		const out: Record<string, string> = {};
+		for (const tag of Object.keys(raw)) {
+			if (!matches(LOCALE_TAG, tag)) fail(`manifest.descriptions.${tag}`, "expected a lowercase language tag such as en or pt-br");
+			out[tag] = text(raw[tag], `manifest.descriptions.${tag}`, 2000);
+		}
+		if (Object.keys(out).length > 10) fail("manifest.descriptions", "must contain at most 10 languages");
+		result.manifest.descriptions = out;
+	}
+	if (Object.hasOwn(manifest, "translations")) result.manifest.translations = translationTable(manifest.translations, "manifest.translations");
 	if (Object.hasOwn(manifest, "settingsScope")) {
 		if (manifest.settingsScope !== "local" && manifest.settingsScope !== "server") fail("manifest.settingsScope", "expected local or server");
 		result.manifest.settingsScope = manifest.settingsScope;

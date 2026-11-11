@@ -21,6 +21,7 @@ import { ComponentHandlerSet, NEEDS_COMBO, appConflict, checkShortcutFree, norma
 import { THINKING_LEVELS } from "../types";
 import type { PaneAdapter } from "./panes";
 import { parseLayout } from "./layout-spec";
+import { manifestName } from "./translations";
 import type { WorkspaceAdapter } from "./workspace";
 import { SETTINGS_TABS, WORKSPACE_DIALOGS } from "./workspace-spec";
 import type { Edge } from "../layout";
@@ -807,7 +808,7 @@ export class ExtensionHost {
     entry.enabled = false; entry.state = "error"; entry.error = error.slice(0, 500);
     this.cleanup(id); this.applyThemes();
     try { this.save(); } catch { /* still tear down on persistence failure */ }
-    this.log(id, error); this.adapter?.notify(t("확장 중지: {name} · {error}", { name: entry.package.manifest.name, error: error.slice(0, 120) }));
+    this.log(id, error); this.adapter?.notify(t("확장 중지: {name} · {error}", { name: manifestName(entry.package.manifest), error: error.slice(0, 120) }));
   }
   /**
    * Language packs of an extension: usable at once on this device, and published to the server so every other client
@@ -1032,7 +1033,7 @@ export class ExtensionHost {
       authorize: () => { if (approvedKey !== approvalKey()) throw new LocalizedError(t("설정이 변경되어 다시 승인이 필요합니다")); localStorage.setItem(CONFIGURATION_GRANT + id, approvedKey); },
       confirm: async message => {
         approvedKey = approvalKey();
-        const approved = await adapter.confirm(`[${this.find(id).package.manifest.name}]\n${message}`);
+        const approved = await adapter.confirm(`[${manifestName(this.find(id).package.manifest)}]\n${message}`);
         if (this.configurations.get(id) !== client || !this.find(id).enabled) return false;
         return approved;
       },
@@ -1308,7 +1309,7 @@ export class ExtensionHost {
         const ask = this.adapter?.dialog;
         if (!ask) throw new LocalizedError(t("이 클라이언트는 대화상자를 지원하지 않습니다"));
         const s = object(args[0]); const kind = method.slice("dialog.".length) as "confirm" | "select" | "input";
-        const base = { owner: id, ownerName: this.find(id).package.manifest.name, title: string(s.title, 120), ...(s.message === undefined ? {} : { message: string(s.message, 2000) }) };
+        const base = { owner: id, ownerName: manifestName(this.find(id).package.manifest), title: string(s.title, 120), ...(s.message === undefined ? {} : { message: string(s.message, 2000) }) };
         let request: ExtensionDialogRequest;
         if (kind === "confirm") request = { ...base, kind, ...(s.confirmLabel === undefined ? {} : { confirmLabel: string(s.confirmLabel, 40) }) };
         else if (kind === "select") {
@@ -1561,14 +1562,14 @@ export class ExtensionHost {
         if (method === "notifications.remove") return adapter.remove(id, localId(args[0]));
         if (method === "notifications.register") return adapter.register(id, localId(args[0]), parseNotificationRule(args[1]));
         const spec = parseNotification(args[0]);
-        return adapter.send(id, { ...spec, title: `[${this.find(id).package.manifest.name}] ${spec.title}` });
+        return adapter.send(id, { ...spec, title: `[${manifestName(this.find(id).package.manifest)}] ${spec.title}` });
       }
       case "notifications.show": {
         this.require(id, "notifications"); const text = string(args[0], 300);
         const recent = (this.notificationTimes.get(id) ?? []).filter(at => Date.now() - at < 10000);
         if (recent.length >= 5) throw new LocalizedError(t("확장 알림은 10초에 최대 5개입니다"));
         this.notificationTimes.set(id, [...recent, Date.now()]);
-        this.adapter!.notify(`[${this.find(id).package.manifest.name}] ${text}`); return;
+        this.adapter!.notify(`[${manifestName(this.find(id).package.manifest)}] ${text}`); return;
       }
       case "settings.get": return this.effectiveSettings(id);
       case "storage.get": { this.require(id, "storage"); const key = string(args[0], 80); const data = object(JSON.parse(localStorage.getItem(STORE + id) ?? "{}")); return Object.hasOwn(data, key) ? data[key] : null; }
@@ -1615,7 +1616,7 @@ export class ExtensionHost {
     if (this.safeMode) return [];
     return this.shortcuts.filter(s => this.activeOwner(s.owner)).map(s => ({
       ...s, combo: this.shortcutCombo(s), override: this.shortcutKeys[`${s.owner}:${s.id}`] !== undefined,
-      ownerName: this.find(s.owner).package.manifest.name,
+      ownerName: manifestName(this.find(s.owner).package.manifest),
     }));
   }
   /** How many extension shortcuts the user changed, for "모두 기본값으로". */
@@ -1720,7 +1721,7 @@ export class ExtensionHost {
       if (!filter) continue;
       try {
         const out = await filter.run(current);
-        if (out && typeof out === "object" && "cancel" in out) return { cancel: `[${e.package.manifest.name}] ${out.cancel}` };
+        if (out && typeof out === "object" && "cancel" in out) return { cancel: `[${manifestName(e.package.manifest)}] ${out.cancel}` };
         if (typeof out === "string") current = out; else if (out) current = out.text;
       } catch { /* a broken filter must never keep the user from sending */ }
     }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { manifestName } from "../../lib/extensions/translations";
 	import IconButton from "../ui/IconButton.svelte";
 	import { t } from "../../lib/i18n";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
@@ -12,7 +13,7 @@
 	 * Positions are kept inside the window.
 	 */
 	const key = (p: ExtensionPanel) => `${p.owner}:${p.id}`;
-	const ownerName = (owner: string) => extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest.name ?? owner;
+	const ownerName = (owner: string) => ((m) => (m ? manifestName(m) : owner))(extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest);
 	const shown = $derived(extensions.panels.filter((p) => p.placement === "floating" && p.open && extensions.installed.some((e) => e.package.manifest.id === p.owner && e.state === "active")));
 	let boxes = $state<Record<string, Box>>({});
 	/** Stacking: the window touched last is on top. */

@@ -4,7 +4,7 @@ import {
 	resolveLang, setLang, setLangPref, setRemotePacks, systemLang, t, tc, translate,
 } from "../src/lib/i18n";
 import { en } from "../src/lib/locales/en";
-import { sourceKeys } from "../scripts/extract-i18n.cjs";
+import { bareKorean, sourceKeys } from "../scripts/extract-i18n.cjs";
 
 afterEach(() => {
 	setRemotePacks([]);
@@ -112,6 +112,10 @@ describe("dictionary", () => {
 	});
 	test("English plural markers are well formed", () => {
 		for (const english of Object.values(en)) expect(english).not.toMatch(/\{\w+#[^|}]*\}/);
+	});
+	test("every Korean text a person reads goes through t(), tc() or msg()", () => {
+		// a line that keeps Korean on purpose says why: `// i18n-ok: <why>`
+		expect(bareKorean()).toEqual([]);
 	});
 	test("English text is English (no leftover Hangul)", () => {
 		for (const [ko, english] of Object.entries(en)) expect(english, ko).not.toMatch(/[가-힣]/);

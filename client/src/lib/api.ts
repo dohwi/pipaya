@@ -35,7 +35,7 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 	WorkspaceInfo,
 	ThinkingLevel,
 } from "./types";
-import { t } from "./i18n";
+import { msg, t } from "./i18n";
 import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, type ServerUpdateStatus, type ServerVersions } from "./protocol";
 
 export class ApiError extends Error {
@@ -206,7 +206,7 @@ export class Api {
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {
@@ -562,9 +562,9 @@ const RAW_NETWORK = /^(failed to fetch|load failed|networkerror|network request 
  */
 /** Settings that can hold a model, for translating a provider_in_use error's role ids. */
 const ROLE_LABELS: Record<string, string> = {
-	compaction: "컨텍스트 압축 모델",
-	system: "시스템 모델",
-	image: "이미지 모델",
+	compaction: msg("컨텍스트 압축 모델"),
+	system: msg("시스템 모델"),
+	image: msg("이미지 모델"),
 };
 
 export function errorText(e: unknown, fallback?: string): string {
