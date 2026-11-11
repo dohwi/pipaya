@@ -194,18 +194,23 @@ describe("REST/SSE compaction contract", () => {
 		} finally { globalThis.fetch = original; }
 	});
 
-	test("subscribes to all compaction and context events", () => {
+	test("subscribes to all compaction and context events", async () => {
 		const original = globalThis.EventSource;
+		const originalFetch = globalThis.fetch;
 		const names: string[] = [];
 		globalThis.EventSource = class {
 			addEventListener(name: string) { names.push(name); }
 			close() {}
 		} as unknown as typeof EventSource;
+		// The stream opens once the one-time ticket has arrived.
+		globalThis.fetch = (async () => Response.json({ ticket: "t", expiresAt: 0 })) as unknown as typeof fetch;
 		try {
 			const api = new Api({ baseUrl: "http://example.test", token: "secret" });
-			api.subscribe({ onEvent() {} }, 0)();
+			const stop = api.subscribe({ onEvent() {} }, 0);
+			await Bun.sleep(0);
+			stop();
 			for (const name of ["compaction_started", "compaction_finished", "compaction_failed", "context_updated"]) expect(names).toContain(name);
-		} finally { globalThis.EventSource = original; }
+		} finally { globalThis.EventSource = original; globalThis.fetch = originalFetch; }
 	});
 });
 

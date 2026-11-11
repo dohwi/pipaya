@@ -434,23 +434,42 @@ export class Api {
 	answer = (sessionId: string, toolCallId: string, answer: string | string[]) =>
 		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, Array.isArray(answer) ? { answers: answer } : { answer });
 
+	/** A server from before stream tickets answers 404 once; after that the token goes in the URL as it always did. */
+	private ticketless = false;
+
 	/**
-	 * Subscribe to the global event stream. EventSource cannot set headers, so the token goes in the
-	 * query string. `after` is the replay cursor; the caller owns reconnects (see AppStore) because a
-	 * dropped stream also loses live-only deltas and needs a full resync rather than a replay.
+	 * What a connection the browser opens without headers (EventSource, WebSocket) puts in its URL, as a query fragment.
+	 * A one-time ticket where the server issues them, so the access token itself stays out of URLs (and with them out of
+	 * proxy logs); the token for a server that has no tickets yet. Throws when the server cannot be asked.
+	 */
+	async streamCredential(signal: AbortSignal = AbortSignal.timeout(8000)): Promise<string> {
+		if (!this.ticketless) {
+			try {
+				const { ticket } = await this.req<{ ticket: string }>("POST", "/stream-tickets", undefined, signal);
+				return `ticket=${encodeURIComponent(ticket)}`;
+			} catch (e) {
+				if (!(e instanceof ApiError) || e.status !== 404) throw e;
+				this.ticketless = true;
+			}
+		}
+		return `token=${encodeURIComponent(this.conn.token)}`;
+	}
+
+	/**
+	 * Subscribe to the global event stream. EventSource cannot set headers, so a one-time ticket goes in the
+	 * query string (see `streamCredential`). `after` is the replay cursor; the caller owns reconnects (see AppStore)
+	 * because a dropped stream also loses live-only deltas and needs a full resync rather than a replay.
 	 */
 	subscribe(
 		handlers: { onEvent: (e: PipayaEvent) => void; onOpen?: () => void; onError?: () => void },
 		after: number,
 	): () => void {
-		const url = `${this.conn.baseUrl}/events?after=${after}&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&token=${encodeURIComponent(this.conn.token)}`;
-		const es = new EventSource(url);
 		let dead = false;
-		es.onopen = () => handlers.onOpen?.();
-		es.onerror = () => {
+		let es: EventSource | null = null;
+		const fail = () => {
 			if (dead) return;
 			dead = true;
-			es.close();
+			es?.close();
 			handlers.onError?.();
 		};
 		const onMessage = (m: MessageEvent) => {
@@ -460,10 +479,16 @@ export class Api {
 				/* ignore malformed frame */
 			}
 		};
-		for (const t of EVENT_TYPES) es.addEventListener(t, onMessage as EventListener);
+		void this.streamCredential().then((credential) => {
+			if (dead) return;
+			es = new EventSource(`${this.conn.baseUrl}/events?after=${after}&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&${credential}`);
+			es.onopen = () => handlers.onOpen?.();
+			es.onerror = fail;
+			for (const t of EVENT_TYPES) es.addEventListener(t, onMessage as EventListener);
+		}, fail);
 		return () => {
 			dead = true;
-			es.close();
+			es?.close();
 		};
 	}
 }

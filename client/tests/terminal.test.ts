@@ -16,9 +16,9 @@ describe("terminal ids and urls", () => {
 		expect(isTerminalId("abc")).toBe(false);
 		expect(isTerminalId(null)).toBe(false);
 	});
-	test("the socket url swaps the scheme and carries the token", () => {
-		expect(terminalSocketUrl("https://h:1", "a b", "term_x")).toBe(`wss://h:1/terminals/term_x/ws?protocol=${PROTOCOL_VERSION}&token=a%20b`);
-		expect(terminalSocketUrl("http://h", "t", "x").startsWith("ws://h/")).toBe(true);
+	test("the socket url swaps the scheme and carries the credential it is given", () => {
+		expect(terminalSocketUrl("https://h:1", "ticket=abc", "term_x")).toBe(`wss://h:1/terminals/term_x/ws?protocol=${PROTOCOL_VERSION}&ticket=abc`);
+		expect(terminalSocketUrl("http://h", "token=t", "x").startsWith("ws://h/")).toBe(true);
 	});
 	test("platform names", () => {
 		expect(platformName("win32")).toBe("Windows");

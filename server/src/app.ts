@@ -58,6 +58,7 @@ import { NotificationService, type PushTransports } from "./notifications.ts";
 import { UnreadTracker } from "./unread.ts";
 import { registerNotificationRoutes } from "./notification-routes.ts";
 import { createCorsPolicy, redactUrl } from "./security.ts";
+import { StreamTickets } from "./stream-tickets.ts";
 import { createPushTransports } from "./push.ts";
 import { ExtensionHost } from "./extensions/host.ts";
 import { registerServerExtensionRoutes } from "./extensions/routes.ts";
@@ -259,7 +260,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
-			// SSE/WebSocket clients pass ?token=; keep it out of request logs.
+			// SSE/WebSocket clients pass ?ticket= (or ?token=, older ones); keep both out of request logs.
 			serializers: {
 				req: (req) => ({
 					method: req.method,
@@ -285,6 +286,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	await server.register(cors, { origin: (origin, cb) => cb(null, !origin || corsPolicy.allows(origin)), methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] });
 
 	const deviceTokens = new DeviceTokens(db);
+	const streamTickets = new StreamTickets();
+	/** The paired device a request was made by; absent for the admin token. */
+	const deviceOf = new WeakMap<object, string>();
 	const expected = Buffer.from(cfg.token);
 	const tokenMatches = (given: string | undefined) => {
 		if (!given) return false;
@@ -307,13 +311,25 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		const bearer = bearerOf(req.headers.authorization);
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
 		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
-		const query = (req.query as { token?: string } | undefined)?.token;
-		const given = bearer ?? (browserStream ? query : undefined);
-		if (tokenMatches(given)) return; // the admin token
-		const device = deviceTokens.verify(given);
-		if (!device) throw new HttpError(401, "unauthorized", "missing or invalid token");
+		const query = browserStream ? (req.query as { token?: string; ticket?: string } | undefined) : undefined;
+		let device: string | null;
+		if (bearer === undefined && typeof query?.ticket === "string") {
+			// A one-time ticket (stream-tickets.ts) keeps the access token itself out of the URL.
+			const holder = streamTickets.redeem(query.ticket);
+			if (!holder) throw new HttpError(401, "unauthorized", "missing or invalid token");
+			if (holder.device === null) return; // asked for with the admin token
+			// The device may have been revoked between asking for the ticket and using it.
+			if (!deviceTokens.has(holder.device)) throw new HttpError(401, "unauthorized", "missing or invalid token");
+			device = holder.device;
+		} else {
+			const given = bearer ?? query?.token;
+			if (tokenMatches(given)) return; // the admin token
+			device = deviceTokens.verify(given);
+			if (!device) throw new HttpError(401, "unauthorized", "missing or invalid token");
+		}
 		if (isAdminOnlyPath(req.method, path ?? "")) throw new HttpError(403, "admin_only", "this needs the server's admin token, not a paired device's");
 		deviceTokens.track(device, req.raw.socket);
+		deviceOf.set(req.raw, device);
 	});
 
 	server.setErrorHandler((err: Error & { statusCode?: number; code?: string }, req, reply) => {
@@ -334,6 +350,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			tokenMatches(bearerOf(req.headers.authorization)) || deviceTokens.verify(bearerOf(req.headers.authorization))
 				? { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL, uptimeMs: Date.now() - startedAt, runningSessions: sessions.runningCount, subscribers: bus.subscriberCount }
 				: { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL },
+	});
+
+	// A browser cannot send the Authorization header on EventSource/WebSocket: it asks for a one-time ticket here and
+	// puts that in the URL instead of the token.
+	app.post("/stream-tickets", {
+		schema: { response: { 200: Type.Object({ ticket: Type.String(), expiresAt: Type.Integer() }), ...S.errors(401) } },
+		handler: async (req) => streamTickets.issue({ device: deviceOf.get(req.raw) ?? null }),
 	});
 
 	// ── self-update: the client offers "update the server too" when it updates itself ──
@@ -618,7 +641,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerMcpRoutes(server, mcp);
 	registerExtensionSettingsRoutes(server, extensionSettings, bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);
-	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens);
+	registerPairingRoutes(server, new Pairing((label) => deviceTokens.issue(label).token), deviceTokens, (id) => streamTickets.revokeDevice(id));
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
 	await registerWebSocket(server, { bus, sessions, questions }, opts.websocket);
 	registerTerminalRoutes(server, terminals);

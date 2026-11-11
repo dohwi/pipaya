@@ -11,6 +11,7 @@
 	import { isTouch } from "../lib/format";
 	import { applyMods, keySequence, touchLines, type Mods } from "../lib/terminal-keys";
 	import { appTakesKey, clipboardKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../lib/terminal";
+	import { Api } from "../lib/api";
 
 	/**
 	 * The screen of one server terminal. Loaded on demand (xterm.js stays out of the start-up chunk). The shell runs on
@@ -81,6 +82,8 @@
 	onMount(() => {
 		const conn = app.conn;
 		if (!host || !conn) return;
+		// Bound to the server this terminal lives on, like `conn`: switching servers must not move its socket.
+		const api = new Api(conn);
 		const fit = new FitAddon();
 		const xt = new Terminal({
 			fontFamily: fontStack(),
@@ -145,10 +148,24 @@
 			refit();
 		}, () => {});
 
-		function connect() {
+		const again = () => {
+			retry = setTimeout(() => void connect(), delay);
+			delay = Math.min(delay * 2, 10_000);
+		};
+		async function connect() {
 			if (disposed) return;
 			status = "connecting";
-			const sock = new WebSocket(terminalSocketUrl(conn!.baseUrl, conn!.token, terminal.id));
+			// A one-time ticket, so the access token is not part of the socket's URL.
+			let credential: string;
+			try {
+				credential = await api.streamCredential();
+			} catch {
+				if (disposed) return;
+				status = "offline";
+				return again();
+			}
+			if (disposed) return;
+			const sock = new WebSocket(terminalSocketUrl(conn!.baseUrl, credential, terminal.id));
 			sock.binaryType = "arraybuffer";
 			ws = sock;
 			sock.onmessage = (m) => {
@@ -181,8 +198,7 @@
 				ws = null;
 				if (status === "exited") return;
 				status = "offline";
-				retry = setTimeout(connect, delay);
-				delay = Math.min(delay * 2, 10_000);
+				again();
 			};
 		}
 
@@ -298,7 +314,7 @@
 		host.addEventListener("touchend", te, opts);
 		host.addEventListener("touchcancel", te, opts);
 		refit();
-		connect();
+		void connect();
 		if (focused) xt.focus();
 
 		return () => {

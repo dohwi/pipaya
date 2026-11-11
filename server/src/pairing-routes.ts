@@ -18,7 +18,7 @@ export const isAdminOnlyPath = (method: string, path: string) =>
 	// Replacing the server's own code and restarting it is the owner's call alone.
 	path === "/server/update";
 
-export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing, devices: DeviceTokens): void {
+export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing, devices: DeviceTokens, onRevoke: (id: string) => void = () => {}): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	app.post("/pairing", {
 		schema: { response: { 200: Type.Object({ code: Type.String(), expiresAt: Type.Integer() }), ...errors(401) } },
@@ -46,6 +46,7 @@ export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing,
 	app.delete("/devices/tokens/:id", {
 		schema: { params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }), response: { 200: Ok, ...errors(401, 403, 404) } },
 		handler: async (req) => {
+			onRevoke(req.params.id);
 			if (!devices.revoke(req.params.id)) throw new HttpError(404, "not_found", "no such device token");
 			return { ok: true };
 		},

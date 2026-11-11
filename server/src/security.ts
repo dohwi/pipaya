@@ -50,7 +50,7 @@ export function createCorsPolicy(extra: string | undefined): CorsPolicy {
 	};
 }
 
-/** Replace `token=` query values so credentials passed via URL (SSE/WebSocket) never reach logs. */
+/** Replace `token=` and `ticket=` query values so credentials passed via URL (SSE/WebSocket) never reach logs. */
 export function redactUrl(url: string): string {
-	return url.replace(/([?&]token=)[^&#]*/gi, "$1[redacted]");
+	return url.replace(/([?&](?:token|ticket)=)[^&#]*/gi, "$1[redacted]");
 }
