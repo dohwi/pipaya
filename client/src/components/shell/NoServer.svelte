@@ -181,11 +181,20 @@
 		font-size: var(--fs-sm);
 		color: var(--text-dim);
 	}
+	/* the 20px line is what shows; an invisible 40px band around it is what a finger hits */
 	.need summary {
+		position: relative;
 		cursor: pointer;
 		line-height: 20px;
 		color: var(--text);
 		font-weight: 600;
+	}
+	.need summary::after {
+		content: "";
+		position: absolute;
+		inset: 50% 0 auto;
+		height: 40px;
+		translate: 0 -50%;
 	}
 	.need .body {
 		display: flex;

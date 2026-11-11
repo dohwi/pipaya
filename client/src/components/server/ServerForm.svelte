@@ -20,7 +20,7 @@
 	import ServerUpdate from "./ServerUpdate.svelte";
 	import LocalServerSettings from "./LocalServerSettings.svelte";
 	import { app, defaultServerUrl } from "../../lib/store.svelte";
-	import { Api, describeConnectError, errorText, normalizeUrl, verifyServer } from "../../lib/api";
+	import { Api, ApiError, describeConnectError, errorText, normalizeUrl, verifyServer } from "../../lib/api";
 	import type { WorkdirInfo } from "../../lib/types";
 	import { isPlainHttpOnOpenNetwork } from "../../lib/pairing";
 
@@ -86,18 +86,26 @@
 			.catch((e) => (wdError = errorText(e)));
 	});
 
+	let urlEl = $state<HTMLInputElement>();
+	let tokenEl = $state<HTMLInputElement>();
+	// The submit button is disabled while checking, which drops its focus to <body>: a keyboard user would start over
+	// from the top. Focus goes to the field the message is about (a rejected token, else the address).
+	const refocus = (el: HTMLInputElement | undefined) => queueMicrotask(() => el?.focus({ preventScroll: false }));
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = "";
 		const baseUrl = normalizeUrl(url);
-		if (!baseUrl) return void (error = t("서버 주소를 입력하세요."));
-		if (!token.trim()) return void (error = t("액세스 토큰을 입력하세요."));
+		if (!baseUrl) return void ((error = t("서버 주소를 입력하세요.")), refocus(urlEl));
+		if (!token.trim()) return void ((error = t("액세스 토큰을 입력하세요.")), refocus(tokenEl));
 		busy = true;
 		try {
 			await verifyServer(baseUrl, token.trim());
 		} catch (err) {
 			error = describeConnectError(err, baseUrl);
 			busy = false;
+			const status = err instanceof ApiError ? err.status : 0;
+			refocus(status === 401 || status === 403 || (err instanceof ApiError && err.code === "auth_throttled") ? tokenEl : urlEl);
 			return;
 		}
 		busy = false;
@@ -183,6 +191,7 @@
 				<FormField label={t("서버 주소")}>
 					<input
 						class="field mono"
+						bind:this={urlEl}
 						bind:value={url}
 						placeholder="http://100.x.x.x:8787"
 						inputmode="url"
@@ -195,6 +204,7 @@
 					<div class="tokenrow">
 						<input
 							class="field mono"
+							bind:this={tokenEl}
 							type={showToken ? "text" : "password"}
 							bind:value={token}
 							placeholder={t("server/data/token 의 내용")}

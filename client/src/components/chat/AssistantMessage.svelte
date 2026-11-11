@@ -236,6 +236,10 @@
 		margin-top: 4px;
 		/* 8px glyph inset less the 2px the first box is pulled in: the first glyph lands on the text's left edge */
 		margin-left: -6px;
+	}
+	/* Only the buttons rest faded until the answer is hovered: the whole line used to, and the model / token text in it
+	   then read 2.3:1 (light theme). The text stays --text-faint at full strength (6:1); the buttons stay quiet. */
+	.foot :global(.iconbtn) {
 		opacity: 0.55;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
@@ -244,9 +248,15 @@
 	.foot :global(.iconbtn) {
 		margin-inline: -2px;
 	}
-	.row:hover .foot,
-	.foot:has(:focus-visible) {
+	.row:hover .foot :global(.iconbtn),
+	.foot:has(:focus-visible) :global(.iconbtn) {
 		opacity: 1;
+	}
+	/* no hover on a touch screen: full strength there, as the user message's actions are (UserMessage.svelte) */
+	@media (pointer: coarse) {
+		.foot :global(.iconbtn) {
+			opacity: 1;
+		}
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
 	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */

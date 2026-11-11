@@ -157,6 +157,22 @@
 		height: 15px;
 		stroke-width: 2.6;
 	}
+	/* touch: the row's other buttons get a 20 x 40 hit box (Sidebar.svelte, .dirnew.tap); the "⋯" was left at its 20px
+	   circle, a quarter of what a finger needs. Same box here, drawn nowhere. */
+	@media (pointer: coarse) {
+		.more {
+			position: relative;
+		}
+		.more::after {
+			content: "";
+			position: absolute;
+			left: 0;
+			top: 50%;
+			width: 100%;
+			height: 40px;
+			translate: 0 -50%;
+		}
+	}
 	/* Where a carried session would land among its siblings: the neighbours step aside (the row grows a 24px gap on that
 	   side, animated) and the line sits in the middle of it. The pseudo-element fills the whole gap and takes the pointer,
 	   so the row under the pointer stays the same one while it moves (otherwise the gap would push the row away and the

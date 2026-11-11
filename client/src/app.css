@@ -265,12 +265,16 @@
 	--mark-file: #10b981;
 	--mark-header: #b45309; /* amber-700: the peer header label and tint on light surfaces (dark uses #fcd34d) */
 	--mark-mention: #0284c7;
-	--info: #1d6fe0;
+	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set
+	   for 4.5:1 or better as text on every light surface, its own soft tint included (worst case: on --bg-active under
+	   the tint). They were 2.5 (ok) to 3.6 (danger): "사용 가능", "오류", "꺼짐" read faint. The soft tints keep the old,
+	   brighter hue, which only tints. White text on each is 5.9:1 or better. */
+	--info: #1960c2;
 	--pinned: #000000;
-	--ok: #12a36a;
+	--ok: #0d734b;
 	--ok-fg: #ffffff;
-	--warn: #b86e00;
-	--danger: #d6303d;
+	--warn: #905600;
+	--danger: #bd2531;
 	--info-soft: rgba(29, 111, 224, 0.1);
 	--ok-soft: rgba(18, 163, 106, 0.1);
 	--warn-soft: rgba(184, 110, 0, 0.1);

@@ -212,8 +212,10 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
+	/* the field fills its 36px row: at its natural 24px a tap on the row's edge missed it */
 	.sw input {
 		flex: 1;
+		align-self: stretch;
 		min-width: 0;
 		border: 0;
 		outline: 0;

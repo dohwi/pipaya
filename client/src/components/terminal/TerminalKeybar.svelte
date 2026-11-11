@@ -67,9 +67,22 @@
 	// Edge fades only where more keys are hidden, so the bar shows that it scrolls
 	let strip: HTMLDivElement | undefined = $state();
 	let more = $state({ left: false, right: false });
+	/* px of the strip's right end to hide. The strip stops wherever the pinned keys leave it, so it could end on a sliver of
+	   a key, or on a divider right after a whole key, both next to the pinned divider: two lines around an empty slot.
+	   When the key at the edge shows less than 16px, everything after the last whole key is hidden (dividers too) and the
+	   fade alone says there is more; 16px or more of a key is left visible, which itself says "scroll". */
+	let cut = $state(0);
 	function measure() {
 		if (!strip) return;
-		more = { left: strip.scrollLeft > 4, right: strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 4 };
+		// local first: the effect below runs this, and reading `more` back there would make it depend on what it writes
+		const right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 4;
+		more = { left: strip.scrollLeft > 4, right };
+		const box = strip.getBoundingClientRect();
+		const kids = [...strip.children].map((el) => ({ sep: el.classList.contains("sep"), r: el.getBoundingClientRect() }));
+		const edgeKey = kids.find((k) => !k.sep && k.r.left < box.right - 0.5 && k.r.right > box.right + 0.5);
+		const showsEnough = edgeKey && box.right - edgeKey.r.left >= 16;
+		const lastWhole = kids.filter((k) => !k.sep && k.r.right <= box.right + 0.5 && k.r.left >= box.left - 0.5).pop();
+		cut = right && !showsEnough && lastWhole ? Math.max(0, Math.floor(box.right - lastWhole.r.right)) : 0;
 	}
 	$effect(() => {
 		if (!strip) return;
@@ -88,7 +101,7 @@
 
 <div class="bar" role="toolbar" aria-label={t("터미널 보조 키")}>
 	<div class="strip" class:fade-l={more.left} class:fade-r={more.right}>
-		<div class="keys" bind:this={strip} onscroll={measure}>
+		<div class="keys" bind:this={strip} onscroll={measure} style:clip-path={cut ? `inset(0 ${cut}px 0 0)` : undefined}>
 			{#if scrolledUp}
 				<button class="k icon accent" aria-label={t("맨 아래로")} title={t("맨 아래로")} onpointerdown={noFocus} onclick={onbottom}><Icon name="arrow-down" /></button>
 			{/if}
@@ -177,6 +190,13 @@
 	}
 	.sep.solid {
 		margin: 0;
+	}
+	/* a phone: the 4 pinned arrows and the keyboard button took 220px, leaving the scrolling keys 128px on a 390px screen
+	   (Esc, Tab and 7px of Ctrl). 36px arrow keys give that strip 20 more: Ctrl shows enough to read as "more this way". */
+	@media (max-width: 420px) {
+		.bar > .k.icon {
+			min-width: 36px;
+		}
 	}
 	.k {
 		flex: none;
