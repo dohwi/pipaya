@@ -98,3 +98,106 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		border-radius: var(--radius-control);
+		margin: 1px -8px 1px 4px; /* the row's highlight runs 8px past its content (the padding below gives it back), so the "⋯" and pin keep their column (x 256) yet are not glued to the highlight's edge */
+		padding-right: 8px;
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.item:hover {
+		background: var(--bg-hover);
+	}
+	.item.active {
+		background: var(--bg-active);
+	}
+	.item.active:hover {
+		background: transparent;
+	}
+	.acts {
+		display: none;
+	}
+	.item:hover .acts,
+	.item:has(:focus-visible) .acts,
+	.item.menuopen .acts {
+		display: flex;
+	}
+	@media (pointer: coarse) {
+		.acts {
+			display: flex;
+		}
+		.item:not(.active):not(.cur):not(.menuopen) .acts {
+			display: none;
+		}
+	}
+	/* the three dots: same box and right edge as the + on the directory row above */
+	.more {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 20px;
+		height: 20px;
+		margin-right: 0; /* tab rows end where folder rows do (no right margin), so this centres on x 256 like the "+" above */
+		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
+		color: var(--text-faint);
+		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
+	}
+	.more:hover,
+	.more.on,
+	.more:focus-visible {
+		background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
+		color: var(--text);
+	}
+	.more :global(svg) {
+		width: 15px;
+		height: 15px;
+		stroke-width: 2.6;
+	}
+	/* Where a carried session would land among its siblings: the neighbours step aside (the row grows a 24px gap on that
+	   side, animated) and the line sits in the middle of it. The pseudo-element fills the whole gap and takes the pointer,
+	   so the row under the pointer stays the same one while it moves (otherwise the gap would push the row away and the
+	   hover would flicker); its line is a 2px gradient. */
+	.item {
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			margin var(--motion-fast) var(--ease-std);
+	}
+	.item.before {
+		margin-top: 25px; /* 24 gap + the usual 1px between rows */
+	}
+	.item.after {
+		margin-bottom: 25px; /* 24 gap + the usual 1px between rows */
+	}
+	.item.before::before,
+	.item.after::after {
+		left: 8px;
+		right: 16px; /* 8 from where the content ends (the row's highlight runs 8px past it) */
+		height: 24px;
+		border-radius: 0;
+		background: linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat;
+		pointer-events: auto;
+	}
+	.item.before::before {
+		top: -24px;
+	}
+	.item.after::after {
+		bottom: -24px;
+	}
+	/* the row in the air: it keeps its place, faded (dropping it on itself does nothing) */
+	.item.carried {
+		opacity: 0.45;
+	}
+	/* the row being pulled onto: pairs up with whatever is dropped */
+	.item.over {
+		background: var(--accent-soft);
+		box-shadow: inset 0 0 0 1.5px var(--accent);
+	}
+	.item.grabbable {
+		cursor: grab;
+		-webkit-tap-highlight-color: transparent;
+	}
+</style>

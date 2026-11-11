@@ -53,3 +53,34 @@
 		{@render body(pinned)}
 	</RowOpen>
 </RowShell>
+
+<style>
+	/* tree line: a rule down from the book's centre; each pane gets a short elbow with a 3px corner (near right angle) (the last one ends the rule) */
+	.branch {
+		position: absolute;
+		left: 46.25px; /* the 1.5px stroke's centre (x 21 + 46.25 + 0.75) sits on the book icon's column, x 68 */
+		top: 0;
+		bottom: 0;
+		width: 12px;
+		pointer-events: none;
+	}
+	.branch::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: -1px; /* rows are 1px apart (their margin): run the rule across that gap so it never breaks */
+		bottom: -1px;
+		border-left: 1.5px solid var(--tree-line);
+	}
+	.branch::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: calc(50% - 8px);
+		width: 100%;
+		height: 8px;
+		border-left: 1.5px solid var(--tree-line);
+		border-bottom: 1.5px solid var(--tree-line);
+		border-bottom-left-radius: 3px;
+	}
+</style>
