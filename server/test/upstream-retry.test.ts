@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
-import { withUpstreamRetry } from "../src/upstream-retry.ts";
+import { retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
 
 const msg = (over: Partial<AssistantMessage>): AssistantMessage =>
 	({ role: "assistant", content: [], stopReason: "stop", timestamp: 0, ...over }) as AssistantMessage;
@@ -55,4 +55,21 @@ test("an abort while waiting ends the run as aborted", async () => {
 	const fn = withUpstreamRetry((() => failing("503 Service Unavailable")) as any, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100, sleep: async () => ac.abort() });
 	const result = await (fn as any)({}, {}, { signal: ac.signal }).result();
 	expect(result.stopReason).toBe("aborted");
+});
+
+test("retryReason keeps the cause, drops secrets and markup, and caps the length", () => {
+	expect(retryReason("502 <html><title>502 Bad Gateway</title></html>")).toBe("502 502 Bad Gateway");
+	expect(retryReason("connect ECONNREFUSED http://user:pw@127.0.0.1:9/v1/chat?api_key=abc#x")).toBe("connect ECONNREFUSED http://127.0.0.1:9/v1/chat");
+	expect(retryReason("401 Authorization: Bearer sk-abcdefghijklmnop1234")).not.toContain("abcdefgh");
+	expect(retryReason("x-api-key: supersecretvalue failed")).not.toContain("supersecret");
+	expect(retryReason(undefined)).toBe("");
+	expect(retryReason("a".repeat(500)).length).toBe(200);
+});
+
+test("onRetry receives the failure message", async () => {
+	const seen: string[] = [];
+	let n = 0;
+	const fn = withUpstreamRetry((() => (++n < 2 ? failing("503 Service Unavailable") : ok())) as any, { ...opts([]), onRetry: (_a, _m, _d, m) => void seen.push(m) });
+	await call(fn).result();
+	expect(seen).toEqual(["503 Service Unavailable"]);
 });
