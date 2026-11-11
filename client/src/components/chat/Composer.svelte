@@ -16,6 +16,8 @@
 	import { DebouncedList } from "../../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../../lib/prompt-history";
 	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../../lib/caret-line";
+	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
+	import { Ime } from "../../lib/composer/ime";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../../lib/slash-menu";
 	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
@@ -46,6 +48,9 @@
 	import { msg, t } from "../../lib/i18n";
 	import { voice } from "../../lib/voice.svelte";
 
+	const uid = $props.id();
+	const menuListId = `${uid}-menu`;
+	const menuOptionId = (i: number) => `${uid}-menu-opt-${i}`;
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
 	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
@@ -67,20 +72,12 @@
 	let reply = $state<{ text: string; who?: string } | null>(null);
 	const replyPreview = $derived(reply ? reply.text.replace(/\s+/g, " ").trim() : "");
 	let dragging = $state(false);
-	let composing = false;
+	const ime = new Ime();
 
 	const running = $derived(chat?.running ?? false);
 	const compacting = $derived(chat?.compacting ?? false);
 	/** Most recent prompt of this conversation, shown in the empty input: glows softly while it runs, grey once done. */
-	const lastPrompt = $derived.by(() => {
-		const items = chat?.items;
-		if (!items) return "";
-		for (let i = items.length - 1; i >= 0; i--) {
-			const it = items[i]!;
-			if (it.kind === "user") return it.text.replace(/\s+/g, " ").trim();
-		}
-		return "";
-	});
+	const lastPrompt = $derived(lastPromptOf(chat?.items));
 	/** Idle only: while a run works the textarea shows the running hint, so the last prompt never reads as an unsent draft. */
 	const promptHint = $derived(!compacting && !running && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
@@ -437,16 +434,11 @@
 	const runningHint = $derived(queueKey ? t("작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령", { key: queueKey }) : t("작업 중 · Enter 끼워 넣기 · / 명령"));
 
 	// ── Up/Down in the input walks back through the prompts already sent in this conversation ──
-	const sentPrompts = $derived.by(() => {
-		const out: string[] = [];
-		for (const it of chat?.items ?? []) if (it.kind === "user" && it.text.trim() && out[out.length - 1] !== it.text) out.push(it.text);
-		return out;
-	});
+	const sentPrompts = $derived(sentPromptsOf(chat?.items));
 	const history = newHistory();
 	/** Returns true when the key was used to move through the history. */
 	function browseHistory(e: KeyboardEvent): boolean {
-		if (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || composing || e.isComposing || !ta) return false;
-		if (ta.selectionStart !== ta.selectionEnd || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return false;
+		if (!ta || !historyKey(e, ime.composing, ta.selectionStart === ta.selectionEnd)) return false;
 		// soft-wrapped text: the caret may be below/above the first/last visual line even without a "\n"
 		if (e.key === "ArrowUp" ? !caretOnFirstVisualLine(ta) : !caretOnLastVisualLine(ta)) return false;
 		const step = stepHistory(history, e.key, text, text.slice(0, ta.selectionStart), text.slice(ta.selectionEnd), sentPrompts);
@@ -459,7 +451,7 @@
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (slashOpen && !composing && !e.isComposing) {
+		if (slashOpen && !ime.composing && !e.isComposing) {
 			const act = menuKey(e.key, { index: slashIndex, count: menuItems.length, kind: menuKind, shift: e.shiftKey, touch: isTouch() });
 			if (act?.do === "move") {
 				e.preventDefault();
@@ -497,42 +489,31 @@
 		// Phones: Enter inserts a newline, the buttons send. Desktop: Enter sends.
 		if (isTouch()) return;
 		const combo = buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
-		if (composing || e.isComposing) {
+		if (ime.composing || e.isComposing) {
 			// IME (Korean etc.): this Enter only commits the last syllable. Remember it and send once the composition ends,
 			// so the user does not have to press Enter twice.
-			if (!e.shiftKey) pendingEnter = combo;
+			if (!e.shiftKey) ime.deferEnter(combo);
 			return;
 		}
 		enterAction(e, combo);
 	}
 
-	/** Enter pressed while composing: the combo to act on when `compositionend` arrives. */
-	let pendingEnter: string | null = null;
 	function onCompositionEnd(e: CompositionEvent) {
-		composing = false;
-		const combo = pendingEnter;
-		pendingEnter = null;
-		// Hangul only: there Enter just ends the last syllable. In Japanese/Chinese Enter confirms a conversion and
-		// a second Enter sends, so those keep their two presses.
-		if (combo === null || !/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(e.data ?? "")) return;
+		const combo = ime.end(e.data);
+		if (combo === null) return;
 		// The committed text lands in `text` after this event; act on the next tick.
 		setTimeout(() => enterAction(null, combo), 0);
 	}
 
 	function enterAction(e: KeyboardEvent | null, combo: string) {
-		// Mid-run: plain Enter always steers; the user's queue shortcut (Alt+Enter by default) queues for afterwards.
-		if (running && combo !== "Enter" && combo === app.prefs.bindings.queueMessage) {
-			e?.preventDefault();
-			void during("queue");
-			return;
-		}
-		if (e?.shiftKey) return;
-		e?.preventDefault();
-		// Commands run locally even mid-run (/stop, ...).
 		const parsed = parseSlash(text);
-		if (parsed) return void runSlash(parsed.cmd, parsed.arg);
-		if (rejectUnknownCommand()) return;
-		if (running) void during("steer");
+		const plan = enterPlan({ running, combo, queueCombo: app.prefs.bindings.queueMessage, shift: !!e?.shiftKey, isCommand: !!parsed, isUnknownCommand: isCommandInput(text) });
+		if (plan === "newline") return;
+		e?.preventDefault();
+		if (plan === "queue") void during("queue");
+		else if (plan === "command") void runSlash(parsed!.cmd, parsed!.arg);
+		else if (plan === "unknown-command") rejectUnknownCommand();
+		else if (plan === "steer") void during("steer");
 		else void submit();
 	}
 
@@ -594,7 +575,7 @@
 	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if chat?.waiting.length}
 			<QueuedList queued={chat.waiting} oncancel={(q) => app.cancelQueued(q, pane.id)} />
@@ -618,6 +599,7 @@
 			bind:this={ta}
 			onscroll={() => { if (mirror && ta) mirror.scrollTop = ta.scrollTop; }}
 			data-composer
+			{...menuAria(slashOpen, menuListId, menuOptionId, slashIndex, menuItems.length)}
 			bind:value={text}
 			onkeydown={onKey}
 			oninput={syncCaret}
@@ -625,7 +607,7 @@
 			onclick={syncCaret}
 			onfocus={syncCaret}
 			onpaste={onPaste}
-			oncompositionstart={() => (composing = true)}
+			oncompositionstart={() => ime.start()}
 			oncompositionend={onCompositionEnd}
 			rows="1"
 			readonly={voiceActive}
