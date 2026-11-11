@@ -13,6 +13,8 @@
 	import type { NotificationDevice } from "../../lib/notification-contract";
 	import Icon from "../ui/Icon.svelte";
 	import PairPanel from "./PairPanel.svelte";
+	import { buildPairingLink, isLoopbackUrl } from "../../lib/pairing";
+	import { copyText } from "../../lib/clipboard";
 
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
@@ -28,6 +30,7 @@
 	/** The QR is a key to the server: its code is only made while this is open, and dropped when it closes. */
 	let adding = $state(false);
 	let now = $state(Date.now());
+	let sharing = $state(false);
 
 	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
@@ -90,6 +93,33 @@
 		}
 	}
 
+	/**
+	 * One click, no QR: a fresh one-time code as a link, straight to the clipboard, for pasting into another server's
+	 * Server Sync or a phone. Nothing is shown, so nothing is revoked on leaving; the server still voids it after two
+	 * minutes or one use. An address only this PC can reach (localhost) is useless elsewhere: the QR panel lets you fix it.
+	 */
+	async function shareLink() {
+		const a = api();
+		if (!a || !server || sharing) return;
+		const base = server.baseUrl.trim().replace(/\/+$/, "");
+		if (isLoopbackUrl(base)) {
+			adding = true;
+			app.toast(t("이 PC는 localhost로 접속 중이라 다른 기기가 쓸 수 없습니다. 아래에서 주소를 바꿔 QR이나 링크를 만드세요."), "info");
+			return;
+		}
+		sharing = true;
+		try {
+			const made = await a.createPairing();
+			const ok = await copyText(buildPairingLink(base, made.code, app.serverLabel(server)));
+			if (ok) app.toast(t("연결 링크를 복사했습니다. 2분 안에 한 번 쓸 수 있습니다."), "ok");
+			else error = t("클립보드에 복사하지 못했습니다. [폰 추가]에서 QR을 쓰세요.");
+		} catch (e) {
+			error = errorText(e);
+		} finally {
+			sharing = false;
+		}
+	}
+
 	const platformName = (p: NotificationDevice["platform"]) =>
 		p === "android" ? "Android" : p === "ios" ? "iOS" : p === "web" ? t("웹 브라우저") : t("데스크톱 앱");
 	const icon = (p: NotificationDevice["platform"]): "phone" | "monitor" => (p === "android" || p === "ios" ? "phone" : "monitor");
@@ -128,9 +158,14 @@
 <div class="devices">
 	<p class="lead">{t("이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")}</p>
 	<div class="add">
-		<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
-			<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
-		</Button>
+		<div class="add-row">
+			<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
+				<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
+			</Button>
+			{#if !adding && paired !== null}
+				<Button onclick={shareLink} disabled={sharing}><Icon name="copy" /> {t("연결 링크 복사")}</Button>
+			{/if}
+		</div>
 		{#if adding}
 			<div class="addbody">{#key serverId}<PairPanel {serverId} />{/key}</div>
 		{/if}
@@ -197,8 +232,10 @@
 		gap: 12px;
 		padding-top: 4px;
 	}
-	.add > :global(.btn) {
-		align-self: flex-start;
+	.add-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 	.addbody {
 		padding-top: 4px;

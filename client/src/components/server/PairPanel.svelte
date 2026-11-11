@@ -21,6 +21,11 @@
 	let error = $state("");
 	let busy = $state(false);
 	let copied = $state(false);
+	/**
+	 * A copied link has left this window: it is pasted somewhere else (another server's Server Sync, a chat), often after
+	 * this panel is closed. Closing must not void it; it still expires two minutes after it was made and works once.
+	 */
+	let handedOut = $state(false);
 
 	const left = $derived(Math.max(0, Math.ceil((expiresAt - now) / 1000)));
 	const expired = $derived(!!link && left === 0);
@@ -37,6 +42,7 @@
 			const made = await new Api({ baseUrl: server.baseUrl, token: server.token }).createPairing();
 			if (mine !== issued) return;
 			link = buildPairingLink(address.trim().replace(/\/+$/, ""), made.code, app.serverLabel(server));
+			handedOut = false;
 			expiresAt = made.expiresAt;
 			now = Date.now();
 		} catch (e) {
@@ -52,10 +58,12 @@
 		issued++;
 		if (link && server) void new Api({ baseUrl: server.baseUrl, token: server.token }).revokePairing().catch(() => {});
 		link = "";
+		handedOut = false;
 	}
 	onDestroy(() => {
 		clearInterval(clock);
-		revoke();
+		if (handedOut) issued++;
+		else revoke();
 	});
 
 	/** A code was made for one address: editing the address drops it, so the QR on screen never points somewhere else. */
@@ -72,6 +80,7 @@
 	async function copy() {
 		if (!link) return;
 		copied = await copyText(link);
+		if (copied) handedOut = true;
 		setTimeout(() => (copied = false), 1600);
 	}
 </script>
@@ -111,6 +120,7 @@
 	{#if error}<div class="warn" role="alert"><Icon name="alert" /><span>{error}</span></div>{/if}
 
 	<p class="hint">{t("한 번만, 2분 안에 쓸 수 있는 코드입니다. 접근 토큰은 들어 있지 않습니다.")}</p>
+	{#if handedOut}<p class="hint">{t("복사한 링크는 이 창을 닫아도 2분 동안 쓸 수 있습니다.")}</p>{/if}
 </div>
 
 <style>
