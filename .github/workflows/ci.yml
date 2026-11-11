@@ -89,7 +89,13 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install "playwright==$PLAYWRIGHT_VERSION"
-          "$RUNNER_TEMP/venv/bin/playwright" install --with-deps chromium
+          # Only the browser: the runner image already carries Chromium's libraries. `--with-deps` fetched ~10 font packages from
+          # the Ubuntu mirror on every run, and a passing DNS failure there failed the job before the test ran. The system
+          # packages are installed (with retries) only when the browser cannot start without them.
+          "$RUNNER_TEMP/venv/bin/playwright" install chromium
+          if ! "$RUNNER_TEMP/venv/bin/python" -c "from playwright.sync_api import sync_playwright as p; b = p().start().chromium.launch(); b.close()"; then
+            for i in 1 2 3; do sudo "$RUNNER_TEMP/venv/bin/playwright" install-deps chromium && break; sleep 20; done
+          fi
       - name: Screen smoke test
         env:
           E2E_OUT: ${{ runner.temp }}/e2e-out
