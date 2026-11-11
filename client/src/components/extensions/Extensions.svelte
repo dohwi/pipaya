@@ -8,13 +8,15 @@
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { download } from "../../lib/download";
-	import { tick } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { app } from "../../lib/store.svelte";
 	import { CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../../lib/extensions/schema";
 	import type { StoredExtensionSettings } from "../../lib/extensions/settings-store";
-	import { serverProvides, serverText, serverTitle, srvKey, type ServerExt } from "../../lib/server-extension";
+	import { serverFields, serverProvides, serverText, serverTitle, srvKey, type ServerExt } from "../../lib/server-extension";
+	import { planPartialSave } from "../../lib/extensions/settings-save";
+	import { formKeys } from "../../lib/extensions/settings-store";
 	import Marketplace from "./Marketplace.svelte";
 	import { fetchCompanion } from "../../lib/extensions/marketplace";
 	import { compareVersions, fetchCatalog, fetchPackage, DEFAULT_MARKETPLACE_URL, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
@@ -58,24 +60,63 @@
 	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
 	/** A server extension whose client half is not installed on this server runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !app.clientExtensionsOf(serverId ?? app.serverId).some((e) => e.id === companion);
+	/** The server being listed, whether or not it is the open one: its events (settings saved, page changed, reloaded) keep the pages current. */
+	const listed = $derived(serverId ?? app.serverId);
 	async function loadServerSide() {
 		const api = srvApi;
 		if (!api) { serverSide = []; return; }
-		try { serverSide = (await api.serverExtensions()).extensions; } catch { serverSide = []; }
-		try { serverSettings = (await api.extensionSettings()).settings; } catch { /* the forms start from their defaults */ }
+		try { const next = (await api.serverExtensions()).extensions; if (api === srvApi) serverSide = next; } catch { if (api === srvApi) serverSide = []; }
+		await loadServerSettings();
 	}
+	/** Only the saved settings: an extension wrote its own, or another device saved. */
+	async function loadServerSettings() {
+		const api = srvApi;
+		if (!api) return;
+		try { const next = (await api.extensionSettings()).settings; if (api === srvApi) serverSettings = next; } catch { /* the forms start from their defaults */ }
+	}
+	// Follow the server live: a settings change re-reads the values, a reload re-reads the list (and with it every page).
+	$effect(() => { const id = listed; if (id && app.serverExtensionFeed.settingsTick(id) > 0) untrack(() => { void loadServerSettings(); }); });
+	/** The page of a server extension as the server holds it now: a pushed change wins over the list read before it. */
+	const pageOf = (ext: ServerExt): unknown => {
+		const pushed = listed ? app.serverExtensionFeed.panelFor(listed, ext.name) : undefined;
+		return pushed ? pushed.panel : ext.panel;
+	};
 	/** Read this server's extensions again; the open server's commands and tools follow only when it is the one listed. */
 	const reloadServer = () => Promise.all([loadServerSide(), app.refreshServerExtensions(serverId ?? undefined)]);
+	/** Write the form's fields; the server replaces only these keys and keeps what the extension keeps for itself. */
+	async function putServerSettings(ext: ServerExt, settings: Record<string, unknown>, keys: readonly string[]) {
+		const api = srvApi;
+		if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
+		const saved = await api.saveExtensionSettings(ext.settingsId, settings, undefined, undefined, undefined, keys);
+		serverSettings[ext.settingsId] = { value: saved.value, updatedAt: saved.updatedAt };
+	}
 	function saveServerSettings(ext: ServerExt, settings: Record<string, unknown>) {
 		void run(srvKey(ext.name), async () => {
-			const api = srvApi;
-			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
-			const saved = await api.saveExtensionSettings(ext.settingsId, settings);
-			serverSettings[ext.settingsId] = { value: saved.value, updatedAt: saved.updatedAt };
+			const fields = serverFields(ext).fields;
+			// The JSON editor may carry keys of the form's read-only fields; only the form's own keys are written.
+			await putServerSettings(ext, settings, formKeys(fields) ?? Object.keys(settings));
 			tasks.notice = t("설정을 저장했습니다.");
 		});
 	}
-	$effect(() => { void srvApi; void market; void loadServerSide(); });
+	/** `save(partial)` of an extension's own settings section: same rules as the form, no busy state or notice of its own. */
+	async function saveServerPartial(ext: ServerExt, partial: unknown) {
+		const plan = planPartialSave(serverFields(ext).fields, serverSettings[ext.settingsId]?.value ?? {}, partial);
+		await putServerSettings(ext, plan.changed, plan.keys);
+	}
+	/** `call(method, params)` of an extension's own settings section: its method on the server this page belongs to. */
+	function callServerMethod(ext: ServerExt, method: unknown, params: unknown): Promise<unknown> {
+		const api = srvApi;
+		if (!api) return Promise.reject(new LocalizedError(t("서버에 연결되어 있지 않습니다.")));
+		if (typeof method !== "string" || !ext.methods.includes(method)) return Promise.reject(new LocalizedError(t("이 확장에 없는 메서드입니다")));
+		return api.callServerExtension(ext.name, method, params ?? null, null);
+	}
+	/** What the user did on an extension's page (a button, a form), sent to the server that holds it. */
+	function sendPageEvent(ext: ServerExt, event: unknown): Promise<unknown> {
+		const api = srvApi;
+		if (!api) return Promise.reject(new LocalizedError(t("서버에 연결되어 있지 않습니다.")));
+		return api.serverExtensionPanelEvent(ext.name, event);
+	}
+	$effect(() => { void srvApi; void market; if (listed) void app.serverExtensionFeed.reloadTick(listed); untrack(() => { void loadServerSide(); }); });
 	/** The catalog, read quietly in the background so updates can be offered without opening the marketplace. */
 	let catalog = $state<MarketCatalog | null>(null);
 	$effect(() => {
@@ -308,6 +349,13 @@
 		});
 	}
 
+	/** `save(partial)` of an extension's own settings section: same rules as the form, the extension is not restarted. */
+	async function saveClientPartial(id: string, partial: unknown) {
+		const entry = src.find(id);
+		if (!entry) throw new LocalizedError(t("확장을 찾을 수 없습니다"));
+		await src.setSettings(id, planPartialSave(entry.package.manifest.settings, entry.settings, partial).whole);
+	}
+
 	function exportPackage(id: string) {
 		void run(id, () => {
 			const pkg = src.find(id)?.package;
@@ -443,12 +491,17 @@
 			oncancelremove={cancelRemove}
 			onremove={(keepSettings) => remove(id, keepSettings)}
 			onsettingslocal={(local) => src.setSettingsLocal(id, local)}
+			onsavepartial={(partial) => saveClientPartial(id, partial)}
 		/>
 	{:else if openServer}
 		<ServerDetail
 			ext={openServer}
 			{serverId}
 			settings={serverSettings[openServer.settingsId]?.value}
+			page={pageOf(openServer)}
+			onsavepartial={(partial) => saveServerPartial(openServer, partial)}
+			oncall={(method, params) => callServerMethod(openServer, method, params)}
+			onpageevent={(event) => sendPageEvent(openServer, event)}
 			busy={!!tasks.busy[srvKey(openServer.name)]}
 			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			onback={() => (selected = null)}

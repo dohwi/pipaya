@@ -24,7 +24,10 @@ describe("an extension's own translations", () => {
 		expect(pickLang({ ko: "연결됨" }, "en")).toBe("연결됨");
 		expect(displayValue("plain", "en")).toBe("plain");
 		expect(displayValue({ ko: "가", en: "a" }, "en")).toBe("a");
-		expect(displayValue(42, "en")).toBe("");
+		// a number is a value too (0 included); only a missing or unusable value is empty
+		expect(displayValue(42, "en")).toBe("42");
+		expect(displayValue(0, "en")).toBe("0");
+		for (const empty of [undefined, null, NaN, Infinity, [], {}, { ko: "" }, ""]) expect(displayValue(empty, "en")).toBe("");
 	});
 	test("a form keeps its keys and values and translates what a person reads", () => {
 		const fields: SettingField[] = [

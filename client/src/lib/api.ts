@@ -199,16 +199,20 @@ export class Api {
 		this.req<{ settings: Record<string, StoredExtensionSettings> }>("GET", "/extensions/settings", undefined, signal);
 	extensionSetting = (id: string, signal?: AbortSignal) =>
 		this.req<StoredExtensionSettings>("GET", `/extensions/${encodeURIComponent(id)}/settings`, undefined, signal);
-	saveExtensionSettings = (id: string, settings: Record<string, unknown>, at?: number, origin?: string, signal?: AbortSignal) =>
-		this.req<ExtensionSaveResult>("PUT", `/extensions/${encodeURIComponent(id)}/settings`, { settings, ...(at !== undefined ? { at } : {}), ...(origin ? { origin } : {}) }, signal);
+	/** `keys`: replace only these keys of the stored object and keep the rest (a form does not own what the extension keeps for itself). */
+	saveExtensionSettings = (id: string, settings: Record<string, unknown>, at?: number, origin?: string, signal?: AbortSignal, keys?: readonly string[]) =>
+		this.req<ExtensionSaveResult>("PUT", `/extensions/${encodeURIComponent(id)}/settings`, { settings, ...(at !== undefined ? { at } : {}), ...(origin ? { origin } : {}), ...(keys ? { keys } : {}) }, signal);
 	deleteExtension = (id: string, signal?: AbortSignal) =>
 		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; panel?: unknown; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
+	/** What the user did on a server extension's page (a button, a form); the server checks it against the page it holds. */
+	serverExtensionPanelEvent = (extension: string, event: unknown, signal?: AbortSignal) =>
+		this.req<{ ok: boolean }>("POST", `/server-extensions/${encodeURIComponent(extension)}/panel/event`, { event }, signal);
 	serverExtensionEntries = (sessionId: string, extension?: string, type?: string, signal?: AbortSignal) => {
 		const q = new URLSearchParams();
 		if (extension) q.set("extension", extension);
@@ -535,6 +539,7 @@ export const EVENT_TYPES = [
 	"locales_updated",
 	"client_settings_updated",
 	"extension_settings_updated",
+	"extension_panel_updated",
 	"extensions_updated",
 	"extension_error",
 	"extension_event",

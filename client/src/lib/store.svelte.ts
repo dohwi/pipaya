@@ -31,6 +31,7 @@ import { notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { ServerExtensionStore } from "./extensions/server-store";
 import { IdleExtensionStores } from "./idle-extension-stores.svelte";
+import { ServerExtensionFeed } from "./server-extension-feed.svelte";
 import type { PairingLink } from "./pairing";
 import { CloseGuard } from "./close-guard.svelte";
 import { PairingFlow } from "./pairing-flow.svelte";
@@ -707,7 +708,8 @@ class AppStore {
       old?.stop();
       const link = new ServerLink(s, {
         event: (l, e) => this.onLinkEvent(l, e),
-        ready: (l, warm) => void this.attach(l, warm),
+        // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
+        ready: (l, warm) => { this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {}); void this.attach(l, warm); },
       });
       next[s.id] = link;
       changed = true;
@@ -842,6 +844,8 @@ class AppStore {
 
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
+    // Server extension pages follow their server's events whether or not it is the open one.
+    this.serverExtensionFeed.onEvent(link.id, e.type, e.data);
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
     if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
@@ -1233,6 +1237,8 @@ class AppStore {
   /** When each transcript was last on screen, and which were on screen at the previous sync (see syncChats). */
   private chatUsed = new Map<string, number>();
   private lastVisible = new Set<string>();
+  /** Live changes to the settings and pages of server extensions, per server (the settings window can show any of them). */
+  readonly serverExtensionFeed = new ServerExtensionFeed();
   /** Editors of the client extensions of saved servers that are not the open one. */
   private readonly idleExtensions = new IdleExtensionStores({ openId: () => this.serverId, apiOf: (id) => this.links[id]?.api ?? null });
   /** Bumped whenever one of those editors changed, so what shows them reads again. */

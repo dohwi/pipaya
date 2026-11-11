@@ -16,6 +16,7 @@ const SaveBody = Type.Object({
 	settings: SettingsObject,
 	at: Type.Optional(Type.Integer({ minimum: 0, description: "When the user made the change (ms); defaults to now. An older write does not replace a newer value" })),
 	origin: Type.Optional(Type.String({ maxLength: 80, description: "Writing device id, echoed in the event" })),
+	keys: Type.Optional(Type.Array(Type.String({ maxLength: 80 }), { maxItems: 100, description: "Replace only these keys of the stored object with their value in `settings` (a listed key missing from `settings` is removed); every other stored key is kept. Without it the whole object is replaced. A settings form sends the keys it edits, so values the extension keeps for itself are not wiped" })),
 });
 const SaveResult = Type.Object({
 	value: SettingsObject,
@@ -37,7 +38,7 @@ export function registerExtensionSettingsRoutes(server: FastifyInstance, store: 
 	app.put("/extensions/:id/settings", {
 		schema: { params: IdParams, body: SaveBody, response: { 200: SaveResult, ...errors(400, 401, 409, 413) } },
 		handler: async (req) => {
-			const res = store.save(req.params.id, req.body.settings, req.body.at);
+			const res = store.save(req.params.id, req.body.settings, req.body.at, undefined, { keys: req.body.keys });
 			if (res.applied) bus.publish(null, "extension_settings_updated", { id: req.params.id, action: "saved", updatedAt: res.updatedAt, origin: req.body.origin });
 			return res;
 		},

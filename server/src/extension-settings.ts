@@ -39,6 +39,32 @@ export const isPlainObject = (v: unknown): v is ExtensionSettingsValue => {
 	return proto === Object.prototype || proto === null;
 };
 
+export interface SaveOptions {
+	/** Replace only these keys of the stored object (see `PUT /extensions/:id/settings`); the rest is kept. */
+	keys?: readonly string[];
+	/** `extension`: the extension rewrote its own object (`pi.settings.set`), not a person: it is not a user edit for the stale check of a `keys` write. */
+	by?: "extension";
+}
+export const MAX_WRITE_KEYS = 100;
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function assertKeys(keys: readonly string[]): void {
+	if (!Array.isArray(keys) || keys.length > MAX_WRITE_KEYS) throw badRequest(`keys must be a list of at most ${MAX_WRITE_KEYS} names`);
+	for (const key of keys) {
+		if (typeof key !== "string" || !key || key.length > 80 || UNSAFE_KEYS.has(key)) throw badRequest("keys must be plain names of at most 80 characters");
+	}
+}
+
+/** `base` with each of `keys` taken from `incoming` (removed when `incoming` has no such key). Never mutates its inputs. */
+function mergeKeys(base: ExtensionSettingsValue, incoming: ExtensionSettingsValue, keys: readonly string[]): ExtensionSettingsValue {
+	const out: ExtensionSettingsValue = { ...base };
+	for (const key of keys) {
+		if (Object.hasOwn(incoming, key)) Object.defineProperty(out, key, { value: incoming[key], enumerable: true, writable: true, configurable: true });
+		else delete out[key];
+	}
+	return out;
+}
+
 /**
  * Generic per-extension settings: `<dataDir>/extensions/<id>/settings.json`.
  * The server never interprets the content; it only stores one plain JSON object per extension.
@@ -87,10 +113,24 @@ export class ExtensionSettings {
 		}
 	}
 
-	private writeStamp(dir: string, at: number): void {
+	/**
+	 * When a person (or a client acting for one) last changed the value, as opposed to the extension rewriting its own
+	 * object: a status the extension writes must not make a form save look stale because a device clock runs behind the
+	 * server's. The stamp file reads `<updatedAt> <userAt>`; an older one has only the first number (then both are equal).
+	 */
+	private readUserStamp(dir: string, updatedAt: number): number {
+		try {
+			const second = readFileSync(join(dir, STAMP), "utf8").trim().split(/\s+/)[1];
+			const at = second === undefined ? Number.NaN : Number.parseInt(second, 10);
+			if (Number.isFinite(at) && at >= 0) return at;
+		} catch { /* no stamp yet */ }
+		return updatedAt;
+	}
+
+	private writeStamp(dir: string, at: number, userAt: number): void {
 		const tmp = join(dir, `.${STAMP}.${randomBytes(6).toString("hex")}.tmp`);
 		try {
-			writeFileSync(tmp, String(at), { mode: 0o600 });
+			writeFileSync(tmp, `${at} ${userAt}`, { mode: 0o600 });
 			chmodSync(tmp, 0o600);
 			renameSync(tmp, join(dir, STAMP));
 		} catch (err) {
@@ -141,19 +181,28 @@ export class ExtensionSettings {
 	 * older than what is stored is not applied. Equal times: the incoming write wins, so a resend is harmless.
 	 * `now` is the server clock; a device clock in the future must not pin the value forever.
 	 */
-	save(id: string, settings: unknown, at?: number, now = Date.now()): ExtensionSaveResult {
+	save(id: string, settings: unknown, at?: number, now = Date.now(), opts: SaveOptions = {}): ExtensionSaveResult {
 		const dir = this.dir(id);
+		const { keys } = opts;
 		if (!isPlainObject(settings)) throw badRequest("settings must be a JSON object");
-		const json = JSON.stringify(settings);
+		if (keys !== undefined) assertKeys(keys);
+		const stamp = Math.min(at ?? now, now);
+		const current = this.getStored(id);
+		const userAt = current ? this.readUserStamp(dir, current.updatedAt) : 0;
+		// A keyed write only competes with other people's edits: the extension rewriting its own status in between does not make it stale.
+		if (current && (keys === undefined ? current.updatedAt > stamp : userAt > stamp)) return { ...current, applied: false };
+		// With `keys` the write replaces only those keys of the stored value (a key missing from `settings` is removed);
+		// every other key, such as one the extension keeps for itself, stays as it is.
+		const next = keys === undefined ? settings : mergeKeys(current?.value ?? {}, settings, keys);
+		const updatedAt = keys !== undefined && current ? Math.max(stamp, current.updatedAt) : stamp;
+		const nextUserAt = opts.by === "extension" ? userAt : keys !== undefined ? Math.max(stamp, userAt) : stamp;
+		const json = JSON.stringify(next);
 		if (json.length > MAX_SETTINGS_CHARS) {
 			throw new HttpError(413, "payload_too_large", `settings exceed ${MAX_SETTINGS_CHARS} characters of JSON`);
 		}
 		if (!existsSync(dir) && this.count() >= MAX_EXTENSIONS) {
 			throw conflict(`at most ${MAX_EXTENSIONS} extensions can store settings`);
 		}
-		const stamp = Math.min(at ?? now, now);
-		const current = this.getStored(id);
-		if (current && current.updatedAt > stamp) return { ...current, applied: false };
 		mkdirSync(this.root, { recursive: true, mode: 0o700 });
 		chmodSync(this.root, 0o700);
 		mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -168,8 +217,8 @@ export class ExtensionSettings {
 			rmSync(tmp, { force: true });
 			throw err;
 		}
-		this.writeStamp(dir, stamp);
-		return { value: JSON.parse(json) as ExtensionSettingsValue, updatedAt: stamp, applied: true };
+		this.writeStamp(dir, updatedAt, nextUserAt);
+		return { value: JSON.parse(json) as ExtensionSettingsValue, updatedAt, applied: true };
 	}
 
 	/**

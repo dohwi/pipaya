@@ -7,6 +7,8 @@
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { t } from "../../lib/i18n";
 	import ExtensionPage from "./ExtensionPage.svelte";
+	import ExtensionMount from "./ExtensionMount.svelte";
+	import ExtensionPart from "./ExtensionPart.svelte";
 	import PermissionList from "./PermissionList.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
@@ -39,6 +41,7 @@
 		oncancelremove,
 		onremove,
 		onsettingslocal,
+		onsavepartial,
 	}: {
 		entry: ExtensionRow;
 		/** Where the extension lives: the host (runs here) or another server's idle list (only remembers the choice) */
@@ -69,6 +72,8 @@
 		onremove: (keepSettings: boolean) => void;
 		/** Keep this extension's settings on this device only (a server extension that shares them) */
 		onsettingslocal?: (local: boolean) => void;
+		/** `save(partial)` of the extension's own settings section: validated like the form, the other keys stay as they are */
+		onsavepartial?: (partial: unknown) => Promise<void>;
 	} = $props();
 
 	const id = $derived(entry.package.manifest.id);
@@ -85,7 +90,16 @@
 	const local = $derived(forcedLocal || extensions.isSettingsLocal(id));
 	/** An extension shares its settings with the server, so it gets the choice. */
 	const canChooseLocal = $derived(!!onsettingslocal);
+	/** Only this extension may draw its own page (a section or a field) with Svelte. */
+	const owners = $derived([id]);
+	const pageProps = $derived({
+		id, extension: id, serverId: null, settings: entry.settings, fields: shownFields ?? [], panel: null, disabled: tasks.busy[id] || entry.state === "starting",
+		save: onsavepartial ?? (() => Promise.reject(new Error("saving is not available here"))),
+		call: () => Promise.reject(new Error("a client extension's page has no server methods; use sdk.server.call in its code")),
+	});
 </script>
+
+{#snippet top()}<ExtensionMount slot="extension.page.top" {owners} props={pageProps} />{/snippet}
 
 <ExtensionPage id="extension-{id}" name={displayName} sub={id} busy={tasks.busy[id] || entry.state === "starting"} {upgrade} {onback}>
 	{#snippet meta()}<span class="facts">v{entry.package.manifest.version}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{/snippet}
@@ -115,6 +129,8 @@
 	{#if entry.error}<Notice tone="danger" size="sm" role="status">{entry.error}</Notice>{/if}
 	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 
+	{@render top()}
+
 	<section class="block set-group">
 		<h3 class="section-label">{t("권한과 실행 안내")}</h3>
 		<PermissionList pkg={entry.package} />
@@ -132,7 +148,9 @@
 		{/if}
 		{#if fields}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
-			<SettingsForm {id} fields={shownFields!} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} />
+			<ExtensionPart part="extension.settings" {owners} props={pageProps}>
+				<SettingsForm {id} fields={shownFields!} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} componentOwners={owners} />
+			</ExtensionPart>
 		{:else}
 			<label class="settings-label" for="extension-settings-{id}">{t("설정 JSON 객체")}</label>
 			<textarea id="extension-settings-{id}" rows="6" spellcheck="false" value={drafts[id] ?? JSON.stringify(entry.settings, null, 2)} disabled={tasks.busy[id]} oninput={(event) => { drafts[id] = event.currentTarget.value; }}></textarea>

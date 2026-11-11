@@ -8,8 +8,8 @@
    * `props` plus `fallback`, a snippet that draws the original, so it can wrap or restyle instead of rebuilding.
    * If the replacement throws, the original is drawn.
    */
-  let { part, props = {}, children }: { part: UIPart; props?: Record<string, unknown>; children: Snippet } = $props();
-  const swap = $derived(extensions.replacementFor(part));
+  let { part, props = {}, owners, children }: { part: UIPart; props?: Record<string, unknown>; /** Extensions allowed to replace it; the parts of an extension's own page need this (only its owner may fill them) */ owners?: readonly string[]; children: Snippet } = $props();
+  const swap = $derived(extensions.replacementFor(part, owners));
 </script>
 
 {#if swap}

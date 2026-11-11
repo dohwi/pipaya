@@ -1394,6 +1394,42 @@ describe("trusted UI (ui-style / ui-components)", () => {
 		expect(host.mountsIn("header.end")).toEqual([]);
 		expect(styleEls.every(e => e.removed)).toBe(true);
 	});
+	test("the slot and part of an extension's own page are only for the owners the page names", async () => {
+		const { host } = newHost();
+		const mine = await activate(host, pkg("example.mine", ["ui-components"], { components: { Top: "<p/>", Page: "<p/>" }, mounts: [{ slot: "extension.page.top", component: "Top" }], replaces: { "extension.settings": "Page" } }));
+		const other = await activate(host, pkg("example.other", ["ui-components"], { components: { Top: "<p/>", Page: "<p/>" }, mounts: [{ slot: "extension.page.top", component: "Top" }], replaces: { "extension.settings": "Page" } }));
+		// nobody asks for it by name: no owner list means nothing, so an ordinary slot lookup never picks them up
+		expect(host.mountsIn("extension.page.top")).toEqual([]);
+		expect(host.replacementFor("extension.settings")).toBeUndefined();
+		// each page sees only its own
+		expect(host.mountsIn("extension.page.top", [mine.id]).map(m => m.owner)).toEqual([mine.id]);
+		expect(host.replacementFor("extension.settings", [mine.id])?.owner).toBe(mine.id);
+		expect(host.replacementFor("extension.settings", [other.id])?.owner).toBe(other.id);
+		// a page that belongs to a third extension gets neither
+		expect(host.mountsIn("extension.page.top", ["example.third"])).toEqual([]);
+		expect(host.replacementFor("extension.settings", ["example.third"])).toBeUndefined();
+		// off, or safe mode: the plain page
+		host.disable(mine.id);
+		expect(host.mountsIn("extension.page.top", [mine.id])).toEqual([]);
+		expect(host.replacementFor("extension.settings", [mine.id])).toBeUndefined();
+		host.setSafeMode(true);
+		expect(host.replacementFor("extension.settings", [other.id])).toBeUndefined();
+	});
+	test("a settings field's component comes only from the page's owner and only while it runs", async () => {
+		const { host } = newHost();
+		const base = pkg("example.field", ["ui-components"], { components: { Slider: "<p/>" } });
+		const withField = { ...base, manifest: { ...base.manifest, settings: [{ key: "level", type: "number", label: "Level", component: "Slider" }] } };
+		const id = host.install(withField);
+		await host.setSettings(id, { level: 3 }); // a package with a settings form is first saved, then enabled
+		await host.enable(id);
+		expect(host.fieldComponent([id], "Slider")?.owner).toBe(id);
+		expect(host.fieldComponent([id], "Missing")).toBeUndefined();
+		expect(host.fieldComponent(["example.someone-else"], "Slider")).toBeUndefined();
+		expect(host.fieldComponent([], "Slider")).toBeUndefined();
+		expect(host.fieldComponent([id], "constructor")).toBeUndefined();
+		host.disable(id);
+		expect(host.fieldComponent([id], "Slider")).toBeUndefined();
+	});
 	test("without the permission the package cannot even be installed", () => {
 		const { host } = newHost();
 		expect(() => host.install(ui("example.skin", {}, ["ui-style"]))).toThrow(/ui-components/);

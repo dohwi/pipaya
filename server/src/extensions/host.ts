@@ -11,7 +11,7 @@ import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../too
 import { RETIRED_EXTENSIONS } from "./retired.ts";
 import { markExtensionImports } from "./loader.ts";
 import type {
-	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
+	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -48,7 +48,7 @@ export interface ExtensionHostOptions {
 	/** The per-extension settings store (`/extensions/:id/settings`). */
 	settings?: {
 		get(id: string): Record<string, unknown> | undefined;
-		save(id: string, value: unknown): { value: Record<string, unknown>; updatedAt: number; applied: boolean };
+		save(id: string, value: unknown, at?: number, now?: number, opts?: { by?: "extension" }): { value: Record<string, unknown>; updatedAt: number; applied: boolean };
 	};
 }
 
@@ -77,6 +77,8 @@ export interface ExtensionInfo {
 	settings?: unknown[];
 	/** Id of the shared settings object (`GET/PUT /extensions/:id/settings`) behind `settings`. */
 	settingsId: string;
+	/** The page this extension shows above its settings form (`pi.ui.setPanel`); absent when it has none. */
+	panel?: ExtensionPanelNode;
 	/** True when the folder carries the client half itself (`pipaya.client`): `GET /server-extensions/:name/client` serves it. */
 	clientPackage?: boolean;
 	error?: string;
@@ -97,6 +99,68 @@ interface Loaded extends ExtensionInfo {
 	providerIds: Set<string>;
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
+	panelHandler?: (event: ExtensionPanelEvent) => void | Promise<void>;
+}
+
+/** The limits of a page tree: the same numbers as the client's `UI_LIMITS` (nodes, depth, bytes, id pattern). */
+export const PANEL_LIMITS = Object.freeze({ nodes: 200, depth: 8, bytes: 60 * 1024, children: 50 });
+const PANEL_ID = /^[a-z][a-z0-9-]{0,39}$/;
+const PANEL_FIELDS = new Set(["input", "textarea", "select", "checkbox"]);
+
+/**
+ * Structural check of a page tree before it is kept and pushed: plain JSON, every node an object with a `type` and a
+ * unique id, within the node, depth, children and byte limits. What each node type may carry is the client's job (it
+ * validates again before drawing); this keeps a runaway tree from being stored and broadcast.
+ */
+export function checkPanel(input: unknown): ExtensionPanelNode {
+	let json: string | undefined;
+	try { json = JSON.stringify(input); } catch { /* cyclic or BigInt */ }
+	if (json === undefined) throw new Error("the panel must be plain JSON");
+	if (Buffer.byteLength(json) > PANEL_LIMITS.bytes) throw new Error(`the panel must be at most ${PANEL_LIMITS.bytes} bytes of JSON`);
+	const root: unknown = JSON.parse(json);
+	const ids = new Set<string>();
+	let count = 0;
+	const claim = (id: unknown, path: string): void => {
+		if (typeof id !== "string" || !PANEL_ID.test(id)) throw new Error(`${path}: expected an id matching ${PANEL_ID}`);
+		if (ids.has(id)) throw new Error(`${path}: duplicate id ${id}`);
+		ids.add(id);
+	};
+	const visit = (node: unknown, depth: number, path: string): void => {
+		if (!node || typeof node !== "object" || Array.isArray(node)) throw new Error(`${path}: expected a node object`);
+		const n = node as Record<string, unknown>;
+		if (typeof n.type !== "string") throw new Error(`${path}.type: expected a string`);
+		claim(n.id, `${path}.id`);
+		if (++count > PANEL_LIMITS.nodes) throw new Error(`the panel must contain at most ${PANEL_LIMITS.nodes} nodes`);
+		if (depth > PANEL_LIMITS.depth) throw new Error(`${path}: nesting must be at most ${PANEL_LIMITS.depth} levels deep`);
+		const lists: [unknown, string][] = [];
+		if (n.type === "tabs") {
+			if (!Array.isArray(n.items)) throw new Error(`${path}.items: expected a list of tabs`);
+			n.items.forEach((item, i) => {
+				const tab = item as Record<string, unknown> | null;
+				if (!tab || typeof tab !== "object") throw new Error(`${path}.items[${i}]: expected an object`);
+				claim(tab.id, `${path}.items[${i}].id`);
+				lists.push([tab.children, `${path}.items[${i}].children`]);
+			});
+		} else if (n.children !== undefined) lists.push([n.children, `${path}.children`]);
+		for (const [kids, where] of lists) {
+			if (!Array.isArray(kids) || kids.length > PANEL_LIMITS.children) throw new Error(`${where}: expected a list of at most ${PANEL_LIMITS.children} nodes`);
+			kids.forEach((child, i) => visit(child, depth + 1, `${where}[${i}]`));
+		}
+	};
+	visit(root, 1, "panel");
+	return root as ExtensionPanelNode;
+}
+
+/** The node with this id, anywhere in the tree (tab ids are not nodes). */
+function panelNode(root: ExtensionPanelNode, id: string): Record<string, unknown> | undefined {
+	const stack: Record<string, unknown>[] = [root];
+	while (stack.length) {
+		const n = stack.pop()!;
+		if (n.id === id) return n;
+		if (Array.isArray(n.children)) stack.push(...(n.children as Record<string, unknown>[]));
+		if (n.type === "tabs" && Array.isArray(n.items)) for (const item of n.items as Record<string, unknown>[]) if (Array.isArray(item.children)) stack.push(...(item.children as Record<string, unknown>[]));
+	}
+	return undefined;
 }
 
 const ENTRY_FILES = ["index.ts", "index.js", "index.mjs"];
@@ -262,6 +326,7 @@ export class ExtensionHost {
 		for (const off of ext.busOff) off();
 		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.familyDefs.clear(); ext.methodDefs.clear();
 		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = [];
+		ext.panel = undefined; ext.panelHandler = undefined;
 		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.providers = []; ext.flags = []; ext.events = [];
 	}
 
@@ -284,10 +349,10 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, error }) => ({
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, panel, error }) => ({
 			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
 			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(translations ? { translations } : {}), ...(settings ? { settings } : {}),
-			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(error ? { error } : {}),
+			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(panel ? { panel } : {}), ...(error ? { error } : {}),
 		}));
 	}
 
@@ -352,7 +417,7 @@ export class ExtensionHost {
 					id,
 					get: () => store().get(id) ?? {},
 					set: (value) => {
-						const saved = store().save(id, value);
+						const saved = store().save(id, value, undefined, undefined, { by: "extension" });
 						if (saved.applied) this.opts.bus.publish(null, "extension_settings_updated", { id, action: "saved", updatedAt: saved.updatedAt });
 						return saved.value;
 					},
@@ -366,6 +431,15 @@ export class ExtensionHost {
 					},
 				};
 			})(),
+			ui: {
+				setPanel: (node) => {
+					const next = node === null ? undefined : checkPanel(node);
+					if (JSON.stringify(next ?? null) === JSON.stringify(ext.panel ?? null)) return;
+					ext.panel = next;
+					this.opts.bus.publish(null, "extension_panel_updated", { extension: ext.name, panel: next ?? null }, { ephemeral: true });
+				},
+				onEvent: (handler) => { ext.panelHandler = handler; },
+			},
 			home: this.opts.home ?? homedir(),
 			defaultCwd: () => this.bridge?.defaultCwd() ?? process.cwd(),
 			sessions: new Proxy({} as ExtensionSessions & { data: ExtensionSessionData }, {
@@ -646,6 +720,46 @@ export class ExtensionHost {
 		} catch (e) {
 			this.recordError(ext.name, `method:${name}`, e);
 			throw e;
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	/**
+	 * What the user did on an extension's page (a button, a form). The event must name a node of the page as it is now,
+	 * of the right kind, so a stale or invented one is refused before the extension sees it.
+	 */
+	async panelEvent(extension: string, event: unknown): Promise<{ found: boolean }> {
+		const ext = this.active().find((e) => e.name === extension);
+		if (!ext?.panel || !ext.panelHandler) return { found: false };
+		const e = event as Record<string, unknown> | null;
+		if (!e || typeof e !== "object" || typeof e.id !== "string") throw new Error("event.id: expected a string");
+		const node = panelNode(ext.panel, e.id);
+		if (!node) throw new Error(`event.id: unknown target ${e.id}`);
+		let safe: ExtensionPanelEvent;
+		if (e.type === "action") {
+			if (node.type !== "button") throw new Error("event.type: action needs a button");
+			safe = { type: "action", id: e.id };
+		} else if (e.type === "change") {
+			if (!PANEL_FIELDS.has(String(node.type))) throw new Error("event.type: change needs a field");
+			if (typeof e.value !== "string" && typeof e.value !== "boolean") throw new Error("event.value: expected a string or a boolean");
+			safe = { type: "change", id: e.id, value: e.value };
+		} else if (e.type === "submit") {
+			if (node.type !== "form") throw new Error("event.type: submit needs a form");
+			const values = e.values;
+			if (!values || typeof values !== "object" || Array.isArray(values) || Object.values(values).some((v) => typeof v !== "string" && typeof v !== "boolean")) throw new Error("event.values: expected an object of strings and booleans");
+			safe = { type: "submit", id: e.id, values: { ...(values as Record<string, string | boolean>) } };
+		} else throw new Error("event.type: expected action, change or submit");
+		if (node.disabled === true) throw new Error(`event.id: target ${e.id} is disabled`);
+		const ms = this.opts.methodTimeoutMs ?? METHOD_TIMEOUT_MS;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`the page handler did not answer within ${ms} ms`)), ms); });
+			await Promise.race([Promise.resolve(ext.panelHandler(safe)), late]);
+			return { found: true };
+		} catch (err) {
+			this.recordError(ext.name, "panel:event", err);
+			throw err;
 		} finally {
 			clearTimeout(timer);
 		}

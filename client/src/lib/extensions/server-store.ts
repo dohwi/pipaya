@@ -1,6 +1,6 @@
 import { describeSettingErrors, parsePackage, resolveSettings, type ExtensionPackage } from "./schema";
 import { canonical } from "./fingerprint";
-import { mergeSettings, PendingWrites, splitSettings, WriteClock } from "./settings-store";
+import { mergeSettings, PendingWrites, splitSettings, WriteClock, keepUnowned, writableKeys } from "./settings-store";
 import { clone, identify, plain, within } from "./host-values";
 import { LocalizedError, t } from "../i18n";
 import type { ServerSettingsSync } from "../server-settings";
@@ -91,7 +91,7 @@ export class ServerExtensionStore {
 		const at = this.clock.next(id);
 		const { shared } = splitSettings(e.settings, e.package.manifest.settings);
 		try {
-			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal));
+			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal, writableKeys(e.package.manifest.settings)));
 			this.pending.confirm(id, res?.updatedAt ?? at);
 			this.remote[id] = clone(res?.value ?? shared);
 			this.save();
@@ -232,14 +232,14 @@ export class ServerExtensionStore {
 		if (fields) {
 			const { values, errors, ok } = resolveSettings(fields, next);
 			if (!ok) throw new LocalizedError(t("설정이 올바르지 않습니다 — {detail}", { detail: describeSettingErrors(fields, errors) }));
-			next = { ...values };
+			next = keepUnowned(fields, e.settings, { ...values });
 		}
 		if (!this.keepsSettingsLocal(id, e.package)) {
 			const api = this.o.api();
 			if (!api) throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
 			const at = this.clock.next(id);
 			const { shared } = splitSettings(next, fields);
-			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal));
+			const res = await within(PUT_MS, (signal) => api.saveExtensionSettings(id, clone(shared), at, undefined, signal, writableKeys(fields)));
 			this.remote[id] = clone(res?.value ?? shared);
 			this.pending.confirm(id, res?.updatedAt ?? at);
 		}

@@ -9,8 +9,8 @@ import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
 import { JsonTransport } from "./transport";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
-import { describeSettingErrors, fillSettingDefaults, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
-import { mergeSettings, PendingWrites, sharedSettings, splitSettings, WriteClock, type StoredExtensionSettings } from "./settings-store";
+import { describeSettingErrors, fillSettingDefaults, OWNED_PAGE_NAMES, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
+import { mergeSettings, PendingWrites, sharedSettings, splitSettings, WriteClock, keepUnowned, writableKeys, type StoredExtensionSettings } from "./settings-store";
 import type { Component } from "svelte";
 import { inlineAssets, raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
@@ -184,6 +184,8 @@ export class ExtensionHost {
   /** Trusted components (`ui-components`) of the active extensions, and the parts they replace. */
   mounted = $state.raw<MountedComponent[]>([]);
   private replacements = $state.raw<{ owner: string; part: UIPart; component: Component<any> }[]>([]);
+  /** Every component of an active `ui-components` package by extension id and name (a settings field names one: `component`). */
+  private componentSets = $state.raw<Record<string, Record<string, Component<any>>>>({});
   /** What each extension's code passed to `components.setData` (plain JSON, handed to its components as `data`). */
   componentData = $state.raw<Record<string, unknown>>({});
   private styleEls = new Map<string, HTMLStyleElement>();
@@ -504,7 +506,7 @@ export class ExtensionHost {
       const at = this.pending.get(id)?.at ?? this.clock.next(id);
       const { shared } = splitSettings(entry.settings, entry.package.manifest.settings);
       try {
-        const res = await within(SYNC_PUT_MS, signal => new Api(connection).saveExtensionSettings(id, clone(shared), at, this.adapter?.deviceId?.() ?? undefined, signal));
+        const res = await within(SYNC_PUT_MS, signal => new Api(connection).saveExtensionSettings(id, clone(shared), at, this.adapter?.deviceId?.() ?? undefined, signal, writableKeys(entry.package.manifest.settings)));
         if (res && res.applied === false) {
           // Another device wrote a newer value while this one was offline: its value wins.
           this.pending.confirm(id, res.updatedAt);
@@ -784,10 +786,25 @@ export class ExtensionHost {
       (spec, handlers) => current() ? this.registerComponentShortcut(id, spec, handlers) : () => {}, (owner, sid) => this.currentShortcutCombo(owner, sid)));
     this.mounted = [...this.mounted, ...(pkg.mounts ?? []).map((m, i) => ({ owner: id, slot: m.slot, order: m.order ?? 0, key: `${id}:${i}`, component: loaded[m.component]! }))];
     this.replacements = [...this.replacements, ...Object.entries(pkg.replaces ?? {}).map(([part, name]) => ({ owner: id, part: part as UIPart, component: loaded[name]! }))];
+    this.componentSets = { ...this.componentSets, [id]: loaded };
   }
   /** Components mounted in a slot, by order then install order. Only active extensions count; safe mode shows none. */
-  mountsIn(slot: UISlot): MountedComponent[] {
-    return this.mountsBySlot.get(slot) ?? NONE;
+  mountsIn(slot: UISlot, owners?: readonly string[]): MountedComponent[] {
+    const all = this.mountsBySlot.get(slot) ?? NONE;
+    // The slots of an extension's own page are not open to everyone: only the extension(s) whose page it is.
+    if (OWNED_PAGE_NAMES.has(slot)) return owners ? all.filter(m => owners.includes(m.owner)) : NONE;
+    return all;
+  }
+  /**
+   * A component of an active extension by name, for a settings field that names one (`component`). Only the extensions in
+   * `owners` are asked (the one whose page it is), none in safe mode, none when the extension is off.
+   */
+  fieldComponent(owners: readonly string[], name: string): { owner: string; component: Component<any> } | undefined {
+    for (const owner of owners) {
+      const component = this.activeOwner(owner) && Object.hasOwn(this.componentSets[owner] ?? {}, name) ? this.componentSets[owner]![name] : undefined;
+      if (component) return { owner, component };
+    }
+    return undefined;
   }
   /** Ids of the extensions that are running now (none in safe mode). Read by every slot, label and renderer lookup. */
   private activeIds = $derived(new Set(this.safeMode ? [] : this.installed.filter(e => e.state === "active").map(e => e.package.manifest.id)));
@@ -799,8 +816,10 @@ export class ExtensionHost {
     return out;
   });
   /** The component an active extension substitutes for a built-in part (the first installed wins). */
-  replacementFor(part: UIPart): { owner: string; component: Component<any> } | undefined {
-    return this.replacements.find(r => r.part === part && this.activeOwner(r.owner));
+  replacementFor(part: UIPart, owners?: readonly string[]): { owner: string; component: Component<any> } | undefined {
+    // The part that draws an extension's own settings is only for the extension whose page it is; nobody else can replace it.
+    if (OWNED_PAGE_NAMES.has(part) && !owners) return undefined;
+    return this.replacements.find(r => r.part === part && (!owners || owners.includes(r.owner)) && this.activeOwner(r.owner));
   }
   private failure(id: string, error: string) {
     this.revokeNotifications(id);
@@ -847,6 +866,7 @@ export class ExtensionHost {
     this.styleEls.get(id)?.remove(); this.styleEls.delete(id);
     this.mounted = this.mounted.filter(m => m.owner !== id);
     this.replacements = this.replacements.filter(r => r.owner !== id);
+    if (Object.hasOwn(this.componentSets, id)) { const { [id]: _gone, ...rest } = this.componentSets; this.componentSets = rest; }
     if (Object.hasOwn(this.componentData, id)) { const { [id]: _drop, ...rest } = this.componentData; this.componentData = rest; }
     this.messageRenderers = this.messageRenderers.filter(r => r.owner !== id);
     this.composerFilters.delete(id);
@@ -937,7 +957,7 @@ export class ExtensionHost {
     if (fields) {
       const { values, errors, ok } = resolveSettings(fields, next);
       if (!ok) throw new LocalizedError(t("설정이 올바르지 않습니다 — {detail}", { detail: describeSettingErrors(fields, errors) }));
-      next = { ...values };
+      next = keepUnowned(fields, entry.settings, { ...values });
     }
     entry.settings = next; entry.configured = true; this.save();
     // The time of this edit travels with the write, so a device that was offline cannot overwrite a newer value.
