@@ -21,7 +21,7 @@ English, Conventional Commits: `type(scope): subject`
 ### Checks
 
 ```sh
-cd server && bun run typecheck && bun run lint && bun run test
+cd server && bun run typecheck && bun run lint -- --error-on-warnings && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
 
@@ -56,7 +56,7 @@ Group work with a GitHub milestone named after the version, not with a long-live
 ### 검증
 
 ```sh
-cd server && bun run typecheck && bun run lint && bun run test
+cd server && bun run typecheck && bun run lint -- --error-on-warnings && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
 

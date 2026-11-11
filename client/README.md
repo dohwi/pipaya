@@ -63,8 +63,19 @@ Follows the Material profile. Values live in one place, the `:root` tokens in `s
 
 ## Layout
 
-- `src/lib/store.svelte.ts`: connection, sessions, SSE sync and reconnect, commands
+- `src/lib/store.svelte.ts`: the app store (`app`): connection, sessions, SSE sync and reconnect, commands. Parts that own
+  their state live beside it and are reached through it: `prefs.svelte.ts`, `sidebar.svelte.ts`, `server-link.svelte.ts`,
+  `server-prefs.svelte.ts`, `close-guard.svelte.ts`, `pairing-flow.svelte.ts`, `idle-extension-stores.svelte.ts`; pure rules
+  without runes in `*-model.ts` (`store-model.ts`, `workdir-model.ts`, …), each with its own tests.
 - `src/lib/chat.svelte.ts`: folds REST history and SSE events into one transcript
-- `src/lib/api.ts`: typed REST client and EventSource subscription
+- `src/lib/api.ts`: typed REST client; event streams and terminal sockets open with a one-time ticket (`streamCredential`)
 - `src/lib/i18n.ts`, `src/lib/locales/`: UI language, English dictionary, language packs
-- `src/components/`: Sidebar, Header, MessageList, Message, ToolCard (questions), Composer, ModelPicker, Settings
+- `src/components/`, one folder per role:
+  - `ui/`: building blocks that know nothing of the app (Button, Modal, Notice, Select, …; they do not import the store)
+  - `shell/`: the frame: Header, TabBar, Pane, GroupView, Sidebar and its rows (`shell/sidebar/`), Palette, first-run screens
+  - `chat/`: the conversation: MessageList, Message, AssistantMessage, ToolCard, Composer, SlashMenu, StatusLine, RetryNotice
+  - `models/`: model picker, connections, model settings
+  - `server/`: connecting, pairing, devices, backup, server update
+  - `settings/`: the settings dialog and its sections
+  - `agent/`: skills, subagents, MCP, sessions; a `XDialog` is the modal, a `XPanel` its body, a `XSettings` the settings section
+  - `terminal/`, `extensions/`
