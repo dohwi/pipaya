@@ -19,6 +19,12 @@ export const en: Record<string, string> = {
 	"최근 작업 폴더": "Recent folders",
 	"폴더 바꾸기": "Change folder",
 	"/ 로 명령, @ 로 파일을 불러옵니다": "Type / for commands, @ to mention a file",
+	/* ---- model retry notice ---- */
+	"{who} 모델이 응답하지 않아 다시 시도 중": "{who} is not responding, retrying",
+	"모델이 응답하지 않아 다시 시도 중": "The model is not responding, retrying",
+	"{n}초 뒤 다시 시도": "next try in {n}s",
+	"지금 다시 시도": "trying again now",
+	"모델 바꾸기": "Change model",
 	/* ---- MCP ---- */
 	"MCP 서버": "MCP servers",
 	"MCP 서버 {n}개": "{n} MCP {n#server|servers}",
@@ -1227,7 +1233,6 @@ export const en: Record<string, string> = {
 	"추론 단계 변경": "Change reasoning level",
 	"minimal → … → max, 끝에서 처음으로 돌아갑니다": "minimal → … → max, wrapping back to the start",
 	"지금까지의 내용을 복사한 새 대화로 갈라집니다": "Splits off a new chat with everything so far copied",
-	"연결이 불안정해 다시 시도하는 중입니다 ({attempt}/{max})": "Connection unstable, retrying ({attempt}/{max})",
 	"응답 다시 시도": "Retry reply",
 	"마지막 응답을 다시 생성합니다 (/retry)": "Regenerates the last reply (/retry)",
 	"컨텍스트 압축": "Compact context",

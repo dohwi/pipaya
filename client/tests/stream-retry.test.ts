@@ -58,7 +58,7 @@ describe("a reply cut off mid-stream", () => {
 		expect(chat.retrying).toBeNull();
 
 		chat.apply(event("run_retrying", { attempt: 1, maxRetries: 3, delayMs: 2000, restart: true }));
-		expect(chat.retrying).toEqual({ attempt: 1, maxRetries: 3 });
+		expect(chat.retrying).toMatchObject({ attempt: 1, maxRetries: 3, delayMs: 2000, reason: "" });
 		expect(chat.items.filter((i) => i.kind === "assistant")).toHaveLength(0);
 
 		// The retried answer replaces it under the same seq, so a reload shows it once.
@@ -76,7 +76,7 @@ describe("a reply cut off mid-stream", () => {
 		chat.apply(event("message_end", { seq: 1, message: assistant("earlier answer") }));
 		chat.apply(event("run_started", { mode: "prompt" }));
 		chat.apply(event("run_retrying", { attempt: 1, maxRetries: 6, delayMs: 2000 }));
-		expect(chat.retrying).toEqual({ attempt: 1, maxRetries: 6 });
+		expect(chat.retrying).toMatchObject({ attempt: 1, maxRetries: 6, delayMs: 2000, reason: "" });
 		expect(JSON.stringify(chat.items)).toContain("earlier answer");
 	});
 });
