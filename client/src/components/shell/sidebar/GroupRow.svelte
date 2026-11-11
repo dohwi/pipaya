@@ -57,3 +57,58 @@
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}
 	</RowOpen>
 </RowShell>
+
+<style>
+	.gfold {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 14px;
+		height: 24px;
+		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 48) */
+		border-radius: var(--radius-sm);
+	}
+	:global(:where(.side) .grprow.cur .title) {
+		font-weight: 600;
+	}
+	:global(:where(.side) .grprow .lead) {
+		width: 16px; /* the tabs' icon column (16px), so the book icon and the name line up with theirs */
+	}
+	:global(:where(.side) .gfold:hover .chev svg) {
+		stroke: var(--text);
+	}
+	/* a folded row has no button beside its count, so the toggle gives up its 8px right inset: the count lands on the list button's
+	   column (x 236 on touch, where the "+" keeps x 256) instead of 8px short of it — measured */
+	:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
+		padding-right: 0;
+	}
+	@media (pointer: coarse) {
+	/* touch, folded split tab: its "⋯" only shows while the tab is open, so the count would land on x 256 when it is not; it keeps
+	   the list button's column (x 236, like a folder's count) either way — 20 from the row's end puts its centre there */
+	:global(:where(.side) .grprow.gfolded .cbadge) {
+		position: absolute;
+		inset-block: 0;
+		margin-block: auto;
+		right: 28px; /* 20 for the count's centre on x 236 plus the row's own 8px highlight bleed */
+	}
+	:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
+		padding-right: 40px; /* room for that count: the title ends where the pill starts */
+	}
+	}
+	@media (hover: hover) {
+	:global(:where(.side) .grprow.gfolded .acts) {
+		position: absolute;
+		top: 50%;
+		right: 8px; /* the row's own right padding: keeps the "⋯" on x 256 */
+		translate: 0 -50%;
+	}
+	:global(:where(.side) .grprow.gfolded .cbadge) {
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	:global(:where(.side) .grprow.gfolded:hover .cbadge),
+	:global(:where(.side) .grprow.gfolded:has(:focus-visible) .cbadge),
+	:global(:where(.side) .grprow.gfolded.menuopen .cbadge) {
+		opacity: 0;
+	}
+	}
+</style>

@@ -229,4 +229,33 @@
 		height: 14px;
 		stroke-width: 1.9;
 	}
+	/* a block being dragged fades */
+	.srv.carried {
+		opacity: 0.45;
+	}
+	.srvhead.grabbable {
+		cursor: grab;
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
+	}
+	@media (hover: hover) {
+	.srvhead.folded {
+		position: relative;
+	}
+	:global(:where(.side) .srvhead.folded .dirnew) {
+		position: absolute;
+		top: 50%;
+		translate: 0 -50%;
+	}
+	:global(:where(.side) .srvhead.folded .dirnew) {
+		right: 12px; /* the strip's right padding: the same centre (x 256) */
+	}
+	.srvhead.folded .cbadge {
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.srvhead.folded:hover .cbadge {
+		opacity: 0;
+	}
+	}
 </style>

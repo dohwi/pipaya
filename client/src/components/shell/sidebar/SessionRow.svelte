@@ -28,3 +28,18 @@
 {/snippet}
 
 <TabRow {n} {x} target={{ kind: "session", x }} {tip} {drop} {member} {body} />
+
+<style>
+	/* label of a pane in a split tab: kept in view while the pane scrolls */
+	.who {
+		flex: none;
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--text-faint);
+		line-height: 16px; /* whole-pixel line box centred by the row; the handle's ink centre lands on the row's centre line, level with the title */
+	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
+</style>

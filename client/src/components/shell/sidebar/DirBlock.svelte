@@ -113,4 +113,131 @@
 		font-weight: 600;
 		color: var(--text);
 	}
+	.dicon :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.9;
+	}
+	.dir {
+		display: flex;
+		align-items: center;
+		margin-top: 12px;
+		border-radius: var(--radius-sm);
+	}
+	.dirblock:first-child > .dir {
+		margin-top: 4px;
+	}
+	.dir.grabbable {
+		cursor: grab;
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
+	}
+	.dirblock {
+		position: relative;
+	}
+	.dirblock.before::before,
+	.dirblock.after::after {
+		left: 0;
+		right: 0;
+	}
+	.dirblock.before::before {
+		top: -1px;
+	}
+	.dirblock.after::after {
+		bottom: -1px;
+	}
+	.dirtoggle {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 28 -> 48 -> 68) */
+		height: 32px; /* every row is 32px tall */
+		border-radius: var(--radius-sm);
+		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
+		text-align: left;
+		color: var(--text-dim);
+		transition: color var(--motion-fast) var(--ease-std);
+	}
+	/* folded, the list button is hidden, so the toggle runs to the "+" and its count takes the column it gives up: x 256 on a mouse
+	   (the "+" is out of the flow there), x 236 on touch (the "+" keeps x 256, so the count lands on the list column) — both measured */
+	.dir.folded .dirtoggle {
+		padding-right: 0;
+	}
+	.dir:hover .dirtoggle,
+	.dir.cur .dirtoggle {
+		color: var(--text);
+	}
+	.dicon {
+		display: grid;
+		flex: none;
+		width: 14px;
+		color: var(--text-faint);
+	}
+	/* name and parent path are centred on the same horizontal line, which is the icons' centre (line-height 1 drops the uneven leading) */
+	.dlabel {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		line-height: 1;
+	}
+	/* where the folder sits, dim after its name; the full path is the tooltip */
+	.dparent {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap; /* no ellipsis: `tail` cuts at folder boundaries or hides the path, never mid-name */
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+	}
+	.dname {
+		flex: 0 1 auto; /* the name takes what it needs; only when it alone is too long does it shrink (the parent path, flex 1 from 0, gives way first) */
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		padding-bottom: 4px;
+		margin-bottom: -4px; /* descenders (g p y) overflow the line-height:1 box; widen the clip area without moving layout */
+	}
+	/* a pinned row's mark (PinMark) is set into its icon's corner: the icon boxes are its hosts */
+	.dicon {
+		position: relative;
+	}
+	.dir.over {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+	}
+	/* a block being dragged fades */
+	.dirblock.carried {
+		opacity: 0.45;
+	}
+	@media (pointer: coarse) {
+	.dirtoggle {
+		height: 40px;
+	}
+	}
+	@media (hover: hover) {
+	.dir.folded {
+		position: relative;
+	}
+	:global(:where(.side) .dir.folded .dirnew) {
+		position: absolute;
+		top: 50%;
+		translate: 0 -50%;
+	}
+	:global(:where(.side) .dir.folded .dirnew) {
+		right: 0; /* the same centre (x 256) as when unfolded */
+	}
+	.dir.folded .cbadge {
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.dir.folded:hover .cbadge {
+		opacity: 0;
+	}
+	}
 </style>

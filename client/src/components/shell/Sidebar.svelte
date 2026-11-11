@@ -379,18 +379,6 @@
 <RowMenu bind:this={rowMenu} bind:open={menuId} />
 
 <style>
-	/* label of a pane in a split tab: kept in view while the pane scrolls */
-	:global(:where(.side) .who) {
-		flex: none;
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box centred by the row; the handle's ink centre lands on the row's centre line, level with the title */
-	}
-	:global(:where(.side) .who.working) { color: var(--info); }
-	:global(:where(.side) .who.asking) { color: var(--warn); }
-	:global(:where(.side) .who.done) { color: var(--ok); }
-	:global(:where(.side) .who.failed) { color: var(--danger); }
 	.side {
 		display: flex;
 		flex-direction: column;
@@ -432,16 +420,6 @@
 	:global(.iconbtn.foldbtn:focus-visible) {
 		outline-offset: -2px;
 	}
-	:global(:where(.side) .forkmark) {
-		display: grid;
-		flex: none;
-		color: var(--text-faint);
-	}
-	:global(:where(.side) .forkmark svg) {
-		width: 13px;
-		height: 13px;
-		stroke-width: 2;
-	}
 	@media (min-width: 861px) {
 		.side {
 			width: var(--sidebar-w); /* the wrapper animates its width; the content must not reflow */
@@ -455,11 +433,6 @@
 		overflow-y: auto;
 		padding: 8px 0 16px; /* 8 below the search box, 16 above the window edge */
 		overscroll-behavior: contain;
-	}
-	/* a block being dragged fades */
-	:global(:where(.side) .srv.carried),
-	:global(:where(.side) .dirblock.carried) {
-		opacity: 0.45;
 	}
 	/* the line where a carried server, folder or tab would land: its own rules below only place it */
 	:global(:where(.side) .srv.before::before),
@@ -476,87 +449,6 @@
 		z-index: 1;
 		pointer-events: none;
 	}
-	:global(:where(.side) .dicon svg) {
-		width: 14px;
-		height: 14px;
-		stroke-width: 1.9;
-	}
-	:global(:where(.side) .dir) {
-		display: flex;
-		align-items: center;
-		margin-top: 12px;
-		border-radius: var(--radius-sm);
-	}
-	:global(:where(.side) .dirblock:first-child > .dir) {
-		margin-top: 4px;
-	}
-	:global(:where(.side) .dir.grabbable),
-	:global(:where(.side) .srvhead.grabbable) {
-		cursor: grab;
-		-webkit-user-select: none;
-		user-select: none;
-		-webkit-touch-callout: none;
-	}
-	:global(:where(.side) .dirblock) {
-		position: relative;
-	}
-	:global(:where(.side) .dirblock.before::before),
-	:global(:where(.side) .dirblock.after::after) {
-		left: 0;
-		right: 0;
-	}
-	:global(:where(.side) .dirblock.before::before) {
-		top: -1px;
-	}
-	:global(:where(.side) .dirblock.after::after) {
-		bottom: -1px;
-	}
-	:global(:where(.side) .dirtoggle) {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 28 -> 48 -> 68) */
-		height: 32px; /* every row is 32px tall */
-		border-radius: var(--radius-sm);
-		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
-		text-align: left;
-		color: var(--text-dim);
-		transition: color var(--motion-fast) var(--ease-std);
-	}
-	/* folded, the list button is hidden, so the toggle runs to the "+" and its count takes the column it gives up: x 256 on a mouse
-	   (the "+" is out of the flow there), x 236 on touch (the "+" keeps x 256, so the count lands on the list column) — both measured */
-	:global(:where(.side) .dir.folded .dirtoggle) {
-		padding-right: 0;
-	}
-	:global(:where(.side) .dir:hover .dirtoggle),
-	:global(:where(.side) .dir.cur .dirtoggle) {
-		color: var(--text);
-	}
-	:global(:where(.side) .dicon) {
-		display: grid;
-		flex: none;
-		width: 14px;
-		color: var(--text-faint);
-	}
-	/* name and parent path are centred on the same horizontal line, which is the icons' centre (line-height 1 drops the uneven leading) */
-	:global(:where(.side) .dlabel) {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		line-height: 1;
-	}
-	/* where the folder sits, dim after its name; the full path is the tooltip */
-	:global(:where(.side) .dparent) {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		white-space: nowrap; /* no ellipsis: `tail` cuts at folder boundaries or hides the path, never mid-name */
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-	}
 	:global(:where(.side) .chev) {
 		display: grid;
 		flex: none;
@@ -570,17 +462,6 @@
 		height: 14px;
 		stroke: var(--text-faint);
 		stroke-width: 2;
-	}
-	:global(:where(.side) .dname) {
-		flex: 0 1 auto; /* the name takes what it needs; only when it alone is too long does it shrink (the parent path, flex 1 from 0, gives way first) */
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		padding-bottom: 4px;
-		margin-bottom: -4px; /* descenders (g p y) overflow the line-height:1 box; widen the clip area without moving layout */
 	}
 	/* a folded row's count: a small round badge pushed to the right edge */
 	/* 20px wide, like the "+" / "⋯" / list buttons (x 246..266): one and two digits both centre on x 256, so the count and the button that replaces it share a column */
@@ -606,77 +487,15 @@
 		opacity: 1;
 	}
 	@media (pointer: coarse) {
-		:global(:where(.side) .dirnew) {
-			opacity: 1;
-		}
-		/* touch rows are 40px (a finger needs more than 32); the 20px buttons keep the x 236 / 256 columns and their hit boxes are
-		   20 wide x the full row high, so the list button's and the "+" boxes touch but never overlap (the 44px .tap box overlapped by 24) */
-		:global(:where(.side) .dirnew.tap::after) {
-			width: 100%;
-			height: 40px;
-		}
-		:global(:where(.side) .dirtoggle) {
-			height: 40px;
-		}
+	:global(:where(.side) .dirnew) {
+		opacity: 1;
 	}
-	/* a folded row has no button beside its count, so the toggle gives up its 8px right inset: the count lands on the list button's
-	   column (x 236 on touch, where the "+" keeps x 256) instead of 8px short of it — measured */
-	:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
-		padding-right: 0;
+	/* touch rows are 40px (a finger needs more than 32); the 20px buttons keep the x 236 / 256 columns and their hit boxes are
+	   20 wide x the full row high, so the list button's and the "+" boxes touch but never overlap (the 44px .tap box overlapped by 24) */
+	:global(:where(.side) .dirnew.tap::after) {
+		width: 100%;
+		height: 40px;
 	}
-	/* touch, folded split tab: its "⋯" only shows while the tab is open, so the count would land on x 256 when it is not; it keeps
-	   the list button's column (x 236, like a folder's count) either way — 20 from the row's end puts its centre there */
-	@media (pointer: coarse) {
-		:global(:where(.side) .grprow.gfolded .cbadge) {
-			position: absolute;
-			inset-block: 0;
-			margin-block: auto;
-			right: 28px; /* 20 for the count's centre on x 236 plus the row's own 8px highlight bleed */
-		}
-		:global(:where(.side) .grprow.gfolded .open:not(.acc):not(.chev)) {
-			padding-right: 40px; /* room for that count: the title ends where the pill starts */
-		}
-	}
-	/* folded rows: on hover the count gives way to the "+", which takes its place instead of sitting beside it */
-	@media (hover: hover) {
-		:global(:where(.side) .dir.folded),
-	:global(:where(.side) .srvhead.folded) {
-			position: relative;
-		}
-		:global(:where(.side) .dir.folded .dirnew),
-	:global(:where(.side) .srvhead.folded .dirnew) {
-			position: absolute;
-			top: 50%;
-			translate: 0 -50%;
-		}
-		:global(:where(.side) .dir.folded .dirnew) {
-			right: 0; /* the same centre (x 256) as when unfolded */
-		}
-		:global(:where(.side) .srvhead.folded .dirnew) {
-			right: 12px; /* the strip's right padding: the same centre (x 256) */
-		}
-		:global(:where(.side) .grprow.gfolded .acts) {
-			position: absolute;
-			top: 50%;
-			right: 8px; /* the row's own right padding: keeps the "⋯" on x 256 */
-			translate: 0 -50%;
-		}
-		:global(:where(.side) .grprow.gfolded .cbadge) {
-			transition: opacity var(--motion-fast) var(--ease-std);
-		}
-		:global(:where(.side) .grprow.gfolded:hover .cbadge),
-		:global(:where(.side) .grprow.gfolded:has(:focus-visible) .cbadge),
-		:global(:where(.side) .grprow.gfolded.menuopen .cbadge) {
-			opacity: 0;
-		}
-		:global(:where(.side) .dir.folded .cbadge),
-	:global(:where(.side) .srvhead.folded .cbadge) {
-			transition: opacity var(--motion-fast) var(--ease-std);
-		}
-		:global(:where(.side) .dir.folded:hover .cbadge),
-	:global(:where(.side) .srvhead.folded:hover .cbadge) {
-			opacity: 0;
-		}
 	}
 	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {
@@ -708,31 +527,12 @@
 		height: 15px;
 		stroke-width: 2;
 	}
-	:global(:where(.side) .item) {
-		position: relative;
-		display: flex;
-		align-items: center;
-		border-radius: var(--radius-control);
-		margin: 1px -8px 1px 4px; /* the row's highlight runs 8px past its content (the padding below gives it back), so the "⋯" and pin keep their column (x 256) yet are not glued to the highlight's edge */
-		padding-right: 8px;
-		transition: background var(--motion-fast) var(--ease-std);
-	}
 	:global(:where(.side) .list .item.nested .open) {
 		padding-left: 39px; /* grid: the tab icon centres on x 68 (28 / 48 / 68, 20px apart) */
-	}
-	:global(:where(.side) .item:hover) {
-		background: var(--bg-hover);
-	}
-	:global(:where(.side) .item.active) {
-		background: var(--bg-active);
 	}
 	/* the sliding marker draws the selection; the row itself stays clear so the two never double up */
 	:global(:where(.side) .list[data-indicator-ready] .item.active) {
 		background: transparent;
-	}
-	:global(:where(.side) .item.active .title) {
-		font-weight: 700;
-		color: var(--text);
 	}
 	/* the open tab: a soft wash that fades out to the right, a faint hairline and a lifted title; no bar, so it stays quiet */
 	:global(:where(.side) .list .slide-ind) {
@@ -744,9 +544,7 @@
 	:global(:where(.side) .item.active .lead > svg) {
 		color: var(--text);
 	}
-	:global(:where(.side) .item.active:hover) {
-		background: transparent;
-	}
+	/* stays here, not in RowOpen: scoped there it would out-rank the padding-left / touch min-height rules of the nested, member and touch rules in this sheet (specificity, measured as a 390px diff) */
 	:global(:where(.side) .open:not(.acc):not(.chev)) {
 		flex: 1;
 		min-width: 0;
@@ -757,130 +555,6 @@
 		padding: 0 8px 0 4px;
 		text-align: left;
 		outline-offset: -1px;
-	}
-	:global(:where(.side) .title) {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-	}
-	/* a pinned row's mark (PinMark) is set into its icon's corner: the icon boxes are its hosts */
-	:global(:where(.side) .dicon) {
-		position: relative;
-	}
-	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
-	:global(:where(.side) .title .track) {
-		display: inline;
-	}
-	:global(:where(.side) .title .dup) {
-		display: none;
-	}
-	@media (hover: hover) {
-		:global(:where(.side) .item:hover .title[data-over]),
-	:global(:where(.side) .item:has(:focus-visible) .title[data-over]) {
-			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-		}
-		:global(:where(.side) .item:hover .title[data-over] .track),
-	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .track) {
-			display: flex;
-			width: max-content;
-			animation: mq var(--mq-d, 8s) linear infinite;
-		}
-		:global(:where(.side) .item:hover .title[data-over] .mq),
-	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .mq),
-	:global(:where(.side) .item:hover .title[data-over] .dup),
-	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .dup) {
-			display: block;
-			flex: none;
-			padding-right: 32px;
-		}
-	}
-	/* touch has no hover, so the open session's long title flows by on its own; on desktop only hover/focus (above) does */
-	@media (hover: none) {
-		:global(:where(.side) .item.active .title[data-over]) {
-			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-		}
-		:global(:where(.side) .item.active .title[data-over] .track) {
-			display: flex;
-			width: max-content;
-			animation: mq var(--mq-d, 8s) linear infinite;
-		}
-		:global(:where(.side) .item.active .title[data-over] .mq),
-	:global(:where(.side) .item.active .title[data-over] .dup) {
-			display: block;
-			flex: none;
-			padding-right: 32px;
-		}
-	}
-	@keyframes -global-mq {
-		from {
-			translate: 0;
-		}
-		to {
-			translate: -50%;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		:global(:where(.side) .item .title[data-over] .track) {
-			animation: none !important;
-		}
-	}
-	:global(:where(.side) .acts) {
-		display: none;
-	}
-	:global(:where(.side) .item:hover .acts),
-	:global(:where(.side) .item:has(:focus-visible) .acts),
-	:global(:where(.side) .item.menuopen .acts) {
-		display: flex;
-	}
-	@media (pointer: coarse) {
-		:global(:where(.side) .acts) {
-			display: flex;
-		}
-		:global(:where(.side) .item:not(.active):not(.cur):not(.menuopen) .acts) {
-			display: none;
-		}
-	}
-	/* the three dots: same box and right edge as the + on the directory row above */
-	:global(:where(.side) .more) {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 20px;
-		height: 20px;
-		margin-right: 0; /* tab rows end where folder rows do (no right margin), so this centres on x 256 like the "+" above */
-		border-radius: 50%; /* a round hit area: a square tint on a row of rounded corners looked off */
-		color: var(--text-faint);
-		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
-	}
-	:global(:where(.side) .more:hover),
-	:global(:where(.side) .more.on),
-	:global(:where(.side) .more:focus-visible) {
-		background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
-		color: var(--text);
-	}
-	:global(:where(.side) .more svg) {
-		width: 15px;
-		height: 15px;
-		stroke-width: 2.6;
-	}
-	:global(:where(.side) .rename) {
-		flex: 1;
-		margin: 4px;
-		height: 34px;
-		padding: 0 8px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--accent);
-		background: var(--bg);
-		outline: 0;
-		font-size: var(--fs-lg);
-		min-width: 0;
 	}
 	.bottom {
 		padding: 8px 8px calc(8px + var(--sab));
@@ -920,13 +594,6 @@
 		position: relative;
 		display: inline-flex;
 	}
-	/* hairline between workspaces / groups */
-
-	/* A split tab and its panes read as one tree: the book row on top, its panes hanging off a line under the book. */
-	:global(:where(.side) .grp) {
-		margin: 1px 0; /* full width like the other tabs, so the book sits where their icons do; 1px between rows like every other row */
-		border-radius: var(--radius-sm);
-	}
 	:global(:where(.side) .grp .item.nested .open) {
 		padding-left: 4px; /* chevron (x 41-55, centre 48) + 4 + 6 gap: the book icon centres on x 68 like the tabs' icons */
 	}
@@ -940,141 +607,17 @@
 	:global(:where(.side) .grp .item.member.active .title) {
 		color: var(--text);
 	}
-	/* tree line: a rule down from the book's centre; each pane gets a short elbow with a 3px corner (near right angle) (the last one ends the rule) */
-	:global(:where(.side) .branch) {
-		position: absolute;
-		left: 46.25px; /* the 1.5px stroke's centre (x 21 + 46.25 + 0.75) sits on the book icon's column, x 68 */
-		top: 0;
-		bottom: 0;
-		width: 12px;
-		pointer-events: none;
-	}
-	:global(:where(.side) .branch::before) {
-		content: "";
-		position: absolute;
-		left: 0;
-		top: -1px; /* rows are 1px apart (their margin): run the rule across that gap so it never breaks */
-		bottom: -1px;
-		border-left: 1.5px solid var(--tree-line);
-	}
-	:global(:where(.side) .branch::after) {
-		content: "";
-		position: absolute;
-		left: 0;
-		top: calc(50% - 8px);
-		width: 100%;
-		height: 8px;
-		border-left: 1.5px solid var(--tree-line);
-		border-bottom: 1.5px solid var(--tree-line);
-		border-bottom-left-radius: 3px;
-	}
-	/* the open pane's path: one element from the group down to its elbow, one step darker than the quiet rule. Only its height
-	   moves (lib/tree-path), on the selection marker's time and curve, so the two travel together */
-	:global(:where(.side) .members) {
-		position: relative;
-	}
-	/* the quiet rules draw above the selection wash, so the open row no longer tints the rule that runs behind it */
-	:global(:where(.side) .members .item .branch) {
-		z-index: 2;
-	}
-	:global(:where(.side) .members .tree-path) {
-		position: absolute;
-		left: 50.25px; /* the rule's column: x 68 like .branch (46.25px from a row's left, x 21); .members starts 4px further left, at x 17 */
-		top: -2px; /* up into the gap under the group row, where the first pane's rule starts */
-		z-index: 3; /* above the rows' quiet rules (z 2, which overlap each other by 1px), which are above the selection wash (z 1) */
-		width: 12px;
-		height: var(--path-h, 0px); /* already counts the 2px lead above the first row (lib/tree-path) */
-		box-sizing: border-box;
-		border-left: 1.5px solid var(--text-dim);
-		border-bottom: 1.5px solid var(--text-dim);
-		border-bottom-left-radius: 3px;
-		opacity: 1;
-		pointer-events: none;
-		transition: height var(--motion-normal) var(--ease), opacity var(--motion-fast) var(--ease-std);
-	}
-	:global(:where(.side) .members .tree-path[data-empty]) {
-		opacity: 0;
-	}
-	:global(:where(.side) .members .item:last-child .branch::before) {
-		bottom: calc(50% + 8px);
-	}
-	:global(:where(.side) .members .item:first-child .branch::before) {
-		top: -2px; /* the first pane also reaches up into the gap under the book row */
-	}
-	:global(:where(.side) .grprow.cur .title) {
-		font-weight: 600;
-	}
-	:global(:where(.side) .gfold) {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 14px;
-		height: 24px;
-		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 48) */
-		border-radius: var(--radius-sm);
-	}
-	:global(:where(.side) .grprow .lead) {
-		width: 16px; /* the tabs' icon column (16px), so the book icon and the name line up with theirs */
-	}
-	:global(:where(.side) .gfold:hover .chev svg) {
-		stroke: var(--text);
-	}
-	:global(:where(.side) .grp.over) {
-		background: var(--accent-soft);
-	}
-	:global(:where(.side) .dir.over) {
-		border-color: var(--accent);
-		background: var(--accent-soft);
-	}
-	/* Where a carried session would land among its siblings: the neighbours step aside (the row grows a 24px gap on that
-	   side, animated) and the line sits in the middle of it. The pseudo-element fills the whole gap and takes the pointer,
-	   so the row under the pointer stays the same one while it moves (otherwise the gap would push the row away and the
-	   hover would flicker); its line is a 2px gradient. */
-	:global(:where(.side) .item) {
-		transition:
-			background var(--motion-fast) var(--ease-std),
-			margin var(--motion-fast) var(--ease-std);
-	}
-	:global(:where(.side) .item.before) {
-		margin-top: 25px; /* 24 gap + the usual 1px between rows */
-	}
-	:global(:where(.side) .item.after) {
-		margin-bottom: 25px; /* 24 gap + the usual 1px between rows */
-	}
-	:global(:where(.side) .item.before::before),
-	:global(:where(.side) .item.after::after) {
-		left: 8px;
-		right: 16px; /* 8 from where the content ends (the row's highlight runs 8px past it) */
-		height: 24px;
-		border-radius: 0;
-		background: linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat;
-		pointer-events: auto;
-	}
-	:global(:where(.side) .item.before::before) {
-		top: -24px;
-	}
-	:global(:where(.side) .item.after::after) {
-		bottom: -24px;
-	}
 	/* the row in the air: it keeps its place, faded (dropping it on itself does nothing) */
 	:global(:where(.side) .item.carried),
 	:global(:where(.side) .grp:has(> .item.carried) .members .item) {
 		opacity: 0.45;
 	}
-	/* the row being pulled onto: pairs up with whatever is dropped */
-	:global(:where(.side) .item.over) {
-		background: var(--accent-soft);
-		box-shadow: inset 0 0 0 1.5px var(--accent);
-	}
-	:global(:where(.side) .item.grabbable) {
-		cursor: grab;
-		-webkit-tap-highlight-color: transparent;
-	}
 	@media (max-width: 860px) {
 		:global(.iconbtn.foldbtn) {
 			display: none;
 		}
-	}	/* touch: tab rows are 40px too. Last in the sheet, so it wins over the 32px base rules above it with the same specificity. */
+	}
+	/* touch: tab rows are 40px too. Last in the sheet, so it wins over the 32px base rules above it with the same specificity. */
 	@media (pointer: coarse) {
 		:global(:where(.side) .open:not(.acc):not(.chev)),
 		:global(:where(.side) .grp .item.member .open) {
