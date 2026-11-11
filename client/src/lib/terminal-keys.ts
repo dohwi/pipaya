@@ -78,7 +78,7 @@ export interface BarKey {
 	mod?: "ctrl" | "alt";
 	/** Not a key: what the button does */
 	repeat?: boolean;
-	/** Icon name (components/Icon.svelte) drawn instead of the label */
+	/** Icon name (components/ui/Icon.svelte) drawn instead of the label */
 	icon?: string;
 	title: string;
 	/** Starts a new group (a gap before it) */

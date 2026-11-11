@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from "../Button.svelte";
-  import DialogBody from "../DialogBody.svelte";
-  import DialogFooter from "../DialogFooter.svelte";
-  import Modal from "../Modal.svelte";
+  import Button from "../ui/Button.svelte";
+  import DialogBody from "../ui/DialogBody.svelte";
+  import DialogFooter from "../ui/DialogFooter.svelte";
+  import Modal from "../ui/Modal.svelte";
   import { t } from "../../lib/i18n";
   import { app } from "../../lib/store.svelte";
 

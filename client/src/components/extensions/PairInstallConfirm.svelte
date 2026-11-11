@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
-	import ConfirmDialog from "../ConfirmDialog.svelte";
+	import ConfirmDialog from "../ui/ConfirmDialog.svelte";
 
 	/**
 	 * "Install the other one too?" for two extensions that only work together. The user sees two extensions, not a

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
-	import ConfirmDialog from "../ConfirmDialog.svelte";
+	import ConfirmDialog from "../ui/ConfirmDialog.svelte";
 
 	/**
 	 * "Delete this extension?" over the marketplace or its page: delete or cancel, with one box for its settings. Settings are kept

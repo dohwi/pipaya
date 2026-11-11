@@ -1,0 +1,443 @@
+<script lang="ts">
+	import { sessionTitle } from "../../lib/session-title";
+	import { RENAME_KEY } from "../../lib/keys";
+	import ExtensionMount from "../extensions/ExtensionMount.svelte";
+	import ExtensionPart from "../extensions/ExtensionPart.svelte";
+	import { extensions } from "../../lib/extensions/host.svelte";
+	import { peerLabel } from "../../lib/peers";
+	import { t } from "../../lib/i18n";
+	import Icon from "../ui/Icon.svelte";
+	import AgentBadge from "./AgentBadge.svelte";
+	import EmptyHero from "../chat/EmptyHero.svelte";
+	import Welcome from "./Welcome.svelte";
+	import MessageList from "../chat/MessageList.svelte";
+	import FindBar from "../chat/FindBar.svelte";
+	import Composer from "../chat/Composer.svelte";
+	import DropLayer from "./DropLayer.svelte";
+	import SessionToasts from "./SessionToasts.svelte";
+	import { activityOf } from "../../lib/activity";
+	import { dragSource } from "../../lib/dnd.svelte";
+	import { closeContextMenu, openContextMenu, type MenuItem } from "../../lib/context-menu";
+	import type { Point } from "../../lib/press-menu";
+	import { marquee } from "../../lib/fit-text";
+	import { memberMenu } from "../../lib/member-menu";
+	import { setPane } from "../../lib/pane";
+	import { InlineRename } from "../../lib/inline-rename.svelte";
+	import { registerRenamePlace } from "../../lib/rename-places";
+	import { app } from "../../lib/store.svelte";
+	import ExtensionSlot from "../extensions/ExtensionSlot.svelte";
+	import Lazy from "../ui/Lazy.svelte";
+	import { isTerminalId, platformName } from "../../lib/terminal";
+	import { viewport } from "../../lib/viewport.svelte";
+
+	const loadTerminal = () => import("../terminal/TerminalView.svelte");
+
+	/**
+	 * One conversation with its own input. `id` null = a new chat that has no session yet.
+	 * `grouped`: shown as one of several panes, so it gets a title bar (to drag it around) and can be focused by a click.
+	 */
+	let { id, grouped = false }: { id: string | null; grouped?: boolean } = $props();
+
+	const focused = $derived(!grouped || id === app.activeId);
+	setPane(() => ({ id, focused }));
+
+	const group = $derived(grouped && id ? app.groupOf(id) : undefined);
+	const full = $derived(app.isFull(group?.id));
+	const zoomed = $derived(grouped && !!id && (full || app.zoomId === id));
+	/** The button: full mode toggles back to the grid, otherwise the temporary zoom. */
+	function toggleZoom() {
+		if (!id) return;
+		if (full && group) app.toggleFull(group.id);
+		else app.zoomId = zoomed ? null : id;
+	}
+	const chat = $derived(app.chatOf(id));
+	const session = $derived(app.session(id));
+	/** A terminal pane: the server's shell instead of a conversation */
+	const term = $derived(app.terminal(id));
+	const isTerm = $derived(isTerminalId(id));
+	const state = $derived(id && !isTerm ? activityOf(app, id) : "idle");
+	/** A label an extension put on this session. */
+	const tag = $derived(id ? (peerLabel(session) ?? extensions.labelOf(id)) : undefined);
+
+	/** The title being renamed in place (double click on it, or "이름 바꾸기" in the menu). */
+	const rename = new InlineRename();
+	const titleNow = () => (term ? term.title : (session ? sessionTitle(session.title) : ""));
+	/** A click in this pane makes F2 rename its own title here, even while a split tab is open (`rename-places`) */
+	$effect(() =>
+		registerRenamePlace({
+			order: 3,
+			zone: id ? `[data-pane="${id}"]` : undefined,
+			open: () => (id && titleNow() ? { id, title: titleNow() } : null),
+			start: (target, title) => rename.start(target, title),
+		})
+	);
+	function commitRename() {
+		const done = rename.commit();
+		if (!done) return;
+		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
+	}
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+
+	/** Right click / long press on the title bar: what its buttons do, with renaming and closing. */
+	function paneMenu(pt: Point) {
+		if (!id) return;
+		const pane = id;
+		// the sidebar's entries for a pane, plus this bar's own zoom
+		const items: MenuItem[] = memberMenu(pane, titleNow(), (tid, name) => rename.start(tid, name), [
+			{ icon: zoomed ? "shrink" : "expand", label: zoomed ? t("작게 보기") : t("크게 보기"), title: "", run: toggleZoom },
+		]);
+		openContextMenu(pt, `pane:${pane}`, items);
+		return closeContextMenu;
+	}
+
+	function focus() {
+		if (grouped && id && id !== app.activeId) void app.openSession(id);
+	}
+</script>
+
+<!-- Only listens (capture) to move focus to this pane when something inside it is pressed or focused; it is not itself a control. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
+	<!-- zoomed: the session strip above carries the title, path and shrink button, so this bar would only repeat it -->
+	{#if grouped && id && (!zoomed || viewport.narrow)}
+		<header
+			class="bar"
+			tabindex="-1"
+			use:dragSource={{ id, menu: paneMenu, disabled: rename.is(id) }}
+			onkeydown={(e) => {
+				// F2 renames while the title bar has focus; the terminal and the input below keep F2 for themselves
+				if (e.key !== RENAME_KEY || rename.is(id) || (e.target as Element).closest("input")) return;
+				e.preventDefault();
+				rename.start(id, titleNow());
+			}}
+			title={t("끌어서 다른 칸으로 옮기기 · 더블 클릭으로 전체 화면 전환")}
+			ondblclick={(e) => {
+				if ((e.target as HTMLElement).closest("button, input, .t")) return;
+				if (group) app.toggleFull(group.id);
+			}}
+		>
+			{#if isTerm}
+				<span class="ticon"><Icon name="terminal" /></span>
+			{:else}
+				<AgentBadge {id} {state} size={16} />
+			{/if}
+			{#if rename.is(id)}
+				<input
+					class="rename"
+					value={rename.draft}
+					aria-label={t("이름 바꾸기")}
+					use:focusSelect
+					oninput={(e) => (rename.draft = e.currentTarget.value)}
+					onblur={commitRename}
+					onpointerdown={(e) => e.stopPropagation()}
+					onkeydown={(e) => {
+						if (e.key === "Enter") commitRename();
+						if (e.key === "Escape") rename.cancel();
+					}}
+				/>
+			{:else}
+			<span class="tt">
+				{#if term}
+				<span class="t">{term.title}{#if app.terminalSupport}<span class="os mono">{platformName(app.terminalSupport.platform)}</span>{/if}</span>
+				<span class="cwd mono" title={term.cwd}>{term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
+				{:else}
+				{#snippet label()}{#if tag}<span class="who mono {state}" title={session?.name ? t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: session.name }) : tag.title}>{tag.text}</span>{/if}{session ? sessionTitle(session.title) : t("대화")}{/snippet}
+				<span class="t" use:marquee={`${tag?.text ?? ""}${session ? sessionTitle(session.title) : ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
+				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
+				{/if}
+			</span>
+			{/if}
+			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
+			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
+			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
+		</header>
+	{/if}
+
+	{#if zoomed && !viewport.narrow && id}
+		<!-- the title bar is hidden while zoomed: the path and the shrink button float in the pane's top-right corner -->
+		{@const dir = term?.cwd ?? session?.cwd ?? ""}
+		<div class="corner">
+			{#if dir}<span class="cwd mono" title={dir}>{dir.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
+			<button class="x tap" onclick={toggleZoom} aria-label={t("작게 보기")} title={full ? t("작게 보기") : t("작게 보기 (Esc)")}><Icon name="shrink" /></button>
+		</div>
+	{/if}
+
+	{#if isTerm}
+	<div class="body">
+		<SessionToasts id={id!} />
+		{#if term}
+			{#key term.id}<Lazy load={loadTerminal} terminal={term} {focused} />{/key}
+		{:else}
+			<div class="gone">{t("터미널이 닫혔습니다")}</div>
+		{/if}
+	</div>
+	<DropLayer target={id!} />
+	{:else}
+
+	<ExtensionMount slot="pane.top" props={{ paneId: id }} />
+	<div class="body">
+		{#if id}<SessionToasts {id} />{/if}
+		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
+			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
+			<ExtensionPart part="pane.empty" props={{ paneId: id }}><EmptyHero /></ExtensionPart>
+		{/if}
+		{#if chat}
+			{#key chat.id}
+				<MessageList {chat} />
+			{/key}
+			<FindBar paneId={id} {focused} />
+		{:else if !id}
+			<div class="empty">
+				<ExtensionPart part="pane.welcome"><Welcome /></ExtensionPart>
+			</div>
+		{/if}
+	</div>
+
+	<ExtensionSlot slot="footer" />
+	<ExtensionMount slot="pane.bottom" props={{ paneId: id }} />
+	<Composer />
+	<!-- covers the input and the stats line too, so a drop zone reaches the bottom edge of the pane -->
+	{#if id}<DropLayer target={id} />{/if}
+	{/if}
+</section>
+
+<style>
+	.pane {
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		position: relative;
+		container-type: inline-size;
+		isolation: isolate; /* the empty-state grid sits at z-index -1 inside it: above the pane background, below the content */
+		background: var(--bg);
+	}
+	.pane.grouped {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+	.pane.focused {
+		/* a full-strength accent frame reads far heavier than the 1px --border lines around it; blend toward them */
+		border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+	}
+	/* finished while the user was elsewhere: green frame + title bar until the pane is looked at */
+	.pane.finished {
+		border-color: var(--ok);
+		box-shadow: 0 0 0 1px var(--ok);
+	}
+	.pane.finished .bar {
+		background: var(--ok-soft);
+		border-bottom-color: var(--ok);
+	}
+	.pane.finished .t {
+		color: var(--ok);
+	}
+	.bar {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 38px;
+		padding: 0 4px 0 8px;
+		background: var(--bg-side);
+		border-bottom: 1px solid var(--border);
+		cursor: grab;
+		user-select: none;
+	}
+	.bar:active {
+		cursor: grabbing;
+	}
+	/* takes all the free width so the badge and the unlink button sit at the right edge */
+	.tt {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	/* pushed to the right edge of the title area, next to the badge / unlink button */
+	.ticon {
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		color: var(--text-dim);
+	}
+	.ticon :global(svg) {
+		width: 15px;
+		height: 15px;
+		stroke-width: 1.9;
+	}
+	.os {
+		margin-left: 8px;
+		font-size: var(--fs-2xs);
+		font-weight: 500;
+		color: var(--text-faint);
+	}
+	.gone {
+		flex: 1;
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+		font-size: var(--fs-sm);
+	}
+	.cwd {
+		flex: 0 1 auto;
+		min-width: 0;
+		margin-left: auto;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.t {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-xs);
+		font-weight: 600;
+		color: var(--text-dim);
+	}
+	.rename {
+		flex: 1;
+		min-width: 0;
+		height: 28px;
+		padding: 0 8px;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-sm);
+		background: var(--bg);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		outline: 0;
+	}
+	.who {
+		margin-right: 4px;
+		color: var(--text-dim);
+		font-weight: 700;
+	}
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
+	.focused .t {
+		color: var(--text);
+	}
+	/* a title that does not fit flows by while the pane is focused, looping back to its start */
+	.t .track {
+		display: inline;
+	}
+	.t .dup {
+		display: none;
+	}
+	@media (hover: hover) {
+		.focused .t:global([data-over]) {
+			text-overflow: clip;
+			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+		}
+		.focused .t:global([data-over]) .track {
+			display: flex;
+			width: max-content;
+			animation: mq var(--mq-d, 8s) linear infinite;
+		}
+		.focused .t:global([data-over]) .mq,
+		.focused .t:global([data-over]) .dup {
+			display: block;
+			flex: none;
+			padding-right: 32px;
+		}
+	}
+	@keyframes mq {
+		from {
+			translate: 0;
+		}
+		to {
+			translate: -50%;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.t:global([data-over]) .track {
+			animation: none !important;
+		}
+	}
+	.ti {
+		display: inline-block;
+	}
+	/* A title longer than the bar scrolls through while the pane is selected, so the whole text can be read. */
+	@media (prefers-reduced-motion: no-preference) {
+		.focused .t:global(.over) {
+			text-overflow: clip;
+		}
+		.focused .t:global(.over) .ti {
+			animation: title-scroll var(--dur, 8s) ease-in-out infinite;
+		}
+	}
+	@keyframes title-scroll {
+		0%, 15% { transform: translateX(0); }
+		70%, 85% { transform: translateX(var(--shift)); }
+		100% { transform: translateX(0); }
+	}
+	.x {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: var(--radius-sm);
+		color: var(--text-faint);
+	}
+	.x:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.x :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.9;
+	}
+	.corner {
+		position: absolute;
+		top: 8px;
+		right: 16px; /* clear of the message list's scrollbar */
+		z-index: 5;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding-left: 8px;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--bg) 85%, transparent);
+		backdrop-filter: blur(4px);
+	}
+	.corner .cwd {
+		max-width: 240px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+	}
+	.body {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		position: relative;
+	}
+	.empty {
+		flex: 1;
+		display: flex;
+		overflow-y: auto;
+		position: relative;
+	}
+	.empty > :global(.welcome) {
+		position: relative;
+	}
+</style>

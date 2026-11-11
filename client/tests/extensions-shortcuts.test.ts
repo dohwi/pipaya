@@ -172,7 +172,7 @@ describe("IME", () => {
 describe("the app ends a hold whenever its keyup may never come", () => {
 	const actions = readFileSync(new URL("../src/lib/actions.ts", import.meta.url), "utf8");
 	const app = readFileSync(new URL("../src/App.svelte", import.meta.url), "utf8");
-	const editor = readFileSync(new URL("../src/components/Shortcuts.svelte", import.meta.url), "utf8");
+	const editor = readFileSync(new URL("../src/components/settings/Shortcuts.svelte", import.meta.url), "utf8");
 	test("window blur, a hidden page and pagehide", () => {
 		expect(actions).toMatch(/export function resetKeyboard\(\) \{[^}]*endExtensionHold\("blur"\)/);
 		expect(app).toContain("onblur={resetKeyboard}");

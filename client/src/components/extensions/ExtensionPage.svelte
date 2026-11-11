@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
-	import Icon from "../Icon.svelte";
-	import Notice from "../Notice.svelte";
-	import Button from "../Button.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Notice from "../ui/Notice.svelte";
+	import Button from "../ui/Button.svelte";
 
 	/**
 	 * The frame of one extension's detail page, for an installed one and for one running on the server: the way back

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Button from "../Button.svelte";
-	import Notice from "../Notice.svelte";
+	import Button from "../ui/Button.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import type { UnreadableExtension } from "../../lib/extensions/host.svelte";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { t } from "../../lib/i18n";

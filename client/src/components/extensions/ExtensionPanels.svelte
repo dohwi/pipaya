@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { errorText } from "../../lib/api";
-	import IconButton from "../IconButton.svelte";
-	import FilterChip from "../FilterChip.svelte";
+	import IconButton from "../ui/IconButton.svelte";
+	import FilterChip from "../ui/FilterChip.svelte";
 	import { t } from "../../lib/i18n";
 	import { closeAnimated } from "../../lib/motion";
 	import { backLayer } from "../../lib/dialog";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { rovingKeys } from "../../lib/roving";
 	import { onDestroy } from "svelte";
-	import Icon from "../Icon.svelte";
-	import Accordion from "../Accordion.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Accordion from "../ui/Accordion.svelte";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
 

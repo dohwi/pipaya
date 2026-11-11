@@ -76,7 +76,7 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `layout-spec.ts` | `parseLayout`: an extension's layout tree, validated (no app imports, so the host can use it) |
 | `workspace.ts` / `workspace-spec.ts` | `workspaceAdapter` for `sdk.workspace` / the settings tabs and dialogs it accepts |
 
-`src/components/`: `Extensions.svelte` (Settings > Extensions tab) and `extensions/`: `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`, `ExtensionDock` (side panels), `ExtensionFloating` (floating panels).
+`src/components/extensions/`: `Extensions.svelte` (Settings > Extensions tab), `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`, `ExtensionDock` (side panels), `ExtensionFloating` (floating panels).
 
 Wiring: `App.svelte` (`extensions.init(adapter)`), `Header.svelte`, `Composer.svelte`, `StatusLine.svelte`, `lib/commands.ts`, `lib/store.svelte.ts` (`extensions.emit`, `applyThemes`, `confirmExtension`), `Settings.svelte`, `Backup.svelte`, `lib/api.ts`.
 

@@ -5,7 +5,7 @@
  *  - keys typed inside a modal never reach the app's global shortcuts (switch / delete session…);
  *  - focus moves into the modal on open and returns to whatever opened it on close.
  *
- * `modalLayer` is for `role="dialog"` panels (components/Modal.svelte uses it); `nativeModal` is the same for a
+ * `modalLayer` is for `role="dialog"` panels (components/ui/Modal.svelte uses it); `nativeModal` is the same for a
  * component whose root is a native `<dialog>` that lives as long as the component.
  *
  * Listeners go through `on()` from svelte/events: it runs the delegated `onkeydown` handlers of the children first,

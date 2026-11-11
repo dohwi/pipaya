@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { app, type ThemePref } from "../../lib/store.svelte";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t } from "../../lib/i18n";
-	import Icon from "../Icon.svelte";
-	import Button from "../Button.svelte";
-	import Select from "../Select.svelte";
-	import RangeField from "../RangeField.svelte";
-	import Segmented from "../Segmented.svelte";
-	import SettingRow from "../SettingRow.svelte";
-	import Switch from "../Switch.svelte";
-	import NotificationSettings from "../NotificationSettings.svelte";
-	import FooterSettings from "../FooterSettings.svelte";
-	import TerminalSettings from "../TerminalSettings.svelte";
-	import UpdateSettings from "../UpdateSettings.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Button from "../ui/Button.svelte";
+	import Select from "../ui/Select.svelte";
+	import RangeField from "../ui/RangeField.svelte";
+	import Segmented from "../ui/Segmented.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
+	import Switch from "../ui/Switch.svelte";
+	import NotificationSettings from "./NotificationSettings.svelte";
+	import FooterSettings from "./FooterSettings.svelte";
+	import TerminalSettings from "../terminal/TerminalSettings.svelte";
+	import UpdateSettings from "./UpdateSettings.svelte";
 
 	/** The app-wide basics on this device: language, theme, zoom, notification sound, then the notification, terminal and update blocks. */
 	const themes: { id: ThemePref; label: string; icon: "monitor" | "sun" | "moon" }[] = [

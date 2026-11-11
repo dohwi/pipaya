@@ -10,8 +10,8 @@
 	import { navGroups } from "../../lib/settings-phone";
 	import { initialFolded } from "../../lib/settings-fold";
 	import type { Server } from "../../lib/store.svelte";
-	import Icon from "../Icon.svelte";
-	import Pin from "../Pin.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Pin from "../ui/Pin.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 

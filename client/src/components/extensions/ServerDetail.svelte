@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Button from "../Button.svelte";
-	import Notice from "../Notice.svelte";
+	import Button from "../ui/Button.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";

@@ -1,5 +1,5 @@
 <script module lang="ts">
-	import Button from "../Button.svelte";
+	import Button from "../ui/Button.svelte";
 	import type { UINode } from "../../lib/extensions/ui";
 
 	const VIEW = Symbol("extension-view");
@@ -25,7 +25,7 @@
 	import { paneIn } from "../../lib/motion";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { getContext, setContext, tick } from "svelte";
-	import Select from "../Select.svelte";
+	import Select from "../ui/Select.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
 	import ExtensionIcon from "./ExtensionIcon.svelte";
 	import { fieldsIn, UIValidationError, validateUIEvent, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";

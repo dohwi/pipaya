@@ -2,8 +2,8 @@
 	import { t } from "../../lib/i18n";
 	import { permissionLabels } from "../../lib/extensions/labels";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
-	import Icon from "../Icon.svelte";
-	import Notice from "../Notice.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Notice from "../ui/Notice.svelte";
 
 	/** What a package asks for, in the sentences the consent dialog and the extension's detail page both show. */
 	let { pkg }: { pkg: ExtensionPackage } = $props();

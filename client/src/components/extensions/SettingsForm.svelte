@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Button from "../Button.svelte";
+	import Button from "../ui/Button.svelte";
 	import { t } from "../../lib/i18n";
 	import { untrack } from "svelte";
-	import Accordion from "../Accordion.svelte";
-	import Select from "../Select.svelte";
+	import Accordion from "../ui/Accordion.svelte";
+	import Select from "../ui/Select.svelte";
 	import { describeSettingErrors, fillSettingDefaults, resolveSettings, settingShown, type SettingField } from "../../lib/extensions/schema";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 

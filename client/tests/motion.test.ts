@@ -154,56 +154,56 @@ describe("modals mounted by their parent animate", () => {
 	const markup = (src: string) => src.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, "");
 
 	test("the shared Modal's scrim and panel use global transitions", () => {
-		const s = markup(read("components/Modal.svelte"));
+		const s = markup(read("components/ui/Modal.svelte"));
 		expect(s).toMatch(/class="scrim"[^>]*in:fadeIn\|global out:fadeOut\|global/);
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["ServerForm", "Settings", "DirPicker", "QueueModal", "WorkBox", "ConnectionForm", "extensions/ImportDialogs", "Skills", "CommandFamilies", "PickerModal", "ConfirmDialog", "StatusCard"]) {
+		for (const f of ["server/ServerForm", "settings/Settings", "server/DirPicker", "chat/QueueModal", "chat/WorkBox", "models/ConnectionForm", "extensions/ImportDialogs", "agent/SkillsDialog", "agent/CommandFamiliesDialog", "ui/PickerModal", "ui/ConfirmDialog", "chat/StatusCard"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
 		}
 	});
 	test("confirmations and status cards are the shared ConfirmDialog / StatusCard, never their own Modal", () => {
-		for (const f of ["DiscardConfirm", "CloseConfirm", "extensions/RemoveExtensionConfirm", "extensions/PairInstallConfirm"]) {
+		for (const f of ["shell/DiscardConfirm", "shell/CloseConfirm", "extensions/RemoveExtensionConfirm", "extensions/PairInstallConfirm"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<ConfirmDialog");
 			expect(s, f).not.toContain("<Modal");
 		}
-		for (const f of ["LinkCard", "UpdateBanner"]) {
+		for (const f of ["chat/LinkCard", "shell/UpdateBanner"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<StatusCard");
 			expect(s, f).not.toContain("<Modal");
 		}
 	});
 	test("the address form is a step inside ConnectModal (embedded), not a second dialog opened over it", () => {
-		expect(markup(read("components/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
-		const host = markup(read("components/ModelConnections.svelte"));
+		expect(markup(read("components/server/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
+		const host = markup(read("components/models/ModelConnections.svelte"));
 		// only editing opens ConnectionForm as a dialog of its own
 		expect(host).not.toContain("oncustom");
-		expect(read("components/ModelConnections.svelte")).toContain('kind: "edit"');
+		expect(read("components/models/ModelConnections.svelte")).toContain('kind: "edit"');
 	});
 	test("dialog titles go through the shared header (one close button, one pull handle)", () => {
-		for (const f of ["QueueModal", "DirPicker", "WorkBox", "FilePreview", "Skills", "CommandFamilies"]) {
+		for (const f of ["chat/QueueModal", "server/DirPicker", "chat/WorkBox", "chat/FilePreview", "agent/SkillsDialog", "agent/CommandFamiliesDialog"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toMatch(/<Modal\b[^\n]*\stitle=/);
 			expect(s, f).not.toContain('aria-label={t("닫기")}');
 		}
-		for (const f of ["Settings", "ConnectModal", "ServerForm"]) expect(markup(read(`components/${f}.svelte`)), f).toContain("<ModalHeader");
+		for (const f of ["settings/Settings", "server/ConnectModal", "server/ServerForm"]) expect(markup(read(`components/${f}.svelte`)), f).toContain("<ModalHeader");
 	});
 	test("every model / catalog picker is the shared PickerModal, and every model button the shared ModelField", () => {
-		for (const f of ["ModelPickerModal", "CatalogPickerModal"]) {
+		for (const f of ["models/ModelPickerModal", "models/CatalogPickerModal"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<PickerModal");
 			expect(s, f).not.toContain("<Modal");
 		}
-		const picker = markup(read("components/ModelPicker.svelte"));
+		const picker = markup(read("components/models/ModelPicker.svelte"));
 		expect(picker).toContain("<ModelField");
 		expect(picker).not.toContain("<ModelPickerModal");
 	});
 	test("Lightbox's layer uses global transitions", () => {
-		const s = markup(read("components/Lightbox.svelte"));
+		const s = markup(read("components/chat/Lightbox.svelte"));
 		expect(s).toMatch(/class="lb"[^>]*in:fadeIn\|global out:fadeOut\|global/);
 	});
 	test("the extension approval and request dialogs are the shared Modal, closed by the request going away", () => {
@@ -218,7 +218,7 @@ describe("modals mounted by their parent animate", () => {
 	});
 	test("every component that is a bare modal root (no {#if} of its own) uses |global", () => {
 		// DirPicker: the modal sits at the top level of the file, outside any block
-		for (const f of ["DirPicker"]) {
+		for (const f of ["server/DirPicker"]) {
 			const top = markup(read(`components/${f}.svelte`));
 			const first = top.search(/<Modal\b/);
 			const before = top.slice(0, first);
