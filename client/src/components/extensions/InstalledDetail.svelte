@@ -99,15 +99,15 @@
 	{#if !src.runs}<Notice tone="info" size="sm" role="status">{on ? t("이 서버를 열면 시작됩니다. 지금은 실행 중이 아닙니다.") : t("이 서버가 열려 있지 않아 지금은 실행되지 않습니다. 켜 두면 서버를 열 때 시작됩니다.")}</Notice>{/if}
 	{#if pairedServer && !bundledBy}
 		<Notice tone={on ? "info" : "warn"} size="sm" icon="clip" role="status">
-			{on ? t("서버 확장 ‘{name}’과 함께 작동합니다.", { name: pairedServer }) : t("서버 확장 ‘{name}’과 함께 쓰려면 이 확장을 켜야 합니다.", { name: pairedServer })}
+			{on ? t("‘{name}’ 확장과 함께 작동합니다.", { name: pairedServer }) : t("‘{name}’ 확장과 함께 쓰려면 이 확장을 켜야 합니다.", { name: pairedServer })}
 			{#snippet action()}
 				{#if on}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}
 				{:else}<button type="button" disabled={tasks.busy[id] || entry.state === "starting" || (src.runs && extensions.safeMode) || !!problem} onclick={onenable}>{t("켜기")}</button>{/if}
 			{/snippet}
 		</Notice>
 	{/if}
-	{#if bundledBy}<Notice tone="info" size="sm" icon="clip" role="status">{t("서버 확장 ‘{name}’에 동봉된 클라이언트 확장입니다. 그 서버 확장과 함께 설치되어 작동합니다.", { name: bundledBy })}{#snippet action()}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}{/snippet}</Notice>{/if}
-	{#if needsServer}<Notice tone="warn" size="sm" icon="clip" role="status">{t("서버 확장 ‘{name}’도 설치해야 동작합니다.", { name: needsServer.name })}{#snippet action()}{#if oninstallserver}<button type="button" onclick={oninstallserver}>{t("설치")}</button>{/if}{/snippet}</Notice>{/if}
+	{#if bundledBy}<Notice tone="info" size="sm" icon="clip" role="status">{t("‘{name}’ 확장에 포함되어 있어 함께 설치되고 함께 작동합니다.", { name: bundledBy })}{#snippet action()}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}{/snippet}</Notice>{/if}
+	{#if needsServer}<Notice tone="warn" size="sm" icon="clip" role="status">{t("‘{name}’ 확장도 설치해야 동작합니다.", { name: needsServer.name })}{#snippet action()}{#if oninstallserver}<button type="button" onclick={oninstallserver}>{t("설치")}</button>{/if}{/snippet}</Notice>{/if}
 	{#if entry.error}<Notice tone="danger" size="sm" role="status">{entry.error}</Notice>{/if}
 	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
 

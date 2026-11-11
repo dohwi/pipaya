@@ -168,6 +168,6 @@ export const formatStars = (n: number): string => n >= 1000 ? `${(n / 1000).toFi
 /** Finds the client extension `id` in the marketplace catalog and downloads it, so a server extension can offer "install the client half". */
 export async function fetchCompanion(id: string, signal?: AbortSignal): Promise<ExtensionPackage> {
   const entry = (await fetchCatalog(DEFAULT_MARKETPLACE_URL, signal)).extensions.find((e) => e.id === id && e.kind === "client");
-  if (!entry) throw new LocalizedError(t("마켓플레이스에서 클라이언트 확장 ‘{id}’을 찾을 수 없습니다.", { id }));
+  if (!entry) throw new LocalizedError(t("마켓플레이스에서 ‘{id}’ 확장을 찾을 수 없습니다.", { id }));
   return fetchPackage(entry, signal);
 }

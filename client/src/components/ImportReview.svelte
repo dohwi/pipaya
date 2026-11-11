@@ -68,7 +68,7 @@
 		<ul class="assure">
 			<li>{t("이미 있는 서버는 주소로 찾아 이름만 맞추고, 토큰은 그대로 둡니다.")}</li>
 			{#if plan.extensions.install.length || plan.extensions.replace.length}
-				<li>{t("확장은 이 기기의 확장으로, 모두 꺼진 상태로 들어옵니다. 권한을 확인한 뒤 직접 켜세요.")}</li>
+				<li>{t("확장은 모두 꺼진 상태로 들어옵니다. 권한을 확인한 뒤 직접 켜세요.")}</li>
 			{/if}
 			<li>{t("적용하기 직전의 상태를 이 기기에 백업해 두어, 아래에서 되돌릴 수 있습니다.")}</li>
 		</ul>

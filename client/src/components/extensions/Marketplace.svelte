@@ -27,7 +27,7 @@
 	let serverHave = $state<Record<string, true>>({});
 	let ctrl: AbortController | null = null;
 
-	/** Whether a client extension is installed where it would go: this device's own, or the listed server's */
+	/** Whether a client extension is installed on the listed server */
 	const installed = (id: string) => (void app.extensionStoreTick, app.clientExtensionsOf(serverId ?? app.serverId)).find((e) => e.id === id);
 	const shown = $derived((catalog?.extensions ?? []).filter((e) => {
 		const q = query.trim().toLowerCase();
@@ -111,7 +111,7 @@
 		try { serverHave = Object.fromEntries((await api.serverExtensions()).extensions.map((e) => [e.name, true as const])); } catch { /* unreachable: nothing marked as installed */ }
 	}
 
-	/** The server entry that asked "install the client one too?" (only when its client half is not on this device yet). */
+	/** The server entry that asked "install the client one too?" (only when its client half is not installed yet). */
 	let asking = $state("");
 	const companionOf = (entry: MarketEntry) => (entry.companion ? catalog?.extensions.find((e) => e.id === entry.companion && e.kind === "client") : undefined);
 
@@ -179,7 +179,7 @@
 	<DialogBody gap>
 		<div class="hints">
 			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>
-			<p class="hint">{t("서버 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>
+			<p class="hint">{t("일부 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>
 		</div>
 		<SearchField label={t("확장 검색")} bind:value={query} />
 		{#if error}<Notice tone="danger" size="sm" role="alert">{error}</Notice>{/if}
@@ -195,7 +195,7 @@
 					<div class="top">
 						<strong class="name">{entry.name}</strong>
 						{#if pairOf(entry)}{@const other = pairOf(entry)}
-							<span class="pair" role="img" aria-label={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })} title={t("{kind} ‘{name}’와 함께 작동합니다.", { kind: other?.kind === "server" ? t("서버 확장") : t("클라이언트 확장"), name: other?.name ?? "" })}><Icon name="clip" /></span>
+							<span class="pair" role="img" aria-label={t("‘{name}’ 확장과 함께 작동합니다.", { name: other?.name ?? "" })} title={t("‘{name}’ 확장과 함께 작동합니다.", { name: other?.name ?? "" })}><Icon name="clip" /></span>
 						{/if}
 						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<StatusChip tone="ok">{t("설치됨")}</StatusChip>{/if}
 						{#if newer && have}<span class="ver"><VersionBump from={have.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
@@ -233,7 +233,7 @@
 						{@const s = serverOf(entry)}
 						{#if s && !serverHave[s.id] && api}
 							<Notice tone="warn" size="sm" role="status">
-								{t("서버 확장 ‘{name}’ 필요", { name: s.name })}
+								{t("‘{name}’ 확장 필요", { name: s.name })}
 								{#snippet action()}<button type="button" disabled={!!working} onclick={() => installServer(s, false)}>{t("설치")}</button>{/snippet}
 							</Notice>
 						{/if}
@@ -241,7 +241,7 @@
 					{#if entry.kind === "server" && serverHave[entry.id] && entry.companion && !installed(entry.companion) && asking !== entry.id}
 						{@const c = companionOf(entry)}
 						<Notice tone="warn" size="sm" role="status">
-							{t("클라이언트 확장 ‘{name}’ 필요", { name: c?.name ?? entry.companion })}
+							{t("‘{name}’ 확장 필요", { name: c?.name ?? entry.companion })}
 							{#snippet action()}{#if c}<button type="button" disabled={!!working} onclick={() => installClient(c)}>{t("설치")}</button>{/if}{/snippet}
 						</Notice>
 					{/if}
@@ -264,7 +264,7 @@
 	{@const other = pairOf(confirming)}
 	{#if other}
 		<PairInstallConfirm
-			picked={{ name: confirming.name, kind: confirming.kind }}
+			picked={{ name: confirming.name }}
 			{other}
 			onboth={() => (asking ? installServer(confirming, true) : installClientWith(confirming, true))}
 			onsolo={() => (asking ? installServer(confirming, false) : installClientWith(confirming, false))}

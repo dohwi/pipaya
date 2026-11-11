@@ -14,7 +14,7 @@
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../lib/extensions/schema";
 	import type { StoredExtensionSettings } from "../lib/extensions/settings-store";
-	import { serverProvides, srvKey, type ServerExt } from "../lib/server-extension";
+	import { serverProvides, serverText, srvKey, type ServerExt } from "../lib/server-extension";
 	import Marketplace from "./extensions/Marketplace.svelte";
 	import { fetchCompanion } from "../lib/extensions/marketplace";
 	import { compareVersions, fetchCatalog, fetchPackage, DEFAULT_MARKETPLACE_URL, type MarketCatalog, type MarketEntry } from "../lib/extensions/marketplace";
@@ -26,7 +26,7 @@
 	import UnreadableCard from "./extensions/UnreadableCard.svelte";
 	import { ExtensionTasks } from "../lib/extension-tasks.svelte";
 
-	/** "server": the open server's extensions (a server tab). "device": this device's (the common tab). */
+	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
 	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
 	let marketQuery = $state("");
 	$effect(() => { if (installFor) { const id = installFor; installFor = null; void installCompanion(id); } });
@@ -55,7 +55,7 @@
 	/** Saved settings of the server extensions, by settings id (`GET /extensions/settings`). */
 	let serverSettings = $state<Record<string, StoredExtensionSettings>>({});
 	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
-	/** A server extension that needs a client extension this device does not have runs only half: say so. */
+	/** A server extension whose client half is not installed on this server runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !app.clientExtensionsOf(serverId ?? app.serverId).some((e) => e.id === companion);
 	async function loadServerSide() {
 		const api = srvApi;
@@ -146,7 +146,7 @@
 			].filter(Boolean).join(" ");
 		}, t("업데이트하지 못했습니다"));
 	}
-	/** A package picked in the marketplace goes through the same preview (permissions, scope) as an imported file. */
+	/** A package picked in the marketplace goes through the same preview (permissions) as an imported file. */
 	function pickFromMarket(pkg: ExtensionPackage, entry: { id: string }) {
 		market = false;
 		preview = pkg;
@@ -381,7 +381,7 @@
 {/snippet}
 
 {#snippet companionLine(id: string, disabled: boolean)}
-	{@render needLine(t("클라이언트 확장 ‘{name}’ 필요", { name: extensionUpdates.clientName(id) ?? id }), disabled, () => installCompanion(id))}
+	{@render needLine(t("‘{name}’ 확장 필요", { name: extensionUpdates.clientName(id) ?? id }), disabled, () => installCompanion(id))}
 {/snippet}
 
 {#snippet installedRow(entry: Installed)}
@@ -496,7 +496,7 @@
 		{#each serverSide as ext (ext.name)}
 				{@const upd = serverUpdate(ext)}
 				{@const half = missingClient(ext.companion)}
-				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
+				<ExtensionRow name={ext.title ?? ext.name} brief={ext.error || serverText(ext) || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
 						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
 					{/snippet}
