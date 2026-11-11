@@ -255,7 +255,7 @@
 {/snippet}
 
 {#if app.serverId && app.net !== "idle"}
-	<div class="bar" data-part="tabbar" class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
+	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
 			{#each tabs as x (x.id)}
@@ -303,6 +303,13 @@
 		padding-right: max(8px, var(--sar));
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
+	}
+	/* a phone with one tab or none: the strip would hold only a "+", a row of height for nothing. New chats still start from the
+	   drawer's folder "+" and the empty screen's folder chip; the desktop keeps its strip. */
+	@media (max-width: 600px) {
+		.bar.solo {
+			display: none;
+		}
 	}
 	/* coming back out of a group: the group's strip folds into the tabs */
 	.bar {

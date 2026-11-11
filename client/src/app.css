@@ -166,7 +166,7 @@
 	--tree-line: #5a5a5a; /* sidebar tree rule: between --border-strong and --text-dim so it reads on the dark rows */
 	--text: #ededed;
 	--text-dim: #a0a0a0;
-	--text-faint: #8b8b93;
+	--text-faint: #9494a0; /* 4.8:1 or better on every dark surface incl. --bg-active (was #8b8b93: 4.25 on #2a2a2a) */
 	--user-bg: #242424;
 	--accent: #e4e4e7;
 	--accent-hover: #ffffff;
@@ -218,8 +218,8 @@
 	--border-strong: #d4d4d8;
 	--tree-line: #a1a1aa; /* sidebar tree rule */
 	--text: #0a0a0b;
-	--text-dim: #52525b;
-	--text-faint: #71717a;
+	--text-dim: #4b4b54; /* sidebar 11px text on the grey rows measured 4.32; now 6.8 or better on every light surface */
+	--text-faint: #63636c; /* 4.7:1 or better on --bg-active #ececee and --bg-set (was #71717a: 3.95 / 4.28) */
 	--user-bg: #f4f4f5;
 	--accent: #18181b;
 	--accent-hover: #000000;

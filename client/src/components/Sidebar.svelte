@@ -553,8 +553,7 @@
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		white-space: nowrap; /* no ellipsis: `tail` cuts at folder boundaries or hides the path, never mid-name */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 	}
@@ -609,6 +608,15 @@
 	@media (pointer: coarse) {
 		:global(:where(.side) .dirnew) {
 			opacity: 1;
+		}
+		/* touch rows are 40px (a finger needs more than 32); the 20px buttons keep the x 236 / 256 columns and their hit boxes are
+		   20 wide x the full row high, so the list button's and the "+" boxes touch but never overlap (the 44px .tap box overlapped by 24) */
+		:global(:where(.side) .dirnew.tap::after) {
+			width: 100%;
+			height: 40px;
+		}
+		:global(:where(.side) .dirtoggle) {
+			height: 40px;
 		}
 	}
 	/* a folded row has no button beside its count, so the toggle gives up its 8px right inset: the count lands on the list button's
@@ -1066,4 +1074,11 @@
 		:global(.iconbtn.foldbtn) {
 			display: none;
 		}
-	}</style>
+	}	/* touch: tab rows are 40px too. Last in the sheet, so it wins over the 32px base rules above it with the same specificity. */
+	@media (pointer: coarse) {
+		:global(:where(.side) .open:not(.acc):not(.chev)),
+		:global(:where(.side) .grp .item.member .open) {
+			min-height: 40px;
+		}
+	}
+</style>

@@ -25,6 +25,8 @@
 	type Loaded = { key: string; files: string[] };
 	let loaded = $state<Loaded | null>(null);
 	let openKey = $state<string | null>(null);
+	// Narrow pane: the count items (AGENTS.md, skills, MCP, roles, commands) stay folded behind one button until it is pressed.
+	let expanded = $state(false);
 	// A conversation reads its own context; a new chat previews what the chosen directory will get.
 	const ctxKey = $derived(pane.id ? `${app.serverId}:${pane.id}` : `${app.serverId}:new:${app.workdirAbs}`);
 	const here = $derived(loaded && loaded.key === ctxKey ? loaded : null);
@@ -211,6 +213,10 @@
 
 	const footer = $derived(app.prefs.footer);
 	const visible = $derived(visibleFooter(footer));
+	// Whether any folded count item exists at all (otherwise the "more" button would open nothing).
+	const hasMore = $derived(
+		visible.some((id) => (id === "agents" && !!ctxFiles) || (id === "skills" && !!skillCount) || (id === "mcp" && !!mcpHere && (mcpHere.ready > 0 || mcpHere.failed > 0)) || (id === "roles" && rolesCount > 0) || (id === "commands" && !!tplNames?.length)),
+	);
 
 	const ring = 2 * Math.PI * 7;
 	const level = $derived(ctx === null || !win ? "" : contextLevel(ctxPct));
@@ -241,38 +247,38 @@
 </script>
 
 <!-- Reserve room before the first reply; allow narrow screens to wrap without clipping. -->
-<div class="statusline mono" data-part="statusline" data-layout={footer.layout} data-align={footer.align} aria-label={t("세션 통계")}>
+<div class="statusline mono" data-part="statusline" data-layout={footer.layout} data-align={footer.align} data-expanded={expanded} role="group" aria-label={t("세션 통계")}>
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
 		<StatusItem title={item.owner}>{item.text}</StatusItem>
 	{/each}
 	{#each visible as id (id)}
 		{#if id === "elapsed"}
 			{#if elapsed}
-				<StatusItem icon="clock" title={t("작업 경과 시간")}>{elapsed}</StatusItem>
+				<StatusItem icon="clock" label={t("작업 경과 시간 {v}", { v: elapsed })} title={t("작업 경과 시간")}>{elapsed}</StatusItem>
 			{/if}
 		{:else if id === "agents"}
-			{#if ctxFiles !== null}
-				<StatusItem icon="prompt" empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>{t("{n}개", { n: ctxFiles })}</StatusItem>
+			{#if ctxFiles}
+				<StatusItem more icon="prompt" empty={ctxFiles === 0} onclick={() => (openKey = ctxKey)} label={t("AGENTS.md {n}개", { n: ctxFiles })} title={filesTip}>{t("{n}개", { n: ctxFiles })}</StatusItem>
 			{/if}
 		{:else if id === "skills"}
-			{#if skillCount !== null}
-				<StatusItem icon="skill" empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>{t("{n}개", { n: skillCount })}</StatusItem>
+			{#if skillCount}
+				<StatusItem more icon="skill" empty={skillCount === 0} onclick={() => app.openSkills(pane.id)} label={t("스킬 {n}개", { n: skillCount })} title={skillsTip}>{t("{n}개", { n: skillCount })}</StatusItem>
 			{/if}
 		{:else if id === "mcp"}
-			{#if mcpHere}
-				<StatusItem icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
+			{#if mcpHere && (mcpHere.ready > 0 || mcpHere.failed > 0)}
+				<StatusItem more icon="plug" empty={mcpHere.ready === 0 && !mcpHere.failed} level={mcpHere.failed > 0 ? "danger" : ""} onclick={() => app.openMcp()} label={t("MCP 서버 {n}개", { n: mcpHere.ready })} title={mcpTip}>{t("{n}개", { n: mcpHere.ready })}</StatusItem>
 			{/if}
 		{:else if id === "roles"}
-			{#if rolesHere}
-				<StatusItem icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
+			{#if rolesHere && rolesCount > 0}
+				<StatusItem more icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
 			{/if}
 		{:else if id === "commands"}
-			{#if tplNames !== null}
-				<StatusItem icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>
+			{#if tplNames && tplNames.length > 0}
+				<StatusItem more icon="list" empty={tplNames.length === 0} onclick={() => app.openCommands(pane.id)} label={t("확장 명령 {n}개", { n: tplNames.length })} title={tplTip}>{t("{n}개", { n: tplNames.length })}</StatusItem>
 			{/if}
 		{:else if id === "context"}
 			<!-- Shown even before there is a figure ("—"), so the line does not jump when the first reply arrives. -->
-			<StatusItem level={level} empty={ctx === null} title={ctxTip}>
+			<StatusItem level={level} empty={ctx === null} label={t("컨텍스트 사용량 {v}", { v: ctx === null ? t("측정 전") : win ? `${pct(ctxPct)}%` : compact(ctx) })} title={ctxTip}>
 				{#snippet mark()}
 					<svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
 						<circle cx="9" cy="9" r="7" class="track" />
@@ -282,11 +288,12 @@
 				{ctx === null ? "—" : win ? `${pct(ctxPct)}%` : compact(ctx)}
 			</StatusItem>
 		{:else if id === "cache"}
-			<StatusItem icon="cache" level={hitLevel} empty={hit === null} title={hitTip}>{hit === null ? "—" : `${pct(hit)}%`}</StatusItem>
+			<StatusItem icon="cache" level={hitLevel} empty={hit === null} label={t("캐시 적중률 {v}", { v: hit === null ? t("측정 전") : `${pct(hit)}%` })} title={hitTip}>{hit === null ? "—" : `${pct(hit)}%`}</StatusItem>
 		{:else if id === "speed"}
-			<StatusItem icon="gauge" level={tpsLevel} empty={tps === null} unit="tps" title={tpsTip}>{tps === null ? "—" : speed(tps)}</StatusItem>
+			<StatusItem icon="gauge" level={tpsLevel} empty={tps === null} unit="tps" label={t("출력 속도 {v}", { v: tps === null ? t("측정 전") : `${speed(tps)} tps` })} title={tpsTip}>{tps === null ? "—" : speed(tps)}</StatusItem>
 		{/if}
 	{/each}
+	{#if hasMore}<button class="morebtn" type="button" aria-expanded={expanded} aria-label={expanded ? t("부가 항목 접기") : t("부가 항목 더보기")} onclick={() => (expanded = !expanded)}>{expanded ? "−" : "⋯"}</button>{/if}
 </div>
 
 {#if openKey && openKey === ctxKey && app.api}
@@ -306,10 +313,25 @@
 		min-height: 26px;
 		flex-wrap: wrap;
 		padding: 8px 16px 0; /* the same 16px column as the messages and the composer */
-		font-size: var(--fs-2xs);
-		line-height: 1;
-		color: var(--text-faint);
+		font-size: var(--fs-xs); /* 12px: 11px was unreadable on a phone */
+		line-height: 16px;
+		color: var(--text-dim); /* 4.5:1 or better on the page in both themes (the old faint grey was 2.3 to 2.7) */
 		user-select: none;
+	}
+	.morebtn {
+		display: none;
+		min-width: 24px;
+		height: 24px;
+		padding: 0 4px;
+		border-radius: var(--radius-sm);
+		font: inherit;
+		line-height: 16px;
+		color: inherit;
+		flex: none;
+	}
+	.morebtn:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 	.statusline :global(.ring) {
 		width: 13px;
@@ -351,6 +373,22 @@
 	}
 	/* narrow pane: tighter spacing, and one row only. Wrapping made the composer jump when a status was added; what does not
 	   fit scrolls sideways instead (`safe` keeps the first item reachable when the row overflows). */
+	@container (max-width: 600px) {
+		.statusline :global(.more) {
+			display: none;
+		}
+		.statusline[data-expanded="true"] :global(.more) {
+			display: inline-flex;
+		}
+		.statusline[data-expanded="true"] {
+			flex-wrap: wrap;
+		}
+		.morebtn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
+	}
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;

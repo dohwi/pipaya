@@ -148,6 +148,11 @@
 		text-align: left;
 		color: var(--text-dim);
 	}
+	@media (pointer: coarse) {
+		.srvtoggle {
+			height: 40px; /* touch rows are 40px, like .dirtoggle */
+		}
+	}
 	/* folded: the list button is hidden, so the toggle runs to the "+" and its count takes that column (x 256 on a mouse, where the
 	   "+" leaves the flow; x 236 on touch, where the "+" keeps x 256) — measured, both on the grid */
 	:global(:where(.side) .srvhead.folded .srvtoggle) {
