@@ -10,7 +10,8 @@
 	 *  level    "" | "warn" | "danger": the colour of the whole item (context fill, cache hit, speed, failed servers)
 	 *  empty    nothing to show yet: dimmed
 	 *  label    accessible name of a button (the visible text is only the value)
-	 *  unit     small suffix after the value, hidden on a phone (`tps`)
+	 *  unit     small suffix after the value (`tps`)
+	 *  more     a secondary count: folded behind the "more" button in a narrow pane
 	 * Every item is the same 21px-tall box with a 4px icon/value gap, so the row aligns whatever it holds.
 	 */
 	let {
@@ -20,6 +21,7 @@
 		title,
 		label,
 		unit,
+		more = false,
 		onclick,
 		mark,
 		children,
@@ -30,6 +32,7 @@
 		title?: string;
 		label?: string;
 		unit?: string;
+		more?: boolean;
 		onclick?: () => void;
 		mark?: Snippet;
 		children: Snippet;
@@ -37,18 +40,18 @@
 </script>
 
 {#if onclick}
-	<button class="b tap {level}" class:empty onclick={onclick} aria-haspopup="dialog" aria-label={label} {title}>
+	<button class="b tap {level}" class:more class:empty onclick={onclick} aria-haspopup="dialog" aria-label={label} {title}>
 		{@render inner()}
 	</button>
 {:else}
-	<span class="b {level}" class:empty {title}>
+	<span class="b {level}" class:more class:empty role={label ? "group" : undefined} aria-label={label} {title}>
 		{@render inner()}
 	</span>
 {/if}
 
 {#snippet inner()}
 	{#if mark}{@render mark()}{:else if icon}<Icon name={icon as never} />{/if}
-	<span class="v">{@render children()}</span>{#if unit}<span class="unit wide">{unit}</span>{/if}
+	<span class="v">{@render children()}</span>{#if unit}<span class="unit">{unit}</span>{/if}
 {/snippet}
 
 <style>
@@ -74,8 +77,9 @@
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
+	/* no value yet: the dimmer token, not opacity (opacity .6 took the value to 2.3:1); --text-faint stays above 4.5:1 on the page */
 	.empty {
-		opacity: 0.6;
+		color: var(--text-faint);
 	}
 	.warn {
 		color: var(--warn);
@@ -91,8 +95,7 @@
 		text-overflow: ellipsis;
 	}
 	.unit {
-		font-size: var(--fs-2xs);
-		opacity: 0.75;
+		font-size: var(--fs-xs);
 	}
 	.b :global(svg:not(.ring)) {
 		width: 13px;
@@ -104,11 +107,6 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	@media (max-width: 640px) {
-		.wide {
-			display: none;
-		}
-	}
 	/* narrow pane: smaller marks so the line stays on as few rows as possible */
 	@container (max-width: 420px) {
 		.b {
@@ -118,9 +116,6 @@
 		.b :global(svg:not(.ring)) {
 			width: 11px;
 			height: 11px;
-		}
-		.wide {
-			display: none;
 		}
 	}
 </style>

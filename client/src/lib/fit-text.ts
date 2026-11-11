@@ -5,28 +5,35 @@ import { schedule, unschedule } from "./frame";
  * title scroll past on hover. Both re-measure when the row is resized.
  */
 
-/** A path too long for its row keeps its end (the folder you are in) and elides the start: `…/pipaya` */
+/** The forms of a path `tail` tries, longest first: the whole path, then `…` plus ever fewer whole folders. Never a piece of a folder name. */
+export function tailCandidates(full: string): string[] {
+	const out = [full];
+	for (const m of full.matchAll(/[\\/]/g)) if (m.index! > 0) out.push(`…${full.slice(m.index!)}`);
+	return out;
+}
+
+/**
+ * A path too long for its row keeps its end and drops whole folders from the start: `…/pipaya`. When not even the last folder
+ * fits, the row shows nothing: half a folder name (`…rkspace`) says less than no name (the full path stays in the tooltip).
+ */
 export function tail(node: HTMLElement, text: string) {
+	return fitTail(node, text, false);
+}
+
+/** Like `tail`, but the last folder always shows: when even it is too wide the row ends it with the CSS ellipsis instead of going blank. */
+export function tailKeepLast(node: HTMLElement, text: string) {
+	return fitTail(node, text, true);
+}
+
+function fitTail(node: HTMLElement, text: string, keepLast: boolean) {
 	let full = text;
 	const fit = () => {
-		node.textContent = full;
-		if (node.scrollWidth <= node.clientWidth) return;
-		// cut at a folder boundary: the longest tail of whole folders that fits
-		const cuts = [...full.matchAll(/\//g)].map((m) => m.index!).filter((i) => i > 0);
-		for (const i of cuts) {
-			node.textContent = `…${full.slice(i)}`;
+		for (const c of tailCandidates(full)) {
+			node.textContent = c;
 			if (node.scrollWidth <= node.clientWidth) return;
 		}
-		// even the last folder alone is too long: cut inside it
-		let lo = 1;
-		let hi = full.length;
-		while (lo < hi) {
-			const mid = Math.ceil((lo + hi) / 2);
-			node.textContent = `…${full.slice(full.length - mid)}`;
-			if (node.scrollWidth <= node.clientWidth) lo = mid;
-			else hi = mid - 1;
-		}
-		node.textContent = `…${full.slice(full.length - lo)}`;
+		const c = tailCandidates(full);
+		node.textContent = keepLast ? c[c.length - 1]! : "";
 	};
 	const ro = new ResizeObserver(() => schedule(node, () => fit()));
 	ro.observe(node);

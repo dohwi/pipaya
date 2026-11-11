@@ -84,7 +84,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 
 | Thing | Value |
 |---|---|
-| Row height (list rows, tabs, headers, tree rows) | **32px** |
+| Row height (list rows, tabs, headers, tree rows) | **32px** (**40px** in the sidebar on `pointer: coarse`: folder, server and tab rows; the 20px `+` / list buttons keep their columns and their touch boxes are 20px wide x 40px high so they never overlap) |
 | Compact control | `--control-h-sm` 34px; normal control `--control-h` 40px |
 | Gap between two rows of one block | **1px** (the row's own `margin: 1px 0`) |
 | Gap between blocks (a card's header and its first folder) | **4px** |
