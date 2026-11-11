@@ -32,6 +32,7 @@ import { extensionUpdates } from "./extension-updates.svelte";
 import { deviceIdentity, notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { ServerExtensionStore } from "./extensions/server-store";
+import { IdleExtensionStores } from "./idle-extension-stores.svelte";
 import { PairingError, redeemPairing, type PairingLink } from "./pairing";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { fetchLocalePacks } from "./locale-sync";
@@ -775,7 +776,7 @@ class AppStore {
       link.start();
     }
     for (const id of Object.keys(this.links)) if (!next[id]) {
-      this.dropExtensionStore(id);
+      void this.idleExtensions.drop(id);
       this.links[id]!.stop();
       changed = true;
     }
@@ -805,8 +806,7 @@ class AppStore {
     this.serverPrefs.load(id);
     // This server's list now belongs to the extension host: the idle editor of it (and its sync) is done. The host
     // reads the list from storage (the editor writes it at once), and the editor's uploads finish before the host's pull.
-    const handedOver = this.dropExtensionStore(id);
-    this.handover = handedOver;
+    this.idleExtensions.handOver(id);
     if (changing) void extensions.switchServer();
     notifications.connect(null);
     serverUpdater.reset();
@@ -906,7 +906,7 @@ class AppStore {
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
-    if (e.type === "client_settings_updated") void this.extStores.get(link.id)?.sync.onEvent(e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
+    if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
     // Notices of a server not in view still reach this device.
     if (e.type === "notification") {
       const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
@@ -935,7 +935,7 @@ class AppStore {
     this.ensureDraftModel();
     // The editor of this server (if settings had it open) sends what it still holds before the host pulls the server's copy.
     // Bounded: an unreachable server must not hold up opening it.
-    await Promise.race([this.handover, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
+    await Promise.race([this.idleExtensions.settled, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
     if (link.id !== this.serverId || token !== this.attachToken) return;
     // A warm reconnect already has its settings sync running (and the editor holds nothing new): rebuilding it here made
     // every client of this server pull all of its settings again on each return to the window.
@@ -1292,79 +1292,17 @@ class AppStore {
   private settingsSync: ServerSettingsSync | null = null;
   /** The server whose extension list is currently loaded */
   private openedFor: string | null = null;
-  /**
-   * Editors of the client extensions of saved servers that are NOT the open one (settings can show any server). Each has its
-   * own connection and its own sync, so a change reaches the server it was made on and never the open one.
-   */
-  /** Resolves when the editor of the server just opened has sent its last edits */
-  private handover: Promise<void> = Promise.resolve();
   /** When each transcript was last on screen, and which were on screen at the previous sync (see syncChats). */
   private chatUsed = new Map<string, number>();
   private lastVisible = new Set<string>();
-  private extStores = new Map<string, { store: ServerExtensionStore; sync: ServerSettingsSync; api: Api }>();
+  /** Editors of the client extensions of saved servers that are not the open one. */
+  private readonly idleExtensions = new IdleExtensionStores({ openId: () => this.serverId, apiOf: (id) => this.links[id]?.api ?? null });
   /** Bumped whenever one of those editors changed, so what shows them reads again. */
-  extensionStoreTick = $state(0);
-  /** The editor of a server's client extensions, or null for the open server (its host has them) and for one not attached yet. */
-  extensionStoreOf(serverId: string | null | undefined): ServerExtensionStore | null {
-    void this.extensionStoreTick;
-    if (!serverId || serverId === this.serverId) return null;
-    return this.extStores.get(serverId)?.store ?? null;
-  }
-  /** Make the editor of this server ready (read its stored list, then what the server holds) and keep it in step. */
-  async attachExtensionStore(serverId: string): Promise<void> {
-    if (serverId === this.serverId) return;
-    const link = this.links[serverId];
-    if (!link) return;
-    const old = this.extStores.get(serverId);
-    if (old && old.api === link.api) return;
-    this.dropExtensionStore(serverId);
-    const holder: { sync?: ServerSettingsSync } = {};
-    const store: ServerExtensionStore = new ServerExtensionStore({
-      serverId,
-      api: () => this.links[serverId]?.api ?? null,
-      storage: localStorage,
-      changed: (key) => holder.sync?.changed(key),
-      updated: () => { this.extensionStoreTick++; },
-    });
-    const sync = new ServerSettingsSync({
-      api: link.api,
-      origin: notifications.id,
-      storage: localStorage,
-      storageKey: `pipaya.settings-sync.${serverId}`,
-      adapters: {
-        extensions: { read: () => store.packages(), apply: (v) => store.applyPackages(v) },
-        extensionStates: { read: () => store.states(), apply: (v) => store.applyStates(v) },
-      },
-    });
-    holder.sync = sync;
-    this.extStores.set(serverId, { store, sync, api: link.api });
-    this.extensionStoreTick++;
-    try { await sync.pull(); } catch { /* unreachable: the stored copy stays and is uploaded on the next try */ }
-    if (this.extStores.get(serverId)?.sync !== sync) return;
-    await store.loadRemoteSettings();
-    this.extensionStoreTick++;
-  }
-  /** Stop editing a server's list apart from the host (it was opened, or removed). Pending changes are sent first. */
-  private dropExtensionStore(serverId: string): Promise<void> {
-    const e = this.extStores.get(serverId);
-    if (!e) return Promise.resolve();
-    this.extStores.delete(serverId);
-    this.extensionStoreTick++;
-    // Its last edits reach the server before anything else reads that server again (the host pulls when it opens it).
-    return e.sync.flush().catch(() => {}).finally(() => e.sync.dispose());
-  }
-  /**
-   * The client extensions as one server sees them: the host's when it is open, the idle editor's otherwise. Never
-   * another server's: the host only holds the open server's.
-   */
-  clientExtensionsOf(serverId: string | null | undefined): { id: string; name: string; version: string; live: boolean; enabled: boolean }[] {
-    const open = !serverId || serverId === this.serverId;
-    const own = open
-      ? extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.state === "active" || e.state === "starting", enabled: e.enabled }))
-      : [];
-    const idle = open ? [] : (this.extensionStoreOf(serverId)?.installed ?? []).filter((e) => !own.some((o) => o.id === e.package.manifest.id));
-    return [...own, ...idle.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.enabled, enabled: e.enabled }))];
-  }
+  get extensionStoreTick() { return this.idleExtensions.tick; }
+  extensionStoreOf(serverId: string | null | undefined): ServerExtensionStore | null { return this.idleExtensions.of(serverId); }
+  attachExtensionStore(serverId: string): Promise<void> { return this.idleExtensions.attach(serverId); }
+  /** The client extensions as one server sees them (the host's when it is open, the idle editor's otherwise). */
+  clientExtensionsOf(serverId: string | null | undefined) { return this.idleExtensions.clientsOf(serverId); }
   listChanged() {
     this.settingsSync?.changed("extensions");
   }

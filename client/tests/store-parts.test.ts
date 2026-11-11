@@ -8,6 +8,7 @@ import type * as FeedbackModule from "../src/lib/feedback.svelte";
 import type * as SidebarModule from "../src/lib/sidebar.svelte";
 import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
+import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
@@ -17,6 +18,7 @@ let reorder: typeof SidebarModule.reorder;
 let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
+let IdleExtensionStores: typeof IdleModule.IdleExtensionStores;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -43,6 +45,9 @@ beforeAll(async () => {
 	({ reorder, SidebarState } = await loadRunes("sidebar"));
 	({ ServerPrefs } = await loadRunes("server-prefs"));
 	({ ExtensionRequests } = await loadRunes("extension-requests"));
+	// the extension host and notifications modules it imports read session storage when they load
+	(globalThis as any).sessionStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+	({ IdleExtensionStores } = await loadRunes("idle-extension-stores"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -285,5 +290,32 @@ describe("configuration servers", () => {
 		expect(out[0]).toMatchObject({ id: "2", token: "t2" });
 		expect(out[1]!.token).toBe("");
 		expect(out[1]!.id).not.toBe("2");
+	});
+});
+
+describe("idle extension stores", () => {
+	const make = (open: string | null, apis: Record<string, unknown> = {}) => new IdleExtensionStores({ openId: () => open, apiOf: (id) => (apis[id] as never) ?? null });
+
+	test("the open server and a server not attached have no idle editor", () => {
+		const idle = make("s1");
+		expect(idle.of("s1")).toBeNull();
+		expect(idle.of("s2")).toBeNull();
+		expect(idle.of(null)).toBeNull();
+	});
+	test("attaching the open server, or one with no connection, does nothing", async () => {
+		const idle = make("s1", {});
+		await idle.attach("s1");
+		await idle.attach("gone");
+		expect(idle.tick).toBe(0);
+	});
+	test("dropping what was never attached resolves and changes nothing", async () => {
+		const idle = make("s1");
+		await idle.drop("s2");
+		idle.handOver("s2");
+		await idle.settled;
+		expect(idle.tick).toBe(0);
+	});
+	test("another server's list is never the host's: no idle editor means no rows", () => {
+		expect(make("s1").clientsOf("s2")).toEqual([]);
 	});
 });
