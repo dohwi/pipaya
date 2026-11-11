@@ -63,8 +63,18 @@ Material 프로필을 따릅니다. 수치는 `src/app.css`의 `:root` 토큰 �
 
 ## Layout
 
-- `src/lib/store.svelte.ts`: 연결, 세션, SSE 동기화와 재연결, 명령
-- `src/lib/chat.svelte.ts`: REST 기록과 SSE 이벤트를 하나의 대화로 합침
-- `src/lib/api.ts`: 타입이 있는 REST 클라이언트와 EventSource 구독
-- `src/lib/i18n.ts`, `src/lib/locales/`: UI 언어, 영어 사전, 언어팩
-- `src/components/`: Sidebar, Header, MessageList, Message, ToolCard(승인), Composer, ModelPicker, Settings
+- `src/lib/store.svelte.ts`: 앱 스토어(`app`). 연결, 세션, SSE 동기화와 재연결, 명령. 상태를 스스로 가진 부품은 옆 파일에 있고 스토어를
+  거쳐 쓴다: `prefs.svelte.ts`, `sidebar.svelte.ts`, `server-link.svelte.ts`, `server-prefs.svelte.ts`, `close-guard.svelte.ts`,
+  `pairing-flow.svelte.ts`, `idle-extension-stores.svelte.ts`. 룬 없는 순수 규칙은 `*-model.ts`(`store-model.ts`, `workdir-model.ts` 등)에 테스트와 함께.
+- `src/lib/chat.svelte.ts`: REST 기록과 SSE 이벤트를 하나의 대화로 합친다
+- `src/lib/api.ts`: 타입 있는 REST 클라이언트. 이벤트 스트림과 터미널 소켓은 일회용 티켓으로 연다(`streamCredential`)
+- `src/lib/i18n.ts`, `src/lib/locales/`: UI 언어, 영어 사전, 언어 팩
+- `src/components/`, 역할별 폴더:
+  - `ui/`: 앱을 모르는 기본 부품(Button, Modal, Notice, Select 등. 스토어를 import하지 않는다)
+  - `shell/`: 앱 틀. Header, TabBar, Pane, GroupView, Sidebar와 그 행(`shell/sidebar/`), Palette, 첫 화면
+  - `chat/`: 대화. MessageList, Message, AssistantMessage, ToolCard, Composer, SlashMenu, StatusLine, RetryNotice
+  - `models/`: 모델 선택, 연결, 모델 설정
+  - `server/`: 연결, 페어링, 기기, 백업, 서버 업데이트
+  - `settings/`: 설정 대화상자와 각 섹션
+  - `agent/`: 스킬, 하위 에이전트, MCP, 세션. `XDialog`는 모달, `XPanel`은 본문, `XSettings`는 설정 섹션
+  - `terminal/`, `extensions/`
