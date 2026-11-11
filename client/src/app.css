@@ -11,17 +11,42 @@
 	font-weight: 100 800;
 	font-display: swap;
 }
+/* Maple Mono draws the terminal. Its 10,379 Nerd Font icons (prompt separators, file-type and git glyphs, in the
+   private-use ranges) were 90% of each file, so they live in a file of their own, which a browser fetches only once a
+   page shows one of them: a terminal without them loads 177 kB instead of 1,887 kB.
+   - The icons are drawn the same at both weights, so one file serves both. Two powerline glyphs do differ (U+E0A1,
+     U+E0B5); those stay in the text files.
+   - The icon file is declared once per weight, not as `font-weight: 400 700`: with a weight range Chromium picks that
+     face for regular text, never fetches the regular file and draws the terminal in the next font of the stack.
+   Made by `client/scripts/split-terminal-font.py`, which also prints these ranges. Rendering is pixel-identical to the
+   unsplit font (compared in Chromium, text and icons, both weights). */
 @font-face {
 	font-family: "Maple Mono";
 	src: url("/fonts/maplemono-regular.woff2") format("woff2");
 	font-weight: 400;
 	font-display: swap;
+	unicode-range: U+0-DFFF, U+E0A1, U+E0B5, U+F900-EFFFF;
 }
 @font-face {
 	font-family: "Maple Mono";
 	src: url("/fonts/maplemono-bold.woff2") format("woff2");
 	font-weight: 700;
 	font-display: swap;
+	unicode-range: U+0-DFFF, U+E0A1, U+E0B5, U+F900-EFFFF;
+}
+@font-face {
+	font-family: "Maple Mono";
+	src: url("/fonts/maplemono-icons.woff2") format("woff2");
+	font-weight: 400;
+	font-display: swap;
+	unicode-range: U+E000-E0A0, U+E0A2-E0B4, U+E0B6-F8FF, U+F0000-FFFFD;
+}
+@font-face {
+	font-family: "Maple Mono";
+	src: url("/fonts/maplemono-icons.woff2") format("woff2");
+	font-weight: 700;
+	font-display: swap;
+	unicode-range: U+E000-E0A0, U+E0A2-E0B4, U+E0B6-F8FF, U+F0000-FFFFD;
 }
 @font-face {
 	font-family: "SUIT";
