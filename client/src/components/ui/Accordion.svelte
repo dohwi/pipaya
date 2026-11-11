@@ -89,6 +89,11 @@
 	.text .head { width: fit-content; justify-content: flex-start; gap: 4px; font-size: var(--fs-xs); }
 	.text .label { flex: none; }
 	.text .inner { padding-top: 8px; }
+	/* the text variant is a one-line link (19px); a finger gets a 40px-tall hit area around it, drawn nowhere */
+	@media (pointer: coarse) {
+		.text .head { position: relative; }
+		.text .head::after { content: ""; position: absolute; inset: -11px -8px; }
+	}
 
 	@media (prefers-reduced-motion: reduce) { .chev, .chev.open { transition: none; } }
 </style>

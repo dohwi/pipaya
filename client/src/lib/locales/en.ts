@@ -16,8 +16,6 @@ export const en: Record<string, string> = {
 	"Windows 앱 + 서버": "Windows app + server",
 	"접근 토큰은 서버를 설치한 컴퓨터에서 확인합니다.": "Find the access token on the computer where the server is installed.",
 	"토큰 확인": "Show the token",
-	"최근 작업 폴더": "Recent folders",
-	"폴더 바꾸기": "Change folder",
 	"/ 로 명령, @ 로 파일을 불러옵니다": "Type / for commands, @ to mention a file",
 	/* ---- model retry notice ---- */
 	"{who} 모델이 응답하지 않아 다시 시도 중": "{who} is not responding, retrying",

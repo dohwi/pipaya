@@ -30,7 +30,7 @@
 	</SettingRow>
 	<SettingRow label={t("테마")}>
 		<Segmented size="sm" full={false} label={t("테마")} value={app.prefs.theme} onchange={(id) => app.prefs.setTheme(id)} options={themes.map((th) => ({ id: th.id, label: t(th.label) }))}>
-			{#snippet option(o)}<Icon name={themes.find((th) => th.id === o.id)!.icon} /> {o.label}{/snippet}
+			{#snippet option(o)}<span class="topt"><Icon name={themes.find((th) => th.id === o.id)!.icon} />{o.label}</span>{/snippet}
 		</Segmented>
 	</SettingRow>
 	<div class="zoom">
@@ -55,6 +55,13 @@
 
 
 <style>
+	/* theme option: icon and label as one centred row (an inline svg sat on the text's baseline, its ink 1.5px above the
+	   label's); the 4px is the icon-label gap inside a control */
+	.topt {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
 	.zoom {
 		display: flex;
 		flex-direction: column;
