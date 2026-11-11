@@ -367,7 +367,7 @@ export interface CustomModel {
 	thinkingSource?: { kind: "custom" | "catalog" | "default"; catalogId?: string; levels: ThinkingLevel[] };
 }
 
-/** One entry of the server's bundled OpenRouter catalog (GET /configuration/catalog) */
+/** One entry of the server's OpenRouter catalog (GET /configuration/catalog) */
 export interface CatalogModel {
 	id: string;
 	name: string;
@@ -378,6 +378,19 @@ export interface CatalogModel {
 	/** An image-generation model */
 	image: boolean;
 	levels: string[];
+}
+
+/** The server's OpenRouter catalog and how current it is (GET /configuration/catalog). */
+export interface CatalogInfo {
+	models: CatalogModel[];
+	/** When the live list was fetched (ms since the epoch); 0 = only the snapshot bundled with the server is in hand. */
+	updatedAt: number;
+	/** The entries came from OpenRouter itself, not from the snapshot bundled with the server. */
+	live: boolean;
+	/** The live list is older than its cache window, so a refresh is due. */
+	stale: boolean;
+	/** Why the last fetch failed (the list is then the cache, or the bundled snapshot). */
+	error?: string;
 }
 
 /** Body of PUT /configuration/providers/:id */

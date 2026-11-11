@@ -1,5 +1,5 @@
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
-import type { CatalogModel, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
 	ActivityInfo,
@@ -283,7 +283,8 @@ export class Api {
 
 	/* ---------- model connection settings ---------- */
 	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
-	catalog = () => this.req<{ models: CatalogModel[] }>("GET", "/configuration/catalog");
+	/** The OpenRouter catalog the model picker autocompletes from; `refresh` asks OpenRouter again now. */
+	catalog = (refresh = false) => this.req<CatalogInfo>("GET", `/configuration/catalog${refresh ? "?refresh=1" : ""}`);
 	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string; apiKey?: string }) =>
 		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);
 	saveCustomProvider = (id: string, input: CustomProviderInput) =>

@@ -12,7 +12,7 @@ import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
 import { Thinking } from "./schemas.ts";
-import { catalogEntries, catalogMatch } from "./thinking-catalog.ts";
+import { createOpenRouterCatalog, type OpenRouterCatalog } from "./openrouter-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
@@ -35,7 +35,7 @@ export const CustomProviderBody = Type.Object({
 		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
 		disabled: Type.Optional(Type.Boolean({ description: "Switched off by the owner: kept in the connection (with its settings, so a refresh never brings it back) but hidden from every model picker and not offered to sessions." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
-		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the bundled catalog (by catalogId, else by name), else minimal..high." })),
+		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the OpenRouter catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
 		defaultThinkingLevel: Type.Optional(Thinking),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
@@ -44,9 +44,9 @@ export const CustomProviderBody = Type.Object({
  * The catalog entry a saved model points at: the OpenRouter model it was matched to, else a match by id.
  * `catalogId: null` means "manual", so nothing is looked up for it.
  */
-function catalogFor(m: { id: string; catalogId?: string | null }) {
+function catalogFor(catalog: OpenRouterCatalog, m: { id: string; catalogId?: string | null }) {
 	if (m.catalogId === null) return undefined;
-	return (m.catalogId ? catalogMatch(m.catalogId) : undefined) ?? catalogMatch(m.id);
+	return (m.catalogId ? catalog.match(m.catalogId) : undefined) ?? catalog.match(m.id);
 }
 
 /**
@@ -54,23 +54,23 @@ function catalogFor(m: { id: string; catalogId?: string | null }) {
  * the same rule the model picker lists by, so a strength the picker shows is never refused here. A model with no map
  * keeps pi-ai's own default set (off through high).
  */
-function supportedLevelsFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): ThinkingLevel[] {
+function supportedLevelsFor(catalog: OpenRouterCatalog, m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): ThinkingLevel[] {
 	if (m.thinkingLevels?.length) return THINKING_LEVELS.filter((l) => m.thinkingLevels!.includes(l));
-	const map = catalogFor(m)?.map;
+	const map = catalogFor(catalog, m)?.map;
 	return getSupportedThinkingLevels({ reasoning: true, ...(map ? { thinkingLevelMap: map } : {}) } as Model<any>)
 		.filter((l): l is ThinkingLevel => (THINKING_LEVELS as readonly string[]).includes(l));
 }
 
 /** The model's `thinkingLevelMap`: a level that is not listed is marked unsupported (null), the others pass through unchanged. */
-function thinkingMapFor(m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
+function thinkingMapFor(catalog: OpenRouterCatalog, m: { id: string; catalogId?: string | null; thinkingLevels?: readonly string[] }): { thinkingLevelMap?: NonNullable<Model<any>["thinkingLevelMap"]> } {
 	if (m.thinkingLevels?.length) {
 		// Keep the catalog's own wire value for a level that stays on (OpenRouter calls "off" "none"), else the level itself.
-		const base = catalogFor(m)?.map as Record<string, string | null | undefined> | undefined;
+		const base = catalogFor(catalog, m)?.map as Record<string, string | null | undefined> | undefined;
 		const map: Record<string, string | null> = {};
 		for (const level of THINKING_LEVELS) map[level] = m.thinkingLevels.includes(level) ? (base?.[level] ?? level) : null;
 		return { thinkingLevelMap: map };
 	}
-	const found = catalogFor(m)?.map;
+	const found = catalogFor(catalog, m)?.map;
 	return found ? { thinkingLevelMap: found } : {};
 }
 export const DiscoverBody = Type.Object({
@@ -91,7 +91,7 @@ export const DefaultsBody = Type.Union([DefaultSelection, Type.Null()]);
 /** Where a model's reasoning strengths come from (response only): the owner's own list, a catalog match by name, or the plain default. */
 export const ThinkingSource = Type.Object({
 	kind: Type.Union([Type.Literal("custom"), Type.Literal("catalog"), Type.Literal("default")]),
-	catalogId: Type.Optional(Type.String({ description: "The bundled OpenRouter catalog id the name was matched to (kind \"catalog\")" })),
+	catalogId: Type.Optional(Type.String({ description: "The OpenRouter catalog id the name was matched to (kind \"catalog\")" })),
 	levels: Type.Array(Thinking, { description: "The strengths the model offers, weakest first; empty without reasoning" }),
 });
 const PublicModel = Type.Object({
@@ -145,9 +145,9 @@ const REFRESH_INTERVAL_MS = 60_000;
 const MAX_MODELS = 100;
 
 /** A model the upstream lists that we do not know yet: limits and capabilities come from the matching OpenRouter entry, else plain defaults. */
-function upstreamModel(m: { id: string; name?: string }): CustomProvider["models"][number] {
-	const hit = catalogMatch(m.id);
-	const e = hit ? catalogEntries().find((c) => c.id === hit.id) : undefined;
+function upstreamModel(catalog: OpenRouterCatalog, m: { id: string; name?: string }): CustomProvider["models"][number] {
+	const hit = catalog.match(m.id);
+	const e = hit ? catalog.entry(hit.id) : undefined;
 	const contextWindow = e?.contextWindow ?? 128_000;
 	return {
 		id: m.id, ...(m.name ? { name: m.name } : {}), contextWindow, maxTokens: Math.min(e?.maxTokens ?? 8192, contextWindow),
@@ -210,6 +210,9 @@ export class Configuration {
 	/** Images owners uploaded as model icons. */
 	readonly images: ModelIcons;
 
+	/** The OpenRouter model list the settings screens autocomplete from: live when it can be fetched, cached for hours. */
+	readonly catalog: OpenRouterCatalog;
+
 	constructor(
 		private db: Database,
 		private cfg: Config,
@@ -219,9 +222,27 @@ export class Configuration {
 		private usedBy: () => { role: string; provider: string; model: string }[] = () => [],
 	) {
 		this.images = new ModelIcons(db);
+		this.catalog = createOpenRouterCatalog(cfg.dataDir);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
 		registry.defaultSelection = () => this.effectiveDefaults();
 		registry.isImageModel = (provider, id) => this.get(provider)?.models.some((m) => m.id === id && m.imageGeneration === true) ?? false;
+	}
+
+	/** How current the OpenRouter list is, for the settings screen (see the catalog route). */
+	catalogState(): { updatedAt: number; live: boolean; stale: boolean; error?: string } {
+		return { updatedAt: this.catalog.updatedAt, live: this.catalog.isLive, stale: this.catalog.stale, ...(this.catalog.lastError ? { error: this.catalog.lastError } : {}) };
+	}
+
+	/**
+	 * Bring the OpenRouter list up to date (when stale, or always with `force`) and re-register the connections, so a model
+	 * whose strengths come from the catalog follows it. Never throws: a failed fetch leaves the cache in place.
+	 */
+	async refreshCatalog(force = false): Promise<void> {
+		const before = this.catalog.updatedAt;
+		await this.catalog.refresh(force);
+		if (this.open && this.catalog.updatedAt !== before) {
+			for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
+		}
 	}
 
 	/** Whether a refresh may still write: set false on shutdown so a late upstream answer never touches a closed database. */
@@ -348,7 +369,7 @@ export class Configuration {
 		const live = this.registry.models.getModel(providerId, m.id);
 		const levels = live ? getSupportedThinkingLevels(live).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [];
 		if (!m.reasoning) return { kind: "default", levels: [] };
-		const match = catalogFor(m);
+		const match = catalogFor(this.catalog, m);
 		if (m.thinkingLevels?.length) return { kind: "custom", ...(match ? { catalogId: match.id } : {}), levels };
 		return match ? { kind: "catalog", catalogId: match.id, levels } : { kind: "default", levels };
 	}
@@ -374,7 +395,7 @@ export class Configuration {
 		for (const m of input.models) {
 			if (!m.defaultThinkingLevel) continue;
 			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
-			if (!supportedLevelsFor(m).includes(m.defaultThinkingLevel)) throw badRequest(`${m.id.trim()}: the default thinking level must be one of ${supportedLevelsFor(m).join(", ")}`);
+			if (!supportedLevelsFor(this.catalog, m).includes(m.defaultThinkingLevel)) throw badRequest(`${m.id.trim()}: the default thinking level must be one of ${supportedLevelsFor(this.catalog, m).join(", ")}`);
 		}
 		const p: CustomProvider = { ...input, id, name: input.name.trim(), baseUrl: url.toString().replace(/\/$/, ""), models: input.models.map((m) => ({ ...m, id: m.id.trim() })) };
 		const defaultModel = this.effectiveDefaults();
@@ -456,7 +477,7 @@ export class Configuration {
 		// A model typed in by hand that the upstream does list is one of its own from now on, so it is flagged if it ever disappears.
 		const adopted = current.models.some((m) => !m.fromUpstream && ids.has(m.id));
 		const room = Math.max(0, MAX_MODELS - current.models.length);
-		const added = listed.filter((m) => !have.has(m.id)).slice(0, room).map(upstreamModel);
+		const added = listed.filter((m) => !have.has(m.id)).slice(0, room).map((m) => upstreamModel(this.catalog, m));
 		if (added.length || adopted) {
 			const models = current.models.map((m) => (!m.fromUpstream && ids.has(m.id) ? { ...m, fromUpstream: true } : m));
 			const next: CustomProvider = { ...current, models: [...models, ...added] };
@@ -542,8 +563,8 @@ export class Configuration {
 		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
-			// Strengths the owner listed win; otherwise they are looked up by name in the bundled OpenRouter catalog, and unknown names keep the defaults.
-			...(m.reasoning && !m.imageGeneration ? thinkingMapFor(m) : {}),
+			// Strengths the owner listed win; otherwise they are looked up by name in the OpenRouter catalog, and unknown names keep the defaults.
+			...(m.reasoning && !m.imageGeneration ? thinkingMapFor(this.catalog, m) : {}),
 			// pi-ai has no slot for "where a new chat starts", so the owner's choice travels on the model object (see modelDefaultLevel).
 			...(m.reasoning && !m.imageGeneration && m.defaultThinkingLevel ? { defaultThinkingLevel: m.defaultThinkingLevel } : {}),
 			contextWindow: m.contextWindow, maxTokens: m.maxTokens,

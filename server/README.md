@@ -47,6 +47,8 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see `server/builtin-skills/pipaya-client-extensions/references/notifications.md` |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
 | `PIPAYA_TERMINAL` | `1` | `0` turns off terminals: interactive shells clients open on this server (the user's shell on Linux/macOS, PowerShell on Windows) |
+| `PIPAYA_OPENROUTER` | `1` | `0` keeps the model picker on the OpenRouter list bundled with pi-ai: no request leaves the server (offline installs) |
+| `PIPAYA_OPENROUTER_URL` | `https://openrouter.ai/api/v1/models` | Where the live list is read from (a mirror). The picture-making models are read from its `/images/models` sibling |
 
 A fresh server has an empty catalog: there are no built-in providers and no environment-based authentication.
 Saved custom providers and models are restored from SQLite on restart.
@@ -60,6 +62,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET/POST | `/server/update` | Admin token only. GET: is a newer commit available on the branch this checkout tracks, and can the server restart itself. POST `{force?}`: move to it, reinstall dependencies and exit so the service manager restarts the new code. 409 `sessions_running` unless `force` |
 | GET | `/tools` | Tool list and defaults |
 | GET | `/models?provider=&configured=true` | Model catalog |
+| GET | `/configuration/catalog?refresh=1` | OpenRouter's model list for the model picker: fetched live, cached for 6 hours in `<data>/openrouter-catalog.json`; `refresh=1` fetches it now. Also `updatedAt`, `live`, `stale`, `error` |
 | GET | `/providers` | Provider availability, no keys |
 | PUT | `/providers/:id/credential` | `{key}` |
 | DELETE | `/providers/:id/credential` | Remove stored key |
