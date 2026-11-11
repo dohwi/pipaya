@@ -7,7 +7,7 @@ import {
   normalizeUrl,
   verifyServer,
 } from "./api";
-import { expandHome, isAbs, isWinAbs, relativeToRoot, sepOf, trimSep } from "./workdir-path";
+import { normalizeWorkdir, relPath, workdirAbs, workdirText } from "./workdir-model";
 import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -1234,26 +1234,17 @@ class AppStore {
 
   /** `/home/x/workspace/proj/a` -> `proj/a`; the root itself is ".". */
   relPath(cwd: string): string {
-    return relativeToRoot(cwd, this.workspace?.root);
+    return relPath(cwd, this.workspace?.root);
   }
 
   /** Human label for a `workdir` value: the server default, a sub-folder of it, or an absolute path. */
   workdirLabel(rel: string = this.workdir): string {
-    return rel === "."
-      ? (this.workspace?.root ?? t("서버 기본 디렉터리"))
-      : isAbs(rel)
-        ? rel
-        : `${this.workspace?.root ?? ""}${sepOf(this.workspace?.root ?? "")}${rel}`.replace(/^\//, "/");
+    return workdirText(rel, this.workspace?.root) ?? t("서버 기본 디렉터리");
   }
 
   /** Absolute path the next new chat will start in (best effort until the server confirms). */
   get workdirAbs(): string {
-    const root = this.workspace?.root ?? "";
-    return this.workdir === "."
-      ? root
-      : isAbs(this.workdir)
-        ? this.workdir
-        : `${root}${sepOf(root)}${this.workdir}`;
+    return workdirAbs(this.workdir, this.workspace?.root);
   }
 
   /** Switch one agent tool on or off for every chat. Saved on the server. */
@@ -1510,29 +1501,19 @@ class AppStore {
    * An open chat keeps its own directory, so this leaves it and starts a fresh chat there.
    */
   changeWorkdir(raw: string): boolean {
-    let rel = trimSep(expandHome(raw.trim(), this.workspace?.home)) || ".";
-    if (rel === "~" || rel.startsWith("~/")) {
-      this.toast(t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다"), "error");
-      return false;
-    }
-    // a backslash is a separator in a Windows path (`C:\work`), and nothing else
-    if (/\0/.test(rel) || (!isWinAbs(rel) && rel.includes("\\")) || (isWinAbs(rel) && /[<>"|?*\0]/.test(rel.slice(2)))) {
-      this.toast(t("경로에 사용할 수 없는 문자가 있습니다"), "error");
-      return false;
-    }
-    // An absolute path inside the default directory is stored relative to it, so the sidebar groups it with the rest.
-    if (isAbs(rel)) rel = this.relPath(rel);
-    else rel = rel.replace(/^(\.\/)+/, "") || ".";
-    if (
-      !isAbs(rel) &&
-      rel.split("/").some((seg) => seg === ".." || seg === "")
-    ) {
+    const norm = normalizeWorkdir(raw, { root: this.workspace?.root, home: this.workspace?.home });
+    if (!norm.ok) {
       this.toast(
-        t("상대 경로에는 ..을 쓸 수 없습니다. 절대 경로(/로 시작)를 입력하세요"),
+        norm.error === "home"
+          ? t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다")
+          : norm.error === "chars"
+            ? t("경로에 사용할 수 없는 문자가 있습니다")
+            : t("상대 경로에는 ..을 쓸 수 없습니다. 절대 경로(/로 시작)를 입력하세요"),
         "error",
       );
       return false;
     }
+    const rel = norm.path;
     const same = this.current && this.relPath(this.current.cwd) === rel;
     this.setWorkdir(rel);
     if (same) return true;
