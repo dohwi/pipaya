@@ -118,6 +118,8 @@ function failureText(e: unknown): string {
 		if (e.code === "update_failed") return t("서버를 업데이트하지 못해 이전 버전으로 되돌렸습니다");
 		if (e.code === "update_restore_failed") return t("서버를 업데이트하지 못했고 이전 버전도 완전히 복원하지 못했습니다. 서버의 체크아웃을 확인하세요");
 		if (e.code === "dirty_checkout") return t("서버의 체크아웃에 로컬 변경이 있어 업데이트할 수 없습니다");
+		if (e.code === "update_untrusted") return t("릴리스가 가리키는 코드가 릴리스 브랜치에 없어 업데이트를 거부했습니다. 서버는 그대로입니다");
+		if (e.code === "update_unverified") return t("릴리스의 출처를 확인하지 못해 업데이트하지 않았습니다. 잠시 뒤 다시 시도하세요");
 		if (e.code === "update_unavailable") return t("이 서버는 스스로 업데이트할 수 없습니다");
 		if (e.status === 403) return t("서버 관리자 토큰으로 연결해야 업데이트할 수 있습니다");
 	}

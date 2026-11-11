@@ -11,8 +11,12 @@ import { SERVER_VERSION } from "./version.ts";
  * Only offered when something will bring the process back: a systemd/launchd service (detected from the environment they set),
  * or `PIPAYA_SELF_UPDATE=1` for another supervisor (pm2, a container restart policy on a git checkout). `PIPAYA_SELF_UPDATE=0`
  * switches it off. A Docker image, a compiled binary and a manual `bun src/index.ts` have no way back, so they report why.
+ *
+ * What it trusts: the release tag is only a pointer, and a pointer is cheap to move (any push access, a workflow token).
+ * The branch the releases are cut from is the protected one: nothing lands there without a reviewed, checked pull
+ * request. So before any code is replaced, the commit the tag names must lie on that branch's history (`provenance`
+ * below). A tag moved to a commit from anywhere else is refused, and the running version stays as it is.
  */
-
 export interface RunResult {
 	code: number;
 	out: string;
@@ -65,6 +69,8 @@ const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const DEFAULT_RELEASE_TAG = "latest";
 const TAG_PATTERN = /^[A-Za-z0-9._-]+$/;
 const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
+/** How much of the release branch's history is fetched to find the release commit on it, before fetching all of it. */
+const ANCESTRY_DEPTHS = [64, 512];
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
@@ -150,6 +156,45 @@ export class SelfUpdater {
 		return this.run(["git", ...args], this.o.root, timeoutMs);
 	}
 
+	/** The branch releases are cut from: the remote's default branch, or `PIPAYA_RELEASE_BRANCH` for a fork that releases from another. */
+	private async releaseBranch(): Promise<string | null> {
+		const wanted = this.env.PIPAYA_RELEASE_BRANCH?.trim();
+		if (wanted) return REF_PATTERN.test(wanted) && !wanted.startsWith("-") ? wanted : null;
+		const head = await this.git(["ls-remote", "--symref", "origin", "HEAD"], 30_000);
+		const name = head.code === 0 ? /^ref: refs\/heads\/(\S+)\tHEAD$/m.exec(head.out)?.[1] : undefined;
+		return name && REF_PATTERN.test(name) && !name.startsWith("-") ? name : null;
+	}
+
+	/**
+	 * Whether `sha` lies on the history of the release branch. "unknown" when the remote could not be asked: the caller
+	 * refuses then as well, since an update that cannot be checked is not applied.
+	 *
+	 * The checkout is shallow (install.sh clones one commit), so the branch's history is fetched in growing slices, and
+	 * in full only when the commit was not found in them: a real release is a few commits behind the tip, and only a
+	 * commit that is not on the branch at all costs the whole download.
+	 */
+	private async provenance(sha: string): Promise<"on_branch" | "off_branch" | "unknown"> {
+		const branch = await this.releaseBranch();
+		if (!branch) return "unknown";
+		const tip = await this.git(["ls-remote", "origin", `refs/heads/${branch}`], 30_000);
+		const head = tip.code === 0 ? tip.out.split("\n").find((l) => l.endsWith(`\trefs/heads/${branch}`))?.split("\t")[0] : undefined;
+		if (!head || !SHA_PATTERN.test(head)) return "unknown";
+		if (head === sha) return "on_branch";
+		const reached = async () => (await this.git(["merge-base", "--is-ancestor", sha, head])).code === 0;
+		for (const depth of ANCESTRY_DEPTHS) {
+			if ((await this.git(["fetch", "--quiet", "--depth", String(depth), "origin", head], 300_000)).code !== 0) return "unknown";
+			if (await reached()) return "on_branch";
+		}
+		// Not within the slices: only the whole history can tell "older than that" from "not on the branch".
+		const shallow = await this.git(["rev-parse", "--is-shallow-repository"]);
+		if (shallow.code === 0 && shallow.out.trim() === "true") {
+			if ((await this.git(["fetch", "--quiet", "--unshallow", "origin"], 600_000)).code !== 0) return "unknown";
+			if ((await this.git(["fetch", "--quiet", "origin", head], 300_000)).code !== 0) return "unknown";
+			if (await reached()) return "on_branch";
+		}
+		return "off_branch";
+	}
+
 	async status(refresh = false): Promise<UpdateStatus> {
 		if (!refresh && this.cached && this.now() - this.cached.checkedAt < this.cacheMs) return this.cached;
 		const checkedAt = this.now();
@@ -202,6 +247,18 @@ export class SelfUpdater {
 			}
 
 			const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", st.latest], 120_000);
+			// The tag is only a pointer: the code it names must come from the protected release branch (see the top of this file).
+			if (fetched.code === 0) {
+				const origin = await this.provenance(st.latest);
+				if (origin === "off_branch") {
+					this.cached = null;
+					throw new HttpError(409, "update_untrusted", "the release tag points at a commit that is not on the release branch; the update was refused");
+				}
+				if (origin === "unknown") {
+					this.cached = null;
+					throw new HttpError(502, "update_unverified", "the release could not be checked against the release branch; nothing was changed");
+				}
+			}
 			// Dependencies are reinstalled only when the manifest or lockfile differ between the two commits (unknown = reinstall).
 			const diff = fetched.code === 0 ? await this.git(["diff", "--name-only", st.current, st.latest, "--", "server/package.json", "server/bun.lock"]) : null;
 			const depsChanged = !diff || diff.code !== 0 || diff.out.length > 0;

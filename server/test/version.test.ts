@@ -11,6 +11,8 @@ const TOKEN = "version-test-token-0123456789";
 const auth = { authorization: `Bearer ${TOKEN}` };
 const OLD = "a".repeat(40);
 const NEW = "b".repeat(40);
+/** Tip of the release branch in the fake remote, ahead of the release commit. */
+const TIP = "c".repeat(40);
 
 describe("version handshake", () => {
 	let app: App;
@@ -28,6 +30,9 @@ describe("version handshake", () => {
 		const key = a.join(" ");
 		if (key.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (key === "rev-parse HEAD") return { code: 0, out: head };
+		// The release branch is `main`, and the release commit is its tip: the tag names code that came through the branch.
+		if (key === "ls-remote --symref origin HEAD") return { code: 0, out: `ref: refs/heads/main\tHEAD\n${fetched}\tHEAD` };
+		if (key === "ls-remote origin refs/heads/main") return { code: 0, out: `${fetched}\trefs/heads/main` };
 		if (key.startsWith("ls-remote")) return { code: 0, out: `${fetched}\trefs/tags/latest` };
 		if (key.startsWith("fetch")) return { code: 0, out: "" };
 		if (key.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
@@ -175,6 +180,9 @@ describe("SelfUpdater", () => {
 		const k = cmd.slice(1).join(" ");
 		if (k.startsWith("symbolic-ref")) return { code: 0, out: "main" };
 		if (k === "rev-parse HEAD") return { code: 0, out: OLD };
+		// The release branch is `main`; TIP is ahead of the release, which lies on its history (`merge-base` answers 0 below).
+		if (k === "ls-remote --symref origin HEAD") return { code: 0, out: `ref: refs/heads/main\tHEAD\n${TIP}\tHEAD` };
+		if (k === "ls-remote origin refs/heads/main") return { code: 0, out: `${TIP}\trefs/heads/main` };
 		if (k.startsWith("ls-remote")) return { code: 0, out: `${NEW}\trefs/tags/latest` };
 		if (k.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		return { code: 0, out: "" };
@@ -340,6 +348,115 @@ describe("SelfUpdater", () => {
 		await expect(u.apply()).rejects.toMatchObject({ status: 409, code: "dirty_checkout" });
 		expect(resets).toEqual([]);
 		rmSync(dir, { recursive: true, force: true });
+	});
+
+	describe("where the release comes from", () => {
+		/** Runs an update against a fake git and records what was asked of it. */
+		const attempt = async (answer: (key: string) => { code: number; out: string } | undefined, env: Record<string, string> = {}) => {
+			const calls: string[] = [];
+			let restarted = false;
+			let installs = 0;
+			const run: Run = async (cmd, cwd, t) => {
+				const key = cmd.slice(1).join(" ");
+				calls.push(key);
+				return answer(key) ?? fine(cmd, cwd, t);
+			};
+			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1", ...env }, run, install: async () => (installs++, true), restart: () => (restarted = true) });
+			const result = await u.apply().then((v) => ({ ok: v }), (e) => ({ error: e as { status: number; code: string } }));
+			rmSync(dir, { recursive: true, force: true });
+			return { result, calls, restarted, installs, moved: calls.filter((c) => c.startsWith("reset")) };
+		};
+
+		test("a release on the branch is installed after a small slice of history", async () => {
+			const r = await attempt(() => undefined);
+			expect(r.result).toMatchObject({ ok: { from: OLD, to: NEW } });
+			expect(r.restarted).toBe(true);
+			expect(r.calls).toContain(`merge-base --is-ancestor ${NEW} ${TIP}`);
+			expect(r.calls).toContain(`fetch --quiet --depth 64 origin ${TIP}`);
+			expect(r.calls.some((c) => c.includes("--unshallow") || c.includes("--depth 512"))).toBe(false); // no more than needed
+		});
+
+		test("a release that is the tip of the branch needs no history at all", async () => {
+			const r = await attempt((k) => (k === "ls-remote origin refs/heads/main" ? { code: 0, out: `${NEW}\trefs/heads/main` } : undefined));
+			expect(r.result).toMatchObject({ ok: { to: NEW } });
+			expect(r.calls.some((c) => c.startsWith("merge-base"))).toBe(false);
+		});
+
+		test("an older release is found by reaching further back", async () => {
+			let depth = 0;
+			const r = await attempt((k) => {
+				const m = /^fetch --quiet --depth (\d+) origin c+$/.exec(k);
+				if (m) depth = Number(m[1]);
+				if (k.startsWith("merge-base")) return { code: depth >= 512 ? 0 : 1, out: "" };
+				return undefined;
+			});
+			expect(r.result).toMatchObject({ ok: { to: NEW } });
+			expect(r.calls.filter((c) => c.startsWith("merge-base")).length).toBe(2);
+			expect(r.calls.some((c) => c.includes("--unshallow"))).toBe(false);
+		});
+
+		test("a tag moved to a commit that is not on the branch is refused and nothing is touched", async () => {
+			const r = await attempt((k) => {
+				if (k.startsWith("merge-base")) return { code: 1, out: "" };
+				if (k === "rev-parse --is-shallow-repository") return { code: 0, out: "true" };
+				return undefined;
+			});
+			expect(r.result).toMatchObject({ error: { status: 409, code: "update_untrusted" } });
+			expect(r.moved).toEqual([]); // the working tree was never reset
+			expect(r.installs).toBe(0);
+			expect(r.restarted).toBe(false);
+			// it said no only after the whole history had been looked at
+			expect(r.calls).toContain("fetch --quiet --unshallow origin");
+			expect(r.calls.filter((c) => c.startsWith("merge-base")).length).toBe(3);
+		});
+
+		test("a full clone is not fetched again to say no", async () => {
+			const r = await attempt((k) => {
+				if (k.startsWith("merge-base")) return { code: 1, out: "" };
+				if (k === "rev-parse --is-shallow-repository") return { code: 0, out: "false" };
+				return undefined;
+			});
+			expect(r.result).toMatchObject({ error: { code: "update_untrusted" } });
+			expect(r.calls.some((c) => c.includes("--unshallow"))).toBe(false);
+		});
+
+		test("when the branch cannot be asked, the update is not applied (and not called untrusted)", async () => {
+			for (const broken of [
+				(k: string) => (k === "ls-remote --symref origin HEAD" ? { code: 128, out: "unable to access" } : undefined), // no default branch
+				(k: string) => (k === "ls-remote --symref origin HEAD" ? { code: 0, out: `${TIP}\tHEAD` } : undefined), // a remote that names none
+				(k: string) => (k === "ls-remote origin refs/heads/main" ? { code: 0, out: "" } : undefined), // the branch is gone
+				(k: string) => (k.startsWith("fetch --quiet --depth 64") ? { code: 128, out: "timeout" } : undefined), // its history cannot be fetched
+				(k: string) => (k.startsWith("merge-base") ? { code: 1, out: "" } : k === "rev-parse --is-shallow-repository" ? { code: 0, out: "true" } : k.includes("--unshallow") ? { code: 128, out: "x" } : undefined),
+			]) {
+				const r = await attempt(broken);
+				expect(r.result).toMatchObject({ error: { status: 502, code: "update_unverified" } });
+				expect(r.moved).toEqual([]);
+				expect(r.restarted).toBe(false);
+			}
+		});
+
+		test("a fork names the branch its releases are cut from", async () => {
+			const r = await attempt((k) => (k === "ls-remote origin refs/heads/release" ? { code: 0, out: `${TIP}\trefs/heads/release` } : undefined), { PIPAYA_RELEASE_BRANCH: "release" });
+			expect(r.result).toMatchObject({ ok: { to: NEW } });
+			expect(r.calls).not.toContain("ls-remote --symref origin HEAD"); // told, so the remote is not asked for its default
+		});
+
+		test("a branch name that is no branch name is never passed to git", async () => {
+			for (const bad of ["a b;rm -rf", "--upload-pack=x", "-x"]) {
+				const r = await attempt(() => undefined, { PIPAYA_RELEASE_BRANCH: bad });
+				expect(r.result).toMatchObject({ error: { code: "update_unverified" } });
+				expect(r.calls.some((c) => c.includes(bad))).toBe(false);
+			}
+		});
+
+		test("looking for an update asks nothing about the branch: only applying one does", async () => {
+			const calls: string[] = [];
+			const run: Run = async (cmd, cwd, t) => (calls.push(cmd.slice(1).join(" ")), fine(cmd, cwd, t));
+			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run });
+			expect((await u.status()).available).toBe(true);
+			expect(calls.some((c) => c.includes("refs/heads") || c.includes("--symref") || c.startsWith("merge-base"))).toBe(false);
+			rmSync(dir, { recursive: true, force: true });
+		});
 	});
 
 	test("two updates at once: the second is turned away", async () => {
