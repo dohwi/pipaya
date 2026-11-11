@@ -9,8 +9,14 @@ import type { Socket } from "node:net";
  * changing that token and re-pairing everything. Now each pairing mints its own token. Only its SHA-256 is stored
  * (a database leak yields nothing usable), and revoking it cuts that one device off, open streams included.
  * The admin token keeps working and is the only credential that can mint or revoke device tokens.
+ *
+ * A device that has not connected for a long time loses its access by itself (`PIPAYA_DEVICE_TOKEN_IDLE_DAYS`, 90 by
+ * default, 0 = never): a phone that was sold or lost without being revoked must not stay a way in for ever. Pairing
+ * it again takes one scan.
  */
 export const DEVICE_TOKEN_PREFIX = "hdt_";
+export const DEFAULT_DEVICE_TOKEN_IDLE_DAYS = 90;
+const DAY_MS = 24 * 3600_000;
 const LAST_USED_GRANULARITY_MS = 60_000;
 
 export interface DeviceTokenInfo {
@@ -33,7 +39,16 @@ export class DeviceTokens {
 	private sockets = new Map<string, Set<Socket>>();
 	private touched = new Map<string, number>();
 
-	constructor(private db: Database, private now: () => number = Date.now) {}
+	/** `idleDays`: a token unused for this long stops working; 0 keeps it for ever. */
+	constructor(private db: Database, private now: () => number = Date.now, private idleDays = DEFAULT_DEVICE_TOKEN_IDLE_DAYS) {}
+
+	/** Forget the tokens of devices that have not connected (or, never having connected, were paired) for `idleDays`. */
+	private expireIdle(): void {
+		if (this.idleDays <= 0) return;
+		const cutoff = this.now() - this.idleDays * DAY_MS;
+		const stale = this.db.query("SELECT id FROM device_tokens WHERE COALESCE(last_used_at, created_at) <= ?").all(cutoff) as { id: string }[];
+		for (const { id } of stale) this.revoke(id);
+	}
 
 	issue(name?: string): { id: string; token: string } {
 		const id = randomBytes(8).toString("hex");
@@ -47,9 +62,13 @@ export class DeviceTokens {
 	/** The device id a token belongs to, or null. */
 	verify(token: string | undefined): string | null {
 		if (!token || !token.startsWith(DEVICE_TOKEN_PREFIX) || token.length > 200) return null;
-		const row = this.db.query("SELECT id FROM device_tokens WHERE hash = ?").get(hashOf(token)) as { id: string } | null;
+		const row = this.db.query("SELECT id, created_at, last_used_at FROM device_tokens WHERE hash = ?").get(hashOf(token)) as { id: string; created_at: number; last_used_at: number | null } | null;
 		if (!row) return null;
 		const t = this.now();
+		if (this.idleDays > 0 && t - (row.last_used_at ?? row.created_at) >= this.idleDays * DAY_MS) {
+			this.revoke(row.id);
+			return null;
+		}
 		if (t - (this.touched.get(row.id) ?? 0) >= LAST_USED_GRANULARITY_MS) {
 			this.touched.set(row.id, t);
 			this.db.query("UPDATE device_tokens SET last_used_at = ? WHERE id = ?").run(t, row.id);
@@ -62,7 +81,13 @@ export class DeviceTokens {
 		return this.db.query("SELECT 1 FROM device_tokens WHERE id = ?").get(id) !== null;
 	}
 
+	/** Days of silence after which a device must pair again; 0 = never. Shown next to the list. */
+	get idleLimitDays(): number {
+		return Math.max(0, this.idleDays);
+	}
+
 	list(): DeviceTokenInfo[] {
+		this.expireIdle(); // the list shows who can get in: an expired device is not one of them
 		return (
 			this.db.query("SELECT id, name, created_at, last_used_at FROM device_tokens ORDER BY created_at DESC").all() as {
 				id: string;

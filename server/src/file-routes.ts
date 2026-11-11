@@ -61,9 +61,12 @@ export function filesNote(saved: SavedFile[]): string {
 	return `${FILES_OPEN}${JSON.stringify(saved)}</pipaya-files>\nThe user attached these files (saved in the working directory):\n${list}`;
 }
 
-export const FileQuery = Type.Object({ path: Type.String({ minLength: 1, description: "Relative to the session's working directory" }) });
+export const FileQuery = Type.Object({ path: Type.String({ minLength: 1, description: "Relative to the session's working directory, or absolute" }) });
 
-/** Read a file of a session's working directory back, for previews. Never leaves it (symlinks included). */
+/**
+ * Read a file back for previews. Paths resolve against the session's working directory but are not confined to it
+ * (see `safePath`): whoever holds a token can read any file the server user can, as the `read` tool already lets them.
+ */
 export function registerFileRoutes(server: FastifyInstance, cwdOf: (sessionId: string) => string | undefined): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 

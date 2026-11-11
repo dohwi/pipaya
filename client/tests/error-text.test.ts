@@ -15,6 +15,11 @@ describe("errorText", () => {
 		expect(errorText(new TypeError("Failed to fetch"))).not.toMatch(/fetch/i);
 		expect(errorText(new TypeError("Load failed"))).not.toMatch(/load/i);
 	});
+	test("a throttled address is told to wait, not that its token is wrong", () => {
+		const text = errorText(new ApiError(429, "auth_throttled", "too many wrong tokens from this address; wait a minute"));
+		expect(text).not.toMatch(/too many/);
+		expect(text).not.toBe(errorText(new ApiError(401, "unauthorized", "x")));
+	});
 	test("an unreachable server and a refused token have their own words", () => {
 		expect(errorText(new ApiError(0, "network", "x"))).not.toBe("x");
 		expect(errorText(new ApiError(401, "unauthorized", "x"))).not.toBe("x");

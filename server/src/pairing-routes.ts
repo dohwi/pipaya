@@ -40,8 +40,8 @@ export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing,
 	});
 	const DeviceTokenInfo = Type.Object({ id: Type.String(), name: Type.String(), createdAt: Type.Integer(), lastUsedAt: Type.Union([Type.Integer(), Type.Null()]) });
 	app.get("/devices/tokens", {
-		schema: { response: { 200: Type.Object({ tokens: Type.Array(DeviceTokenInfo) }), ...errors(401, 403) } },
-		handler: async () => ({ tokens: devices.list() }),
+		schema: { response: { 200: Type.Object({ tokens: Type.Array(DeviceTokenInfo), idleDays: Type.Optional(Type.Integer({ description: "A device silent for this many days must pair again; 0 = never" })) }), ...errors(401, 403) } },
+		handler: async () => ({ tokens: devices.list(), idleDays: devices.idleLimitDays }),
 	});
 	app.delete("/devices/tokens/:id", {
 		schema: { params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }), response: { 200: Ok, ...errors(401, 403, 404) } },

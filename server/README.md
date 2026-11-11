@@ -37,12 +37,13 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PIPAYA_HOST` / `PIPAYA_PORT` | `0.0.0.0` / `8787` | Listen address |
+| `PIPAYA_HOST` / `PIPAYA_PORT` | `127.0.0.1` / `8787` | Listen address. Loopback by default, so only this machine can connect; set a private address (a Tailscale IP) or `0.0.0.0` to accept other devices. `install.sh` and the Docker image set it for you |
 | `PIPAYA_DATA_DIR` | `~/.pipaya` | Database, token, default workspace |
 | `PIPAYA_DB` | `<data>/pipaya.db` | SQLite path |
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
+| `PIPAYA_DEVICE_TOKEN_IDLE_DAYS` | `90` | A paired device that has not connected for this many days loses its access and must pair again. `0` = never |
 | `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Credentials passed as `?ticket=` or `?token=` are redacted from request logs |
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see `server/builtin-skills/pipaya-client-extensions/references/notifications.md` |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |

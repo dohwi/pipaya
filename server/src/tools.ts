@@ -94,13 +94,13 @@ export function isInside(root: string, target: string): boolean {
 }
 
 /**
- * Resolve a user path against cwd and refuse anything that escapes it, lexically or through a symlink
- * (a link inside cwd that points outside is rejected, including for files that do not exist yet).
+ * Resolve a path the model or a client gave against cwd. It is NOT confined to cwd: an absolute path, `..` and a
+ * symlink that leads elsewhere are all accepted, on purpose. The agent works across the whole machine like the user's
+ * own shell does, and what it may touch is decided by who runs the server (a dedicated user, the Docker sandbox) and
+ * by guard extensions, not here. Everything that takes a path goes through this one function so that stays one decision.
  */
 export function safePath(cwd: string, p: string): string {
-	const abs = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
-	// Path restriction disabled by user request: allow paths outside cwd.
-	return abs;
+	return isAbsolute(p) ? resolve(p) : resolve(cwd, p);
 }
 
 /** Like safePath, but additionally allows reading inside the given directories. */

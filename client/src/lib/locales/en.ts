@@ -1001,6 +1001,7 @@ export const en: Record<string, string> = {
 	/* ---- api / connection errors ---- */
 	"서버에 연결할 수 없습니다": "Can't reach the server",
 	"토큰이 거부되었습니다": "The token was rejected",
+	"잘못된 토큰이 여러 번 들어와 잠시 막혔습니다. 1분 뒤 다시 시도하세요": "Too many wrong tokens came from this device, so it is blocked for a moment. Try again in a minute",
 	"대상을 찾을 수 없습니다": "Not found",
 	"이 서버는 아직 이 기능을 지원하지 않습니다. 서버를 업데이트하세요": "This server does not support this yet. Update the server",
 	"문제가 발생했습니다": "Something went wrong",
@@ -1324,6 +1325,7 @@ export const en: Record<string, string> = {
 	"기기의 접속 권한을 취소했습니다": "Device access revoked",
 	"QR로 연결한 기기": "Devices connected by QR",
 	"기기마다 따로 발급된 접속 권한입니다. 취소하면 그 기기만 즉시 접속이 끊기고, 다른 기기와 서버 토큰은 그대로입니다.": "Each device has its own access. Revoking one disconnects only that device at once; other devices and the server token are unaffected.",
+	"{n}일 동안 접속하지 않은 기기는 자동으로 취소됩니다.": "A device that has not connected for {n} days is revoked automatically.",
 	"마지막 사용 {ago}": "Last used {ago}",
 	"아직 사용하지 않음": "Not used yet",
 	"정말 취소": "Really revoke",

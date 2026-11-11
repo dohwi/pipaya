@@ -151,7 +151,7 @@ export class Api {
 	}
 
 	/** Access tokens issued to paired devices (admin token only). The secret itself is never listed. */
-	deviceTokens() { return this.req<{ tokens: { id: string; name: string; createdAt: number; lastUsedAt: number | null }[] }>("GET", "/devices/tokens", undefined, AbortSignal.timeout(5000)); }
+	deviceTokens() { return this.req<{ tokens: { id: string; name: string; createdAt: number; lastUsedAt: number | null }[]; idleDays?: number }>("GET", "/devices/tokens", undefined, AbortSignal.timeout(5000)); }
 	revokeDeviceToken(id: string) { return this.req("DELETE", `/devices/tokens/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5000)); }
 	notificationStatus() { return this.req<{ pushConfigured: boolean; providers: ("fcm" | "apns")[] }>("GET", "/notifications/status"); }
 	notificationPresence(id: string, presence: { platform: "desktop" | "android" | "ios" | "web"; focused: boolean; enabled: boolean; visibleSessionIds: string[]; activeSessionId?: string; lang?: string; name?: string; os?: string; app?: string; push?: { provider: "fcm" | "apns"; token: string } | null }) { return this.req("PUT", `/notifications/devices/${encodeURIComponent(id)}`, presence, AbortSignal.timeout(3500)); }
@@ -571,6 +571,7 @@ export function errorText(e: unknown, fallback?: string): string {
 	if (e instanceof ApiError) {
 		if (e.status === 0) return t("서버에 연결할 수 없습니다");
 		if (e.status === 401 || e.status === 403) return t("토큰이 거부되었습니다");
+		if (e.code === "auth_throttled") return t("잘못된 토큰이 여러 번 들어와 잠시 막혔습니다. 1분 뒤 다시 시도하세요");
 		if (isUnsupportedRoute(e)) return t("이 서버는 아직 이 기능을 지원하지 않습니다. 서버를 업데이트하세요");
 		if (e.code === "not_found") return t("대상을 찾을 수 없습니다");
 		if (e.code === "provider_in_use") {
@@ -601,6 +602,7 @@ export async function verifyServer(baseUrl: string, token: string, timeoutMs = 8
 export function describeConnectError(e: unknown, baseUrl: string): string {
 	if (e instanceof ApiError) {
 		if (e.status === 401 || e.status === 403) return t("서버가 토큰을 거부했습니다. 토큰을 다시 확인하세요.");
+		if (e.code === "auth_throttled") return t("잘못된 토큰이 여러 번 들어와 잠시 막혔습니다. 1분 뒤 다시 시도하세요");
 		if (e.status === 0) return t("{url}에 연결할 수 없습니다. 주소와 서버 실행 여부를 확인하세요.", { url: baseUrl });
 		return e.message;
 	}

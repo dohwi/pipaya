@@ -193,6 +193,21 @@ describe("settings", () => {
 	});
 });
 
+describe("listen address", () => {
+	test("loopback unless PIPAYA_HOST says otherwise", () => {
+		const d = mkdtempSync(join(tmpdir(), "pipaya-host-"));
+		try {
+			const env = { PIPAYA_DATA_DIR: d, PIPAYA_TOKEN: "listen-address-test-token-0123456789" };
+			expect(loadConfig(env).host).toBe("127.0.0.1");
+			expect(loadConfig({ ...env, PIPAYA_HOST: "  " }).host).toBe("127.0.0.1"); // an empty line in an env file is not an address
+			expect(loadConfig({ ...env, PIPAYA_HOST: "0.0.0.0" }).host).toBe("0.0.0.0");
+			expect(loadConfig({ ...env, PIPAYA_HOST: " 100.64.0.5 " }).host).toBe("100.64.0.5");
+		} finally {
+			rmSync(d, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("PIPAYA_TOKEN strength", () => {
 	test("a short explicit token is refused at startup", () => {
 		const d = mkdtempSync(join(tmpdir(), "pipaya-tok-"));
