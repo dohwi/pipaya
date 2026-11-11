@@ -133,15 +133,20 @@
 	});
 
 	// Voice input hands its transcript over once: inserted at the caret, so it continues the sentence being typed.
+	// Focus stays where it was: a focused field keeps a bare voice shortcut (` ) as typing, so taking focus here would make
+	// the next press type the key instead of recording. An unfocused input appends, its stale caret is not where the user is.
 	$effect(() => {
 		const incoming = app.insertText;
 		// "" is the new-chat composer (no session yet): it takes the text, as the microphone there did.
 		if (!incoming || incoming.paneId !== (pane.id ?? "")) return;
 		app.insertText = null;
-		const at = ta?.selectionStart ?? untrack(() => text).length;
-		const next = insertToken(untrack(() => text), at, incoming.text);
-		setText(next.text);
-		queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
+		const current = untrack(() => text);
+		const focused = !!ta && document.activeElement === ta;
+		const at = focused ? (ta?.selectionStart ?? current.length) : current.length;
+		const next = insertToken(current, at, incoming.text);
+		text = next.text;
+		caret = next.caret;
+		if (focused) queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
 	});
 
 	// The Reply button on a message hands it over once.

@@ -14,6 +14,7 @@ import {
   escapeShouldStop,
   escapeShouldUnzoom,
   hasLongerBinding,
+  isBareCombo,
   keyName,
   MAX_KEYS,
   nextChord,
@@ -21,7 +22,6 @@ import {
   RENAME_KEY,
   renameShouldFallThrough,
   splitCombo,
-  yieldsToTyping,
   type ActionId,
 } from "./keys";
 import { renameNow } from "./rename-places";
@@ -462,9 +462,8 @@ export function onShortcut(e: KeyboardEvent) {
       }
     }
     if (!id && !starts) continue;
-    // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there (voice input still fires: its
-    // transcription leaves the caret in the composer, and the same key must stop or start the next recording).
-    if (yieldsToTyping(id, combo) && typingTarget(e)) return;
+    // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there.
+    if (isBareCombo(combo) && typingTarget(e)) return;
     e.preventDefault();
     if (starts) {
       const prefix = { ...mods, keys };
