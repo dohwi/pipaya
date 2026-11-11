@@ -5,11 +5,13 @@
 	let { tone, children }: { tone: "ok" | "warn" | "neutral"; children: Snippet } = $props();
 </script>
 
-<span class="chip {tone}"><i></i>{@render children()}</span>
+<span class="chip {tone}"><i></i><span class="t">{@render children()}</span></span>
 
 <style>
 	/* same box as the global .chip / Badge md (22px); a status reads as a short sentence, so one size up */
-	.chip { flex: 0 1 auto; height: 24px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+	.chip { flex: 0 1 auto; max-width: 100%; min-width: 0; height: 24px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+	/* a long status in a narrow column ends in an ellipsis instead of pushing the row wider */
+	.t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 	.ok { background: var(--ok-soft); color: var(--ok); }
 	.warn { background: var(--warn-soft); color: var(--warn); }

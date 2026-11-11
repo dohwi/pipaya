@@ -36,21 +36,23 @@
 			{#if shown.from}
 				<span class="ver">{shown.from}{#if isNew && shown.to} → {shown.to}{/if}</span>
 			{/if}
+			{#if serverUpdater.progressLabel}
+				<StatusChip tone="warn">{serverUpdater.progressLabel}</StatusChip>
+			{:else if isNew}
+				<StatusChip tone="ok">{t("서버에 새 버전이 있습니다")}</StatusChip>
+			{:else if release === "older"}
+				<StatusChip tone="warn">{t("앱보다 오래된 버전입니다")}</StatusChip>
+			{:else if status || release === "current"}
+				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
+			{/if}
 		</div>
-		{#if serverUpdater.progressLabel}
-			<StatusChip tone="warn">{serverUpdater.progressLabel}</StatusChip>
-		{:else if isNew}
-			<StatusChip tone="ok">{t("서버에 새 버전이 있습니다")}</StatusChip>
-		{:else if release === "older"}
-			<StatusChip tone="warn">{t("앱보다 오래된 버전입니다")}</StatusChip>
-		{:else if status || release === "current"}
-			<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
-		{/if}
-		{#if isNew && serverUpdater.blockedByRuns && !busy}
-			<ConfirmButton size="sm" confirmLabel={t("정말 중단")} onconfirm={forceUpdate}>{t("중단하고 업데이트")}</ConfirmButton>
-		{/if}
 		{#if isNew}
-			<Button size="sm" variant="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
+			<div class="actions">
+				{#if serverUpdater.blockedByRuns && !busy}
+					<ConfirmButton size="sm" confirmLabel={t("정말 중단")} onconfirm={forceUpdate}>{t("중단하고 업데이트")}</ConfirmButton>
+				{/if}
+				<Button size="sm" variant="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
+			</div>
 		{/if}
 	</div>
 	{#if release === "older" && !isNew && !busy}
@@ -60,9 +62,13 @@
 {/if}
 
 <style>
-	.item { display: flex; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
-	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
-	.ver { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
-	.item :global(.btn) { flex: none; white-space: nowrap; }
+	/* version and status stack on the left, the buttons sit on the right; when the pane is too narrow for both the buttons
+	   wrap under them instead of squeezing the version into a one-character column */
+	.item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+	/* 160px: the narrowest the version + status column may get before the buttons move to their own line */
+	.meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 160px; min-width: 0; }
+	.ver { max-width: 100%; font-size: var(--fs-sm); line-height: 20px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+	.actions :global(.btn) { flex: none; white-space: nowrap; }
 	.note { line-height: 1.6; margin: 8px 0 0; }
 </style>
