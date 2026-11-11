@@ -46,10 +46,16 @@
 	.info {
 		min-width: 0;
 		flex: 1;
-		transition: opacity var(--motion-fast) var(--ease);
+		transition: color var(--motion-fast) var(--ease);
 	}
+	/* a switched-off item steps its text down a colour instead of fading to 0.55, which took small badges and the path
+	   line under it to 2.3:1: the name from --text to --text-faint at normal weight, so on and off still read apart at a
+	   glance; the faint lines under it stay as they are. Badges keep their colours: the status badge says "off" already. */
 	.off .info {
-		opacity: 0.55;
+		color: var(--text-faint);
+	}
+	.off .info :global(.name) {
+		font-weight: 500;
 	}
 	/* The first row (switch, title + badges, actions) shares one centre line: it is as tall as its tallest part, the 34px
 	   action buttons, or the 22px switch when there are none. On a phone the actions drop below, so the row is 22px again. */

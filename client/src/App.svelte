@@ -2,6 +2,7 @@
 	import ExtensionMount from "./components/extensions/ExtensionMount.svelte";
 	import { onMount, untrack } from "svelte";
 	import { backLayer, handleBack } from "./lib/dialog";
+	import { OVERLAY_SELECTOR } from "./lib/keys";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/ui/Icon.svelte";
 	import Sidebar from "./components/shell/Sidebar.svelte";
@@ -122,6 +123,20 @@
 	$effect(() => {
 		if (!viewport.narrow || !app.sidebar.open) return;
 		return backLayer({ onclose: () => (app.sidebar.open = false) });
+	});
+	// Esc closes the open drawer too (the scrim says so), unless something inside used the key first: a search field
+	// clearing itself, a rename field cancelling, a menu or dialog closing. Focus goes back to the menu button.
+	$effect(() => {
+		if (!viewport.narrow || !app.sidebar.open) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || document.querySelector(OVERLAY_SELECTOR)) return;
+			e.preventDefault();
+			const inside = sideEl?.contains(document.activeElement);
+			app.sidebar.open = false;
+			if (inside) document.querySelector<HTMLElement>("[data-part=header] .menu")?.focus({ preventScroll: true });
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
 	});
 	onMount(() => {
 		if (!mobile) return;
@@ -364,7 +379,9 @@
 	{/if}
 {:else}
 	<div class="app" data-part="app">
-		<div class="side" bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">
+		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
+		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			{#if !app.sidebar.collapsed}
@@ -643,11 +660,14 @@
 		.side.collapsed .grip {
 			display: none;
 		}
+		/* starts under the 44px brand row: the fold button's 38px box reaches to 1px from the sidebar's edge, and a grip
+		   over it took the last 6px of the button (the click resized instead of folding). The brand row has no border
+		   to drag there anyway. */
 		.grip {
 			display: block;
 			position: absolute;
 			z-index: var(--z-popover);
-			top: 0;
+			top: 44px;
 			bottom: 0;
 			right: -4px;
 			width: 9px;
