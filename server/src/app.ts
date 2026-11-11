@@ -61,8 +61,8 @@ import { createCorsPolicy, redactUrl } from "./security.ts";
 import { StreamTickets } from "./stream-tickets.ts";
 import { AuthThrottle } from "./auth-throttle.ts";
 import { createPushTransports } from "./push.ts";
-import { ExtensionHost } from "./extensions/host.ts";
-import { registerServerExtensionRoutes } from "./extensions/routes.ts";
+import { ExtensionHost, ROUTE_PREFIX } from "./extensions/host.ts";
+import { registerExtensionHttpRoutes, registerServerExtensionRoutes } from "./extensions/routes.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
 import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
 import { join, resolve } from "node:path";
@@ -291,6 +291,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const authThrottle = new AuthThrottle();
 	/** The paired device a request was made by; absent for the admin token. */
 	const deviceOf = new WeakMap<object, string>();
+	/** Requests to a public extension route that still carried a valid token. */
+	const publicAuthed = new WeakSet<object>();
 	const expected = Buffer.from(cfg.token);
 	const tokenMatches = (given: string | undefined) => {
 		if (!given) return false;
@@ -311,6 +313,16 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		}
 		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
 		const bearer = bearerOf(req.headers.authorization);
+		// An extension route marked public (a webhook, a page) is open; the extension checks its own secret. A token that
+		// comes along anyway is still recognised, so the handler can tell the owner from a stranger.
+		if (path?.startsWith(ROUTE_PREFIX) && extensions.isPublicRoute(req.method, path)) {
+			if (tokenMatches(bearer)) publicAuthed.add(req.raw);
+			else {
+				const device = bearer ? deviceTokens.verify(bearer) : null;
+				if (device) { publicAuthed.add(req.raw); deviceOf.set(req.raw, device); }
+			}
+			return;
+		}
 		// Too many wrong tokens from this address: nothing is checked until its minute has passed (auth-throttle.ts).
 		const wait = authThrottle.blockedFor(req.ip);
 		if (wait > 0) {
@@ -620,6 +632,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.EventTypeList, ...S.errors(401) } },
 		handler: async () => ({ events: S.EVENTS.map((e) => ({ type: e.type, persisted: e.persisted, description: e.description, data: e.data })) }),
 	});
+	await registerExtensionHttpRoutes(server, extensions, (raw) => ({ device: deviceOf.get(raw) ?? null, authenticated: publicAuthed.has(raw) }));
 	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"), (cwd) => resolve(configuration.defaultWorkdir(), cwd?.trim() || "."));
 	registerNotificationRoutes(server, notifications, id => store.get(id) !== undefined);
 	registerConfigurationRoutes(server, configuration, bus, opts.home);

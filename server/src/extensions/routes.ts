@@ -3,7 +3,7 @@ import Type from "typebox";
 import { badRequest, notFound } from "../errors.ts";
 import { errors, IdParams } from "../schemas.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
-import type { ExtensionHost } from "./host.ts";
+import { ROUTE_PREFIX, type ExtensionHost } from "./host.ts";
 import { installFromGit, removeInstalled } from "./install.ts";
 
 const Info = Type.Object({
@@ -13,6 +13,7 @@ const Info = Type.Object({
 	commands: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), args: Type.Optional(Type.String()) })),
 	commandFamilies: Type.Array(Type.Object({ prefix: Type.String(), label: Type.Optional(Type.String()) })),
 	methods: Type.Array(Type.String()),
+	routes: Type.Array(Type.Object({ methods: Type.Array(Type.String()), path: Type.String({ description: "Under `/x/<name>`" }), public: Type.Boolean({ description: "Reachable without a token" }) })),
 	providers: Type.Array(Type.String()),
 	flags: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()), type: Type.String(), value: Type.Optional(Type.Union([Type.Boolean(), Type.String()])) })),
 	events: Type.Array(Type.String()),
@@ -33,6 +34,49 @@ const Info = Type.Object({
 	clientPackage: Type.Optional(Type.Boolean({ description: "The folder carries its client half (`pipaya.client`); `GET /server-extensions/:extension/client` serves it" })),
 	error: Type.Optional(Type.String()),
 });
+
+/** Bodies of extension routes may be bigger than the API's own requests (an upload, a webhook with attachments). */
+export const EXTENSION_ROUTE_BODY_LIMIT = 16 * 1024 * 1024;
+
+/**
+ * `/x/<extension>/<path>`: the HTTP endpoints extensions registered with `pi.registerRoute`. The request reaches the
+ * handler as a web `Request` with the raw body (any content type); whatever it returns is sent back, a `Response` as
+ * is and anything else as JSON. Authentication happened in the app's `onRequest` hook (public routes skip it there).
+ */
+export async function registerExtensionHttpRoutes(server: FastifyInstance, host: ExtensionHost, who: (raw: object) => { device: string | null; authenticated: boolean }): Promise<void> {
+	await server.register(async (scope) => {
+		// Hand the handler the bytes as they came, whatever the content type: it parses (or verifies a signature over) them itself.
+		scope.removeAllContentTypeParsers();
+		scope.addContentTypeParser("*", { parseAs: "buffer", bodyLimit: EXTENSION_ROUTE_BODY_LIMIT }, (_req, body, done) => done(null, body));
+		scope.route({
+			method: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+			url: `${ROUTE_PREFIX}*`,
+			bodyLimit: EXTENSION_ROUTE_BODY_LIMIT,
+			handler: async (req, reply) => {
+				const url = new URL(req.url, `http://${req.host || "localhost"}`);
+				const method = req.method === "HEAD" ? "GET" : req.method;
+				const found = host.findRoute(method, url.pathname);
+				if (!found) throw notFound("extension route");
+				const headers = new Headers();
+				for (const [k, v] of Object.entries(req.headers)) {
+					if (Array.isArray(v)) for (const x of v) headers.append(k, x);
+					else if (v !== undefined) headers.set(k, String(v));
+				}
+				const body = req.method === "GET" || req.method === "HEAD" || !Buffer.isBuffer(req.body) ? undefined : new Uint8Array(req.body);
+				const request = new Request(url.href, { method: req.method, headers, body });
+				const caller = who(req.raw);
+				const result = await host.runRoute(found.extension, found.route, request, {
+					params: found.params,
+					query: url.searchParams,
+					device: caller.device,
+					authenticated: found.route.public ? caller.authenticated : true,
+				});
+				if (result instanceof Response) return reply.send(result);
+				return reply.send(Response.json(result ?? null));
+			},
+		});
+	});
+}
 
 /** Server extensions run code with the server's privileges, so every route here needs the admin token. */
 export function registerServerExtensionRoutes(server: FastifyInstance, host: ExtensionHost, sessionExists: (id: string) => boolean, installDir: string, resolveCwd: (cwd?: string) => string): void {

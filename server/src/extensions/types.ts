@@ -294,6 +294,42 @@ export interface MessageNote {
 	data?: unknown;
 }
 
+/** HTTP methods an extension route can answer (`"*"` = every one of them). */
+export type RouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/**
+ * An HTTP endpoint the extension serves from the pipaya server itself, at `/x/<extension>/<path>`: a webhook, a small
+ * dashboard, a REST API for another program. The handler is a web-standard `fetch` handler (the same shape `Bun.serve`
+ * takes), so it can stream, set headers and return any content type.
+ */
+export interface ExtensionRoute {
+	/** One method, a list, or `"*"` for all (default `"GET"`). */
+	method?: RouteMethod | RouteMethod[] | "*";
+	/**
+	 * Path under `/x/<extension>`, starting with `/`. Segments may be `:name` parameters and the last may be `*`
+	 * (the rest of the path, in `params["*"]`). `/` is the extension's root.
+	 */
+	path: string;
+	/**
+	 * Without a token. Default `false`: the caller needs the server's token (admin or a paired device), like any other
+	 * API. A public route is reachable by anyone who can reach the server: check a secret of your own (e.g. a webhook
+	 * signature) before acting.
+	 */
+	public?: boolean;
+	handler(req: Request, ctx: RouteContext): Response | Promise<Response> | unknown | Promise<unknown>;
+}
+
+export interface RouteContext {
+	/** `:name` segments (and `*`) of the matched path. */
+	params: Record<string, string>;
+	/** The parsed query string. */
+	query: URLSearchParams;
+	/** `null` for the admin token or a public route without one, otherwise the paired device's id. */
+	device: string | null;
+	/** Whether a valid token came with the request (always true for a non-public route). */
+	authenticated: boolean;
+}
+
 export interface ExtensionFlag {
 	description?: string;
 	type?: "boolean" | "string";
@@ -363,6 +399,11 @@ export interface ExtensionAPI {
 	registerCommands(prefix: string, family: ExtensionCommandFamily): void;
 	/** Callable by clients: `POST /server-extensions/:extension/methods/:name`. */
 	registerMethod(name: string, handler: (params: unknown, ctx: ExtensionContext | null) => unknown | Promise<unknown>): void;
+	/**
+	 * An HTTP endpoint at `/x/<extension>/<path>` on the pipaya server (see `ExtensionRoute`). Return a `Response`, or
+	 * any other value to send it as JSON. Removed on reload.
+	 */
+	registerRoute(route: ExtensionRoute): void;
 	/** A model provider (custom endpoint, proxy, OAuth login …). Same shape as pi-ai's `Provider`. */
 	registerProvider(provider: Provider): void;
 	unregisterProvider(id: string): void;
