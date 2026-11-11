@@ -8,6 +8,7 @@ import type * as FeedbackModule from "../src/lib/feedback.svelte";
 import type * as SidebarModule from "../src/lib/sidebar.svelte";
 import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
+import type * as PairingFlowModule from "../src/lib/pairing-flow.svelte";
 import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 
@@ -19,6 +20,7 @@ let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
 let IdleExtensionStores: typeof IdleModule.IdleExtensionStores;
+let PairingFlow: typeof PairingFlowModule.PairingFlow;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -48,6 +50,7 @@ beforeAll(async () => {
 	// the extension host and notifications modules it imports read session storage when they load
 	(globalThis as any).sessionStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 	({ IdleExtensionStores } = await loadRunes("idle-extension-stores"));
+	({ PairingFlow } = await loadRunes("pairing-flow"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -317,5 +320,41 @@ describe("idle extension stores", () => {
 	});
 	test("another server's list is never the host's: no idle editor means no rows", () => {
 		expect(make("s1").clientsOf("s2")).toEqual([]);
+	});
+});
+
+describe("pairing flow", () => {
+	const link = { baseUrl: "http://10.0.0.5:8787", code: "abcdefgh", name: "" };
+	const make = () => {
+		const added: unknown[] = [];
+		return { added, flow: new PairingFlow({ add: (i) => (added.push(i), true), toast: () => {} }) };
+	};
+
+	test("a link only asks first: nothing is added before the user confirms", () => {
+		const { flow, added } = make();
+		flow.connect(link);
+		expect(JSON.parse(JSON.stringify(flow.linking))).toEqual({ name: "10.0.0.5:8787", baseUrl: link.baseUrl, state: "confirm" });
+		expect(added).toEqual([]);
+	});
+	test("the same code is taken once, until declining frees it", () => {
+		const { flow } = make();
+		flow.connect(link);
+		flow.close();
+		expect(flow.linking).toBeNull();
+		flow.connect(link);
+		expect(flow.linking?.state).toBe("confirm");
+		flow.connect({ ...link, name: "other" }); // same code while the card is up: ignored
+		expect(flow.linking?.name).toBe("10.0.0.5:8787");
+	});
+	test("confirming with no pending link, or twice at once, does nothing", async () => {
+		const { flow, added } = make();
+		await flow.confirm();
+		expect(flow.linking).toBeNull();
+		flow.connect(link);
+		const first = flow.confirm();
+		await flow.confirm(); // already working: the pending link is gone
+		await first;
+		expect(added).toEqual([]); // no server answered, so nothing was added
+		expect(flow.linking?.state).toBe("failed");
 	});
 });
