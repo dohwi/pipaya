@@ -772,19 +772,19 @@ describe("unreadable stored entries are preserved", () => {
 describe("components", () => {
 	test("settings form and navbar follow the compact/a11y requirements", async () => {
 		const { compile } = await import("svelte/compiler");
-		for (const f of ["extensions/SettingsForm", "Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ExtensionPage", "extensions/ServerDetail", "extensions/NavbarItems", "Header"]) {
+		for (const f of ["extensions/SettingsForm", "extensions/Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ExtensionPage", "extensions/ServerDetail", "extensions/NavbarItems", "shell/Header"]) {
 			const source = await Bun.file(`src/components/${f}.svelte`).text();
 			expect(() => compile(source, { filename: `${f}.svelte`, generate: "client" }), f).not.toThrow();
 		}
 		const form = await Bun.file("src/components/extensions/SettingsForm.svelte").text();
 		for (const needle of ["aria-invalid", "aria-describedby", "고급: JSON 직접 편집", "<Accordion", "disabled={disabled || !resolved.ok}"]) expect(form).toContain(needle);
 		// the page is split into the list and its cards (Extensions, extensions/InstalledDetail, UnreadableCard, RemoveExtensionConfirm, ...): check them together
-		const parts = ["Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ServerDetail"];
+		const parts = ["extensions/Extensions", "extensions/InstalledDetail", "extensions/UnreadableCard", "extensions/RemoveExtensionConfirm", "extensions/ExtensionRow", "extensions/ServerDetail"];
 		const page = (await Promise.all(parts.map((f) => Bun.file(`src/components/${f}.svelte`).text()))).join("\n");
 		expect(page).toContain("settingsProblem(id)");
 		expect(page).toContain("!!problem");
 		for (const needle of ["설정값은 남겨 두고, 같은 확장을 다시 설치하면 이어서 씁니다.", "설정값도 함께 삭제", "읽을 수 없음", "원본 내보내기", "이 버전에서 지원하지 않는 형식입니다", "알 수 없는 확장", "keepSettings"]) expect(page).toContain(needle);
-		const confirm = await Bun.file("src/components/ConfirmDialog.svelte").text();
+		const confirm = await Bun.file("src/components/ui/ConfirmDialog.svelte").text();
 		expect(confirm).toContain('role="alertdialog"');
 		expect(page).toContain("확장을 삭제했습니다. 설정값은 유지했습니다.");
 		expect(page).toContain("확장과 설정값을 삭제했습니다.");

@@ -1,5 +1,5 @@
 import { msg } from "./i18n";
-import type { IconName } from "../components/Icon.svelte";
+import type { IconName } from "../components/ui/Icon.svelte";
 
 /** What a model can do, as the four tags every model list shows. */
 export type CapKey = "chat" | "reasoning" | "vision" | "image";

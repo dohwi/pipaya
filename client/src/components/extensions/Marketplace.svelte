@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { errorText, type Api } from "../../lib/api";
-	import SearchField from "../SearchField.svelte";
-	import Button from "../Button.svelte";
+	import SearchField from "../ui/SearchField.svelte";
+	import Button from "../ui/Button.svelte";
 	import { getLang, t } from "../../lib/i18n";
-	import Icon from "../Icon.svelte";
-	import Notice from "../Notice.svelte";
-	import Modal from "../Modal.svelte";
-	import DialogBody from "../DialogBody.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Notice from "../ui/Notice.svelte";
+	import Modal from "../ui/Modal.svelte";
+	import DialogBody from "../ui/DialogBody.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
-	import StatusChip from "../StatusChip.svelte";
-	import VersionBump from "../VersionBump.svelte";
+	import StatusChip from "../ui/StatusChip.svelte";
+	import VersionBump from "./VersionBump.svelte";
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
 	import type { ExtensionSource } from "../../lib/extensions/source";

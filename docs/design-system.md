@@ -1,7 +1,7 @@
 # Design system: spacing, grid and measuring
 
 Source of truth for how the client is laid out. The values here are the ones the sidebar already uses
-(`client/src/components/Sidebar.svelte`, `sidebar/*.svelte`); everything else is being moved onto the same rules.
+(`client/src/components/shell/Sidebar.svelte`, `shell/sidebar/*.svelte`); everything else is being moved onto the same rules.
 Tokens live in `client/src/app.css` (`:root`); read it before adding a value.
 
 > 한국어 요약은 맨 아래. The short, enforceable rules are in [`DESIGN.md`](../DESIGN.md) (read it first; `python3 scripts/ui-lint.py` checks them); this file has the reasons and the exact numbers.

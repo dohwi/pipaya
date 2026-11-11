@@ -1,5 +1,5 @@
 /**
- * The line icons of `components/Icon.svelte`, kept in lib so that code building markup by hand
+ * The line icons of `components/ui/Icon.svelte`, kept in lib so that code building markup by hand
  * (`lib/video-view.ts` draws the video's own buttons) uses the same shapes instead of copying them.
  */
 export type IconName =

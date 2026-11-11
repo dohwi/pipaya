@@ -1,7 +1,7 @@
 <script lang="ts">
-	import Button from "../Button.svelte";
-	import Notice from "../Notice.svelte";
-	import Switch from "../Switch.svelte";
+	import Button from "../ui/Button.svelte";
+	import Notice from "../ui/Notice.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import { CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
 	import type { ExtensionRow, ExtensionSource } from "../../lib/extensions/source";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
@@ -10,7 +10,7 @@
 	import PermissionList from "./PermissionList.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import SettingsForm from "./SettingsForm.svelte";
-	import SettingRow from "../SettingRow.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
 
 	/**
 	 * The page of one installed extension: on/off switch, its settings (a form when it declares fields, else raw JSON),

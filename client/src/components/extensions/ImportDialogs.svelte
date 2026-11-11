@@ -5,15 +5,15 @@
 </script>
 
 <script lang="ts">
-	import Button from "../Button.svelte";
-	import DialogBody from "../DialogBody.svelte";
-	import DialogFooter from "../DialogFooter.svelte";
+	import Button from "../ui/Button.svelte";
+	import DialogBody from "../ui/DialogBody.svelte";
+	import DialogFooter from "../ui/DialogFooter.svelte";
 	import { t } from "../../lib/i18n";
 	import { featuresOf } from "../../lib/extensions/labels";
 	import { extensions, type InstalledExtension } from "../../lib/extensions/host.svelte";
-	import Icon from "../Icon.svelte";
-	import Modal from "../Modal.svelte";
-	import Notice from "../Notice.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import Modal from "../ui/Modal.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import PermissionList from "./PermissionList.svelte";
 
 	/**

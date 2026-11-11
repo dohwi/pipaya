@@ -8,7 +8,7 @@
 실행: python3 logo/build_mark.py
   -> logo/svg/mark.svg · mark-light.svg · mark-mono.svg · favicon.svg · app-icon.svg · app-icon-glyph.svg
      · app-icon-adaptive.svg (안드로이드 전경) · app-icon-mark.svg (알림 아이콘용 실루엣)
-기하는 client/src/components/PipayaMark.svelte 와 같다 (MARK_VIEWBOX, 잎·열매·줄기 값).
+기하는 client/src/components/ui/PipayaMark.svelte 와 같다 (MARK_VIEWBOX, 잎·열매·줄기 값).
 앱 아이콘 PNG는 client/scripts/render-icons.ts -> make-icons.py 로 만든다.
 """
 import math

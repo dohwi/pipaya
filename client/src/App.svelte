@@ -3,30 +3,30 @@
 	import { onMount, untrack } from "svelte";
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { fadeIn, fadeOut } from "./lib/motion";
-	import Icon from "./components/Icon.svelte";
-	import Sidebar from "./components/Sidebar.svelte";
-	import Rail from "./components/Rail.svelte";
+	import Icon from "./components/ui/Icon.svelte";
+	import Sidebar from "./components/shell/Sidebar.svelte";
+	import Rail from "./components/shell/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
 	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
-	import Header from "./components/Header.svelte";
-	import Pane from "./components/Pane.svelte";
-	import GroupView from "./components/GroupView.svelte";
-	import TabBar from "./components/TabBar.svelte";
-	import Palette from "./components/Palette.svelte";
-	import NoServer from "./components/NoServer.svelte";
-	import Toasts from "./components/Toasts.svelte";
-	import RowMenu from "./components/RowMenu.svelte";
+	import Header from "./components/shell/Header.svelte";
+	import Pane from "./components/shell/Pane.svelte";
+	import GroupView from "./components/shell/GroupView.svelte";
+	import TabBar from "./components/shell/TabBar.svelte";
+	import Palette from "./components/shell/Palette.svelte";
+	import NoServer from "./components/shell/NoServer.svelte";
+	import Toasts from "./components/shell/Toasts.svelte";
+	import RowMenu from "./components/ui/RowMenu.svelte";
 	import { registerContextMenu } from "./lib/context-menu";
-	import Lazy from "./components/Lazy.svelte";
-	import UpdateBanner from "./components/UpdateBanner.svelte";
-	import DoneNotice from "./components/DoneNotice.svelte";
-	import ChordStrip from "./components/ChordStrip.svelte";
+	import Lazy from "./components/ui/Lazy.svelte";
+	import UpdateBanner from "./components/shell/UpdateBanner.svelte";
+	import DoneNotice from "./components/shell/DoneNotice.svelte";
+	import ChordStrip from "./components/shell/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
 	import { paneAdapter } from "./lib/extensions/panes";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
-	import CloseConfirm from "./components/CloseConfirm.svelte";
+	import CloseConfirm from "./components/shell/CloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
 	import { createAttention } from "./lib/attention";
 	import { summarize } from "./lib/activity";
@@ -57,18 +57,18 @@
 
 	// Dialogs and settings panels load on first open, keeping them (and ModelConnections, Extensions, Backup…) out of the start-up chunk.
 	const load = {
-		settings: () => import("./components/Settings.svelte"),
-		skills: () => import("./components/Skills.svelte"),
-		commands: () => import("./components/CommandFamilies.svelte"),
-		mcp: () => import("./components/Mcp.svelte"),
-		subagents: () => import("./components/Subagents.svelte"),
-		lightbox: () => import("./components/Lightbox.svelte"),
-		queue: () => import("./components/QueueModal.svelte"),
-		filePreview: () => import("./components/FilePreview.svelte"),
-		dirPicker: () => import("./components/DirPicker.svelte"),
-		serverForm: () => import("./components/ServerForm.svelte"),
-		linkCard: () => import("./components/LinkCard.svelte"),
-		sessions: () => import("./components/SessionsDialog.svelte"),
+		settings: () => import("./components/settings/Settings.svelte"),
+		skills: () => import("./components/agent/SkillsDialog.svelte"),
+		commands: () => import("./components/agent/CommandFamiliesDialog.svelte"),
+		mcp: () => import("./components/agent/McpDialog.svelte"),
+		subagents: () => import("./components/agent/SubagentsDialog.svelte"),
+		lightbox: () => import("./components/chat/Lightbox.svelte"),
+		queue: () => import("./components/chat/QueueModal.svelte"),
+		filePreview: () => import("./components/chat/FilePreview.svelte"),
+		dirPicker: () => import("./components/server/DirPicker.svelte"),
+		serverForm: () => import("./components/server/ServerForm.svelte"),
+		linkCard: () => import("./components/chat/LinkCard.svelte"),
+		sessions: () => import("./components/agent/SessionsDialog.svelte"),
 	};
 
 	// "작업 완료" on what is on screen is read as soon as the user comes back to the window or clicks on it (blank space included).

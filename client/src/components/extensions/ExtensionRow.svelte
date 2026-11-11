@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
-	import Icon from "../Icon.svelte";
+	import Icon from "../ui/Icon.svelte";
 
 	/**
 	 * One extension in the list: a card whose open button shows its name, a small state line and a short description,

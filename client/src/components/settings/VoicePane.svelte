@@ -1,8 +1,8 @@
 <script lang="ts">
-	import Button from "../Button.svelte";
-	import Notice from "../Notice.svelte";
-	import SettingRow from "../SettingRow.svelte";
-	import Switch from "../Switch.svelte";
+	import Button from "../ui/Button.svelte";
+	import Notice from "../ui/Notice.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import { t, getLang } from "../../lib/i18n";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";

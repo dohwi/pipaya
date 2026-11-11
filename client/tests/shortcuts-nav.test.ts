@@ -241,7 +241,7 @@ describe("settings navigation", () => {
 
 	test("settings pieces compile", async () => {
 		const { compile } = await import("svelte/compiler");
-		for (const f of ["Settings", "ServerForm", "Switch", "Accordion", "Extensions", "Shortcuts"]) {
+		for (const f of ["settings/Settings", "server/ServerForm", "ui/Switch", "ui/Accordion", "extensions/Extensions", "settings/Shortcuts"]) {
 			const source = await Bun.file(`src/components/${f}.svelte`).text();
 			expect(() => compile(source, { filename: `${f}.svelte`, generate: "client" }), f).not.toThrow();
 		}

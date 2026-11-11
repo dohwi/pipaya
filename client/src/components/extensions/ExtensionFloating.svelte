@@ -1,5 +1,5 @@
 <script lang="ts">
-	import IconButton from "../IconButton.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import { t } from "../../lib/i18n";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import type { UIPanelPosition } from "../../lib/extensions/ui";

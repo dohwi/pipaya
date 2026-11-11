@@ -17,7 +17,7 @@ describe("closed chats permanent deletion", () => {
 	});
 
 	test("Palette component renders X button when ondelete is provided", () => {
-		const palSrc = readFileSync(resolve(__dirname, "../src/components/Palette.svelte"), "utf-8");
+		const palSrc = readFileSync(resolve(__dirname, "../src/components/shell/Palette.svelte"), "utf-8");
 		expect(palSrc).toContain("{#if spec.ondelete}");
 		expect(palSrc).toContain('class="del"');
 		expect(palSrc).toContain("void spec?.ondelete?.(it);");

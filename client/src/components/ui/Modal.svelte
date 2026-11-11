@@ -1,0 +1,244 @@
+<script lang="ts">
+	import { schedule, unschedule } from "../../lib/frame";
+	import type { Snippet } from "svelte";
+	import { fadeIn, fadeOut, modalIn, modalOut } from "../../lib/motion";
+	import { modalLayer, portal as lift } from "../../lib/dialog";
+	import ModalHeader from "./ModalHeader.svelte";
+
+	/**
+	 * The one modal panel: scrim + panel, the same enter/exit, a bottom sheet on phones, the z-index layer for its
+	 * nesting depth, and (lib/dialog.ts) Esc for the top modal only, Tab kept inside, focus returned to the opener,
+	 * and the app's shortcuts muted while it is open. With `title` it draws the shared header (ModalHeader: title,
+	 * subtitle, close, pull-to-dismiss); without, the caller draws its own. Body and footer are the caller's.
+	 *
+	 * Transitions are `|global`: a component whose root is this modal is shown by its parent's `{#if}`, and a local
+	 * transition would only play for a block inside this file (see tests/motion.test.ts).
+	 */
+	type Width = "s" | "m" | "l" | "xl" | (string & {});
+	let {
+		onclose,
+		onescape,
+		label,
+		labelledby,
+		describedby,
+		role = "dialog",
+		live,
+		width = "m",
+		height,
+		maxHeight = "640px",
+		gutter = "var(--modal-gutter)",
+		layer = 1,
+		elevated = false,
+		sheet = true,
+		safeArea = false,
+		portal = false,
+		dismissible = true,
+		class: cls = "",
+		title,
+		sub,
+		subMono = false,
+		divider = false,
+		compact = false,
+		onback,
+		headerActions,
+		titleExtra,
+		children,
+	}: {
+		onclose: () => void;
+		/** Esc when it should do less than closing (step back from a sub-page); defaults to `onclose` */
+		onescape?: () => void;
+		label?: string;
+		labelledby?: string;
+		describedby?: string;
+		role?: "dialog" | "alertdialog";
+		live?: "polite" | "assertive";
+		/** a size token (`--modal-w-*`) or any CSS length; never wider than the viewport minus `gutter` */
+		width?: Width;
+		/** a fixed height (e.g. a window with tabs that must not jump); otherwise it grows up to `maxHeight` */
+		height?: string;
+		maxHeight?: string;
+		gutter?: string;
+		/** 1 for a modal over the page, +1 for each modal opened from another */
+		layer?: 1 | 2 | 3 | 4 | 5;
+		/** a raised surface, for pickers that open over another modal */
+		elevated?: boolean;
+		/** false: stays a centred card on phones instead of becoming a bottom sheet */
+		sheet?: boolean;
+		/** pad the bottom by the home-indicator inset when the sheet has no footer of its own doing it */
+		safeArea?: boolean;
+		/** lift to <body>: needed when opened from inside a transformed panel */
+		portal?: boolean;
+		/** false while closing must wait (saving, downloading); Esc and the scrim then do nothing */
+		dismissible?: boolean;
+		class?: string;
+		/** draws the shared header (and labels the dialog with it when `label` is not given) */
+		title?: string;
+		sub?: string | null;
+		subMono?: boolean;
+		/** a hairline under the header */
+		divider?: boolean;
+		/** the smaller header of a picker stacked over another dialog */
+		compact?: boolean;
+		/** a back arrow before the title (a step inside the dialog) */
+		onback?: () => void;
+		/** icon buttons placed before the header's close button */
+		headerActions?: Snippet;
+		/** inline after the title (a count) */
+		titleExtra?: Snippet;
+		children: Snippet;
+	} = $props();
+
+	const tokens = ["s", "m", "l", "xl"];
+	const w = $derived(tokens.includes(width) ? `var(--modal-w-${width})` : width);
+	const dismiss = () => dismissible && onclose();
+
+	/**
+	 * Keeps a centred panel on whole pixels. `left/top: 50%` + `translate: -50% -50%` puts the panel on a half pixel whenever the window
+	 * or the panel has an odd size (557px in 900px: y = 171.5): its text blurs and the same badge is painted 0.5px higher in one dialog than
+	 * in the next. The panel is placed by absolute pixel offsets instead: the window's whole-pixel middle minus the panel's whole half-size.
+	 * `ResizeObserver` reports the border-box size without the enter animation's transform (getBoundingClientRect has it).
+	 * A phone's bottom sheet is pinned to the bottom edge by CSS and only needs its sideways centring.
+	 *
+	 * Only the first size (and a window resize) centres. While the panel grows or shrinks (a collapse animation reports a new height every
+	 * frame) its top edge stays put, so the header and rows do not drift by half the change each frame (the content grows downward);
+	 * it only moves up when the bottom would leave the window.
+	 *
+	 * Content that arrives late (a list fetched after opening) makes the panel grow from its small first size. During the first LOAD_MS
+	 * after opening, every size change re-centres at once (no transition), so the panel is already in the middle of its final size
+	 * while it is still fading in. A delayed ease to the middle made it float up a second time after it had appeared.
+	 * Later size changes (the user expanding a row) never move it.
+	 */
+	const LOAD_MS = 1500;
+	function whole(node: HTMLElement) {
+		const opened = performance.now();
+		let size: [number, number] | null = null;
+		let top: number | null = null;
+		const view = () => {
+			const zoom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
+			// computed `top` is never "auto" (it resolves to px), so ask the same media query the CSS uses
+			const sheet = node.classList.contains("sheet") && window.matchMedia("(max-width: 640px)").matches;
+			return { vw: window.innerWidth / zoom, vh: window.innerHeight / zoom, sheet };
+		};
+		const middle = (vh: number, h: number) => Math.round((vh - h) / 2);
+		function place(recentre: boolean) {
+			if (!size) return;
+			const [w, h] = size;
+			const { vw, vh, sheet } = view();
+			node.style.left = `${Math.round((vw - w) / 2)}px`;
+			node.style.translate = "none";
+			if (sheet) return void (node.style.top = "");
+			if (top === null || recentre) top = middle(vh, h);
+			node.style.top = `${Math.max(Math.min(top, vh - h - 12), Math.min(12, middle(vh, h)))}px`;
+		}
+		const initW = node.offsetWidth;
+		const initH = node.offsetHeight;
+		if (initW > 0 && initH > 0) {
+			size = [initW, initH];
+			place(true);
+		}
+		const ro = new ResizeObserver(([e]) => {
+			const box = e?.borderBoxSize?.[0];
+			if (!box) return;
+			const first = size === null;
+			const oldH = size ? size[1] : 0;
+			size = [box.inlineSize, box.blockSize];
+			const grewSignificantly = !first && performance.now() - opened < LOAD_MS && Math.abs(size[1] - oldH) >= 40;
+			place(first || grewSignificantly);
+		});
+		// window resizes arrive many times per frame: place once per frame
+		const onResize = () => size && schedule(node, () => place(true));
+		ro.observe(node, { box: "border-box" });
+		window.addEventListener("resize", onResize);
+		return { destroy: () => { ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
+	}
+	// Before any child mounts and focuses itself: this is where focus goes back to on close.
+	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+</script>
+
+{#snippet body()}
+	<!-- The backdrop is a pointer shortcut for closing; the keyboard closes the dialog with Esc (modalLayer). -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="scrim" style:z-index="var(--z-scrim-{layer})" onclick={dismiss} in:fadeIn|global out:fadeOut|global></div>
+	<div
+		class="modal {cls}"
+		data-part="modal"
+		class:elevated
+		class:sheet
+		class:safe={safeArea}
+		class:fixed={!!height}
+		{role}
+		aria-modal="true"
+		aria-label={label ?? title}
+		aria-labelledby={labelledby}
+		aria-describedby={describedby}
+		aria-live={live}
+		style:z-index="var(--z-modal-{layer})"
+		style:--modal-w={w}
+		style:--modal-h={height}
+		style:--modal-max-h={maxHeight}
+		style:--modal-gut={gutter}
+		use:whole
+		use:modalLayer={{ onclose: onescape ?? onclose, dismissible, opener }}
+		in:modalIn|global
+		out:modalOut|global
+	>
+		{#if title}
+			<!-- a card that stays centred on phones (`sheet={false}`) is not pulled down: no handle -->
+			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} pull={sheet} closeDisabled={!dismissible} actions={headerActions} {titleExtra} />
+		{/if}
+		{@render children()}
+	</div>
+{/snippet}
+
+{#if portal}
+	<div use:lift>{@render body()}</div>
+{:else}
+	{@render body()}
+{/if}
+
+<style>
+	.scrim {
+		position: fixed;
+		inset: 0;
+		background: var(--scrim);
+	}
+	.modal {
+		position: fixed;
+		left: 50%;
+		top: 50%;
+		translate: -50% -50%;
+		width: min(var(--modal-w), calc(var(--vw) - var(--modal-gut)));
+		max-height: min(var(--modal-max-h), calc(var(--dvh) - 24px));
+		display: flex;
+		flex-direction: column;
+		background: var(--bg-side);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-panel);
+		box-shadow: var(--shadow);
+		color: var(--text);
+		overflow: hidden;
+	}
+	.modal.fixed {
+		height: min(var(--modal-h), calc(var(--dvh) - var(--modal-gut)));
+	}
+	.modal.elevated {
+		background: var(--bg-elev);
+	}
+	@media (max-width: 640px) {
+		.modal.sheet {
+			top: auto;
+			bottom: 0;
+			translate: -50% 0;
+			width: var(--vw);
+			max-height: calc(var(--dvh) * 0.9);
+			border-bottom: 0;
+			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+		}
+		.modal.sheet.fixed {
+			height: calc(var(--dvh) * 0.9);
+		}
+		.modal.sheet.safe {
+			padding-bottom: var(--sab);
+		}
+	}
+</style>
