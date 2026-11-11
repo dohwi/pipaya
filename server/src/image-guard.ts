@@ -5,8 +5,6 @@ import { resizeImage } from "./image-resize.ts";
 
 type Block = { type?: string; data?: string; mimeType?: string; [k: string]: unknown };
 
-const base64Size = (chars: number) => chars;
-
 /** Result per picture (keyed by a cheap fingerprint), so a long history is not decoded again on every turn. */
 const cache = new Map<string, Block>();
 const CACHE_MAX = 200;

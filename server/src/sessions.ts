@@ -1024,7 +1024,7 @@ export class SessionManager {
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, delegate: (toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), peers: {
+		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), peers: {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),

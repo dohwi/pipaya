@@ -6,7 +6,6 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import type { Api } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
-import type { PipayaEvent } from "../src/lib/types";
 
 let ChatState: typeof ChatStateType;
 let dir: string;
@@ -46,7 +45,6 @@ const setup = (status: () => Record<string, unknown>) => {
 	const chat = new ChatState("session", api);
 	return chat;
 };
-const event = (type: string, data: unknown = {}): PipayaEvent => ({ id: 1, sessionId: "session", type, data, ts: Date.now() });
 const base = { running: false, compacting: false, pendingToolCalls: [], pendingQuestions: 0, queuedMessages: [], streamingMessage: null };
 
 describe("catching up after the window was in the background", () => {

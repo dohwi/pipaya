@@ -81,13 +81,6 @@ const oneLine = (s: string, max: number) => {
 	return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 };
 
-/** A finished run's report carries the whole last reply (a one-line cut hid the end of it); only an extreme one is cut. */
-const REPORT_CHARS = 12000;
-const fullText = (s: string, max: number) => {
-	const t = s.trim();
-	return t.length > max ? `${t.slice(0, max - 1)}… (cut; peer(action=read) has the rest)` : t;
-};
-
 /** Newest lines first until the total cap; long lines are cut. */
 export function capLines(lines: string[]): string {
 	const kept: string[] = [];
