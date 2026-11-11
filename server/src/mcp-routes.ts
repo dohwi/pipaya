@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
 import { McpBody, McpInfo, type McpManager } from "./mcp.ts";
 import { errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";

@@ -7,6 +7,8 @@ on:
     paths:
       - "server/**"
       - "client/**"
+      - "scripts/ui-lint.py"
+      - "biome.json"
       - ".github/workflows/ci.yml"
   workflow_dispatch:
 
@@ -34,8 +36,13 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun run lint
+      # Warnings fail too: an unused import or variable left behind is how dead code piles up.
+      - run: bun run lint -- --error-on-warnings
       - run: bun run test
+      # Known advisories in what the server ships with. Moderate and low ones are listed in the log but do not block:
+      # they sit deep in firebase-admin's tree and are fixed by its next release, not by a change here.
+      - name: No high or critical advisory in the dependencies
+        run: bun audit --audit-level=high
       - name: App and server carry the same version
         run: bun ../scripts/check-versions.ts
 
@@ -52,5 +59,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run check
+      # DESIGN.md: spacing on the 4px scale, px between blocks, z-index through tokens. The same check as before a commit.
+      - name: Styles follow DESIGN.md
+        run: python3 ../scripts/ui-lint.py
       - run: bun run test
       - run: bun run build
+      - name: No high or critical advisory in the dependencies
+        run: bun audit --audit-level=high

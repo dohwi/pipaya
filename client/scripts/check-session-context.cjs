@@ -44,7 +44,7 @@ const snapshot = {
   const opener=page.getByRole('button',{name:/context files/});
   // Footer shows the number of entries (system prompt + 2 AGENTS.md), not a navbar icon.
   await opener.waitFor();
-  assert.equal((await opener.innerText()).replace(/\s+/g,' ').trim(),'3');
+  assert.equal((await opener.textContent()).replace(/\s+/g,' ').trim(),'3');
   assert.equal(await opener.getAttribute('aria-label'),'context files 3개');
   assert.equal(await page.getByRole('button',{name:'적용된 컨텍스트 보기'}).count(),0,'navbar file icon should be gone');
   await opener.click();
