@@ -11,7 +11,7 @@ import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../too
 import { RETIRED_EXTENSIONS } from "./retired.ts";
 import { markExtensionImports } from "./loader.ts";
 import type {
-	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, ServerEvent, ToolResult,
+	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, RouteContext, RouteMethod, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -60,6 +60,8 @@ export interface ExtensionInfo {
 	/** Command families (`/prefix:name`), by prefix. */
 	commandFamilies: { prefix: string; label?: string }[];
 	methods: string[];
+	/** HTTP endpoints under `/x/<name>` (`pi.registerRoute`). */
+	routes: { methods: string[]; path: string; public: boolean }[];
 	providers: string[];
 	flags: { name: string; description?: string; type: "boolean" | "string"; value: boolean | string | undefined }[];
 	events: string[];
@@ -142,6 +144,7 @@ interface Loaded extends ExtensionInfo {
 	commandDefs: Map<string, ExtensionCommand>;
 	familyDefs: Map<string, ExtensionCommandFamily>;
 	methodDefs: Map<string, (params: unknown, ctx: ExtensionContext | null) => unknown>;
+	routeDefs: CompiledRoute[];
 	providerIds: Set<string>;
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
@@ -215,6 +218,45 @@ const MAX_ERRORS = 100;
 const FAMILY_NAME = /^[A-Za-z0-9_.-]{1,80}$/;
 const MAX_FAMILY_ENTRIES = 500;
 const METHOD_NAME = /^[A-Za-z0-9_-]{1,80}$/;
+/** Extension HTTP endpoints live under this prefix: `/x/<extension>/<path>`. */
+export const ROUTE_PREFIX = "/x/";
+const ROUTE_METHODS: readonly RouteMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+const MAX_ROUTES = 50;
+const ROUTE_SEGMENT = /^(?:[A-Za-z0-9._~-]+|:[A-Za-z_][A-Za-z0-9_]{0,39})$/;
+
+interface CompiledRoute {
+	methods: RouteMethod[];
+	path: string;
+	public: boolean;
+	segments: string[];
+	handler: (req: Request, ctx: RouteContext) => unknown;
+}
+
+/** `/a/:id/*` -> segments, or an error for anything else. */
+function compileRoutePath(path: unknown): string[] {
+	if (typeof path !== "string" || !path.startsWith("/") || path.length > 200) throw new Error(`invalid route path "${String(path)}": it must start with "/" (at most 200 characters)`);
+	const segments = path === "/" ? [] : path.slice(1).replace(/\/$/, "").split("/");
+	segments.forEach((seg, i) => {
+		if (seg === "*" && i === segments.length - 1) return;
+		if (!ROUTE_SEGMENT.test(seg)) throw new Error(`invalid route path "${path}": segment "${seg}" must be letters, digits, "._~-", a ":name" parameter or a final "*"`);
+	});
+	return segments;
+}
+
+/** The parameters of `parts` if they match `segments`, else null. */
+function matchSegments(segments: string[], parts: string[]): Record<string, string> | null {
+	const params: Record<string, string> = {};
+	for (let i = 0; i < segments.length; i++) {
+		const seg = segments[i]!;
+		if (seg === "*") { params["*"] = parts.slice(i).join("/"); return params; }
+		const part = parts[i];
+		if (part === undefined || part === "") return null;
+		if (seg.startsWith(":")) {
+			try { params[seg.slice(1)] = decodeURIComponent(part); } catch { return null; }
+		} else if (seg !== part) return null;
+	}
+	return parts.length === segments.length ? params : null;
+}
 /**
  * The app's own slash commands (client `COMMANDS` in client/src/lib/commands.ts). An extension cannot take these names:
  * built-in commands are never overridden. client/tests/commands-reserved.test.ts keeps the two lists equal.
@@ -363,8 +405,8 @@ export class ExtensionHost {
 
 	private blank(name: string, path: string): Loaded {
 		return {
-			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], providers: [], flags: [], events: [],
-			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(),
+			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], routes: [], providers: [], flags: [], events: [],
+			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(), routeDefs: [],
 			providerIds: new Set(), flagDefs: new Map(), busOff: [],
 		};
 	}
@@ -373,9 +415,9 @@ export class ExtensionHost {
 		for (const id of ext.providerIds) this.opts.registry.models.deleteProvider(id);
 		for (const off of ext.busOff) off();
 		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.familyDefs.clear(); ext.methodDefs.clear();
-		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = [];
+		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = []; ext.routeDefs = [];
 		ext.panel = undefined; ext.panelHandler = undefined;
-		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.providers = []; ext.flags = []; ext.events = [];
+		ext.tools = []; ext.commands = []; ext.commandFamilies = []; ext.methods = []; ext.routes = []; ext.providers = []; ext.flags = []; ext.events = [];
 	}
 
 	private async unloadAll(): Promise<void> {
@@ -397,8 +439,8 @@ export class ExtensionHost {
 	}
 
 	list(): ExtensionInfo[] {
-		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, panel, ui, error }) => ({
-			name, path, tools, commands, commandFamilies, methods, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
+		return this.loaded.map(({ name, path, tools, commands, commandFamilies, methods, routes, providers, flags, events, companion, title, version, description, descriptions, translations, settings, settingsId, clientFile, panel, ui, error }) => ({
+			name, path, tools, commands, commandFamilies, methods, routes, providers, settingsId, ...(companion ? { companion } : {}), ...(clientFile && existsSync(clientFile) ? { clientPackage: true } : {}),
 			...(title ? { title } : {}), ...(version ? { version } : {}), ...(description ? { description } : {}), ...(descriptions ? { descriptions } : {}), ...(translations ? { translations } : {}), ...(settings ? { settings } : {}),
 			flags: flags.map((f) => ({ ...f, value: this.flagValue(f.name) })), events, ...(panel ? { panel } : {}), ...(ui ? { ui } : {}), ...(error ? { error } : {}),
 		}));
@@ -547,6 +589,21 @@ export class ExtensionHost {
 				own("method", name, ext.methodDefs.has(name));
 				ext.methodDefs.set(name, handler);
 				ext.methods.push(name);
+			},
+			registerRoute: (route) => {
+				if (!route || typeof route !== "object" || typeof route.handler !== "function") throw new Error("a route needs a path and a handler");
+				const segments = compileRoutePath(route.path);
+				const raw = route.method ?? "GET";
+				const methods = raw === "*" ? [...ROUTE_METHODS] : [...new Set(Array.isArray(raw) ? raw : [raw])];
+				if (!methods.length || methods.some((m) => !ROUTE_METHODS.includes(m))) throw new Error(`invalid route method; use ${ROUTE_METHODS.join(", ")} or "*"`);
+				if (ext.routeDefs.length >= MAX_ROUTES) throw new Error(`at most ${MAX_ROUTES} routes per extension`);
+				const key = segments.map((s) => (s.startsWith(":") ? ":" : s)).join("/");
+				for (const r of ext.routeDefs) {
+					if (r.segments.map((s) => (s.startsWith(":") ? ":" : s)).join("/") === key && r.methods.some((m) => methods.includes(m))) throw new Error(`route ${route.path} is already registered by this extension`);
+				}
+				const path = "/" + segments.join("/");
+				ext.routeDefs.push({ methods, path, public: route.public === true, segments, handler: route.handler });
+				ext.routes.push({ methods, path, public: route.public === true });
 			},
 			registerProvider: (provider) => {
 				this.opts.registry.models.setProvider(provider);
@@ -770,6 +827,43 @@ export class ExtensionHost {
 			throw e;
 		} finally {
 			clearTimeout(timer);
+		}
+	}
+
+	// ── HTTP routes ─────────────────────────────────────────────────────────
+
+	/** The route that answers `method path` (a full path starting with ROUTE_PREFIX), with its extension and parameters. */
+	findRoute(method: string, path: string): { extension: string; route: CompiledRoute; params: Record<string, string> } | undefined {
+		if (!path.startsWith(ROUTE_PREFIX)) return undefined;
+		const rest = path.slice(ROUTE_PREFIX.length);
+		// The longest name wins: `pack/sub` before `pack` (a folder may hold several extensions).
+		const owners = this.active().filter((e) => e.routeDefs.length && (rest === e.name || rest.startsWith(`${e.name}/`)))
+			.sort((a, b) => b.name.length - a.name.length);
+		const ext = owners[0];
+		if (!ext) return undefined;
+		const tail = rest.slice(ext.name.length).replace(/^\//, "");
+		const parts = tail === "" ? [] : tail.split("/");
+		if (parts.length > 1 && parts.at(-1) === "") parts.pop(); // `/x/a/b/` is `/x/a/b`
+		for (const route of ext.routeDefs) {
+			if (!route.methods.includes(method as RouteMethod)) continue;
+			const params = matchSegments(route.segments, parts);
+			if (params) return { extension: ext.name, route, params };
+		}
+		return undefined;
+	}
+
+	/** Whether `method path` is an extension route that needs no token (asked before authentication). */
+	isPublicRoute(method: string, path: string): boolean {
+		return this.findRoute(method === "HEAD" ? "GET" : method, path)?.route.public === true;
+	}
+
+	/** Runs a route handler; its errors are recorded and become a 500. */
+	async runRoute(extension: string, route: CompiledRoute, req: Request, ctx: RouteContext): Promise<unknown> {
+		try {
+			return await route.handler(req, ctx);
+		} catch (e) {
+			this.recordError(extension, `route:${route.path}`, e);
+			throw e;
 		}
 	}
 

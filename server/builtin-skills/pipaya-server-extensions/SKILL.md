@@ -127,6 +127,7 @@ export default (pi) => {
 | `pi.registerCommand(name, {description?, args?, handler(args, ctx)})` | user types `/name args`; return a string or `{prompt, note?, title?}` to send it to the model, nothing to just handle it. Runs before the model sees the message. The app's built-in names (`new`, `resume`, `rename`, `close`, `cd`, `compact`, `retry`, `stop`, `cancel`, `fork`, `tree`, `copy`, `delete`) are refused: built-in commands cannot be overridden |
 | `pi.registerCommands(prefix, {label?, list(cwd), run(name, args, ctx)})` | a family `/prefix:name args` found at run time (e.g. files in a folder). `list(cwd)` returns `[{name, description?, args?}]` for the menu (`GET /server-extensions/commands?cwd=`); `run` returns like a command. A `note` (`{text, collapse?, data?}`) is shown on the user's message and never sent to the model |
 | `pi.registerMethod(name, (params, ctx\|null) => result)` | called by clients: `POST /server-extensions/:extension/methods/:name[?sessionId=]`. Name: letters, digits, `_`, `-` (max 80). A call that has not answered in 20 s fails |
+| `pi.registerRoute({method?, path, public?, handler(req, ctx)})` | an HTTP endpoint on the pipaya server at `/x/<extension><path>` (webhook, small web page, REST API for another program). `method`: `GET` (default), `POST`, `PUT`, `PATCH`, `DELETE`, a list, or `"*"`. `path` segments: literal, `:name`, or a final `*` (rest of the path). `handler` gets a web `Request` (raw body, any content type, ≤16 MiB) and `ctx = {params, query, device, authenticated}`; return a `Response` (any status, headers, stream) or a value to send as JSON. A token (admin or paired device) is required unless `public: true`; a public route is open to anyone who can reach the server, so check your own secret (a webhook signature). Max 50 per extension, removed on reload, listed in `GET /server-extensions` (`routes`). A throw is a 500 and an entry in the extension's errors |
 | `pi.registerProvider(provider)` / `unregisterProvider(id)` | a pi-ai `Provider` (custom endpoint, proxy, OAuth). Removed when the extension unloads |
 | `pi.registerFlag(name, {type?, default?, description?})`, `pi.getFlag(name)` | value from environment `PIPAYA_FLAG_<NAME>` |
 | `pi.emit(sessionId\|null, type, data?, {ephemeral?})` | publishes `extension_event` to clients (client extensions with the `server` permission receive it) |
@@ -162,6 +163,10 @@ export default (pi) => {
 `alwaysActive: true` gives a tool to every session, also ones created before the extension was installed (otherwise only new sessions get it, through the default tool set). `switchable: true` lets the user turn it off in the settings.
 
 Tools run without asking the user; a `tool_call` hook is the place for a policy. To ask the user something, call `ctx.ask(...)`.
+
+## Another server next to pipaya
+
+Need more than routes (a WebSocket server, another port, a Python service)? The extension runs with the server's rights, so it can open one itself: `const srv = Bun.serve({ hostname, port, fetch })` or `Bun.spawn([...])`, and close it in `pi.on("extension_unload", () => srv.stop())` (otherwise a reload leaves the port taken). Prefer `registerRoute` when HTTP is enough: it shares the server's address, TLS and token check.
 
 ## Rules that are easy to break
 

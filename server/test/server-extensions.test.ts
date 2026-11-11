@@ -519,3 +519,85 @@ export default (pi) => {
 		expect(JSON.stringify(second)).toContain('{\\"text\\":\\"a note\\",\\"call\\":\\"noted\\"}');
 	});
 });
+
+describe("pi.registerRoute", () => {
+	const ROUTES = `
+export default (pi) => {
+	pi.registerRoute({ path: "/", handler: () => ({ hello: pi.name }) });
+	pi.registerRoute({ path: "/items/:id", handler: (_req, ctx) => ({ id: ctx.params.id, q: ctx.query.get("q"), device: ctx.device }) });
+	pi.registerRoute({ method: ["POST", "PUT"], path: "/echo", handler: async (req) => new Response(await req.text(), { status: 201, headers: { "content-type": "text/plain", "x-ext": "yes" } }) });
+	pi.registerRoute({ method: "POST", path: "/hook", public: true, handler: async (req, ctx) => ({ body: await req.json(), sig: req.headers.get("x-sig"), authenticated: ctx.authenticated }) });
+	pi.registerRoute({ path: "/files/*", public: true, handler: (_req, ctx) => new Response("<h1>" + ctx.params["*"] + "</h1>", { headers: { "content-type": "text/html" } }) });
+	pi.registerRoute({ path: "/boom", handler: () => { throw new Error("route failed"); } });
+};
+`;
+	let other: App;
+	let exDir: string;
+	const call = async (method: any, url: string, opts: { token?: string | null; body?: string; type?: string; headers?: Record<string, string> } = {}) => {
+		const token = opts.token === undefined ? "test-token" : opts.token;
+		return other.server.inject({
+			method, url,
+			headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(opts.type ? { "content-type": opts.type } : {}), ...opts.headers },
+			...(opts.body !== undefined ? { payload: opts.body } : {}),
+		});
+	};
+	beforeAll(async () => {
+		exDir = join(dir, "route-exts");
+		mkdirSync(exDir, { recursive: true });
+		writeFileSync(join(exDir, "hooks.js"), ROUTES);
+		writeFileSync(join(exDir, "bad-route.js"), `export default (pi) => { pi.registerRoute({ path: "no-slash", handler: () => 1 }); };`);
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "route-data"), dbPath: join(dir, "route.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
+		other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
+	});
+	afterAll(async () => {
+		await other.close();
+		rmSync(exDir, { recursive: true, force: true });
+	});
+
+	test("a route answers under /x/<extension> with JSON, parameters and the query", async () => {
+		expect((await call("GET", "/x/hooks")).json()).toEqual({ hello: "hooks" });
+		expect((await call("GET", "/x/hooks/")).json()).toEqual({ hello: "hooks" });
+		expect((await call("GET", "/x/hooks/items/a%20b?q=1")).json()).toEqual({ id: "a b", q: "1", device: null });
+		expect((await call("GET", "/x/hooks/items")).statusCode).toBe(404);
+		expect((await call("GET", "/x/nobody/thing")).statusCode).toBe(404);
+	});
+
+	test("a Response is sent as is: status, headers and the raw body of any content type", async () => {
+		const r = await call("PUT", "/x/hooks/echo", { body: "plain text body", type: "text/plain" });
+		expect(r.statusCode).toBe(201);
+		expect(r.headers["x-ext"]).toBe("yes");
+		expect(r.body).toBe("plain text body");
+		expect((await call("GET", "/x/hooks/echo")).statusCode).toBe(404); // method not registered
+	});
+
+	test("routes need the token unless public; a public one still knows the owner", async () => {
+		expect((await call("GET", "/x/hooks", { token: null })).statusCode).toBe(401);
+		expect((await call("GET", "/x/hooks", { token: "wrong" })).statusCode).toBe(401);
+		const anon = await call("POST", "/x/hooks/hook", { token: null, body: '{"a":1}', type: "application/json", headers: { "x-sig": "s1" } });
+		expect(anon.statusCode).toBe(200);
+		expect(anon.json()).toEqual({ body: { a: 1 }, sig: "s1", authenticated: false });
+		expect((await call("POST", "/x/hooks/hook", { body: "{}", type: "application/json" })).json().authenticated).toBe(true);
+		const page = await call("GET", "/x/hooks/files/docs/readme", { token: null });
+		expect(page.headers["content-type"]).toContain("text/html");
+		expect(page.body).toBe("<h1>docs/readme</h1>");
+		// Public is per method: a GET on the POST-only hook is not opened by it.
+		expect((await call("GET", "/x/hooks/hook", { token: null })).statusCode).toBe(401);
+	});
+
+	test("a throwing handler is a 500 and an error of the extension; bad routes fail the load", async () => {
+		expect((await call("GET", "/x/hooks/boom")).statusCode).toBe(500);
+		const errs = (await call("GET", "/server-extensions/errors?extension=hooks")).json().errors as any[];
+		expect(errs.some((e) => e.where === "route:/boom" && e.message === "route failed")).toBe(true);
+		const list = (await call("GET", "/server-extensions")).json().extensions as any[];
+		expect(list.find((e) => e.name === "bad-route").error).toContain("invalid route path");
+		expect(list.find((e) => e.name === "hooks").routes).toContainEqual({ methods: ["POST"], path: "/hook", public: true });
+	});
+
+	test("reload drops the routes of an extension that no longer registers them", async () => {
+		writeFileSync(join(exDir, "hooks.js"), `export default (pi) => { pi.registerRoute({ path: "/v2", handler: () => 2 }); };`);
+		expect((await call("POST", "/server-extensions/reload")).statusCode).toBe(200);
+		expect((await call("GET", "/x/hooks")).statusCode).toBe(404);
+		expect((await call("GET", "/x/hooks/v2")).json()).toBe(2);
+		expect((await call("POST", "/x/hooks/hook", { token: null, body: "{}", type: "application/json" })).statusCode).toBe(401);
+	});
+});
