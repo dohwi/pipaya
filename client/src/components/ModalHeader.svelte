@@ -65,7 +65,7 @@
 		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); /* measured: the 38px close button holds a 19px glyph, 9.5px from its edge: 9 + 9.5 = 18.5 + the modal's 1px border = the body's right edge (gutter + 1) */
 	}
 	.mh:has(> :global(.iconbtn:first-child)) {
-		padding-left: 12px;
+		padding-left: calc(var(--dlg-px) - 9.5px); /* the back button's 19px glyph sits 9.5px in: it lands on the body's left line (DESIGN.md 5) */
 	}
 	.mh.divider {
 		padding-bottom: var(--dlg-head-b);

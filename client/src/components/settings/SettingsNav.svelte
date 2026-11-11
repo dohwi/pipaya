@@ -7,6 +7,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
+	import { navGroups } from "../../lib/settings-phone";
 	import { initialFolded } from "../../lib/settings-fold";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../Icon.svelte";
@@ -27,6 +28,9 @@
 		serverName = "",
 		server,
 		serverOnline = true,
+		phone = false,
+		touch = false,
+		onopen,
 	}: {
 		tab: string;
 		extId: string | null;
@@ -38,11 +42,15 @@
 		server: Server | null;
 		/** False while the server does not answer: its sections (all but "정보") are greyed out and cannot be opened. */
 		serverOnline?: boolean;
+		/** A phone: the list of sections, one row each, nothing selected; opening one goes to its page (`onopen`) */
+		phone?: boolean;
+		/** Touch-only device: "단축키" goes to the very bottom of the list */
+		touch?: boolean;
+		onopen?: () => void;
 	} = $props();
 
 	type TabId = SettingsTabId;
-	const COMMON = SETTINGS_TABS.filter((x) => !x.server);
-	const PER_SERVER = SETTINGS_TABS.filter((x) => x.server);
+	const groups = $derived(navGroups(SETTINGS_TABS, touch));
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
 	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded (see `settings-fold`). */
 	let collapsed = $state<Record<string, boolean>>(initialFolded());
@@ -90,6 +98,7 @@
 	function openExt(tabId: TabId, id: string) {
 		if (tabId !== tab) { dir = order(tabId) > order(tab) ? 1 : -1; tab = tabId; }
 		extId = id;
+		onopen?.();
 	}
 	function follow(link: { tab: TabId; id: string | null; install?: string }) {
 		if (link.install) { go(link.tab); installFor = link.install; }
@@ -98,6 +107,7 @@
 	}
 	function go(next: TabId) {
 		extId = null;
+		onopen?.();
 		if (next === tab) return;
 		dir = order(next) > order(tab) ? 1 : -1;
 		tab = next;
@@ -122,22 +132,26 @@
 <!-- desktop: a column on the left; phone: a row of tabs above the content -->
 <div
 	class="nav"
+	class:phone
 	role="tablist"
 	aria-label={t("설정 구역")}
 	use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius-control)" }}
 	use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
 >
 	<div class="glabel" aria-hidden="true">{t("공통")}</div>
-	{#each COMMON as x (x.id)}
+	{#each groups.common as x (x.id)}
 		{@render item(x)}
 	{/each}
 	{#if server}
 		<div class="gsep" role="separator" aria-orientation="horizontal"></div>
 		<div class="glabel" aria-hidden="true" title={serverName}><span>{serverName}</span></div>
-		{#each PER_SERVER as x (x.id)}
+		{#each groups.server as x (x.id)}
 			{@render item(x)}
 		{/each}
 	{/if}
+	{#each groups.last as x (x.id)}
+		{@render item(x)}
+	{/each}
 </div>
 
 {#snippet item(x: (typeof SETTINGS_TABS)[number])}
@@ -145,11 +159,12 @@
 			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
 			<div class="row" class:has={kids.length > 0}>
-				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={tab === x.id && !extId} tabindex={tab === x.id && !extId ? 0 : -1} class:on={tab === x.id && !extId} onclick={() => go(x.id)}>
+				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={!phone && tab === x.id && !extId} tabindex={phone || (tab === x.id && !extId) ? 0 : -1} class:on={!phone && tab === x.id && !extId} onclick={() => go(x.id)}>
 					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={x.id === "info" ? t("서버 업데이트 있음") : t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
 					</span>
+					{#if phone && !kids.length}<span class="go" aria-hidden="true"><Icon name="chevron-right" /></span>{/if}
 				</button>
 				{#if kids.length}
 					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
@@ -438,7 +453,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	@media (max-width: 760px) {
+	@media (min-width: 601px) and (max-width: 760px) {
 		.nav {
 			flex-direction: row;
 			padding: 4px 12px;
@@ -483,6 +498,28 @@
 		}
 		.nav .row.has > button:first-child {
 			padding-right: 12px;
+		}
+	}
+	/* phone: the list of sections, one tall row each (its own page opens on a tap), on the dialog's 16px gutter: the 12px of the row's padding + 4 here */
+	@media (max-width: 600px) {
+		.nav.phone {
+			padding: 12px 4px;
+			border-right: 0;
+		}
+		.nav.phone button {
+			height: 40px; /* a touch row: 40 (the sidebar's 32 is for a mouse) */
+		}
+		.nav.phone .row.has > button:first-child {
+			padding-right: 60px;
+		}
+		.nav .go {
+			margin-left: auto;
+			display: inline-flex;
+			color: var(--text-faint);
+		}
+		.nav .go :global(svg) {
+			width: 16px;
+			height: 16px;
 		}
 	}
 </style>

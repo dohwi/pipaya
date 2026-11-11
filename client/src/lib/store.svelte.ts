@@ -302,10 +302,14 @@ class AppStore {
   settingsTab = $state<SettingsTabId | "servers" | "agent">("general");
   /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
   settingsServer = $state<string | "new" | null>(null);
+  /** True when a section was asked for (not a plain open): on a phone it opens straight on that section instead of the list. */
+  settingsDirect = false;
   openSettings(
-    tab: SettingsTabId | "servers" | "agent" = "general",
+    tab?: SettingsTabId | "servers" | "agent",
     server: string | "new" | null = null,
   ) {
+    this.settingsDirect = tab !== undefined;
+    tab ??= "general";
     this.settingsTab = tab;
     this.settingsServer = tab === "servers" ? server : null;
     this.settingsOpen = true;

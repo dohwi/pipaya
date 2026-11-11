@@ -23,10 +23,21 @@
 	import { t } from "../lib/i18n";
 	import { backLayer } from "../lib/dialog";
 	import { viewport } from "../lib/viewport.svelte";
+	import { phoneBack, phoneStart, touchOnly } from "../lib/settings-phone";
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
 	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab === "agent" ? "models" : app.settingsTab); // "agent" (extensions, older links) is now "models"
+
+	/**
+	 * Phone (≤600px): two steps. "list" shows every section (and the search), "detail" one section under a back arrow.
+	 * Wider screens are always "detail": the nav is a column beside the section. Opened for a given section → straight to it.
+	 */
+	// svelte-ignore state_referenced_locally
+	let step = $state<"list" | "detail">(phoneStart(app.settingsDirect));
+	const listing = $derived(viewport.phone && step === "list");
+	const detailPhone = $derived(viewport.phone && step === "detail");
+	const touch = touchOnly({ coarse: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches, hover: typeof matchMedia === "function" && matchMedia("(hover: hover)").matches });
 
 	/** The nav lists the common sections (`server: false`, same for every server) first, then the chosen server's own. */
 	const tabs = SETTINGS_TABS;
@@ -88,20 +99,32 @@
 	function pick(h: Hit) {
 		if (h.target.keyFilter !== undefined) keyFilter = h.target.keyFilter;
 		go(h.target.tab);
+		step = "detail";
 		query = "";
 	}
 
-	/** Phone: an open extension page is one step inside the window, so back returns to the list before it closes the window. */
+	/** Tablet-narrow: an open extension page is one step inside the window, so back returns to the list before it closes the window. */
 	$effect(() => {
-		if (!viewport.narrow || !extId || words.length) return;
+		if (viewport.phone || !viewport.narrow || !extId || words.length) return;
 		return backLayer({ onclose: () => (extId = null) });
+	});
+	/** Phone: a section page is a step too: back (arrow, hardware or browser) leaves an open extension, then the section, then the window. */
+	function back() {
+		const next = phoneBack({ step, extId });
+		step = next.step;
+		extId = next.extId;
+	}
+	$effect(() => {
+		if (!detailPhone) return;
+		return backLayer({ onclose: back });
 	});
 
 	const close = () => (app.settingsOpen = false);
 </script>
 
 <Modal onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
-	<ModalHeader title={t("설정")} onclose={close} />
+	<ModalHeader title={detailPhone ? t(current.label) : t("설정")} onclose={close} onback={detailPhone ? back : undefined} />
+	{#if !detailPhone}
 	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
 		{#each chips as { s, state } (s.id)}
 			<span class="chipwrap" class:off={unreachable(state)}>
@@ -117,9 +140,14 @@
 		<SearchField label={t("설정·단축키 검색")} bind:value={query} onkeydown={(e) => { if (e.key === "Enter" && hits[0]) pick(hits[0]); }} />
 	</div>
 
-	<div class="layout">
-		<SettingsNav bind:tab bind:extId bind:dir bind:installFor serverName={server ? app.serverLabel(server) : ""} {server} {serverOnline} />
+	{/if}
 
+	<div class="layout" class:phone={viewport.phone}>
+		{#if !detailPhone && !(listing && words.length)}
+		<SettingsNav bind:tab bind:extId bind:dir bind:installFor serverName={server ? app.serverLabel(server) : ""} {server} {serverOnline} phone={viewport.phone} {touch} onopen={() => (step = "detail")} />
+		{/if}
+
+		{#if !listing || words.length}
 		<div class="body">
 			{#if words.length}
 				<div class="pane" role="region" aria-label={t("검색 결과")} in:fadeIn>
@@ -151,6 +179,7 @@
 			{/key}
 			{/if}
 		</div>
+		{/if}
 	</div>
 </Modal>
 
@@ -230,6 +259,11 @@
 		flex-direction: column;
 		gap: var(--dlg-gap);
 		max-width: 680px;
+	}
+	@media (max-width: 600px) {
+		.layout.phone {
+			grid-template-rows: minmax(0, 1fr);
+		}
 	}
 	@media (max-width: 760px) {
 
