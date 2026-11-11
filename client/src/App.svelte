@@ -44,7 +44,8 @@
 	import { nativePushAdapter } from "./lib/native-push";
 	import { notificationRules } from "./lib/notification-rules";
 	import { getLang, t } from "./lib/i18n";
-	import { isTauri } from "./lib/tauri";
+	import { isTauri, openExternal } from "./lib/tauri";
+	import { copyText } from "./lib/clipboard";
 	import { notificationPlatform } from "./lib/notifications";
 	import { listenForPairingLinks } from "./lib/pairing-intake";
 
@@ -200,6 +201,8 @@
 			dark: () => app.prefs.resolvedDark,
 			reservedCommands: () => COMMANDS.map(c => c.name),
 			connection: () => app.conn,
+			openUrl: url => openExternal(url),
+			copy: text => copyText(text),
 			serverId: () => app.serverId,
 			deviceId: () => notifications.id,
 			listChanged: () => app.listChanged(),

@@ -68,9 +68,22 @@ export interface ExtensionSDK {
     place(id: string, layout: { placement?: import("./ui").UIPanelPlacement; size?: import("./ui").UIPanelSize; position?: import("./ui").UIPanelPosition }): Promise<void>;
     remove(id: string): Promise<void>;
   };
-  /** Needs `ui-components`: the value (JSON, ≤64KB) is read by this package's components as `ext.data` (from "pipaya"). */
+  /** Needs `ui-components`: the value (JSON, ≤256KB) is read by this package's components as `ext.data` (from "pipaya"). */
   readonly components: { setData(value: unknown): Promise<void> };
   readonly navbar: { set(id: string, spec: NavbarItemSpec): Promise<void>; remove(id: string): Promise<void> };
+  /**
+   * Needs `network`: a request to any http(s) URL (the extension's own fetch). Any method and headers, a JSON / text /
+   * base64 body (≤4 MiB) and answer (≤8 MiB), up to 60 s, 6 at a time. App cookies and credentials are never sent. The
+   * target must allow the app's origin (CORS); otherwise go through a server extension.
+   */
+  readonly net: { fetch(request: import("./net").NetRequest): Promise<import("./net").NetResponse> };
+  /**
+   * Needs `server-api`: any request to the connected pipaya server's own API (`/sessions`, `/configuration`, …) with the
+   * user's rights. The token is added by the app and never handed over. A non-2xx answer is returned, not thrown. 30 s.
+   */
+  readonly serverApi: { request(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<{ status: number; body: unknown }> };
+  /** `openUrl` needs `open-url` (http(s) and mailto), `copy` needs `clipboard`. Together 5 per 10 s. */
+  readonly system: { openUrl(url: string): Promise<void>; copy(text: string): Promise<void> };
   readonly http: {
     getJson(path: string): Promise<unknown>;
     requestJson(request: import("./transport").JsonRequest): Promise<import("./transport").JsonResponse>;
@@ -95,7 +108,7 @@ export interface ExtensionSDK {
     /** Entries a server extension stored with `ctx.appendEntry` on a session (default: the open one). */
     entries(options?: { sessionId?: string; extension?: string; type?: string }): Promise<{ id: number; extension: string; type: string; data: unknown; createdAt: number }[]>;
     /** Server extensions that are loaded: what each registered (tools, commands, command families, methods, providers, flags, hooked events). */
-    list(): Promise<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>;
+    list(): Promise<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; routes?: { methods: string[]; path: string; public: boolean }[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; settings?: unknown[]; settingsId: string; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>;
     on(handler: (event: ServerExtensionEvent) => void | Promise<void>): Promise<() => void>;
   };
   /**

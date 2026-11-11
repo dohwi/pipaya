@@ -201,24 +201,24 @@ describe("UI permission and registration", () => {
     expect(runtime.executed).toEqual([]);
   });
 
-  test("duplicate IDs are owner-local and the five-panel cap is enforced without mutation", async () => {
+  test("duplicate IDs are owner-local and the ten-panel cap is enforced without mutation", async () => {
     const { host } = newHost();
     const a = await activate(host, "example.alpha");
     register(host, a.id, "p0", button(), "a", a.runtime);
     const before = host.panels;
     expect(() => register(host, a.id, "p0", button(), "duplicate", a.runtime)).toThrow();
     expect(host.panels).toBe(before);
-    for (let i = 1; i < 5; i++) register(host, a.id, `p${i}`, button(), `a${i}`, a.runtime);
+    for (let i = 1; i < 10; i++) register(host, a.id, `p${i}`, button(), `a${i}`, a.runtime);
     const full = host.panels;
-    expect(() => register(host, a.id, "p5", button(), "sixth", a.runtime)).toThrow();
+    expect(() => register(host, a.id, "p10", button(), "eleventh", a.runtime)).toThrow();
     expect(host.panels).toBe(full);
     const b = await activate(host, "example.beta");
     register(host, b.id, "p0", button(), "b", b.runtime);
-    expect(host.panels.filter(panel => panel.owner === a.id)).toHaveLength(5);
+    expect(host.panels.filter(panel => panel.owner === a.id)).toHaveLength(10);
     expect(host.panels.filter(panel => panel.owner === b.id)).toHaveLength(1);
     call(host, a.id, "ui.remove", ["p0"], a.runtime);
     register(host, a.id, "replacement", button(), "fresh", a.runtime);
-    expect(host.panels.filter(panel => panel.owner === a.id)).toHaveLength(5);
+    expect(host.panels.filter(panel => panel.owner === a.id)).toHaveLength(10);
   });
 
   test("composer contributions never open the modal: ui.open/close fold and unfold them", async () => {

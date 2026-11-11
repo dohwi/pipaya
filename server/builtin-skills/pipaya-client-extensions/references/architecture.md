@@ -28,11 +28,11 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Template command | package `commands[]` | `/` menu | 20 | `host.registerCommand`, `lib/commands.ts` |
 | Code command | `sdk.commands.register` | `/` menu | 20 per extension | same |
 | Composer action | `sdk.composer.registerAction` | button row under the composer | 10 | `Composer.svelte` |
-| Panel | `sdk.ui.registerPanel` | launcher → modal `<dialog>` | 5 per extension | `extensions/ExtensionPanels.svelte` |
-| Composer widget | panel with `placement:'composer'` | collapsible box above the composer | counts toward the 5 | `ExtensionPanels placement="composer"` |
-| Sidebar section | panel with `placement:'sidebar'` | collapsible box at the sidebar bottom | counts toward the 5 | `ExtensionPanels placement="sidebar"` |
-| Side dock | panel with `placement:'side'` | dock right of the panes (`App.svelte` `.work`) | counts toward the 5 | `extensions/ExtensionDock.svelte` |
-| Floating window | panel with `placement:'floating'` | non-modal window over the app | counts toward the 5 | `extensions/ExtensionFloating.svelte` |
+| Panel | `sdk.ui.registerPanel` | launcher → modal `<dialog>` | 10 per extension (`MAX_PANELS`) | `extensions/ExtensionPanels.svelte` |
+| Composer widget | panel with `placement:'composer'` | collapsible box above the composer | counts toward the 10 | `ExtensionPanels placement="composer"` |
+| Sidebar section | panel with `placement:'sidebar'` | collapsible box at the sidebar bottom | counts toward the 10 | `ExtensionPanels placement="sidebar"` |
+| Side dock | panel with `placement:'side'` | dock right of the panes (`App.svelte` `.work`) | counts toward the 10 | `extensions/ExtensionDock.svelte` |
+| Floating window | panel with `placement:'floating'` | non-modal window over the app | counts toward the 10 | `extensions/ExtensionFloating.svelte` |
 | Navbar item | `sdk.navbar.set` | header right slot | 3, read-only nodes | `extensions/NavbarItems.svelte`, `Header.svelte` |
 | Status chip | `sdk.status.set` | `StatusLine` | 10, 120 chars | `StatusLine.svelte` |
 | Theme | package `theme` | `:root` CSS variables | token whitelist | `host.applyThemes` |
@@ -54,7 +54,7 @@ host ─execute(token,arg)─▶ Worker handler (command, action, panel event)
 | Settings form | manifest `settings` | Settings > Extensions > detail page | 20 fields | `extensions/SettingsForm.svelte` |
 | Approval | `sdk.configuration.*` | modal | one at a time | `extensions/ExtensionApproval.svelte`, `store.confirmExtension` |
 
-Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char settings JSON, 32,000-char storage, 100 log lines.
+Global limits: 50 extensions, 1 MiB package, 512 KiB code, 16,000-char settings JSON, 128,000-char storage (`MAX_STORAGE`), 100 log lines.
 
 > Trusted UI (`ui-style`, `ui-components`) is the one place extension code runs in the app realm: `lib/extensions/{components,kit,style}.ts`, `extensions/ExtensionMount|ExtensionPart.svelte`, `host.installUi/mountsIn/replacementFor`. Details: [trusted-ui.md](trusted-ui.md). Cleanup by owner covers its styles, mounts, replacements and data.
 
@@ -72,7 +72,7 @@ Global limits: 50 extensions, 256 KiB package, 128 KiB code, 16,000-char setting
 | `runtime.ts` | sandbox iframe + Worker source, heartbeat, message and time limits |
 | `host.svelte.ts` | `ExtensionHost`: install, enable, cleanup, settings sync, `request()` dispatcher, panel/navbar/status state |
 | `labels.ts` | `permissionLabels` (consent text per permission; the type forces one for each) |
-| `http.ts` / `transport.ts` | `http` (GET JSON) / `http-write` |
+| `http.ts` / `transport.ts` / `net.ts` | `http` (GET JSON) / `http-write` / `network` (`NetClient`, any URL) |
 | `configuration.ts` / `fingerprint.ts` | config export/import/backup/approval; canonical JSON + SHA-256 |
 | `marketplace.ts` | catalog parsing and install (`DEFAULT_MARKETPLACE_URL`) |
 | `panes.ts` | `paneAdapter` for `sdk.panes` |
@@ -153,7 +153,7 @@ Finish tests and docs in the same change.
 2. Validate on the host: reject unknown keys, cap lengths and counts, return fresh copies.
 3. Check permissions on the host; consent text says exactly what becomes possible.
 4. Never disable or touch other extensions. A reinstall starts disabled (exception: same-ID replace with no new permissions restarts at once).
-5. Never hand credentials to an extension: server token, app localStorage, transcripts, tool args and results.
+5. Never hand credentials to an extension: server token, app localStorage. Server data (transcripts included) is reachable only through `server-api`, which makes the call for the extension.
 6. Keep recovery paths: safe mode, `?extensions=off`, boot-interruption detection, unreadable entries.
 7. The app always shows the source (extension name) so an extension cannot pose as an app dialog. UI copy is Korean source strings through `t()`/`msg()` (`src/lib/i18n.ts`); add English to `src/lib/locales/en.ts` (`node scripts/extract-i18n.cjs` checks).
 

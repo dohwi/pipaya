@@ -5,7 +5,7 @@ description: Read before adding or changing anything in the pipaya client app (S
 
 # Pipaya client extensions
 
-Client extensions (SDK v1) run in a sandboxed Worker and can only send **validated data**; the host renders everything. The one exception is the opt-in **trusted UI** (`ui-style`, `ui-components`, see `references/trusted-ui.md`): CSS and Svelte components that run in the app itself, behind their own permissions and a danger notice. Server extensions are separate (`pipaya-server-extensions`); the `server` permission bridges the two.
+Client extensions (SDK v1) run in a sandboxed Worker and can only send **validated data**; the host renders everything. The one exception is the opt-in **trusted UI** (`ui-style`, `ui-components`, see `references/trusted-ui.md`): CSS and Svelte components that run in the app itself, behind their own permissions and a danger notice. The policy is **capability by consent**: an extension may get any power the app has (any URL with `network`, the server's whole API with `server-api`, links, clipboard), each behind its own permission and consent sentence, while the host keeps the token out of its hands and cancels everything with the extension. Server extensions are separate (`pipaya-server-extensions`); the `server` permission bridges the two.
 
 The docs are in `references/` next to this file. Source paths in them (`src/lib/extensions/...`, `src/components/...`, `tests/...`, `examples/extensions/...`) are relative to the client root, the directory containing `src/lib/extensions/` (normally `<repo>/client`). If you cannot find it, ask the user instead of guessing.
 

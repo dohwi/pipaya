@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { compileModule } from "svelte/compiler";
@@ -322,7 +322,7 @@ describe("declarative extensions", () => {
 
 	test("unsupported permissions and malformed packages are rejected without being installed", () => {
 		const { host } = newHost();
-		expect(() => host.install(pkg("example.bad", ["network"], { code: "x" }))).toThrow();
+		expect(() => host.install(pkg("example.bad", ["filesystem"], { code: "x" }))).toThrow();
 		expect(() => host.install(pkg("example.bad", ["commands"], { commands: [{ name: "x", description: "d", template: "t" }] }))).toThrow(); // needs composer
 		expect(host.installed).toEqual([]);
 		expect(storageKeys().filter(k => k.includes("example.bad"))).toEqual([]);
@@ -669,7 +669,7 @@ describe("extension storage", () => {
 		const { id } = await activate(host, code("example.all"));
 		call(host, id, "storage.set", ["small", "keep"]);
 		const before = storageKeys().map(k => [k, storage.get(k)]);
-		expect(() => call(host, id, "storage.set", ["big", "x".repeat(33000)])).toThrow();
+		expect(() => call(host, id, "storage.set", ["big", "x".repeat(129_000)])).toThrow();
 		expect(storageKeys().map(k => [k, storage.get(k)])).toEqual(before);
 		expect(call(host, id, "storage.get", ["small"])).toBe("keep");
 		expect(call(host, id, "storage.get", ["big"])).toBeNull();
@@ -1442,7 +1442,8 @@ describe("trusted UI (ui-style / ui-components)", () => {
 		const { id } = await activate(host, ui("example.skin", { code: "/* fake */" }));
 		call(host, id, "components.setData", [{ n: 1 }]);
 		expect(host.componentData[id]).toEqual({ n: 1 });
-		expect(() => call(host, id, "components.setData", ["x".repeat(65000)])).toThrow();
+		call(host, id, "components.setData", ["x".repeat(200_000)]);
+		expect(() => call(host, id, "components.setData", ["x".repeat(257_000)])).toThrow();
 		expect(() => call(host, id, "components.setData", [])).toThrow();
 		host.disable(id);
 		expect(host.componentData[id]).toBeUndefined();
@@ -1710,5 +1711,107 @@ describe("hold shortcuts and component shortcuts", () => {
 		host.disable(id);
 		expect(late({ id: "again", label: "A", combo: "Alt+A" }, { down() {} })).toBeInstanceOf(Function);
 		expect(host.shortcutList()).toEqual([]);
+	});
+});
+
+describe("network, server API, links and clipboard", () => {
+	const MORE = ["network", "server-api", "open-url", "clipboard"];
+	const realFetch = globalThis.fetch;
+	afterEach(() => { globalThis.fetch = realFetch; });
+
+	test("each is refused without its own permission", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.none", ["commands"]));
+		for (const [method, args] of [["net.fetch", [{ url: "https://a.test" }]], ["serverApi.request", ["GET", "/sessions", null]], ["system.openUrl", ["https://a.test"]], ["system.copy", ["x"]]] as const) {
+			expect(() => call(host, id, method, [...args])).toThrow(/권한|permission/i);
+		}
+		host.stop();
+	});
+
+	test("net.fetch reaches any URL without the app's credentials and reads JSON, text or bytes", async () => {
+		const { host } = await reload();
+		const seen: { url: string; init: RequestInit }[] = [];
+		globalThis.fetch = (async (url: string, init: RequestInit) => {
+			seen.push({ url: String(url), init });
+			if (String(url).endsWith("/bin")) return new Response(new Uint8Array([1, 2, 3]));
+			if (String(url).endsWith("/text")) return new Response("hi", { headers: { "content-type": "text/plain" } });
+			return Response.json({ ok: 1 }, { status: 201, headers: { "x-a": "b" } });
+		}) as typeof fetch;
+		const { id } = await activate(host, code("example.net", MORE));
+		const r = await call(host, id, "net.fetch", [{ url: "https://api.example.com/x?y=1", method: "POST", headers: { "X-Key": "k" }, body: { a: 1 } }]);
+		expect(r).toMatchObject({ status: 201, ok: true, body: { ok: 1 }, headers: { "x-a": "b" } });
+		expect(seen[0]!.init.credentials).toBe("omit");
+		expect(new Headers(seen[0]!.init.headers).get("content-type")).toBe("application/json");
+		expect(new Headers(seen[0]!.init.headers).get("x-key")).toBe("k");
+		expect((await call(host, id, "net.fetch", [{ url: "http://lan.example:8080/text" }])).body).toBe("hi");
+		expect((await call(host, id, "net.fetch", [{ url: "https://a.test/bin", responseType: "base64" }])).body).toBe("AQID");
+		await call(host, id, "net.fetch", [{ url: "https://a.test/up", method: "PUT", body: "AQID", bodyEncoding: "base64" }]);
+		expect([...(seen.at(-1)!.init.body as Uint8Array)]).toEqual([1, 2, 3]);
+		for (const bad of [{ url: "file:///etc/passwd" }, { url: "https://u:p@a.test" }, { url: "https://a.test", method: "TRACE" }, { url: "https://a.test", body: "x" }, { url: "https://a.test", headers: { "x": "a\nb" } }, { url: "https://a.test", timeout: 120_000 }, { url: "https://a.test", extra: 1 }]) {
+			await expect(Promise.resolve().then(() => call(host, id, "net.fetch", [bad]))).rejects.toThrow();
+		}
+		host.stop();
+	});
+
+	test("disabling the extension cancels its requests", async () => {
+		const { host } = await reload();
+		let signal!: AbortSignal;
+		globalThis.fetch = ((_u: string, init: RequestInit) => { signal = init.signal as AbortSignal; return new Promise(() => {}); }) as typeof fetch;
+		const { id } = await activate(host, code("example.slow", MORE));
+		const pending = call(host, id, "net.fetch", [{ url: "https://a.test" }]);
+		host.disable(id);
+		expect(signal.aborted).toBe(true);
+		await expect(pending).rejects.toThrow();
+		host.stop();
+	});
+
+	test("serverApi.request calls the open server with the app's token, which the extension never sees", async () => {
+		const { host, adapter } = await reload();
+		adapter.connection = () => ({ baseUrl: "http://pipaya.test", token: "secret-token" });
+		const seen: { url: string; init: RequestInit }[] = [];
+		globalThis.fetch = (async (url: string, init: RequestInit) => { seen.push({ url: String(url), init }); return Response.json({ error: { code: "nope" } }, { status: 404 }); }) as typeof fetch;
+		const { id } = await activate(host, code("example.api", MORE));
+		const r = await call(host, id, "serverApi.request", ["PATCH", "/sessions/s1", { title: "x" }]);
+		expect(r).toEqual({ status: 404, body: { error: { code: "nope" } } });
+		expect(JSON.stringify(r)).not.toContain("secret-token");
+		expect(seen[0]!.url).toBe("http://pipaya.test/sessions/s1");
+		expect(new Headers(seen[0]!.init.headers).get("authorization")).toBe("Bearer secret-token");
+		for (const [m, p] of [["GET", "http://evil.test/"], ["GET", "//evil.test/x"], ["GET", "/a/../b"], ["TRACE", "/x"], ["GET", "x"]]) {
+			expect(() => call(host, id, "serverApi.request", [m, p, null])).toThrow();
+		}
+		expect(() => call(host, id, "serverApi.request", ["GET", "/x", { a: 1 }])).toThrow();
+		adapter.connection = () => null;
+		expect(() => call(host, id, "serverApi.request", ["GET", "/sessions", null])).toThrow();
+		host.stop();
+	});
+
+	test("links open through the adapter (http, https, mailto only) and the clipboard is written; both are rate limited", async () => {
+		const { host, adapter } = await reload();
+		const opened: string[] = [], copied: string[] = [];
+		adapter.openUrl = async url => { opened.push(url); };
+		adapter.copy = async text => { copied.push(text); return true; };
+		const { id } = await activate(host, code("example.sys", MORE));
+		await call(host, id, "system.openUrl", ["https://example.com/a"]);
+		await call(host, id, "system.openUrl", ["mailto:a@b.c"]);
+		await call(host, id, "system.copy", ["hello"]);
+		expect(opened).toEqual(["https://example.com/a", "mailto:a@b.c"]);
+		expect(copied).toEqual(["hello"]);
+		expect(() => call(host, id, "system.openUrl", ["javascript:alert(1)"])).toThrow();
+		expect(() => call(host, id, "system.openUrl", ["file:///etc/passwd"])).toThrow();
+		await call(host, id, "system.copy", ["2"]);
+		await call(host, id, "system.copy", ["3"]);
+		expect(() => call(host, id, "system.copy", ["6th"])).toThrow(/10초/);
+		host.stop();
+	});
+
+	test("bigger limits: 10 panels and 128 KB of storage per extension", async () => {
+		const { host } = await reload();
+		const { id } = await activate(host, code("example.big", ["ui", "storage"]));
+		const view = { type: "text", id: "t", text: "x" };
+		for (let i = 0; i < 10; i++) call(host, id, "ui.registerPanel", [{ id: `p${i}`, title: "P", view }, `t${i}`]);
+		expect(() => call(host, id, "ui.registerPanel", [{ id: "p10", title: "P", view }, "t10"])).toThrow(/10/);
+		call(host, id, "storage.set", ["k", "x".repeat(100_000)]);
+		expect(() => call(host, id, "storage.set", ["k", "x".repeat(130_000)])).toThrow();
+		host.stop();
 	});
 });

@@ -8,7 +8,7 @@ export const MAX_PACKAGE_BYTES = 1024 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
 	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions",
-	"ui-style", "ui-components", "workspace",
+	"ui-style", "ui-components", "workspace", "network", "server-api", "open-url", "clipboard",
 ] as const);
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -165,7 +165,7 @@ const FONT_LIST = /^[A-Za-z0-9 ,"'_-]{1,200}$/;
 const SETTING_KEY = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/;
 const MAX_SETTING_STRING = 2000;
 const DIMENSION = /^(?:0|[1-9][0-9]*)px$/;
-const MAX_CODE_BYTES = 128 * 1024;
+export const MAX_CODE_BYTES = 512 * 1024;
 const encoder = new TextEncoder();
 
 /**

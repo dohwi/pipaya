@@ -7,6 +7,7 @@ import {
 } from "./configuration";
 import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
 import { JsonTransport } from "./transport";
+import { NetClient } from "./net";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
 import { describeSettingErrors, fillSettingDefaults, OWNED_PAGE_NAMES, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
@@ -54,6 +55,10 @@ export interface HostAdapter {
   reservedCommands(): string[];
   /** Authenticated connection of the open server; settings sync is skipped (local only) without one. */
   connection?(): Connection | null;
+  /** Open a link outside the app (`open-url`). */
+  openUrl?(url: string): Promise<void>;
+  /** Write text to the clipboard (`clipboard`); false when the platform refused. */
+  copy?(text: string): Promise<boolean>;
   /** Id of the open server: the installed list is kept per server */
   serverId?(): string | null;
   /** This device's id, sent with a settings write so the event it causes can be recognised as its own */
@@ -170,6 +175,11 @@ function readShortcuts(): Record<string, string> {
   return out;
 }
 
+/** Per-extension caps (sdk.md and ui.md quote them). */
+export const MAX_PANELS = 10;
+export const MAX_STORAGE = 128_000;
+export const MAX_COMPONENT_DATA = 256_000;
+
 export class ExtensionHost {
   installed = $state<InstalledExtension[]>([]);
   commands = $state.raw<ExtensionCommand[]>([]);
@@ -197,6 +207,7 @@ export class ExtensionHost {
   private serverSubscribed = new Set<string>();
   private sessionCalls = new Map<string, number[]>();
   private paneCalls = new Map<string, number[]>();
+  private systemCalls = new Map<string, number[]>();
   private httpReader = new HttpReader();
   logs = $state<ExtensionLog[]>([]);
   panels = $state.raw<ExtensionPanel[]>([]);
@@ -234,6 +245,7 @@ export class ExtensionHost {
   private puts = new Map<string, Promise<void>>();
   private configurations = new Map<string, ConfigurationManager>();
   private transport = new JsonTransport();
+  private net = new NetClient();
   /** This extension's settings stay on this device: its manifest says so, or the user switched it here. */
   private keepsSettingsLocal(id: string, pkg?: ExtensionPackage): boolean {
     if (pkg?.manifest.settingsScope === "local") return true;
@@ -851,10 +863,11 @@ export class ExtensionHost {
     this.httpReader.cleanup(id);
     this.configurations.get(id)?.cleanup(); this.configurations.delete(id);
     this.transport.cleanup(id);
+    this.net.cleanup(id);
     this.navbar = this.navbar.filter(item => item.owner !== id);
     this.pendingPanelOpens.delete(id);
     this.subscribed.delete(id); this.notificationTimes.delete(id);
-    this.serverSubscribed.delete(id); this.sessionCalls.delete(id); this.paneCalls.delete(id);
+    this.serverSubscribed.delete(id); this.sessionCalls.delete(id); this.paneCalls.delete(id); this.systemCalls.delete(id);
     if (this.holding?.owner === id) {
       // A sandboxed extension is stopped above and cannot hear it; a component is still here and ends its hold.
       const held = this.holding; this.holding = null;
@@ -1160,7 +1173,7 @@ export class ExtensionHost {
       case "ui.registerPanel": {
         this.require(id, "ui"); const spec = parsePanelSpec(args[0]); const token = string(args[1], 40);
         if (this.panels.some(p => p.owner === id && p.id === spec.id)) throw new LocalizedError(t("중복 패널 ID"));
-        if (this.panels.filter(p => p.owner === id).length >= 5) throw new LocalizedError(t("확장당 패널은 최대 5개입니다"));
+        if (this.panels.filter(p => p.owner === id).length >= MAX_PANELS) throw new LocalizedError(t("확장당 패널은 최대 {n}개입니다", { n: MAX_PANELS }));
         const generation = this.generations.get(id);
         const placement = spec.placement ?? "panel";
         const panel: ExtensionPanel = { ...spec, owner: id, revision: 0, open: placement === "side" || placement === "floating", placed: 0, run: async event => {
@@ -1250,6 +1263,50 @@ export class ExtensionHost {
         if (args.length !== 1) throw new LocalizedError(t("navbar.remove는 ID 한 개가 필요합니다"));
         const itemId = navbarId(args[0]);
         this.navbar = this.navbar.filter(item => item.owner !== id || item.id !== itemId); return;
+      }
+      case "net.fetch": {
+        this.require(id, "network");
+        if (args.length !== 1) throw new LocalizedError(t("net.fetch는 요청 객체 하나가 필요합니다"));
+        const generation = this.generations.get(id);
+        return this.net.request(id, args[0], () => this.generations.get(id) === generation && this.find(id).enabled);
+      }
+      case "serverApi.request": {
+        this.require(id, "server-api");
+        const connection = this.adapter?.connection?.() ?? null;
+        if (!connection) throw new LocalizedError(t("서버에 연결해 주세요"));
+        const verb = args[0], path = args[1];
+        if (typeof verb !== "string" || !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(verb)) throw new LocalizedError(t("지원하지 않는 HTTP 메서드"));
+        // A path of this server only: no scheme, no host, no climbing out with `..`.
+        if (typeof path !== "string" || path.length > 2048 || !/^\/(?!\/)[\x21-\x7e]*$/.test(path) || path.includes("\\") || path.split("?")[0]!.split("/").some(s => s === ".." || /^%2e%2e$/i.test(s))) throw new LocalizedError(t("올바르지 않은 요청 경로입니다"));
+        const body = args[2] === null || args[2] === undefined ? undefined : args[2];
+        if ((verb === "GET" || verb === "DELETE") && body !== undefined) throw new LocalizedError(t("GET·DELETE 요청에는 본문을 보낼 수 없습니다"));
+        const generation = this.generations.get(id);
+        return within(30000, async signal => {
+          let result: { status: number; body: unknown };
+          try { result = await new Api(connection).extensionRequest(verb, path, body, signal); }
+          catch (e) { throw e instanceof LocalizedError ? e : new LocalizedError(t("서버에 연결할 수 없습니다")); }
+          if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다"));
+          return result;
+        });
+      }
+      case "system.openUrl": {
+        this.require(id, "open-url");
+        const url = string(args[0], 4096);
+        let parsed: URL;
+        try { parsed = new URL(url); } catch { throw new LocalizedError(t("올바르지 않은 URL입니다")); }
+        if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) throw new LocalizedError(t("http(s)·mailto 주소만 열 수 있습니다"));
+        const open = this.adapter?.openUrl;
+        if (!open) throw new LocalizedError(t("이 클라이언트는 링크 열기를 지원하지 않습니다"));
+        this.limitSystem(id);
+        return open(parsed.href);
+      }
+      case "system.copy": {
+        this.require(id, "clipboard");
+        if (typeof args[0] !== "string" || args[0].length > 100_000) throw new LocalizedError(t("복사할 텍스트는 최대 100,000자입니다"));
+        const copy = this.adapter?.copy;
+        if (!copy) throw new LocalizedError(t("이 클라이언트는 클립보드를 지원하지 않습니다"));
+        this.limitSystem(id);
+        return copy(args[0]).then(ok => { if (!ok) throw new LocalizedError(t("클립보드에 복사하지 못했습니다")); });
       }
       case "http.getJson": {
         this.require(id, "http");
@@ -1512,7 +1569,7 @@ export class ExtensionHost {
         this.require(id, "ui-components");
         if (args.length !== 1) throw new LocalizedError(t("components.setData는 값 하나가 필요합니다"));
         const json = JSON.stringify(args[0] ?? null);
-        if (json.length > 64000) throw new LocalizedError(t("컴포넌트 데이터는 최대 64KB입니다"));
+        if (json.length > MAX_COMPONENT_DATA) throw new LocalizedError(t("컴포넌트 데이터는 최대 256KB입니다"));
         this.componentData = { ...this.componentData, [id]: JSON.parse(json) }; return;
       }
       case "composerFilter.set": {
@@ -1598,11 +1655,19 @@ export class ExtensionHost {
         if (["__proto__", "constructor", "prototype"].includes(key)) throw new LocalizedError(t("사용할 수 없는 저장소 키"));
         const data = object(JSON.parse(localStorage.getItem(STORE + id) ?? "{}"));
         data[key] = args[1] ?? null; const json = JSON.stringify(data);
-        if (json.length > 32000) throw new LocalizedError(t("확장 저장소는 최대 32KB입니다")); localStorage.setItem(STORE + id, json); return;
+        if (json.length > MAX_STORAGE) throw new LocalizedError(t("확장 저장소는 최대 128KB입니다"));
+        try { localStorage.setItem(STORE + id, json); } catch { throw new LocalizedError(t("브라우저 저장 공간이 부족합니다")); }
+        return;
       }
       case "log": this.log(id, string(args[0], 1000)); return;
       default: throw new LocalizedError(t("지원하지 않는 SDK 메서드: {method}", { method }));
     }
+  }
+  /** Opening tabs and writing the clipboard reach outside the app: 5 per 10 seconds per extension, so one cannot flood them. */
+  private limitSystem(id: string) {
+    const recent = (this.systemCalls.get(id) ?? []).filter(at => Date.now() - at < 10000);
+    if (recent.length >= 5) throw new LocalizedError(t("링크 열기·복사는 10초에 최대 5번입니다"));
+    this.systemCalls.set(id, [...recent, Date.now()]);
   }
   private limitSession(id: string) {
     const recent = (this.sessionCalls.get(id) ?? []).filter(at => Date.now() - at < 10000);

@@ -207,7 +207,7 @@ export class Api {
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
 	serverExtensions = (signal?: AbortSignal) =>
-		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; panel?: unknown; ui?: { components: string[]; mounts: { slot: string; component: string; order?: number }[]; replaces: Record<string, string> }; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; routes?: { methods: string[]; path: string; public: boolean }[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; panel?: unknown; ui?: { components: string[]; mounts: { slot: string; component: string; order?: number }[]; replaces: Record<string, string> }; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	/** The Svelte sources a server extension carries for its own settings page (`pipaya.components`); unvalidated, run only after the user agreed. */
@@ -222,6 +222,26 @@ export class Api {
 		if (type) q.set("type", type);
 		return this.req<{ entries: { id: number; extension: string; type: string; data: unknown; createdAt: number }[] }>("GET", `/sessions/${encodeURIComponent(sessionId)}/extension-entries${q.size ? `?${q}` : ""}`, undefined, signal).then((r) => r.entries);
 	};
+	/**
+	 * Any request to this server's API on behalf of an extension (`server-api`): the token is added here and never handed
+	 * over. A non-2xx answer is returned, not thrown, so the extension can read the server's error.
+	 */
+	async extensionRequest(method: string, path: string, body: unknown, signal?: AbortSignal): Promise<{ status: number; body: unknown }> {
+		const res = await fetch(this.conn.baseUrl + path, {
+			method,
+			signal,
+			headers: {
+				Authorization: `Bearer ${this.conn.token}`,
+				[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+				...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+			},
+			body: body !== undefined ? JSON.stringify(body) : undefined,
+		});
+		const text = await res.text();
+		let json: unknown = null;
+		try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+		return { status: res.status, body: json };
+	}
 	installServerExtension = (src: { id: string; repo: string; dir?: string; ref: string; commit: string }, signal?: AbortSignal) =>
 		this.req<{ extensions: unknown[] }>("POST", "/server-extensions/install", src, signal);
 	/** The client half a server extension carries in its folder (`pipaya.client`); unvalidated JSON. */
