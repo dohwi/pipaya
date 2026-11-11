@@ -1530,6 +1530,8 @@ export const en: Record<string, string> = {
 	"서버를 업데이트하지 못했고 이전 버전도 완전히 복원하지 못했습니다. 서버의 체크아웃을 확인하세요": "The server couldn't be updated and the previous version couldn't be fully restored. Check the server's checkout",
 	"서버의 체크아웃에 로컬 변경이 있어 업데이트할 수 없습니다": "The server's checkout has local changes, so it can't be updated",
 	"이 서버는 스스로 업데이트할 수 없습니다": "This server can't update itself",
+	"릴리스가 가리키는 코드가 릴리스 브랜치에 없어 업데이트를 거부했습니다. 서버는 그대로입니다": "The release points at code that is not on the release branch, so the update was refused. The server is unchanged",
+	"릴리스의 출처를 확인하지 못해 업데이트하지 않았습니다. 잠시 뒤 다시 시도하세요": "Could not check where the release comes from, so nothing was updated. Try again in a moment",
 	"서버 관리자 토큰으로 연결해야 업데이트할 수 있습니다": "Connect with the server's admin token to update it",
 	"서버를 업데이트하지 못했습니다": "Couldn't update the server",
 	"이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요": "This server needs a newer app. Update the app",
