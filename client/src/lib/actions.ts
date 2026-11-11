@@ -5,8 +5,8 @@ import { isTauri } from "./tauri";
 import { resume, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
-import { stepSessionTarget } from "./step-session";
-import { firstUnseen, sessionOrder, stepDir, stepFrom, tabPanes } from "./nav";
+import { stepSessionTarget, stepWorkspaceTarget } from "./step-session";
+import { firstUnseen, sessionOrder, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -74,27 +74,33 @@ async function cycleThinking() {
   if (l) await app.configure({ thinkingLevel: l });
 }
 
-/**
- * Previous / next conversation in sidebar order (server bands → folders → tabs), skipping rows hidden by a folded server,
- * folder or split group. Crossing into another server's band switches to that server (see `stepSessionTarget`).
- */
-function stepSession(step: 1 | -1) {
-  const bands = orderServers(
+/** Every server as the sidebar lists it, for stepping across them. */
+function stepBands() {
+  return orderServers(
     app.servers.map((s) => {
       const link = app.links[s.id];
       return { id: s.id, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
     }),
   ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state) }));
-  const to = stepSessionTarget(bands, app.sidebar.folded, { server: app.serverId, id: app.activeId }, step);
-  if (!to) return;
-  if (to.server === app.serverId) void app.openSession(to.id);
-  else app.openIn(to.server, { session: to.id });
 }
 
-/** Previous / next workspace (folder block in the sidebar): opens its first tab. */
+function goTo(to: { server: string; id: string } | null) {
+  if (!to) return;
+  if (to.server !== app.serverId) app.openIn(to.server, { session: to.id });
+  else if (to.id !== app.activeId) void app.openSession(to.id);
+}
+
+/**
+ * Previous / next conversation in sidebar order (server bands → folders → tabs), skipping rows hidden by a folded server,
+ * folder or split group. Crossing into another server's band switches to that server (see `stepSessionTarget`).
+ */
+function stepSession(step: 1 | -1) {
+  goTo(stepSessionTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
+}
+
+/** Previous / next workspace (folder block in the sidebar), across servers like `stepSession`: opens its first tab. */
 function stepWorkspace(step: 1 | -1) {
-  const id = stepDir(app.dirs, app.activeId, step);
-  if (id && id !== app.activeId) void app.openSession(id);
+  goTo(stepWorkspaceTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
 }
 
 /** Previous / next tab of the tab bar (the active workspace's tabs), wrapping. A split group counts as one tab per pane. */
