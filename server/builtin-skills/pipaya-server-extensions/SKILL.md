@@ -56,6 +56,23 @@ The tree is the client's declarative UI (`pipaya-client-extensions`, `references
 
 Live: `GET /server-extensions` has `panel`; a change is the live-only event `extension_panel_updated` (`{extension, panel}`, `panel` null when removed); the client posts events to `POST /server-extensions/:extension/panel/event` `{event}`. A page that must draw more than the nodes can (a slider, an editor) uses the client half, below.
 
+### A richer page: Svelte without a client half (`pipaya.components`)
+
+A pure server extension can carry Svelte for its own settings page, no client companion needed. In `package.json`:
+
+```json
+"pipaya": {
+  "settings": [{ "key": "interval", "type": "number", "label": "Interval", "min": 1, "max": 60, "component": "Slider" }],
+  "components": { "Slider": "ui/Slider.svelte", "Banner": "ui/Banner.svelte" },
+  "mounts": [{ "slot": "extension.page.top", "component": "Banner" }],
+  "replaces": { "extension.settings": "Section" }
+}
+```
+
+`components` maps a PascalCase name to a `.svelte` file inside the folder (≤20, ≤64 KB each; a missing or oversized file is left out). The server lists the names and mounts as `ui` in `GET /server-extensions` and serves the sources at `GET /server-extensions/:extension/ui`. The reach is the extension's own page only: `mounts` accepts just the slot `extension.page.top`, `replaces` just the part `extension.settings`, and a settings field names a component with `"component"`; anything else is dropped by the server and refused by the client. Components are written like those of a client `ui-components` package (the `pipaya` kit, props `{ id, extension, serverId, settings, fields, panel, disabled, save(partial), call(method, params), fallback }`; a field component gets `{ field, value, onchange, disabled, settings, error, fallback }`; see `pipaya-client-extensions`, `references/trusted-ui.md`). `call` and `save` go to the server the page is shown for, also when it is not the open one. A runnable example is `examples/extensions/page-demo/`.
+
+It runs in the app itself with full access, so **nothing runs until the user allows it on that device**, for exactly this code (the agreement is the SHA-256 of the components, mounts and part; changed code asks again; one agreement per server and extension; "허용 취소" takes it back; safe mode runs none of it). Until then, and when a component throws, the declarative page and the generic form are shown, so keep the essentials there. An older app ignores `pipaya.components` (the keys are unknown to it): detect nothing, just keep the declarative fallback.
+
 ### A richer page: Svelte from the client half
 
 A server extension with `pipaya.companion` (and the client package, `pipaya.client`) can draw its own page with Svelte, using the client extension's `ui-components` (the user consents to that when installing it). Only the extension that owns the page can: the client extension named in `pipaya.companion`, never another one. The page then gets `extension.settings` (the whole settings section, with the generic form as `fallback`), `extension.page.top` (a block above the sections), and any settings field can name `"component": "Slider"` in `pipaya.settings` to draw just that one field. Props, `save(partial)` and `call(method, params)` are in `pipaya-client-extensions`, `references/trusted-ui.md`. It runs only when the client half is installed and on, and only on the server that is open in the app; elsewhere (and in safe mode, or on an older app, or if a component throws) the declarative page and the generic form are shown, so keep the essentials there.

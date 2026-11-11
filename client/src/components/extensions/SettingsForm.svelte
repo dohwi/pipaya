@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
 	import { t } from "../../lib/i18n";
-	import { untrack } from "svelte";
+	import { untrack, type Component } from "svelte";
 	import Accordion from "../ui/Accordion.svelte";
 	import Select from "../ui/Select.svelte";
 	import { describeSettingErrors, fillSettingDefaults, resolveSettings, settingShown, type SettingField } from "../../lib/extensions/schema";
@@ -23,8 +23,10 @@
 		onsave: (settings: Record<string, unknown>) => void;
 		/** Extensions whose `ui-components` may draw a field that names a `component`: the one whose page this is. */
 		componentOwners?: readonly string[];
+		/** Components the extension carries for its own page itself (a server extension's `pipaya.components`), by name; tried first */
+		ownComponents?: Record<string, Component<any>>;
 	}
-	let { id, fields, value, disabled = false, saveLabel, onsave, componentOwners = [] }: Props = $props();
+	let { id, fields, value, disabled = false, saveLabel, onsave, componentOwners = [], ownComponents }: Props = $props();
 
 	const clone = (input: Record<string, unknown>): Record<string, unknown> => JSON.parse(JSON.stringify(input));
 	/** What the extension holds now, with defaults: a `readonly` field shows this, so a value it just wrote appears at once. */
@@ -128,7 +130,8 @@
 <form class="settings" novalidate onsubmit={saveForm}>
 	{#each shown as field (field.key)}
 		{@const error = resolved.errors[field.key]}
-		{@const custom = field.component ? extensions.fieldComponent(componentOwners, field.component) : undefined}
+		{@const own = field.component && ownComponents && Object.hasOwn(ownComponents, field.component) ? ownComponents[field.component] : undefined}
+		{@const custom = own ? { owner: id, component: own } : field.component ? extensions.fieldComponent(componentOwners, field.component) : undefined}
 		{#snippet original()}{@render control(field, error)}{/snippet}
 		<div class="field-row" class:invalid={!!error} class:readonly-field={field.readonly} in:collapseIn out:collapseOut>
 			{#if custom}

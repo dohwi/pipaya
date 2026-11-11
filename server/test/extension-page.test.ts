@@ -269,3 +269,72 @@ describe("settings writes that keep the keys a form does not edit", () => {
 		expect(store.getStored("keep.old")?.updatedAt).toBe(1700000000001);
 	});
 });
+
+describe("components a server extension carries for its own page (pipaya.components)", () => {
+	let own: App;
+	let ownDir: string;
+	const get = async (url: string) => {
+		const r = await own.server.inject({ method: "GET", url, headers: { authorization: "Bearer test-token" } });
+		return { status: r.statusCode, json: r.body ? r.json() : undefined };
+	};
+	beforeAll(async () => {
+		ownDir = mkdtempSync(join(tmpdir(), "pipaya-ext-own-"));
+		const exts = join(ownDir, "exts");
+		const folder = join(exts, "ownui");
+		mkdirSync(join(folder, "ui"), { recursive: true });
+		writeFileSync(join(folder, "index.js"), "export default () => {};");
+		writeFileSync(join(folder, "ui", "Top.svelte"), "<p>top</p>");
+		writeFileSync(join(folder, "ui", "Section.svelte"), "<p>section</p>");
+		writeFileSync(join(folder, "ui", "Big.svelte"), `<p>${"x".repeat(70 * 1024)}</p>`);
+		writeFileSync(join(folder, "package.json"), JSON.stringify({ pipaya: {
+			settings: [{ key: "level", type: "number", label: "Level", component: "Top" }],
+			components: { Top: "ui/Top.svelte", Section: "ui/Section.svelte", Big: "ui/Big.svelte", Escape: "../../secret.svelte", "bad name": "ui/Top.svelte", Missing: "ui/Nope.svelte", NotSvelte: "ui/Top.js", Abs: "/etc/passwd.svelte" },
+			mounts: [{ slot: "extension.page.top", component: "Top", order: 2 }, { slot: "app.overlay", component: "Top" }, { slot: "extension.page.top", component: "Ghost" }, { slot: "extension.page.top", component: "Section", order: 99999 }],
+			replaces: { "extension.settings": "Section", "composer.send": "Top" },
+		} }));
+		const plain = join(exts, "plainui");
+		mkdirSync(plain, { recursive: true });
+		writeFileSync(join(plain, "index.js"), "export default () => {};");
+		writeFileSync(join(plain, "package.json"), JSON.stringify({ pipaya: { components: { Top: "ui/Top.svelte" } } })); // names a file that is not there
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: ownDir, dbPath: join(ownDir, "db.sqlite"), token: "test-token", workspaceRoot: join(ownDir, "ws"), logLevel: "silent" };
+		own = await buildApp(cfg, { strictResponses: true, extensionDirs: [exts], home: ownDir });
+	});
+	afterAll(async () => {
+		await own.close();
+		rmSync(ownDir, { recursive: true, force: true });
+	});
+
+	test("the list names the components and keeps only mounts and the part of the extension's own page", async () => {
+		const e = (await get("/server-extensions")).json.extensions.find((x: any) => x.name === "ownui");
+		expect([...e.ui.components].sort()).toEqual(["Section", "Top"]); // bad names, escapes, missing, oversized and non-.svelte files are dropped
+		expect(e.ui.mounts).toEqual([{ slot: "extension.page.top", component: "Top", order: 2 }, { slot: "extension.page.top", component: "Section" }]);
+		expect(e.ui.replaces).toEqual({ "extension.settings": "Section" });
+	});
+
+	test("an extension without pipaya.components is listed as before", async () => {
+		const list = (await get("/server-extensions")).json.extensions;
+		expect(list.find((x: any) => x.name === "plainui")).not.toHaveProperty("ui");
+	});
+
+	test("the sources are served by GET /server-extensions/:name/ui, only for what the extension declared", async () => {
+		const r = await get("/server-extensions/ownui/ui");
+		expect(r.status).toBe(200);
+		expect(r.json.components).toEqual({ Top: "<p>top</p>", Section: "<p>section</p>" });
+		expect(r.json.mounts).toEqual([{ slot: "extension.page.top", component: "Top", order: 2 }, { slot: "extension.page.top", component: "Section" }]);
+		expect(r.json.replaces).toEqual({ "extension.settings": "Section" });
+	});
+
+	test("a missing or oversized file is left out of the list; an unknown extension or one without components is 404", async () => {
+		expect((await get("/server-extensions/ownui")).status).toBe(404); // not a route
+		expect((await get("/server-extensions/nope/ui")).status).toBe(404);
+		expect((await get("/server-extensions/plainui/ui")).status).toBe(404);
+		expect((await get("/server-extensions/plain/ui")).status).toBe(404);
+	});
+
+	test("an edit of a component file is served on the next request", async () => {
+		writeFileSync(join(ownDir, "exts", "ownui", "ui", "Top.svelte"), "<p>changed</p>");
+		expect((await get("/server-extensions/ownui/ui")).json.components.Top).toBe("<p>changed</p>");
+		writeFileSync(join(ownDir, "exts", "ownui", "ui", "Top.svelte"), "x".repeat(70 * 1024));
+		expect((await get("/server-extensions/ownui/ui")).status).toBe(400); // grew past the limit after loading
+	});
+});

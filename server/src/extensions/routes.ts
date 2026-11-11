@@ -25,6 +25,11 @@ const Info = Type.Object({
 	settings: Type.Optional(Type.Array(Type.Unknown(), { description: "Fields of the settings form (`pipaya.settings` in package.json), same shape as a client manifest's `settings`" })),
 	settingsId: Type.String({ description: "Id of the shared settings object behind the form (`GET/PUT /extensions/:id/settings`)" }),
 	panel: Type.Optional(Type.Unknown({ description: "The declarative page the extension shows above its settings form (`pi.ui.setPanel`); live changes arrive as the `extension_panel_updated` event. Text fields may be a string or { ko, en }" })),
+	ui: Type.Optional(Type.Object({
+		components: Type.Array(Type.String()),
+		mounts: Type.Array(Type.Object({ slot: Type.String(), component: Type.String(), order: Type.Optional(Type.Integer()) })),
+		replaces: Type.Record(Type.String(), Type.String()),
+	}, { description: "Svelte components the extension carries for its own settings page (`pipaya.components`); sources: `GET /server-extensions/:extension/ui`. Run by the client only after the user agreed on that device" })),
 	clientPackage: Type.Optional(Type.Boolean({ description: "The folder carries its client half (`pipaya.client`); `GET /server-extensions/:extension/client` serves it" })),
 	error: Type.Optional(Type.String()),
 });
@@ -76,6 +81,22 @@ export function registerServerExtensionRoutes(server: FastifyInstance, host: Ext
 		handler: async (req) => {
 			const cwd = resolveCwd(req.query.cwd);
 			return { cwd, families: await host.commandEntries(cwd) };
+		},
+	});
+	app.get("/server-extensions/:extension/ui", {
+		schema: {
+			params: Type.Object({ extension: Type.String() }),
+			response: { 200: Type.Object({
+				components: Type.Record(Type.String(), Type.String(), { description: "name -> Svelte source" }),
+				mounts: Type.Array(Type.Object({ slot: Type.String(), component: Type.String(), order: Type.Optional(Type.Integer()) })),
+				replaces: Type.Record(Type.String(), Type.String()),
+			}), ...errors(400, 401, 404) },
+		},
+		handler: async (req) => {
+			let ui: ReturnType<ExtensionHost["ownUi"]>;
+			try { ui = host.ownUi(req.params.extension); } catch (e) { throw badRequest(e instanceof Error ? e.message : String(e)); }
+			if (!ui) throw notFound("extension ui");
+			return ui;
 		},
 	});
 	app.get("/server-extensions/:extension/client", {

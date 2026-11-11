@@ -499,6 +499,7 @@
 			{serverId}
 			settings={serverSettings[openServer.settingsId]?.value}
 			page={pageOf(openServer)}
+			api={srvApi}
 			onsavepartial={(partial) => saveServerPartial(openServer, partial)}
 			oncall={(method, params) => callServerMethod(openServer, method, params)}
 			onpageevent={(event) => sendPageEvent(openServer, event)}
