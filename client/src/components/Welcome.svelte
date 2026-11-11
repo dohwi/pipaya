@@ -1,9 +1,8 @@
 <script lang="ts">
-	import Notice from "./Notice.svelte";
+	import StartActions from "./StartActions.svelte";
 	import { t } from "../lib/i18n";
 	import PipayaMark from "./PipayaMark.svelte";
 	import Backdrop, { arrival, type Burst } from "./Backdrop.svelte";
-	import { app } from "../lib/store.svelte";
 
 	const GLOW = 1500; // ms, matches @keyframes glow
 	let bursts: Burst[] = $state([]);
@@ -30,7 +29,6 @@
 		}
 	});
 
-	const noModel = $derived(!app.models.some((m) => m.configured));
 </script>
 
 <Backdrop bind:bursts />
@@ -46,14 +44,7 @@
 		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
 	</div>
 
-	{#if noModel && app.sessionsLoaded}
-		<div class="warn">
-			<Notice tone="warn" icon="key">
-				{t("사용할 수 있는 모델이 아직 없습니다.")}
-				{#snippet action()}<button type="button" class="tap" onclick={() => app.openSettings("agent")}>{t("모델 연결")}</button>{/snippet}
-			</Notice>
-		</div>
-	{/if}
+	<StartActions />
 </div>
 
 <style>
@@ -130,12 +121,5 @@
 		font-size: var(--fs-sm);
 		color: var(--text-dim);
 		text-wrap: balance;
-	}
-	/* the notice keeps its own left-aligned layout inside the centred hero */
-	.warn {
-		position: relative;
-		margin-top: 16px;
-		max-width: 100%;
-		text-align: left;
 	}
 </style>
