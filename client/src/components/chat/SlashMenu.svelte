@@ -9,6 +9,8 @@
 		empty = msg("일치하는 명령이 없습니다"),
 		onpick,
 		onhover,
+		listId,
+		optionId,
 	}: {
 		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; accent?: boolean; group?: string; state?: Activity }[];
 		index: number;
@@ -16,6 +18,9 @@
 		empty?: string;
 		onpick: (i: number) => void;
 		onhover: (i: number) => void;
+		/** ids the composer's textarea points at (aria-controls / aria-activedescendant) */
+		listId: string;
+		optionId: (i: number) => string;
 	} = $props();
 
 	let listEl: HTMLDivElement | undefined = $state();
@@ -25,7 +30,7 @@
 	});
 </script>
 
-<div class="menu" in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }} role="listbox" aria-label={t(label)} bind:this={listEl}>
+<div class="menu" id={listId} in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }} role="listbox" aria-label={t(label)} bind:this={listEl}>
 	{#each items as item, i (item.id)}
 		{#if item.group && item.group !== items[i - 1]?.group}
 			<div class="head" class:first={i === 0} role="presentation">{t(item.group)}</div>
@@ -34,6 +39,7 @@
 		<button
 			class="cmd"
 			class:on={i === index}
+			id={optionId(i)}
 			role="option"
 			aria-selected={i === index}
 			data-i={i}
