@@ -663,6 +663,15 @@ export function isBareCombo(combo: string): boolean {
   return !mods.includes("Mod") && !mods.includes("Alt");
 }
 
+/**
+ * True when the shortcut must stay quiet while a text field has focus. Voice input fires from a field anyway: a
+ * transcription lands in the composer and leaves the caret there, and the same key must stop or start the next one.
+ */
+export function yieldsToTyping(id: ActionId | null | undefined, combo: string): boolean {
+  if (id === "voiceInput") return false;
+  return isBareCombo(combo);
+}
+
 export const isMac =
   typeof navigator !== "undefined" &&
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);

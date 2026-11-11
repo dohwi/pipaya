@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { firstUnseen, sessionOrder, sidebarDirs, stepDir, stepFrom, tabOf } from "../src/lib/nav";
 import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, yieldsToTyping, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -472,5 +472,19 @@ describe("F2 renames the open thing", () => {
 		offStrip();
 		offRow();
 		expect(renameNow()).toBeUndefined();
+	});
+});
+
+describe("shortcuts in a text field", () => {
+	test("a bare key stays typing, a modified one fires", () => {
+		expect(yieldsToTyping("newChat", "J")).toBe(true);
+		expect(yieldsToTyping("newChat", "Mod+J")).toBe(false);
+		expect(yieldsToTyping(null, "J")).toBe(true);
+	});
+
+	test("voice input fires from a field: a transcription leaves the caret in the composer", () => {
+		expect(yieldsToTyping("voiceInput", "J")).toBe(false);
+		expect(yieldsToTyping("voiceInput", "Shift+Space")).toBe(false);
+		expect(yieldsToTyping("voiceInput", "Mod+Shift+V")).toBe(false);
 	});
 });
