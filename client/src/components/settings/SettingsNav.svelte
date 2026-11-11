@@ -2,6 +2,7 @@
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { treePath } from "../../lib/tree-path";
 	import { rovingKeys } from "../../lib/roving";
+	import { easeEnter, easeExit, ms } from "../../lib/motion";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
@@ -101,6 +102,21 @@
 		dir = order(next) > order(tab) ? 1 : -1;
 		tab = next;
 	}
+
+	/**
+	 * Opens or closes a section's tree by its height. Not `slide`: that sets overflow:hidden, which would cut the first row's trunk where it
+	 * reaches 10px up into the section row. The clip-path clips only the bottom (and nothing above), so the rows below never show through.
+	 */
+	function fold(node: HTMLElement, dir: "in" | "out") {
+		const h = node.offsetHeight;
+		const mb = parseFloat(getComputedStyle(node).marginBottom) || 0;
+		return {
+			duration: ms(dir === "in" ? "normal" : "fast"),
+			easing: dir === "in" ? easeEnter : easeExit,
+			css: (t: number) =>
+				`height:${(t * h).toFixed(2)}px;margin-bottom:${(t * mb).toFixed(2)}px;opacity:${Math.min(1, t * 1.5).toFixed(3)};clip-path:inset(-16px -16px 0 -16px)`,
+		};
+	}
 </script>
 
 <!-- desktop: a column on the left; phone: a row of tabs above the content -->
@@ -141,7 +157,7 @@
 				{/if}
 			</div>
 			{#if open}
-				<div class="tree" role="group" aria-label={t(x.label)} use:treePath={{ row: ".item:has(button.sub.on)", lead: 10 }}>
+				<div class="tree" role="group" aria-label={t(x.label)} in:fold={"in"} out:fold={"out"} use:treePath={{ row: ".item:has(button.sub.on)", lead: 10 }}>
 					{#each kids as e (e.id)}
 						{@const link = e.link}
 						<div class="item" class:end={e.end}>
