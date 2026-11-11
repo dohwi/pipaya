@@ -74,7 +74,6 @@ jobs:
     timeout-minutes: 15
     env:
       PLAYWRIGHT_VERSION: "1.63.0"
-      E2E_OUT: ${{ runner.temp }}/e2e-out
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -92,6 +91,8 @@ jobs:
           "$RUNNER_TEMP/venv/bin/pip" install "playwright==$PLAYWRIGHT_VERSION"
           "$RUNNER_TEMP/venv/bin/playwright" install --with-deps chromium
       - name: Screen smoke test
+        env:
+          E2E_OUT: ${{ runner.temp }}/e2e-out
         run: '"$RUNNER_TEMP/venv/bin/python" scripts/e2e-smoke.py'
       - name: Screenshots and logs of the failed step
         if: failure()
