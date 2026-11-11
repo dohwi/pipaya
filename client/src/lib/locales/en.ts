@@ -5,6 +5,20 @@
  * `node scripts/extract-i18n.cjs` lists keys that are used but missing here, and keys that are here but unused.
  */
 export const en: Record<string, string> = {
+	/* ---- first run and empty conversation ---- */
+	"pipaya 서버에 연결해 대화를 시작합니다. 서버는 에이전트가 실제로 일하는 컴퓨터에서 돌아갑니다.": "Connect to a pipaya server to start. The server runs on the computer where the agent does its work.",
+	"이 컴퓨터에서 시작": "Start on this computer",
+	"이 컴퓨터에서 서버를 시작하지 못했습니다. 주소와 토큰으로 연결해 주세요.": "Could not start a server on this computer. Connect with an address and token instead.",
+	"주소와 토큰으로 연결": "Connect with address and token",
+	"서버가 아직 없나요?": "No server yet?",
+	"서버는 한 번 설치해 두면 PC·폰·웹 어느 기기에서든 같은 대화를 이어 가게 해 줍니다.": "Install a server once and continue the same conversations from any PC, phone or browser.",
+	"서버 설치 (Linux·macOS)": "Install a server (Linux, macOS)",
+	"Windows 앱 + 서버": "Windows app + server",
+	"접근 토큰은 서버를 설치한 컴퓨터에서 확인합니다.": "Find the access token on the computer where the server is installed.",
+	"토큰 확인": "Show the token",
+	"최근 작업 폴더": "Recent folders",
+	"폴더 바꾸기": "Change folder",
+	"/ 로 명령, @ 로 파일을 불러옵니다": "Type / for commands, @ to mention a file",
 	/* ---- MCP ---- */
 	"MCP 서버": "MCP servers",
 	"MCP 서버 {n}개": "{n} MCP {n#server|servers}",
@@ -1393,8 +1407,6 @@ export const en: Record<string, string> = {
 	"링크를 보낸 사람이 믿을 수 있는지, 위 주소가 내 서버가 맞는지 확인하세요. 연결하면 이 서버가 목록에 추가됩니다.": "Check that you trust whoever sent the link and that the address above is your own server. Connecting adds it to your server list.",
 	"연결됐습니다": "Connected",
 	"연결하지 못했습니다": "Couldn't connect",
-	"서버 주소로 연결": "Connect with an address",
-	"QR로 서버에 연결합니다.": "Connect to your server with a QR code.",
 	"PC에서 pipaya를 엽니다": "Open pipaya on your PC",
 	"설정 → 폰으로 연결할 서버 이름 아래 ‘기기’ → ‘폰 추가’": "Settings → under the name of the server to connect → Devices → Add phone",
 	"화면에 QR이 나타납니다.": "A QR code appears on screen.",
@@ -1403,7 +1415,6 @@ export const en: Record<string, string> = {
 	"카메라 권한이 필요합니다. 설정에서 카메라를 허용해 주세요.": "Camera permission is needed. Allow the camera in Settings.",
 	"pipaya 연결 QR이 아닙니다. PC 앱에 표시된 QR을 스캔해 주세요.": "That isn't a pipaya connection QR. Scan the one shown in the PC app.",
 	"카메라를 열지 못했습니다.": "Couldn't open the camera.",
-	"서버에 연결하려면 주소와 접근 토큰이 필요합니다. 토큰은 서버의 data/token 파일에 있습니다.": "You need the server address and access token. The token is in the server's data/token file.",
 	"로컬": "Local",
 	"폰에서 앱을 열고 이 QR을 카메라로 스캔하면 서버가 바로 등록됩니다.": "Scan this QR with your phone's camera and the server is added right away.",
 	"폰이 접속할 주소": "Address the phone will use",

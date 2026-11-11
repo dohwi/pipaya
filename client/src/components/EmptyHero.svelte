@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Backdrop, { arrival, type Burst } from "./Backdrop.svelte";
 	import PipayaMark from "./PipayaMark.svelte";
+	import StartActions from "./StartActions.svelte";
 
 	const GLOW = 1500; // ms: from the wave reaching the mark until it has fully faded again (see @keyframes glow)
 	let bursts: Burst[] = $state([]);
@@ -25,25 +26,34 @@
 </script>
 
 <Backdrop bind:bursts />
-<div class="hello" aria-hidden="true" bind:clientWidth={w} bind:clientHeight={h}>
+<div class="hello" bind:clientWidth={w} bind:clientHeight={h}>
+	<div class="face" aria-hidden="true">
 	<div class="base"><PipayaMark size={72} /></div>
 	<!-- the colour mark: rises softly as the wave reaches it, stays a while, then fades out -->
 	{#each glows as g (g.id)}
 		<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark color size={72} /></div>
 	{/each}
+	</div>
+	<StartActions />
 </div>
 
 <style>
 	.hello {
 		position: absolute;
 		inset: 0;
-		display: grid;
-		place-items: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 16px;
 		pointer-events: none;
 		user-select: none;
 		color: var(--text-faint);
 	}
-	.hello > * {
+	.face {
+		display: grid;
+	}
+	.face > * {
 		grid-area: 1 / 1;
 	}
 	.base {
