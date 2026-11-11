@@ -32,6 +32,7 @@ import { ServerSettingsSync } from "./server-settings";
 import { ServerExtensionStore } from "./extensions/server-store";
 import { IdleExtensionStores } from "./idle-extension-stores.svelte";
 import type { PairingLink } from "./pairing";
+import { CloseGuard } from "./close-guard.svelte";
 import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { fetchLocalePacks } from "./locale-sync";
@@ -469,42 +470,16 @@ class AppStore {
     return [...ids];
   }
 
-  /** Window close asked while work is running: shows the confirmation. `confirm` stops the work, then closes. */
-  closeConfirm = $state<{ count: number; confirm(): void; cancel(): void } | null>(null);
+  /** Window close asked while work is running: the confirmation. */
+  private readonly closing = new CloseGuard({
+    local: () => this.servers.find((s) => s.local),
+    openId: () => this.serverId,
+    openApi: () => this.api,
+    busyIds: () => this.busyIds(),
+  });
+  get closeConfirm() { return this.closing.confirm; }
   /** Resolves true when the window may close now (nothing running, or the user confirmed and the work was stopped). */
-  async requestClose(): Promise<boolean> {
-    if (this.closeConfirm) return false;
-    // Only the "This PC" server dies with the window. Other servers keep running in the background, so their work is left alone.
-    const local = this.servers.find((s) => s.local);
-    if (!local) return true;
-    let api: Api;
-    let ids: string[];
-    if (local.id === this.serverId) {
-      if (!this.api) return true;
-      api = this.api;
-      ids = this.busyIds();
-    } else {
-      // Another server is open: ask the local one directly what it is running.
-      api = new Api({ baseUrl: local.baseUrl, token: local.token });
-      try {
-        ids = (await api.activity()).sessions.filter((a) => a.running).map((a) => a.sessionId);
-      } catch {
-        return true; // local server not reachable: nothing to cut off
-      }
-    }
-    if (!ids.length) return true;
-    return new Promise((resolve) => {
-      const done = (ok: boolean) => { this.closeConfirm = null; resolve(ok); };
-      this.closeConfirm = {
-        count: ids.length,
-        cancel: () => done(false),
-        confirm: () => {
-          const targets = local.id === this.serverId ? this.busyIds() : ids;
-          void Promise.allSettled(targets.map((id) => api.abort(id))).then(() => done(true));
-        },
-      };
-    });
-  }
+  requestClose(): Promise<boolean> { return this.closing.request(); }
 
   get runningHere(): boolean {
     return !!this.chat?.running;

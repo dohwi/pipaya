@@ -9,6 +9,7 @@ import type * as SidebarModule from "../src/lib/sidebar.svelte";
 import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
 import type * as PairingFlowModule from "../src/lib/pairing-flow.svelte";
+import type * as CloseGuardModule from "../src/lib/close-guard.svelte";
 import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 
@@ -21,6 +22,7 @@ let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
 let IdleExtensionStores: typeof IdleModule.IdleExtensionStores;
 let PairingFlow: typeof PairingFlowModule.PairingFlow;
+let CloseGuard: typeof CloseGuardModule.CloseGuard;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -51,6 +53,7 @@ beforeAll(async () => {
 	(globalThis as any).sessionStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 	({ IdleExtensionStores } = await loadRunes("idle-extension-stores"));
 	({ PairingFlow } = await loadRunes("pairing-flow"));
+	({ CloseGuard } = await loadRunes("close-guard"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -356,5 +359,39 @@ describe("pairing flow", () => {
 		await first;
 		expect(added).toEqual([]); // no server answered, so nothing was added
 		expect(flow.linking?.state).toBe("failed");
+	});
+});
+
+describe("close guard", () => {
+	const local = { id: "pc", name: "", baseUrl: "http://127.0.0.1:1", token: "t", local: true };
+	const make = (o: { local?: typeof local; busy?: string[]; api?: unknown } = {}) => {
+		const aborted: string[] = [];
+		const api = "api" in o ? o.api : { abort: async (id: string) => void aborted.push(id) };
+		const guard = new CloseGuard({ local: () => ("local" in o ? o.local : local), openId: () => "pc", openApi: () => api as never, busyIds: () => o.busy ?? [] });
+		return { guard, aborted };
+	};
+
+	test("closes at once without a local server, without a connection, or with nothing running", async () => {
+		expect(await make({ local: undefined }).guard.request()).toBe(true);
+		expect(await make({ api: null, busy: ["a"] }).guard.request()).toBe(true);
+		expect(await make({ busy: [] }).guard.request()).toBe(true);
+	});
+	test("running work asks; a second ask while it is open is refused; cancel keeps the window", async () => {
+		const { guard, aborted } = make({ busy: ["a", "b"] });
+		const first = guard.request();
+		expect(guard.confirm?.count).toBe(2);
+		expect(await guard.request()).toBe(false);
+		guard.confirm!.cancel();
+		expect(await first).toBe(false);
+		expect(guard.confirm).toBeNull();
+		expect(aborted).toEqual([]);
+	});
+	test("confirming stops every busy session, then lets the window close", async () => {
+		const { guard, aborted } = make({ busy: ["a", "b"] });
+		const asked = guard.request();
+		guard.confirm!.confirm();
+		expect(await asked).toBe(true);
+		expect(aborted).toEqual(["a", "b"]);
+		expect(guard.confirm).toBeNull();
 	});
 });
