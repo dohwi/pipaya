@@ -49,10 +49,13 @@ export function platformName(platform: string | undefined): string {
 	}
 }
 
-/** URL of a terminal's I/O socket. Browsers cannot set headers on a WebSocket, so the token rides in the query. */
-export function terminalSocketUrl(baseUrl: string, token: string, id: string): string {
+/**
+ * URL of a terminal's I/O socket. Browsers cannot set headers on a WebSocket, so the credential rides in the query:
+ * `credential` is the fragment `Api.streamCredential()` returns (a one-time ticket, or the token for an older server).
+ */
+export function terminalSocketUrl(baseUrl: string, credential: string, id: string): string {
 	const base = baseUrl.replace(/^http/i, "ws");
-	return `${base}/terminals/${encodeURIComponent(id)}/ws?${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&token=${encodeURIComponent(token)}`;
+	return `${base}/terminals/${encodeURIComponent(id)}/ws?${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&${credential}`;
 }
 
 /**

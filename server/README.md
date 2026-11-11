@@ -18,7 +18,7 @@ For a one-command install with a service, see the [project README](../README.md#
 
 Token: `$PIPAYA_TOKEN`, or generated at `~/.pipaya/token`.
 Send `Authorization: Bearer <token>` on all API calls except `GET /health`.
-Browser EventSource/WebSocket may use `?token=` **only** on `/events`, `/sessions/:id/events`, and `/ws`.
+Browser EventSource/WebSocket cannot send headers. On `/events`, `/sessions/:id/events`, `/ws` and `/terminals/:id/ws` **only**, they pass `?ticket=`: a one-time ticket from `POST /stream-tickets` (Bearer token in the header) that opens one connection within 30 seconds, so the token itself never appears in a URL. `?token=` still works there for older clients.
 CORS preflight is public to allow clients on a separate origin.
 The token grants administrator access; use Tailscale or HTTPS and do not share it with untrusted clients.
 
@@ -43,7 +43,7 @@ Bun loads `.env` in the server working directory. See `.env.example`.
 | `PIPAYA_WORKSPACE` | `<data>/workspace` | Startup default working directory. Change it at runtime with `PUT /configuration/workdir` (saved in SQLite, overrides this) |
 | `PIPAYA_PROVIDER` / `PIPAYA_MODEL` | First configured model | Startup default; must name a registered custom provider/model; saved default takes priority |
 | `PIPAYA_MAX_SESSIONS` | `200` | Most active (not closed) sessions at once; creating or reopening past it returns 409. `0` = no limit |
-| `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Tokens passed as `?token=` are redacted from request logs |
+| `PIPAYA_LOG_LEVEL` | `info` | Fastify log level (`silent` disables logging). Credentials passed as `?ticket=` or `?token=` are redacted from request logs |
 | `PIPAYA_PUSH_FCM` | _(on when credentials exist)_ | `0` disables. Otherwise sends Android push through Firebase Cloud Messaging with Google Application Default Credentials; see `server/builtin-skills/pipaya-client-extensions/references/notifications.md` |
 | `PIPAYA_CORS_ORIGINS` | _(empty)_ | Extra allowed browser origins, comma separated (exact match; `*` = any). Loopback, Tailscale `100.64.0.0/10`, RFC1918 LAN, `*.ts.net` and Tauri origins are always allowed |
 | `PIPAYA_TERMINAL` | `1` | `0` turns off terminals: interactive shells clients open on this server (the user's shell on Linux/macOS, PowerShell on Windows) |
@@ -94,7 +94,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET | `/terminals/info` | What the server offers for terminals: `{enabled, platform, pty, shell, shells[], max}`. Linux/macOS run the user's shell in a PTY; Windows runs PowerShell (`pwsh`, else `powershell`, else `cmd`) over pipes (`pty: false`) |
 | GET/POST | `/terminals` | Open shells (in memory only: a restart ends them). `POST {cwd?, shell?, title?, cols?, rows?}`; ids start with `term_` and may stand in a group layout beside sessions |
 | PATCH/DELETE | `/terminals/:id` | Rename; end the shell (`terminal_closed`, and it leaves its group) |
-| WS | `/terminals/:id/ws` | Attach (token as `?token=`): `hello`, then the kept output (binary), then live output. Send `{type:"input",data}` / `{type:"resize",cols,rows}`; `{type:"exit",code}` when the shell ends |
+| WS | `/terminals/:id/ws` | Attach (`?ticket=`, see above): `hello`, then the kept output (binary), then live output. Send `{type:"input",data}` / `{type:"resize",cols,rows}`; `{type:"exit",code}` when the shell ends |
 | GET | `/extensions/settings` | All client-extension settings, keyed by extension id |
 | PUT | `/extensions/:id/settings` | `{settings}`: a JSON object owned by the extension (max 16,000 chars) |
 | DELETE | `/extensions/:id` | Remove an extension's stored settings |
@@ -226,7 +226,7 @@ the default directory is created with `0700`, and new databases with `0600`.
 Use a SQLite-aware backup or stop/checkpoint before copying; do not copy only the database while it is running.
 Existing `server/data` is not auto-imported; set `PIPAYA_DATA_DIR=./data` to keep using it.
 
-The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?token=` is redacted. `bash` child processes and terminals do not inherit any `PIPAYA_*` variable.
+The auth token and the data directory (`0600` / `0700`) are never printed to logs; `?ticket=` and `?token=` are redacted. `bash` child processes and terminals do not inherit any `PIPAYA_*` variable.
 
 Custom URLs intentionally allow LAN/Tailscale server-side requests; configure only trusted endpoints.
 `bash` is **not sandboxed** and runs as the server user. Tools run without asking, so isolate the server in a container/VM.

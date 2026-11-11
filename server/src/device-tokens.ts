@@ -57,6 +57,11 @@ export class DeviceTokens {
 		return row.id;
 	}
 
+	/** Whether this device id still has a token (it was not revoked). */
+	has(id: string): boolean {
+		return this.db.query("SELECT 1 FROM device_tokens WHERE id = ?").get(id) !== null;
+	}
+
 	list(): DeviceTokenInfo[] {
 		return (
 			this.db.query("SELECT id, name, created_at, last_used_at FROM device_tokens ORDER BY created_at DESC").all() as {
