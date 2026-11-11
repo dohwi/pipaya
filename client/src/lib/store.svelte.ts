@@ -1,13 +1,11 @@
 import {
   Api,
   ApiError,
-  describeConnectError,
   errorText,
   isUnsupportedRoute,
   normalizeUrl,
-  verifyServer,
 } from "./api";
-import { expandHome, isAbs, isWinAbs, relativeToRoot, sepOf, trimSep } from "./workdir-path";
+import { normalizeWorkdir, relPath, workdirAbs, workdirText } from "./workdir-model";
 import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -29,10 +27,13 @@ import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as la
 import { extensions } from "./extensions/host.svelte";
 import { appEventsOf, serverEventOf } from "./extensions/event-forward";
 import { extensionUpdates } from "./extension-updates.svelte";
-import { deviceIdentity, notifications } from "./notifications";
+import { notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
 import { ServerExtensionStore } from "./extensions/server-store";
-import { PairingError, redeemPairing, type PairingLink } from "./pairing";
+import { IdleExtensionStores } from "./idle-extension-stores.svelte";
+import type { PairingLink } from "./pairing";
+import { CloseGuard } from "./close-guard.svelte";
+import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { fetchLocalePacks } from "./locale-sync";
 import { groupNameFor } from "./group-name";
@@ -469,42 +470,16 @@ class AppStore {
     return [...ids];
   }
 
-  /** Window close asked while work is running: shows the confirmation. `confirm` stops the work, then closes. */
-  closeConfirm = $state<{ count: number; confirm(): void; cancel(): void } | null>(null);
+  /** Window close asked while work is running: the confirmation. */
+  private readonly closing = new CloseGuard({
+    local: () => this.servers.find((s) => s.local),
+    openId: () => this.serverId,
+    openApi: () => this.api,
+    busyIds: () => this.busyIds(),
+  });
+  get closeConfirm() { return this.closing.confirm; }
   /** Resolves true when the window may close now (nothing running, or the user confirmed and the work was stopped). */
-  async requestClose(): Promise<boolean> {
-    if (this.closeConfirm) return false;
-    // Only the "This PC" server dies with the window. Other servers keep running in the background, so their work is left alone.
-    const local = this.servers.find((s) => s.local);
-    if (!local) return true;
-    let api: Api;
-    let ids: string[];
-    if (local.id === this.serverId) {
-      if (!this.api) return true;
-      api = this.api;
-      ids = this.busyIds();
-    } else {
-      // Another server is open: ask the local one directly what it is running.
-      api = new Api({ baseUrl: local.baseUrl, token: local.token });
-      try {
-        ids = (await api.activity()).sessions.filter((a) => a.running).map((a) => a.sessionId);
-      } catch {
-        return true; // local server not reachable: nothing to cut off
-      }
-    }
-    if (!ids.length) return true;
-    return new Promise((resolve) => {
-      const done = (ok: boolean) => { this.closeConfirm = null; resolve(ok); };
-      this.closeConfirm = {
-        count: ids.length,
-        cancel: () => done(false),
-        confirm: () => {
-          const targets = local.id === this.serverId ? this.busyIds() : ids;
-          void Promise.allSettled(targets.map((id) => api.abort(id))).then(() => done(true));
-        },
-      };
-    });
-  }
+  requestClose(): Promise<boolean> { return this.closing.request(); }
 
   get runningHere(): boolean {
     return !!this.chat?.running;
@@ -657,55 +632,19 @@ class AppStore {
     return server;
   }
 
-  /** Progress of a connection made from a link or QR; drives the card shown over the whole app */
-  linking = $state<{ name: string; baseUrl: string; state: "confirm" | "working" | "done" | "failed"; error?: string } | null>(null);
-  private linkSeen = new Set<string>();
-  private pendingLink: PairingLink | null = null;
-
-  /**
-   * A link that reaches the app (camera, message, command line) only asks first: anyone can craft one that points at
-   * their own server, so nothing is redeemed or added until the user confirms the address shown on the card.
-   */
-  connectByLink(link: PairingLink) {
-    if (this.linkSeen.has(link.code)) return;
-    this.linkSeen.add(link.code);
-    this.pendingLink = link;
-    this.linking = { name: link.name || hostOf(link.baseUrl), baseUrl: link.baseUrl, state: "confirm" };
-  }
-
-  /** The user approved the address on the confirmation card: trade the one-time code for the token and add the server. */
-  async confirmLinking() {
-    const link = this.pendingLink;
-    if (!link || this.linking?.state !== "confirm") return;
-    this.pendingLink = null;
-    const name = link.name || hostOf(link.baseUrl);
-    this.linking = { name, baseUrl: link.baseUrl, state: "working" };
-    try {
-      const token = await redeemPairing(link, (await deviceIdentity().catch(() => null))?.name);
-      await verifyServer(link.baseUrl, token);
+  /** Connecting from a link or QR (the card shown over the whole app). */
+  private readonly pairing = new PairingFlow({
+    add: (input) => {
       const before = this.servers.length;
-      this.addServer({ name: link.name, baseUrl: link.baseUrl, token });
-      this.linking = { name, baseUrl: link.baseUrl, state: "done" };
-      this.toast(this.servers.length > before ? t("서버를 추가했습니다") : t("이미 등록된 주소라 정보를 갱신했습니다"), "ok");
-    } catch (e) {
-      const why: Record<string, string> = {
-        expired: t("연결 코드가 만료됐거나 이미 사용됐습니다. PC에서 새 QR을 만들어 주세요."),
-        throttled: t("잘못된 코드가 너무 많이 시도됐습니다. 잠시 뒤 다시 시도해 주세요."),
-        unsupported: t("이 서버는 QR 연결을 지원하지 않습니다. 서버를 최신 버전으로 업데이트해 주세요."),
-        timeout: t("서버 응답 시간이 초과되었습니다."),
-        unreachable: t("{url}에 연결할 수 없습니다. 주소와 서버 실행 여부를 확인하세요.", { url: link.baseUrl }),
-        failed: t("연결하지 못했습니다."),
-      };
-      const error = e instanceof PairingError ? (why[e.reason] ?? why.failed!) : describeConnectError(e, link.baseUrl);
-      this.linking = { name, baseUrl: link.baseUrl, state: "failed", error };
-    }
-  }
-  closeLinking() {
-    // declining a link frees its code, so scanning the same QR again still works
-    if (this.pendingLink) this.linkSeen.delete(this.pendingLink.code);
-    this.pendingLink = null;
-    this.linking = null;
-  }
+      this.addServer(input);
+      return this.servers.length > before;
+    },
+    toast: (text, kind) => this.toast(text, kind),
+  });
+  get linking() { return this.pairing.linking; }
+  connectByLink(link: PairingLink) { this.pairing.connect(link); }
+  confirmLinking() { return this.pairing.confirm(); }
+  closeLinking() { this.pairing.close(); }
 
   updateServer(
     id: string,
@@ -775,7 +714,7 @@ class AppStore {
       link.start();
     }
     for (const id of Object.keys(this.links)) if (!next[id]) {
-      this.dropExtensionStore(id);
+      void this.idleExtensions.drop(id);
       this.links[id]!.stop();
       changed = true;
     }
@@ -805,8 +744,7 @@ class AppStore {
     this.serverPrefs.load(id);
     // This server's list now belongs to the extension host: the idle editor of it (and its sync) is done. The host
     // reads the list from storage (the editor writes it at once), and the editor's uploads finish before the host's pull.
-    const handedOver = this.dropExtensionStore(id);
-    this.handover = handedOver;
+    this.idleExtensions.handOver(id);
     if (changing) void extensions.switchServer();
     notifications.connect(null);
     serverUpdater.reset();
@@ -906,7 +844,7 @@ class AppStore {
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
-    if (e.type === "client_settings_updated") void this.extStores.get(link.id)?.sync.onEvent(e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
+    if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
     // Notices of a server not in view still reach this device.
     if (e.type === "notification") {
       const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
@@ -935,7 +873,7 @@ class AppStore {
     this.ensureDraftModel();
     // The editor of this server (if settings had it open) sends what it still holds before the host pulls the server's copy.
     // Bounded: an unreachable server must not hold up opening it.
-    await Promise.race([this.handover, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
+    await Promise.race([this.idleExtensions.settled, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
     if (link.id !== this.serverId || token !== this.attachToken) return;
     // A warm reconnect already has its settings sync running (and the editor holds nothing new): rebuilding it here made
     // every client of this server pull all of its settings again on each return to the window.
@@ -1234,26 +1172,17 @@ class AppStore {
 
   /** `/home/x/workspace/proj/a` -> `proj/a`; the root itself is ".". */
   relPath(cwd: string): string {
-    return relativeToRoot(cwd, this.workspace?.root);
+    return relPath(cwd, this.workspace?.root);
   }
 
   /** Human label for a `workdir` value: the server default, a sub-folder of it, or an absolute path. */
   workdirLabel(rel: string = this.workdir): string {
-    return rel === "."
-      ? (this.workspace?.root ?? t("서버 기본 디렉터리"))
-      : isAbs(rel)
-        ? rel
-        : `${this.workspace?.root ?? ""}${sepOf(this.workspace?.root ?? "")}${rel}`.replace(/^\//, "/");
+    return workdirText(rel, this.workspace?.root) ?? t("서버 기본 디렉터리");
   }
 
   /** Absolute path the next new chat will start in (best effort until the server confirms). */
   get workdirAbs(): string {
-    const root = this.workspace?.root ?? "";
-    return this.workdir === "."
-      ? root
-      : isAbs(this.workdir)
-        ? this.workdir
-        : `${root}${sepOf(root)}${this.workdir}`;
+    return workdirAbs(this.workdir, this.workspace?.root);
   }
 
   /** Switch one agent tool on or off for every chat. Saved on the server. */
@@ -1301,79 +1230,17 @@ class AppStore {
   private settingsSync: ServerSettingsSync | null = null;
   /** The server whose extension list is currently loaded */
   private openedFor: string | null = null;
-  /**
-   * Editors of the client extensions of saved servers that are NOT the open one (settings can show any server). Each has its
-   * own connection and its own sync, so a change reaches the server it was made on and never the open one.
-   */
-  /** Resolves when the editor of the server just opened has sent its last edits */
-  private handover: Promise<void> = Promise.resolve();
   /** When each transcript was last on screen, and which were on screen at the previous sync (see syncChats). */
   private chatUsed = new Map<string, number>();
   private lastVisible = new Set<string>();
-  private extStores = new Map<string, { store: ServerExtensionStore; sync: ServerSettingsSync; api: Api }>();
+  /** Editors of the client extensions of saved servers that are not the open one. */
+  private readonly idleExtensions = new IdleExtensionStores({ openId: () => this.serverId, apiOf: (id) => this.links[id]?.api ?? null });
   /** Bumped whenever one of those editors changed, so what shows them reads again. */
-  extensionStoreTick = $state(0);
-  /** The editor of a server's client extensions, or null for the open server (its host has them) and for one not attached yet. */
-  extensionStoreOf(serverId: string | null | undefined): ServerExtensionStore | null {
-    void this.extensionStoreTick;
-    if (!serverId || serverId === this.serverId) return null;
-    return this.extStores.get(serverId)?.store ?? null;
-  }
-  /** Make the editor of this server ready (read its stored list, then what the server holds) and keep it in step. */
-  async attachExtensionStore(serverId: string): Promise<void> {
-    if (serverId === this.serverId) return;
-    const link = this.links[serverId];
-    if (!link) return;
-    const old = this.extStores.get(serverId);
-    if (old && old.api === link.api) return;
-    this.dropExtensionStore(serverId);
-    const holder: { sync?: ServerSettingsSync } = {};
-    const store: ServerExtensionStore = new ServerExtensionStore({
-      serverId,
-      api: () => this.links[serverId]?.api ?? null,
-      storage: localStorage,
-      changed: (key) => holder.sync?.changed(key),
-      updated: () => { this.extensionStoreTick++; },
-    });
-    const sync = new ServerSettingsSync({
-      api: link.api,
-      origin: notifications.id,
-      storage: localStorage,
-      storageKey: `pipaya.settings-sync.${serverId}`,
-      adapters: {
-        extensions: { read: () => store.packages(), apply: (v) => store.applyPackages(v) },
-        extensionStates: { read: () => store.states(), apply: (v) => store.applyStates(v) },
-      },
-    });
-    holder.sync = sync;
-    this.extStores.set(serverId, { store, sync, api: link.api });
-    this.extensionStoreTick++;
-    try { await sync.pull(); } catch { /* unreachable: the stored copy stays and is uploaded on the next try */ }
-    if (this.extStores.get(serverId)?.sync !== sync) return;
-    await store.loadRemoteSettings();
-    this.extensionStoreTick++;
-  }
-  /** Stop editing a server's list apart from the host (it was opened, or removed). Pending changes are sent first. */
-  private dropExtensionStore(serverId: string): Promise<void> {
-    const e = this.extStores.get(serverId);
-    if (!e) return Promise.resolve();
-    this.extStores.delete(serverId);
-    this.extensionStoreTick++;
-    // Its last edits reach the server before anything else reads that server again (the host pulls when it opens it).
-    return e.sync.flush().catch(() => {}).finally(() => e.sync.dispose());
-  }
-  /**
-   * The client extensions as one server sees them: the host's when it is open, the idle editor's otherwise. Never
-   * another server's: the host only holds the open server's.
-   */
-  clientExtensionsOf(serverId: string | null | undefined): { id: string; name: string; version: string; live: boolean; enabled: boolean }[] {
-    const open = !serverId || serverId === this.serverId;
-    const own = open
-      ? extensions.installed.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.state === "active" || e.state === "starting", enabled: e.enabled }))
-      : [];
-    const idle = open ? [] : (this.extensionStoreOf(serverId)?.installed ?? []).filter((e) => !own.some((o) => o.id === e.package.manifest.id));
-    return [...own, ...idle.map((e) => ({ id: e.package.manifest.id, name: e.package.manifest.name, version: e.package.manifest.version, live: e.enabled, enabled: e.enabled }))];
-  }
+  get extensionStoreTick() { return this.idleExtensions.tick; }
+  extensionStoreOf(serverId: string | null | undefined): ServerExtensionStore | null { return this.idleExtensions.of(serverId); }
+  attachExtensionStore(serverId: string): Promise<void> { return this.idleExtensions.attach(serverId); }
+  /** The client extensions as one server sees them (the host's when it is open, the idle editor's otherwise). */
+  clientExtensionsOf(serverId: string | null | undefined) { return this.idleExtensions.clientsOf(serverId); }
   listChanged() {
     this.settingsSync?.changed("extensions");
   }
@@ -1510,29 +1377,19 @@ class AppStore {
    * An open chat keeps its own directory, so this leaves it and starts a fresh chat there.
    */
   changeWorkdir(raw: string): boolean {
-    let rel = trimSep(expandHome(raw.trim(), this.workspace?.home)) || ".";
-    if (rel === "~" || rel.startsWith("~/")) {
-      this.toast(t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다"), "error");
-      return false;
-    }
-    // a backslash is a separator in a Windows path (`C:\work`), and nothing else
-    if (/\0/.test(rel) || (!isWinAbs(rel) && rel.includes("\\")) || (isWinAbs(rel) && /[<>"|?*\0]/.test(rel.slice(2)))) {
-      this.toast(t("경로에 사용할 수 없는 문자가 있습니다"), "error");
-      return false;
-    }
-    // An absolute path inside the default directory is stored relative to it, so the sidebar groups it with the rest.
-    if (isAbs(rel)) rel = this.relPath(rel);
-    else rel = rel.replace(/^(\.\/)+/, "") || ".";
-    if (
-      !isAbs(rel) &&
-      rel.split("/").some((seg) => seg === ".." || seg === "")
-    ) {
+    const norm = normalizeWorkdir(raw, { root: this.workspace?.root, home: this.workspace?.home });
+    if (!norm.ok) {
       this.toast(
-        t("상대 경로에는 ..을 쓸 수 없습니다. 절대 경로(/로 시작)를 입력하세요"),
+        norm.error === "home"
+          ? t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다")
+          : norm.error === "chars"
+            ? t("경로에 사용할 수 없는 문자가 있습니다")
+            : t("상대 경로에는 ..을 쓸 수 없습니다. 절대 경로(/로 시작)를 입력하세요"),
         "error",
       );
       return false;
     }
+    const rel = norm.path;
     const same = this.current && this.relPath(this.current.cwd) === rel;
     this.setWorkdir(rel);
     if (same) return true;

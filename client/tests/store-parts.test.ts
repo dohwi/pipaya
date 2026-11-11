@@ -8,6 +8,9 @@ import type * as FeedbackModule from "../src/lib/feedback.svelte";
 import type * as SidebarModule from "../src/lib/sidebar.svelte";
 import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
+import type * as PairingFlowModule from "../src/lib/pairing-flow.svelte";
+import type * as CloseGuardModule from "../src/lib/close-guard.svelte";
+import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
@@ -17,6 +20,9 @@ let reorder: typeof SidebarModule.reorder;
 let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
+let IdleExtensionStores: typeof IdleModule.IdleExtensionStores;
+let PairingFlow: typeof PairingFlowModule.PairingFlow;
+let CloseGuard: typeof CloseGuardModule.CloseGuard;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -43,6 +49,11 @@ beforeAll(async () => {
 	({ reorder, SidebarState } = await loadRunes("sidebar"));
 	({ ServerPrefs } = await loadRunes("server-prefs"));
 	({ ExtensionRequests } = await loadRunes("extension-requests"));
+	// the extension host and notifications modules it imports read session storage when they load
+	(globalThis as any).sessionStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+	({ IdleExtensionStores } = await loadRunes("idle-extension-stores"));
+	({ PairingFlow } = await loadRunes("pairing-flow"));
+	({ CloseGuard } = await loadRunes("close-guard"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -285,5 +296,97 @@ describe("configuration servers", () => {
 		expect(out[0]).toMatchObject({ id: "2", token: "t2" });
 		expect(out[1]!.token).toBe("");
 		expect(out[1]!.id).not.toBe("2");
+	});
+});
+
+describe("idle extension stores", () => {
+	const make = (open: string | null, apis: Record<string, unknown> = {}) => new IdleExtensionStores({ openId: () => open, apiOf: (id) => (apis[id] as never) ?? null });
+
+	test("the open server and a server not attached have no idle editor", () => {
+		const idle = make("s1");
+		expect(idle.of("s1")).toBeNull();
+		expect(idle.of("s2")).toBeNull();
+		expect(idle.of(null)).toBeNull();
+	});
+	test("attaching the open server, or one with no connection, does nothing", async () => {
+		const idle = make("s1", {});
+		await idle.attach("s1");
+		await idle.attach("gone");
+		expect(idle.tick).toBe(0);
+	});
+	test("dropping what was never attached resolves and changes nothing", async () => {
+		const idle = make("s1");
+		await idle.drop("s2");
+		idle.handOver("s2");
+		await idle.settled;
+		expect(idle.tick).toBe(0);
+	});
+	test("another server's list is never the host's: no idle editor means no rows", () => {
+		expect(make("s1").clientsOf("s2")).toEqual([]);
+	});
+});
+
+describe("pairing flow", () => {
+	const link = { baseUrl: "http://10.0.0.5:8787", code: "abcdefgh", name: "" };
+	const make = () => {
+		const added: unknown[] = [];
+		return { added, flow: new PairingFlow({ add: (i) => (added.push(i), true), toast: () => {} }) };
+	};
+
+	test("a link only asks first: nothing is added before the user confirms", () => {
+		const { flow, added } = make();
+		flow.connect(link);
+		expect(JSON.parse(JSON.stringify(flow.linking))).toEqual({ name: "10.0.0.5:8787", baseUrl: link.baseUrl, state: "confirm" });
+		expect(added).toEqual([]);
+	});
+	test("the same code is taken once, until declining frees it", () => {
+		const { flow } = make();
+		flow.connect(link);
+		flow.close();
+		expect(flow.linking).toBeNull();
+		flow.connect(link);
+		expect(flow.linking?.state).toBe("confirm");
+		flow.connect({ ...link, name: "other" }); // same code while the card is up: ignored
+		expect(flow.linking?.name).toBe("10.0.0.5:8787");
+	});
+	test("confirming with no pending link does nothing", async () => {
+		const { flow, added } = make();
+		await flow.confirm();
+		expect(flow.linking).toBeNull();
+		expect(added).toEqual([]);
+	});
+});
+
+describe("close guard", () => {
+	const local = { id: "pc", name: "", baseUrl: "http://127.0.0.1:1", token: "t", local: true };
+	const make = (o: { local?: typeof local; busy?: string[]; api?: unknown } = {}) => {
+		const aborted: string[] = [];
+		const api = "api" in o ? o.api : { abort: async (id: string) => void aborted.push(id) };
+		const guard = new CloseGuard({ local: () => ("local" in o ? o.local : local), openId: () => "pc", openApi: () => api as never, busyIds: () => o.busy ?? [] });
+		return { guard, aborted };
+	};
+
+	test("closes at once without a local server, without a connection, or with nothing running", async () => {
+		expect(await make({ local: undefined }).guard.request()).toBe(true);
+		expect(await make({ api: null, busy: ["a"] }).guard.request()).toBe(true);
+		expect(await make({ busy: [] }).guard.request()).toBe(true);
+	});
+	test("running work asks; a second ask while it is open is refused; cancel keeps the window", async () => {
+		const { guard, aborted } = make({ busy: ["a", "b"] });
+		const first = guard.request();
+		expect(guard.confirm?.count).toBe(2);
+		expect(await guard.request()).toBe(false);
+		guard.confirm!.cancel();
+		expect(await first).toBe(false);
+		expect(guard.confirm).toBeNull();
+		expect(aborted).toEqual([]);
+	});
+	test("confirming stops every busy session, then lets the window close", async () => {
+		const { guard, aborted } = make({ busy: ["a", "b"] });
+		const asked = guard.request();
+		guard.confirm!.confirm();
+		expect(await asked).toBe(true);
+		expect(aborted).toEqual(["a", "b"]);
+		expect(guard.confirm).toBeNull();
 	});
 });
