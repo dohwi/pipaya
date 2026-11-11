@@ -31,7 +31,7 @@ describe("portable extension package schema", () => {
 	test("exports the SDK, byte cap, and immutable permission/token whitelists", () => {
 		expect(SDK_VERSION).toBe(1);
 		expect(MAX_PACKAGE_BYTES).toBe(1024 * 1024);
-		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions", "ui-style", "ui-components", "workspace"]);
+		expect(PERMISSIONS).toEqual(["commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales", "server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions", "ui-style", "ui-components", "workspace", "network", "server-api", "open-url", "clipboard"]);
 		expect(Object.isFrozen(PERMISSIONS)).toBe(true);
 		expect(Object.isFrozen(THEME_TOKENS)).toBe(true);
 		expect(new Set(THEME_TOKENS).size).toBe(THEME_TOKENS.length);
@@ -179,10 +179,10 @@ describe("portable extension package schema", () => {
 		}
 	});
 
-	test("limits code to 128 KiB in UTF-8 rather than just character count", () => {
-		expect(parsePackage({ ...codePackage(), code: "x".repeat(128 * 1024) }).code).toHaveLength(128 * 1024);
-		rejects({ ...codePackage(), code: "x".repeat(128 * 1024 + 1) }, "code");
-		rejects({ ...codePackage(), code: "界".repeat(45000) }, "UTF-8 bytes");
+	test("limits code to 512 KiB in UTF-8 rather than just character count", () => {
+		expect(parsePackage({ ...codePackage(), code: "x".repeat(512 * 1024) }).code).toHaveLength(512 * 1024);
+		rejects({ ...codePackage(), code: "x".repeat(512 * 1024 + 1) }, "code");
+		rejects({ ...codePackage(), code: "界".repeat(180000) }, "UTF-8 bytes");
 	});
 
 	test("enforces the inclusive total JSON UTF-8 byte limit", () => {

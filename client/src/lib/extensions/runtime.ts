@@ -8,11 +8,13 @@ const WORKER = `
 const pending = new Map(), handlers = new Map(), listeners = new Set(), serverListeners = new Set();
 let seq = 0;
 const panelTokens = new Map();
+// Calls that wait on the network or on the user get longer than the 5 s default; the host bounds each of them itself.
+const SLOW = { 'net.fetch': 65000, 'serverApi.request': 35000, 'dialog.confirm': 600000, 'dialog.select': 600000, 'dialog.input': 600000 };
 function rpc(method, ...args) {
   const id = ++seq;
   if (pending.size >= 100) return Promise.reject(new Error('Too many pending requests'));
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('SDK request timed out')); }, 5000);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error('SDK request timed out')); }, SLOW[method] || 5000);
     pending.set(id, { resolve, reject, timer });
     postMessage({ type: 'request', id, method, args });
   });
@@ -37,6 +39,9 @@ const sdk = Object.freeze({
     remove: async id => { await rpc('ui.remove', id); handlers.delete(panelTokens.get(id)); panelTokens.delete(id); }
   }),
   navbar: Object.freeze({ set: (id, spec) => rpc('navbar.set', id, spec), remove: id => rpc('navbar.remove', id) }),
+  net: Object.freeze({ fetch: request => rpc('net.fetch', request) }),
+  serverApi: Object.freeze({ request: (method, path, body) => rpc('serverApi.request', method, path, body === undefined ? null : body) }),
+  system: Object.freeze({ openUrl: url => rpc('system.openUrl', url), copy: text => rpc('system.copy', text) }),
   http: Object.freeze({ getJson: (...args) => args.length !== 1 ? Promise.reject(new Error('http.getJson takes exactly one argument')) : rpc('http.getJson', args[0]), requestJson: request => rpc('http.requestJson', request) }),
   configuration: Object.freeze({ authorize: () => rpc('configuration.authorize'), revoke: () => rpc('configuration.revoke'), access: () => rpc('configuration.access'), read: () => rpc('configuration.read'), applyBackground: (document, fingerprint) => rpc('configuration.applyBackground', document, fingerprint), export: () => rpc('configuration.export'), apply: document => rpc('configuration.apply', document), restore: () => rpc('configuration.restore'), status: () => rpc('configuration.status') }),
   server: Object.freeze({
@@ -203,7 +208,8 @@ export class ExtensionRuntime {
       if (p) { clearTimeout(p.timer); this.pending.delete(m.id); m.error ? p.reject(new Error(String(m.error).slice(0, 500))) : p.resolve(m.value); }
     } else if (m.type === "request" && Number.isSafeInteger(m.id) && typeof m.method === "string" && Array.isArray(m.args)) {
       try {
-        const limit = ["configuration.apply", "configuration.applyBackground", "http.requestJson"].includes(m.method) ? 4 * 1024 * 1024 + 4096 : 70000;
+        const limit = ["configuration.apply", "configuration.applyBackground", "http.requestJson", "serverApi.request", "components.setData", "storage.set"].includes(m.method) ? 4 * 1024 * 1024 + 4096
+          : m.method === "net.fetch" ? 6 * 1024 * 1024 : 70000; // base64 bodies are a third larger than the 4 MiB they carry
         if (m.args.length > 10 || new TextEncoder().encode(JSON.stringify(m.args)).length > limit) throw new LocalizedError(t("SDK 요청 크기 제한 초과"));
         const value = await this.callbacks.request(m.method, m.args);
         if (!this.stopped) this.port?.postMessage({ type: "response", id: m.id, value });

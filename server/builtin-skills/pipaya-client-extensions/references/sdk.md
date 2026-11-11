@@ -38,7 +38,7 @@ Examples: `examples/extensions/focus.json` (declarative), `session-tools.json` (
 - `sdkVersion`: exactly `1`.
 - `permissions`: only those listed below. Declarative commands also need `commands` and `composer`.
 - Command names: lowercase letter first, then `[a-z0-9-]`, ≤40 chars.
-- Package ≤256 KiB, code ≤128 KiB (UTF-8), ≤50 extensions.
+- Package ≤1 MiB, code ≤512 KiB (UTF-8), ≤50 extensions.
 - Unknown fields, duplicate permissions/commands and wrong types are rejected. Types: `src/lib/extensions/schema.ts`, public SDK: `src/lib/extensions/sdk.ts`.
 - `code` is the body of an async function with `sdk` injected. No imports, no npm.
 - `settingsScope`: `"server"` (default) or `"local"` (this device only). Credentials do not need it: a `secret: true`
@@ -175,12 +175,16 @@ Every SDK method returns a Promise. `await` registrations in startup code; a fai
 | `status` | `sdk.status.set(id, text)`, `remove(id)` | ≤10 status items |
 | `navbar` | `sdk.navbar.set(id, {label, view})`, `remove(id)` | ≤3 read-only header items |
 | `http` | `sdk.http.getJson(path)` | GET JSON from the user's `httpOrigin`, no credentials |
+| `network` | `sdk.net.fetch({url, method?, headers?, body?, bodyEncoding?, responseType?, timeout?})` → `{status, statusText, ok, url, headers, body}` | any http(s) URL, any method (`GET HEAD POST PUT PATCH DELETE OPTIONS`) and headers; body: string as is, other values as JSON, or `bodyEncoding: "base64"` for bytes (≤4 MiB); answer `auto`/`json`/`text`/`base64` (≤8 MiB); `timeout` ≤60 s (default 30 s); 6 in flight per extension; never sends app cookies or credentials; CORS is the target's (otherwise use a server extension's route or method); non-2xx is returned |
+| `server-api` | `sdk.serverApi.request(method, path, body?)` → `{status, body}` | the connected pipaya server's whole REST API with the user's rights (`GET /sessions`, `PATCH /configuration/...`, …); the app adds the token and never hands it over; path must be this server's (`/...`, no `..`); 30 s; non-2xx is returned. Consent text says "high risk" |
+| `open-url` | `sdk.system.openUrl(url)` | http(s) / mailto in the system browser or a new tab; shares 5 per 10 s with `clipboard` |
+| `clipboard` | `sdk.system.copy(text)` | write text (≤100,000 chars) to the clipboard |
 | `http-write` | `sdk.http.requestJson(request)` | JSON read/write to `httpOrigin`, optional Bearer from own `httpToken` |
 | `configuration` | `sdk.configuration.export()`, `apply(doc)`, `restore()`, `status()` | user-approved config export/import |
 | `configuration-background` | `sdk.configuration.authorize/revoke/access/read/applyBackground` | ongoing access after one approval |
 | `context` | `sdk.context.get()` | session ID, model, provider, running/online |
 | `events` | `sdk.events.on(handler)` | event metadata only |
-| `storage` | `sdk.storage.get(key)`, `set(key, value)` | per-extension JSON, ≤32,000 chars serialized |
+| `storage` | `sdk.storage.get(key)`, `set(key, value)` | per-extension JSON, ≤128,000 chars serialized |
 | `notifications` | `sdk.notifications.show(text)` | in-app toast, ≤300 chars |
 | `locales` | none | ship language packs |
 | `system-notifications` | `sdk.notifications.send(spec)`, `status()`, `register(id, rule)`, `remove(id)` | OS / push ([notifications.md](notifications.md)) |
@@ -299,10 +303,10 @@ const res = await sdk.http.requestJson({ path: '/resource', method: 'PUT', body:
 
 ## Isolation and limits
 
-- Code runs in a Worker inside an opaque-origin `<iframe sandbox="allow-scripts">` (no `allow-same-origin`), talking over a dedicated `MessagePort`. Forged messages gain nothing: the host checks every call.
+- Code runs in a Worker inside an opaque-origin `<iframe sandbox="allow-scripts">` (no `allow-same-origin`), talking over a dedicated `MessagePort`. Forged messages gain nothing: the host checks every call. Direct `fetch` stays blocked; network goes through `net.fetch` (`network`) so it is permission-checked, bounded and cancelled with the extension.
 - Sandbox CSP blocks everything but scripts and Workers: no direct network, external scripts, images, frames or forms. A canary checks this before start; WebViews that ignore the CSP do not run code.
-- Never exposed: server token, API keys, app localStorage, DOM, Tauri invoke, transcripts, tool args/results, files, shell.
-- Limits: start 5 s, command 10 s, SDK reply 5 s; heartbeat every 4 s, stopped after 5 s without a reply; 200 messages/s, 100 pending SDK requests, 20 concurrent commands; requests ≤70,000 bytes (4 MiB for configuration apply and `requestJson`).
+- Never exposed: server token, API keys, app localStorage, DOM, Tauri invoke, files, shell. Transcripts and the server's data only through `server-api`, which calls the API for the extension without giving out the token.
+- Limits: start 5 s, command 10 s, SDK reply 5 s (`net.fetch` 65 s, `serverApi.request` 35 s, dialogs 10 min); heartbeat every 4 s, stopped after 5 s without a reply; 200 messages/s, 100 pending SDK requests, 20 concurrent commands; requests ≤70,000 bytes (4 MiB for configuration apply, `requestJson`, `serverApi.request`, `components.setData`, `storage.set`; 6 MiB for `net.fetch`).
 - Start, Worker or timeout errors disable the extension; JS and permission errors are logged.
 - A browser sandbox is not OS process isolation and guarantees no memory/CPU quota. Only run reviewed extensions. There is no fallback that runs code in the app realm.
 
@@ -331,4 +335,4 @@ Default URL `http://localhost:1420`, override with `EXTENSION_TEST_URL`. This do
 
 ## Not supported
 
-Signing and publisher verification, npm packages, arbitrary HTML/CSS/components, file/shell/arbitrary network APIs, transcript access. Add any of these only behind a new explicit permission.
+Signing and publisher verification, npm packages, file and shell APIs (use a server extension). HTML/CSS/components are the trusted UI (`ui-style`, `ui-components`); network is `network`; transcripts and the server's data are `server-api`. Add anything else only behind a new explicit permission.

@@ -1,0 +1,16 @@
+{
+  "manifest": {
+    "id": "example.net-tools",
+    "name": "Net tools · SDK example",
+    "version": "1.0.0",
+    "sdkVersion": 1,
+    "description": "Calls any URL with sdk.net.fetch, reads the pipaya server API with sdk.serverApi, opens links and copies text.",
+    "descriptions": {
+      "en": "Calls any URL with sdk.net.fetch, reads the pipaya server API with sdk.serverApi, opens links and copies text.",
+      "ko": "sdk.net.fetch로 아무 주소나 호출하고, sdk.serverApi로 pipaya 서버 API를 읽고, 링크를 열고 텍스트를 복사하는 예제입니다."
+    },
+    "translations": { "ko": { "Net tools · SDK example": "네트워크 도구 · SDK 예제" } },
+    "permissions": ["commands", "ui", "network", "server-api", "open-url", "clipboard"]
+  },
+  "code": "let last = { status: 'Press a button', body: '' };\nconst view = () => ({ type: 'stack', id: 'root', gap: 'medium', children: [\n  { type: 'form', id: 'f', submitLabel: 'Fetch', children: [{ type: 'input', id: 'url', label: 'URL', value: 'https://api.github.com/repos/sveltejs/svelte' }] },\n  { type: 'stack', id: 'row', direction: 'horizontal', children: [\n    { type: 'button', id: 'sessions', label: 'Count sessions (server API)' },\n    { type: 'button', id: 'copy', label: 'Copy answer' },\n    { type: 'button', id: 'open', label: 'Open URL' }] },\n  { type: 'alert', id: 'status', text: String(last.status), tone: 'info' },\n  { type: 'code', id: 'body', text: String(last.body).slice(0, 4000) || '(empty)' }] });\nlet url = 'https://api.github.com/repos/sveltejs/svelte';\nconst show = async (status, body) => { last = { status, body: typeof body === 'string' ? body : JSON.stringify(body, null, 2) }; await sdk.ui.update('net', view()); };\nawait sdk.ui.registerPanel({ id: 'net', title: 'Net tools', placement: 'side', view: view() }, async e => {\n  try {\n    if (e.type === 'submit') { url = String(e.values.url); const r = await sdk.net.fetch({ url }); await show(`${r.status} ${r.statusText} · ${r.headers['content-type'] || ''}`, r.body); }\n    if (e.type === 'action' && e.id === 'sessions') { const r = await sdk.serverApi.request('GET', '/sessions'); await show(`server API ${r.status}`, { sessions: (r.body && r.body.sessions || []).length }); }\n    if (e.type === 'action' && e.id === 'copy') { await sdk.system.copy(last.body); await show('Copied', last.body); }\n    if (e.type === 'action' && e.id === 'open') await sdk.system.openUrl(url);\n  } catch (err) { await show('Error: ' + (err && err.message || err), ''); }\n});\nawait sdk.commands.register({ name: 'net', description: 'Open the net tools dock' }, () => sdk.ui.open('net'));"
+}

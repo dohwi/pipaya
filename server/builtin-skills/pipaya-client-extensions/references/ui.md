@@ -20,7 +20,7 @@ Extensions build screens by sending a JSON view tree; the host renders it with S
 
 The app always labels a panel with its extension's name (header; the owner line is skipped when it equals the panel title). This stops an extension from posing as an app dialog; keep it when polishing.
 
-Limits per panel: 5 panels per extension, 200 nodes, depth 8, 60 KiB view, 50 children, 8 tabs, 50 options, table 100 rows × 8 columns, list 100 items. Every node has a unique `id` (`[a-z][a-z0-9-]`, ≤40); tab IDs are unique across the tree.
+Limits per panel: 10 panels per extension, 200 nodes, depth 8, 60 KiB view, 50 children, 8 tabs, 50 options, table 100 rows × 8 columns, list 100 items. Every node has a unique `id` (`[a-z][a-z0-9-]`, ≤40); tab IDs are unique across the tree.
 
 ## Writing a panel
 
