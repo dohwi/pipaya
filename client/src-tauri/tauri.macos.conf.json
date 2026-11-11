@@ -1,6 +1,7 @@
 {
   "bundle": {
     "externalBin": ["binaries/pipaya-server"],
-    "resources": { "../../server/builtin-skills": "builtin-skills" }
+    "resources": { "../../server/builtin-skills": "builtin-skills" },
+    "macOS": { "entitlements": "Entitlements.plist" }
   }
 }
