@@ -356,7 +356,6 @@ describe("pairing flow", () => {
 		expect(added).toEqual([]);
 	});
 });
-});
 
 describe("close guard", () => {
 	const local = { id: "pc", name: "", baseUrl: "http://127.0.0.1:1", token: "t", local: true };
