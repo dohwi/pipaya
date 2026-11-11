@@ -25,6 +25,8 @@ cd server && bun run typecheck && bun run lint && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
 
+Screen smoke test (real browser, starts and removes its own server): `pip install playwright==1.63.0 && playwright install chromium`, then `python3 scripts/e2e-smoke.py --build`. On failure it leaves screenshots and a console log in `tmp/e2e/`.
+
 ### Releases
 
 Users only get an update when a version bump reaches `main`. Only the rolling `latest` release exists; version tags are not created.
@@ -57,6 +59,8 @@ Group work with a GitHub milestone named after the version, not with a long-live
 cd server && bun run typecheck && bun run lint && bun run test
 cd client && bun run check && bun run test && bun run build
 ```
+
+화면 스모크 테스트(실제 브라우저, 서버를 스스로 띄우고 지움): `pip install playwright==1.63.0 && playwright install chromium` 후 `python3 scripts/e2e-smoke.py --build`. 실패하면 `tmp/e2e/`에 스크린샷과 콘솔 로그가 남습니다.
 
 ### 릴리스
 
