@@ -5,6 +5,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import VersionBump from "./VersionBump.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { download } from "../../lib/download";
 	import { tick } from "svelte";
@@ -473,7 +474,7 @@
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
 		{#if extensions.safeMode}
-			<Notice tone="warn" size="sm" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “고급”에서 해제할 수 있습니다.")}</Notice>
+			<Notice tone="warn" size="sm" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “문제 해결”에서 해제할 수 있습니다.")}</Notice>
 		{/if}
 		{#if unreadable.length}
 			<Notice tone="warn" size="sm" role="status">{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</Notice>
@@ -512,18 +513,13 @@
 		{/if}
 	</section>
 
-	<!-- Not folded: the safe-mode switch is the recovery path when an extension misbehaves, so it must be visible without a click -->
-	<section class="adv" aria-labelledby="extensions-advanced">
-		<h3 id="extensions-advanced" class="section-label">{t("고급")}</h3>
-		<div class="adv-body">
-			<div class="adv-row">
-				<span class="switch-text">
-					<span class="switch-title"><Icon name="shield" /> {t("안전 모드: 모든 확장 실행 중지")}</span>
-					<span class="hint">{t("풀어도 자동으로 켜지지 않습니다. 문제가 생기면 주소에")} <a href="?extensions=off">?extensions=off</a>{t("를 붙여 복구하세요.")}</span>
-				</span>
-				<Switch checked={extensions.safeMode} label={t("모든 확장 실행 중지")} disabled={tasks.busy.$safe} onchange={setSafeMode} />
-			</div>
-		</div>
+	<!-- The same settings group as the other panes: a heading, a SettingRow and a hint line. Not folded: the switch is the way back when an extension misbehaves. -->
+	<section class="set-group trouble" aria-labelledby="extensions-trouble">
+		<h3 id="extensions-trouble" class="section-label">{t("문제 해결")}</h3>
+		<SettingRow label={t("안전 모드")} hint={t("모든 확장의 실행을 멈춥니다. 꺼도 확장이 저절로 다시 켜지지 않습니다.")}>
+			<Switch checked={extensions.safeMode} label={t("안전 모드")} disabled={tasks.busy.$safe} onchange={setSafeMode} />
+		</SettingRow>
+		<p class="hint">{t("이 화면까지 오지 못하면 주소 끝에")} <code>?extensions=off</code>{t("를 붙여 여세요.")}</p>
 	</section>
 	{/if}
 </div>
@@ -552,10 +548,6 @@
 	.need-text { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 	.needline :global(.btn) { flex: none; }
 
-	.switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-	.switch-title { display: inline-flex; align-items: center; gap: 4px; font-weight: 550; }
-	.switch-title :global(svg) { width: 17px; height: 17px; stroke-width: 1.9; }
-	.switch-title :global(svg) { color: var(--text-dim); }
 
 	.extensions :global(.btn.sm) { height: auto; min-height: var(--control-h-sm); padding: 4px 12px; white-space: normal; }
 
@@ -565,13 +557,10 @@
 	.extensions .bar > :global(.add.disabled) { opacity: 0.5; cursor: default; }
 	.extensions .bar > :global(.add input) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.extensions .bar > :global(.add svg) { width: 16px; height: 16px; }
-	.adv { padding-top: 16px; border-top: 1px solid var(--border); }
-	.adv-body { display: flex; flex-direction: column; gap: 8px; }
-	.adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+	.trouble { display: flex; flex-direction: column; gap: 8px; }
+	/* the recovery query is typed by hand: mono, on one line, never split at "?" */
+	.trouble code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }
 
-	a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
-	/* the recovery query is typed by hand: keep it on one line so it is never split at "?" */
-	.adv a { white-space: nowrap; }
 	.none {
 		margin: 4px 0 4px;
 		padding: 12px;
