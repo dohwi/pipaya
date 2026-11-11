@@ -8,7 +8,7 @@
 	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
 	import { navGroups } from "../../lib/settings-phone";
-	import { initialFolded } from "../../lib/settings-fold";
+	import { initialFolded, saveFolded } from "../../lib/settings-fold";
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
@@ -52,7 +52,7 @@
 	type TabId = SettingsTabId;
 	const groups = $derived(navGroups(SETTINGS_TABS, touch));
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
-	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded (see `settings-fold`). */
+	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded, then the last choice is kept (see `settings-fold`). */
 	let collapsed = $state<Record<string, boolean>>(initialFolded());
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
@@ -167,7 +167,7 @@
 					{#if phone && !kids.length}<span class="go" aria-hidden="true"><Icon name="chevron-right" /></span>{/if}
 				</button>
 				{#if kids.length}
-					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => (collapsed[x.id] = open)}><Icon name="chevron-down" /></button>
+					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => { collapsed[x.id] = open; saveFolded(collapsed); }}><Icon name="chevron-down" /></button>
 					{#if !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}
 				{/if}
 			</div>
