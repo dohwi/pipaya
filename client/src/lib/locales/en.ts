@@ -1444,6 +1444,7 @@ export const en: Record<string, string> = {
 	"만드는 중…": "Creating…",
 	"QR 만들기": "Create QR",
 	"한 번만, 2분 안에 쓸 수 있는 코드입니다. 접근 토큰은 들어 있지 않습니다.": "A one-time code, valid for 2 minutes. It does not contain the access token.",
+	"복사한 링크는 이 창을 닫아도 2분 동안 쓸 수 있습니다.": "A copied link keeps working for 2 minutes after you close this panel.",
 	"폰 추가": "Add phone",
 	"연결 코드가 만료됐거나 이미 사용됐습니다. PC에서 새 QR을 만들어 주세요.": "The connection code has expired or was already used. Create a new QR on the PC.",
 	"잘못된 코드가 너무 많이 시도됐습니다. 잠시 뒤 다시 시도해 주세요.": "Too many wrong codes were tried. Please wait a moment and try again.",
