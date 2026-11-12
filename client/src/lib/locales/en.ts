@@ -251,6 +251,8 @@ export const en: Record<string, string> = {
 	"확장 설정": "Extension settings",
 	"새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.": "This extension is new. Check the defaults and save the settings to turn it on.",
 	"설정 저장 및 다시 불러오기": "Save settings and reload",
+	"{fields} 값은 기기에만 저장되어 서버끼리 옮겨지지 않습니다. 이 기기의 ‘{server}’ 서버에 입력해 둔 값이 있습니다.": "{fields} is kept on the device only and never travels between servers. This device has a value for it on the server ‘{server}’.",
+	"그 값 쓰기": "Use that value",
 	"설정 저장": "Save settings",
 	"설정 JSON 객체": "Settings JSON object",
 	"JSON 객체만 저장할 수 있습니다 (최대 16KB). 켜져 있는 확장은 다시 불러와 적용하고, 꺼져 있으면 다음에 켤 때 적용합니다.": "Only a JSON object can be saved (up to 16 KB). A running extension is reloaded to apply it; otherwise it applies the next time it's turned on.",

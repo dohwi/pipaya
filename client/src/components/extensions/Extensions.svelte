@@ -28,6 +28,7 @@
 	import UnreadableCard from "./UnreadableCard.svelte";
 	import { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
+	import { deviceValuesElsewhere } from "../../lib/extensions/device-values";
 
 	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
 	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
@@ -217,6 +218,11 @@
 	/** The server extension on the open server that pairs with the open client extension */
 	const pairedServer = $derived(selected ? serverSide.find((e) => e.companion === selected) : undefined);
 	const openEntry = $derived(selected ? list.find((e) => e.package.manifest.id === selected) : undefined);
+	/** This device's other servers that hold the device-only values (keys, tokens) the open extension lacks here. */
+	const deviceValuesOf = (entry: Installed) => {
+		void app.extensionStoreTick;
+		return deviceValuesElsewhere(entry.package.manifest.id, entry.package.manifest.settings, entry.settings, serverId ?? app.serverId, app.servers, localStorage);
+	};
 	$effect(() => { if (selected && !openEntry && !(selected.startsWith("srv:") && (!serverSide.length || openServer))) selected = null; });
 	function closeDetail() {
 		const id = selected;
@@ -492,6 +498,7 @@
 			onremove={(keepSettings) => remove(id, keepSettings)}
 			onsettingslocal={(local) => src.setSettingsLocal(id, local)}
 			onsavepartial={(partial) => saveClientPartial(id, partial)}
+			deviceValues={deviceValuesOf(openEntry)}
 		/>
 	{:else if openServer}
 		<ServerDetail
