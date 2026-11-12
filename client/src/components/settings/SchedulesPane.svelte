@@ -14,6 +14,7 @@
 	import Select from "../ui/Select.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { abortable } from "../../lib/abortable";
+	import { recentreModal } from "../../lib/dialog";
 	import { Api, errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
 	import { nameInLang } from "../../lib/member-names";
@@ -208,9 +209,18 @@
 		{ id: "day" as const, label: t("일") },
 	]);
 	const minAt = $derived(toLocalInput(Date.now()));
+
+	// The list and the form are two pages of different heights: in the sidebar's dialog, centre it again on each switch
+	// (the modal otherwise keeps its top, and the taller form would sit pinned to the window's bottom edge).
+	let root: HTMLDivElement | undefined = $state();
+	const editing = $derived(form !== null);
+	$effect(() => {
+		void editing;
+		if (root) recentreModal(root);
+	});
 </script>
 
-<div class="body" aria-busy={loading}>
+<div class="body" aria-busy={loading} bind:this={root}>
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 	<ExtrasIntro
 		what={t("정해진 때나 일정한 간격으로 기존 대화에 프롬프트를 자동으로 보냅니다.")}

@@ -2,7 +2,7 @@
 	import { schedule, unschedule } from "../../lib/frame";
 	import type { Snippet } from "svelte";
 	import { fadeIn, fadeOut, modalIn, modalOut } from "../../lib/motion";
-	import { modalLayer, portal as lift } from "../../lib/dialog";
+	import { RECENTRE, modalLayer, portal as lift } from "../../lib/dialog";
 	import ModalHeader from "./ModalHeader.svelte";
 
 	/**
@@ -147,9 +147,27 @@
 		});
 		// window resizes arrive many times per frame: place once per frame
 		const onResize = () => size && schedule(node, () => place(true));
+		// the body swapped to another page (lib/dialog.ts recentreModal): centre at the new size now; the observer that
+		// follows reports the same size and keeps this top. Stopped here so a modal nested inside another moves alone.
+		const onRecentre = (e: Event) => {
+			e.stopPropagation();
+			const w = node.offsetWidth;
+			const h = node.offsetHeight;
+			if (w <= 0 || h <= 0) return;
+			size = [w, h];
+			place(true);
+		};
 		ro.observe(node, { box: "border-box" });
 		window.addEventListener("resize", onResize);
-		return { destroy: () => { ro.disconnect(); unschedule(node); window.removeEventListener("resize", onResize); } };
+		node.addEventListener(RECENTRE, onRecentre);
+		return {
+			destroy: () => {
+				ro.disconnect();
+				unschedule(node);
+				window.removeEventListener("resize", onResize);
+				node.removeEventListener(RECENTRE, onRecentre);
+			},
+		};
 	}
 	// Before any child mounts and focuses itself: this is where focus goes back to on close.
 	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
