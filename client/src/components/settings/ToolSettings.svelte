@@ -61,8 +61,8 @@
 		{ id: "any", label: t("자유") },
 	];
 	const roleHint: Record<DelegateRoles, string> = {
-		defined: t("도우미는 역할 파일로 정의된 역할만 쓸 수 있습니다. 다른 이름은 거절됩니다"),
-		any: t("에이전트가 정의되지 않은 이름으로도 도우미를 부를 수 있습니다. 파일 없는 도우미는 읽기 전용 도구만 쓰고, 지침은 전달한 작업 내용입니다"),
+		defined: t("역할 파일로 정의된 역할만 씁니다. 다른 이름은 거절됩니다"),
+		any: t("파일 없는 이름도 허용합니다. 그 도우미는 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다"),
 	};
 	const nums = (xs: number[]) => xs.map((n) => ({ value: n, label: String(n) }));
 
@@ -127,10 +127,12 @@
 	{@const d = shown.tools.delegate}
 	<section class="set-group">
 		<div class="section-label">{t("도우미 위임 (delegate)")}</div>
-		<Segmented variant="cards" columns={2} label={t("도우미 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />
-		<span class="hint">{roleHint[d.roles]}</span>
-		<Segmented variant="cards" columns={3} label={t("도우미 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
-		<span class="hint">{modeHint[d.policy]}</span>
+		<SettingRow label={t("도우미 역할")} hint={roleHint[d.roles]}>
+			<Segmented size="sm" full={false} label={t("도우미 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />
+		</SettingRow>
+		<SettingRow label={t("도우미 모델")} hint={modeHint[d.policy]}>
+			<Segmented size="sm" full={false} label={t("도우미 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
+		</SettingRow>
 		{#if d.policy === "allowlist"}
 			{#each modelList as m (`${m.provider}/${m.id}`)}
 				{@const key = `${m.provider}/${m.id}`}
