@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
+import { buildTools } from "../src/tools.ts";
 import { readFileSync } from "node:fs";
-import { chooseModel, DelegateLimits, helperUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
+import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, helperUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -110,6 +111,14 @@ describe("chooseModel", () => {
 		expect(() => chooseModel(l, "q/r", "a/b")).toThrow(/not allowed.*x\/y, x\/z/);
 		expect(() => chooseModel(l, "q/r", "a/b")).toThrow(expect.objectContaining({ status: 409 }));
 		expect(chooseModel({ policy: "any", models: [] }, "q/r", undefined)).toBe("q/r");
+	});
+});
+
+describe("freeRole", () => {
+	test("a role with no file gets read-only tools only, the default turn budget and no instructions of its own", () => {
+		const r = freeRole("summarize");
+		expect(r).toMatchObject({ name: "summarize", tools: ["read", "grep", "ls"], maxTurns: DEFAULT_SUBAGENT_TURNS, prompt: "", file: "" });
+		expect(r.tools.some((t) => ["write", "edit", "bash", "delegate", "ask_user"].includes(t) || t.startsWith("peer"))).toBe(false);
 	});
 });
 
@@ -249,6 +258,34 @@ describe("delegate tool", () => {
 		const out = await call(id, { role: "ghost", task: "x" });
 		expect(out).toContain('helper role');
 		expect(out).toContain("available: explore");
+	});
+
+	test("the role policy: defined refuses a role with no file; any runs a read-only general helper that takes the task as its instructions", async () => {
+		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
+		const put = (b: object) => api("PUT", "/configuration/delegate", { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30, ...b });
+		expect((await api("GET", "/configuration")).json.tools.delegate).toMatchObject({ roles: "defined" });
+		expect(await call(id, { role: "summarize", task: "x" })).toContain("helper role");
+		expect((await put({ roles: "any" })).json.delegate.roles).toBe("any");
+		expect(await call(id, { role: "summarize", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("secret-marker-42");
+		// No write or shell for a free role: the denial comes back as a tool error, not a result.
+		expect(await call(id, { role: "summarize", task: `!bash ${JSON.stringify({ command: "echo hi" })}` })).not.toContain("\\nhi");
+		expect(await call(id, { role: "bad name!", task: "x" })).toContain("role names are letters");
+		// A role file that exists but is switched off stays refused even under the free policy.
+		await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: false });
+		expect(await call(id, { role: "explore", task: "x" })).toContain("switched off in the settings");
+		await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: true });
+		// An update without `roles` (an older client) keeps the saved policy.
+		expect((await api("PUT", "/configuration/delegate", { policy: "any", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 })).json.delegate.roles).toBe("any");
+		expect((await put({ roles: "defined" })).json.delegate.roles).toBe("defined");
+		expect(await call(id, { role: "summarize", task: "x" })).toContain("helper role");
+	});
+
+	test("the delegate tool text follows the role policy", () => {
+		const make = (roles: "defined" | "any") => buildTools(["delegate"], dir, [], { delegateRoles: () => roles })[0]!;
+		expect(make("any").description).toContain("any other short name");
+		expect((make("any").parameters as any).properties.role.description).toContain("any short name");
+		expect(make("defined").description).not.toContain("any other short name");
+		expect((make("defined").parameters as any).properties.role.description).not.toContain("any short name");
 	});
 
 	test("switched off, the helper tool is withheld from sessions", async () => {

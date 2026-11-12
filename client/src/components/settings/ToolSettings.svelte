@@ -3,7 +3,7 @@
 	import { toolLabel } from "../../lib/settings-search";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
-	import type { DelegateMode, DelegatePolicy, ModelInfo, ToolsInfo } from "../../lib/types";
+	import type { DelegateMode, DelegatePolicy, DelegateRoles, ModelInfo, ToolsInfo } from "../../lib/types";
 	import SubagentsPanel from "../agent/SubagentsPanel.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import Select from "../ui/Select.svelte";
@@ -55,6 +55,14 @@
 		defined: t("도우미는 역할 파일에 적힌 모델만 씁니다. 에이전트가 모델을 고르려 하면 거절됩니다"),
 		allowlist: t("에이전트는 아래에서 켠 모델 중에서만 고를 수 있습니다"),
 		any: t("에이전트가 연결된 모델 중 아무거나 고를 수 있습니다"),
+	};
+	const roleModes: { id: DelegateRoles; label: string }[] = [
+		{ id: "defined", label: t("정의된 역할만") },
+		{ id: "any", label: t("자유") },
+	];
+	const roleHint: Record<DelegateRoles, string> = {
+		defined: t("역할 파일로 정의된 역할만 씁니다. 다른 이름은 거절됩니다"),
+		any: t("파일 없는 이름도 허용합니다. 그 도우미는 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다"),
 	};
 	const nums = (xs: number[]) => xs.map((n) => ({ value: n, label: String(n) }));
 
@@ -119,8 +127,12 @@
 	{@const d = shown.tools.delegate}
 	<section class="set-group">
 		<div class="section-label">{t("도우미 위임 (delegate)")}</div>
-		<Segmented variant="cards" columns={3} label={t("도우미 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
-		<span class="hint">{modeHint[d.policy]}</span>
+		<SettingRow label={t("도우미 역할")} hint={roleHint[d.roles]}>
+			<Segmented size="sm" full={false} label={t("도우미 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />
+		</SettingRow>
+		<SettingRow label={t("도우미 모델")} hint={modeHint[d.policy]}>
+			<Segmented size="sm" full={false} label={t("도우미 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
+		</SettingRow>
 		{#if d.policy === "allowlist"}
 			{#each modelList as m (`${m.provider}/${m.id}`)}
 				{@const key = `${m.provider}/${m.id}`}

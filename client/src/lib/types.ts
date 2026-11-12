@@ -477,8 +477,11 @@ export interface ConfigurationInfo {
 }
 
 export type DelegateMode = "defined" | "allowlist" | "any";
+export type DelegateRoles = "defined" | "any";
 /** How the delegate tool picks models and how much it may run */
 export interface DelegatePolicy {
+	/** defined: `role` must name a role file; any: a role name with no file is a general read-only helper */
+	roles: DelegateRoles;
 	policy: DelegateMode;
 	/** provider/model entries the allowlist permits */
 	models: string[];
