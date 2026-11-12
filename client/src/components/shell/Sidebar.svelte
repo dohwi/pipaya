@@ -13,6 +13,7 @@
 	import { updater } from "../../lib/updater.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 	import { t } from "../../lib/i18n";
+	import { whenShort } from "../../lib/schedules";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
@@ -340,6 +341,10 @@
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
 	/** A saved model that no longer works outranks an update: chats, compaction or naming fail until it is fixed. */
 	const problems = $derived(app.problemCount);
+	/** Scheduled tasks of the open server: the button shows for any server that has the feature, even with none (so it can be found). */
+	const scheduled = $derived(app.schedules.all(app.serverId));
+	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: whenShort(scheduled.next) }));
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
 	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible ? t("업데이트 있음") : serverUpdater.available ? t("서버 업데이트 있음") : "");
 </script>
@@ -369,7 +374,13 @@
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionPanels placement="sidebar" />
 		<ExtensionMount slot="sidebar.bottom" />
-		<button class="settings wide" onclick={() => app.openSettings()}>
+		{#if schedulesShown}
+			<button class="navbtn wide" onclick={() => (app.schedulesDialog = true)} title={schedulesTip}>
+				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
+				{#if scheduled.count}<span class="salert"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
+			</button>
+		{/if}
+		<button class="settings navbtn wide" onclick={() => app.openSettings()}>
 			<span class="sico"><Icon name="settings" />{#if settingsAlert || extensionUpdates.any}<Pin tone={alertTone} label={settingsAlert || t("업데이트 있음")} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone={alertTone} size="sm">{settingsAlert}</Badge></span>{/if}
 			{#if updater.current}<span class="sver" class:push={!settingsAlert}>v{updater.current}</span>{/if}
@@ -408,7 +419,7 @@
 		padding: 12px 8px; /* the search box shares the card's left and right edges (8) */
 		border-bottom: 1px solid var(--border);
 	}
-	.settings :global(svg) {
+	.navbtn :global(svg) {
 		width: 18px;
 		height: 18px;
 		stroke-width: 1.9;
@@ -561,7 +572,8 @@
 		padding: 8px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
-	.settings {
+	/* the two buttons at the bottom (scheduled tasks, settings) are one shape: same height, padding and glyph column */
+	.navbtn {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -572,7 +584,7 @@
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.settings:hover {
+	.navbtn:hover {
 		background: var(--bg-hover);
 		color: var(--text);
 	}

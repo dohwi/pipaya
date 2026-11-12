@@ -54,6 +54,13 @@
 		const ids = app.visibleIds;
 		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
 	});
+	// The sidebar's scheduled-task count and clocks: read when the open server connects and again after its task events pause.
+	$effect(() => {
+		void app.schedulesTick;
+		const link = app.link;
+		if (!link?.online) return;
+		return app.schedules.follow(link.id, link.api);
+	});
 	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 
@@ -63,6 +70,7 @@
 		skills: () => import("./components/agent/SkillsDialog.svelte"),
 		commands: () => import("./components/agent/CommandFamiliesDialog.svelte"),
 		mcp: () => import("./components/agent/McpDialog.svelte"),
+		schedules: () => import("./components/agent/SchedulesDialog.svelte"),
 		subagents: () => import("./components/agent/SubagentsDialog.svelte"),
 		lightbox: () => import("./components/chat/Lightbox.svelte"),
 		queue: () => import("./components/chat/QueueModal.svelte"),
@@ -462,6 +470,9 @@
 {/if}
 {#if app.mcpDialog && app.api}
 	{#key app.serverId}<Lazy load={load.mcp} api={app.api} onclose={() => (app.mcpDialog = false)} />{/key}
+{/if}
+{#if app.schedulesDialog && app.serverId}
+	{#key app.serverId}<Lazy load={load.schedules} serverId={app.serverId} onclose={() => (app.schedulesDialog = false)} />{/key}
 {/if}
 {#if app.subagentsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.subagents} dialog={app.subagentsDialog} api={app.api} onclose={() => (app.subagentsDialog = null)} />{/key}
