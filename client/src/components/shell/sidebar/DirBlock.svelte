@@ -113,7 +113,7 @@
 		font-weight: 600;
 		color: var(--text);
 	}
-	.dicon :global(svg) {
+	.dicon > :global(svg) { /* the folder glyph only: the pinned mark (PinMark) keeps its own 9px pin */
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.9;
