@@ -21,6 +21,9 @@ SPACE = re.compile(r"(?<![-\w])(margin|padding|gap|row-gap|column-gap|inset|top|
 Z = re.compile(r"(?<![-\w])z-index\s*:\s*(-?\d+)")
 PX = re.compile(r"(-?\d*\.?\d+)px")
 EM = re.compile(r"(-?\d*\.?\d+)em\b")
+# the PinMark hosts (PinMark.svelte's :where list): a rule reaching every svg inside them also hits the mark's own pin
+PIN_HOSTS = ("lead", "dicon", "ico")
+PINHOST = re.compile(r"\.(" + "|".join(PIN_HOSTS) + r")\s+(?::global\()?svg\b")
 
 
 def style_blocks(path: pathlib.Path):
@@ -55,6 +58,7 @@ def main():
     files = sorted(SRC.rglob("*.svelte")) + [SRC / "app.css"]
     hits, allowed = [], []
     for f in files:
+        has_pin = "pinmark" in f.read_text(encoding="utf-8").lower()
         for offset, css in style_blocks(f):
             lines = css.split("\n")
             for i, line in enumerate(lines):
@@ -73,6 +77,8 @@ def main():
                             hits.append((where, "nudge", f"{prop}: {val.strip()}"))
                     if not pos and EM.search(val) and "calc(" not in val:
                         (allowed if ok else hits).append((where, "em-space", f"{prop}: {val.strip()}"))
+                if has_pin and PINHOST.search(line.split("/*")[0]):
+                    hits.append((where, "pinhost", line.strip()))
                 for m in Z.finditer(line):
                     if abs(int(m.group(1))) > 9:
                         (allowed if ok else hits).append((where, "z-index", line.strip()))
