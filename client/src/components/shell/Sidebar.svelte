@@ -268,6 +268,7 @@
 		leaveGroup: (id) => void app.leaveGroup(id),
 		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
+		schedule: (id) => app.openScheduleFor(id),
 	};
 	const menuItems = (target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActions, member);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();

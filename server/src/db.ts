@@ -234,6 +234,27 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id, name });
 		}
 	},
+	// v32: scheduled tasks: a prompt sent to an existing session once, or every so often. Rows go with their session.
+	// last_status is free text on purpose (ok / skipped_busy / skipped_closed / skipped_expired / error): a new state needs no migration.
+	`CREATE TABLE IF NOT EXISTS scheduled_tasks (
+		id          TEXT PRIMARY KEY,
+		session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		title       TEXT,
+		prompt      TEXT NOT NULL,
+		kind        TEXT NOT NULL CHECK (kind IN ('once', 'interval')),
+		run_at      INTEGER,
+		every_ms    INTEGER,
+		enabled     INTEGER NOT NULL DEFAULT 1,
+		next_run_at INTEGER,
+		last_run_at INTEGER,
+		last_status TEXT,
+		last_error  TEXT,
+		fail_count  INTEGER NOT NULL DEFAULT 0,
+		created_at  INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS scheduled_tasks_due ON scheduled_tasks(enabled, next_run_at);
+	CREATE INDEX IF NOT EXISTS scheduled_tasks_session ON scheduled_tasks(session_id);`,
 ];
 
 export function openDb(path: string): Database {

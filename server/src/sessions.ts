@@ -34,6 +34,13 @@ import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
+/**
+ * Stored after the text of a message a scheduled task sent. The client hides the block and labels the message "예약";
+ * the model reads the sentence, so it knows nobody is typing and a question may wait a long time for an answer.
+ */
+export const SCHEDULE_OPEN = "<pipaya-schedule>";
+const SCHEDULE_NOTE = `${SCHEDULE_OPEN}This message was sent automatically by a scheduled task, not typed by the user right now.</pipaya-schedule>`;
+
 export const NOTE_OPEN = "<pipaya-note>";
 const NOTE_CLOSE = "</pipaya-note>";
 
@@ -515,6 +522,7 @@ export class SessionManager {
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
+		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {

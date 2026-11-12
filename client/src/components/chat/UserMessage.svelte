@@ -28,14 +28,16 @@
 
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
 	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
+	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
+	const scheduled = $derived(!!item.scheduled && !header);
 	const shown = $derived(splitQuote(header ? header.body : item.text));
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
 	let expanded = $state(false);
 </script>
 
-<div class="row user" data-part="message.user" class:headed={!!header} class:fresh={item.fresh}>
-	<div class="bubble" class:headedbubble={!!header} class:glow-working={working} data-level={working ? level : undefined}>
+<div class="row user" data-part="message.user" class:headed={!!header || scheduled} class:fresh={item.fresh}>
+	<div class="bubble" class:headedbubble={!!header || scheduled} class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
 				{#each item.images as img, i}
@@ -54,6 +56,8 @@
 		{/if}
 		{#if header}
 			<div class="header"><Icon name="chat" /> <span>{header.from}</span></div>
+		{:else if scheduled}
+			<div class="header"><Icon name="clock" /> <span>{t("예약")}</span></div>
 		{/if}
 		{#if shown.quote}
 			<blockquote class="quote">{shown.quote}</blockquote>

@@ -282,6 +282,10 @@ class AppStore {
   mcpDialog = $state(false);
   /** Bumped when an MCP server is changed or connects/disconnects, so footers and the dialog re-read it. */
   mcpTick = $state(0);
+  /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
+  schedulesTick = $state(0);
+  /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
+  scheduleFor = $state<string | null>(null);
   openMcp() {
     if (this.api) this.mcpDialog = true;
   }
@@ -315,6 +319,11 @@ class AppStore {
     this.settingsTab = tab;
     this.settingsServer = tab === "servers" ? server : null;
     this.settingsOpen = true;
+  }
+  /** Opens the scheduled-tasks page with a new-task form for this conversation. */
+  openScheduleFor(sessionId: string) {
+    this.scheduleFor = sessionId;
+    this.openSettings("schedules");
   }
   sending = $state(false);
 
@@ -1099,6 +1108,9 @@ class AppStore {
         break;
       case "mcp_updated":
         this.mcpTick++;
+        break;
+      case "schedules_updated":
+        this.schedulesTick++;
         break;
       case "locales_updated":
         void this.syncLocales();

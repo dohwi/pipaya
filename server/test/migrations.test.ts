@@ -30,8 +30,7 @@ describe("migrations", () => {
 		add.run({ id: "d", name: "미나", closed: 0, at: 4 });
 		add.run({ id: "e", name: "철수", closed: 1, at: 5 }); // closed: gave its name up, stays as it is
 		add.run({ id: "f", name: "가온", closed: 0, at: 6 });
-		for (let i = MIGRATIONS.length - 2; i < MIGRATIONS.length; i++) { // the last two steps: Korean names, then pairs
-			const step = MIGRATIONS[i]!;
+		for (const step of MIGRATIONS.slice(-3, -1)) { // v30 and v31: Korean names, then pairs (v32, scheduled tasks, is SQL and has no part in this)
 			if (typeof step !== "string") step(db);
 		}
 		const names = Object.fromEntries((db.query("SELECT id, name FROM sessions").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]));
@@ -44,5 +43,15 @@ describe("migrations", () => {
 		const active = ["a", "b", "c", "d", "f"].map((id) => names[id]!);
 		expect(new Set(active).size).toBe(5); // no two active sessions share a name any more
 		expect(db.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 6 }); // nothing deleted
+	});
+
+	test("scheduled tasks: the table is created by the last step, which can run again and keeps the rows", () => {
+		const db = openDb(":memory:");
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s', 't', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
+		db.query("INSERT INTO scheduled_tasks (id, session_id, prompt, kind, every_ms, next_run_at, created_at, updated_at) VALUES ('t', 's', 'p', 'interval', 300000, 5, 1, 1)").run();
+		const last = MIGRATIONS[MIGRATIONS.length - 1]!;
+		expect(typeof last).toBe("string");
+		db.exec(last as string);
+		expect(db.query("SELECT id, enabled, fail_count, last_status FROM scheduled_tasks").all()).toEqual([{ id: "t", enabled: 1, fail_count: 0, last_status: null }]);
 	});
 });

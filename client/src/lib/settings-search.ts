@@ -18,6 +18,7 @@ export const SETTINGS_TABS = [
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 도우미 위임"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
+	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
 	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
 	{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
 ] as const;
@@ -43,6 +44,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
+	{ tab: "schedules", label: msg("예약 작업"), words: "schedule scheduled task timer cron repeat interval later 예약 반복 정기 주기 자동 실행 알람" }, // i18n-ok: search words in either language
 ];
 
 const norm = (s: string) => s.toLowerCase();

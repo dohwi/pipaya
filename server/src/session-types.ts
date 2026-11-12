@@ -18,9 +18,10 @@ export type PromptMode = "prompt" | "steer" | "follow_up";
  * watching session, so its result is agent-to-agent traffic. "user": everything else (the person's message, retry,
  * extension). A person's message joining a running peer run turns it into a "user" run. This is the one criterion
  * for the "no notifications for peer talk" setting: the origin of the run, not what the run did (a user run that
- * used peer tools still notifies when it ends).
+ * used peer tools still notifies when it ends). "schedule": started by a scheduled task. The person set it up, so it is
+ * not agent-to-agent traffic: it notifies and leaves an unread mark like a "user" run; the transcript labels it.
  */
-export type RunOrigin = "user" | "peer";
+export type RunOrigin = "user" | "peer" | "schedule";
 
 export interface CreateSessionInput {
 	title?: string;

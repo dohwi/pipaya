@@ -209,6 +209,35 @@ export interface McpServerInfo extends McpServer {
 	tools: { name: string; tool: string; description: string }[];
 }
 
+/** A prompt the server sends to a session once or every so often (server/src/scheduler.ts). Times are Unix ms. */
+export type ScheduleStatus = "ok" | "skipped_busy" | "skipped_closed" | "skipped_expired" | "error";
+export interface Schedule {
+	id: string;
+	sessionId: string;
+	title: string | null;
+	prompt: string;
+	kind: "once" | "interval";
+	runAt: number | null;
+	everyMs: number | null;
+	enabled: boolean;
+	nextRunAt: number | null;
+	lastRunAt: number | null;
+	lastStatus: ScheduleStatus | null;
+	lastError: string | null;
+	failCount: number;
+	createdAt: number;
+	updatedAt: number;
+}
+export interface ScheduleInput {
+	sessionId: string;
+	title?: string | null;
+	prompt: string;
+	kind: "once" | "interval";
+	runAt?: number | null;
+	everyMs?: number | null;
+}
+export type SchedulePatch = Partial<Pick<Schedule, "title" | "prompt" | "enabled" | "runAt" | "everyMs">>;
+
 export interface McpInfo {
 	servers: McpServerInfo[];
 	/** Servers connected right now */
@@ -640,6 +669,8 @@ export interface UserItem {
 	files?: FileRef[];
 	/** A note a server extension stored with the message (`pipaya-note`): shown on it, never sent to the model. */
 	note?: MessageNote;
+	/** Sent by a scheduled task, not typed by the person (the server stores a `pipaya-schedule` block with it) */
+	scheduled?: boolean;
 	ts: number;
 	fresh?: boolean;
 }
