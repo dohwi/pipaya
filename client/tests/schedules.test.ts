@@ -19,6 +19,7 @@ import {
 	resultOf,
 	sortSchedules,
 	splitEvery,
+	summarizeSchedules,
 	toLocalInput,
 } from "../src/lib/schedules";
 import { rowMenuEntries } from "../src/lib/sidebar-model";
@@ -164,5 +165,29 @@ describe("a prompt a schedule sent", () => {
 		expect(scheduled).toMatchObject({ text: "상태 알려줘", scheduled: true });
 		expect(typed!.text).toBe("내가 쓴 글");
 		expect(typed!.scheduled).toBeUndefined();
+	});
+});
+
+describe("summarizeSchedules", () => {
+	test("counts only switched-on tasks, overall and per conversation, with the soonest next run", () => {
+		const { all, bySession } = summarizeSchedules([
+			task({ id: "1", sessionId: "a", nextRunAt: 5000 }),
+			task({ id: "2", sessionId: "a", nextRunAt: 3000 }),
+			task({ id: "3", sessionId: "b", nextRunAt: 4000 }),
+			task({ id: "4", sessionId: "b", enabled: false, nextRunAt: 100 }),
+			task({ id: "5", sessionId: "c", enabled: false, nextRunAt: null }),
+		]);
+		expect(all).toEqual({ count: 3, next: 3000 });
+		expect(bySession.get("a")).toEqual({ count: 2, next: 3000 });
+		expect(bySession.get("b")).toEqual({ count: 1, next: 4000 });
+		expect(bySession.has("c")).toBe(false);
+	});
+	test("an on task without a next time counts but sets no time; an empty list is zero", () => {
+		const { all, bySession } = summarizeSchedules([task({ sessionId: "a", nextRunAt: null }), task({ id: "2", sessionId: "a", nextRunAt: 7 })]);
+		expect(all).toEqual({ count: 2, next: 7 });
+		expect(bySession.get("a")).toEqual({ count: 2, next: 7 });
+		const none = summarizeSchedules([]);
+		expect(none.all).toEqual({ count: 0, next: null });
+		expect(none.bySession.size).toBe(0);
 	});
 });

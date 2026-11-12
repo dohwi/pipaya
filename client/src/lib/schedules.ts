@@ -97,3 +97,33 @@ export function sortSchedules(list: readonly Schedule[]): Schedule[] {
 		return a.createdAt - b.createdAt;
 	});
 }
+
+/** What the sidebar shows about a set of tasks: how many are switched on and when the soonest runs next. */
+export interface ScheduleSummary {
+	count: number;
+	next: number | null;
+}
+export const NO_SCHEDULES: ScheduleSummary = { count: 0, next: null };
+
+/**
+ * The switched-on tasks of one server, counted overall and per conversation, each with its soonest next run.
+ * A task that is off (or used up) is not counted, and an on task without a next time counts but sets no time.
+ */
+export function summarizeSchedules(list: readonly Pick<Schedule, "sessionId" | "enabled" | "nextRunAt">[]): { all: ScheduleSummary; bySession: Map<string, ScheduleSummary> } {
+	const soonest = (a: number | null, b: number | null) => (a === null ? b : b === null ? a : Math.min(a, b));
+	const all = { count: 0, next: null as number | null };
+	const bySession = new Map<string, ScheduleSummary>();
+	for (const s of list) {
+		if (!s.enabled) continue;
+		all.count++;
+		all.next = soonest(all.next, s.nextRunAt);
+		const one = bySession.get(s.sessionId) ?? { count: 0, next: null };
+		one.count++;
+		one.next = soonest(one.next, s.nextRunAt);
+		bySession.set(s.sessionId, one);
+	}
+	return { all, bySession };
+}
+
+/** A time for a tooltip: `11월 13일 09:30` (the app's language), shorter than the page's full date and seconds. */
+export const whenShort = (ms: number): string => new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });

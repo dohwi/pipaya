@@ -521,6 +521,8 @@ export const en: Record<string, string> = {
 	"{n}/{max}개": "{n}/{max}",
 	"지금 실행": "Run now",
 	"다음 실행 {when}": "Next run {when}",
+	"다음 실행: {when}": "Next run: {when}",
+	"예약 {n}개": "{n} scheduled",
 	"마지막 {when}": "Last {when}",
 	"실행을 마쳤습니다": "Finished running",
 	"꺼져 있음": "Off",

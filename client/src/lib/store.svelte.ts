@@ -46,6 +46,7 @@ import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import type { SettingsTabId } from "./settings-search";
 import { SidebarState, reorder } from "./sidebar.svelte";
+import { ScheduleBook } from "./schedule-book.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -262,6 +263,8 @@ class AppStore {
   readonly feedback = new Feedback();
   /** Drawer, width, folded nodes, dragged order. */
   readonly sidebar = new SidebarState();
+  /** Scheduled tasks per server as the sidebar shows them (the button's count, the clock on a conversation). */
+  readonly schedules = new ScheduleBook();
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);
@@ -284,6 +287,8 @@ class AppStore {
   mcpTick = $state(0);
   /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
   schedulesTick = $state(0);
+  /** The scheduled-tasks window opened from the sidebar (the open server's list and form), or false. */
+  schedulesDialog = $state(false);
   /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
   scheduleFor = $state<string | null>(null);
   openMcp() {
@@ -766,6 +771,7 @@ class AppStore {
     this.skillsDialog = null;
     this.commandsDialog = null;
     this.mcpDialog = false;
+    this.schedulesDialog = false;
     this.queueDialog = null;
     // The transcripts of the server we leave are parked, and the ones parked for this server come back: coming back to a
     // server shows its conversation at once and refreshes it in place (attach), instead of an empty pane for the length of
