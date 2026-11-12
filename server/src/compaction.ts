@@ -116,9 +116,11 @@ export function contextTokens(messages: AgentMessage[], systemChars: number, sin
  * always lands on a user message, so a tool call is never separated from its result. Returns null when there is
  * no earlier user message to cut at (nothing worth summarizing).
  */
-export function pickCut(messages: AgentMessage[], keepRecent = KEEP_RECENT_TOKENS): number | null {
+export function pickCut(messages: AgentMessage[], keepRecent = KEEP_RECENT_TOKENS, midRun = false): number | null {
 	const candidates: number[] = [];
-	messages.forEach((m, i) => { if (i > 0 && m.role === "user") candidates.push(i); });
+	// Mid-run (one long prompt with many tool turns) there may be no later user message; a turn's assistant message is
+	// also a safe cut, because its tool results follow it and stay with it.
+	messages.forEach((m, i) => { if (i > 0 && (m.role === "user" || (midRun && m.role === "assistant"))) candidates.push(i); });
 	if (!candidates.length) return null;
 	const suffix = new Array<number>(messages.length + 1).fill(0);
 	for (let i = messages.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1]! + estimateTokens(messages[i]!);
