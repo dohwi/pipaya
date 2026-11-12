@@ -5,7 +5,7 @@
 	import { orderQueued, queuedLabel, queuedTone } from "../../lib/queue";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 
-	type Queued = { mode: "steer" | "follow_up"; text: string };
+	type Queued = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
 	/** Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it). */
 	let { queued, oncancel }: { queued: Queued[]; oncancel: (q: Queued) => void } = $props();
 

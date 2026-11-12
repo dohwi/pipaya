@@ -437,8 +437,15 @@ export class Api {
 		return res.blob();
 	}
 	abort = (id: string) => this.req<{ aborted: boolean }>("POST", `/sessions/${id}/abort`);
-	cancelQueued = (id: string, mode: "steer" | "follow_up", text: string) =>
-		this.req<{ cancelled: boolean }>("POST", `/sessions/${id}/queue/cancel`, { mode, text });
+	cancelQueued = (id: string, mode: "steer" | "follow_up", text: string, deferred?: boolean) =>
+		this.req<{ cancelled: boolean }>("POST", `/sessions/${id}/queue/cancel`, { mode, text, ...(deferred !== undefined ? { deferred } : {}) });
+	/** Queue a command behind the current run (it runs when the run ends, in order with the follow-ups). */
+	queueCommand = (id: string, text: string, instructions?: string) =>
+		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
+			text,
+			mode: "follow_up",
+			command: { name: "compact", ...(instructions?.trim() ? { instructions: instructions.trim() } : {}) },
+		});
 	retry = (id: string) => this.req<{ accepted: "retry" }>("POST", `/sessions/${id}/retry`);
 	/** Resolves only after the server has durably committed the compacted model context. */
 	compactSession = (id: string, customInstructions?: string) =>

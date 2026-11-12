@@ -282,7 +282,7 @@ export interface SessionDetail extends Session {
 		streamingMessage: unknown;
 		queued: boolean;
 		/** Absent on servers from before this field. */
-		queuedMessages?: { mode: "steer" | "follow_up"; text: string }[];
+		queuedMessages?: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[];
 		lastError: string | null;
 	};
 	usage: Usage;

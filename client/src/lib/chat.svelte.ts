@@ -118,11 +118,12 @@ const EARLIER_PAGE = 100;
 export class ChatState {
 	items = $state<ChatItem[]>([]);
 	tools = $state<Record<string, ToolRun>>({});
-	queued = $state<{ mode: "steer" | "follow_up"; text: string }[]>([]);
+	/** `deferred`: the server holds it until the run ends (a /compact and what was queued behind it), so it outlives run_finished. */
+	queued = $state<{ mode: "steer" | "follow_up"; text: string; deferred?: boolean }[]>([]);
 	/** Messages sent while a compaction runs: held here and sent as soon as it ends (shown as queued). */
 	held = $state<{ text: string; images: ImageBlock[]; files: UploadFile[] }[]>([]);
 	/** Everything waiting for delivery: held messages first (they go out first), then the server's queue. */
-	get waiting(): { mode: "steer" | "follow_up"; text: string }[] {
+	get waiting(): { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] {
 		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];
 	}
 	running = $state(false);
@@ -324,7 +325,7 @@ export class ChatState {
 			this.compaction = detail.compaction ?? null;
 			this.serverCompacting = st.compacting ?? false;
 			this.contextRevision++;
-			this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text }));
+			this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 			this.ready = true;
 			this.ahead = null;
 			setTimeout(() => { if (token === this.token) this.prefetchEarlier(); }, 0);
@@ -378,7 +379,7 @@ export class ChatState {
 			}
 		}
 		this.serverCompacting = st.compacting ?? false;
-		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text }));
+		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 		const partial = st.streamingMessage as AssistantMessage | null;
 		if (st.running && partial && partial.role === "assistant") this.catchUpStream(partial);
 	}
@@ -556,7 +557,7 @@ export class ChatState {
 				for (const run of Object.values(this.tools)) {
 					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
-				this.queued = [];
+				this.queued = this.queued.filter((x) => x.deferred && d.status !== "aborted");
 				// The run-limit abort cut a model call short and left an empty error reply; the server drops it, so hide it here too.
 				if (d.cause === "limit") {
 					const tail = this.items[this.items.length - 1];
@@ -581,11 +582,11 @@ export class ChatState {
 				break;
 
 			case "message_queued":
-				this.queued.push({ mode: d.mode === "steer" ? "steer" : "follow_up", text: String(d.text ?? "") });
+				this.queued.push({ mode: d.mode === "steer" ? "steer" : "follow_up", text: String(d.text ?? ""), ...(d.deferred ? { deferred: true } : {}) });
 				break;
 
 			case "message_dequeued": {
-				const i = this.queued.findIndex((x) => x.mode === (d.mode === "steer" ? "steer" : "follow_up") && x.text === String(d.text ?? ""));
+				const i = this.queued.findIndex((x) => x.mode === (d.mode === "steer" ? "steer" : "follow_up") && x.text === String(d.text ?? "") && !!x.deferred === !!d.deferred);
 				if (i >= 0) this.queued.splice(i, 1);
 				break;
 			}

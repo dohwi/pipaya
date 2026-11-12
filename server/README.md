@@ -82,7 +82,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET | `/sessions/:id/status` | Includes the streaming partial message for late joiners |
 | GET | `/sessions/:id/usage` | Token/cost totals |
 | POST | `/sessions/:id/abort` | `{aborted}` |
-| POST | `/sessions/:id/queue/cancel` | Body `{mode: steer|follow_up, text}`; removes one undelivered queued message → `{cancelled}` |
+| POST | `/sessions/:id/queue/cancel` | Body `{mode: steer|follow_up, text, deferred?}`; removes one undelivered queued message → `{cancelled}` |
 | POST | `/sessions/:id/retry` | Retry after failure/abort; `202` |
 | POST | `/sessions/:id/fork` | Optional `{atSeq,title}` |
 | GET | `/skills?cwd=` | Skills visible from `cwd` (default: server default directory) with global/project on-off state |
@@ -113,7 +113,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | GET | `/events/history?sessionId=&after=&limit=` | Persisted events and latest cursor |
 | GET | `/events/types` | Machine-readable event payload schemas |
 
-Message modes: `prompt` starts an idle session; `steer` injects into an active run; `follow_up` queues for after it.
+Message modes: `prompt` starts an idle session; `steer` injects into an active run; `follow_up` queues for after it. With `mode: follow_up`, `command: {name: "compact", instructions?}` queues the command instead of a message: the server runs it when the run ends, in order with the other follow-ups (messages queued after it wait behind it, and a stopped run drops them). `text` is what the queue shows. `queue/cancel` takes `deferred: true` for those held items.
 Invalid state returns `409`. `systemPrompt` and `tools` are frozen after the first message.
 Thinking levels: `minimal`, `low`, `medium` (default), `high`, `xhigh`, `max`.
 Disabling reasoning with `off` is not supported; existing `off` sessions migrate to `medium`.

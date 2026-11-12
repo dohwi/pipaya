@@ -30,7 +30,7 @@ import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, with
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
-import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
@@ -72,6 +72,9 @@ const DESCRIBE_RETRY_MS = 10 * 60_000;
 
 /** Why a chat cannot use an image model (also shown to the user as the error). */
 const IMAGE_MODEL_IN_CHAT = "this is an image model: it does not chat. Pick a chat model, and set this one as the image model in the settings so agents can draw with the generate_image tool";
+
+/** Errors compact() has already published as compaction_failed. */
+const reported = new WeakSet<object>();
 
 export class SessionManager {
 	private live = new Map<string, Live>();
@@ -169,10 +172,10 @@ export class SessionManager {
 	}
 
 	/** Messages still waiting in a session's steer / follow-up queues (pi-agent-core keeps them in plain arrays). */
-	private queuedOf(id: string): { mode: "steer" | "follow_up"; text: string }[] {
+	private queuedOf(id: string): { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] {
 		const live = this.live.get(id);
 		if (!live) return [];
-		const out: { mode: "steer" | "follow_up"; text: string }[] = [];
+		const out: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] = [];
 		for (const mode of ["steer", "follow_up"] as const) {
 			const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
 			for (const m of Array.isArray(queue?.messages) ? queue.messages : []) {
@@ -181,6 +184,8 @@ export class SessionManager {
 				out.push({ mode, text });
 			}
 		}
+		// Held by the server until the run ends; delivered after everything above.
+		for (const d of live.deferred ?? []) out.push({ mode: "follow_up", text: d.text, deferred: true });
 		return out;
 	}
 
@@ -286,7 +291,7 @@ export class SessionManager {
 			pendingToolCalls: live ? [...live.agent.state.pendingToolCalls] : [],
 			pendingQuestions: this.questions?.list(id).length ?? 0,
 			streamingMessage: (live?.running && live.agent.state.streamingMessage) || null,
-			queued: live?.agent.hasQueuedMessages() ?? false,
+			queued: (live?.agent.hasQueuedMessages() ?? false) || !!live?.deferred?.length,
 			queuedMessages: this.queuedOf(id),
 			lastError: live?.agent.state.errorMessage ?? null,
 			compacting: !!live?.compacting,
@@ -381,8 +386,9 @@ export class SessionManager {
 			const aborted = controller.signal.aborted || (e as { aborted?: boolean }).aborted === true;
 			const errorMessage = e instanceof Error ? e.message : String(e);
 			this.bus.publish(id, "compaction_failed", { aborted, ...(aborted ? {} : { errorMessage }) });
-			if (aborted) throw conflict("compaction cancelled");
-			throw e instanceof HttpError ? e : new HttpError(502, "upstream_error", errorMessage);
+			const err = aborted ? conflict("compaction cancelled") : e instanceof HttpError ? e : new HttpError(502, "upstream_error", errorMessage);
+			reported.add(err);
+			throw err;
 		} finally {
 			live.compacting = undefined;
 			live.compactSettled = undefined;
@@ -513,12 +519,22 @@ export class SessionManager {
 
 	async send(
 		id: string,
-		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin },
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		this.assertChatModel(record.provider, record.model);
 		const mode = input.mode ?? "prompt";
+		if (input.command) {
+			// A command is never a prompt: the server holds it and runs it when the run ends, in order with the other follow-ups.
+			if (mode !== "follow_up") throw badRequest('a command can only be queued with mode "follow_up"');
+			const live = this.live.get(id);
+			if (!live?.running) throw conflict('session is idle; run the command directly (mode "follow_up" needs an active run)');
+			const instructions = input.command.instructions?.trim() || undefined;
+			(live.deferred ??= []).push({ kind: "compact", text: input.text, ...(instructions ? { instructions } : {}) });
+			this.bus.publish(id, "message_queued", { mode, text: input.text, deferred: true });
+			return { accepted: mode };
+		}
 		let extraParts: { type: "text"; text: string }[] = [];
 		let inputTitle: string | undefined;
 		if (this.ext) {
@@ -560,8 +576,9 @@ export class SessionManager {
 			// A person joining a run that another session started makes it a run for the person; a peer never takes it back.
 			if (origin === "user") live.origin = "user";
 			if (mode === "steer") live.agent.steer(message);
+			else if (live.deferred?.length) live.deferred.push({ kind: "message", text: input.text, message, origin });
 			else live.agent.followUp(message);
-			this.bus.publish(id, "message_queued", { mode, text: input.text });
+			this.bus.publish(id, "message_queued", { mode, text: input.text, ...(mode === "follow_up" && live.deferred?.length ? { deferred: true } : {}) });
 			return { accepted: mode };
 		}
 
@@ -690,21 +707,29 @@ export class SessionManager {
 	}
 
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
-	cancelQueued(id: string, mode: "steer" | "follow_up", text: string): boolean {
+	cancelQueued(id: string, mode: "steer" | "follow_up", text: string, deferred?: boolean): boolean {
 		this.get(id);
 		const live = this.live.get(id);
 		if (!live) return false;
+		const held = (): boolean => {
+			const j = live.deferred?.findIndex((d) => d.text === text) ?? -1;
+			if (j < 0) return false;
+			live.deferred!.splice(j, 1);
+			this.bus.publish(id, "message_dequeued", { mode: "follow_up", text, deferred: true });
+			return true;
+		};
+		if (deferred) return mode === "follow_up" && held();
 		// pi-agent-core has no per-item removal API; its queues are plain arrays.
 		const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
 		const items = queue?.messages;
-		if (!Array.isArray(items)) return false;
+		if (!Array.isArray(items)) return deferred === undefined && mode === "follow_up" && held();
 		const textOf = (m: AgentMessage) => {
 			const c = (m as { content?: unknown }).content;
 			if (typeof c === "string") return c;
 			return Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
 		};
 		const i = items.findIndex((m) => textOf(m) === text);
-		if (i < 0) return false;
+		if (i < 0) return deferred === undefined && mode === "follow_up" && held();
 		items.splice(i, 1);
 		this.bus.publish(id, "message_dequeued", { mode, text });
 		return true;
@@ -886,10 +911,45 @@ export class SessionManager {
 				usage: this.store.usage(id),
 				...(live.stopCause ? { cause: live.stopCause } : {}),
 			});
+			// Commands and messages queued behind them go on now (not after a stop: the client drops its queue then too).
+			const next = this.drainDeferred(id, live, status);
+			this.pendingRuns.add(next);
+			void next.finally(() => this.pendingRuns.delete(next));
 		})();
 		live.settled = settled;
 		this.pendingRuns.add(settled);
 		void settled.finally(() => this.pendingRuns.delete(settled));
+	}
+
+	/**
+	 * Works through the follow-ups the server holds (see Deferred), in the order they were typed: a `/compact` runs
+	 * itself; the messages after it go out as one run, and the next command waits for that run to end.
+	 */
+	private async drainDeferred(id: string, live: Live, status: "ok" | "error" | "aborted"): Promise<void> {
+		if (status === "aborted") { live.deferred = []; return; }
+		while (live.deferred?.length && !live.running && !this.closing && this.live.get(id) === live) {
+			const head = live.deferred[0]!;
+			if (head.kind === "compact") {
+				live.deferred.shift();
+				this.bus.publish(id, "message_dequeued", { mode: "follow_up", text: head.text, deferred: true });
+				try {
+					await this.compact(id, head.instructions);
+				} catch (e) {
+					// compact() reports its own failures; a refusal before it started ("not enough history") has not been reported yet.
+					if (!reported.has(e as object)) this.bus.publish(id, "compaction_failed", { aborted: false, errorMessage: e instanceof Error ? e.message : String(e) });
+				}
+				continue;
+			}
+			const batch: Extract<Deferred, { kind: "message" }>[] = [];
+			while (live.deferred[0]?.kind === "message") batch.push(live.deferred.shift() as Extract<Deferred, { kind: "message" }>);
+			const [first, ...rest] = batch as [Extract<Deferred, { kind: "message" }>, ...Extract<Deferred, { kind: "message" }>[]];
+			this.run(id, live, "prompt", first.origin, async () => {
+				for (const r of rest) live.agent.followUp(r.message);
+				await this.autoCompact(id);
+				await live.agent.prompt(first.message);
+			});
+			return;
+		}
 	}
 
 	/**
