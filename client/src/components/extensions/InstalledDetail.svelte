@@ -14,6 +14,7 @@
 	import SettingsForm from "./SettingsForm.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import { localizeFields, manifestDescription, manifestName } from "../../lib/extensions/translations";
+	import type { DeviceValuesSource } from "../../lib/extensions/device-values";
 
 	/**
 	 * The page of one installed extension: on/off switch, its settings (a form when it declares fields, else raw JSON),
@@ -42,6 +43,7 @@
 		onremove,
 		onsettingslocal,
 		onsavepartial,
+		deviceValues = [],
 	}: {
 		entry: ExtensionRow;
 		/** Where the extension lives: the host (runs here) or another server's idle list (only remembers the choice) */
@@ -74,6 +76,8 @@
 		onsettingslocal?: (local: boolean) => void;
 		/** `save(partial)` of the extension's own settings section: validated like the form, the other keys stay as they are */
 		onsavepartial?: (partial: unknown) => Promise<void>;
+		/** This device's other servers that hold the device-only values (keys, tokens) this one lacks for this extension */
+		deviceValues?: DeviceValuesSource[];
 	} = $props();
 
 	const id = $derived(entry.package.manifest.id);
@@ -147,6 +151,12 @@
 			</SettingRow>
 		{/if}
 		{#if fields}
+			{#each deviceValues.slice(0, 1) as source (source.serverId)}
+				<Notice tone="info" size="sm" role="status">
+					{t("{fields} 값은 기기에만 저장되어 서버끼리 옮겨지지 않습니다. 이 기기의 ‘{server}’ 서버에 입력해 둔 값이 있습니다.", { fields: source.labels.join(" · "), server: source.serverName })}
+					{#snippet action()}<button type="button" disabled={tasks.busy[id]} onclick={() => onsave({ ...entry.settings, ...source.values })}>{t("그 값 쓰기")}</button>{/snippet}
+				</Notice>
+			{/each}
 			{#if gated}<p class="hint">{t("새로 설치한 확장입니다. 기본값을 확인하고 설정을 저장하면 켤 수 있습니다.")}</p>{/if}
 			<ExtensionPart part="extension.settings" {owners} props={pageProps}>
 				<SettingsForm {id} fields={shownFields!} value={entry.settings} disabled={tasks.busy[id] || entry.state === "starting"} {saveLabel} {onsave} componentOwners={owners} />
