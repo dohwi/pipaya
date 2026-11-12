@@ -115,14 +115,16 @@ export const WorkdirInfo = Type.Object({
 export const DefaultsResult = Type.Object({ defaults: DefaultsBody, effectiveDefaults: DefaultsBody });
 export const ToolsBody = Type.Object({ disabled: Type.Array(Type.String(), { description: "Switchable tools to withhold from every session. Unknown or locked names are rejected" }) }, { additionalProperties: false });
 export const DelegatePolicy = Type.Object({
+	// Optional so settings saved before the role policy existed (and older clients) still validate; they read as `defined`.
+	roles: Type.Optional(Type.Union([Type.Literal("defined"), Type.Literal("any")], { description: "defined: `role` must name a role file (the default); any: a role name with no file is a general read-only helper that takes the task as its instructions" })),
 	policy: Type.Union([Type.Literal("defined"), Type.Literal("allowlist"), Type.Literal("any")], { description: "defined: helpers use the model their role file names (a `model` argument is refused); allowlist: the `model` argument may pick only from `models`; any: any model" }),
 	models: Type.Array(Type.String({ minLength: 3, maxLength: 200 }), { maxItems: 50, description: "provider/model entries the allowlist permits" }),
 	maxConcurrent: Type.Integer({ minimum: 1, maximum: 8, description: "Helpers running at once per session" }),
 	maxCalls: Type.Integer({ minimum: 1, maximum: 50, description: "delegate calls per run of the calling session" }),
 	maxTurns: Type.Integer({ minimum: 1, maximum: 50, description: "Upper bound on a helper's model calls, whatever its role file asks for" }),
 }, { additionalProperties: false });
-export type DelegatePolicyValue = Static<typeof DelegatePolicy>;
-export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 };
+export type DelegatePolicyValue = Static<typeof DelegatePolicy> & { roles: "defined" | "any" };
+export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 };
 export const ToolsInfo = Type.Object({
 	delegate: Type.Optional(DelegatePolicy),
 	toggleable: Type.Array(Type.String(), { description: "Tools that can be switched off" }),
@@ -288,17 +290,19 @@ export class Configuration {
 	delegatePolicy(): DelegatePolicyValue {
 		const row = this.db.query("SELECT data FROM settings WHERE key = 'delegate_policy'").get() as { data: string } | null;
 		try {
-			const v = row ? JSON.parse(row.data) : null;
-			return Value.Check(DelegatePolicy, v) ? v : DEFAULT_DELEGATE_POLICY;
+			const v = row ? { roles: "defined", ...JSON.parse(row.data) } : null;
+			return Value.Check(DelegatePolicy, v) ? (v as DelegatePolicyValue) : DEFAULT_DELEGATE_POLICY;
 		} catch { return DEFAULT_DELEGATE_POLICY; }
 	}
 
-	setDelegatePolicy(p: DelegatePolicyValue) {
+	setDelegatePolicy(p: Static<typeof DelegatePolicy>) {
 		const models = [...new Set(p.models)];
 		const bad = models.find((m) => !m.includes("/") || !this.registry.models.getModel(m.slice(0, m.indexOf("/")), m.slice(m.indexOf("/") + 1)));
 		if (bad) throw badRequest(`unknown model ${bad}; use provider/model of a configured model`);
 		if (p.policy === "allowlist" && !models.length) throw badRequest("the allowlist policy needs at least one model");
-		const data = JSON.stringify({ ...p, models });
+		// A request without `roles` (an older client) keeps the saved role policy.
+		const roles = p.roles ?? this.delegatePolicy().roles;
+		const data = JSON.stringify({ ...p, roles, models });
 		this.db.query("INSERT INTO settings (key, data) VALUES ('delegate_policy', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data });
 		return this.toolsInfo();
 	}

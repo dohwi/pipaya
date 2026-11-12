@@ -25,7 +25,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, helperUsage, loadSubagents, subagentSystem } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, freeRole, helperUsage, loadSubagents, SUBAGENT_NAME, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -1109,7 +1109,7 @@ export class SessionManager {
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), peers: {
+		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), delegateRoles: () => this.delegatePolicy().roles, peers: {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),
@@ -1147,10 +1147,17 @@ export class SessionManager {
 	private async delegate(sessionId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void) {
 		const rec = this.store.get(sessionId);
 		if (!rec) throw notFound("session");
+		const name = input.role.replace(/\.md$/, "");
 		const defs = loadSubagents(rec.cwd, this.home, this.disabledSubagents());
-		const def = defs.get(input.role.replace(/\.md$/, ""));
-		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents, or switch a role on in the settings)"}`);
 		const pol = this.delegatePolicy();
+		let def = defs.get(name);
+		if (!def && pol.roles === "any") {
+			// Free role: a name with no file is a general read-only helper. A role file that exists but is switched off stays refused.
+			if (!SUBAGENT_NAME.test(name)) throw badRequest(`helper role "${input.role}": role names are letters, digits, '.', '_' and '-' (at most 40, starting with a letter or digit)`);
+			if (loadSubagents(rec.cwd, this.home).has(name)) throw notFound(`helper role "${input.role}" is switched off in the settings`);
+			def = freeRole(name);
+		}
+		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents, or switch a role on in the settings)"}`);
 		const spec = chooseModel(pol, input.model, def.model);
 		let provider = rec.provider, modelId = rec.model;
 		if (spec) {

@@ -33,6 +33,8 @@ export interface ToolContext {
 	ask?(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 	/** Run a one-off helper and return its answer (`delegate`). Rejects with a conflict when a limit is hit; the signal stops the helper. */
 	delegate?(toolCallId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void): Promise<AgentToolResult<any>>;
+	/** The role policy of `delegate` now: `any` lets `role` name a role with no file (read in `create`, so the tool text matches it). */
+	delegateRoles?(): "defined" | "any";
 	/** Other sessions of this server (`peer`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
@@ -583,17 +585,24 @@ const DELEGATE_DESCRIPTION =
 	"Hand a self-contained task to a short-lived helper (a sub-agent role defined in ~/.agents/subagents or the project's .agents/subagents) and get its final answer back as text. " +
 	"The helper does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
 	"Use it to save your own context on searches or noisy commands; limits apply (concurrent helpers, calls per run). An unknown role is rejected with the list of roles.";
+/** Free role policy: `role` may name no file; the helper is a general read-only one that takes `task` as its instructions. */
+const DELEGATE_DESCRIPTION_FREE =
+	"Hand a self-contained task to a short-lived helper and get its final answer back as text. " +
+	"`role` may be a role defined in ~/.agents/subagents or the project's .agents/subagents (its own model and tools), or any other short name (e.g. explore, summarize): then the helper is a general one with read-only tools (read, grep, ls) and no write, edit or shell access, and `task` is its whole instruction. " +
+	"The helper does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
+	"Use it to save your own context on searches or noisy commands; limits apply (concurrent helpers, calls per run).";
 
 const delegateTool: ToolDef = {
 	name: DELEGATE_TOOL,
 	description: "Run a one-off helper (sub-agent) and return its answer.",
 	create(_cwd, _roots, ctx) {
+		const free = ctx?.delegateRoles?.() === "any";
 		return defineTool({
 			name: DELEGATE_TOOL,
 			label: "Delegate to a helper",
-			description: DELEGATE_DESCRIPTION,
+			description: free ? DELEGATE_DESCRIPTION_FREE : DELEGATE_DESCRIPTION,
 			parameters: Type.Object({
-				role: Type.String({ minLength: 1, maxLength: 60, description: "Helper role, the file name without .md (e.g. explore, runner)" }),
+				role: Type.String({ minLength: 1, maxLength: 60, description: free ? "Helper role: the name of a role file (without .md, e.g. explore, runner), or any short name for a general read-only helper" : "Helper role, the file name without .md (e.g. explore, runner)" }),
 				task: Type.String({ minLength: 1, maxLength: 12000, description: "Everything the helper needs: goal, paths, symbols, the question, and the answer format you want" }),
 				model: Type.Optional(Type.String({ minLength: 3, maxLength: 200, description: "provider/model to use instead of the role's own model" })),
 			}),

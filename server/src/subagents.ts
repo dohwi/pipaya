@@ -170,6 +170,14 @@ export class DelegateLimits {
 	forget(id: string): void { this.use.delete(id); }
 }
 
+/**
+ * A helper for a role name that has no file, under the free role policy: a general helper with the default read-only tools
+ * (never write, edit or bash), the calling session's model unless the model policy says otherwise, and the task as its instructions.
+ */
+export function freeRole(name: string): SubagentDef {
+	return { name, description: "", tools: [...DEFAULT_SUBAGENT_TOOLS], maxTurns: DEFAULT_SUBAGENT_TURNS, prompt: "", file: "", scope: "global" };
+}
+
 export type ModelPolicy = { policy: "defined" | "allowlist" | "any"; models: string[] };
 
 /** Which model a helper runs on, or a conflict explaining why the request is refused. `requested` is the call's `model` argument. */
