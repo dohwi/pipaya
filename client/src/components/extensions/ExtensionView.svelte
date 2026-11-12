@@ -375,7 +375,7 @@
 {:else if node.type === "stat"}
 	<dl class="stat">
 		<dt>{node.label}</dt>
-		<dd class="stat-value">{node.value}</dd>
+		<dd class="stat-value" style:--chars={Math.max(8, node.value.length)}>{node.value}</dd>
 		{#if node.hint}<dd class="muted">{node.hint}</dd>{/if}
 	</dl>
 {:else if node.type === "table"}
@@ -526,7 +526,7 @@
 	.gap-small { gap: 4px; }
 	.gap-medium { gap: 12px; }
 	.gap-large { gap: 20px; }
-	.grid { display: grid; --cols: 2; --min: 9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(var(--min), calc((100% - (var(--cols) - 1) * 20px) / var(--cols)))), 1fr)); align-items: start; }
+	.grid { display: grid; --cols: 2; --min: 9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(var(--min), calc((100% - (var(--cols) - 1) * 20px) / var(--cols)))), 1fr)); align-items: stretch; }
 	.grid.gap-small { gap: 4px; }
 	.grid.gap-medium { gap: 12px; }
 	.grid.gap-large { gap: 20px; }
@@ -541,7 +541,7 @@
 	.card-head h4 { font-size: var(--fs-base); font-weight: 600; overflow-wrap: anywhere; }
 
 	/* text */
-	.text, .muted, .list-title, .error, label, .alert, .stat, dd, dt { overflow-wrap: anywhere; }
+	.text, .muted, .list-title, .error, label, .alert { overflow-wrap: anywhere; }
 	.text { color: var(--text); line-height: 1.55; white-space: pre-wrap; }
 	.text:not(.tone-neutral) { color: var(--tone); }
 	.size-small { font-size: var(--fs-xs); }
@@ -567,10 +567,14 @@
 	progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); }
 	progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }
 
-	.stat { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
-	.stat dt { font-size: var(--fs-xs); color: var(--text-dim); }
+	/* A stat's value is a headline number or short address: one size for every stat (cells in a row look alike), and it
+	   shrinks to fit its own cell (container query) before it ever wraps. A value with no break point at all (an address
+	   like 100.85.51.107:8790, a URL) is never split mid-number: it goes smaller, and only below the smallest size does
+	   it wrap by character. */
+	.stat { container-type: inline-size; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
+	.stat dt { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: break-word; }
 	.stat dd { margin: 0; }
-	.stat-value { font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.02em; }
+	.stat-value { font-size: clamp(var(--fs-sm), calc(100cqi / var(--chars, 8) * 1.7), var(--fs-xl)); font-weight: 650; letter-spacing: -0.02em; line-height: 1.3; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 
 	.scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 	table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
