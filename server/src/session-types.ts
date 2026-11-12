@@ -12,6 +12,11 @@ Files the user attaches are saved in the working directory and listed in the mes
 
 export const IDLE_EVICT_MS = 30 * 60_000;
 
+/** A follow-up the server keeps itself: a command (the model never sees it), or a message queued behind one. */
+export type Deferred =
+	| { kind: "compact"; text: string; instructions?: string }
+	| { kind: "message"; text: string; message: AgentMessage; origin: RunOrigin };
+
 export type PromptMode = "prompt" | "steer" | "follow_up";
 /**
  * Who a run is for. "peer": started by another session's message (peer send/create) or by a server report to a
@@ -41,7 +46,7 @@ export interface SessionStatus {
 	streamingMessage: AgentMessage | null;
 	queued: boolean;
 	/** Texts still waiting in the steer / follow-up queues, so a client that reloads can show them again. */
-	queuedMessages: { mode: "steer" | "follow_up"; text: string }[];
+	queuedMessages: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[];
 	lastError: string | null;
 	/** A manual or automatic compaction is writing its summary. */
 	compacting: boolean;
@@ -70,6 +75,8 @@ export interface Live {
 	compacting?: AbortController;
 	/** Set while a dropped stream waits for its retry; aborting it stops the wait and ends the run as aborted. */
 	retryWait?: AbortController;
+	/** Follow-ups that wait for the run to end, in the order they were typed: `/compact` and whatever was typed after it. */
+	deferred?: Deferred[];
 	/** Resolves when the running compaction ends (success or not); a prompt sent meanwhile waits for it. */
 	compactSettled?: Promise<void>;
 	/** Settles after the run's own wrap-up (run_finished) has been published, not just when the agent is idle. */

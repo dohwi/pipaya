@@ -572,7 +572,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	app.post("/sessions/:id/queue/cancel", {
 		schema: { params: S.IdParams, body: S.CancelQueuedBody, response: { 200: Type.Object({ cancelled: Type.Boolean() }), ...S.errors(400, 401, 404) } },
-		handler: async (req) => ({ cancelled: sessions.cancelQueued(req.params.id, req.body.mode, req.body.text) }),
+		handler: async (req) => ({ cancelled: sessions.cancelQueued(req.params.id, req.body.mode, req.body.text, req.body.deferred) }),
 	});
 	app.post("/sessions/:id/retry", {
 		schema: { params: S.IdParams, response: { 202: Type.Object({ accepted: Type.Literal("retry") }), ...S.errors(401, 404, 409) } },

@@ -70,7 +70,7 @@ export const SessionStatus = Type.Object({
 	pendingQuestions: Type.Integer(),
 	streamingMessage: Type.Unknown({ description: "Partial assistant message while a run is streaming, else null. Lets late joiners catch up." }),
 	queued: Type.Boolean(),
-	queuedMessages: Type.Array(Type.Object({ mode: Type.Union([Type.Literal("steer"), Type.Literal("follow_up")]), text: Type.String() }), { description: "Messages still waiting in the steer / follow_up queues" }),
+	queuedMessages: Type.Array(Type.Object({ mode: Type.Union([Type.Literal("steer"), Type.Literal("follow_up")]), text: Type.String(), deferred: Type.Optional(Type.Boolean({ description: "Held by the server until the run ends (a /compact and what was queued after it); kept when the run finishes" })) }), { description: "Messages still waiting in the steer / follow_up queues" }),
 	lastError: Nullable(Type.String()),
 	compacting: Type.Boolean({ description: "A manual or automatic compaction is writing its summary" }),
 });
@@ -214,11 +214,13 @@ export const ForkBody = Type.Object({
 export const CancelQueuedBody = Type.Object({
 	mode: Type.Union([Type.Literal("steer"), Type.Literal("follow_up")]),
 	text: Type.String({ maxLength: 1_000_000 }),
+	deferred: Type.Optional(Type.Boolean({ description: "Take back an item the server holds until the run ends (a /compact and what was queued after it). Absent: the first match in either place" })),
 });
 
 export const SendBody = Type.Object({
 	text: Type.String({ minLength: 1, maxLength: 1_000_000 }),
 	mode: Type.Optional(PromptMode),
+	command: Type.Optional(Type.Object({ name: Type.Literal("compact"), instructions: Type.Optional(Type.String({ maxLength: 2000 })) }, { description: "Queue a command instead of a message (mode follow_up only): it runs when the run has ended, in order with the other follow-ups. `text` is what the queue shows" })),
 	images: Type.Optional(
 		Type.Array(
 			Type.Object({ type: Type.Literal("image"), data: Type.String({ description: "base64" }), mimeType: Type.String() }),
@@ -534,8 +536,8 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "message_queued",
 		persisted: true,
-		description: "A steer or follow_up message was accepted during a run",
-		data: Type.Object({ mode: Type.String(), text: Type.String() }),
+		description: "A steer or follow_up message was accepted during a run. `deferred`: the server holds it until the run ends (a command, or a message queued behind one)",
+		data: Type.Object({ mode: Type.String(), text: Type.String(), deferred: Type.Optional(Type.Boolean()) }),
 	},
 	{
 		type: "message_dequeued",

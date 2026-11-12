@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 
-export type QueuedItem = { mode: "steer" | "follow_up"; text: string };
+export type QueuedItem = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
 export type QueuedView = QueuedItem & { n: number };
 
 /** Delivery order: steers go into the running turn first, then queued follow-ups. `n` counts per mode, from 1. */

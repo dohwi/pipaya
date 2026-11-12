@@ -328,3 +328,51 @@ describe("cut selection", () => {
 		});
 	});
 });
+
+describe("/compact queued as a follow-up", () => {
+	const post = (id: string, body: object) => api("POST", `/sessions/${id}/messages`, body);
+
+	test("runs when the run ends, before the messages queued after it; can be taken back", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["one", "two", "three", "four"]) await say(id, t);
+		const before = upstream.requests.length;
+
+		expect((await post(id, { text: "!bash sleep 1" })).status).toBe(202);
+		expect((await post(id, { text: "/compact", mode: "follow_up", command: { name: "compact", instructions: "keep names" } })).status).toBe(202);
+		expect((await post(id, { text: "after-compact", mode: "follow_up" })).status).toBe(202);
+		expect((await post(id, { text: "dropped", mode: "follow_up" })).status).toBe(202);
+		let status = (await api("GET", `/sessions/${id}/status`)).json;
+		expect(status.queuedMessages.map((q: any) => [q.text, q.deferred])).toEqual([["/compact", true], ["after-compact", true], ["dropped", true]]);
+
+		// Taking one back works on what the server holds.
+		expect((await api("POST", `/sessions/${id}/queue/cancel`, { mode: "follow_up", text: "dropped" })).json.cancelled).toBe(true);
+		await untilIdle(id);
+		for (let i = 0; i < 100 && (await api("GET", `/sessions/${id}/status`)).json.queuedMessages.length; i++) await Bun.sleep(20);
+		await untilIdle(id);
+
+		status = (await api("GET", `/sessions/${id}/status`)).json;
+		expect(status.queuedMessages).toEqual([]);
+		const sent = upstream.requests.slice(before).map((r) => JSON.stringify(r.body?.messages ?? []));
+		// The summary request carries the instructions, and the follow-up went out after it, with the summary in context.
+		const summaryAt = sent.findIndex((b) => b.includes("keep names"));
+		const followAt = sent.findIndex((b) => b.includes("after-compact"));
+		expect(summaryAt).toBeGreaterThan(-1);
+		expect(followAt).toBeGreaterThan(summaryAt);
+		expect(sent.some((b) => b.includes("dropped"))).toBe(false);
+		// The model never saw the command text as a prompt.
+		expect(sent.some((b) => b.includes('"/compact"'))).toBe(false);
+	});
+
+	test("refuses a command when idle or with another mode; a stopped run drops it", async () => {
+		const id = await newSession();
+		expect((await post(id, { text: "/compact", mode: "follow_up", command: { name: "compact" } })).status).toBe(409);
+		expect((await post(id, { text: "/compact", mode: "steer", command: { name: "compact" } })).status).toBe(400);
+		expect((await post(id, { text: "!bash sleep 5" })).status).toBe(202);
+		expect((await post(id, { text: "/compact", mode: "follow_up", command: { name: "compact" } })).status).toBe(202);
+		await api("POST", `/sessions/${id}/abort`);
+		await untilIdle(id);
+		await Bun.sleep(50);
+		expect((await api("GET", `/sessions/${id}/status`)).json.queuedMessages).toEqual([]);
+	});
+});

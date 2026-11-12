@@ -1977,17 +1977,17 @@ class AppStore {
   }
 
   /** Remove one not-yet-delivered steer/queue message. The chat list updates from the `message_dequeued` event. */
-  async cancelQueued(item: { mode: "steer" | "follow_up"; text: string }, id: string | null = this.queueDialog): Promise<void> {
+  async cancelQueued(item: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }, id: string | null = this.queueDialog): Promise<void> {
     const chat = this.chatOf(id);
     if (!this.api || !chat) return;
-    const h = item.mode === "follow_up" ? chat.held.findIndex((x) => x.text === item.text) : -1;
+    const h = item.mode === "follow_up" && !item.deferred ? chat.held.findIndex((x) => x.text === item.text) : -1;
     if (h >= 0) {
       chat.held.splice(h, 1);
       if (chat.id === this.activeId) this.prefill = item.text;
       return;
     }
     try {
-      const r = await this.api.cancelQueued(chat.id, item.mode, item.text);
+      const r = await this.api.cancelQueued(chat.id, item.mode, item.text, item.deferred ? true : undefined);
       if (!r.cancelled) {
         // Already delivered (or gone): drop the stale row so the list matches the server.
         const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text);
@@ -2023,12 +2023,26 @@ class AppStore {
       this.toast(t("서버에 연결하고 압축할 대화를 여세요"), "error", id);
       return false;
     }
-    if (!chat.ready || chat.loadError || this.sending || chat.running || chat.compacting) {
-      this.toast(t("진행 중인 작업이 끝난 뒤 압축하세요"), "error", id);
-      return false;
-    }
     if (chat.compaction?.supported === false) {
       this.toast(t("이 서버는 컨텍스트 압축을 지원하지 않습니다. BE 연동이 필요합니다"), "error", id);
+      return false;
+    }
+    // While it works, /compact waits in the queue like a follow-up: the server runs it when the run ends.
+    if (chat.ready && !chat.loadError && chat.running && !chat.compacting) {
+      const label = customInstructions?.trim() ? `/compact ${customInstructions.trim()}` : "/compact";
+      try {
+        await api.queueCommand(chat.id, label, customInstructions);
+        return true;
+      } catch (e) {
+        // The run ended a moment ago: nothing to wait for, compact right away.
+        if (!(e instanceof ApiError && e.status === 409)) {
+          this.fail(e, t("대기열에 추가하지 못했습니다"), chat.id);
+          return false;
+        }
+      }
+    }
+    if (!chat.ready || chat.loadError || this.sending || chat.running || chat.compacting) {
+      this.toast(t("진행 중인 작업이 끝난 뒤 압축하세요"), "error", id);
       return false;
     }
     try {
