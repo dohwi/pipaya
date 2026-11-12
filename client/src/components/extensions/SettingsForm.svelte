@@ -8,6 +8,7 @@
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { displayValue } from "../../lib/extensions/translations";
 	import { extensions } from "../../lib/extensions/host.svelte";
+	import { followsSaved } from "../../lib/extensions/form-draft";
 
 	interface Props {
 		id: string;
@@ -45,18 +46,23 @@
 	const savedForm = $derived(formOf(saved));
 	const signature = $derived(JSON.stringify(savedForm));
 	let draft = $state<Record<string, unknown>>(untrack(() => clone(savedForm)));
+	/** The saved value the draft was taken from: see `followsSaved`. */
+	let base = untrack(() => signature);
 	let jsonDraft = $state<string | null>(null);
 
 	const clean = $derived(formOf(draft));
 	const resolved = $derived(resolveSettings(fields, clean));
-	const dirty = $derived(JSON.stringify(clean) !== signature);
 	/** The fields on the form right now: one with `when` comes and goes with the choice it depends on. */
 	const shown = $derived(fields.filter((field) => settingShown(field, resolved.values)));
 
 	// Follow saves and server syncs, but never overwrite what the user is typing.
 	$effect(() => {
-		signature;
-		untrack(() => { if (!dirty) draft = clone(savedForm); });
+		const next = signature;
+		untrack(() => {
+			if (!followsSaved(JSON.stringify(clean), base, next)) return;
+			draft = clone(savedForm);
+			base = next;
+		});
 	});
 
 	const jsonText = $derived(jsonDraft ?? JSON.stringify(value, null, 2));
