@@ -706,6 +706,7 @@ class AppStore {
         continue;
       }
       old?.stop();
+      delete this.parkedChats[s.id]; // they read through the old connection
       const link = new ServerLink(s, {
         event: (l, e) => this.onLinkEvent(l, e),
         // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
@@ -716,6 +717,7 @@ class AppStore {
       link.start();
     }
     for (const id of Object.keys(this.links)) if (!next[id]) {
+      delete this.parkedChats[id];
       void this.idleExtensions.drop(id);
       this.links[id]!.stop();
       changed = true;
@@ -756,10 +758,19 @@ class AppStore {
     this.commandsDialog = null;
     this.mcpDialog = false;
     this.queueDialog = null;
-    this.activeId = null;
-    this.chats = {};
-    this.sidebar.open = false;
+    // The transcripts of the server we leave are parked, and the ones parked for this server come back: coming back to a
+    // server shows its conversation at once and refreshes it in place (attach), instead of an empty pane for the length of
+    // a request followed by the whole transcript being laid out again (the jump on every switch between servers).
+    if (this.parkedFor && this.parkedFor !== id) this.parkedChats[this.parkedFor] = this.chats;
+    const parked = this.parkedChats[id] ?? {};
+    delete this.parkedChats[id];
+    this.parkedFor = id;
     const link = this.links[id];
+    const want = read<string | null>(this.activeKey, null);
+    const back = !!(want && parked[want]?.ready && link?.loaded && this.shows(want));
+    this.activeId = back ? want : null;
+    this.chats = back ? parked : {};
+    this.sidebar.open = false;
     if (!link) return;
     if (link.online && link.loaded) void this.attach(link);
     else void link.sync(); // not reachable yet (or refused earlier): try now instead of waiting for the next retry
@@ -1237,6 +1248,10 @@ class AppStore {
   /** When each transcript was last on screen, and which were on screen at the previous sync (see syncChats). */
   private chatUsed = new Map<string, number>();
   private lastVisible = new Set<string>();
+  /** Transcripts of servers not in view, kept from when they were last open (see openServer); dropped with their link. */
+  private parkedChats: Record<string, Record<string, ChatState>> = {};
+  /** The server `chats` belongs to. */
+  private parkedFor: string | null = null;
   /** Live changes to the settings and pages of server extensions, per server (the settings window can show any of them). */
   readonly serverExtensionFeed = new ServerExtensionFeed();
   /** Editors of the client extensions of saved servers that are not the open one. */

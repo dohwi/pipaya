@@ -87,6 +87,11 @@ describe("sliding indicator", () => {
 		expect(shouldSlide(a, a)).toBe(false);
 		expect(shouldSlide(a, b)).toBe(true);
 	});
+	test("a list that was replaced (the old target is gone) snaps instead of sliding in from nowhere", () => {
+		const a = {}, b = {};
+		expect(shouldSlide(a, b, false)).toBe(false);
+		expect(shouldSlide(a, b, true)).toBe(true);
+	});
 });
 
 import { edgeBox } from "../src/lib/sliding-indicator";
