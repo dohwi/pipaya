@@ -13,6 +13,7 @@
 	import { openExternal } from "../../lib/tauri";
 	import Segmented from "../ui/Segmented.svelte";
 	import { paneIn } from "../../lib/motion";
+	import { recentreOn } from "../../lib/dialog";
 	import type { LoginState, ProviderInfo } from "../../lib/types";
 	import ConnectionForm from "../models/ConnectionForm.svelte";
 	import type { LocalPreset } from "../../lib/connection-form";
@@ -222,7 +223,8 @@
 </script>
 
 <Modal onclose={() => !isBusy && onclose()} onescape={() => (inFlow ? void back() : onclose())} dismissible={!isBusy} label={t("연결 추가")} width="m" maxHeight="720px" layer={3} portal>
-	<div class="cm">
+	<!-- the two provider lists, a login, a key and the address form are steps of different heights: centre again on each -->
+	<div class="cm" use:recentreOn={formStart ? "form" : login ? "login" : keyFor ? "key" : tab}>
 		<ModalHeader {title} {sub} divider onback={inFlow ? back : undefined} {onclose} closeDisabled={isBusy} />
 
 		{#if formStart}

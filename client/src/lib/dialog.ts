@@ -278,6 +278,30 @@ export function recentreModal(node: HTMLElement) {
 	node.dispatchEvent(new CustomEvent(RECENTRE, { bubbles: true }));
 }
 
+/**
+ * `use:recentreOn={page}`: centre the enclosing modal again whenever `page` changes (a list swapped for its form, a
+ * step, a tab). Waits one animation frame so the new page is laid out; that frame runs before the next paint, so the
+ * panel is never drawn at the old place. Outside a modal (the same pane inside the settings window) it does nothing.
+ */
+export function recentreOn(node: HTMLElement, page: unknown) {
+	let raf = 0;
+	return {
+		update(next: unknown) {
+			if (Object.is(next, page)) return;
+			page = next;
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => node.isConnected && recentreModal(node));
+		},
+		destroy: () => cancelAnimationFrame(raf),
+	};
+}
+
+/** `use:recentreOnMount`: the same for a page that replaces another inside a modal that stays open (an import's result). */
+export function recentreOnMount(node: HTMLElement) {
+	const raf = requestAnimationFrame(() => node.isConnected && recentreModal(node));
+	return { destroy: () => cancelAnimationFrame(raf) };
+}
+
 /** Lift a node to <body>: a modal opened from inside a transformed panel would otherwise be positioned relative to it. */
 export function portal(node: HTMLElement) {
 	document.body.appendChild(node);

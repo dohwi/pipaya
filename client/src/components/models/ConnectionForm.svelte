@@ -8,6 +8,7 @@
 	import DialogFooter from "../ui/DialogFooter.svelte";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
+	import { recentreOn } from "../../lib/dialog";
 	import { sheetPull } from "../../lib/sheet";
 	import { errorText, type Api } from "../../lib/api";
 	import { indexCatalog } from "../../lib/catalog-match";
@@ -313,7 +314,8 @@
 {/snippet}
 
 {#snippet editor(form: Form)}
-	<form class="fform" onsubmit={submit}>
+	<!-- the connection and one model's page are two pages: centre the dialog again on each switch -->
+	<form class="fform" onsubmit={submit} use:recentreOn={editing}>
 		{#if !embedded}
 			<header use:sheetPull={{ onclose: () => !busy && close(), disabled: busy }}>
 				{#if editing !== null}

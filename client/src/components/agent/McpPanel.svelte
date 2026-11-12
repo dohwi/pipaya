@@ -13,6 +13,7 @@
 	import Segmented from "../ui/Segmented.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { abortable } from "../../lib/abortable";
+	import { recentreOn } from "../../lib/dialog";
 	import { errorText, type Api } from "../../lib/api";
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
@@ -115,7 +116,8 @@
 	const target = (s: McpServerInfo) => (s.transport === "stdio" ? [s.command, ...(s.args ?? [])].join(" ") : s.url);
 </script>
 
-<div class="body" aria-busy={loading}>
+<!-- the list and the form are two pages of different heights: centre the dialog again on each switch -->
+<div class="body" aria-busy={loading} use:recentreOn={form !== null}>
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 	<ExtrasIntro
 		what={t("외부 도구 서버를 에이전트에 연결합니다. 연결된 서버의 도구를 에이전트가 직접 호출합니다.")}
