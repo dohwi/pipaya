@@ -147,7 +147,24 @@
 		text = next.text;
 		caret = next.caret;
 		if (focused) queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
+		voiceEnter = !focused;
 	});
+
+	// A transcript landed in an input that has no focus: a bare Enter anywhere (nothing else focused) sends it, as if the
+	// input were focused. Any other key, typing or focusing the input ends this.
+	let voiceEnter = false;
+	function onWindowKey(e: KeyboardEvent) {
+		if (!voiceEnter) return;
+		const plain = e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && !e.repeat;
+		const t = e.target as HTMLElement | null;
+		const free = !t || t === document.body || !t.closest("input,textarea,select,button,a,summary,[contenteditable],[role=dialog],[role=menu],[role=tab],dialog");
+		if (!plain || e.defaultPrevented || !pane.focused || !free || isTouch() || !hasInput) {
+			if (!["Shift", "Control", "Alt", "Meta"].includes(e.key)) voiceEnter = false;
+			return;
+		}
+		voiceEnter = false;
+		enterAction(e, buildCombo({ mod: false, alt: false, shift: false }, [keyName(e.code)]));
+	}
 
 	// The Reply button on a message hands it over once.
 	$effect(() => {
@@ -557,6 +574,7 @@
 </script>
 
 <svelte:window
+	onkeydown={onWindowKey}
 	ondragover={(e) => {
 		if (pane.focused && e.dataTransfer?.types.includes("Files")) {
 			e.preventDefault();
@@ -607,10 +625,10 @@
 			{...menuAria(slashOpen, menuListId, menuOptionId, slashIndex, menuItems.length)}
 			bind:value={text}
 			onkeydown={onKey}
-			oninput={syncCaret}
+			oninput={() => { voiceEnter = false; syncCaret(); }}
 			onkeyup={(e) => { if (!["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(e.key)) syncCaret(); }}
 			onclick={syncCaret}
-			onfocus={syncCaret}
+			onfocus={() => { voiceEnter = false; syncCaret(); }}
 			onpaste={onPaste}
 			oncompositionstart={() => ime.start()}
 			oncompositionend={onCompositionEnd}
