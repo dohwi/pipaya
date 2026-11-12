@@ -15,6 +15,7 @@
 	import Select from "../ui/Select.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { Api, errorText } from "../../lib/api";
+	import { recentreOn } from "../../lib/dialog";
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
@@ -128,7 +129,8 @@
 	const scopeHint = $derived(form?.scope === "project" ? (list?.projectDir ?? "") : "~/.agents/subagents");
 </script>
 
-<section class:set-group={!bare} class:bare>
+<!-- the list and the form are two pages of different heights: centre the dialog again on each switch -->
+<section class:set-group={!bare} class:bare use:recentreOn={form !== null}>
 	{#if !bare}<div class="section-label">{t("도우미 역할")}</div>{/if}
 	<ExtrasIntro
 		what={t("에이전트가 delegate 도구로 일을 맡길 수 있는 도우미입니다. 각자 모델, 도구, 지침을 따로 가집니다.")}

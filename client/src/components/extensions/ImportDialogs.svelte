@@ -13,6 +13,7 @@
 	import { extensions, type InstalledExtension } from "../../lib/extensions/host.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Modal from "../ui/Modal.svelte";
+	import { recentreOnMount } from "../../lib/dialog";
 	import Notice from "../ui/Notice.svelte";
 	import PermissionList from "./PermissionList.svelte";
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
@@ -77,7 +78,7 @@
 	>
 		{#if result}
 			{@const r = result}
-			<div class="rmodal result {r.tone}" use:focusOk>
+			<div class="rmodal result {r.tone}" use:focusOk use:recentreOnMount>
 				<DialogBody gap rule={false}>
 				<div class="rhead">
 					<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
