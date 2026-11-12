@@ -149,6 +149,7 @@
 			closeTerminal: (id) => void app.closeTerminal(id),
 			togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 			isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
+			schedule: (id) => app.openScheduleFor(id),
 		});
 	function tabMenu(pt: Point, x: Tab) {
 		menu?.openAt(pt, x.id, tabItems(x));

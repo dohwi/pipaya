@@ -1,5 +1,5 @@
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
-import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
 	ActivityInfo,
@@ -341,6 +341,11 @@ export class Api {
 
 	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
 	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);
+	schedules = (sessionId?: string, signal?: AbortSignal) => this.req<{ schedules: Schedule[] }>("GET", `/schedules${sessionId ? `?${new URLSearchParams({ sessionId })}` : ""}`, undefined, signal);
+	createSchedule = (input: ScheduleInput) => this.req<Schedule>("POST", "/schedules", input);
+	patchSchedule = (id: string, patch: SchedulePatch) => this.req<Schedule>("PATCH", `/schedules/${encodeURIComponent(id)}`, patch);
+	deleteSchedule = (id: string) => this.req<{ ok: boolean }>("DELETE", `/schedules/${encodeURIComponent(id)}`);
+	runSchedule = (id: string) => this.req<Schedule>("POST", `/schedules/${encodeURIComponent(id)}/run`);
 	retention = () => this.req<RetentionInfo>("GET", "/retention");
 	setRetention = (settings: RetentionSettings) => this.req<RetentionInfo>("PUT", "/retention", settings);
 	runRetention = () => this.req<{ deleted: number }>("POST", "/retention/run");
@@ -559,6 +564,7 @@ export const EVENT_TYPES = [
 	"configuration_updated",
 	"skills_updated",
 	"mcp_updated",
+	"schedules_updated",
 	"locales_updated",
 	"client_settings_updated",
 	"extension_settings_updated",

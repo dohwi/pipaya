@@ -9,6 +9,7 @@
 	import ModalHeader from "../ui/ModalHeader.svelte";
 	import Shortcuts from "./Shortcuts.svelte";
 	import VoicePane from "./VoicePane.svelte";
+	import SchedulesPane from "./SchedulesPane.svelte";
 	import Extensions from "../extensions/Extensions.svelte";
 	import Backup from "../server/Backup.svelte";
 	import ServerForm from "../server/ServerForm.svelte";
@@ -168,6 +169,8 @@
 				<Backup />
 			{:else if tab === "voice"}
 				<VoicePane />
+			{:else if tab === "schedules" && server}
+				{#key server.id}<SchedulesPane serverId={server.id} />{/key}
 			{:else if tab === "keys"}
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}

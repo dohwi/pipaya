@@ -15,6 +15,8 @@ import { CompactionSettings } from "./compaction.ts";
 import { registerCompactionRoutes } from "./compaction-routes.ts";
 import { Retention } from "./retention.ts";
 import { registerRetentionRoutes } from "./retention-routes.ts";
+import { Scheduler } from "./scheduler.ts";
+import { registerSchedulerRoutes } from "./scheduler-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { TOGGLEABLE_TOOLS } from "./tools.ts";
@@ -640,6 +642,12 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerCompactionRoutes(server, compactionSettings, bus);
 	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));
 	registerRetentionRoutes(server, retention, bus);
+	const scheduler = new Scheduler(db, { session: (id) => store.get(id), isRunning: (id) => sessions.isRunning(id), send: (id, input) => sessions.send(id, input) }, {
+		onChange: (c) => bus.publish(null, "schedules_updated", c, { ephemeral: true }),
+		log: (m) => server.log.info(m),
+	});
+	bus.subscribe((e) => { if (e.type === "session_deleted") scheduler.onSessionDeleted((e.data as { id: string }).id); });
+	registerSchedulerRoutes(server, scheduler);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
 	registerVoiceRoutes(server, voice, credentials, bus);
@@ -685,6 +693,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const prune = setInterval(pruneEvents, 6 * 3600_000);
 	prune.unref?.();
 	retention.start();
+	scheduler.start();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
 	void configuration.refreshStale();
 	// Same for OpenRouter's own catalog: refreshed when it is stale, so the model picker opens on a current list.
@@ -692,6 +701,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	return { server, sessions, bus, async close() {
 		clearInterval(prune);
 		retention.stop();
+		scheduler.stop();
 		configuration.close();
 		await mcp.close();
 		agentsWatch.stop();

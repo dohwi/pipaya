@@ -63,10 +63,11 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote; scheduled?: true } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
 	let note: MessageNote | undefined;
+	let scheduled = false;
 	// Blocks the server or an extension adds (`<pipaya-…>`: attached files, hints for the model, notes) are not message text.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
@@ -79,6 +80,10 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 					} catch { /* a note we cannot read is simply not shown */ }
 					return false;
 				}
+				if (s.startsWith("<pipaya-schedule>")) {
+					scheduled = true; // sent by a scheduled task: labelled "예약" on the message
+					return false;
+				}
 				if (s.startsWith("<pipaya-note>")) {
 					try {
 						const j = JSON.parse(s.slice("<pipaya-note>".length, s.indexOf("</pipaya-note>")));
@@ -89,7 +94,7 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 				return !s.startsWith("<pipaya-");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files, ...(note ? { note } : {}) };
+	return { text: textOf(shown), images, files, ...(note ? { note } : {}), ...(scheduled ? { scheduled: true as const } : {}) };
 }
 
 function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun {
