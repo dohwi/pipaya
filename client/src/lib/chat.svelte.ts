@@ -288,7 +288,12 @@ export class ChatState {
 			for (const { seq, message, createdAt } of msgs) this.ingest(items, tools, seq, message, createdAt);
 
 			const st = detail.status;
-			for (const id of st.pendingToolCalls) tools[id] ??= { state: "running", output: "" };
+			// A call still running keeps the output already streamed to this transcript: the server's list does not carry it,
+			// and dropping it shrank the live preview to one line until the next update grew it back (a jump on every return).
+			for (const id of st.pendingToolCalls) {
+				const was = this.tools[id];
+				tools[id] ??= was && (was.state === "running" || was.state === "pending") ? was : { state: "running", output: "" };
+			}
 			for (const q of questions) {
 				if (q.sessionId === this.id) tools[q.toolCallId] = { state: "awaiting_input", output: "", question: q };
 			}

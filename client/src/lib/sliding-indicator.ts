@@ -42,8 +42,12 @@ export function indicatorBox(container: ContainerRect, selected: Rect | undefine
 /** A bar along the bottom edge of `box` (underline tabs). */
 export const edgeBox = (box: Box, thickness: number): Box => ({ x: box.x, y: box.y + box.height - thickness, width: box.width, height: thickness });
 
-/** Slide only when the selection moved to a different element; everything else snaps. */
-export const shouldSlide = (previous: unknown, next: unknown) => previous != null && previous !== next;
+/**
+ * Slide only when the selection moved to a different element that sat beside the old one; everything else snaps.
+ * `previousShown`: the old target is still in the container. When the whole list was replaced (another server's tabs),
+ * there is nothing to slide from: gliding in from a spot that no longer exists read as the whole strip wobbling.
+ */
+export const shouldSlide = (previous: unknown, next: unknown, previousShown = true) => previous != null && previous !== next && previousShown;
 
 /**
  * fill: sits under the item (sidebar rows, segmented controls) · ring: fill + hairline (rail)
@@ -150,7 +154,7 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 		const unchanged = last === selected && lastBox && lastBox.x === box.x && lastBox.y === box.y && lastBox.width === box.width && lastBox.height === box.height;
 		if (unchanged && el.style.display !== "none") return;
 
-		const newTarget = shouldSlide(last, selected) && el.style.display !== "none";
+		const newTarget = shouldSlide(last, selected, !!last && last.isConnected && container.contains(last)) && el.style.display !== "none";
 		// A moved-but-same target snaps (reflow), unless it is mid-slide, where it just keeps gliding.
 		const slide = newTarget || (sliding && last === selected);
 		if (newTarget) {
