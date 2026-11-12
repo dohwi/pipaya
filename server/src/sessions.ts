@@ -1,4 +1,4 @@
-import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { isContextOverflow, isRetryableAssistantError, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
@@ -326,7 +326,7 @@ export class SessionManager {
 		if (!this.compaction) throw new HttpError(501, "compaction_not_supported", "compaction is not available on this server");
 
 		const stored = this.store.projection(id);
-		const cutAt = pickCut(stored.messages.map((m) => m.message));
+		const cutAt = pickCut(stored.messages.map((m) => m.message), undefined, reason === "threshold" && live.running);
 		if (cutAt === null) throw conflict("not enough history to compact yet");
 		const toSummarize = stored.messages.slice(0, cutAt).map((m) => ({ ...m, message: withoutNotes([m.message])[0]! }));
 		const uptoSeq = toSummarize[toSummarize.length - 1]!.seq;
@@ -399,6 +399,22 @@ export class SessionManager {
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }
+	}
+
+	/**
+	 * Between the turns of one run (a long task of many tool calls never passes `autoCompact`, which only runs before a
+	 * prompt): compact when the context has reached the threshold and hand the loop the shortened transcript.
+	 */
+	private async compactMidRun(id: string, tools: AgentTool<any>[] | undefined): Promise<{ context: { messages: AgentMessage[]; tools?: AgentTool<any>[] } } | undefined> {
+		const settings = this.compaction?.get();
+		if (!settings?.auto) return undefined;
+		const usage = this.contextUsage(id);
+		if (!usage?.tokens || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return undefined;
+		try {
+			await this.compact(id, undefined, "threshold");
+		} catch { return undefined; } // compact() already published why; the run goes on with the full context
+		const live = this.live.get(id);
+		return live ? { context: { messages: live.agent.state.messages.slice(), tools } } : undefined;
 	}
 
 	update(id: string, patch: SessionPatch): SessionRecord {
@@ -967,6 +983,7 @@ export class SessionManager {
 			}),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
+			prepareNextTurnWithContext: async (turn) => this.compactMidRun(record.id, turn.context.tools),
 			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),
 			afterToolCall: async (c) => this.extensionToolResult(record.id, c),
 		});

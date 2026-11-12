@@ -216,6 +216,21 @@ describe("POST /sessions/:id/compact", () => {
 		await api("PUT", "/compaction", { auto: false, model: null });
 	});
 
+	test("a long run compacts between turns once the context passes the threshold", async () => {
+		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 30 });
+		const id = await newSession();
+		await say(id, "a");
+		await say(id, "b");
+		// One prompt, big tool output: the context crosses the threshold only after the first turn.
+		await say(id, "!bash head -c 12000 /dev/zero | tr '\\0' x");
+		const events = app.bus.history({ sessionId: id, after: 0, limit: 500 });
+		const started = events.filter((e) => e.type === "compaction_started");
+		expect(started.length).toBeGreaterThan(0);
+		expect((started.at(-1)!.data as any).reason).toBe("threshold");
+		expect((events.filter((e) => e.type === "run_finished").at(-1)!.data as any).status).toBe("ok");
+		await api("PUT", "/compaction", { auto: false, model: null });
+	});
+
 	test("with automatic compaction off, an overflow error is reported as is", async () => {
 		await api("PUT", "/compaction", { auto: false, model: null });
 		const id = await newSession();
@@ -272,6 +287,13 @@ describe("cut selection", () => {
 	test("keeps everything it can within the recent budget", () => {
 		const msgs = [user("1"), asst("a"), user("2"), asst("b"), user("3"), asst("c")];
 		expect(pickCut(msgs, 1_000_000)).toBe(2);
+	});
+
+	test("mid-run it may also cut at an assistant turn when the run has no later user message", () => {
+		const msgs = [user("1"), asst("a".repeat(40_000)), result("r"), asst("b".repeat(40_000)), result("r")];
+		expect(pickCut(msgs, 5000)).toBeNull();
+		const cut = pickCut(msgs, 5000, true)!;
+		expect(msgs[cut]!.role).toBe("assistant");
 	});
 
 	test("token estimate and automatic threshold", () => {
