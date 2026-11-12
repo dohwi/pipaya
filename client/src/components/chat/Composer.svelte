@@ -252,10 +252,20 @@
 	// ── @mentions: the other sessions and groups, then whatever extensions add (`sdk.mentions.set`) ──
 	const mentionItems = $derived([...peerMentions(app.sessions, app.groups, pane.id), ...extensions.mentions().filter((m) => !m.except || m.except !== pane.id)]);
 	const atMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("at", text, caret));
-	const atMatches = $derived(atMention ? mentionItems.filter((m) => {
+	const atMatches = $derived.by(() => {
+		if (!atMention) return [];
 		const q = atMention.query.toLowerCase();
-		return m.insert.slice(1).toLowerCase().startsWith(q) || m.keywords.toLowerCase().includes(q);
-	}) : []);
+		// Name matches (exact, then prefix) come before matches found only through keywords/description.
+		const rank = (m: (typeof mentionItems)[number]) => {
+			const name = m.insert.slice(1).toLowerCase();
+			return name === q ? 0 : name.startsWith(q) ? 1 : m.keywords.toLowerCase().includes(q) ? 2 : -1;
+		};
+		return mentionItems
+			.map((m, i) => ({ m, i, r: rank(m) }))
+			.filter((x) => x.r >= 0)
+			.sort((a, b) => a.r - b.r || a.i - b.i)
+			.map((x) => x.m);
+	});
 
 	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	$effect(() => {
