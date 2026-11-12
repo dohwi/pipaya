@@ -266,6 +266,18 @@ export function nativeModal(dialog: HTMLDialogElement, opts: { onclose: () => vo
 	};
 }
 
+/** The event `recentreModal` sends; components/ui/Modal.svelte listens for it on its panel. */
+export const RECENTRE = "pipaya:modal-recentre";
+
+/**
+ * Ask the modal around `node` to centre itself again at its current size. A modal keeps its top edge while its content
+ * grows (an expanding row must not drift), so a body that swaps to a different page (a list replaced by its form) calls
+ * this once the new page is in the DOM; otherwise the taller page stays pinned to the window's bottom edge.
+ */
+export function recentreModal(node: HTMLElement) {
+	node.dispatchEvent(new CustomEvent(RECENTRE, { bubbles: true }));
+}
+
 /** Lift a node to <body>: a modal opened from inside a transformed panel would otherwise be positioned relative to it. */
 export function portal(node: HTMLElement) {
 	document.body.appendChild(node);
