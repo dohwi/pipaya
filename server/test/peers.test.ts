@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
+import { RETIRED_EXTENSIONS } from "../src/extensions/retired.ts";
 import { nameInLang } from "../src/member-names.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
@@ -247,13 +248,15 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 });
 
 describe("old copies of the replaced extensions", () => {
-	test("ask-user and peer-tools folders are skipped, so the built-in tools stay in charge", async () => {
+	test("folders of retired extensions are skipped, so the built-in tools stay in charge", async () => {
 		const d = mkdtempSync(join(tmpdir(), "pipaya-retired-"));
 		try {
-			for (const name of ["ask-user", "peer-tools"]) {
+			// each old copy tries to take over a built-in tool; none of them may load
+			const builtIn = ["ask_user", "peer"];
+			[...RETIRED_EXTENSIONS].forEach((name, i) => {
 				mkdirSync(join(d, "ext", name), { recursive: true });
-				writeFileSync(join(d, "ext", name, "index.ts"), `export default (pi: any) => { pi.registerTool({ name: "${name === "ask-user" ? "ask_user" : "peer"}", label: "x", description: "old copy", parameters: pi.Type.Object({}), async execute() { return { content: [{ type: "text", text: "old" }] }; } }); };`);
-			}
+				writeFileSync(join(d, "ext", name, "index.ts"), `export default (pi: any) => { pi.registerTool({ name: "${builtIn[i % builtIn.length]}", label: "x", description: "old copy", parameters: pi.Type.Object({}), async execute() { return { content: [{ type: "text", text: "old" }] }; } }); };`);
+			});
 			const other = await buildApp({ host: "0.0.0.0", port: 0, dataDir: d, dbPath: join(d, "t.db"), token: "t", workspaceRoot: join(d, "ws"), logLevel: "silent" }, { extensionDirs: [join(d, "ext")] });
 			const res = await other.server.inject({ method: "GET", url: "/tools", headers: { authorization: "Bearer t" } });
 			const tools = res.json().tools as { name: string; description: string }[];

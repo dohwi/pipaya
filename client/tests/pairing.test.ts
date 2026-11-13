@@ -3,9 +3,9 @@ import { buildPairingLink, isLoopbackUrl, isPlainHttpOnOpenNetwork, parsePairing
 
 describe("connection link", () => {
 	test("round-trips address, code and name", () => {
-		const link = buildPairingLink("http://100.85.51.107:8787", "abcDEF123_-xyz", "집 서버");
+		const link = buildPairingLink("http://100.101.102.103:8787", "abcDEF123_-xyz", "집 서버");
 		expect(link.startsWith("pipaya://connect?")).toBe(true);
-		expect(parsePairingLink(link)).toEqual({ baseUrl: "http://100.85.51.107:8787", code: "abcDEF123_-xyz", name: "집 서버" });
+		expect(parsePairingLink(link)).toEqual({ baseUrl: "http://100.101.102.103:8787", code: "abcDEF123_-xyz", name: "집 서버" });
 	});
 	test("the link never carries a token", () => {
 		expect(buildPairingLink("https://h.example", "code-code-code")).not.toMatch(/token/i);
@@ -26,7 +26,7 @@ describe("connection link", () => {
 	});
 	test("loopback addresses are recognised: a phone cannot reach them", () => {
 		for (const u of ["http://localhost:8787", "http://127.0.0.1:8787", "http://[::1]:8787", "http://0.0.0.0:1"]) expect(isLoopbackUrl(u)).toBe(true);
-		for (const u of ["http://100.85.51.107:8787", "https://my.ts.net", "http://192.168.0.5:1"]) expect(isLoopbackUrl(u)).toBe(false);
+		for (const u of ["http://100.101.102.103:8787", "https://my.ts.net", "http://192.168.0.5:1"]) expect(isLoopbackUrl(u)).toBe(false);
 	});
 });
 
@@ -34,7 +34,7 @@ describe("plain http on an open network", () => {
 	test("this machine, the LAN and Tailscale are not flagged", () => {
 		for (const u of [
 			"http://localhost:8787", "http://127.0.0.1:8787", "http://192.168.0.5:8787", "http://10.1.2.3:8787", "http://172.16.0.9:8787",
-			"http://172.31.255.1:8787", "http://100.85.51.107:8787", "http://100.64.0.1:8787", "http://100.127.255.255:8787",
+			"http://172.31.255.1:8787", "http://100.101.102.103:8787", "http://100.64.0.1:8787", "http://100.127.255.255:8787",
 			"http://my-mac.local:8787", "http://box.tail1234.ts.net:8787", "http://nas:8787", "http://[::1]:8787", "http://[fd7a:115c::1]:8787",
 		]) expect(isPlainHttpOnOpenNetwork(u), u).toBe(false);
 	});

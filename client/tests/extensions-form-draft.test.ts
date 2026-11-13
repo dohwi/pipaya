@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { followsSaved } from "../src/lib/extensions/form-draft";
 
-const off = JSON.stringify({ role: "primary", shareSecrets: false });
-const on = JSON.stringify({ role: "primary", shareSecrets: true });
+const off = JSON.stringify({ mode: "basic", notify: false });
+const on = JSON.stringify({ mode: "basic", notify: true });
 
 describe("a settings form follows the saved value", () => {
 	test("a value changed elsewhere reaches an untouched form", () => {
@@ -13,7 +13,7 @@ describe("a settings form follows the saved value", () => {
 		expect(followsSaved(on, off, on)).toBe(true);
 	});
 	test("what the user is changing is never overwritten", () => {
-		const editing = JSON.stringify({ role: "follower", shareSecrets: false });
+		const editing = JSON.stringify({ mode: "advanced", notify: false });
 		expect(followsSaved(editing, off, on)).toBe(false);
 	});
 });

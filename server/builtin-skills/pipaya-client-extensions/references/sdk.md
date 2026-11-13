@@ -86,7 +86,7 @@ Up to 20 fields; the settings page renders a form and validates. Without it, the
 | `options` | `select` only, 2–20 of `{value ≤60, label ≤60}` |
 | `readonly` | shown as plain text (not an input), never edited: the extension writes it (a status line, text or `{ko,en}`); a value it wrote appears live; never validated, never saved by the form |
 | `component` | PascalCase name of a component of this package (needs `ui-components`) that draws this field instead of the default control; the default control is used wherever it cannot run. See `trusted-ui.md` |
-| `when` | `{ "key": "role", "equals": "follower" }` (or a list of values): shown only while that **earlier, editable** field holds one of them. A hidden field keeps its value but is never required or an error |
+| `when` | `{ "key": "mode", "equals": "advanced" }` (or a list of values): shown only while that **earlier, editable** field holds one of them. A hidden field keeps its value but is never required or an error |
 
 `resolveSettings(fields, raw)` → `{values, errors, ok}` is strict: fills defaults, drops undeclared keys, never coerces (`"5"` is not a number).
 

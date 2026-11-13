@@ -22,7 +22,7 @@
 	let busy = $state(false);
 	let copied = $state(false);
 	/**
-	 * A copied link has left this window: it is pasted somewhere else (another server's Server Sync, a chat), often after
+	 * A copied link has left this window: it is pasted somewhere else (another server or program that pairs with this one, a chat), often after
 	 * this panel is closed. Closing must not void it; it still expires two minutes after it was made and works once.
 	 */
 	let handedOut = $state(false);
