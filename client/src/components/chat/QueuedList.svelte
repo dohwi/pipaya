@@ -7,7 +7,7 @@
 
 	type Queued = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
 	/** Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it). */
-	let { queued, oncancel }: { queued: Queued[]; oncancel: (q: Queued) => void } = $props();
+	let { queued, oncancel, onopen }: { queued: Queued[]; oncancel: (q: Queued) => void; onopen: (q: Queued) => void } = $props();
 
 	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
 	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
@@ -34,6 +34,8 @@
 		syncFade();
 	});
 	let drag: { y: number; top: number; moved: boolean } | null = null;
+	// A press that dragged the list is not also a click that opens the row under the pointer.
+	let dragged = false;
 	// Which edges still hide rows: those edges fade out, so a half-cut row (and its ✕) never reads as a button.
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
@@ -61,6 +63,7 @@
 	function onDown(e: PointerEvent) {
 		if (e.pointerType !== "mouse" || e.button !== 0 || !ul || ul.scrollHeight <= ul.clientHeight) return;
 		drag = { y: e.clientY, top: ul.scrollTop, moved: false };
+		dragged = false;
 	}
 	function onMove(e: PointerEvent) {
 		if (!drag || !ul) return;
@@ -68,6 +71,7 @@
 		if (!drag.moved) {
 			if (Math.abs(dy) < THRESHOLD) return;
 			drag.moved = true;
+			dragged = true;
 			ul.setPointerCapture(e.pointerId);
 		}
 		ul.scrollTop = drag.top - dy;
@@ -90,8 +94,11 @@
 <ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
-			<QueueBadge {q} />
-			<span class="qt">{q.text}</span>
+			<!-- The row shows one cut line; a click opens the whole message (and its copy / remove) in the queue dialog. -->
+			<button type="button" class="qo" onclick={() => { if (!dragged) onopen({ mode: q.mode, text: q.text, deferred: q.deferred }); }} title={t("자세히 보기")}>
+				<QueueBadge {q} />
+				<span class="qt">{q.text}</span>
+			</button>
 			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
 		</li>
 	{/each}
@@ -181,6 +188,22 @@
 		min-width: 0;
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
+	}
+	/* The badge and the text are one button: no box of its own, the row's look stays; hover brightens the text. */
+	.qo {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		text-align: left;
+		color: inherit;
+		font-size: inherit;
+		line-height: 22px; /* the 22px row of the ✕ beside it (ROW in the script) */
+		border-radius: var(--radius-xs);
+	}
+	.qo:hover .qt {
+		color: var(--text);
 	}
 	.qx {
 		flex: none;

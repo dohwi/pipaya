@@ -1971,8 +1971,11 @@ class AppStore {
 
   /** Queue manager dialog: the session whose queued messages are listed. null = closed. */
   queueDialog = $state<string | null>(null);
-  openQueue(id: string | null = this.activeId) {
+  /** The message the queue dialog opens on (its detail view) instead of the list; the dialog takes it once and clears it. */
+  queueItem = $state<{ mode: "steer" | "follow_up"; text: string; deferred?: boolean } | null>(null);
+  openQueue(id: string | null = this.activeId, item: { mode: "steer" | "follow_up"; text: string; deferred?: boolean } | null = null) {
     if (!id || !this.chatOf(id)?.waiting.length) return void this.toast(t("취소할 대기열이 없습니다"), "error", id);
+    this.queueItem = item;
     this.queueDialog = id;
   }
 

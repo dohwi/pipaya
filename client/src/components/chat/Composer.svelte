@@ -611,7 +611,7 @@
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if chat?.waiting.length}
-			<QueuedList queued={chat.waiting} oncancel={(q) => app.cancelQueued(q, pane.id)} />
+			<QueuedList queued={chat.waiting} oncancel={(q) => app.cancelQueued(q, pane.id)} onopen={(q) => app.openQueue(pane.id, q)} />
 		{/if}
 		{#if reply}
 			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />
