@@ -4,10 +4,12 @@
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
+	import { viewport } from "../../lib/viewport.svelte";
 
 	/**
 	 * The frame of one extension's detail page, for an installed one and for one running on the server: the way back
-	 * (shown only where the settings sidebar does not already list the extensions), the heading with its state line and
+	 * (shown only between phone and wide: wide windows list the extensions in the settings sidebar, and on a phone the
+	 * window's own header arrow already leaves the extension first, see `phoneBack`), the heading with its state line and
 	 * the control at the right (the on/off switch, or a spinner), then the sections.
 	 *
 	 *  id        the page's DOM id, so the list can bring focus back to it
@@ -42,7 +44,8 @@
 </script>
 
 <div class="page" {id} tabindex="-1">
-	<button type="button" class="back" onclick={onback}><span class="chev flip"><Icon name="chevron-right" /></span>{t("목록")}</button>
+	<!-- phone: the settings header's back arrow does this, a second one under it would be a duplicate -->
+	{#if !viewport.phone}<button type="button" class="back" onclick={onback}><span class="chev flip"><Icon name="chevron-right" /></span>{t("목록")}</button>{/if}
 	<div class="line">
 		<div class="who">
 			<span class="top">
