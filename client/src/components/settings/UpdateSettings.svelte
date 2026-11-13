@@ -30,7 +30,7 @@
 				{#if updater.current}<span class="ver">{updater.current}</span>{/if}
 			</div>
 			{#if appNew}
-				<StatusChip tone="ok">{t("새 버전 {version}을 사용할 수 있습니다", { version: updater.version })}</StatusChip>
+				<StatusChip tone="ok">{t("새 버전 {version}", { version: updater.version })}</StatusChip>
 			{:else if updater.phase === "idle" && updater.current}
 				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
 			{/if}
@@ -53,9 +53,9 @@
 <style>
 	.card { margin-top: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.item { display: flex; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; }
-	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: max-content; }
 	.name { font-size: var(--fs-sm); font-weight: 500; }
-	.ver { font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+	.ver { white-space: nowrap; font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 	.item :global(.btn) { flex: none; white-space: nowrap; }
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
