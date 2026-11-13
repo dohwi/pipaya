@@ -601,3 +601,103 @@ export default (pi) => {
 		expect((await call("POST", "/x/hooks/hook", { token: null, body: "{}", type: "application/json" })).statusCode).toBe(401);
 	});
 });
+
+describe("pi.api and pi.server", () => {
+	const CALLER = `
+export default (pi) => {
+	globalThis.__apiOfCaller = pi.api;
+	pi.registerMethod("call", async (p) => pi.api.request(p.method, p.path, p.body, p.query ? { query: p.query } : undefined));
+	pi.registerMethod("info", () => pi.server.info());
+};
+`;
+	let other: App;
+	let exDir: string;
+	const call = async (url: string, payload: unknown) => {
+		const r = await other.server.inject({ method: "POST", url, headers: { authorization: "Bearer test-token", "content-type": "application/json" }, payload: JSON.stringify(payload) });
+		return { status: r.statusCode, json: r.json() };
+	};
+	const request = (method: string, path: string, body?: unknown, query?: unknown) => call("/server-extensions/caller/methods/call", { method, path, body, query });
+	beforeAll(async () => {
+		exDir = join(dir, "api-exts");
+		mkdirSync(exDir, { recursive: true });
+		writeFileSync(join(exDir, "caller.js"), CALLER);
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: join(dir, "api-data"), dbPath: join(dir, "api.sqlite"), token: "test-token", workspaceRoot: ws, logLevel: "silent" };
+		other = await buildApp(cfg, { strictResponses: true, extensionDirs: [exDir], home: dir });
+		// Set up through pi.api itself: a PUT goes through the public route's validation and is applied.
+		expect((await request("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl))).json.result.status).toBe(200);
+		expect((await request("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id })).json.result.status).toBe(200);
+	});
+	afterAll(async () => {
+		await other.close();
+		rmSync(exDir, { recursive: true, force: true });
+	});
+
+	test("a GET returns the status and the parsed body; the query is appended", async () => {
+		await request("POST", "/sessions", { cwd: ws, title: "one" });
+		await request("POST", "/sessions", { cwd: ws, title: "two" });
+		const all = (await request("GET", "/sessions")).json.result;
+		expect(all.status).toBe(200);
+		expect(all.body.sessions.map((s: any) => s.title).sort()).toEqual(["one", "two"]);
+		const one = (await request("GET", "/sessions", undefined, { limit: 1 })).json.result;
+		expect(one.body.sessions).toHaveLength(1);
+		expect(one.body.nextBefore).not.toBeNull();
+	});
+
+	test("errors come back as a status, with the same validation as the public route", async () => {
+		const missing = (await request("GET", "/sessions/nope")).json.result;
+		expect(missing.status).toBe(404);
+		expect(missing.body.error.code).toBe("not_found");
+		expect((await request("POST", "/sessions", { cwd: 42 })).json.result.status).toBe(400);
+		expect((await request("PATCH", "/sessions/nope", { title: "x" })).json.result.status).toBe(404);
+	});
+
+	test("a write publishes the same events as a client's request", async () => {
+		const seen: string[] = [];
+		const off = other.bus.subscribe((e) => { seen.push(e.type); });
+		try {
+			const created = (await request("POST", "/sessions", { cwd: ws, title: "evented" })).json.result;
+			expect(created.status).toBe(201);
+			expect((await request("PATCH", `/sessions/${created.body.id}`, { title: "renamed" })).json.result.body.title).toBe("renamed");
+			expect((await request("DELETE", `/sessions/${created.body.id}`)).json.result).toEqual({ status: 204, body: null });
+		} finally { off(); }
+		expect(seen).toEqual(expect.arrayContaining(["session_created", "session_updated", "session_deleted"]));
+	});
+
+	test("only server routes: absolute URLs, other hosts and streams are refused", async () => {
+		// A throwing method is a 400 carrying its message.
+		for (const path of ["http://example.com/sessions", "//example.com/sessions", "/\\example.com", "sessions", ""]) {
+			const r = await request("GET", path);
+			expect(r.status).toBe(400);
+			expect(r.json.error.message).toContain("an absolute URL is refused");
+		}
+		expect((await request("GET", "/events")).json.error.message).toContain("is a stream");
+		expect((await request("CONNECT", "/sessions")).json.error.message).toContain("invalid method");
+	});
+
+	test("a request after the extension unloaded is refused", async () => {
+		const old = (globalThis as any).__apiOfCaller;
+		expect((await other.server.inject({ method: "POST", url: "/server-extensions/reload", headers: { authorization: "Bearer test-token" } })).statusCode).toBe(200);
+		await expect(old.request("GET", "/sessions")).rejects.toThrow("unloaded");
+		expect((await request("GET", "/sessions")).json.result.status).toBe(200);
+	});
+
+	test("pi.server.info: the bound port and host, and the addresses other devices may use", async () => {
+		const info = (await call("/server-extensions/caller/methods/info", {})).json.result;
+		expect(info).toEqual({ port: expect.any(Number), host: "0.0.0.0", urls: expect.any(Array) });
+		for (const u of info.urls) expect(u).toMatch(/^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/);
+	});
+
+	test("reachableUrls: every interface, one address or loopback only", async () => {
+		const { reachableUrls } = await import("../src/server-address.ts");
+		const nics: any = {
+			lo: [{ address: "127.0.0.1", family: "IPv4", internal: true }],
+			eth0: [{ address: "192.168.0.5", family: "IPv4", internal: false }, { address: "fe80::1", family: "IPv6", internal: false }],
+			vpn0: [{ address: "100.64.0.7", family: "IPv4", internal: false }],
+			usb0: [{ address: "169.254.1.1", family: "IPv4", internal: false }],
+		};
+		expect(reachableUrls("0.0.0.0", 8787, nics)).toEqual(["http://192.168.0.5:8787", "http://100.64.0.7:8787"]);
+		expect(reachableUrls("100.64.0.7", 8787, nics)).toEqual(["http://100.64.0.7:8787"]);
+		expect(reachableUrls("127.0.0.1", 8787, nics)).toEqual([]);
+		expect(reachableUrls("localhost", 8787, nics)).toEqual([]);
+	});
+});

@@ -11,7 +11,7 @@ import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../too
 import { RETIRED_EXTENSIONS } from "./retired.ts";
 import { markExtensionImports } from "./loader.ts";
 import type {
-	AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, RouteContext, RouteMethod, ServerEvent, ToolResult,
+	ApiMethod, AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionServerInfo, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, RouteContext, RouteMethod, ServerEvent, ToolResult,
 } from "./types.ts";
 
 /** What the host needs from the session layer (set after both exist, to avoid a construction cycle). */
@@ -28,6 +28,24 @@ export interface SessionBridge {
 	/** An OS / push notification from extension `source`; throws past the rate limit. */
 	notify(source: string, n: { title: string; body?: string; sessionId?: string; key?: string; kind?: string }): void;
 	defaultCwd(): string;
+}
+
+/** A request an extension makes to the server's own REST API (`pi.api.request`), already checked by the host. */
+export interface InternalRequest {
+	/** The extension that made it, for the log. */
+	extension: string;
+	method: ApiMethod;
+	/** A server path starting with `/`, the query already in it. */
+	url: string;
+	body?: unknown;
+	signal: AbortSignal;
+}
+
+/** What the host needs from the HTTP server (set once the server exists). */
+export interface ServerBridge {
+	/** Runs the request through the server's routes with the admin's rights; status and raw body. */
+	request(req: InternalRequest): Promise<{ status: number; contentType: string | undefined; body: string }>;
+	info(): ExtensionServerInfo;
 }
 
 export interface ExtensionHostOptions {
@@ -148,6 +166,8 @@ interface Loaded extends ExtensionInfo {
 	providerIds: Set<string>;
 	flagDefs: Map<string, ExtensionFlag>;
 	busOff: (() => void)[];
+	/** Aborted when the extension unloads: its `pi.api` requests still running are given up. */
+	life: AbortController;
 	panelHandler?: (event: ExtensionPanelEvent) => void | Promise<void>;
 }
 
@@ -264,6 +284,7 @@ function matchSegments(segments: string[], parts: string[]): Record<string, stri
 export const RESERVED_COMMANDS = Object.freeze(["new", "clear", "model", "resume", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "fork", "tree", "copy", "delete", "reopen", "branch", "regenerate", "abort", "cwd", "compress", "remove", "rm"]);
 /** A method a client waits on must answer: the client gives up after 15 s, so the server stops waiting a little later. */
 const METHOD_TIMEOUT_MS = 20_000;
+const API_METHODS: readonly ApiMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const MAX_ENTRY_PAGE = 1000;
 
 const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.trim() && v.length <= max ? v : undefined);
@@ -314,6 +335,7 @@ export class ExtensionHost {
 	/** The extensions that loaded without an error; asked on every tool call and model call, so kept rather than filtered each time. */
 	private running: Loaded[] = [];
 	private bridge?: SessionBridge;
+	private serverBridge?: ServerBridge;
 	private channels = new Map<string, Set<(data: unknown) => void>>();
 	private version = 0;
 	readonly errors: { at: number; extension: string; where: string; message: string }[] = [];
@@ -325,6 +347,43 @@ export class ExtensionHost {
 
 	attach(bridge: SessionBridge): void {
 		this.bridge = bridge;
+	}
+
+	attachServer(bridge: ServerBridge): void {
+		this.serverBridge = bridge;
+	}
+
+	/** `pi.api.request`: checks the call, then runs it through the server within the method time limit. */
+	private async apiRequest(ext: Loaded, method: unknown, path: unknown, body: unknown, o: { query?: Record<string, unknown>; signal?: AbortSignal } = {}): Promise<{ status: number; body: any }> {
+		const server = this.serverBridge;
+		if (!server) throw new Error("the server API is not ready");
+		if (typeof method !== "string" || !API_METHODS.includes(method.toUpperCase() as ApiMethod)) throw new Error(`invalid method; use ${API_METHODS.join(", ")}`);
+		// A server route only: "/sessions", never "http://…", "//host/…" or a path with a backslash some parsers read as a host.
+		if (typeof path !== "string" || !/^\/(?![/\\])/.test(path) || /[\\\s#]/.test(path) || path.length > 2000) throw new Error(`invalid path "${String(path)}": it must be a server route starting with "/" (an absolute URL is refused)`);
+		let url = path;
+		if (o.query !== undefined) {
+			if (!o.query || typeof o.query !== "object" || Array.isArray(o.query)) throw new Error("query must be an object");
+			const q = new URLSearchParams();
+			for (const [k, v] of Object.entries(o.query)) if (v !== undefined && v !== null) q.append(k, String(v));
+			const text = q.toString();
+			if (text) url += (url.includes("?") ? "&" : "?") + text;
+		}
+		ext.life.signal.throwIfAborted();
+		o.signal?.throwIfAborted();
+		const ms = this.opts.methodTimeoutMs ?? METHOD_TIMEOUT_MS;
+		const signal = AbortSignal.any([ext.life.signal, AbortSignal.timeout(ms), ...(o.signal ? [o.signal] : [])]);
+		let res;
+		try {
+			res = await server.request({ extension: ext.name, method: method.toUpperCase() as ApiMethod, url, ...(body !== undefined ? { body } : {}), signal });
+		} catch (e) {
+			if (signal.aborted) throw signal.reason instanceof Error && signal.reason.name !== "TimeoutError" ? signal.reason : new Error(`${method} ${path} did not answer within ${ms} ms`);
+			throw e;
+		}
+		if (!res.body) return { status: res.status, body: null };
+		if (/[/+]json\b/i.test(res.contentType ?? "")) {
+			try { return { status: res.status, body: JSON.parse(res.body) }; } catch { /* sent as JSON but is not: the text */ }
+		}
+		return { status: res.status, body: res.body };
 	}
 
 	/** Default places: `<dataDir>/extensions` and `~/.agents/extensions`. */
@@ -407,13 +466,14 @@ export class ExtensionHost {
 		return {
 			name, path, settingsId: name.split("/")[0]!, tools: [], commands: [], commandFamilies: [], methods: [], routes: [], providers: [], flags: [], events: [],
 			handlers: new Map(), toolDefs: new Map(), commandDefs: new Map(), familyDefs: new Map(), methodDefs: new Map(), routeDefs: [],
-			providerIds: new Set(), flagDefs: new Map(), busOff: [],
+			providerIds: new Set(), flagDefs: new Map(), busOff: [], life: new AbortController(),
 		};
 	}
 
 	private cleanup(ext: Loaded): void {
 		for (const id of ext.providerIds) this.opts.registry.models.deleteProvider(id);
 		for (const off of ext.busOff) off();
+		ext.life.abort(new Error(`extension ${ext.name} was unloaded`));
 		ext.handlers.clear(); ext.toolDefs.clear(); ext.commandDefs.clear(); ext.familyDefs.clear(); ext.methodDefs.clear();
 		ext.providerIds.clear(); ext.flagDefs.clear(); ext.busOff = []; ext.routeDefs = [];
 		ext.panel = undefined; ext.panelHandler = undefined;
@@ -638,6 +698,15 @@ export class ExtensionHost {
 					for (const h of [...(this.channels.get(channel) ?? [])]) {
 						try { void Promise.resolve(h(data)).catch((e) => this.recordError(ext.name, `events:${channel}`, e)); } catch (e) { this.recordError(ext.name, `events:${channel}`, e); }
 					}
+				},
+			},
+			api: {
+				request: (method, path, body, o) => this.apiRequest(ext, method, path, body, o),
+			},
+			server: {
+				info: () => {
+					if (!this.serverBridge) throw new Error("the server is not ready");
+					return this.serverBridge.info();
 				},
 			},
 			log: (...args) => this.log(`[${ext.name}] ${args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")}`),
