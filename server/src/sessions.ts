@@ -17,6 +17,9 @@ import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMess
 import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { SCHEDULE_TOOL } from "./schedule-tool.ts";
+import type { Scheduler } from "./scheduler.ts";
+import { sameName } from "./member-names.ts";
 import { PeerService, type GroupOps, type GroupRef } from "./peers.ts";
 import type { QuestionRequest } from "./questions.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
@@ -169,6 +172,45 @@ export class SessionManager {
 
 	setGroupOps(ops: GroupOps): void {
 		this.groupOps = ops;
+	}
+
+	/** Scheduled tasks for the `schedule` tool, wired by the app once the scheduler exists. */
+	private scheduler?: Scheduler;
+
+	setScheduler(s: Scheduler): void {
+		this.scheduler = s;
+	}
+
+	/** What `schedule` may do, on behalf of session `selfId`. */
+	private scheduleOps(selfId: string): ToolContext["schedules"] {
+		const s = this.scheduler;
+		if (!s) return undefined;
+		const target = (name?: string) => {
+			const n = name?.trim().replace(/^@/, "");
+			if (!n) return selfId;
+			const active = this.store.list({ limit: 1000, closed: false }).filter((r) => r.name);
+			const hit = active.find((r) => sameName(r.name, n));
+			if (!hit) throw notFound(`session @${n} (sessions: ${active.map((r) => `@${r.name}`).join(", ") || "none"})`);
+			return hit.id;
+		};
+		return {
+			list: (all) => s.list(all ? undefined : selfId),
+			create: ({ session, title, prompt, runAt, everyMs }) =>
+				s.create({ sessionId: target(session), title, prompt, ...(runAt !== undefined ? { kind: "once", runAt } : { kind: "interval", everyMs }) }),
+			update: (id, patch) => s.update(id, patch),
+			delete: (id) => {
+				const t = s.get(id);
+				s.delete(id);
+				return t;
+			},
+			run: (id) => s.runNow(id),
+			label: (id) => {
+				if (id === selfId) return "this session";
+				const r = this.store.get(id);
+				return r?.name ? `@${r.name}${r.closed ? " (closed)" : ""}` : id;
+			},
+			now: () => Date.now(),
+		};
 	}
 
 	/** Messages still waiting in a session's steer / follow-up queues (pi-agent-core keeps them in plain arrays). */
@@ -1092,7 +1134,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -1118,7 +1160,7 @@ export class SessionManager {
 			create: (input) => this.peers.create(sessionId, input),
 			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
 			group: (action, a) => this.peers.group(sessionId, action, a),
-		} };
+		}, schedules: this.scheduleOps(sessionId) };
 		if (q) {
 			ctx.ask = async (toolCallId, req, signal) => {
 				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));

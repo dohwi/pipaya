@@ -646,6 +646,7 @@ export const en: Record<string, string> = {
 	"도구 허용 · 도우미 위임": "Allowed tools · helper delegation",
 	"MCP 서버 연결": "MCP server connections",
 	"일회성 도우미에게 작업 위임 (delegate)": "Hand a task to a one-off helper (delegate)",
+	"예약 작업 만들기·변경·삭제 (schedule)": "Create, change and remove scheduled tasks (schedule)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */

@@ -8,6 +8,7 @@ import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resi
 import { resizeImage } from "./image-resize.ts";
 import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
 import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
+import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
@@ -46,6 +47,8 @@ export interface ToolContext {
 		manage(name: string, action: ManageAction, a?: ManageArgs): string;
 		group(action: "create" | "add" | "remove" | "dissolve", a: { group?: string; members?: string[]; name?: string }): string;
 	};
+	/** Scheduled tasks (`schedule`). */
+	schedules?: ScheduleOps;
 }
 
 /** One question, or several asked together (`items`; `question`/`options` describe the first). */
@@ -616,12 +619,12 @@ const delegateTool: ToolDef = {
 
 const PEER_DEFS = [peerTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL];
+export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
 export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 
