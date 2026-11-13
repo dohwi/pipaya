@@ -672,6 +672,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	bus.subscribe((e) => { if (e.type === "session_deleted") scheduler.onSessionDeleted((e.data as { id: string }).id); });
 	registerSchedulerRoutes(server, scheduler);
+	sessions.setScheduler(scheduler);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
 	registerVoiceRoutes(server, voice, credentials, bus);

@@ -16,8 +16,8 @@ export const MAX_DELEGATES_PER_RUN = 12;
 /** Model calls a helper may use when its definition says nothing, and the most a definition may ask for. */
 export const DEFAULT_SUBAGENT_TURNS = 12;
 export const MAX_SUBAGENT_TURNS = 30;
-/** Tools a helper never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user or reach other sessions. */
-const FORBIDDEN = (n: string) => n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_");
+/** Tools a helper never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions or schedule prompts. */
+const FORBIDDEN = (n: string) => n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule";
 export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
 
 export interface SubagentDef {

@@ -39,3 +39,11 @@ describe("tool colours", () => {
 		expect(new Set(kinds.map(hue)).size).toBe(kinds.length);
 	});
 });
+
+describe("toolSummary for schedule", () => {
+	test("names the action, the task and its title or prompt", () => {
+		expect(toolSummary("schedule", { action: "create", prompt: "빌드 상태 확인\n둘째 줄", everyMinutes: 60 })).toBe("create · 빌드 상태 확인");
+		expect(toolSummary("schedule", { action: "delete", id: "abc" })).toBe("delete · abc");
+		expect(toolSummary("schedule", { action: "list" })).toBe("list");
+	});
+});

@@ -68,6 +68,8 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 			return str(args.path);
 		case "delegate":
 			return clip(`${str(args.role)}: ${firstLine(str(args.task))}`, 90);
+		case "schedule":
+			return clip([str(args.action), str(args.id), firstLine(str(args.title || args.prompt))].filter(Boolean).join(" · "), 90);
 		case "ask_user": {
 			// the question itself, not its JSON; several questions say how many
 			const qs = Array.isArray(args.questions) ? args.questions : [];

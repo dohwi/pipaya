@@ -6,7 +6,7 @@
 
 - 위치: `~/.agents/subagents/*.md`(전역), `<세션 cwd>/.agents/subagents/*.md`(프로젝트, 같은 이름이면 프로젝트가 이긴다). 호출마다 다시 읽는다. 설정 > 에이전트 도구 > 도우미 역할에서 목록·추가·수정·삭제할 수 있다(`GET/POST /configuration/subagents`, `PUT/DELETE /configuration/subagents/:name`; 프로젝트 범위는 `cwd` 쿼리(없으면 서버 기본 작업 폴더)의 `.agents/subagents`에 쓴다. 역할마다 스위치로 끌 수 있고(`PUT /configuration/subagents/:name/enabled`, 키 `scope/name`을 `settings.disabled_subagents`에 저장) 끈 역할은 `delegate`가 없는 역할처럼 거절한다. 같은 이름의 프로젝트 역할을 끄면 전역 역할이 다시 보인다. 대화창 하단 푸터의 "도우미 역할" 항목은 그 대화 폴더의 `cwd`로 연다. frontmatter의 모르는 키는 수정해도 보존).
 - 파일 이름(`.md` 제외)이 역할 이름. frontmatter: `description`, `model`(`provider/model`, 생략 = 부모 모델), `thinking`(생략 = off), `tools`(생략 = read·grep·ls), `maxTurns`(생략 12, 상한 30). 본문 = 도우미 시스템 프롬프트.
-- `delegate`·`ask_user`·`peer`는 `tools`에 적어도 도우미에게 주지 않는다(깊이 1, 사용자·다른 세션 접근 없음). 설정에서 끈 도구도 제외.
+- `delegate`·`ask_user`·`peer`·`schedule`은 `tools`에 적어도 도우미에게 주지 않는다(깊이 1, 사용자·다른 세션·예약 접근 없음). 설정에서 끈 도구도 제외.
 
 ## 도구 (`server/src/tools.ts`, `SessionManager.delegate`)
 
