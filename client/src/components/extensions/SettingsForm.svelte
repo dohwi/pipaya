@@ -53,7 +53,7 @@
 	const clean = $derived(formOf(draft));
 	const resolved = $derived(resolveSettings(fields, clean));
 	/** The fields on the form right now: one with `when` comes and goes with the choice it depends on. */
-	const shown = $derived(fields.filter((field) => settingShown(field, resolved.values, fields)));
+	const shown = $derived(fields.filter((field) => settingShown(field, resolved.values)));
 
 	// Follow saves and server syncs, but never overwrite what the user is typing.
 	$effect(() => {
