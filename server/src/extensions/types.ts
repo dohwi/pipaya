@@ -453,7 +453,36 @@ export interface ExtensionAPI {
 	 * belong in the settings object. Absent on a server older than the feature: test `typeof pi.ui?.setPanel === "function"`.
 	 */
 	ui?: ExtensionUi;
+	/**
+	 * The server's own REST API, called in-process with the admin's rights: the same routes, validation, events and side
+	 * effects as a client's request, without a network hop or a token. Prefer it over touching the database or the data
+	 * folder directly.
+	 */
+	api: ExtensionServerApi;
+	/** Where this server listens and how other devices may reach it. */
+	server: { info(): ExtensionServerInfo };
 	log(...args: unknown[]): void;
+}
+
+export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+export interface ExtensionServerApi {
+	/**
+	 * `method path` against this server, e.g. `request("GET", "/sessions")` or `request("PUT", "/mcp", body)`. `path` is a
+	 * server route starting with `/` (an absolute URL is refused); `body` is sent as JSON; `query` is appended to the path.
+	 * Resolves with the status and the body (parsed when it is JSON, `null` when empty, text otherwise) for every status,
+	 * errors included; rejects only when the request cannot be made (a bad path, a stream route, the extension unloaded).
+	 */
+	request<T = unknown>(method: ApiMethod, path: string, body?: unknown, opts?: { query?: Record<string, string | number | boolean | null | undefined>; signal?: AbortSignal }): Promise<{ status: number; body: T }>;
+}
+
+export interface ExtensionServerInfo {
+	/** The port the server is bound to. */
+	port: number;
+	/** The address it is bound to (`0.0.0.0` = every interface). */
+	host: string;
+	/** `http://<ip>:<port>` for each of this machine's IPv4 addresses another device could use (LAN, VPN); empty when bound to loopback only. */
+	urls: string[];
 }
 
 /**

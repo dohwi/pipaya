@@ -63,6 +63,7 @@ import { createCorsPolicy, redactUrl } from "./security.ts";
 import { StreamTickets } from "./stream-tickets.ts";
 import { AuthThrottle } from "./auth-throttle.ts";
 import { createPushTransports } from "./push.ts";
+import { reachableUrls } from "./server-address.ts";
 import { ExtensionHost, ROUTE_PREFIX } from "./extensions/host.ts";
 import { registerExtensionHttpRoutes, registerServerExtensionRoutes } from "./extensions/routes.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
@@ -369,6 +370,29 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	server.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: { code: "not_found", message: "route not found" } }));
 	const app = server.withTypeProvider<TypeBoxProvider>();
+
+	// `pi.api.request`: an extension calls the REST API in-process with the admin token, through the same hooks, schemas,
+	// body limits and handlers as a client's request. Streams never end, so they are refused (extensions have `pi.subscribe`).
+	extensions.attachServer({
+		request: async ({ extension, method, url, body, signal }) => {
+			const path = url.split("?")[0] ?? "";
+			if (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path) || /^\/sessions\/[^/]+\/events$/.test(path)) throw new Error(`${path} is a stream; use pi.subscribe for events`);
+			server.log.info({ extension, method, url: redactUrl(url) }, "extension api request");
+			const res = await server.inject({
+				method, url, signal,
+				headers: { authorization: `Bearer ${cfg.token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+				...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
+			});
+			const type = res.headers["content-type"];
+			return { status: res.statusCode, contentType: typeof type === "string" ? type : undefined, body: res.body };
+		},
+		info: () => {
+			// Before `listen` (tests, startup) the configured port; after, the one actually bound (port 0 picks a free one).
+			const bound = server.server.address();
+			const port = bound && typeof bound === "object" ? bound.port : cfg.port;
+			return { port, host: cfg.host, urls: reachableUrls(cfg.host, port) };
+		},
+	});
 
 	// ── meta ──
 	app.get("/health", {
