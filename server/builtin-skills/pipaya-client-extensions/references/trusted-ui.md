@@ -65,7 +65,7 @@ A field's component gets `{ field, value, onchange(next), disabled, settings, er
 { "manifest": { "permissions": ["ui-components"], "settings": [{ "key": "level", "type": "number", "label": "Level", "min": 0, "max": 10, "component": "Slider" }] },
   "components": {
     "Slider": "<script>import { Icon } from 'pipaya'; let { field, value, onchange, disabled } = $props();</script><input type=\"range\" min={field.min} max={field.max} {value} {disabled} oninput={(e) => onchange(e.currentTarget.valueAsNumber)} /> {value}",
-    "Status": "<script>let { settings, call, save } = $props();</script><button onclick={() => call('syncNow')}>Sync</button> {settings.lastRun}"
+    "Status": "<script>let { settings, call, save } = $props();</script><button onclick={() => call('refresh')}>Refresh</button> {settings.updatedAt}"
   },
   "mounts": [{ "slot": "extension.page.top", "component": "Status" }] }
 ```
@@ -86,5 +86,5 @@ A server extension may carry the same kind of components itself (`pipaya.compone
 ## When to use which
 - **Declarative nodes** (`ui.md`): the default. Sandboxed, validated, consistent. Use them for panels, forms and simple read-only items.
 - **`ui-style`**: re-skin the existing app.
-- **`ui-components`**: a look or behaviour the nodes cannot express (rings and popovers, a replaced send button, new toolbar controls). The cost is that it runs unsandboxed and needs the danger consent. A real example is `quota-monitor` 0.5: its worker polls with the sandboxed `http-write` and sends plain data through `sdk.components.setData`; `Gauge.svelte` and `Ring.svelte` only draw it.
+- **`ui-components`**: a look or behaviour the nodes cannot express (a custom chart, a replaced send button, new toolbar controls). The cost is that it runs unsandboxed and needs the danger consent. A good split: the worker polls with the sandboxed `http-write` and sends plain data through `sdk.components.setData`; the components only draw it.
 - Keep secrets, polling and network in the Worker. Components should do no I/O, so one that only draws can be reviewed at a glance.

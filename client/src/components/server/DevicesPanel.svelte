@@ -94,8 +94,8 @@
 	}
 
 	/**
-	 * One click, no QR: a fresh one-time code as a link, straight to the clipboard, for pasting into another server's
-	 * Server Sync or a phone. Nothing is shown, so nothing is revoked on leaving; the server still voids it after two
+	 * One click, no QR: a fresh one-time code as a link, straight to the clipboard, for pasting into another
+	 * server or program that pairs with this one, or a phone. Nothing is shown, so nothing is revoked on leaving; the server still voids it after two
 	 * minutes or one use. An address only this PC can reach (localhost) is useless elsewhere: the QR panel lets you fix it.
 	 */
 	async function shareLink() {

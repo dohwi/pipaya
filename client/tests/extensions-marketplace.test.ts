@@ -20,8 +20,8 @@ describe("parseCatalog", () => {
   });
 
   test("a folder of a repository is kept as `dir`", () => {
-    const c = parseCatalog({ name: "m", extensions: [gitEntry("peer-tools", { type: "git", repo: "dohwi/pipaya-extensions", dir: "peer-tools", ref: "peer-tools-v0.1.0", commit: C40 })] });
-    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extensions", dir: "peer-tools", ref: "peer-tools-v0.1.0", commit: C40 });
+    const c = parseCatalog({ name: "m", extensions: [gitEntry("folder-a", { type: "git", repo: "dohwi/pipaya-extensions", dir: "folder-a", ref: "folder-a-v0.1.0", commit: C40 })] });
+    expect(c.extensions[0]?.source).toEqual({ type: "git", repo: "dohwi/pipaya-extensions", dir: "folder-a", ref: "folder-a-v0.1.0", commit: C40 });
   });
 
   test("a git source that does not fit is left out, never trusted", () => {
@@ -100,7 +100,7 @@ import { formatStars, localizedDescription, parseCatalog as pc, repoLoc } from "
 import { describe as d2, expect as e2, test as t2 } from "bun:test";
 
 d2("marketplace card helpers", () => {
-  const base = { id: "guard", kind: "server", name: "Guard", description: "", version: "1.0.0" } as const;
+  const base = { id: "example", kind: "server", name: "Example", description: "", version: "1.0.0" } as const;
   t2("localizedDescription picks tag, base language, then default", () => {
     const e = { ...base, description: "def", descriptions: { ko: "한글", "zh-CN": "中文" }, source: { type: "path", path: "x" } } as MarketEntry;
     e2(localizedDescription(e, "ko")).toBe("한글");

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { compile } from "svelte/compiler";
 import { Glob } from "bun";
+import { join } from "node:path";
+import { extensionNameRules, namesIn } from "../../server/test/support/extension-names";
 import { parseNavbarItem, navbarId, NAVBAR_LIMITS } from "../src/lib/extensions/navbar";
 import { HTTP_MAX_BYTES, HttpReader, copyJson, httpOrigin, httpPath } from "../src/lib/extensions/http";
 import { SANDBOX_HTML } from "../src/lib/extensions/runtime";
@@ -250,14 +252,22 @@ describe("renderers, SDK surface and brand neutrality", () => {
 		expect(files.filter((f) => /gauge|quota|usage/i.test(f.split("/").pop()!) && !/^components\/(?:Pin|Sidebar)/.test(f))).toEqual([]);
 		expect(await Bun.file("src/lib/extensions/ui.ts").text()).not.toMatch(/gauge|\brings?\b/i);
 	});
-	test("the core never names an extension or its feature (ids, tools, @name vocabulary)", async () => {
-		// What an extension owns stays out of the core: its id, its tool names and the words of its feature. The core offers
-		// neutral hooks (labels, mentions, message headers) that any extension can fill with its own meaning.
-		const pattern = /peer-tools|peer-names|ask-user|prompt-templates|session-retention|quota-monitor|\bmark-(?:agent|member)\b|\bpeerbubble\b/i;
+	test("the app never names an extension or its feature (ids, titles, setting keys, words), not even in comments or tests", async () => {
+		// What an extension owns stays out of the app: its id, its title, its setting keys and the words of its feature. The
+		// app offers neutral hooks (labels, mentions, message headers, settings forms) that any extension can fill with its
+		// own meaning, and an example or a test uses a made-up extension. The rules: server/test/support/extension-names.ts.
+		const rules = extensionNameRules(join(import.meta.dir, "..", ".."));
+		const self = "tests/extensions-generic.test.ts";
 		const hits: string[] = [];
-		for await (const file of new Glob("**/*").scan({ cwd: "src", onlyFiles: true })) {
-			if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file) || file === "lib/locales/en.ts") continue;
-			if (pattern.test(await Bun.file(`src/${file}`).text())) hits.push(file);
+		for (const dir of ["src", "tests", "examples"]) {
+			for await (const file of new Glob("**/*").scan({ cwd: dir, onlyFiles: true })) {
+				if (/\.(png|jpe?g|gif|webp|ico|icns|woff2?)$/i.test(file) || `${dir}/${file}` === self) continue;
+				const lines = (await Bun.file(`${dir}/${file}`).text()).split("\n");
+				lines.forEach((line, i) => {
+					const names = namesIn(line, rules);
+					if (names.length) hits.push(`${dir}/${file}:${i + 1} ${names.join(", ")}`);
+				});
+			}
 		}
 		expect(hits).toEqual([]);
 	});

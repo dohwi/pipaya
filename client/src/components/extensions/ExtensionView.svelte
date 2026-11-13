@@ -569,7 +569,7 @@
 
 	/* A stat's value is a headline number or short address: one size for every stat (cells in a row look alike), and it
 	   shrinks to fit its own cell (container query) before it ever wraps. A value with no break point at all (an address
-	   like 100.85.51.107:8790, a URL) is never split mid-number: it goes smaller, and only below the smallest size does
+	   like 192.0.2.10:8787, a URL) is never split mid-number: it goes smaller, and only below the smallest size does
 	   it wrap by character. */
 	.stat { container-type: inline-size; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); }
 	.stat dt { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: break-word; }
