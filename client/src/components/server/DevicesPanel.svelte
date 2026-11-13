@@ -183,7 +183,7 @@
 					<span class="kind" class:on={d.live} title={d.live ? t("연결됨") : t("연결 끊김")}><Icon name={icon(d.platform)} /></span>
 					<div class="meta">
 						<span class="name">
-							{d.name ?? platformName(d.platform)}
+							<span class="nm">{d.name ?? platformName(d.platform)}</span>
 							{#if mine(d)}<Badge variant="outline" size="sm">{t("이 기기")}</Badge>{/if}
 						</span>
 						<span class="sub">{[d.os ?? platformName(d.platform), d.app].filter(Boolean).join(" · ")}</span>
@@ -303,10 +303,11 @@
 		gap: 8px;
 		font-size: var(--fs-md);
 		font-weight: 600;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		min-width: 0;
 		white-space: nowrap;
 	}
+	/* only the name ellipsizes; the "이 기기" badge beside it stays whole */
+	.nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	.sub {
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
