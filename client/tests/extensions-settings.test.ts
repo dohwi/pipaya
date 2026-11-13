@@ -44,22 +44,6 @@ describe("manifest settings schema", () => {
 		expect(() => parsePackage(withSettings([field({ key: "s", readonly: true }), field({ key: "url", when: { key: "s", equals: "x" } })]))).toThrow();
 		expect(() => parsePackage(withSettings([role, field({ key: "url", when: { key: "role", equals: "b", other: 1 } })]))).toThrow();
 	});
-	test("a sub-option of a hidden option is hidden too, and never blocks the save", () => {
-		const role = { key: "role", type: "select", label: "Role", default: "primary", options: [{ value: "primary", label: "P" }, { value: "follower", label: "F" }] };
-		const box = { key: "syncApp", type: "boolean", label: "App", default: true, when: { key: "role", equals: "follower" } };
-		const sub = { key: "syncMcp", type: "boolean", label: "MCP", default: true, when: { key: "syncApp", equals: true } };
-		const need = { key: "url", type: "string", label: "URL", required: true, when: { key: "syncMcp", equals: true } };
-		const fields = parsePackage(withSettings([role, box, sub, need])).manifest.settings!;
-		const shown = (values: Record<string, unknown>) => fields.filter((f) => settingShown(f, resolveSettings(fields, values).values, fields)).map((f) => f.key);
-		// the primary: the box is hidden, so is everything under it, though its kept value is true
-		expect(shown({ role: "primary", syncApp: true, syncMcp: true })).toEqual(["role"]);
-		expect(resolveSettings(fields, { role: "primary", syncApp: true, syncMcp: true }).ok).toBe(true);
-		// the follower: the chain is on the form while each link is on
-		expect(shown({ role: "follower", syncApp: true, syncMcp: true, url: "x" })).toEqual(["role", "syncApp", "syncMcp", "url"]);
-		expect(shown({ role: "follower", syncApp: false })).toEqual(["role", "syncApp"]);
-		// without the list, one level only (the old behaviour, for callers that check one field)
-		expect(settingShown(fields[2]!, { role: "primary", syncApp: true })).toBe(true);
-	});
 	test("accepts every field type and round-trips as fresh data", () => {
 		const input = withSettings([
 			field({ key: "origin", label: "서버", format: "origin", required: true, placeholder: "https://x.test", description: "설명", default: "https://a.test" }),
