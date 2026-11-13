@@ -34,9 +34,10 @@
 <style>
 	.row {
 		display: flex;
+		flex-wrap: wrap; /* a wide control drops under its label instead of squeezing the label into a one-character column */
 		align-items: center;
 		justify-content: space-between;
-		gap: 16px;
+		gap: 8px 16px;
 		font-size: var(--fs-md);
 		line-height: 20px; /* a whole-pixel line, so a row is 20 / 40 + padding on the scale */
 		transition: color var(--motion-normal) var(--ease-std);
@@ -49,13 +50,14 @@
 	}
 	.row > :global(:not(.text)) {
 		flex: none;
+		margin-left: auto;
 		transition: opacity var(--motion-normal) var(--ease-std);
 	}
 	.row.dim > :global(:not(.text)) {
 		opacity: 0.55;
 	}
 	.text {
-		flex: 1;
+		flex: 1 1 6em;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
