@@ -22,7 +22,7 @@ Where they are read from (each entry is a file or a folder; names starting with 
 - `<dataDir>/extensions/` (default `~/.pipaya/extensions/`)
 - `~/.agents/extensions/`
 
-The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`; the default ones are folders of `pipaya-extensions`). `ask_user` and `peer` are built in, so the old `ask-user` and `peer-tools` extensions are not loaded. `examples/extensions/todo.ts` is a small one to copy from.
+The server ships no extensions of its own: install them from the marketplace (`pipaya-marketplace`; the default ones are folders of `pipaya-extensions`). `ask_user` and `peer` are built in: an older extension that only added one of them is not loaded. `examples/extensions/todo.ts` is a small one to copy from.
 
 Reload without a restart: `POST /server-extensions/reload`. Loaded extensions, their tools, commands, methods and load errors: `GET /server-extensions`, `GET /server-extensions/errors[?extension=name]`. A file that throws while loading is switched off alone; the others keep working.
 
@@ -84,7 +84,7 @@ The form edits the declared fields that are not `readonly` and sends only those 
 ## A complete example
 
 ```ts
-// ~/.pipaya/extensions/guard.ts
+// ~/.pipaya/extensions/todo.ts
 export default (pi) => {
   const T = pi.Type;
 
@@ -102,7 +102,7 @@ export default (pi) => {
   // 2. a policy: block commands before they run
   pi.on("tool_call", (e) =>
     e.toolName === "bash" && /rm\s+-rf\s+\//.test(String(e.args.command))
-      ? { block: true, reason: "refused by guard" }
+      ? { block: true, reason: "refused by todo" }
       : undefined);
 
   // 3. a /command handled by the server (returning a string sends it to the model as the user's message)
@@ -181,4 +181,4 @@ Need more than routes (a WebSocket server, another port, a Python service)? The 
 
 ## Client side
 
-A client extension reaches yours with the `server` permission: `sdk.server.call("guard", "count")`, `sdk.server.entries({type: "todo"})`, `sdk.server.on(e => ...)`. See `pipaya-client-extensions`.
+A client extension reaches yours with the `server` permission: `sdk.server.call("todo", "count")`, `sdk.server.entries({type: "todo"})`, `sdk.server.on(e => ...)`. See `pipaya-client-extensions`.
