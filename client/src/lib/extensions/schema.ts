@@ -380,12 +380,19 @@ function settingCondition(input: unknown, path: string, earlier: Map<string, Set
 	return { key, equals: Array.isArray(raw) ? [...list] as SettingValue[] : raw as SettingValue };
 }
 
-/** Whether a field is on the form for these values: no `when`, or the field it names holds one of the listed values. */
-export function settingShown(field: SettingField, values: Record<string, unknown>): boolean {
+/**
+ * Whether a field is on the form for these values: no `when`, or the field it names holds one of the listed values AND
+ * is on the form itself. A sub-option of a hidden option is hidden too, whatever value the hidden one kept: a box under
+ * "sync app settings" must not show for a role that has no such box. Pass `fields` to follow that chain; `when` only
+ * names earlier fields, so the chain always ends.
+ */
+export function settingShown(field: SettingField, values: Record<string, unknown>, fields?: readonly SettingField[]): boolean {
 	if (!field.when) return true;
 	const { key, equals } = field.when;
 	const current = values[key];
-	return Array.isArray(equals) ? equals.includes(current as SettingValue) : equals === current;
+	if (!(Array.isArray(equals) ? equals.includes(current as SettingValue) : equals === current)) return false;
+	const parent = fields?.find((f) => f.key === key);
+	return parent ? settingShown(parent, values, fields) : true;
 }
 
 export interface ResolvedSettings {
@@ -419,7 +426,7 @@ export function resolveSettings(fields: readonly SettingField[], raw: unknown): 
 		let value: unknown = Object.hasOwn(source, field.key) ? source[field.key] : undefined;
 		// A hidden field keeps a good value (switching back shows it again) but never blocks the save. `when` only names
 		// earlier fields, so `values` already holds what the form shows for the field it depends on.
-		if (!settingShown(field, values)) {
+		if (!settingShown(field, values, fields)) {
 			const kept = resolveSettings([{ ...field, when: undefined, required: false }], { [field.key]: value });
 			if (kept.ok && Object.hasOwn(kept.values, field.key)) values[field.key] = kept.values[field.key]!;
 			continue;
