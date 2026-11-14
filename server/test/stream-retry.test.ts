@@ -61,3 +61,31 @@ describe("a stream cut off mid-reply", () => {
 		expect((await api("GET", `/sessions/${id}/status`)).json.lastError).toBeNull();
 	});
 });
+
+describe("a reply the output limit cut off", () => {
+	test("is kept as written with stopReason length, and the next prompt goes on from it with the cut text in context", async () => {
+		const id = (await api("POST", "/sessions", { cwd: ws })).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: "!cut a long answer" });
+		await untilIdle(id);
+		let msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		const cut = msgs.filter((m) => m.role === "assistant").map((m) => m.message);
+		expect(cut).toHaveLength(1);
+		expect(cut[0].stopReason).toBe("length");
+		expect(JSON.stringify(cut[0].content)).toContain("Echo: a long answer");
+		// not an error: nothing to retry, no error reported
+		expect((await api("GET", `/sessions/${id}/status`)).json.lastError).toBeNull();
+		expect((await api("POST", `/sessions/${id}/retry`)).status).toBe(409);
+
+		// "continue" is an ordinary prompt; the model sees its own cut reply right before it
+		const before = upstream.requests.length;
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "go on" })).status).toBe(202);
+		await untilIdle(id);
+		const sent = upstream.requests.slice(before).find((r) => r.path.endsWith("/chat/completions"))!.body.messages as any[];
+		const tail = sent.slice(-2);
+		expect(tail[0].role).toBe("assistant");
+		expect(JSON.stringify(tail[0].content)).toContain("Echo: a long answer");
+		expect(tail[1]).toMatchObject({ role: "user" });
+		msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		expect(msgs.filter((m) => m.role === "assistant").at(-1).message.stopReason).toBe("stop");
+	});
+});

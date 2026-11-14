@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { plainTextOf, segmentsOf } from "../src/lib/reply-blocks";
+import { plainTextOf, replyActions, segmentsOf } from "../src/lib/reply-blocks";
 import { SWIPE_MAX, SWIPE_TRIGGER, SwipeReply } from "../src/lib/swipe-reply";
-import type { AssistantBlock } from "../src/lib/types";
+import type { AssistantBlock, StopReason } from "../src/lib/types";
 
 const text = (t: string): AssistantBlock => ({ type: "text", text: t });
 const think = (t: string): AssistantBlock => ({ type: "thinking", text: t, done: true });
@@ -81,5 +81,26 @@ describe("swipe to reply", () => {
 		s.move(300 - 20, 100);
 		expect(s.armed).toBe(false);
 		expect(s.end()).toBe(false);
+	});
+});
+
+describe("replyActions", () => {
+	const r = (stopReason: StopReason) => ({ stopReason });
+	const none = { retry: false, cut: false, resume: false };
+
+	test("a reply the output limit cut off says so, and only the newest one offers to go on", () => {
+		expect(replyActions(r("length"), true, false)).toEqual({ retry: false, cut: true, resume: true });
+		expect(replyActions(r("length"), false, false)).toEqual({ retry: false, cut: true, resume: false });
+	});
+	test("a failed or stopped reply offers retry, and only the newest one", () => {
+		expect(replyActions(r("error"), true, false)).toEqual({ retry: true, cut: false, resume: false });
+		expect(replyActions(r("aborted"), true, false)).toEqual({ retry: true, cut: false, resume: false });
+		expect(replyActions(r("aborted"), false, false)).toEqual(none);
+	});
+	test("a reply still being written, a finished one and no reply at all offer nothing", () => {
+		expect(replyActions(r("length"), true, true)).toEqual(none);
+		expect(replyActions(r("error"), true, true)).toEqual(none);
+		for (const s of ["stop", "toolUse", "pending", "deferred"] as const) expect(replyActions(r(s), true, false), s).toEqual(none);
+		expect(replyActions(undefined, true, false)).toEqual(none);
 	});
 });

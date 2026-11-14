@@ -5,11 +5,13 @@
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
+	import Notice from "../ui/Notice.svelte";
+	import Button from "../ui/Button.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { compact, duration } from "../../lib/format";
-	import { plainTextOf, segmentsOf } from "../../lib/reply-blocks";
+	import { plainTextOf, replyActions, segmentsOf } from "../../lib/reply-blocks";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 
@@ -19,7 +21,7 @@
 	 * the answer can be dragged right to left to reply to it.
 	 *
 	 *  live  the agent is still writing it
-	 *  last  the newest answer (the only one that can be retried)
+	 *  last  the newest answer (the only one that can be retried or continued)
 	 */
 	let {
 		item,
@@ -91,7 +93,7 @@
 	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
-	const canRetry = $derived(!!tail && last && !live && (tail.stopReason === "error" || tail.stopReason === "aborted"));
+	const actions = $derived(replyActions(tail, last, live));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
@@ -120,11 +122,26 @@
 			{/if}
 		{/if}
 
+		{#if actions.cut}
+			<div class="cut">
+				{#if actions.resume}
+					<Notice tone="warn" size="sm" role="status">
+						{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
+						{#snippet action()}
+							<Button size="sm" disabled={app.sending} onclick={() => void app.continueCut(paneId)}>{t("이어서 작성")}</Button>
+						{/snippet}
+					</Notice>
+				{:else}
+					<Notice tone="warn" size="sm" role="status">{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}</Notice>
+				{/if}
+			</div>
+		{/if}
+
 		{#if tail && !live}
 			<div class="foot">
 				<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
 				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
-				{#if canRetry}
+				{#if actions.retry}
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
 				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
@@ -220,6 +237,10 @@
 		color: var(--danger);
 		font-size: var(--fs-sm);
 		overflow-wrap: anywhere;
+	}
+	/* same gap above as the error box: both close the answer's text */
+	.cut {
+		margin-top: 8px;
 	}
 	.error :global(svg) {
 		width: 17px;
