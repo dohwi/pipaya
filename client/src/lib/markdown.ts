@@ -4,9 +4,9 @@ import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf } from "./files";
 import { groupPictures } from "./gallery";
-import { MARKED_OPTIONS, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
+import { MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 
-const md = new Marked(MARKED_OPTIONS);
+const md = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE);
 
 const escapeHtml = (s: string) =>
 	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
