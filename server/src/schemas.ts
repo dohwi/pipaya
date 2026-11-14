@@ -241,6 +241,7 @@ export const MessagesQuery = Type.Object({
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000, default: 1000 })),
 	tail: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000, description: "Return only the newest N messages (oldest first); with `before`, the newest N below it" })),
 	before: Type.Optional(Type.Integer({ minimum: 0, description: "With `tail`: only messages with seq below this (paging back)" })),
+	turn: Type.Optional(Type.Boolean({ description: "With `tail`: a page that starts inside a reply also carries the earlier part of that reply, back to its prompt" })),
 });
 export const StoredMessage = Type.Object({
 	seq: Type.Integer(),

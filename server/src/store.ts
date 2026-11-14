@@ -85,6 +85,8 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 
 interface MessageRow { seq: number; role: string; data: string; created_at: number }
 const toStored = (r: MessageRow): StoredMessage => ({ seq: r.seq, role: r.role, createdAt: r.created_at, message: JSON.parse(r.data) });
+/** How far a `wholeTurn` page reaches back for the prompt of a reply it starts inside (long agent runs stay well below). */
+const TURN_REACH_MAX = 1000;
 
 export interface StoredMessage {
 	seq: number;
@@ -245,14 +247,28 @@ export class SessionStore {
 		return row.n;
 	}
 
-	messages(sessionId: string, opts: { after?: number; limit?: number; tail?: number; before?: number } = {}): StoredMessage[] {
+	messages(sessionId: string, opts: { after?: number; limit?: number; tail?: number; before?: number; wholeTurn?: boolean } = {}): StoredMessage[] {
 		// `tail`: only the newest N (with seq below `before`), oldest first. Opening a long conversation needs just the end of it.
 		if (opts.tail) {
-			return this.db
+			const after = opts.after ?? -1;
+			const rows = this.db
 				.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n")
-				.all({ sid: sessionId, after: opts.after ?? -1, before: opts.before ?? Number.MAX_SAFE_INTEGER, n: opts.tail })
-				.reverse()
-				.map((r) => toStored(r as MessageRow));
+				.all({ sid: sessionId, after, before: opts.before ?? Number.MAX_SAFE_INTEGER, n: opts.tail })
+				.reverse() as MessageRow[];
+			// `wholeTurn`: a page that starts inside a reply reaches back to the prompt it answers, so the client never
+			// shows (and totals) half a reply that grows once the next page arrives. Capped for runaway agent loops.
+			const first = rows[0];
+			if (opts.wholeTurn && first && first.role !== "user" && first.seq > after + 1) {
+				const prompt = this.db
+					.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user' AND seq > $after AND seq < $first")
+					.get({ sid: sessionId, after, first: first.seq }) as { s: number | null };
+				const from = Math.max(prompt.s ?? after + 1, first.seq - TURN_REACH_MAX);
+				const lead = this.db
+					.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq >= $from AND seq < $first ORDER BY seq")
+					.all({ sid: sessionId, from, first: first.seq }) as MessageRow[];
+				rows.unshift(...lead);
+			}
+			return rows.map(toStored);
 		}
 		return this.db
 			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit")

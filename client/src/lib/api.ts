@@ -403,11 +403,15 @@ export class Api {
 			"GET",
 			`/sessions/${id}/messages?limit=5000${after !== undefined ? `&after=${after}` : ""}`,
 		).then((r) => r.messages);
-	/** The newest `n` messages (below seq `before` when paging back), oldest first. A server without `tail` answers with everything. */
+	/**
+	 * The newest `n` messages (below seq `before` when paging back), oldest first. A page that would start inside a reply
+	 * also carries the rest of that reply back to its prompt (`turn`), so it can be more than `n`. A server without `tail`
+	 * answers with everything; one without `turn` simply cuts at `n`.
+	 */
 	tailMessages = (id: string, n: number, before?: number) =>
 		this.req<{ messages: StoredMessage[] }>(
 			"GET",
-			`/sessions/${id}/messages?limit=5000&tail=${n}${before !== undefined ? `&before=${before}` : ""}`,
+			`/sessions/${id}/messages?limit=5000&tail=${n}&turn=true${before !== undefined ? `&before=${before}` : ""}`,
 		).then((r) => r.messages);
 	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[], files?: { name: string; data: string }[]) =>
 		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
