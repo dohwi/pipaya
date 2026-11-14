@@ -30,7 +30,7 @@ import { ClientSettings } from "./client-settings.ts";
 import { registerClientSettingsRoutes } from "./client-settings-routes.ts";
 import { DeviceTokens } from "./device-tokens.ts";
 import { Pairing } from "./pairing.ts";
-import { isAdminOnlyPath, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
+import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
@@ -355,7 +355,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			device = deviceTokens.verify(given);
 			if (!device) throw refuse(given);
 		}
-		if (isAdminOnlyPath(req.method, path ?? "")) throw new HttpError(403, "admin_only", "this needs the server's admin token, not a paired device's");
+		// Judge by the route the router matched, not the raw URL: it decodes percent-escapes the raw text still carries.
+		// No match (undefined) ends in a 404 anyway; the raw path is the safe stand-in for it.
+		if (isAdminOnlyRoute(req.method, req.routeOptions.url ?? path ?? "")) throw new HttpError(403, "admin_only", "this needs the server's admin token, not a paired device's");
 		deviceTokens.track(device, req.raw.socket);
 		deviceOf.set(req.raw, device);
 	});

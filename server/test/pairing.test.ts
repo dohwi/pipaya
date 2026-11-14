@@ -121,6 +121,18 @@ describe("per-device tokens over HTTP", () => {
 		expect((await as(token, "DELETE", "/server-extensions/x")).status).toBe(403);
 		expect((await as(token, "POST", "/server-extensions/install", { id: "x", repo: "a/b", ref: "v1", commit: "a".repeat(40) })).status).toBe(403);
 	});
+	test("percent-escapes in the path do not get a device token past the admin-only rules", async () => {
+		// The router decodes these to the admin-only routes; the check must see the same route the router does.
+		const token = await pair();
+		const install = { id: "x", repo: "a/b", ref: "v1", commit: "a".repeat(40) };
+		const cases: [string, string, unknown?][] = [
+			["GET", "/devices/token%73"], ["GET", "/%64evices/tokens"], ["DELETE", "/devices/tokens/%61ny"], ["DELETE", "/devices/token%73/any"],
+			["POST", "/pairin%67"], ["DELETE", "/pairin%67"],
+			["POST", "/server-extensions/reloa%64"], ["POST", "/server-extensions/instal%6c", install], ["DELETE", "/server-extension%73/x"],
+			["POST", "/server/updat%65", {}], ["GET", "/server/updat%65"],
+		];
+		for (const [method, url, body] of cases) expect([method, url, (await as(token, method, url, body)).status]).toEqual([method, url, 403]);
+	});
 	test("the admin lists tokens by name (never the secret) and revoking one locks only that device out", async () => {
 		const a = await pair("Phone A");
 		const b = await pair("Phone B");
