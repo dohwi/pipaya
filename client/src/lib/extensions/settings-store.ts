@@ -1,10 +1,10 @@
 /**
  * The one place that decides where a client extension's settings live.
  *
- *  - The server is the source of truth: `<dataDir>/extensions/<id>/settings.json`, shared by every client of that server.
- *  - `secret: true` fields (and keys that look like credentials) never leave the device. The host splits them out before a
- *    write and merges them back after a read, so an extension author cannot leak one by forgetting `settingsScope`.
- *  - `settingsScope: "local"` in the manifest, or the per-extension "이 기기에만" switch, keeps the whole object here.
+ *  - The server is the only source of truth: `<dataDir>/extensions/<id>/settings.json`, shared by every client of that
+ *    server, secrets included (it is the user's own server; a device that connects gets everything it needs to run).
+ *  - Only a field the extension marks `device: true` (a local path, this machine's own setting) stays on the device, and
+ *    `settingsScope: "local"` in the manifest keeps the whole object here.
  *  - A write carries the time the user made the change; the server refuses anything older than what it holds, so two
  *    devices editing at once cannot silently overwrite each other.
  */
@@ -20,18 +20,36 @@ export interface ExtensionSaveResult extends StoredExtensionSettings {
 	applied: boolean;
 }
 
-/**
- * Keys that are treated as credentials even without `secret: true`. The same list the configuration export uses, so a
- * value that never leaves the device in an export does not leave it over the wire either.
- */
+/** Keys that look like credentials. Earlier versions kept them (and `secret: true` fields) on the device only. */
 const CREDENTIAL_KEY = /token|secret|password|credential|authorization|api.?key|cookie|private|constructor|prototype|__proto__/i;
 
+/** True when this field of the schema stays on the device: only a field the extension itself marked `device`. */
+export const isDeviceOnlyField = (field: Pick<SettingField, "device">): boolean => field.device === true;
+
+/** A field earlier versions never uploaded: a secret, or a key that looks like a credential. */
+const wasDeviceOnly = (field: Pick<SettingField, "key" | "secret" | "device">): boolean =>
+	!isDeviceOnlyField(field) && (field.secret === true || CREDENTIAL_KEY.test(field.key));
+
 /**
- * True when this field of the schema must stay on the device: a secret, a key that looks like a credential, or a field the
- * extension itself marked `device` (a local path, this machine's own setting).
+ * The server's value with this device's `device` fields on top. A secret this device still holds from an earlier version
+ * (when secrets stayed on the device) and the server lacks is kept as well, and `carried` says it must be uploaded once.
  */
-export const isDeviceOnlyField = (field: Pick<SettingField, "key" | "secret" | "device">): boolean =>
-	field.secret === true || field.device === true || CREDENTIAL_KEY.test(field.key);
+export function adoptServerValue(
+	fields: readonly SettingField[] | undefined,
+	stored: Record<string, unknown>,
+	current: Record<string, unknown>,
+): { next: Record<string, unknown>; carried: boolean } {
+	const { local } = splitSettings(current, fields);
+	const next = mergeSettings(stored, local);
+	let carried = false;
+	for (const field of fields ?? []) {
+		const value = current[field.key];
+		if (!wasDeviceOnly(field) || Object.hasOwn(stored, field.key) || value === undefined || value === "") continue;
+		next[field.key] = value;
+		carried = true;
+	}
+	return { next, carried };
+}
 
 /**
  * Split the values that may be shared from the ones that stay here.
@@ -69,7 +87,7 @@ export function keepUnowned(fields: readonly SettingField[] | undefined, existin
 	return { ...out, ...next };
 }
 
-/** `formKeys` of what a client extension shares with the server: its device-only fields (secrets, `device`) never leave the device. */
+/** `formKeys` of what a client extension shares with the server: its `device` fields never leave the device. */
 export const writableKeys = (fields: readonly SettingField[] | undefined): string[] | undefined =>
 	formKeys(fields?.filter((f) => !isDeviceOnlyField(f)));
 

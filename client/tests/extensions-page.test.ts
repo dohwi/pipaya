@@ -34,8 +34,8 @@ describe("which keys a settings form owns", () => {
 		expect(formKeys([])).toBeUndefined();
 		expect(formKeys(undefined)).toBeUndefined();
 	});
-	test("a client extension's write also leaves out what never leaves the device", () => {
-		expect(writableKeys(fields)).toEqual(["url", "interval"]);
+	test("a client extension's write leaves out only its device fields; secrets go to the server", () => {
+		expect(writableKeys(fields)).toEqual(["url", "interval", "token"]);
 		expect(writableKeys([{ key: "path", type: "string", label: "P", device: true }, { key: "a", type: "string", label: "A" }])).toEqual(["a"]);
 	});
 	test("a form save keeps the keys it does not own and drops a stale read-only value from the draft", () => {

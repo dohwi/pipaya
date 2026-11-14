@@ -104,7 +104,6 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 | `pipaya.extensions.device.v1` (`.corrupt`) | device-scope list |
 | `pipaya.extensions.safe`, `.booting`, `.kept`, `.v1.corrupt` | safe mode, IDs mid-start, settings kept on delete, corrupt backup |
 | `pipaya.extension.storage.<id>` | `sdk.storage` |
-| `pipaya.extensions.local-ids.<serverId>` | ids whose settings stay on this device (the per-extension switch) |
 | `pipaya.extensions.pending.<serverId>` | `{ <id>: { at, dirty } }`: the time of a local edit that has not reached the server |
 | `pipaya.extensions.configuration-backup(-at)`, `.background-grant.<id>` | import backup, background grant |
 
@@ -129,7 +128,7 @@ Stored at `<dataDir>/extensions/<id>/settings.json`, with the write time in `set
 keeps its mtime). Last write wins by that time, so a stale offline edit cannot overwrite a newer value. Saving emits SSE
 `extension_settings_updated` (`{id, action, updatedAt, origin}`), which every device uses to fetch just that one id; the
 writing device skips its own echo by `origin`. The client reads with a 3 s timeout at start and falls back to its
-localStorage cache. `secret: true` fields and credential-looking keys are never uploaded (`settings-store.ts`).
+localStorage cache. Only `device: true` fields are never uploaded; secrets live on the server too (`settings-store.ts`).
 
 ## Change checklists
 

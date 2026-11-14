@@ -32,10 +32,6 @@ export interface ExtensionSource {
 	remove(id: string, opts: { keepSettings: boolean }): void | Promise<void>;
 	removeUnreadable(index: number, opts: { keepSettings: boolean }): void | Promise<void>;
 	setSettings(id: string, settings: Record<string, unknown>): Promise<void>;
-	/** True when this extension's settings stay on this device (its manifest says so, or the user switched it) */
-	isSettingsLocal(id: string): boolean;
-	/** Keep this extension's settings here, or put them back on the server */
-	setSettingsLocal(id: string, local: boolean): void;
 	canResume(pkg: ExtensionPackage): boolean;
 	/** Failed to read the stored list */
 	loadError(): string;
@@ -56,8 +52,6 @@ export function hostSource(host: ExtensionHost): ExtensionSource {
 		remove: (id, opts) => host.remove(id, opts),
 		removeUnreadable: (index, opts) => host.removeUnreadable(index, opts),
 		setSettings: (id, settings) => host.setSettings(id, settings),
-		isSettingsLocal: (id) => host.isSettingsLocal(id),
-		setSettingsLocal: (id, local) => host.setSettingsLocal(id, local),
 		canResume: (pkg) => host.canResume(pkg),
 		loadError: () => host.loadError,
 	};
@@ -87,8 +81,6 @@ export function storeSource(store: ServerExtensionStore): ExtensionSource {
 		remove: (id, opts) => store.remove(id, opts),
 		removeUnreadable: (index, opts) => store.removeUnreadable(index, opts),
 		setSettings: (id, settings) => store.setSettings(id, settings),
-		isSettingsLocal: (id) => store.isSettingsLocal(id),
-		setSettingsLocal: (id, local) => store.setSettingsLocal(id, local),
 		canResume: () => false,
 		loadError: () => store.loadError,
 	};
