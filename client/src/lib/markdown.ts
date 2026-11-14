@@ -5,8 +5,14 @@ import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf } from "./files";
 import { groupPictures } from "./gallery";
 import { MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
+import { highlightCode } from "./code-highlight";
 
 const md = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE);
+
+/** Off while the block being streamed is drawn: it is parsed again every frame, so it gets its colours once it is done. */
+let colourCode = true;
+/** Set when a code block was drawn plain because its grammar is still loading: that HTML must not be cached. */
+let waited = false;
 
 const escapeHtml = (s: string) =>
 	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -29,10 +35,15 @@ md.use({
 		// Code blocks get a header with a copy button; MarkdownView wires up the click via delegation.
 		code({ text, lang }) {
 			const label = (lang ?? "").split(/\s/)[0] ?? "";
+			// Colours come from highlight.js (escaped text in `hljs-*` spans, sanitized below like the rest); copy reads
+			// textContent, which is the code as written. A grammar still loading draws plain and marks the block to redo.
+			const hl = colourCode ? highlightCode(text, label) : null;
+			if (hl === "wait") waited = true;
+			const body = hl === null || hl === "wait" ? escapeHtml(text) : hl;
 			return (
 				`<div class="codeblock"><div class="codehead"><span>${escapeHtml(label || "text")}</span>` +
 				`<button type="button" class="copy" data-copy aria-label="${escapeHtml(t("코드 복사"))}">${escapeHtml(t("복사"))}</button></div>` +
-				`<pre><code>${escapeHtml(text)}</code></pre></div>`
+				`<pre><code${hl === "wait" ? " data-hl-wait" : ""}>${body}</code></pre></div>`
 			);
 		},
 		link({ href, title, text, tokens }) {
@@ -79,6 +90,9 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 
 const cache = new Map<string, string>();
 
+/** True when `html` holds a code block drawn plain while its grammar loads (see `onHighlightReady`). */
+export const awaitsHighlight = (html: string): boolean => html.includes("data-hl-wait");
+
 export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): string {
 	// The code-block header is translated, so the cache is per language (and reading it re-renders on a switch).
 	const key = `${getLang()}\u0000${src}`;
@@ -86,12 +100,14 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	if (hit !== undefined) return hit;
 	// Streaming produces a new prefix every frame; caching those would evict the finished messages the cache is for.
 	const store = opts.cache ?? true;
+	waited = false;
 	const html = groupPictures(DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
-		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind"],
+		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	}));
-	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them.
-	if (store && src.length < 20_000) {
+	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them. Not while a grammar loads:
+	// the same text is drawn again in colour once it is there.
+	if (store && !waited && src.length < 20_000) {
 		if (cache.size > 300) cache.delete(cache.keys().next().value!);
 		cache.set(key, html);
 	}
@@ -108,19 +124,31 @@ const blockCache = new Map<string, string>();
 export function renderStreaming(full: string): string {
 	const src = hideMarkerTail(hideFenceTail(full));
 	const cut = streamSplit(src);
-	if (!cut) return renderMarkdown(src, { cache: false });
+	if (!cut) return renderTail(src);
 	let head = "";
 	for (const raw of blocksOf(src.slice(0, cut))) {
 		const key = `${getLang()}\u0000${raw}`;
 		let html = blockCache.get(key);
 		if (html === undefined) {
 			html = renderMarkdown(raw, { cache: false });
-			if (blockCache.size > 400) blockCache.delete(blockCache.keys().next().value!);
-			blockCache.set(key, html);
+			if (!awaitsHighlight(html)) {
+				if (blockCache.size > 400) blockCache.delete(blockCache.keys().next().value!);
+				blockCache.set(key, html);
+			}
 		}
 		head += html;
 	}
-	return head + renderMarkdown(src.slice(cut), { cache: false });
+	return head + renderTail(src.slice(cut));
+}
+
+/** The block still being written: plain code, so a growing code block costs no highlighting pass per frame. */
+function renderTail(src: string): string {
+	colourCode = false;
+	try {
+		return renderMarkdown(src, { cache: false });
+	} finally {
+		colourCode = true;
+	}
 }
 
 /**

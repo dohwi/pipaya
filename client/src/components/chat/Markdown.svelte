@@ -3,7 +3,8 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { baseName } from "../../lib/files";
-	import { renderMarkdown, renderStreaming } from "../../lib/markdown";
+	import { awaitsHighlight, renderMarkdown, renderStreaming } from "../../lib/markdown";
+	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
 	import { openExternal } from "../../lib/tauri";
 	import { patchHtml } from "../../lib/patch-html";
@@ -27,8 +28,15 @@
 		return () => cancelAnimationFrame(frame);
 	});
 
+	// A code block whose grammar was still loading is drawn plain; when the grammar arrives, draw the text again in colour.
+	let hlTick = $state(0);
 	// While streaming, only the block being written is parsed again; the blocks above it come from the cache.
-	const html = $derived(streaming ? renderStreaming(shown) : renderMarkdown(shown));
+	const html = $derived((void hlTick, streaming ? renderStreaming(shown) : renderMarkdown(shown)));
+	const waiting = $derived(awaitsHighlight(html));
+	$effect(() => {
+		if (!waiting) return;
+		return onHighlightReady(() => hlTick++);
+	});
 
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
 	// Only once the reply has settled: while streaming, the path may still be half written.
@@ -291,6 +299,34 @@
 	.md :global(pre code) {
 		font-family: inherit;
 		white-space: pre;
+	}
+	/* syntax colours (code-highlight.ts): colour only, never weight or size, so a block keeps its layout when it is coloured in */
+	.md :global(:is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_, .hljs-meta .hljs-keyword)) {
+		color: var(--syn-keyword);
+	}
+	.md :global(:is(.hljs-title, .hljs-title.class_, .hljs-title.function_)) {
+		color: var(--syn-title);
+	}
+	.md :global(:is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-section)) {
+		color: var(--syn-number);
+	}
+	.md :global(:is(.hljs-string, .hljs-regexp, .hljs-meta .hljs-string)) {
+		color: var(--syn-string);
+	}
+	.md :global(:is(.hljs-built_in, .hljs-symbol)) {
+		color: var(--syn-builtin);
+	}
+	.md :global(:is(.hljs-comment, .hljs-code, .hljs-formula)) {
+		color: var(--syn-comment);
+	}
+	.md :global(:is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo, .hljs-addition)) {
+		color: var(--syn-name);
+	}
+	.md :global(:is(.hljs-bullet, .hljs-link)) {
+		color: var(--syn-bullet);
+	}
+	.md :global(.hljs-deletion) {
+		color: var(--syn-keyword);
 	}
 	.md :global(.tablewrap) {
 		overflow-x: auto;
