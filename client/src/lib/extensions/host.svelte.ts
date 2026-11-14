@@ -1268,7 +1268,8 @@ export class ExtensionHost {
         this.require(id, "network");
         if (args.length !== 1) throw new LocalizedError(t("net.fetch는 요청 객체 하나가 필요합니다"));
         const generation = this.generations.get(id);
-        return this.net.request(id, args[0], () => this.generations.get(id) === generation && this.find(id).enabled);
+        const local = this.find(id).package.manifest.permissions.includes("network-local");
+        return this.net.request(id, args[0], () => this.generations.get(id) === generation && this.find(id).enabled, local);
       }
       case "serverApi.request": {
         this.require(id, "server-api");

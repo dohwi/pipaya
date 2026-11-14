@@ -1743,7 +1743,7 @@ describe("network, server API, links and clipboard", () => {
 		expect(seen[0]!.init.credentials).toBe("omit");
 		expect(new Headers(seen[0]!.init.headers).get("content-type")).toBe("application/json");
 		expect(new Headers(seen[0]!.init.headers).get("x-key")).toBe("k");
-		expect((await call(host, id, "net.fetch", [{ url: "http://lan.example:8080/text" }])).body).toBe("hi");
+		expect((await call(host, id, "net.fetch", [{ url: "http://plain.example:8080/text" }])).body).toBe("hi");
 		expect((await call(host, id, "net.fetch", [{ url: "https://a.test/bin", responseType: "base64" }])).body).toBe("AQID");
 		await call(host, id, "net.fetch", [{ url: "https://a.test/up", method: "PUT", body: "AQID", bodyEncoding: "base64" }]);
 		expect([...(seen.at(-1)!.init.body as Uint8Array)]).toEqual([1, 2, 3]);
@@ -1751,6 +1751,33 @@ describe("network, server API, links and clipboard", () => {
 			await expect(Promise.resolve().then(() => call(host, id, "net.fetch", [bad]))).rejects.toThrow();
 		}
 		host.stop();
+	});
+
+	test("the user's own networks need network-local, also behind a redirect", async () => {
+		const { host } = await reload();
+		const seen: string[] = [];
+		globalThis.fetch = (async (url: string, init: RequestInit) => {
+			seen.push(String(url));
+			expect(init.redirect).toBe("manual");
+			if (String(url).endsWith("/to-lan")) return new Response(null, { status: 302, headers: { location: "http://192.168.0.1/admin" } });
+			if (String(url).endsWith("/hop")) return new Response(null, { status: 303, headers: { location: "/final" } });
+			return new Response("ok", { headers: { "content-type": "text/plain" } });
+		}) as typeof fetch;
+		const { id } = await activate(host, code("example.wan", MORE));
+		for (const url of ["http://127.0.0.1:8787/sessions", "http://localhost/x", "http://10.0.0.5/", "http://192.168.1.1/", "http://172.20.0.1/", "http://100.85.51.107:8790/", "http://[::1]/", "http://[fd00::1]/", "http://[::ffff:127.0.0.1]/", "http://0x7f.1/", "http://2130706433/", "http://nas/", "http://printer.local/", "https://ubuntu.tailb4b2ac.ts.net/", "http://169.254.169.254/latest/meta-data/"]) {
+			await expect(Promise.resolve().then(() => call(host, id, "net.fetch", [{ url }]))).rejects.toThrow(/network-local/);
+		}
+		expect(seen).toEqual([]);
+		await expect(Promise.resolve().then(() => call(host, id, "net.fetch", [{ url: "https://public.example/to-lan" }]))).rejects.toThrow(/network-local/);
+		expect(seen).toEqual(["https://public.example/to-lan"]);
+		const hop = await call(host, id, "net.fetch", [{ url: "https://public.example/hop", method: "POST", body: "x" }]);
+		expect(hop).toMatchObject({ status: 200, body: "ok", url: "https://public.example/final" });
+		host.stop();
+		const second = await reload();
+		const lan = await activate(second.host, code("example.lan", [...MORE, "network-local"]));
+		expect((await call(second.host, lan.id, "net.fetch", [{ url: "http://192.168.0.10/x" }])).body).toBe("ok");
+		expect((await call(second.host, lan.id, "net.fetch", [{ url: "https://public.example/to-lan" }])).body).toBe("ok");
+		second.host.stop();
 	});
 
 	test("disabling the extension cancels its requests", async () => {

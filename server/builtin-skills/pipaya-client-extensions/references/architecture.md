@@ -72,7 +72,7 @@ Global limits: 50 extensions, 1 MiB package, 512 KiB code, 16,000-char settings 
 | `runtime.ts` | sandbox iframe + Worker source, heartbeat, message and time limits |
 | `host.svelte.ts` | `ExtensionHost`: install, enable, cleanup, settings sync, `request()` dispatcher, panel/navbar/status state |
 | `labels.ts` | `permissionLabels` (consent text per permission; the type forces one for each) |
-| `http.ts` / `transport.ts` / `net.ts` | `http` (GET JSON) / `http-write` / `network` (`NetClient`, any URL) |
+| `http.ts` / `transport.ts` / `net.ts` | `http` (GET JSON) / `http-write` / `network` (`NetClient`, public URLs; `network-local` for this machine/LAN/tailnet, see `local-address.ts`) |
 | `configuration.ts` / `fingerprint.ts` | config export/import/backup/approval; canonical JSON + SHA-256 |
 | `marketplace.ts` | catalog parsing and install (`DEFAULT_MARKETPLACE_URL`) |
 | `panes.ts` | `paneAdapter` for `sdk.panes` |
