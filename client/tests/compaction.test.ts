@@ -287,6 +287,18 @@ describe("paged transcript", () => {
 		expect(chat.items[0]!.seq).toBe(800);
 		expect(chat.hasEarlier).toBe(true);
 	});
+	test("coming back to a scrolled-in transcript reloads everything that was loaded, not only the first page", async () => {
+		const sizes: number[] = [];
+		const ok = server();
+		const { chat } = setup({ tailMessages: async (id: string, n: number, before?: number) => { if (before === undefined) sizes.push(n); return ok(id, n, before); } });
+		await chat.load();
+		await chat.loadEarlier();
+		expect(chat.items).toHaveLength(140);
+		await chat.load(); // the tab is shown again
+		expect(sizes).toEqual([40, 180]);
+		expect(chat.items[0]!.seq).toBe(820);
+		expect(chat.hasEarlier).toBe(true);
+	});
 	test("a short conversation has nothing earlier", async () => {
 		const { chat } = setup({ tailMessages: async () => stored(0, 5) });
 		await chat.load();

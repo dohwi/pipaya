@@ -114,6 +114,8 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
 /** Messages fetched when a conversation opens, and per step when scrolling back. */
 const FIRST_PAGE = 40;
 const EARLIER_PAGE = 100;
+/** Most messages a refresh asks for at once (the server's `tail` limit). */
+const MAX_RELOAD = 5000;
 
 export class ChatState {
 	items = $state<ChatItem[]>([]);
@@ -280,9 +282,14 @@ export class ChatState {
 		this.buffer = [];
 		this.loadError = "";
 		this.notFound = false;
+		// A refresh of a transcript already on screen (coming back to its tab) covers everything the reader had loaded,
+		// plus room for what arrived meanwhile. Cutting back to the first page made scrolled-in replies shrink and the
+		// view jump on every return, then grow again once the older page came back.
+		const loaded = this.ready && this.lastSeq >= 0 ? this.lastSeq - this.firstSeq + 1 : 0;
+		const want = Math.min(MAX_RELOAD, Math.max(FIRST_PAGE, loaded + FIRST_PAGE));
 		try {
 			const [msgs, detail, questions, entries] = await Promise.all([
-				this.api.tailMessages(this.id, FIRST_PAGE),
+				this.api.tailMessages(this.id, want),
 				this.api.getSession(this.id),
 				this.api.questions(),
 				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
