@@ -521,7 +521,11 @@
 	.stack, .grid { min-width: 0; }
 	.stack { display: flex; }
 	.stack.column { flex-direction: column; }
-	.stack.row { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+	/* A row lines its items up on the first line's baseline: a badge next to small text ("연결됨 · 26초 전 확인") reads as
+	   one line, and buttons of one height still share a top. The badge's own `align-self: flex-start` (it keeps it from
+	   stretching in a column) must not opt it out here. */
+	.stack.row { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
+	.stack.row > :global(.badge) { align-self: baseline; }
 	.stack > :global(*) { min-width: 0; }
 	.gap-small { gap: 4px; }
 	.gap-medium { gap: 12px; }
