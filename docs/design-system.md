@@ -71,6 +71,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new pill style gets its own measured value, never a guess.
 - Dialogs sit on whole pixels (`Modal` places the panel by pixel offsets, not `top: 50%` + `translate`), otherwise a panel with the other parity than the window lands on x.5 and its badges are painted 0.5px higher than in the next dialog. Header title/subtitle have whole-pixel line boxes (28 / 18).
 - A small label next to bigger text in a centred row (the `@name` handle before a conversation title) is aligned on the **baseline**, not the centre: the handle is lowered 1.5px.
+- An extension's horizontal `stack` aligns its items on the baseline (badge included), so a status badge and the small text after it read as one line (measured: ink centres equal at 1440/820/390; `flex-start` left the text 4px high).
 - The `@name` handle is one style everywhere it appears (sidebar row, split tab's title bar, tab, group chip inside the group box): 11px
   `--fs-2xs`, weight 600, `--text-faint`, on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
   It sits between the agent badge and the title (4px gaps, the row's own), never after the title. It does not shrink (`flex: none`): a tab
