@@ -89,7 +89,8 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 
 ## Lifecycle
 
-1. `install(pkg, scope)`: `parsePackage`, add **disabled**. `scope` is `"server"` (default; the open server's list, synced) or `"device"` (this device only; untouched by server sync and `switchServer`). On an ID clash the device copy stays. With a settings schema, defaults are filled and a fresh install has `configured=false`.
+1. `install(pkg)`: `parsePackage`, add **disabled** to the open server's list (synced to every device of that server). With a settings schema, defaults are filled and a fresh install has `configured=false` until its first save, unless the server already holds settings for the id.
+   A device that gets the package from the server starts it when `extensionStates` says it is on (`followStates`): the server's "on" is the consent, so the first-save gate does not apply there.
 2. `enable(id)`: check safe mode, `configRequired`, `settingsProblem` → `markBooting` → `start`.
 3. `start(id)`: `cleanup` → bump generation → register template commands → `ExtensionRuntime.start` (5 s) → `state:'active'` → apply themes. Async steps check the generation (`current()`) so stale replies cannot reach a new instance.
 4. On failure `failure()`: `enabled=false`, `state:'error'`, `cleanup`, toast.
@@ -101,7 +102,7 @@ Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test
 | Key | Holds |
 |---|---|
 | `pipaya.extensions.v1.<serverId>` | server-scope list (package, enabled, settings, configured) + raw unreadable entries |
-| `pipaya.extensions.device.v1` (`.corrupt`) | device-scope list |
+| `pipaya.extensions.device.v1` (`.corrupt`) | old device-only list: folded into the open server's list once at start, then removed |
 | `pipaya.extensions.safe`, `.booting`, `.kept`, `.v1.corrupt` | safe mode, IDs mid-start, settings kept on delete, corrupt backup |
 | `pipaya.extension.storage.<id>` | `sdk.storage` |
 | `pipaya.extensions.pending.<serverId>` | `{ <id>: { at, dirty } }`: the time of a local edit that has not reached the server |
