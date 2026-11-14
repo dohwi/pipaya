@@ -3,8 +3,12 @@
  * server; what stays fixed is that the app's cookies and credentials never ride along (`credentials: "omit"`), that every
  * request ends with its extension (disable, safe mode), and that sizes and time are bounded. CORS is still the browser's:
  * a server that does not allow the app's origin cannot be read (use a server extension to reach it).
+ *
+ * Addresses in the user's own networks (loopback, LAN, tailnet: see local-address.ts) need `network-local` too, and a
+ * redirect is followed by hand so that it cannot lead from a public address into one of those.
  */
-import { LocalizedError, t } from "../i18n";
+import { LocalizedError, msg, t } from "../i18n";
+import { isLocalUrl } from "./local-address";
 
 export const NET_METHODS = Object.freeze(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const);
 export const NET_LIMITS = Object.freeze({
@@ -42,6 +46,10 @@ export interface NetResponse {
   headers: Record<string, string>;
   body: unknown;
 }
+
+/** Hops followed before giving up, like a browser's own limit but lower. */
+const MAX_REDIRECTS = 5;
+const LOCAL_REFUSED = msg("내부망(이 컴퓨터·LAN·Tailscale) 주소에 요청하려면 network-local 권한이 필요합니다");
 
 const KEYS = new Set(["url", "method", "headers", "body", "bodyEncoding", "responseType", "timeout"]);
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/;
@@ -109,8 +117,11 @@ export class NetClient {
   private flights = new Map<string, Set<AbortController>>();
   constructor(private fetcher: typeof fetch = (...a) => fetch(...a)) {}
 
-  async request(owner: string, input: unknown, current: () => boolean): Promise<NetResponse> {
+  /** `local`: the extension also holds `network-local` and may reach the user's own networks. */
+  async request(owner: string, input: unknown, current: () => boolean, local = false): Promise<NetResponse> {
     const req = parseNetRequest(input);
+    const allowed = (url: URL) => local || !isLocalUrl(url);
+    if (!allowed(new URL(req.url))) throw new LocalizedError(t(LOCAL_REFUSED));
     const mine = this.flights.get(owner) ?? new Set<AbortController>();
     if (mine.size >= NET_LIMITS.concurrent) throw new LocalizedError(t("동시 요청은 확장당 최대 {n}개입니다", { n: NET_LIMITS.concurrent }));
     const controller = new AbortController();
@@ -125,27 +136,43 @@ export class NetClient {
     });
     aborted.catch(() => {});
     try {
-      let response: Response;
-      try {
-        response = await Promise.race([this.fetcher(req.url, { method: req.method, headers: req.headers, body: req.body, signal: controller.signal, credentials: "omit", cache: "no-store", redirect: "follow" }), aborted]);
-      } catch {
-        throw new LocalizedError(timedOut ? t("요청 시간이 초과되었습니다") : controller.signal.aborted ? t("요청이 취소되었습니다") : t("요청 실패 (네트워크 또는 CORS)"));
+      let response!: Response;
+      let url = req.url, method: string = req.method, body = req.body;
+      for (let hop = 0; ; hop++) {
+        try {
+          response = await Promise.race([this.fetcher(url, { method, headers: req.headers, body, signal: controller.signal, credentials: "omit", cache: "no-store", redirect: "manual" }), aborted]);
+        } catch {
+          throw new LocalizedError(timedOut ? t("요청 시간이 초과되었습니다") : controller.signal.aborted ? t("요청이 취소되었습니다") : t("요청 실패 (네트워크 또는 CORS)"));
+        }
+        // A browser hides a cross-origin redirect (`opaqueredirect`, status 0): it cannot be checked, so it is not followed.
+        if (response.type === "opaqueredirect") throw new LocalizedError(t("다른 주소로 넘기는 응답은 따라갈 수 없습니다"));
+        const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+        if (!location) break;
+        if (hop >= MAX_REDIRECTS) throw new LocalizedError(t("리디렉션이 너무 많습니다"));
+        let next: URL;
+        try { next = new URL(location, url); } catch { throw new LocalizedError(t("올바르지 않은 URL입니다")); }
+        if (next.protocol !== "http:" && next.protocol !== "https:") throw new LocalizedError(t("http(s) 주소만 요청할 수 있습니다"));
+        if (!allowed(next)) throw new LocalizedError(t(LOCAL_REFUSED));
+        await response.body?.cancel().catch(() => {});
+        // 303, and 301/302 after a POST, continue as GET without a body (what browsers do).
+        if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === "POST")) { method = "GET"; body = undefined; }
+        url = next.href;
       }
       const bytes = await Promise.race([this.read(response, controller.signal), aborted]);
       if (!current()) throw new LocalizedError(t("요청이 취소되었습니다"));
       const headers: Record<string, string> = {};
       response.headers.forEach((value, name) => { headers[name] = value; });
       const type = req.responseType === "auto" ? (/\bjson\b/i.test(headers["content-type"] ?? "") ? "json" : "text") : req.responseType;
-      let body: unknown = null;
-      if (req.method !== "HEAD" && bytes.byteLength) {
-        if (type === "base64") body = base64(bytes);
+      let answer: unknown = null;
+      if (method !== "HEAD" && bytes.byteLength) {
+        if (type === "base64") answer = base64(bytes);
         else {
           const text = new TextDecoder().decode(bytes);
-          if (type === "json") { try { body = JSON.parse(text); } catch { if (req.responseType === "json") throw new LocalizedError(t("응답이 JSON이 아닙니다")); body = text; } }
-          else body = text;
+          if (type === "json") { try { answer = JSON.parse(text); } catch { if (req.responseType === "json") throw new LocalizedError(t("응답이 JSON이 아닙니다")); answer = text; } }
+          else answer = text;
         }
       }
-      return { status: response.status, statusText: response.statusText, ok: response.ok, url: response.url || req.url, headers, body };
+      return { status: response.status, statusText: response.statusText, ok: response.ok, url: response.url || url, headers, body: answer };
     } catch (e) {
       if (timedOut) throw new LocalizedError(t("요청 시간이 초과되었습니다"));
       throw e instanceof LocalizedError ? e : new LocalizedError(t("요청 실패 (네트워크 또는 CORS)"));

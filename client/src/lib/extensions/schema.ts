@@ -8,7 +8,7 @@ export const MAX_PACKAGE_BYTES = 1024 * 1024;
 export const PERMISSIONS = Object.freeze([
 	"commands", "composer", "status", "context", "storage", "notifications", "events", "ui", "navbar", "http", "configuration", "http-write", "configuration-background", "system-notifications", "locales",
 	"server", "shortcuts", "dialogs", "session", "tools", "messages", "slots", "composer-filter", "panes", "session-labels", "composer-mentions",
-	"ui-style", "ui-components", "workspace", "network", "server-api", "open-url", "clipboard",
+	"ui-style", "ui-components", "workspace", "network", "network-local", "server-api", "open-url", "clipboard",
 ] as const);
 export type Permission = (typeof PERMISSIONS)[number];
 
