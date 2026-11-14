@@ -186,6 +186,15 @@
 	--bg-hover: #242424;
 	--bg-active: #2b2b2b;
 	--bg-code: #121212;
+	/* code syntax colours (GitHub dark): every one 6:1 or better on --bg-code */
+	--syn-keyword: #ff7b72;
+	--syn-title: #d2a8ff;
+	--syn-number: #79c0ff;
+	--syn-string: #a5d6ff;
+	--syn-builtin: #ffa657;
+	--syn-comment: #8b949e;
+	--syn-name: #7ee787;
+	--syn-bullet: #f2cc60;
 	--border: #2e2e2e;
 	--border-strong: #3f3f3f;
 	--tree-line: #5a5a5a; /* sidebar tree rule: between --border-strong and --text-dim so it reads on the dark rows */
@@ -239,6 +248,15 @@
 	--bg-hover: #f4f4f5;
 	--bg-active: #ececee;
 	--bg-code: #f4f4f5;
+	/* code syntax colours (GitHub light): every one 4.5:1 or better on --bg-code */
+	--syn-keyword: #cf222e;
+	--syn-title: #8250df;
+	--syn-number: #0550ae;
+	--syn-string: #0a3069;
+	--syn-builtin: #953800;
+	--syn-comment: #57606a;
+	--syn-name: #116329;
+	--syn-bullet: #953800;
 	--border: #ededed;
 	--border-strong: #d4d4d8;
 	--tree-line: #a1a1aa; /* sidebar tree rule */

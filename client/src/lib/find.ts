@@ -6,7 +6,7 @@ const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"]);
 /** Match limit: a one-letter query in a long session would otherwise create tens of thousands of ranges. */
 export const MAX_MATCHES = 2000;
 
-/** Ranges of the matches inside one text node. Matching is per node, so a hit never spans an element boundary. */
+/** Ranges of the matches inside one string (a text node, or the joined text of one code block: see findRanges). */
 export function matchesIn(text: string, query: string): [number, number][] {
 	const out: [number, number][] = [];
 	if (!query) return out;
@@ -19,22 +19,51 @@ export function matchesIn(text: string, query: string): [number, number][] {
 	return out;
 }
 
+/** NodeFilter values, kept numeric: the module is also loaded where the DOM globals are not (tests). */
+const SHOW_TEXT = 4;
+const ACCEPT = 1;
+const REJECT = 2;
+
 export function findRanges(root: Node, query: string, limit = MAX_MATCHES): Range[] {
 	const out: Range[] = [];
 	if (!query.trim()) return out;
 	const doc = root.ownerDocument ?? document;
-	const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+	const walker = doc.createTreeWalker(root, SHOW_TEXT, {
 		acceptNode(node) {
 			const el = node.parentElement;
-			if (!el || SKIP.has(el.tagName) || el.closest("[data-find-skip]")) return NodeFilter.FILTER_REJECT;
-			return node.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+			if (!el || SKIP.has(el.tagName) || el.closest("[data-find-skip]")) return REJECT;
+			return node.nodeValue ? ACCEPT : REJECT;
 		},
 	});
+	// Text inside a code block is split into many nodes by its syntax colours (`hljs-*` spans): a search for `res.ok` must
+	// still find it there, so the nodes of one <pre> are searched as one string and a match may span several of them.
+	// Everywhere else matching stays per node.
+	const runs: Text[][] = [];
+	let runPre: Element | null = null;
 	for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-		for (const [from, to] of matchesIn(node.nodeValue!, query)) {
+		const pre = node.parentElement!.closest("pre");
+		if (pre && pre === runPre) runs[runs.length - 1]!.push(node as Text);
+		else runs.push([node as Text]);
+		runPre = pre;
+	}
+	for (const run of runs) {
+		const text = run.map((n) => n.nodeValue!).join("");
+		const starts: number[] = [];
+		let at = 0;
+		for (const n of run) {
+			starts.push(at);
+			at += n.nodeValue!.length;
+		}
+		/** The node holding character `pos` of the joined text (an end position belongs to the node it closes). */
+		const locate = (pos: number, end: boolean): [Text, number] => {
+			let i = run.length - 1;
+			while (i > 0 && (end ? starts[i]! >= pos : starts[i]! > pos)) i--;
+			return [run[i]!, pos - starts[i]!];
+		};
+		for (const [from, to] of matchesIn(text, query)) {
 			const r = doc.createRange();
-			r.setStart(node, from);
-			r.setEnd(node, to);
+			r.setStart(...locate(from, false));
+			r.setEnd(...locate(to, true));
 			out.push(r);
 			if (out.length >= limit) return out;
 		}
