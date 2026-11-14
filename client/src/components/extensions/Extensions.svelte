@@ -48,9 +48,10 @@
 	const pendingStore = $derived(!!serverId && serverId !== app.serverId && !store);
 	// Re-run when the open server changes: the one just left now needs its own editor, the one just opened has the host.
 	$effect(() => { void app.serverId; if (serverId) void app.attachExtensionStore(serverId); });
-	const rows = $derived((void app.extensionStoreTick, src.list()));
+	// While another server's list is still being read, show nothing rather than the open server's list.
+	const rows = $derived((void app.extensionStoreTick, pendingStore ? [] : src.list()));
 	const list = $derived(rows);
-	const unreadable = $derived((void app.extensionStoreTick, src.unreadable()).map((item) => ({ item, index: item.index })));
+	const unreadable = $derived((void app.extensionStoreTick, pendingStore ? [] : src.unreadable()).map((item) => ({ item, index: item.index })));
 	let filename = $state("");
 	let market = $state(false);
 	/** Extensions that run inside the server (installed from the marketplace); read-only here. */
@@ -490,7 +491,6 @@
 			onaskremove={(event) => askRemove(id, event)}
 			oncancelremove={cancelRemove}
 			onremove={(keepSettings) => remove(id, keepSettings)}
-			onsettingslocal={(local) => src.setSettingsLocal(id, local)}
 			onsavepartial={(partial) => saveClientPartial(id, partial)}
 		/>
 	{:else if openServer}

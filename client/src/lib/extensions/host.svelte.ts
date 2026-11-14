@@ -11,7 +11,7 @@ import { NetClient } from "./net";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
 import { describeSettingErrors, fillSettingDefaults, OWNED_PAGE_NAMES, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
-import { mergeSettings, PendingWrites, sharedSettings, splitSettings, WriteClock, keepUnowned, writableKeys, type StoredExtensionSettings } from "./settings-store";
+import { adoptServerValue, PendingWrites, sharedSettings, splitSettings, WriteClock, keepUnowned, writableKeys, type StoredExtensionSettings } from "./settings-store";
 import type { Component } from "svelte";
 import { inlineAssets, raiseSpecificity } from "./style";
 import { ExtensionRuntime } from "./runtime";
@@ -152,9 +152,8 @@ const MAX_ENTRIES = 50;
 const SHORTCUT_KEYS = "pipaya.extensions.shortcut-keys";
 const NONE: MountedComponent[] = [];
 const STORE = "pipaya.extension.storage.";
-/** Extension ids whose settings stay on this device only: JSON array. Replaces the old all-or-nothing settings-source switch. */
+/** Old per-device switches that kept settings off the server (per server `<id>` appended, and one global). Dropped on start. */
 const LOCAL_IDS = "pipaya.extensions.local-ids";
-/** The old global switch: "local" meant every extension's settings stayed here. Folded into LOCAL_IDS on start. */
 const LEGACY_SOURCE = "pipaya.extensions.settings-source";
 /** Unconfirmed writes, per server: { <id>: { at, dirty } }. */
 const PENDING = "pipaya.extensions.pending";
@@ -238,64 +237,30 @@ export class ExtensionHost {
   private pending!: PendingWrites;
   /** Per-id write times, so a second edit inside the same millisecond still counts as newer. */
   private clock = new WriteClock();
-  /** Extension ids the user keeps on this device only (per server: the switch belongs with the server's list). */
-  private localIds = $state.raw<string[]>([]);
   /** Last settings payload read from the server, used to restore settings of a reinstalled id. */
   private remote: Record<string, unknown> = {};
   private puts = new Map<string, Promise<void>>();
   private configurations = new Map<string, ConfigurationManager>();
   private transport = new JsonTransport();
   private net = new NetClient();
-  /** This extension's settings stay on this device: its manifest says so, or the user switched it here. */
-  private keepsSettingsLocal(id: string, pkg?: ExtensionPackage): boolean {
-    if (pkg?.manifest.settingsScope === "local") return true;
-    return this.localIds.includes(id);
+  /** This extension's settings stay on this device only when its manifest says so; everything else lives on the server. */
+  private keepsSettingsLocal(_id: string, pkg?: ExtensionPackage): boolean {
+    return pkg?.manifest.settingsScope === "local";
   }
-  /** Settings of this extension go to the server (unless the user keeps them on this device). */
+  /** Settings of this extension go to the server. */
   private sharesSettings(entry: InstalledExtension): boolean {
     return !this.keepsSettingsLocal(entry.package.manifest.id, entry.package);
   }
-  /** The user's choice for one extension; `false` puts it back on the server (and uploads what is here). */
-  setSettingsLocal(id: string, local: boolean) {
-    this.find(id);
-    const next = local ? [...new Set([...this.localIds, id])] : this.localIds.filter((x) => x !== id);
-    this.localIds = next; this.saveLocalIds();
-    if (!local) void this.push(id); // what this device holds becomes the server's value
-  }
-  isSettingsLocal(id: string): boolean {
-    const entry = this.installed.find((e) => e.package.manifest.id === id);
-    return entry ? this.keepsSettingsLocal(id, entry.package) : this.localIds.includes(id);
-  }
-  private saveLocalIds() {
-    try {
-      if (this.localIds.length) localStorage.setItem(this.localIdsKey(), JSON.stringify(this.localIds));
-      else localStorage.removeItem(this.localIdsKey());
-    } catch { /* storage unavailable */ }
-  }
-  private localIdsKey(): string {
-    const id = this.adapter?.serverId?.() ?? null;
-    return id ? `${LOCAL_IDS}.${id}` : LOCAL_IDS;
-  }
-  private readLocalIds() {
-    let ids: string[] = [];
-    try {
-      const raw: unknown = JSON.parse(localStorage.getItem(this.localIdsKey()) ?? "[]");
-      if (Array.isArray(raw)) ids = raw.filter((x): x is string => typeof x === "string" && /^[a-z][a-z0-9.-]*$/.test(x));
-    } catch { /* treat as none */ }
-    this.localIds = ids;
-  }
   /**
-   * The old switch kept EVERY extension's settings on the device. Fold it into the per-extension list once: the ids
-   * installed right now become local, and the switch is removed so nothing silently flips back later.
+   * Earlier versions let the user keep an extension's settings on one device. The server owns them now: the old switches
+   * are dropped, and the server's value (or, when it has none, what this device holds) is used from the next sync on.
    */
-  private migrateLegacySource() {
-    let legacy = false;
-    try { legacy = localStorage.getItem(LEGACY_SOURCE) === "local"; } catch { /* no storage */ }
-    if (!legacy) return;
-    const ids = this.installed.map((e) => e.package.manifest.id);
-    this.localIds = [...new Set([...this.localIds, ...ids])];
-    this.saveLocalIds();
-    try { localStorage.removeItem(LEGACY_SOURCE); } catch { /* no storage */ }
+  private dropLocalSwitches() {
+    try {
+      const id = this.adapter?.serverId?.() ?? null;
+      localStorage.removeItem(id ? `${LOCAL_IDS}.${id}` : LOCAL_IDS);
+      localStorage.removeItem(LEGACY_SOURCE);
+    } catch { /* no storage */ }
   }
   /** Where this device's unconfirmed writes are kept (per server, like the settings themselves). */
   private pendingKey(): string {
@@ -361,9 +326,8 @@ export class ExtensionHost {
     this.lastShared = null;
     this.readList(this.storedList());
     this.migrateDeviceList();
-    this.readLocalIds();
     this.pending = new PendingWrites(localStorage, this.pendingKey());
-    this.migrateLegacySource();
+    this.dropLocalSwitches();
     // Only the extensions whose start never finished are switched off; everything else starts normally.
     if (booting.length) {
       let changed = false;
@@ -395,7 +359,7 @@ export class ExtensionHost {
     await (async () => {
       // The server is the source of truth for settings: read it before any extension starts.
       if (connection) await this.syncSettings(connection).catch(() => {});
-      if (this.safeMode || !enabled.length) return;
+      if (this.safeMode) return;
       // Start sequentially, so recovery and the UI remain responsive.
       for (const e of enabled) {
         if (this.safeMode || !e.enabled) continue;
@@ -404,6 +368,8 @@ export class ExtensionHost {
         if (problem) { e.enabled = false; e.state = "disabled"; e.error = problem; try { this.save(); } catch { /* ignore */ } continue; }
         await this.enable(id).catch(() => {});
       }
+      // The server's on/off choices may have arrived before its settings did: follow them again now that both are here.
+      this.followStates();
     })();
   }
 
@@ -494,8 +460,9 @@ export class ExtensionHost {
       this.unsynced.delete(id);
     }
     this.clock.see(id, stored.updatedAt);
-    const { local } = splitSettings(entry.settings, entry.package.manifest.settings);
-    const next = mergeSettings(clone(stored.value), local);
+    const { next, carried } = adoptServerValue(entry.package.manifest.settings, clone(stored.value), entry.settings);
+    // a secret this device kept from an earlier version, which the server never got: it goes up once
+    if (carried) { this.pending.mark(id, this.clock.next(id)); void this.push(id); }
     if (JSON.stringify(next) === JSON.stringify(entry.settings)) return false;
     entry.settings = next;
     // the server already holds this id's settings, so a fresh install is not gated on saving them again
@@ -565,7 +532,7 @@ export class ExtensionHost {
       const stored = await within(SYNC_FETCH_MS, signal => new Api(connection).extensionSetting(id, signal));
       if (!stored || typeof stored.value !== "object") return;
       if (typeof data.updatedAt === "number" && stored.updatedAt < data.updatedAt) return;
-      if (this.adoptRemote(entry, stored)) { try { this.save(); } catch { /* cache only */ } }
+      if (this.adoptRemote(entry, stored)) { try { this.save(); } catch { /* cache only */ } this.followStates(); }
     } catch { /* the next sync or save catches up */ }
   }
 
@@ -611,6 +578,11 @@ export class ExtensionHost {
     for (const [id, on] of Object.entries(value)) if (typeof on === "boolean" && /^[a-z][a-z0-9.-]*$/.test(id)) this.wanted[id] = on;
     this.followStates();
   }
+  /**
+   * Make this device run exactly what the server says is on. The server's "on" is the consent: no device asks again, and
+   * the first-save gate does not apply (whoever switched it on already saved its settings, which this device read from
+   * the server). Only settings that are really missing keep it off, and the reason shows on the extension.
+   */
   private followStates() {
     if (this.safeMode) return;
     this.applyingRemote = true;
@@ -618,8 +590,12 @@ export class ExtensionHost {
       for (const e of [...this.installed]) {
         const id = e.package.manifest.id;
         if (!Object.hasOwn(this.wanted, id)) continue;
-        if (this.wanted[id] && !e.enabled && e.state !== "starting") void this.enable(id).catch(() => {});
-        else if (!this.wanted[id] && e.enabled) this.disable(id);
+        if (this.wanted[id] && !e.enabled && e.state !== "starting") {
+          if (!e.configured) { e.configured = true; try { this.save(); } catch { /* cache only */ } }
+          const problem = this.settingsProblem(id);
+          if (problem) { e.state = "disabled"; e.error = problem; continue; }
+          void this.enable(id).catch(() => {});
+        } else if (!this.wanted[id] && e.enabled) this.disable(id);
       }
     } finally { this.applyingRemote = false; }
   }
@@ -660,7 +636,7 @@ export class ExtensionHost {
     this.unreadable = [];
     this.remote = {}; this.wanted = {}; this.unsynced.clear(); this.clock = new WriteClock();
     this.pending = new PendingWrites(localStorage, this.pendingKey());
-    this.readLocalIds();
+    this.dropLocalSwitches();
     this.loadError = ""; this.syncNotice = ""; this.corruptRaw = null; this.panelOpen = false; this.activePanel = null;
     this.loadList();
     this.applyThemes();
@@ -923,7 +899,6 @@ export class ExtensionHost {
       if (removed.configured) this.keepLocal(id, settings);
     } else { this.discardSettings(id, !this.sharesSettings(removed)); dropShortcutKeys(); }
     this.unsynced.delete(id); this.pending.forget(id); this.clock.forget(id);
-    if (this.localIds.includes(id)) { this.localIds = this.localIds.filter((x) => x !== id); this.saveLocalIds(); }
   }
   /** Removing an extension takes down the language packs it published (only its own; best effort). */
   private unpublishLocales(pkg: ExtensionPackage) {
@@ -1020,7 +995,7 @@ export class ExtensionHost {
     if (!adapter) throw new LocalizedError(t("이 클라이언트는 설정 내보내기를 지원하지 않습니다"));
     return {
       capture: () => ({ schemaVersion: 1 as const, ...withoutKeybindings(adapter.capture(), id !== ""), extensions: this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: clone(e.package), enabled: e.enabled, settings: publicSettings(e.settings, e.package.manifest.settings ?? []) })) }),
-      backup: () => ({ app: adapter.backup(), entries: clone(this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured }))), unreadable: clone(this.unreadable), localIds: [...this.localIds] }),
+      backup: () => ({ app: adapter.backup(), entries: clone(this.installed.filter(e => e.package.manifest.id !== id).map(e => ({ package: e.package, enabled: e.enabled, settings: e.settings, configured: e.configured }))), unreadable: clone(this.unreadable) }),
       apply: document => {
         const newCount = document.extensions.filter(e => !this.installed.some(old => old.package.manifest.id === e.package.manifest.id) && !this.unreadable.some(old => old.id === e.package.manifest.id)).length;
         if (this.installed.length + this.unreadable.length + newCount > MAX_ENTRIES) throw new LocalizedError(t("확장 최대 50개 한도를 초과합니다"));
@@ -1044,12 +1019,6 @@ export class ExtensionHost {
         for (const e of this.installed) if (e.package.manifest.id !== id) this.cleanup(e.package.manifest.id);
         this.installed = [...this.installed.filter(e => e.package.manifest.id === id), ...entries];
         this.unreadable = clone(raw.unreadable) as UnreadableExtension[];
-        // An older backup kept every extension's settings here (`localSettings: true`): those ids become local.
-        const localIds = Array.isArray(raw.localIds)
-          ? raw.localIds.filter((x): x is string => typeof x === "string")
-          : raw.localSettings === true ? entries.map(e => e.package.manifest.id) : [];
-        this.localIds = [...new Set(localIds)];
-        this.saveLocalIds();
         this.save(); this.applyThemes(); adapter.restore(raw.app);
       },
     };

@@ -41,9 +41,9 @@ Examples: `examples/extensions/focus.json` (declarative), `session-tools.json` (
 - Package ≤1 MiB, code ≤512 KiB (UTF-8), ≤50 extensions.
 - Unknown fields, duplicate permissions/commands and wrong types are rejected. Types: `src/lib/extensions/schema.ts`, public SDK: `src/lib/extensions/sdk.ts`.
 - `code` is the body of an async function with `sdk` injected. No imports, no npm.
-- `settingsScope`: `"server"` (default) or `"local"` (this device only). Credentials do not need it: a `secret: true`
-  field, and any key that looks like one (`token`, `password`, `apiKey`, …), never leaves the device whatever the scope says.
-  A single field can be device-only too (`"device": true`): a local path, this machine's own setting.
+- `settingsScope`: `"server"` (default) or `"local"` (this device only). Secrets are stored on the server like every other
+  value (`secret: true` only masks the input and keeps the value out of configuration exports), so every device of the
+  server gets them. A single field can be device-only (`"device": true`): a local path, this machine's own setting.
 
 ### Korean and English (`manifest.descriptions`, `manifest.translations`)
 
@@ -116,11 +116,13 @@ write in `settings.at`); `localStorage` is a cache. The server is the source of 
 - **Form saves keep what the form does not own**: an undeclared key, and a `readonly` value the extension wrote, survive a save. The form never sends a `readonly` field's value. A `keys` write is compared with the time of the last edit by a person, not with the extension's own `pi.settings.set`, so a status the extension wrote moments ago does not make a form save stale (`settings.at` holds `<updatedAt> <userAt>`; a file with one number reads as before).
 - **Live**: `extension_settings_updated` (`{id, action, updatedAt, origin}`) arrives on every device. The writing device skips
   its own echo by `origin`, and a change older than what the device holds is ignored.
-- **Secrets stay here**: `secret: true` fields and credential-looking keys are split out before the `PUT` and merged back on
-  top of what the server returns.
-- **Per-extension switch**: the user can keep one extension's settings on this device (`pipaya.extensions.local-ids`, per
-  server). Turning it off uploads what the device holds.
-- **Migration**: no server value but a non-empty local one → `PUT` once.
+- **Device fields stay here**: only `device: true` fields are split out before the `PUT` and merged back on top of what the
+  server returns. Secrets go to the server.
+- **On/off follows the server**: `client-settings` `extensionStates` is the user's choice for the server; every device runs
+  exactly what it says, with the server's settings and without asking again. Only settings that are really missing keep an
+  extension off on a device (the reason shows on it).
+- **Migration**: no server value but a non-empty local one → `PUT` once. A secret only this device held (versions before
+  secrets went to the server) is kept and uploaded once; the old per-device switch (`pipaya.extensions.local-ids`) is dropped.
 - **Delete** asks: keep settings / delete settings / cancel. Both remove the package and `pipaya.extension.storage.<id>`. "Delete settings" sends `DELETE`; "keep" stores a copy in `pipaya.extensions.kept` (≤50) restored on reinstall (server value first).
 - Importing a configuration uploads the imported values to the server (it no longer pins every extension to this device).
 
