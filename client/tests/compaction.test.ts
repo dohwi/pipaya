@@ -278,6 +278,15 @@ describe("paged transcript", () => {
 		await settle();
 		expect(calls).toEqual([undefined, 960, 860]); // and the page after it is already on its way
 	});
+	test("a page stretched back to a reply's prompt (more than asked) still offers what is before it", async () => {
+		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => (before === undefined ? stored(900, 1000) : stored(800, 900)) });
+		await chat.load();
+		expect(chat.items).toHaveLength(100);
+		expect(chat.hasEarlier).toBe(true);
+		await chat.loadEarlier();
+		expect(chat.items[0]!.seq).toBe(800);
+		expect(chat.hasEarlier).toBe(true);
+	});
 	test("a short conversation has nothing earlier", async () => {
 		const { chat } = setup({ tailMessages: async () => stored(0, 5) });
 		await chat.load();

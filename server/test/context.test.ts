@@ -290,4 +290,21 @@ describe("tail paging of messages", () => {
 			expect(store.messages("s")).toHaveLength(10);
 		} finally { db.close(); f.cleanup(); }
 	});
+	test("`wholeTurn` reaches back to the prompt of a reply the page starts inside", () => {
+		const f = fixture();
+		const db = openDb(join(f.root, "turn.db"));
+		try {
+			const store = new SessionStore(db);
+			store.create(record("s", f.cwd));
+			// 0 user, 1..7 one reply (assistant / toolResult), 8 user, 9..11 its reply
+			const roles = ["user", "assistant", "toolResult", "assistant", "toolResult", "assistant", "toolResult", "assistant", "user", "assistant", "toolResult", "assistant"];
+			roles.forEach((role, i) => store.appendMessage("s", i, { role, content: `m${i}`, timestamp: i } as unknown as AgentMessage));
+			const seqs = (o: Parameters<SessionStore["messages"]>[1]) => store.messages("s", o).map((m) => m.seq);
+			expect(seqs({ tail: 6, wholeTurn: true })).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+			expect(seqs({ tail: 6 })).toEqual([6, 7, 8, 9, 10, 11]);
+			expect(seqs({ tail: 4, wholeTurn: true })).toEqual([8, 9, 10, 11]); // already starts at a prompt
+			expect(seqs({ tail: 2, before: 6, wholeTurn: true })).toEqual([0, 1, 2, 3, 4, 5]);
+			expect(seqs({ tail: 2, before: 6, after: 2, wholeTurn: true })).toEqual([3, 4, 5]); // never at or below `after`
+		} finally { db.close(); f.cleanup(); }
+	});
 });

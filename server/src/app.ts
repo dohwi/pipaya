@@ -617,8 +617,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { params: S.IdParams, querystring: S.MessagesQuery, response: { 200: S.MessageList, ...S.errors(400, 401, 404) } },
 		handler: async (req) => {
 			sessions.get(req.params.id);
-			const { after, limit, tail, before } = req.query;
-			return { messages: store.messages(req.params.id, tail ? { after, tail, before } : { after, limit: limit ?? 1000 }) };
+			const { after, limit, tail, before, turn } = req.query;
+			return { messages: store.messages(req.params.id, tail ? { after, tail, before, wholeTurn: turn === true } : { after, limit: limit ?? 1000 }) };
 		},
 	});
 	app.get("/questions", {
