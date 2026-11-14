@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { compileModule } from "svelte/compiler";
 import ts from "typescript";
+import { packageDigest } from "../src/lib/extensions/approvals";
 import { fillSettingDefaults, parsePackage, resolveSettings, settingShown, type SettingField } from "../src/lib/extensions/schema";
 import type { ExtensionHost as ExtensionHostType, ExtensionContext, HostAdapter } from "../src/lib/extensions/host.svelte";
 
@@ -447,13 +448,14 @@ describe("server sync", () => {
 		expect(host.installed[0]!.settings).toEqual({ httpOrigin: "https://server.test", httpToken: "new" });
 		expect(requests.filter(r => r.method === "PUT")).toEqual([]);
 	});
-	test("a device switches on what the server says is on, with the server's settings and without asking", async () => {
+	test("a device follows the server's \"on\" for a package it approved, with the server's settings", async () => {
 		const schema = [
 			{ key: "httpOrigin", type: "string", label: "서버 주소", format: "origin", required: true },
 			{ key: "httpToken", type: "string", label: "토큰", secret: true, required: true },
 		];
 		const pkg = parsePackage(cfg("example.cfg", schema));
-		// a fresh device: the package arrives from the server switched off and never configured here
+		// this device switched these exact contents on before (approvals.ts)
+		storage.set("pipaya.extensions.approved", JSON.stringify({ "example.cfg": packageDigest(pkg) }));
 		const { host } = await boot();
 		const value = { httpOrigin: "https://server.test", httpToken: "t" };
 		respond = req => req.path === "/extensions/settings" ? json({ settings: { "example.cfg": { value, updatedAt: 1000 } } })
@@ -466,6 +468,40 @@ describe("server sync", () => {
 		await flush();
 		expect(host.find("example.cfg").state).toBe("active");
 		expect(host.find("example.cfg").settings).toEqual({ httpOrigin: "https://server.test", httpToken: "t" });
+	});
+	test("the server's \"on\" never starts a package this device did not approve; turning it on here does", async () => {
+		const pkg = parsePackage(cfg("example.new", null));
+		storage.set("pipaya.extensions.approved", "{}"); // a device that already keeps approvals
+		const { host } = await boot();
+		host.applyPackages([pkg]);
+		host.applyStates({ "example.new": true });
+		await flush();
+		expect(host.find("example.new").state).toBe("disabled");
+		expect(host.needsApproval("example.new")).toBe(true);
+		await host.enable("example.new");
+		expect(host.find("example.new").state).toBe("active");
+		expect(host.needsApproval("example.new")).toBe(false);
+		// the same id with other contents (code pushed through the server) is a new approval
+		host.disable("example.new");
+		host.applyPackages([{ ...pkg, manifest: { ...pkg.manifest, version: "9.9.9" } }]);
+		host.applyStates({ "example.new": true });
+		await flush();
+		expect(host.find("example.new").state).toBe("disabled");
+		expect(host.needsApproval("example.new")).toBe(true);
+	});
+	test("a stored list switched on but never approved here does not start at launch", async () => {
+		storage.set("pipaya.extensions.approved", "{}");
+		seed([{ package: parsePackage(cfg("example.stored", null)), enabled: true }]);
+		const { host } = await boot();
+		await flush();
+		expect(host.find("example.stored").state).toBe("disabled");
+	});
+	test("upgrading keeps what was already on: the first run approves the enabled packages once", async () => {
+		seed([{ package: parsePackage(cfg("example.was-on", null)), enabled: true }, { package: parsePackage(cfg("example.was-off", null)), enabled: false }]);
+		const { host } = await boot();
+		await flush();
+		expect(host.find("example.was-on").state).toBe("active");
+		expect(Object.keys(JSON.parse(storage.get("pipaya.extensions.approved")!))).toEqual(["example.was-on"]);
 	});
 	test("old per-device switches are dropped: the server holds every extension's settings", async () => {
 		seed([{ package: parsePackage(cfg("example.one")), settings: { httpOrigin: "https://one.test" } }]);

@@ -246,6 +246,8 @@ export const en: Record<string, string> = {
 	"처리 중": "Working",
 	"{name} 사용": "Use {name}",
 	"켤 수 없습니다.": "Can't turn on.",
+	"이 기기에서 아직 승인하지 않은 확장입니다. 권한을 확인한 뒤 직접 켜 주세요": "This extension has not been approved on this device yet. Check its permissions, then turn it on yourself",
+	"다른 기기에서 켠 확장입니다. 이 기기에서 실행하려면 권한을 확인한 뒤 직접 켜 주세요.": "Turned on from another device. To run it on this device, check its permissions and turn it on here.",
 	"다시 불러오기": "Reload",
 	"삭제": "Delete",
 	"‘{name}’을 삭제할까요?": "Delete “{name}”?",
