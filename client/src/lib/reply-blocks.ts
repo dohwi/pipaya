@@ -1,4 +1,4 @@
-import type { AssistantBlock, Step } from "./types";
+import type { AssistantBlock, Step, StopReason } from "./types";
 
 export type Segment = { kind: "text"; text: string; i: number } | { kind: "work"; steps: Step[]; i: number };
 
@@ -26,3 +26,15 @@ export const plainTextOf = (blocks: readonly AssistantBlock[]): string =>
 		.filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
 		.map((b) => b.text)
 		.join("\n\n");
+
+/** What a finished reply offers below it. Only the newest reply, and only once it has stopped, can be acted on. */
+export function replyActions(tail: { stopReason: StopReason } | undefined, last: boolean, live: boolean): { retry: boolean; cut: boolean; resume: boolean } {
+	const settled = !!tail && !live;
+	// The token limit ended the text mid-way. (A cut tool call never ends a run: the agent fails it and goes on.)
+	const cut = settled && tail.stopReason === "length";
+	return {
+		retry: settled && last && (tail.stopReason === "error" || tail.stopReason === "aborted"),
+		cut,
+		resume: cut && last,
+	};
+}

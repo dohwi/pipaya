@@ -7,6 +7,7 @@
  *   "!bash <command>"  -> streams a bash tool call, then summarises the tool result
  *   "!<tool> {json}"   -> streams a call to any other tool with JSON args
  *   "!overflow ..."    -> 400 "maximum context length" until the request carries a compaction summary
+ *   "!cut ..."         -> streams "Echo: ..." and ends it with finish_reason "length" (the output limit cut it off)
  *   "!drop ..."        -> streams the first frames of the reply, then the body ends without a finish reason
  *                         (the first time only, so the retry of the same request succeeds)
  */
@@ -50,7 +51,7 @@ const textOf = (content: unknown): string => {
 	return "";
 };
 
-type Plan = { text: string; tool?: { name: string; args: string } };
+type Plan = { text: string; tool?: { name: string; args: string }; cut?: boolean };
 
 function plan(messages: any[]): Plan {
 	const last = messages[messages.length - 1];
@@ -65,6 +66,7 @@ function plan(messages: any[]): Plan {
 	}
 	// "!drop ..." only asks the fixture to cut the stream; the reply itself is a plain echo.
 	if (input.startsWith("!drop")) return { text: `Echo: ${input.replace(/^!drop\s*/, "")}` };
+	if (last?.role === "user" && input.startsWith("!cut")) return { text: `Echo: ${input.replace(/^!cut\s*/, "")}`, cut: true };
 	const m = /^!(\w+)\s+(.*)$/s.exec(input);
 	if (last?.role === "user" && m) {
 		const [, name, rest] = m as unknown as [string, string, string];
@@ -87,7 +89,7 @@ function chunks(p: Plan, callId: string): object[] {
 		out.push({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: callId, type: "function", function: { name: p.tool.name, arguments: "" } }] }, finish_reason: null }] });
 		out.push({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: p.tool.args } }] }, finish_reason: null }] });
 	}
-	out.push({ ...base, choices: [{ index: 0, delta: {}, finish_reason: p.tool ? "tool_calls" : "stop" }], usage: { prompt_tokens: 4, completion_tokens: pieces.length, total_tokens: 4 + pieces.length } });
+	out.push({ ...base, choices: [{ index: 0, delta: {}, finish_reason: p.tool ? "tool_calls" : p.cut ? "length" : "stop" }], usage: { prompt_tokens: 4, completion_tokens: pieces.length, total_tokens: 4 + pieces.length } });
 	return out;
 }
 

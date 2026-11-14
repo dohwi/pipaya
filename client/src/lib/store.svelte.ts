@@ -2070,6 +2070,14 @@ class AppStore {
     }
   }
 
+  /**
+   * Go on with an answer the output limit cut off. The model's context already holds the cut text (it stays in the
+   * transcript), so a short prompt is enough: it picks up where the text stopped instead of starting over.
+   */
+  continueCut(id = this.activeId): Promise<boolean> {
+    return this.send(t("이어서 작성해 주세요. 앞부분은 다시 쓰지 말고 끊긴 곳부터 바로 시작해 주세요."), [], id);
+  }
+
   async answerQuestion(toolCallId: string, answer: string | string[], id = this.activeId) {
     const chat = this.chatOf(id);
     if (!this.api || !chat) return;
