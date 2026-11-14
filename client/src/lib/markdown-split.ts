@@ -1,11 +1,39 @@
 /**
  * Splitting a streaming markdown answer (no DOM needed, so it is unit-tested on its own). See renderStreaming in markdown.ts.
  */
-import { Lexer } from "marked";
+import { Marked, Tokenizer, type MarkedExtension, type Token, type Tokens } from "marked";
 
 /** The renderer's options (markdown.ts builds its Marked from these): block boundaries depend on them. */
 export const MARKED_OPTIONS = { gfm: true, breaks: true } as const;
-const lexer = () => new Lexer(MARKED_OPTIONS);
+
+/**
+ * No indented code blocks. Models indent lists and paragraphs by four spaces (`    1. step`) far more often than they
+ * mean a code block (they fence code), and CommonMark turns those lines into a grey `<pre>`. A block indented by four
+ * spaces is therefore parsed again with the indent taken off, as ordinary blocks. Fenced code is not touched.
+ */
+export const NO_INDENTED_CODE: MarkedExtension = {
+	tokenizer: {
+		code(src) {
+			const tok = Tokenizer.prototype.code.call(this, src);
+			if (!tok) return false;
+			// The blocks inside sit where the indented block stood: blocks of their own (paragraphs, not loose text).
+			const state = this.lexer.state;
+			const top = state.top;
+			state.top = true;
+			try {
+				// Each pass takes four columns off, so a deeper indent ends after a few passes; inline parts are lexed with the rest.
+				return { type: "indented", raw: tok.raw, text: tok.text, tokens: this.lexer.blockTokens(tok.text, []) } as unknown as Tokens.Code;
+			} finally {
+				state.top = top;
+			}
+		},
+	},
+	extensions: [{ name: "indented", renderer(token) { return this.parser.parse(token.tokens ?? []); } }],
+};
+
+/** Same options and extension as the renderer, so the blocks split here are the blocks it draws. */
+const splitter = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE);
+const lex = (src: string) => splitter.lexer(src);
 
 /**
  * Where a streaming answer can be cut into a settled head and a tail that is still being written: the start of its
@@ -14,8 +42,9 @@ const lexer = () => new Lexer(MARKED_OPTIONS);
  * reference-style link definitions, which make an earlier block depend on a later one.
  */
 export function streamSplit(src: string): number {
-	if (/^ {0,3}\[[^\]]+\]:/m.test(src)) return 0;
-	const tokens = lexer().lex(src);
+	// any indent: an indented block is parsed as ordinary blocks, so a definition inside one counts too
+	if (/^[ \t]*\[[^\]]+\]:/m.test(src)) return 0;
+	const tokens = lex(src);
 	// The last real block; the separator before it ("space") belongs to the head.
 	let end = tokens.length - 1;
 	while (end >= 0 && tokens[end]!.type === "space") end--;
@@ -32,16 +61,17 @@ export function streamSplit(src: string): number {
  * block. Hide that unfinished fence until it is complete.
  */
 export function hideFenceTail(src: string): string {
-	const m = /\n {0,3}(`{1,2}|~{1,2})$/.exec(src);
+	// any indent: a fence inside an indented block is a fence too (see NO_INDENTED_CODE)
+	const m = /\n[ \t]*(`{1,2}|~{1,2})$/.exec(src);
 	if (!m) return src;
-	const tokens = lexer().lex(src);
-	const last = tokens[tokens.length - 1];
-	if (last?.type !== "code" || !last.raw.endsWith(m[0])) return src;
+	const last = lastBlock(src);
+	// the indented block's code has its indent taken off, so match the fence characters on their own line
+	if (last?.type !== "code" || !new RegExp(`\\n[ \\t]*${m[1]}$`).test(last.raw)) return src;
 	return src.slice(0, m.index);
 }
 
 /** A last line that is only a block marker so far: heading hashes, quote, list bullet or number, rule, table pipes. */
-const MARKER_LINE = /(?:^|\n) {0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)]?|[-*_]{2,}|[|:\- \t]*\|[|:\- \t]*)[ \t]*$/;
+const MARKER_LINE = /(?:^|\n)[ \t]*(?:#{1,6}|>|[-*+]|\d{1,9}[.)]?|[-*_]{2,}|[|:\- \t]*\|[|:\- \t]*)[ \t]*$/;
 
 /**
  * A block marker typed on its own line changes shape with every character: `#` is an empty h1, `##` a smaller h2,
@@ -51,12 +81,20 @@ const MARKER_LINE = /(?:^|\n) {0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)]?|[-*_]{2,}|[|:\
 export function hideMarkerTail(src: string): string {
 	const m = MARKER_LINE.exec(src);
 	if (!m) return src;
-	const last = lexer().lex(src).at(-1);
+	const last = lastBlock(src);
 	if (!last || last.type === "code") return src;
 	return src.slice(0, m.index);
 }
 
+/** The last block that is drawn: inside an indented block, its own last block (it is drawn as those blocks). */
+function lastBlock(src: string): Token | undefined {
+	const last = (tokens: Token[]) => [...tokens].reverse().find((t) => t.type !== "space");
+	let t = last(lex(src));
+	while (t?.type === "indented") t = last((t as Tokens.Generic).tokens ?? []);
+	return t;
+}
+
 /** The top-level blocks of `src`, separators dropped. */
 export function blocksOf(src: string): string[] {
-	return lexer().lex(src).filter((t) => t.type !== "space").map((t) => t.raw);
+	return lex(src).filter((t) => t.type !== "space").map((t) => t.raw);
 }
