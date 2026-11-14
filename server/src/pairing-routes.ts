@@ -9,8 +9,14 @@ import type { TypeBoxProvider } from "./typebox-provider.ts";
 /** Paths reachable without the access token (the code is the credential). Keep in step with the auth hook in app.ts. */
 export const PUBLIC_PAIRING_PATH = "/pairing/redeem";
 
-/** Only the admin token may open the door for another device: a paired phone must not be able to pair more phones. */
-export const isAdminOnlyPath = (method: string, path: string) =>
+/**
+ * Only the admin token may open the door for another device: a paired phone must not be able to pair more phones.
+ *
+ * `path` must be the route pattern the router matched (`req.routeOptions.url`, e.g. `/devices/tokens/:id`), never the raw
+ * request URL: the router decodes percent-escapes, so `/devices/token%73` reaches `/devices/tokens` while the raw text
+ * would not match any rule here.
+ */
+export const isAdminOnlyRoute = (method: string, path: string) =>
 	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
 	// Server extensions execute code in this process; a paired phone may use their methods but never reload or install them.
 	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
