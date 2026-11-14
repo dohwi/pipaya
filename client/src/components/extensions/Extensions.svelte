@@ -10,7 +10,7 @@
 	import { download } from "../../lib/download";
 	import { tick, untrack } from "svelte";
 	import { app } from "../../lib/store.svelte";
-	import { CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
+	import { APPROVAL_HINT, CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
 	import { hostSource, storeSource, type ExtensionRow as Installed } from "../../lib/extensions/source";
 	import { parsePackage, PackageError, MAX_PACKAGE_BYTES, type ExtensionPackage } from "../../lib/extensions/schema";
 	import type { StoredExtensionSettings } from "../../lib/extensions/settings-store";
@@ -456,7 +456,8 @@
 		{/snippet}
 		{#snippet notices()}
 			{#if entry.error}<Notice tone="danger" size="sm" animated role="status">{entry.error}</Notice>{/if}
-			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
+			{#if problem}<Notice tone="warn" size="sm" animated id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>
+			{:else if !on && src.needsApproval(id)}<Notice tone="warn" size="sm" animated role="status">{t(APPROVAL_HINT)}</Notice>{/if}
 		{/snippet}
 	</ExtensionRow>
 {/snippet}

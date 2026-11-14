@@ -2,7 +2,7 @@
 	import Button from "../ui/Button.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Switch from "../ui/Switch.svelte";
-	import { CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
+	import { APPROVAL_HINT, CONFIG_REQUIRED, extensions } from "../../lib/extensions/host.svelte";
 	import type { ExtensionRow, ExtensionSource } from "../../lib/extensions/source";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { t } from "../../lib/i18n";
@@ -118,7 +118,8 @@
 	{#if bundledBy}<Notice tone="info" size="sm" icon="clip" role="status">{t("‘{name}’ 확장에 포함되어 있어 함께 설치되고 함께 작동합니다.", { name: bundledBy })}{#snippet action()}{#if onopenserver}<button type="button" onclick={onopenserver}>{t("열기")}</button>{/if}{/snippet}</Notice>{/if}
 	{#if needsServer}<Notice tone="warn" size="sm" icon="clip" role="status">{t("‘{name}’ 확장도 설치해야 동작합니다.", { name: needsServer.name })}{#snippet action()}{#if oninstallserver}<button type="button" onclick={oninstallserver}>{t("설치")}</button>{/if}{/snippet}</Notice>{/if}
 	{#if entry.error}<Notice tone="danger" size="sm" role="status">{entry.error}</Notice>{/if}
-	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>{/if}
+	{#if problem}<Notice tone="warn" size="sm" id="extension-blocked-{id}">{t("켤 수 없습니다.")} {problem}</Notice>
+	{:else if !on && src.needsApproval(id)}<Notice tone="warn" size="sm" role="status">{t(APPROVAL_HINT)}</Notice>{/if}
 
 	{@render top()}
 

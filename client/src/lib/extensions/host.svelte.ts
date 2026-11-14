@@ -6,6 +6,7 @@ import {
   type ConfigurationDocument, type ConfigurationPlan,
 } from "./configuration";
 import { canonical, configurationFingerprint, sha256 } from "./fingerprint";
+import { approve, isApproved, seedApprovals } from "./approvals";
 import { JsonTransport } from "./transport";
 import { NetClient } from "./net";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
@@ -162,6 +163,8 @@ const SYNC_PUT_MS = 10000;
 export const SYNC_SAVE_FAILED = msg("서버에 저장하지 못해 이 브라우저에만 저장됨");
 export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 활성화할 수 있습니다");
 export const BOOT_INTERRUPTED = msg("시작이 완료되지 않아 비활성화했습니다");
+export const NEEDS_APPROVAL = msg("이 기기에서 아직 승인하지 않은 확장입니다. 권한을 확인한 뒤 직접 켜 주세요");
+export const APPROVAL_HINT = msg("다른 기기에서 켠 확장입니다. 이 기기에서 실행하려면 권한을 확인한 뒤 직접 켜 주세요.");
 export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
 
 /** The user's extension shortcut overrides, read once at start: { "<extension id>:<shortcut id>": combo | "" }. */
@@ -326,6 +329,8 @@ export class ExtensionHost {
     this.lastShared = null;
     this.readList(this.storedList());
     this.migrateDeviceList();
+    // Upgrading from a version without per-device approval: what was already switched on here keeps starting.
+    seedApprovals(this.installed.filter(e => e.enabled).map(e => e.package));
     this.pending = new PendingWrites(localStorage, this.pendingKey());
     this.dropLocalSwitches();
     // Only the extensions whose start never finished are switched off; everything else starts normally.
@@ -366,7 +371,9 @@ export class ExtensionHost {
         const id = e.package.manifest.id;
         const problem = this.configRequired(id) ? t(CONFIG_REQUIRED) : this.settingsProblem(id);
         if (problem) { e.enabled = false; e.state = "disabled"; e.error = problem; try { this.save(); } catch { /* ignore */ } continue; }
-        await this.enable(id).catch(() => {});
+        // Switched on in the stored list, but these exact contents were never approved here (the list came from the server).
+        if (!isApproved(e.package)) { e.enabled = false; e.state = "disabled"; try { this.save(); } catch { /* ignore */ } continue; }
+        await this.resume(id).catch(() => {});
       }
       // The server's on/off choices may have arrived before its settings did: follow them again now that both are here.
       this.followStates();
@@ -393,6 +400,15 @@ export class ExtensionHost {
     if (count > 0) { this.booting.set(id, count); return; }
     this.booting.delete(id);
     this.writeBooting(this.bootingIds().filter(other => other !== id));
+  }
+
+  /**
+   * True when the server says this extension is on but its exact contents were never switched on on this device: it
+   * waits for the user to turn it on here (which approves it) instead of starting by itself.
+   */
+  needsApproval(id: string): boolean {
+    const entry = this.find(id);
+    return !entry.enabled && this.wanted[id] === true && !isApproved(entry.package);
   }
 
   /** True while a newly installed package with a settings schema still waits for its first explicit save. */
@@ -594,7 +610,9 @@ export class ExtensionHost {
           if (!e.configured) { e.configured = true; try { this.save(); } catch { /* cache only */ } }
           const problem = this.settingsProblem(id);
           if (problem) { e.state = "disabled"; e.error = problem; continue; }
-          void this.enable(id).catch(() => {});
+          // The server's "on" is not consent for code this device never ran: it waits for the user here (needsApproval).
+          if (this.needsApproval(id)) continue;
+          void this.resume(id).catch(() => {});
         } else if (!this.wanted[id] && e.enabled) this.disable(id);
       }
     } finally { this.applyingRemote = false; }
@@ -710,7 +728,20 @@ export class ExtensionHost {
     this.save();
     return id;
   }
+  /**
+   * Switch an extension on: the user's choice on this device, which also approves this exact package here (see
+   * approvals.ts). Starts that happen by themselves (`boot`, `followStates`) go through `resume`, which needs that approval.
+   */
   async enable(id: string) {
+    await this.turnOn(id);
+    approve(this.find(id).package);
+  }
+  /** Start what was switched on before, only when this device approved these exact contents. */
+  private async resume(id: string) {
+    if (!isApproved(this.find(id).package)) throw new LocalizedError(t(NEEDS_APPROVAL));
+    await this.turnOn(id);
+  }
+  private async turnOn(id: string) {
     if (!this.adapter) throw new LocalizedError(t("확장 호스트가 준비되지 않았습니다"));
     if (this.safeMode) throw new LocalizedError(t("안전 모드를 먼저 해제하세요"));
     this.find(id);
