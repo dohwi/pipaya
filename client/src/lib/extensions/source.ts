@@ -2,6 +2,7 @@ import { CONFIG_REQUIRED, type ExtensionHost, type InstalledExtension } from "./
 import { LocalizedError, t } from "../i18n";
 import type { ServerExtensionStore, StoredExtension } from "./server-store";
 import type { ExtensionPackage } from "./schema";
+import { approve } from "./approvals";
 
 /**
  * Where the extension pane reads and writes: the extension host (the open server's extensions, which run here) or the
@@ -26,8 +27,11 @@ export interface ExtensionSource {
 	find(id: string): ExtensionRow | undefined;
 	configRequired(id: string): boolean;
 	settingsProblem(id: string): string;
+	/** The user's own action: also approves this exact package on this device (see approvals.ts). */
 	enable(id: string): Promise<void>;
 	disable(id: string): void;
+	/** Switched on elsewhere, waiting for this device's approval before it runs here. */
+	needsApproval(id: string): boolean;
 	install(pkg: ExtensionPackage): string;
 	remove(id: string, opts: { keepSettings: boolean }): void | Promise<void>;
 	removeUnreadable(index: number, opts: { keepSettings: boolean }): void | Promise<void>;
@@ -48,6 +52,7 @@ export function hostSource(host: ExtensionHost): ExtensionSource {
 		settingsProblem: (id) => host.settingsProblem(id),
 		enable: (id) => host.enable(id),
 		disable: (id) => host.disable(id),
+		needsApproval: (id) => host.needsApproval(id),
 		install: (pkg) => host.install(pkg),
 		remove: (id, opts) => host.remove(id, opts),
 		removeUnreadable: (index, opts) => host.removeUnreadable(index, opts),
@@ -74,9 +79,13 @@ export function storeSource(store: ServerExtensionStore): ExtensionSource {
 			if (store.configRequired(id)) throw new LocalizedError(t(CONFIG_REQUIRED));
 			const problem = store.settingsProblem(id);
 			if (problem) throw new Error(problem);
+			// Switched on here by the user: this device agrees to run it once that server is open.
+			const entry = store.installed.find((x) => x.package.manifest.id === id);
+			if (entry) approve(entry.package);
 			store.setEnabled(id, true);
 		},
 		disable: (id) => store.setEnabled(id, false),
+		needsApproval: () => false,
 		install: (pkg) => store.install(pkg),
 		remove: (id, opts) => store.remove(id, opts),
 		removeUnreadable: (index, opts) => store.removeUnreadable(index, opts),
