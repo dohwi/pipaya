@@ -135,6 +135,8 @@ export const en: Record<string, string> = {
 	"{name} 대화 열기": "Open the {name} chat",
 	"{name} 미리 보기": "Preview {name}",
 	"{n}개 대기 중": "{n} waiting",
+	"대기열 높이 조절": "Resize the queue",
+	"끌어서 높이 조절 · 더블 클릭으로 원래 크기": "Drag to resize · double-click to reset",
 	"대기 중인 메시지가 없습니다": "No waiting messages",
 	"작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령": "Working · Enter to steer / {key} to queue · / for commands",
 	"작업 중 · Enter 끼워 넣기 · / 명령": "Working · Enter to steer · / for commands",
