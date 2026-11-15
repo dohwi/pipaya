@@ -4,6 +4,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { parsePeer } from "../../lib/peers";
 	import { extensions } from "../../lib/extensions/host.svelte";
+	import { queuedShown } from "../../lib/queue";
 
 	/**
 	 * A waiting message's text, the way its bubble will read: a message from another session (or a server report, or a
@@ -11,7 +12,8 @@
 	 *
 	 *  full  the whole text under the label (queue dialog detail); otherwise one cut line beside it (lists)
 	 */
-	let { text, full = false }: { text: string; full?: boolean } = $props();
+	let { text: raw, full = false }: { text: string; full?: boolean } = $props();
+	const text = $derived(queuedShown(raw));
 	const head = $derived(parsePeer(text) ?? extensions.headerOf(text));
 	const body = $derived(head ? head.body : text);
 	const server = $derived(!!head && "server" in head && !!head.server);

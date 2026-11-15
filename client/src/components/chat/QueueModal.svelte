@@ -9,7 +9,7 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import DialogBody from "../ui/DialogBody.svelte";
 	import DialogFooter from "../ui/DialogFooter.svelte";
-	import { orderQueued, type QueuedItem } from "../../lib/queue";
+	import { orderQueued, queuedShown, type QueuedItem } from "../../lib/queue";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import Modal from "../ui/Modal.svelte";
 
@@ -146,7 +146,7 @@
 				>
 					<QueueBadge {q} />
 					<QueueText text={q.text} />
-					<button type="button" class="rm" tabindex="-1" aria-label={t("{name} 취소", { name: q.text })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
+					<button type="button" class="rm" tabindex="-1" aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
 				</li>
 			{:else}
 				<li class="empty">{t("대기 중인 메시지가 없습니다")}</li>
@@ -157,7 +157,7 @@
 </Modal>
 
 {#snippet copyAction()}
-	<IconButton icon={copied.done ? "check" : "copy"} label={copied.done ? t("복사됨") : t("복사")} tip onclick={() => view && void copied.copy(view.text)} />
+	<IconButton icon={copied.done ? "check" : "copy"} label={copied.done ? t("복사됨") : t("복사")} tip onclick={() => view && void copied.copy(queuedShown(view.text))} />
 {/snippet}
 
 <style>

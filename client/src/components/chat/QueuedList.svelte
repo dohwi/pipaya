@@ -3,7 +3,7 @@
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
 	import Icon from "../ui/Icon.svelte";
-	import { orderQueued, queuedLabel, queuedTone } from "../../lib/queue";
+	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 
 	type Queued = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
@@ -100,7 +100,7 @@
 				<QueueBadge {q} />
 				<QueueText text={q.text} />
 			</button>
-			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
+			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("취소")}><Icon name="x" /></button>
 		</li>
 	{/each}
 </ul>
