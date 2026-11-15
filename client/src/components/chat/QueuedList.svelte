@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
 	import QueueBadge from "./QueueBadge.svelte";
+	import QueueText from "./QueueText.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedTone } from "../../lib/queue";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
@@ -97,7 +98,7 @@
 			<!-- The row shows one cut line; a click opens the whole message (and its copy / remove) in the queue dialog. -->
 			<button type="button" class="qo" onclick={() => { if (!dragged) onopen({ mode: q.mode, text: q.text, deferred: q.deferred }); }} title={t("자세히 보기")}>
 				<QueueBadge {q} />
-				<span class="qt">{q.text}</span>
+				<QueueText text={q.text} />
 			</button>
 			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: q.text })} title={t("취소")}><Icon name="x" /></button>
 		</li>
@@ -202,7 +203,7 @@
 		line-height: 22px; /* the 22px row of the ✕ beside it (ROW in the script) */
 		border-radius: var(--radius-xs);
 	}
-	.qo:hover .qt {
+	.qo:hover :global(.qt) {
 		color: var(--text);
 	}
 	.qx {
@@ -227,10 +228,5 @@
 		width: 14px;
 		height: 14px;
 		stroke-width: 2;
-	}
-	.qt {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 </style>

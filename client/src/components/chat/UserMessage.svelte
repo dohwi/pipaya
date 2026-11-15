@@ -55,7 +55,7 @@
 			</div>
 		{/if}
 		{#if header}
-			<div class="header"><Icon name="chat" /> <span>{header.from}</span></div>
+			<div class="header"><Icon name={"server" in header && header.server ? "server" : "chat"} /> <span>{header.from}</span></div>
 		{:else if scheduled}
 			<div class="header"><Icon name="clock" /> <span>{t("예약")}</span></div>
 		{/if}
