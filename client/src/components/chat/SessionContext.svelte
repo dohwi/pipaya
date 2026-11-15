@@ -5,7 +5,7 @@
 	import Notice from "../ui/Notice.svelte";
 	import { msg, t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
-		import { untrack } from "svelte";
+	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import type { SessionContext } from "../../lib/types";
@@ -208,7 +208,8 @@
 	.rest { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
 	h3 { margin: 0 0 8px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
 	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px; text-align: left; overflow-wrap: anywhere; }
-	.fold:hover { background: var(--bg-hover); }
+	/* hover only where a pointer hovers: on touch it stuck on the last tapped row and read as selected */
+	@media (hover: hover) { .fold:hover { background: var(--bg-hover); } }
 	/* a full-width row must not shrink when pressed (the global 0.97 press scale is meant for small buttons): feedback is a tint */
 	.fold:active { scale: none; background: var(--bg-active); }
 	.label { min-width: 0; }
@@ -217,17 +218,19 @@
 	.chev.open { transition: transform var(--motion-normal) var(--ease); }
 	.chev.open { transform: rotate(90deg); }
 	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
-	.source-name { font-size: var(--fs-xs); }
-	.meta { display: block; margin-top: 4px; color: var(--text-faint); font-size: var(--fs-2xs); }
+	.source-name { display: block; font-size: var(--fs-xs); line-height: 20px; }
+	.meta { display: block; margin-top: 4px; color: var(--text-faint); font-size: var(--fs-2xs); line-height: 16px; }
 	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 
 	.gap { margin-bottom: 8px; }
 	.tabs { margin-bottom: 8px; }
-	.inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }
-	.inner > .note { margin-top: 8px; }
-	.inner .source { margin-top: 4px; }
+	/* the same 12px on all four sides of an opened card, and the same 8px between rows as outside it */
+	.inner { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
+	.inner > .source, .inner > .note { margin: 0; }
+	/* a group caption after a row starts a new block: 16px above it, 8px to its own rows */
+	.inner > .source + .note { margin-top: 8px; }
 	/* same box as a collapsed row, so "nothing applied" reads as a muted row rather than stray body text */
-	.empty { padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); }
-	.note { margin: 0 0 8px; font-size: var(--fs-2xs); color: var(--text-faint); }
-	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 1.6; color: var(--text-faint); overflow-wrap: anywhere; }
+	.empty { padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
+	.note { margin: 0 0 8px; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
+	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); overflow-wrap: anywhere; }
 </style>
