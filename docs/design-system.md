@@ -164,6 +164,11 @@ Applies to `ToolCard`, `QuestionReply` and the work box. Measured on 320 / 390 /
 | `max-width: 640px` | phone layout of dialogs and panels |
 | `pointer: coarse` | touch: action buttons are always visible, `.tap` adds an invisible 44px hit area |
 
+**Hover tints only where a pointer hovers.** A `:hover` that only changes a colour (background, border, text) goes inside
+`@media (hover: hover)`. On a touch screen the browser keeps `:hover` on the last tapped element, so a bare `:hover` tint
+stays on that row and reads as "selected" (it did on the settings nav and the context sheet). Hovers that *reveal*
+something (`opacity`, `display` of actions) stay as they are: touch shows those through `pointer: coarse` rules. `ui-lint` flags it as `hover`.
+
 A control smaller than 44px stays visually small but must carry `.tap` (`app.css`). Check every change at **1440×900**, **820×1180** (tablet) and **390×844** (phone).
 
 ## 6. How to measure (do not guess)
@@ -273,4 +278,6 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 - 눈대중으로 맞추지 말고 DOM의 아이콘 중심을 재서 맞춥니다(6장). 결과 보고는 수정 전/후를 가이드 있는 것과 없는 것으로 나란히, 숫자와 함께 냅니다.
 - 공용 컴포넌트를 바꿀 때는 그것을 쓰는 모든 화면을 확인하고, 데스크톱 1440 · 태블릿 820 · 모바일 390 세 크기에서 확인합니다.
 - 맞춤용 `margin: -1px`이나 `translate`로 땜질하지 않습니다. 크기가 틀린 박스를 고칩니다.
+- 색만 바꾸는 `:hover`는 `@media (hover: hover)` 안에 둡니다. 터치에서는 마지막으로 탭한 행에 hover가 남아 선택된 것처럼 보입니다(`ui-lint`의 `hover`).
+- 펼친 카드·그룹 카드 안쪽은 위·아래·좌우 여백을 같게 하고, 안쪽 행 사이 간격은 바깥 카드 사이와 같게 합니다. 부모가 `gap`을 주면 자식은 마진을 더하지 않습니다.
 - 질문·도구 호출 블록: 상태는 색으로 말하고 칩은 쓰지 않습니다(실행 중·준비 중·실행 안 됨만 칩). 실패는 빨간 테두리와 빨간 글씨, 대기는 주황 테두리. 보기는 같은 폭의 40px 버튼, 추천은 글자 앞 반짝이, 고른 답은 굵은 테두리와 체크, 입력창 안에 보내기 화살표. 여러 질문은 28px 번호 원(4개까지)을 선으로 이은 단계 표시, 5개부터는 `‹ 3 / 8 ›`. 어느 탭에서도 카드 높이는 같습니다.

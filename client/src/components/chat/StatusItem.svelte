@@ -70,8 +70,10 @@
 		cursor: pointer;
 		border-radius: var(--radius-sm);
 	}
-	button.b:hover {
-		color: var(--text);
+	@media (hover: hover) {
+		button.b:hover {
+			color: var(--text);
+		}
 	}
 	button.b:focus-visible {
 		outline: 2px solid var(--accent);

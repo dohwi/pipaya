@@ -237,7 +237,9 @@
 <style>
 	.panel-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 	.launcher { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-xs); }
-	.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
+	@media (hover: hover) {
+		.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
+	}
 	.launcher:disabled { opacity: 0.55; cursor: not-allowed; }
 	.launcher :global(svg), .empty :global(svg) { stroke-width: 1.8; }
 	.launcher :global(svg) { flex: none; width: 15px; height: 15px; }

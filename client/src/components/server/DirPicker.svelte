@@ -285,9 +285,11 @@
 		border-radius: var(--radius);
 		color: var(--text-dim);
 	}
-	.favbtn:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.favbtn:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.favbtn :global(svg) {
 		width: 16px;
@@ -322,9 +324,13 @@
 		text-align: left;
 		font-size: var(--fs-sm);
 	}
-	.row:hover,
 	.row.hl {
 		background: var(--bg-hover);
+	}
+	@media (hover: hover) {
+		.row:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.row.hl {
 		box-shadow: inset 0 0 0 1.5px var(--border-strong);

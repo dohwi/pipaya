@@ -78,7 +78,9 @@
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
 	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
-	.back:hover { color: var(--text); }
+	@media (hover: hover) {
+		.back:hover { color: var(--text); }
+	}
 	/* on a wide window the settings sidebar lists the extensions, so there is nothing to go back to */
 	@media (min-width: 761px) { .back { display: none; } }
 	@media (max-width: 760px) {

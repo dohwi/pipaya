@@ -187,9 +187,13 @@
 		font-weight: 700;
 		line-height: 1;
 	}
-	.agent.dir:hover,
 	.agent.dir.active {
 		color: var(--text);
+	}
+	@media (hover: hover) {
+		.agent.dir:hover {
+			color: var(--text);
+		}
 	}
 	/* the open folder: a filled tile and an edge bar, so it reads as selected at a glance */
 	.agent.dir.active {
@@ -211,8 +215,10 @@
 	.agent {
 		-webkit-tap-highlight-color: transparent;
 	}
-	.agent:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.agent:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.agent.active {
 		background: var(--bg-active);

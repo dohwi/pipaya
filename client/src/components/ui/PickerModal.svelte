@@ -100,7 +100,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
-		padding: 4px 12px 12px;
+		padding: 4px 16px 12px; /* the compact header's and footer's fixed 16px gutter: search field, rows and Close share one left and one right line */
 	}
 	.pk-search-wrap {
 		position: relative;

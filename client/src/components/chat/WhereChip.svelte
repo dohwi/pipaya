@@ -35,9 +35,11 @@
 			border-color var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	.where:hover {
-		color: var(--text);
-		border-color: var(--border-strong);
+	@media (hover: hover) {
+		.where:hover {
+			color: var(--text);
+			border-color: var(--border-strong);
+		}
 	}
 	.where :global(svg) {
 		width: 14px;

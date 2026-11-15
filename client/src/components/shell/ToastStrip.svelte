@@ -59,8 +59,10 @@
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
-	.act:hover {
-		background: color-mix(in srgb, var(--tone) 16%, transparent);
+	@media (hover: hover) {
+		.act:hover {
+			background: color-mix(in srgb, var(--tone) 16%, transparent);
+		}
 	}
 	.msg {
 		flex: 1;

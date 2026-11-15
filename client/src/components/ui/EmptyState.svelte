@@ -28,7 +28,7 @@
 </svelte:element>
 
 <style>
-	.es { margin: 0; color: var(--text-faint); font-size: var(--fs-sm); line-height: 1.6; overflow-wrap: anywhere; }
+	.es { margin: 0; color: var(--text-faint); font-size: var(--fs-sm); line-height: 20px; overflow-wrap: anywhere; }
 	.card { padding: 16px 12px; background: var(--bg); border-radius: var(--radius); }
 	.plain { padding: 24px 12px; text-align: center; }
 	.dashed { padding: 16px; border: 1px dashed var(--border); border-radius: var(--radius); text-align: center; }

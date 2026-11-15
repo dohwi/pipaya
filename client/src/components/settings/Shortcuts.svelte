@@ -251,6 +251,7 @@
 	.group {
 		font-size: var(--fs-sm);
 		font-weight: 600;
+		line-height: 20px;
 	}
 	.hint {
 		display: flex;
@@ -294,22 +295,26 @@
 		flex-direction: column;
 		gap: 4px;
 	}
+	/* whole-pixel lines: the body's 1.55 left every shortcut row on a fractional height */
 	.name {
 		font-size: var(--fs-md);
+		line-height: 20px;
 	}
 	.sub {
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.note {
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-dim);
 	}
 	.note.bad {
 		color: var(--danger);
 	}
 	.key {
-		min-width: 108px;
+		min-width: 120px; /* fits "Ctrl+Shift+N" (110px at 108 pushed its left edge 2px off the other keys) */
 		height: var(--control-h-sm);
 		padding: 0 12px;
 		border: 1px solid var(--border-strong);
@@ -320,8 +325,10 @@
 		background: var(--bg-elev, transparent);
 		white-space: nowrap;
 	}
-	.key:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.key:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.key.fixed {
 		display: inline-flex;
@@ -332,9 +339,10 @@
 		border-style: dashed;
 		cursor: default;
 	}
+	/* stands in for the two 30px reset buttons and the 8px gap between them, so a fixed key (F2) lines up with the others */
 	.slot {
 		flex: none;
-		width: 30px;
+		width: 68px;
 	}
 	.key.none {
 		color: var(--text-faint);
@@ -357,9 +365,11 @@
 		border-radius: 50%;
 		color: var(--text-dim);
 	}
-	.step:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.step:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.step.ok:not(:disabled) {
 		color: var(--ok);
@@ -386,9 +396,11 @@
 		height: 14px;
 		stroke-width: 2.2;
 	}
-	.reset:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.reset:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.reset:disabled {
 		opacity: 0.25;

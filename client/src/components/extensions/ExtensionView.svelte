@@ -597,7 +597,9 @@
 	.tabs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 	.tablist { position: relative; display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); }
 	.tab { flex: none; padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--text-dim); font-size: var(--fs-sm); font-weight: 550; transition: color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std); }
-	.tab:hover { color: var(--text); }
+	@media (hover: hover) {
+		.tab:hover { color: var(--text); }
+	}
 	.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 	.tablist:global([data-indicator-ready]) .tab[aria-selected="true"] { border-bottom-color: transparent; }
 	.tabpanel { display: flex; flex-direction: column; gap: 12px; min-width: 0; border-radius: var(--radius-sm); }
@@ -626,11 +628,17 @@
 	.button-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 	.btn { height: auto; min-height: 38px; max-width: 100%; padding: 8px 16px; line-height: 1.3; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 	.btn.primary { background: var(--accent); color: var(--accent-fg); }
-	.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+	@media (hover: hover) {
+		.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+	}
 	.btn.secondary { background: var(--bg-elev); border-color: var(--border-strong); color: var(--text); }
-	.btn.secondary:hover:not(:disabled) { background: var(--bg-hover); }
+	@media (hover: hover) {
+		.btn.secondary:hover:not(:disabled) { background: var(--bg-hover); }
+	}
 	.btn.danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
-	.btn.danger:hover:not(:disabled) { background: var(--danger); color: var(--accent-fg); }
+	@media (hover: hover) {
+		.btn.danger:hover:not(:disabled) { background: var(--danger); color: var(--accent-fg); }
+	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.tab, .control { transition: none; }

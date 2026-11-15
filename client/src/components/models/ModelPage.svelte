@@ -232,8 +232,10 @@
 		text-align: left;
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
-	.mtrigger:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.mtrigger:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.namerow {
 		display: flex;
@@ -256,8 +258,10 @@
 		color: var(--text);
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
-	.iconpick:hover {
-		border-color: var(--accent);
+	@media (hover: hover) {
+		.iconpick:hover {
+			border-color: var(--accent);
+		}
 	}
 	.iconpick :global(svg:not(.model):not(.logo)) {
 		width: 13px;
@@ -310,8 +314,10 @@
 		height: 16px;
 		stroke-width: 1.8;
 	}
-	.cap:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.cap:hover {
+			background: var(--bg-hover);
+		}
 	}
 	/* pressed = the selected FilterChip look */
 	.cap[aria-pressed="true"] {
@@ -344,9 +350,11 @@
 	.cap.lv:not([aria-pressed="true"]) .dot {
 		opacity: 0.55;
 	}
-	.cap.lv:not([aria-pressed="true"]):hover {
-		background: var(--bg-hover);
-		color: var(--text-dim);
+	@media (hover: hover) {
+		.cap.lv:not([aria-pressed="true"]):hover {
+			background: var(--bg-hover);
+			color: var(--text-dim);
+		}
 	}
 	.cap.lv[aria-pressed="true"] {
 		background: var(--lv-soft);

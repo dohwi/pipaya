@@ -206,8 +206,10 @@
 			opacity: 1;
 		}
 	}
-	.fav:hover {
-		color: var(--text);
+	@media (hover: hover) {
+		.fav:hover {
+			color: var(--text);
+		}
 	}
 	.fav:active {
 		scale: 0.85;
@@ -283,9 +285,11 @@
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	.manage:hover {
-		color: var(--text);
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.manage:hover {
+			color: var(--text);
+			background: var(--bg-hover);
+		}
 	}
 	.manage :global(svg) {
 		width: 15px;

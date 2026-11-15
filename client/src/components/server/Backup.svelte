@@ -209,7 +209,7 @@
 	}
 	.hint {
 		margin: 0;
-		line-height: 1.5;
+		line-height: 16px;
 	}
 	.list {
 		display: flex;
@@ -237,6 +237,7 @@
 	.t {
 		font-size: var(--fs-md);
 		font-weight: 600;
+		line-height: 20px; /* whole-pixel rows: the body's 1.55 made each item 68.08px */
 	}
 	.n {
 		margin-left: 4px;
@@ -247,7 +248,7 @@
 	.s {
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
-		line-height: 1.45;
+		line-height: 16px;
 	}
 	.item.off .t {
 		color: var(--text-faint);
@@ -270,7 +271,7 @@
 		gap: 8px;
 		margin: 0;
 		font-size: var(--fs-xs);
-		line-height: 1.5;
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.note :global(svg),
@@ -300,11 +301,16 @@
 			background var(--motion-fast) var(--ease-std),
 			border-color var(--motion-fast) var(--ease-std);
 	}
-	.drop:hover,
 	.drop:focus-within,
 	.drop.over {
 		background: var(--bg-hover);
 		border-color: var(--text-faint);
+	}
+	@media (hover: hover) {
+		.drop:hover {
+			background: var(--bg-hover);
+			border-color: var(--text-faint);
+		}
 	}
 	.drop.busy {
 		opacity: 0.6;

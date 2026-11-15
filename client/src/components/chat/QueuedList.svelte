@@ -209,8 +209,10 @@
 		position: relative;
 		top: -1px;
 	}
-	.qo:hover :global(.qt) {
-		color: var(--text);
+	@media (hover: hover) {
+		.qo:hover :global(.qt) {
+			color: var(--text);
+		}
 	}
 	.qx {
 		flex: none;
@@ -226,9 +228,11 @@
 	.qx {
 		cursor: pointer;
 	}
-	.qx:hover {
-		color: var(--text);
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.qx:hover {
+			color: var(--text);
+			background: var(--bg-hover);
+		}
 	}
 	.qx :global(svg) {
 		width: 14px;

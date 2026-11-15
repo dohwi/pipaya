@@ -250,8 +250,10 @@
 		text-align: left;
 		overflow: hidden;
 	}
-	.box:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.box:hover {
+			background: var(--bg-hover);
+		}
 	}
 	/* the group clips (overflow: hidden) and the button fills it, so an outer ring would be cut away entirely */
 	.box:focus-visible {

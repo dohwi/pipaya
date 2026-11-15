@@ -463,8 +463,10 @@ input[type="range"]:focus-visible {
 	user-select: none;
 	white-space: nowrap;
 }
-.btn:hover:not(:disabled) {
-	background: var(--bg-hover);
+@media (hover: hover) {
+	.btn:hover:not(:disabled) {
+		background: var(--bg-hover);
+	}
 }
 .btn:active:not(:disabled) {
 	transform: scale(0.94);
@@ -483,8 +485,10 @@ input[type="range"]:focus-visible {
 	border-color: var(--accent);
 	color: var(--accent-fg);
 }
-.btn.primary:hover:not(:disabled) {
-	background: var(--accent-hover);
+@media (hover: hover) {
+	.btn.primary:hover:not(:disabled) {
+		background: var(--accent-hover);
+	}
 }
 /* An update to take: green like the "new version" chip next to it (the one colour for updates across the app) */
 .btn.update {
@@ -492,15 +496,19 @@ input[type="range"]:focus-visible {
 	border-color: var(--ok);
 	color: var(--ok-fg);
 }
-.btn.update:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--ok) 85%, #000);
+@media (hover: hover) {
+	.btn.update:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--ok) 85%, #000);
+	}
 }
 /* destructive: a red label on the usual outline; the red border appears once it is armed (ConfirmButton) */
 .btn.danger {
 	color: var(--danger);
 }
-.btn.danger:hover:not(:disabled) {
-	background: var(--danger-soft);
+@media (hover: hover) {
+	.btn.danger:hover:not(:disabled) {
+		background: var(--danger-soft);
+	}
 }
 .btn.ghost {
 	background: transparent;
@@ -515,19 +523,25 @@ input[type="range"]:focus-visible {
 	border: 1px dashed var(--border-strong);
 	color: var(--text-dim);
 }
-.btn.dashed:hover:not(:disabled) {
-	background: var(--bg-hover);
-	color: var(--text);
+@media (hover: hover) {
+	.btn.dashed:hover:not(:disabled) {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
 }
-.btn.ghost:hover:not(:disabled) {
-	background: var(--bg-hover);
+@media (hover: hover) {
+	.btn.ghost:hover:not(:disabled) {
+		background: var(--bg-hover);
+	}
 }
 /* A ghost button for a destructive action: red text, red wash on hover. */
 .btn.danger-text {
 	color: var(--danger);
 }
-.btn.danger-text:hover:not(:disabled) {
-	background: var(--danger-soft);
+@media (hover: hover) {
+	.btn.danger-text:hover:not(:disabled) {
+		background: var(--danger-soft);
+	}
 }
 
 .iconbtn {
@@ -554,9 +568,11 @@ input[type="range"]:focus-visible {
 	width: 16px;
 	height: 16px;
 }
-.iconbtn:hover:not(:disabled) {
-	background: var(--bg-hover);
-	color: var(--text);
+@media (hover: hover) {
+	.iconbtn:hover:not(:disabled) {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
 }
 .iconbtn:active:not(:disabled) {
 	transform: scale(0.88);
@@ -646,8 +662,10 @@ input[type="checkbox"] {
 		box-shadow var(--motion-fast) var(--ease-std),
 		transform var(--motion-fast) var(--ease);
 }
-input[type="checkbox"]:hover:not(:disabled) {
-	border-color: var(--text-dim);
+@media (hover: hover) {
+	input[type="checkbox"]:hover:not(:disabled) {
+		border-color: var(--text-dim);
+	}
 }
 input[type="checkbox"]:active:not(:disabled) {
 	transform: scale(0.9);
@@ -691,7 +709,7 @@ kbd {
 	background: var(--bg);
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);
-	line-height: 1.5;
+	line-height: 14px; /* whole-pixel cap: 14 + 2 padding + 3 border = 19px, inside a 20px text line (1.5 made it 21.5 and stretched the line) */
 	color: var(--text-dim);
 }
 /* A count in a round badge (folded rows, tab totals): the one shape for a bare number. */
@@ -985,8 +1003,10 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	border-radius: calc(var(--radius-control) - 3px);
 	font-size: var(--fs-md);
 }
-.seg > button:hover:not(:disabled) {
-	color: var(--text);
+@media (hover: hover) {
+	.seg > button:hover:not(:disabled) {
+		color: var(--text);
+	}
 }
 .seg > button.on {
 	color: var(--text);
@@ -1507,8 +1527,10 @@ html.dnd {
 	border-radius: var(--radius-control);
 	transition: background var(--motion-fast) var(--ease-std);
 }
-.wd-video-btn:hover {
-	background: color-mix(in srgb, #fff 20%, transparent);
+@media (hover: hover) {
+	.wd-video-btn:hover {
+		background: color-mix(in srgb, #fff 20%, transparent);
+	}
 }
 .wd-video-speed {
 	width: auto;

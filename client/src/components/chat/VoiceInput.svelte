@@ -89,9 +89,11 @@
 		width: 19px;
 		height: 19px;
 	}
-	.mic:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.mic:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.mic.rec {
 		color: var(--danger);

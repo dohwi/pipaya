@@ -189,9 +189,11 @@
 		border-radius: 50%;
 		color: var(--text-faint);
 	}
-	.x:hover {
-		background: var(--bg-active);
-		color: var(--text);
+	@media (hover: hover) {
+		.x:hover {
+			background: var(--bg-active);
+			color: var(--text);
+		}
 	}
 	.x :global(svg),
 	.sw :global(svg),

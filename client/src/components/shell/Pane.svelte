@@ -394,9 +394,11 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
-	.x:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.x:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.x :global(svg) {
 		width: 14px;

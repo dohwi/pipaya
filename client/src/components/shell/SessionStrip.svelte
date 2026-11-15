@@ -120,9 +120,11 @@
 		white-space: nowrap;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.gchip:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.gchip:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.gchip.carried {
 		opacity: 0.45;

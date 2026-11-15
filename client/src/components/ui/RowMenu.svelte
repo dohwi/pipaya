@@ -156,9 +156,13 @@
 		color: var(--text);
 		white-space: nowrap;
 	}
-	.mi:hover,
 	.mi:focus-visible {
 		background: var(--bg-hover);
+	}
+	@media (hover: hover) {
+		.mi:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.mi :global(svg) {
 		width: 16px;

@@ -89,7 +89,9 @@
 	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 8px; border-bottom: 1px solid var(--border); }
 	.tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 	.tab { flex: none; max-width: 180px; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); border-radius: var(--radius-sm); }
-	.tab:hover { background: var(--bg-hover); color: var(--text); }
+	@media (hover: hover) {
+		.tab:hover { background: var(--bg-hover); color: var(--text); }
+	}
 	.tab.on { background: var(--bg-active); color: var(--text); }
 	.body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
 	.desc { margin: 0 0 12px; font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6; overflow-wrap: anywhere; }

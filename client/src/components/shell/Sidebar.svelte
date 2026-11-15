@@ -584,9 +584,11 @@
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.navbtn:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.navbtn:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.salert {
 		margin-left: auto;

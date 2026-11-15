@@ -118,10 +118,15 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.cell:hover,
 	.cell:focus-visible {
 		background: var(--bg-hover);
 		color: var(--text);
+	}
+	@media (hover: hover) {
+		.cell:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.cell[aria-pressed="true"] {
 		border-color: var(--accent, var(--text));

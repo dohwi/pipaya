@@ -441,9 +441,11 @@
 			color var(--motion-fast) var(--ease-std),
 			scale var(--motion-fast) var(--ease);
 	}
-	.jump:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.jump:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.jump:active {
 		scale: 0.9;

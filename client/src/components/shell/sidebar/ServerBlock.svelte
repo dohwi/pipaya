@@ -122,8 +122,10 @@
 	.srv:has(> .srvhead:last-child) {
 		padding-bottom: 0; /* folded: the header is the whole card, no band strip under it */
 	}
-	.srvhead:hover {
-		background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
+	@media (hover: hover) {
+		.srvhead:hover {
+			background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
+		}
 	}
 	/* pressing the name or the "+" darkens the whole strip one more step; the global row tint (a lighter square inside the strip) is switched off here */
 	.srvhead:has(.srvtoggle:active),
@@ -133,9 +135,13 @@
 	.srvhead .srvtoggle:active:not(:disabled) {
 		background-color: transparent;
 	}
-	:global(:where(.side) .srvhead .dirnew:hover),
 	:global(:where(.side) .srvhead .dirnew.on) {
 		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+	}
+	@media (hover: hover) {
+		:global(:where(.side) .srvhead .dirnew:hover) {
+			background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+		}
 	}
 	.srvtoggle {
 		flex: 1;
@@ -196,6 +202,7 @@
 	.nosess {
 		padding: 4px 8px 4px 48px;
 		font-size: var(--fs-xs);
+		line-height: 20px; /* whole-pixel row (the body's 1.55 gave 26.59 and a 68.59px server card) */
 		color: var(--text-faint);
 	}
 	.skrow {

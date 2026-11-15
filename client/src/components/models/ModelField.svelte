@@ -115,8 +115,10 @@
 		font-size: var(--fs-md);
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
-	.trigger.field:hover:not(:disabled) {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.trigger.field:hover:not(:disabled) {
+			background: var(--bg-hover);
+		}
 	}
 	.trigger.inline {
 		gap: 4px;
@@ -129,9 +131,11 @@
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	.trigger.inline:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.trigger.inline:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.trigger:disabled {
 		opacity: 0.5;

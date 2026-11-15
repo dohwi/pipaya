@@ -315,8 +315,10 @@
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
 	}
-	button.trigger:hover:not(:disabled) {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		button.trigger:hover:not(:disabled) {
+			background: var(--bg-hover);
+		}
 	}
 	.trigger:focus-visible,
 	.trigger:focus-within,

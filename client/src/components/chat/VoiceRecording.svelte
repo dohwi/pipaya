@@ -257,17 +257,21 @@
 		color: var(--text-dim);
 		background: transparent;
 	}
-	.cancel:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.cancel:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	/* The finish button: the send button's twin in size (38px round) but a tint, not the accent slab, so "this is the answer" reads the same */
 	.done {
 		background: var(--accent-soft);
 		color: var(--text);
 	}
-	.done:hover {
-		background: var(--bg-active);
+	@media (hover: hover) {
+		.done:hover {
+			background: var(--bg-active);
+		}
 	}
 	.cancel :global(svg),
 	.done :global(svg) {

@@ -73,7 +73,9 @@
 	button.tok {
 		cursor: pointer;
 	}
-	button.tok:hover {
-		background: color-mix(in srgb, var(--hue) 22%, transparent);
+	@media (hover: hover) {
+		button.tok:hover {
+			background: color-mix(in srgb, var(--hue) 22%, transparent);
+		}
 	}
 </style>

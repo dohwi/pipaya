@@ -131,8 +131,10 @@
 	button.src {
 		cursor: pointer;
 	}
-	button.src:hover:not(:disabled) {
-		color: var(--text-dim);
+	@media (hover: hover) {
+		button.src:hover:not(:disabled) {
+			color: var(--text-dim);
+		}
 	}
 	button.src:disabled {
 		cursor: default;

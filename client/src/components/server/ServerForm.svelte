@@ -296,9 +296,11 @@
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 	}
-	.back:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.back:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.back :global(svg) {
 		width: 18px;
@@ -347,8 +349,10 @@
 		font-size: var(--fs-sm);
 		font-weight: 550;
 	}
-	.tabs button:hover {
-		color: var(--text);
+	@media (hover: hover) {
+		.tabs button:hover {
+			color: var(--text);
+		}
 	}
 	.tabs button.on {
 		color: var(--text);

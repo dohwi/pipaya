@@ -105,8 +105,10 @@
 		text-underline-offset: 3px;
 		cursor: pointer;
 	}
-	.act:hover:not(:disabled) {
-		color: color-mix(in srgb, var(--tone) 75%, var(--text));
+	@media (hover: hover) {
+		.act:hover:not(:disabled) {
+			color: color-mix(in srgb, var(--tone) 75%, var(--text));
+		}
 	}
 	.act:disabled {
 		opacity: 0.6;
