@@ -121,7 +121,9 @@ def main():
         ready = json.loads(line[6:])
         # server
         sport = free_port()
-        server_env = {"PIPAYA_HOST": "127.0.0.1", "PIPAYA_PORT": str(sport), "PIPAYA_DATA_DIR": str(data), "PIPAYA_PUSH_FCM": "0", "PIPAYA_LOG_LEVEL": "warn"}
+        # PIPAYA_SELF_UPDATE=0: a CI runner looks supervised (INVOCATION_ID) and a pushed main is ahead of the release tag, so the
+        # server offers itself an update; the settings button then reads "설정 서버 업데이트 있음" and the exact name lookup fails.
+        server_env = {"PIPAYA_HOST": "127.0.0.1", "PIPAYA_PORT": str(sport), "PIPAYA_DATA_DIR": str(data), "PIPAYA_PUSH_FCM": "0", "PIPAYA_LOG_LEVEL": "warn", "PIPAYA_SELF_UPDATE": "0"}
         for k in ("PIPAYA_TOKEN", "PIPAYA_WORKSPACE", "PIPAYA_DB", "PIPAYA_PROVIDER", "PIPAYA_MODEL", "PIPAYA_RESTRICT_WORKSPACE"):
             server_env[k] = None  # the developer's own settings must not leak into the run
         srv = spawn(["bun", "src/index.ts"], ROOT / "server", env=server_env, log=log)
