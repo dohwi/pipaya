@@ -20,7 +20,38 @@
 	const viewH = () => window.visualViewport?.height ?? window.innerHeight;
 	let vh = $state(viewH());
 	const rows = $derived(vh < 500 ? 1 : vh < 680 ? 2 : 3); // whole rows; a half row follows
-	const listH = $derived(rows * ROW + (rows - 1) * GAP + GAP + ROW / 2);
+	const baseH = $derived(rows * ROW + (rows - 1) * GAP + GAP + ROW / 2);
+	// The grip on top pulls the list taller (never shorter than the default), up to every row or half the viewport.
+	const contentH = $derived(queued.length * ROW + Math.max(0, queued.length - 1) * GAP);
+	const maxH = $derived(Math.max(baseH, Math.min(contentH, Math.round(vh / 2))));
+	const canGrow = $derived(contentH > baseH);
+	let userH = $state<number | null>(null);
+	const listH = $derived(userH === null ? baseH : Math.min(maxH, Math.max(baseH, userH)));
+	let resize: { y: number; h: number } | null = null;
+	function onGripDown(e: PointerEvent) {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		resize = { y: e.clientY, h: listH };
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function onGripMove(e: PointerEvent) {
+		if (!resize) return;
+		// The composer is anchored at the bottom, so pulling up (smaller clientY) makes the list taller.
+		const h = Math.min(maxH, Math.max(baseH, resize.h + resize.y - e.clientY));
+		userH = h <= baseH ? null : h;
+	}
+	function onGripUp(e: PointerEvent) {
+		const el = e.currentTarget as HTMLElement;
+		if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+		resize = null;
+	}
+	function onGripKey(e: KeyboardEvent) {
+		const step = e.key === "ArrowUp" ? ROW + GAP : e.key === "ArrowDown" ? -(ROW + GAP) : 0;
+		if (!step) return;
+		e.preventDefault();
+		const h = Math.min(maxH, Math.max(baseH, listH + step));
+		userH = h <= baseH ? null : h;
+	}
 	$effect(() => {
 		const sync = () => (vh = viewH());
 		window.addEventListener("resize", sync);
@@ -84,7 +115,13 @@
 </script>
 
 <div class="queued-wrap">
-{#if thumb}
+{#if canGrow}
+	<!-- A window splitter (WAI-ARIA): focusable, with value attributes; ↑/↓ resize like the drag. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+	<div class="grip" role="separator" aria-orientation="horizontal" tabindex="0" aria-label={t("대기열 높이 조절")} aria-valuemin={baseH} aria-valuemax={maxH} aria-valuenow={listH} title={t("끌어서 높이 조절 · 더블 클릭으로 원래 크기")}
+		onpointerdown={onGripDown} onpointermove={onGripMove} onpointerup={onGripUp} onpointercancel={onGripUp} ondblclick={() => (userH = null)} onkeydown={onGripKey}></div>
+{/if}
+{#if thumb || canGrow}
 	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: queued.length })}>
 		{#if steerN}<span class="c {queuedTone("steer")}" title={queuedLabel({ mode: "steer", text: "", n: steerN })}><Icon name="bolt" />{steerN}</span>{/if}
 		{#if followN}<span class="c {queuedTone("follow_up")}" title={queuedLabel({ mode: "follow_up", text: "", n: followN })}><Icon name="list" />{followN}</span>{/if}
@@ -113,6 +150,37 @@
 	.queued-wrap {
 		position: relative;
 		padding: 12px 16px 0;
+	}
+	/* Pull handle in the wrap's 12px top padding: a 32x4 bar 4px below the box edge, centred over the summary line.
+	   The hit area (64x16) reaches 4px into that line, which is not clickable, so touch gets a fair target. */
+	.grip {
+		position: absolute;
+		top: 0;
+		inset-inline: 0;
+		margin-inline: auto;
+		width: 64px;
+		height: 16px;
+		cursor: row-resize;
+		touch-action: none;
+		z-index: 1; /* above the summary line it overlaps */
+		border-radius: var(--radius-xs);
+	}
+	.grip::before {
+		content: "";
+		position: absolute;
+		top: 4px;
+		inset-inline: 0;
+		margin-inline: auto;
+		width: 32px;
+		height: 4px;
+		border-radius: 2px;
+		background: var(--text-faint);
+		opacity: 0.5;
+	}
+	.grip:hover::before,
+	.grip:active::before,
+	.grip:focus-visible::before {
+		opacity: 1;
 	}
 	/* Shown only while the list scrolls: per-mode totals. Centred over the list, so it reads as a summary of it
 	   rather than as a column that has to line up with the badges. */
@@ -162,7 +230,7 @@
 		   the visible x axis into auto too and a horizontal scrollbar appears: pad 4px inside, pull 4px back out. */
 		margin: 0 -4px 0 0;
 		padding: 0 4px 0 0;
-		/* max-height comes from the script (1.5, 2.5 or 3.5 rows, by the room left). */
+		/* max-height comes from the script (1.5, 2.5 or 3.5 rows by the room left, or what the grip pulled it to). */
 		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
