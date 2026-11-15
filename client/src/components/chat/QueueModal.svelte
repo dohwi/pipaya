@@ -111,8 +111,10 @@
 
 <!-- One dialog for both views, so switching between them does not animate a second panel in. In the detail, Esc and the
      back arrow return to the list and the ✕ closes the dialog. -->
-<!-- The detail takes the full header (its back arrow and the copy button sit on the body's 24px gutter); the list keeps the compact one. -->
-<Modal onclose={close} onescape={detail ? back : undefined} onback={detail ? back : undefined} title={view && detail ? `${view.mode === "steer" ? t("끼워 넣기") : t("대기열")} ${view.n}` : t("대기열 관리")} compact={!detail} headerActions={view && detail ? copyAction : undefined} width="m" maxHeight="560px" layer={4} elevated portal safeArea>
+<!-- The detail takes the full header (its back arrow and the copy button sit on the body's 24px gutter); the list keeps the compact one.
+     Both views are as wide and tall as the other reading dialogs (WorkBox, SessionContext) so a long message is not a narrow
+     column, and opening a row does not resize the dialog. -->
+<Modal onclose={close} onescape={detail ? back : undefined} onback={detail ? back : undefined} title={view && detail ? `${view.mode === "steer" ? t("끼워 넣기") : t("대기열")} ${view.n}` : t("대기열 관리")} compact={!detail} headerActions={view && detail ? copyAction : undefined} width="xl" maxHeight="760px" layer={4} elevated portal safeArea>
 	{#if view && detail}
 		<DialogBody>
 			<p class="when">
