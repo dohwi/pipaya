@@ -21,11 +21,26 @@
 	let vh = $state(viewH());
 	const rows = $derived(vh < 500 ? 1 : vh < 680 ? 2 : 3); // whole rows; a half row follows
 	const baseH = $derived(rows * ROW + (rows - 1) * GAP + GAP + ROW / 2);
-	// The grip on top pulls the list taller (never shorter than the default), up to every row or half the viewport.
+	// The grip on top pulls the list taller (never shorter than the default), up to every row or 40% of the pane the
+	// composer sits in: a split pane or a short window keeps its header, some conversation and the input in view.
+	let wrap = $state<HTMLDivElement>();
+	let paneH = $state(0);
+	$effect(() => {
+		const pane = wrap?.closest<HTMLElement>('[data-part="pane"]');
+		if (!pane) return;
+		const ro = new ResizeObserver(() => (paneH = pane.clientHeight));
+		ro.observe(pane);
+		return () => ro.disconnect();
+	});
 	const contentH = $derived(queued.length * ROW + Math.max(0, queued.length - 1) * GAP);
-	const maxH = $derived(Math.max(baseH, Math.min(contentH, Math.round(vh / 2))));
+	const maxH = $derived(Math.max(baseH, Math.min(contentH, Math.round((paneH || vh) * 0.4))));
 	const canGrow = $derived(contentH > baseH);
 	let userH = $state<number | null>(null);
+	// Once the queue fits again (rows sent or cancelled) the grip goes away and the pulled height is forgotten,
+	// so the next long queue starts at the default size.
+	$effect(() => {
+		if (!canGrow) userH = null;
+	});
 	const listH = $derived(userH === null ? baseH : Math.min(maxH, Math.max(baseH, userH)));
 	let resize: { y: number; h: number } | null = null;
 	function onGripDown(e: PointerEvent) {
@@ -114,7 +129,7 @@
 	}
 </script>
 
-<div class="queued-wrap">
+<div class="queued-wrap" bind:this={wrap}>
 {#if canGrow}
 	<!-- A window splitter (WAI-ARIA): focusable, with value attributes; ↑/↓ resize like the drag. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
