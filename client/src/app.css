@@ -217,9 +217,10 @@
 	--lv-high: #f472b6;
 	--lv-xhigh: #fb923c;
 	--lv-max: #f87171;
-	/* mention marks (composer and sent messages): #image (violet), #file (mint), @member (amber, the agent-to-agent hue of --mark-header) */
-	--mark-img: #c4b5fd;
-	--mark-file: #86efac;
+	/* mention marks (composer and sent messages): @member amber (the agent-to-agent hue of --mark-header) is the one accent;
+	   #image and #file are a neutral grey so a tagged message stays calm */
+	--mark-img: #a1a1aa;
+	--mark-file: #a1a1aa;
 	--mark-header: #fcd34d;
 	--mark-mention: #fcd34d;
 	--info: #5aa9ff;
@@ -279,8 +280,8 @@
 	--lv-high: #db2777;
 	--lv-xhigh: #ea580c;
 	--lv-max: #dc2626;
-	--mark-img: #8b5cf6;
-	--mark-file: #10b981;
+	--mark-img: #71717a;
+	--mark-file: #71717a;
 	--mark-header: #b45309; /* amber-700: the peer header label and tint on light surfaces (dark uses #fcd34d) */
 	--mark-mention: #b45309;
 	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set
