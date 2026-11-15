@@ -1,0 +1,86 @@
+<script lang="ts">
+	import Icon from "../ui/Icon.svelte";
+	import { parsePeer } from "../../lib/peers";
+	import { extensions } from "../../lib/extensions/host.svelte";
+
+	/**
+	 * A waiting message's text, the way its bubble will read: a message from another session (or a server report, or a
+	 * header an extension recognises) shows its sender as a small amber label instead of the raw `[from @name, …]` line.
+	 *
+	 *  full  the whole text under the label (queue dialog detail); otherwise one cut line beside it (lists)
+	 */
+	let { text, full = false }: { text: string; full?: boolean } = $props();
+	const head = $derived(parsePeer(text) ?? extensions.headerOf(text));
+	const body = $derived(head ? head.body : text);
+	const server = $derived(!!head && "server" in head && !!head.server);
+</script>
+
+{#if full}
+	{#if head}<p class="from"><Icon name={server ? "server" : "chat"} /><span>{head.from}</span></p>{/if}
+	<p class="full">{body}</p>
+{:else}
+	<span class="line">
+		{#if head}<span class="from" title={head.from}><Icon name={server ? "server" : "chat"} /><span class="who">{head.from}</span></span>{/if}
+		<span class="qt">{body}</span>
+	</span>
+{/if}
+
+<style>
+	.line {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	/* The sender in the bubble's peer colour, so a queued peer message reads like the bubble it becomes. */
+	.from {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: none;
+		max-width: 40%;
+		margin: 0;
+		font-weight: 600;
+		color: var(--mark-header);
+	}
+	.from :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 2;
+	}
+	.who {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.qt {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* Detail view: the label on its own line above the whole text, like the bubble header. */
+	p.from {
+		display: flex;
+		max-width: none;
+		margin: 0 0 4px;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
+	p.from :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.8;
+	}
+	/* The whole message as it will be sent: line breaks kept, long words and paths wrapped instead of widening the dialog. */
+	.full {
+		margin: 0;
+		font-size: var(--fs-md);
+		line-height: 20px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		user-select: text;
+	}
+</style>

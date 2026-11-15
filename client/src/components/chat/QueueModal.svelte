@@ -3,6 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import QueueBadge from "./QueueBadge.svelte";
+	import QueueText from "./QueueText.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Button from "../ui/Button.svelte";
 	import IconButton from "../ui/IconButton.svelte";
@@ -118,7 +119,7 @@
 				<QueueBadge q={view} />
 				<span>{view.mode === "steer" ? t("지금 답변 중에 전달") : t("현재 작업이 모두 끝난 뒤 실행")}</span>
 			</p>
-			<p class="full">{view.text}</p>
+			<QueueText text={view.text} full />
 		</DialogBody>
 		<DialogFooter rule>
 			{#if shown}
@@ -144,7 +145,7 @@
 					onclick={() => open(i)}
 				>
 					<QueueBadge {q} />
-					<span class="qt">{q.text}</span>
+					<QueueText text={q.text} />
 					<button type="button" class="rm" tabindex="-1" aria-label={t("{name} 취소", { name: q.text })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
 				</li>
 			{:else}
@@ -207,13 +208,6 @@
 		width: 16px;
 		height: 16px;
 	}
-	.qt {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
 	.empty {
 		color: var(--text-faint);
 		justify-content: center;
@@ -226,15 +220,6 @@
 		font-size: var(--fs-xs);
 		line-height: 20px;
 		color: var(--text-faint);
-	}
-	/* The whole message as it will be sent: line breaks kept, long words and paths wrapped instead of widening the dialog. */
-	.full {
-		margin: 0;
-		font-size: var(--fs-md);
-		line-height: 20px;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		user-select: text;
 	}
 	.gone {
 		font-size: var(--fs-sm);
