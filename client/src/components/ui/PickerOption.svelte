@@ -94,14 +94,17 @@
 		flex: 1;
 		min-width: 0;
 	}
+	/* whole-pixel lines (rule 3): the body's 1.55 left every row 21.69px and the sheet off its whole-pixel centre */
 	.name {
 		font-size: var(--fs-md);
+		line-height: 20px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.meta {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;

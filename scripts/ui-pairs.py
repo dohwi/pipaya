@@ -12,9 +12,9 @@ Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair).
 Reading the result: 0.5px is the physical half-pixel limit and is fine; from 1px on it is a bug. Two kinds of
 label are reported separately because their ink has no height of its own ("light glyph", ink under 55% of the
 font size: "..", an em dash, a lone "."): their box can be centred while the painted dots sit low. The status
-line is the other known exception: its 11px value sits -1.5 to +2.5px off its 13px mark depending on the
-string, and no single nudge fixes all of them (measured: lifting the mark 1px fixes "0개" and pushes the em
-dash to +3.0), see docs/design-system.md. A two-line block (label + sub label) is skipped: the icon centres
+line used to be the other exception (13px marks on a 16px line sat on a half pixel); with even 12 / 10px marks it is
+measured like any other row. Ink is the rows that reach half of the crop's peak contrast, so the page's faint background
+grid does not count as part of a glyph. A two-line block (label + sub label) is skipped: the icon centres
 the block, not either line.
 """
 import argparse, io, json, pathlib, subprocess, sys
@@ -83,17 +83,31 @@ FIND = r"""() => {
     const rr = host.getBoundingClientRect();
     if (rr.width < 16 || rr.height < 8 || rr.height > 90 || rr.width > 1400) continue;
     if (rr.bottom < 1 || rr.top > innerHeight-1) continue;
+    // only what is on top: a row under an open dialog or sheet (the composer's path chip behind the folder picker) is painted
+    // over, so its pixels are the dialog's. Asked at the icon's centre: the topmost element there must be the icon or inside the host.
     const icon = iconOf(host);
     if (!icon) continue;
     const ir = icon.getBoundingClientRect();
     if (ir.width < 5 || ir.height < 5) continue;
+    { const hit = document.elementFromPoint(ir.left + ir.width/2, ir.top + ir.height/2);
+      if (!hit || !(host.contains(hit) || hit === host)) continue; }
     // A direct text child beside the icon only: a two-line block (label + sub label) or a second word in the
     // same row is a different shape, and comparing it with the icon would report a 10px "error" that is by design.
-    for (const c of host.children) {
+    for (const c0 of host.children) {
+      const cs0 = getComputedStyle(c0);
+      if (cs0.visibility==='hidden' || cs0.display==='none' || +cs0.opacity===0) continue;
+      if (c0 === icon || icon.contains(c0)) continue;
+      // only the label that stands right after the icon: a trailing unit ("tps" after the value) is not beside the glyph
+      if (c0.previousElementSibling && c0.previousElementSibling !== icon && !c0.previousElementSibling.contains(icon)) continue;
+      // a one-line flex wrapper around the label (settings nav: icon + <span class=nt><span class=nl>…</span> badge</span>):
+      // compare its first text child, which is what sits beside the icon
+      let c = c0;
+      if (/flex|grid/.test(cs0.display)) {
+        if (cs0.flexDirection.startsWith('column')) continue;
+        c = [...c0.children].find((k) => (k.innerText||'').trim() && !/flex|grid/.test(getComputedStyle(k).display));
+        if (!c) continue;
+      }
       const cs = getComputedStyle(c);
-      if (cs.visibility==='hidden' || cs.display==='none' || +cs.opacity===0) continue;
-      if (c === icon || icon.contains(c)) continue;
-      if (/flex|grid/.test(cs.display)) continue;
       if (['BUTTON','INPUT','TEXTAREA','SELECT'].includes(c.tagName)) continue;
       const t = (c.innerText||'').trim(); if (!t) continue;
       const r = c.getBoundingClientRect();
@@ -103,15 +117,25 @@ FIND = r"""() => {
       if (Math.abs((r.top+r.height/2)-(ir.top+ir.height/2)) > 14) continue;
       const gapX = Math.max(r.left - ir.right, ir.left - r.right);
       if (gapX > 16) continue;
+      // the label's cap-height centre from the font's own metrics: string-independent, unlike the ink ("beta" has no descender,
+      // "alpha" has one, and their ink centres differ by 1px in the same row)
+      const cv = (window.__pairsCv ||= document.createElement('canvas').getContext('2d'));
+      cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const fm = cv.measureText('Hg'), hm = cv.measureText('H');
+      const lhpx = cs.lineHeight==='normal' ? fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent : parseFloat(cs.lineHeight);
+      const lineTop = r.top + (r.height - lhpx) / 2;
+      const base = lineTop + (lhpx - (fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent)) / 2 + fm.fontBoundingBoxAscent;
+      const capC = base - hm.actualBoundingBoxAscent / 2;
       out.push({i: n++, inStatus: !!host.closest('.statusline'), host: describe(host), icon: describe(icon), cls: describe(c),
         text: t.replace(/\s+/g,' ').slice(0,30), fs: cs.fontSize, lh: cs.lineHeight,
-        irect: R(icon), trect: R(c), hostrect: R(host)});
+        irect: R(icon), trect: R(c), hostrect: R(host), capC});
     }
   }
   return out;
 }"""
 
 def ink(shot, rect, ylim, tol=36):
+    """Painted top-to-bottom extent of a glyph run (its centre is what the eye pairs with the icon's)."""
     x = int(round(rect["x"]*DSF)); w = int(round(rect["w"]*DSF))
     x0, x1 = max(0,x), min(shot.width, x+w)
     y0 = max(0, int(round(max(rect["y"]-3, ylim[0])*DSF)))
@@ -119,11 +143,18 @@ def ink(shot, rect, ylim, tol=36):
     if x1-x0 < 2 or y1-y0 < 2: return None
     sub = shot.crop((x0,y0,x1,y1)).convert("RGB"); px = sub.load(); W,H = sub.size
     bg = Counter([px[0,0],px[W-1,0],px[0,H-1],px[W-1,H-1]]).most_common(1)[0][0]
-    ys = [yy for yy in range(H) for xx in range(W)
-          if abs(px[xx,yy][0]-bg[0])+abs(px[xx,yy][1]-bg[1])+abs(px[xx,yy][2]-bg[2]) > tol]
+    # a pixel counts as ink when it reaches half of the crop's peak contrast: the faint lines of the page's background grid
+    # and the outer anti-aliasing (both under that) no longer stretch a glyph's box by a pixel or two
+    d = [[abs(px[xx,yy][0]-bg[0])+abs(px[xx,yy][1]-bg[1])+abs(px[xx,yy][2]-bg[2]) for xx in range(W)] for yy in range(H)]
+    peak = max(max(r) for r in d)
+    if peak <= tol: return None
+    cut = max(tol, peak * 0.5)
+    count = [sum(v >= cut for v in r) for r in d]
+    ys = [yy for yy in range(H) if count[yy]]
     if not ys: return None
+    edge = min(ys) <= 1 or max(ys) >= H-2
     top = y0/DSF + min(ys)/DSF; bot = y0/DSF + (max(ys)+1)/DSF
-    return {"centre": (top+bot)/2, "h": bot-top, "edge": min(ys) <= 1 or max(ys) >= H-2}
+    return {"centre": (top+bot)/2, "h": bot-top, "edge": edge}
 
 def shoot(pg, name, clicks, narrow):
     pg.goto(url, wait_until="networkidle"); pg.wait_for_timeout(1400)
@@ -145,7 +176,10 @@ def shoot(pg, name, clicks, narrow):
         ii = ink(shot, r["irect"], ylim); ti = ink(shot, r["trect"], ylim)
         if not ii or not ti: continue
         lh = float(r["lh"].replace("px","")) if r["lh"].endswith("px") else None
-        res.append({**r, "dy": round(ti["centre"]-ii["centre"], 2),
+        # the smaller of two readings: the painted ink, and the font's cap-height centre. A real offset moves both; a string
+        # without descenders (or with tall ones) moves only the ink, so it is not reported as a layout bug
+        d_ink = ti["centre"] - ii["centre"]; d_cap = r["capC"] - ii["centre"]
+        res.append({**r, "dy": round(d_ink if abs(d_ink) <= abs(d_cap) else d_cap, 2), "dyInk": round(d_ink, 2), "dyCap": round(d_cap, 2),
                     "iconInkH": round(ii["h"],2), "textInkH": round(ti["h"],2),
                     "edge": bool(ii["edge"] or ti["edge"]),
                     "fracLine": bool(lh and abs(lh-round(lh)) > 0.01)})
@@ -170,18 +204,18 @@ with sync_playwright() as p:
             def light(r):
                 return r["textInkH"] < float(r["fs"].replace("px", "")) * 0.55
             off = [r for r in rows if abs(r["dy"]) >= 1.0 and not r["edge"]]
-            bad = [r for r in off if not light(r) and not r["inStatus"]]
+            bad = [r for r in off if not light(r)]
             faint = [r for r in off if light(r)]
-            known = [r for r in off if r["inStatus"]]
             frac = [r for r in rows if r["fracLine"]]
             problems += len(bad)
-            print(f"{size} {name}: {len(rows)} pairs, {len(bad)} off, {len(faint)} light-glyph, {len(known)} status line, {len(frac)} fractional line box")
+            print(f"{size} {name}: {len(rows)} pairs, {len(bad)} off, {len(faint)} light-glyph, {len(frac)} fractional line box")
             for r in sorted(off, key=lambda r: -abs(r["dy"])):
-                kind = "status line" if r["inStatus"] else ("light glyph" if light(r) else "OFF")
+                kind = "light glyph" if light(r) else "OFF"
                 print(f'   {r["dy"]:+6.2f}  [{kind:11}] {r["host"][:18]:18} | {r["text"][:22]:22} | {r["fs"]}/{r["lh"]} ink{r["textInkH"]:.1f}')
         ctx.close()
     b.close()
 
 if a.json:
     pathlib.Path(a.json).write_text(json.dumps(allres, ensure_ascii=False, indent=1))
-print(f"done: {problems} pair(s) 1px or more off (the status line is the known exception, see the docstring)")
+print(f"done: {problems} pair(s) 1px or more off")
+sys.exit(1 if problems else 0)
