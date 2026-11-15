@@ -36,6 +36,7 @@ import type { PairingLink } from "./pairing";
 import { CloseGuard } from "./close-guard.svelte";
 import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
+import { queuedShown } from "./queue";
 import { fetchLocalePacks } from "./locale-sync";
 import { groupNameFor } from "./group-name";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
@@ -1997,8 +1998,8 @@ class AppStore {
         if (i >= 0) chat.queued.splice(i, 1);
         this.toast(t("이미 전달되어 취소할 수 없습니다"), "error", chat.id);
       } else if (chat.id === this.activeId) {
-        // Cancelled in time: hand the text back to the input so it can be edited or re-sent.
-        this.prefill = item.text;
+        // Cancelled in time: hand the text back to the input so it can be edited or re-sent (without the server's hint blocks).
+        this.prefill = queuedShown(item.text);
       }
     } catch (e) {
       if ((e as { code?: string })?.code === "not_found") {
