@@ -48,17 +48,17 @@ out.mkdir(parents=True, exist_ok=True)
 SCREENS = [
     ("main", []),
     ("main-context", [".statusline .b >> nth=0"]),
-    ("settings-general", ["button.settings"]),
+    ("settings-general", ["button.settings", '.nav button:has-text("내 설정")']),
     ("settings-keys", ["button.settings", '.nav button:has-text("단축키")']),
-    ("settings-extensions", ["button.settings", '.nav button:has-text("클라이언트 확장")']),
     ("settings-backup", ["button.settings", '.nav button:has-text("백업")']),
-    ("srv-info", ["button.settings", ".srvbar .fchip >> nth=1"]),
-    ("srv-models", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("모델")']),
-    ("srv-agent", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("에이전트")']),
-    ("srv-mcp", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("MCP")']),
-    ("srv-sessions", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("대화")']),
-    ("srv-ext", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("서버 확장")']),
-    ("srv-devices", ["button.settings", ".srvbar .fchip >> nth=1", 'button[role="tab"]:has-text("기기")']),
+    # the server's panes sit in the same settings nav (srvtab), under the server's name
+    ("srv-info", ["button.settings", '.nav button.srvtab:has-text("정보")']),
+    ("srv-models", ["button.settings", '.nav button.srvtab:has-text("모델")']),
+    ("srv-agent", ["button.settings", '.nav button.srvtab:has-text("에이전트 도구")']),
+    ("srv-mcp", ["button.settings", '.nav button.srvtab:has-text("MCP")']),
+    ("srv-sessions", ["button.settings", '.nav button.srvtab:has-text("대화")']),
+    ("srv-ext", ["button.settings", '.nav button.srvtab:has-text("확장")']),
+    ("srv-devices", ["button.settings", '.nav button.srvtab:has-text("기기")']),
     ("sessions-panel", [".listbtn"]),
     ("dir-picker", [".where"]),
     ("model-picker", [".trigger.inline"]),
@@ -127,7 +127,7 @@ def ink(shot, rect, ylim, tol=36):
 
 def shoot(pg, name, clicks, narrow):
     pg.goto(url, wait_until="networkidle"); pg.wait_for_timeout(1400)
-    if narrow:
+    if narrow and clicks and not clicks[0].startswith((".statusline", ".where", ".trigger")):
         pg.locator("button.tool.menu").first.click(force=True, timeout=8000); pg.wait_for_timeout(700)
     for c in clicks:
         if '>> nth=' in c:

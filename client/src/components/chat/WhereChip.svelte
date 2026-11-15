@@ -27,6 +27,7 @@
 		margin: 0 0 8px 0; /* aligned with the composer box's left edge */
 		padding: 0 8px 0 8px;
 		font-size: var(--fs-xs);
+		line-height: 16px; /* whole-pixel label beside the folder glyph (rule 3) */
 		color: var(--text-dim);
 		background: var(--bg-elev);
 		border: 1px solid var(--border);

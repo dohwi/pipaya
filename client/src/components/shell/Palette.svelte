@@ -227,7 +227,7 @@
 	}
 	.list {
 		overflow-y: auto;
-		padding: 0 8px 8px;
+		padding: 8px; /* the same 8px above the first row as below the last: the highlighted first row no longer touches the rule */
 		border-top: 1px solid var(--border);
 		min-height: 60px;
 	}
@@ -289,14 +289,17 @@
 		flex-direction: column;
 		gap: 1px;
 	}
+	/* whole-pixel lines: 20 + 1 + 16 + the row's 16px padding = 53px rows (the body's 1.55 gave 55.73) */
 	.t {
 		font-size: var(--fs-md);
+		line-height: 20px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.s {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;
