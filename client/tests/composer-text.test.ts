@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, splitMentions } from "../src/lib/composer-text";
+import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, splitTokens } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -46,14 +46,19 @@ describe("knownMention", () => {
 	});
 });
 
-describe("splitMentions", () => {
+describe("splitTokens", () => {
+	const known = { names: ["미나", "철수", "mina"], images: 2 };
 	test("cuts known @names out of the text, with a particle left as text", () => {
-		expect(splitMentions("@미나랑 @철수 봐 줘", ["미나", "철수"])).toEqual([{ text: "@미나", name: "미나" }, { text: "랑 " }, { text: "@철수", name: "철수" }, { text: " 봐 줘" }]);
+		expect(splitTokens("@미나랑 @철수 봐 줘", known)).toEqual([{ text: "@미나", kind: "mention", name: "미나" }, { text: "랑 " }, { text: "@철수", kind: "mention", name: "철수" }, { text: " 봐 줘" }]);
+		expect(splitTokens("줄\n@Mina", known)).toEqual([{ text: "줄\n" }, { text: "@Mina", kind: "mention", name: "mina" }]);
 	});
-	test("leaves unknown names, e-mail addresses and text without names alone", () => {
-		expect(splitMentions("@누구 a@미나.com", ["미나"])).toEqual([{ text: "@누구 a@미나.com" }]);
-		expect(splitMentions("hello", [])).toEqual([{ text: "hello" }]);
-		expect(splitMentions("줄\n@Mina", ["mina"])).toEqual([{ text: "줄\n" }, { text: "@Mina", name: "mina" }]);
+	test("marks attached images and path-like # tokens, trailing punctuation stays text", () => {
+		expect(splitTokens("#image2 랑 #src/a.ts, 비교", known)).toEqual([{ text: "#image2", kind: "image", name: "2" }, { text: " 랑 " }, { text: "#src/a.ts", kind: "file", name: "src/a.ts" }, { text: ", 비교" }]);
+		expect(splitTokens("#README.md 봐", known)[0]).toEqual({ text: "#README.md", kind: "file", name: "README.md" });
+	});
+	test("leaves unknown names, e-mail addresses, missing images, issue numbers and words alone", () => {
+		for (const t of ["@누구 a@미나.com", "#image3", "PR #96 병합", "#main 브랜치", "hello"]) expect(splitTokens(t, known)).toEqual([{ text: t }]);
+		expect(splitTokens("@미나", { names: [] })).toEqual([{ text: "@미나" }]);
 	});
 });
 

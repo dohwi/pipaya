@@ -57,27 +57,45 @@ export function knownMention(token: string, names: readonly string[]): string | 
 	return best;
 }
 
-/** A run of message text: plain, or an `@name` that names a known session or group (`name` = the known name it matched). */
-export type MentionPart = { text: string; name?: string };
+/** A run of message text: plain, or a token the chat draws as a chip (`@name` of a known session or group, `#imageN`, `#path`). */
+export type TextPart = { text: string; kind?: "mention" | "image" | "file"; name?: string };
+
+/** A `#` token that reads as a file path: has a `/` or ends in an extension (`#src/a.ts`, `#README.md`), not `#96` or `#main`. */
+const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z0-9]{1,8})$/;
 
 /**
- * A sent message cut into plain runs and `@name` mentions, by the same rule as the composer highlight: the token starts
- * the text or follows whitespace, and only a known name counts (`@미나랑` is `@미나` plus "랑"; `a@b.c` is no mention).
+ * A sent message cut into plain runs and the tokens the composer marks, by the same rules: a token starts the text or
+ * follows whitespace; `@name` only for a known name (`@미나랑` is `@미나` plus "랑"; `a@b.c` is no mention), `#imageN` only
+ * for an attached image (1..images), `#path` only when it reads as a path. Trailing punctuation stays text (`#a.ts,`).
  */
-export function splitMentions(text: string, names: readonly string[]): MentionPart[] {
-	if (!names.length || !text.includes("@")) return [{ text }];
-	const out: MentionPart[] = [];
+export function splitTokens(text: string, known: { names: readonly string[]; images?: number }): TextPart[] {
+	if (!/[@#]/.test(text)) return [{ text }];
+	const out: TextPart[] = [];
 	let plain = "";
 	let last = 0;
-	for (const m of text.matchAll(/(^|\s)@([^\s@]+)/g)) {
-		const hit = knownMention(m[2]!, names);
-		if (!hit) continue;
-		const at = m.index! + m[1]!.length;
+	const push = (at: number, part: TextPart) => {
 		plain += text.slice(last, at);
 		if (plain) out.push({ text: plain });
 		plain = "";
-		out.push({ text: `@${m[2]!.slice(0, hit.length)}`, name: hit });
-		last = at + 1 + hit.length;
+		out.push(part);
+		last = at + part.text.length;
+	};
+	for (const m of text.matchAll(/(^|\s)([@#])([^\s@#]+)/g)) {
+		const at = m.index! + m[1]!.length;
+		const body = m[3]!;
+		if (m[2] === "@") {
+			const hit = knownMention(body, known.names);
+			if (hit) push(at, { text: `@${body.slice(0, hit.length)}`, kind: "mention", name: hit });
+			continue;
+		}
+		const img = /^image(\d+)(?![\w./-])/.exec(body);
+		if (img) {
+			const n = Number(img[1]);
+			if (n >= 1 && n <= (known.images ?? 0)) push(at, { text: `#${img[0]}`, kind: "image", name: img[1] });
+			continue;
+		}
+		const path = body.replace(/[.,;:!?)\]}'"]+$/, "");
+		if (FILE_TOKEN.test(path)) push(at, { text: `#${path}`, kind: "file", name: path });
 	}
 	plain += text.slice(last);
 	if (plain) out.push({ text: plain });
