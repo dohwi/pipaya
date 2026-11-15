@@ -767,7 +767,7 @@
 		color: transparent;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
-		border-radius: var(--radius-xs);
+		border-radius: var(--radius-sm); /* the same corners as the sent message's chips (TokenText) */
 	}
 	.mirror :global(mark.img) {
 		background: color-mix(in srgb, var(--mark-img) 32%, transparent);

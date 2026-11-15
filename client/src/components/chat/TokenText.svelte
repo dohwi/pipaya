@@ -37,18 +37,22 @@
 {#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}>{p.text}</button>{:else if p.kind === "mention"}<span class="tok mention">{p.text}</span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" />{p.text.slice(1)}</button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{p.text.slice(1)}</button>{:else if p.kind === "file"}<span class="tok file"><Icon name="file" />{p.text.slice(1)}</span>{:else}{p.text}{/if}{/each}
 
 <style>
-	/* Text-height chips: the hue (app.css --mark-*) tints a light fill; only @names colour their text. */
+	/* Shaped like inline code in a reply (Markdown.svelte): 8px corners, em padding so the chip grows with its text, a hairline
+	   ring. The hue (app.css --mark-*) tints the fill and the ring; only @names colour their text. */
 	.tok {
 		--hue: var(--mark-file);
 		display: inline;
-		padding: 0 4px;
-		border-radius: var(--radius-xs);
-		background: color-mix(in srgb, var(--hue) 14%, transparent);
+		padding: 1px 0.4em; /* em sides scale with the text, like inline code */
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--hue) 12%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent); /* a ring, not a border: the line box stays the text's */
 		color: inherit;
 		font: inherit;
+		font-size: 0.88em; /* inline code's size: the chip (content box + 2px) stays under the 1.55 line, so chips on wrapped lines never touch */
 		overflow-wrap: anywhere;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
+		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.mention {
 		--hue: var(--mark-mention);
@@ -60,16 +64,16 @@
 	}
 	/* The # sigil gives way to a small icon in the text's own colour, dimmed. */
 	.tok :global(svg) {
-		width: 0.9em;
-		height: 0.9em;
-		margin-right: 2px;
-		vertical-align: -0.12em;
+		width: 12px;
+		height: 12px;
+		margin-right: 4px;
+		vertical-align: -1px; /* measured: centres the 12px glyph on the chip text's ink */
 		opacity: 0.7;
 	}
 	button.tok {
 		cursor: pointer;
 	}
 	button.tok:hover {
-		background: color-mix(in srgb, var(--hue) 26%, transparent);
+		background: color-mix(in srgb, var(--hue) 22%, transparent);
 	}
 </style>
