@@ -6,7 +6,6 @@
 	import EmptyState from "../ui/EmptyState.svelte";
 	import ExtrasIntro from "../ui/ExtrasIntro.svelte";
 	import FormField from "../ui/FormField.svelte";
-	import IconButton from "../ui/IconButton.svelte";
 	import ListGroup from "../ui/ListGroup.svelte";
 	import ListItem from "../ui/ListItem.svelte";
 	import Notice from "../ui/Notice.svelte";
@@ -269,7 +268,7 @@
 								{#if result}<Badge size="sm" tone={result.tone}>{result.label}</Badge>{/if}
 							{/snippet}
 							{#snippet actions()}
-								<IconButton icon="send" size="sm" label={t("지금 실행")} tip disabled={busy} onclick={() => runNow(s)} />
+								<Button size="sm" onclick={() => runNow(s)} disabled={busy}>{t("지금 실행")}</Button>
 								<Button size="sm" onclick={() => edit(s)} disabled={busy}>{t("수정")}</Button>
 								<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={busy}>{t("삭제")}</ConfirmButton>
 							{/snippet}
