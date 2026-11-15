@@ -209,8 +209,9 @@
 		height: 16px;
 		stroke-width: 2;
 	}
+	/* 4 + the header's 8px bottom padding = 12 above the first block, matching the 12 at the sides and the bottom */
 	.body {
-		padding: 0 12px 12px;
+		padding: 4px 12px 12px;
 	}
 	/* why it failed, next to "출력", in the failure colour (the pill that used to say it is gone) */
 	.label .why {
@@ -219,6 +220,12 @@
 	}
 	.label {
 		margin: 8px 0 4px;
+	}
+	/* read / ls show only the output: its label opens the body, so no extra gap above it */
+	.label:first-child {
+		margin-top: 0;
+	}
+	.label {
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		letter-spacing: 0.04em;

@@ -36,8 +36,10 @@
 	.hits li:first-child button {
 		border-top: 0;
 	}
-	.hits button:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.hits button:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.ht {
 		font-size: var(--fs-md);

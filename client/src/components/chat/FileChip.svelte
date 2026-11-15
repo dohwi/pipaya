@@ -48,8 +48,10 @@
 	.open:disabled {
 		cursor: default;
 	}
-	.open:hover:not(:disabled) {
-		border-color: var(--border-strong);
+	@media (hover: hover) {
+		.open:hover:not(:disabled) {
+			border-color: var(--border-strong);
+		}
 	}
 	.open img,
 	.ext {

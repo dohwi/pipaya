@@ -35,7 +35,9 @@
 	.rtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.rx { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; padding: 0; color: inherit; }
 	.rx :global(svg) { width: 14px; height: 14px; stroke-width: 2; }
-	.rx:hover { background: var(--accent-soft); color: var(--text); }
+	@media (hover: hover) {
+		.rx:hover { background: var(--accent-soft); color: var(--text); }
+	}
 	@container (max-width: 420px) {
 		.reply-badge {
 			margin-left: 12px;

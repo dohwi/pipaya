@@ -9,6 +9,7 @@ Flags, unless the same line or the line above carries a /* comment */ that says 
   em-space  margin / padding / gap in em (scales with the font: 0.85em of 15px = 12.75px)
   z-index   a raw number above 9 (use a --z-* token from app.css; 0-9 inside one component is fine)
   nudge     margin-left/right/top: -Npx used to centre or nudge (fix the box instead)
+  hover     a :hover rule that only tints (background / border / color) outside @media (hover: hover): it sticks on touch
 Exit code 1 when something is flagged.
 """
 import pathlib
@@ -24,6 +25,31 @@ EM = re.compile(r"(-?\d*\.?\d+)em\b")
 # the PinMark hosts (PinMark.svelte's :where list): a rule reaching every svg inside them also hits the mark's own pin
 PIN_HOSTS = ("lead", "dicon", "ico")
 PINHOST = re.compile(r"\.(" + "|".join(PIN_HOSTS) + r")\s+(?::global\()?svg\b")
+# properties a hover may change and still be "only a tint"; anything else (opacity, display, transform) reveals or moves something
+TINT = re.compile(r"^(background(-color|-image)?|color|border(-\w+)?-color|box-shadow|text-decoration(-\w+)?|outline(-color)?|filter|stroke|fill|--[\w-]+)$")
+
+
+def bare_hovers(css: str):
+    """(line index, selector) of every :hover rule that only tints and is not inside @media (hover: hover)."""
+    css_nc = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), css, flags=re.S)
+    stack, start = [], 0
+    for j, c in enumerate(css_nc):
+        if c == "{":
+            stack.append((css_nc[start:j].strip(), j))
+            start = j + 1
+        elif c == "}":
+            if not stack:
+                start = j + 1
+                continue
+            sel, at = stack.pop()
+            start = j + 1
+            if sel.startswith("@") or ":hover" not in sel:
+                continue
+            if any(s.startswith("@media") and re.search(r"hover:\s*hover", s) for s, _ in stack):
+                continue
+            props = [p.split(":", 1)[0].strip() for p in css_nc[at + 1 : j].split(";") if ":" in p]
+            if props and all(TINT.match(p) for p in props):
+                yield css_nc[:at].count("\n"), " ".join(sel.split())
 
 
 def style_blocks(path: pathlib.Path):
@@ -82,6 +108,8 @@ def main():
                 for m in Z.finditer(line):
                     if abs(int(m.group(1))) > 9:
                         (allowed if ok else hits).append((where, "z-index", line.strip()))
+            for i, sel in bare_hovers(css):
+                (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "hover", sel[:90]))
     seen = set()
     for where, kind, what in hits:
         if (where, kind) in seen:

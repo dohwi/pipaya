@@ -85,10 +85,12 @@
 	.mono {
 		font-family: var(--mono);
 	}
-	.fchip:hover {
-		background: var(--bg-hover);
-		border-color: var(--border-strong);
-		color: var(--text);
+	@media (hover: hover) {
+		.fchip:hover {
+			background: var(--bg-hover);
+			border-color: var(--border-strong);
+			color: var(--text);
+		}
 	}
 	.fchip.on {
 		color: var(--text);

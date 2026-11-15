@@ -378,7 +378,9 @@
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.tabpane { display: flex; flex-direction: column; gap: 12px; }
 	.item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, var(--bg)); color: var(--text); }
-	.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
+	@media (hover: hover) {
+		.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
+	}
 	.item:disabled { opacity: 0.55; cursor: default; }
 	.item :global(svg) { flex: none; width: 15px; height: 15px; stroke: var(--text-faint); stroke-width: 2; }
 	.pname { flex: 1; min-width: 0; font-size: var(--fs-sm); }

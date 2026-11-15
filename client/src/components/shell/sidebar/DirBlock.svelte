@@ -165,9 +165,13 @@
 	.dir.folded .dirtoggle {
 		padding-right: 0;
 	}
-	.dir:hover .dirtoggle,
 	.dir.cur .dirtoggle {
 		color: var(--text);
+	}
+	@media (hover: hover) {
+		.dir:hover .dirtoggle {
+			color: var(--text);
+		}
 	}
 	.dicon {
 		display: grid;

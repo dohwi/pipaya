@@ -141,8 +141,10 @@
 	.mitem:last-child {
 		border-bottom: 0;
 	}
-	.mitem:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.mitem:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.mname {
 		flex: 1;

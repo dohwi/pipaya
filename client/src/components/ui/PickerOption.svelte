@@ -53,8 +53,10 @@
 		border-radius: var(--radius);
 		transition: background-color var(--motion-fast) var(--ease-std);
 	}
-	.pk-row:hover:not(.sel) {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.pk-row:hover:not(.sel) {
+			background: var(--bg-hover);
+		}
 	}
 	.pk-row.sel {
 		background: var(--bg-active);

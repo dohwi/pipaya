@@ -385,8 +385,10 @@
 		border-radius: var(--radius);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.ctl:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.22);
+	@media (hover: hover) {
+		.ctl:hover:not(:disabled) {
+			background: rgba(255, 255, 255, 0.22);
+		}
 	}
 	.ctl:disabled {
 		opacity: 0.35;
@@ -469,8 +471,10 @@
 		border-radius: 50%;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.nav:hover {
-		background: rgba(255, 255, 255, 0.24);
+	@media (hover: hover) {
+		.nav:hover {
+			background: rgba(255, 255, 255, 0.24);
+		}
 	}
 	.nav :global(svg) {
 		width: 22px;

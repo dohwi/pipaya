@@ -366,9 +366,11 @@
 		padding: 0;
 		border-radius: var(--radius-sm);
 	}
-	.nav button.clip.go:hover {
-		color: var(--text);
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.nav button.clip.go:hover {
+			color: var(--text);
+			background: var(--bg-hover);
+		}
 	}
 	.nav .clip :global(svg) {
 		width: 14px;
@@ -422,9 +424,11 @@
 		opacity: 0.4;
 		cursor: default;
 	}
-	.nav button:not(:disabled):hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.nav button:not(:disabled):hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.nav button.on {
 		color: var(--text);

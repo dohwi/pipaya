@@ -60,6 +60,9 @@
 </SettingRow>
 
 <style>
+	.hint {
+		line-height: 16px; /* whole-pixel line: the body's 1.55 left this card 0.6px off the grid from here down */
+	}
 	.head {
 		display: flex;
 		align-items: center;
@@ -98,9 +101,11 @@
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 	}
-	.mv:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.mv:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.mv:disabled {
 		opacity: 0.3;

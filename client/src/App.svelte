@@ -641,8 +641,10 @@
 		text-underline-offset: 3px;
 		cursor: pointer;
 	}
-	.banner button.link:hover {
-		color: color-mix(in srgb, var(--tone) 75%, var(--text));
+	@media (hover: hover) {
+		.banner button.link:hover {
+			color: color-mix(in srgb, var(--tone) 75%, var(--text));
+		}
 	}
 	.banner button:not(.link) {
 		height: var(--control-h-sm);

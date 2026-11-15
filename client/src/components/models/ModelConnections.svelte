@@ -415,8 +415,10 @@
 		content: "•";
 		margin-right: 8px;
 	}
-	.jump:hover {
-		text-decoration: underline;
+	@media (hover: hover) {
+		.jump:hover {
+			text-decoration: underline;
+		}
 	}
 	.provwrap:last-child :global(.prov) {
 		border-bottom: 0;

@@ -91,8 +91,10 @@
 	:global(:where(.side) .grprow .lead) {
 		width: 16px; /* the tabs' icon column (16px), so the book icon and the name line up with theirs */
 	}
-	:global(:where(.side) .gfold:hover .chev svg) {
-		stroke: var(--text);
+	@media (hover: hover) {
+		:global(:where(.side) .gfold:hover .chev svg) {
+			stroke: var(--text);
+		}
 	}
 	/* a folded row has no button beside its count, so the toggle gives up its 8px right inset: the count lands on the list button's
 	   column (x 236 on touch, where the "+" keeps x 256) instead of 8px short of it — measured */

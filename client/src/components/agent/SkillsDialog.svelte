@@ -240,7 +240,9 @@
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.link { padding: 0; font: inherit; font-size: var(--fs-xs); color: var(--text-dim); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 	.link.small { font-size: var(--fs-2xs); }
-	.link:hover:not(:disabled) { color: var(--text); }
+	@media (hover: hover) {
+		.link:hover:not(:disabled) { color: var(--text); }
+	}
 	@media (max-width: 640px) {
 		.tools { padding: 0 var(--dlg-px); }
 	}

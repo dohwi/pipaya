@@ -200,9 +200,11 @@
 	li.on .rm {
 		color: var(--text-dim);
 	}
-	.rm:hover {
-		color: var(--text);
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.rm:hover {
+			color: var(--text);
+			background: var(--bg-hover);
+		}
 	}
 	.rm :global(svg) {
 		width: 16px;

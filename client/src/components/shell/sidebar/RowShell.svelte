@@ -109,14 +109,18 @@
 		padding-right: 8px;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.item:hover {
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.item:hover {
+			background: var(--bg-hover);
+		}
 	}
 	.item.active {
 		background: var(--bg-active);
 	}
-	.item.active:hover {
-		background: transparent;
+	@media (hover: hover) {
+		.item.active:hover {
+			background: transparent;
+		}
 	}
 	.acts {
 		display: none;
@@ -146,11 +150,16 @@
 		color: var(--text-faint);
 		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
 	}
-	.more:hover,
 	.more.on,
 	.more:focus-visible {
 		background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
 		color: var(--text);
+	}
+	@media (hover: hover) {
+		.more:hover {
+			background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
+			color: var(--text);
+		}
 	}
 	.more :global(svg) {
 		width: 15px;

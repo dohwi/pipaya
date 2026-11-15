@@ -224,9 +224,11 @@
 	.tool:focus-visible {
 		outline-offset: -2px;
 	}
-	.tool:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.tool:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.tool :global(svg) {
 		width: 19px;

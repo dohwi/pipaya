@@ -226,8 +226,10 @@
 		border-radius: var(--radius-sm);
 		color: var(--text);
 	}
-	.b:hover:not(:disabled) {
-		background: var(--accent-soft);
+	@media (hover: hover) {
+		.b:hover:not(:disabled) {
+			background: var(--accent-soft);
+		}
 	}
 	.b:disabled {
 		opacity: 0.4;

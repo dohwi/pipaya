@@ -204,8 +204,10 @@
 		text-underline-offset: 3px;
 		transition: text-decoration-color var(--motion-fast) var(--ease-std);
 	}
-	.md :global(a:hover) {
-		text-decoration-color: var(--text);
+	@media (hover: hover) {
+		.md :global(a:hover) {
+			text-decoration-color: var(--text);
+		}
 	}
 	/* Block rhythm in px on the 4px scale: 12 between blocks, a heading 24 above / 8 below (em values gave 12.75 / 14.25 / 23.8 / 9.1). */
 	.md :global(p) {
@@ -282,9 +284,11 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 	}
-	.md :global(.copy:hover) {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.md :global(.copy:hover) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.md :global(pre) {
 		margin: 0;
@@ -372,8 +376,10 @@
 		margin-right: 4px;
 		font-size: 0.9em;
 	}
-	.md :global(a.wd-file:hover) {
-		border-color: var(--border-strong);
+	@media (hover: hover) {
+		.md :global(a.wd-file:hover) {
+			border-color: var(--border-strong);
+		}
 	}
 	.md :global(.wd-media) {
 		color: var(--text-faint);
@@ -460,9 +466,11 @@
 		font-size: var(--fs-xs);
 		cursor: pointer;
 	}
-	.md :global(.remote-img:hover) {
-		color: var(--text);
-		border-color: var(--text-dim);
+	@media (hover: hover) {
+		.md :global(.remote-img:hover) {
+			color: var(--text);
+			border-color: var(--text-dim);
+		}
 	}
 
 	/* Blinking caret at the very end of the text while the model is still writing. It has to sit inline in the last text

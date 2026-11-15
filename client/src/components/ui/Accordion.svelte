@@ -64,7 +64,10 @@
 		cursor: pointer;
 		border-radius: var(--radius-sm);
 	}
-	.head:hover, .open > .head { color: var(--text); }
+	.open > .head { color: var(--text); }
+	@media (hover: hover) {
+		.head:hover { color: var(--text); }
+	}
 	.head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 	/* the arrow turns in step with the body: collapseIn (normal, ease) when opening, collapseOut (fast, ease-exit) when closing */
@@ -83,7 +86,9 @@
 
 	.box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); overflow: hidden; }
 	.box .head { padding: 12px 12px; border-radius: 0; font-size: var(--fs-xs); font-weight: 600; }
-	.box .head:hover { background: var(--bg-hover); }
+	@media (hover: hover) {
+		.box .head:hover { background: var(--bg-hover); }
+	}
 	.box .inner { padding: 16px; border-top: 1px solid var(--border); }
 
 	.text .head { width: fit-content; justify-content: flex-start; gap: 4px; font-size: var(--fs-xs); }

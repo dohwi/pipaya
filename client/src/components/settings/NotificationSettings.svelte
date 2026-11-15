@@ -53,11 +53,9 @@
   <Select id="escalate" size="sm" width="auto" value={app.escalateMinutes} disabled={!app.api} onchange={(m) => app.setEscalateMinutes(m)} options={ESCALATE_CHOICES.map((m) => ({ value: m, label: label(m) }))} />
 </SettingRow>
 
-<div class="test">
 <SettingRow label={t("시험 알림")}>
   <Button size="sm" onclick={runTest} disabled={testing || !app.api}>{testing ? t("보내는 중…") : t("시험")}</Button>
 </SettingRow>
-</div>
 {#if outcome}
   <p class="result" class:ok={outcome.step === "shown"} role="status" in:collapseIn out:collapseOut>{verdict(outcome)}</p>
   {#if outcome.server}
@@ -65,10 +63,9 @@
   {/if}
 {/if}
 <style>
-  .section-label { margin-bottom: 12px; }
-  .hint { line-height: 1.6; margin: 8px 0 0; word-break: keep-all; }
-  .test { margin-top: 12px; }
-  .test + :global(*) { margin-top: 12px; }
-  .result { font-size: var(--fs-xs); line-height: 1.6; margin: 8px 0 0; color: var(--danger); word-break: keep-all; }
+  /* the parent .set-group section already spaces its children 12px apart (GeneralPane): no margins on top of that,
+     or this card gets 24px under its label and above "시험" while every other card has 12 */
+  .hint { line-height: 20px; margin: 0; word-break: keep-all; }
+  .result { font-size: var(--fs-xs); line-height: 20px; margin: 0; color: var(--danger); word-break: keep-all; }
   .result.ok { color: var(--text-dim); }
 </style>

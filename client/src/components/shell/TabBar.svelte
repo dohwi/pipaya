@@ -384,9 +384,11 @@
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	.tab:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+	@media (hover: hover) {
+		.tab:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 	.tab.on {
 		background: var(--bg-active);
@@ -539,9 +541,11 @@
 			opacity: 1;
 		}
 	}
-	.x:hover {
-		background: var(--bg-active);
-		color: var(--text);
+	@media (hover: hover) {
+		.x:hover {
+			background: var(--bg-active);
+			color: var(--text);
+		}
 	}
 	.add {
 		flex: none;
@@ -553,9 +557,14 @@
 		color: var(--text-faint);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.add:hover,
 	.add.on {
 		background: var(--bg-hover);
 		color: var(--text);
+	}
+	@media (hover: hover) {
+		.add:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
 	}
 </style>

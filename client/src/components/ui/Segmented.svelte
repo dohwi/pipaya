@@ -92,8 +92,10 @@
 			border-color var(--motion-fast) var(--ease-std),
 			background-color var(--motion-fast) var(--ease-std);
 	}
-	.cards > button:hover:not(:disabled):not(.on) {
-		border-color: var(--border-strong);
+	@media (hover: hover) {
+		.cards > button:hover:not(:disabled):not(.on) {
+			border-color: var(--border-strong);
+		}
 	}
 	.cards > button.on {
 		border-color: var(--text);

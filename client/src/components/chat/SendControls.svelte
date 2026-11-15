@@ -254,15 +254,19 @@
 		background: var(--bg-active);
 		color: var(--text);
 	}
-	.stack .mode.queue:hover:not(:disabled) {
-		background: var(--border-strong);
+	@media (hover: hover) {
+		.stack .mode.queue:hover:not(:disabled) {
+			background: var(--border-strong);
+		}
 	}
 	.stack .mode.primary {
 		background: var(--accent);
 		color: var(--accent-fg);
 	}
-	.stack .mode.primary:hover:not(:disabled) {
-		background: var(--accent-hover);
+	@media (hover: hover) {
+		.stack .mode.primary:hover:not(:disabled) {
+			background: var(--accent-hover);
+		}
 	}
 	/* disabled: solid pre-mixed colours instead of opacity */
 	.stack .mode:disabled {
@@ -277,8 +281,10 @@
 		color: var(--danger);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent);
 	}
-	.stack .send.stop:hover {
-		background: color-mix(in srgb, var(--danger) 22%, transparent);
+	@media (hover: hover) {
+		.stack .send.stop:hover {
+			background: color-mix(in srgb, var(--danger) 22%, transparent);
+		}
 	}
 	.mode {
 		display: grid;
@@ -300,9 +306,11 @@
 			opacity var(--motion-fast) var(--ease-std),
 			transform var(--motion-fast) var(--ease);
 	}
-	.mode:hover:not(:disabled) {
-		background: var(--bg-active);
-		color: var(--text);
+	@media (hover: hover) {
+		.mode:hover:not(:disabled) {
+			background: var(--bg-active);
+			color: var(--text);
+		}
 	}
 	.mode:active:not(:disabled) {
 		transform: scale(0.92);
@@ -315,9 +323,11 @@
 		border-color: var(--accent);
 		color: var(--accent-fg);
 	}
-	.mode.primary:hover:not(:disabled) {
-		background: var(--accent-hover);
-		color: var(--accent-fg);
+	@media (hover: hover) {
+		.mode.primary:hover:not(:disabled) {
+			background: var(--accent-hover);
+			color: var(--accent-fg);
+		}
 	}
 	.mode :global(svg) {
 		width: 18px;
@@ -351,9 +361,13 @@
 		padding: 4px 12px;
 		text-align: left;
 	}
-	.opt:hover,
 	.opt:active {
 		background: var(--bg-active);
+	}
+	@media (hover: hover) {
+		.opt:hover {
+			background: var(--bg-active);
+		}
 	}
 	.opt .ico {
 		display: grid;
