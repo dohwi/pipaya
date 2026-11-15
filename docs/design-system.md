@@ -58,11 +58,10 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - `Notice`: the one boxed message. Flat by default (a tinted fill of its tone, no border). Add `raised` when it stands **on a tinted settings group** (`.set-group`): the fill is then an opaque mix of the tone over `--bg-lift` (one step above `--bg-set`, so the box reads as above the card, not painted on it), with a 1px ring of its own colour and `--shadow-soft`. The ring is a shadow, never a `border`, so the text keeps the flat notice's 12px inset and the box its height.
 - `FormField`: label (20px line) + 8px + control = 68px with a 40px field. `group` for a control that is not one input (`Segmented`).
 - `StatusItem`: one item under the input (icon or mark + value + tooltip), a 21px box (19px in a narrow pane) with a 4px gap. A button when it has `onclick` (add `empty` when there is nothing to show, `level` for warn/danger).
-  **Its icon/value pair is not a centring bug.** The row centres both boxes on one line (measured box centres: 0.00px apart), but the
-  painted ink does not agree: an 11px value sits −1.5 to +2.5px from its 13px mark depending on the string (`0개` −1.5, `4개` −1.0,
-  `tps` +0.75, `—` +2.0), on top of each mark's own 0.1–0.9px glyph offset. The line boxes are whole pixels already (11px / 11px).
-  Measured nudges do not help: lifting the mark 1px turns `0개` into +0.38 but pushes `—` to +3.0, and a 13px or 16px value line box
-  leaves the digits where they were. So the row stays as it is — do not "fix" it with a margin.
+  **Its marks are an even size: 12px (10px in a narrow pane), the context ring too.** A 13px mark centred on the 16px line
+  sat on a half pixel, so its ink landed 1–2.6px off the value depending on the string (`2개` −2.6, `—` +2.6); an even mark
+  keeps it on whole pixels and every item measures within 0.7px at 1x, 2x and 4x. Do not go back to an odd size, and do not
+  nudge a mark with a margin.
 - Check by measuring: every item in a row must have the same top, height and icon/text centre (`getBoundingClientRect`), at 1440, 820 and 390.
 
 ### Text inside pills (measure the ink, not the box)
@@ -240,10 +239,13 @@ The sibling check for "an icon and one line of text": every row that puts a line
 device_scale_factor 4 over every screen (`main`, the settings sections, the server tabs, the conversation list, the folder picker, the
 model picker, a row menu) at 1440 / 820 / 390. From **1px** apart it is a bug; 0.5px is the half-pixel limit. Two labels are exempt and
 reported separately as *light glyph*: their ink has no height of its own (`..`, `—`, a lone `.`), so a centred box still paints low.
-The status line is the other known exception (see `StatusItem` above). Rows whose label inherits the body's 1.55 line box are listed as
+Rows whose label inherits the body's 1.55 line box are listed as
 *fractional line box*: that is what once put the working-directory path 1.5px below its folder glyph, so give the label `line-height: 20px`
-before hunting anywhere else. Audit result at the time of writing: no layout bug on any screen; the only 1px+ pairs were the status line
-and the folder picker's `..` row.
+before hunting anywhere else. A label made only of a light glyph is rewritten rather than exempted: the folder picker's up row reads
+"상위 폴더" beside its arrow, with `..` as the faint hint on the right. Only the label right after the icon is compared (a trailing unit
+such as `tps` is not beside the glyph), and ink is the rows that reach half of the crop's peak contrast, so the faint background grid
+does not count. The script exits 1 when a pair is 1px or more off. Audit result at the time of writing: 224 pairs over every screen at
+1440 / 820 / 390, worst 0.88px, none at 1px or more.
 
 ### Alignment lint (finds the misses by itself)
 

@@ -20,7 +20,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	// recording: the microphone with a filled dot, so it never reads as the agent's square stop button
 	"mic-rec": "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M19.5 4.5h.01",
 	stop: "M7 7h10v10H7z",
-	chat: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z",
+	// drawn 0.75 higher than its first sketch: the bubble with its tail spans 4.77-19.25, centred on 12 like every other glyph
+	chat: "M21 11.25a8 8 0 0 1-11.6 7.1L4 19.25l1-4.6A8 8 0 1 1 21 11.25z",
 	trash: "M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
 	edit: "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4",
 	pencil: "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4",
@@ -70,7 +71,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	shrink: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
 	clip: "M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8",
 	unlink: "M9 7H7a4 4 0 0 0 0 8h2M15 7h2a4 4 0 0 1 0 8h-2M4 4l16 16",
-	bot: "M5 9h14v10H5zM12 9V5M12 3.5h.01M9 13.5h.01M15 13.5h.01M2.5 13v3M21.5 13v3",
+	// 0.75 lower than first drawn: antenna tip to base spans 4.25-19.75, centred on 12 like every other glyph
+	bot: "M5 9.75h14v10H5zM12 9.75V5.75M12 4.25h.01M9 14.25h.01M15 14.25h.01M2.5 13.75v3M21.5 13.75v3",
 	plug: "M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4",
 	skill: "M12 7c-1.6-1.4-3.7-2-7-2v13c3.3 0 5.4.6 7 2 1.6-1.4 3.7-2 7-2V5c-3.3 0-5.4.6-7 2zM12 7v13",
 	prompt: "M5 8l5 4-5 4M12 17h7",

@@ -55,13 +55,14 @@ FIND = """() => {
 def check_modals(p):
     M = 'button[aria-label="사이드바 열기"]'
     cases = [
-        ("mcp", [".statusline .b.tap >> nth=2"]),
-        ("skills", [".statusline .b.tap >> nth=1"]),
-        ("cmds", [".statusline .b.tap >> nth=3"]),
+        ("mcp", ["SET", '.nav button.srvtab:has-text("MCP")']),  # the status item only shows once a server is connected
+        ("skills", ['button[aria-label^="스킬"]']),
+        ("cmds", ['button[aria-label^="도우미 역할"]']),
         ("ctx", ['button[aria-label^="AGENTS.md"]']),
         ("settings", ["SET"]),
-        ("settings-agent", ["SET", ".srvbar .fchip >> nth=1", '[role=tab]:has-text("에이전트")']),
-        ("add-conn", ["SET", ".srvbar .fchip >> nth=1", '[role=tab]:has-text("에이전트")', 'button:has-text("연결 추가")']),
+        # the server's panes are in the same settings nav (srvtab); on a phone the nav item opens the pane as its own page
+        ("settings-agent", ["SET", '.nav button.srvtab:has-text("에이전트 도구")']),
+        ("add-conn", ["SET", '.nav button.srvtab:has-text("모델")', 'button:has-text("연결 추가")']),
         ("model-picker", ["button.trigger"]),
     ]
     check_sizes = [(1440, 900), (1441, 901), (820, 1180), (390, 844)]
@@ -76,6 +77,10 @@ def check_modals(p):
             pg.goto(f"http://127.0.0.1:{env['CLIENT_PORT']}/", wait_until="networkidle")
             try:
                 for c in clicks:
+                    if c.startswith("button[aria-label^=") and pg.locator(".morebtn[aria-expanded=false]").first.is_visible():
+                        # a narrow pane folds the counts behind "⋯"
+                        pg.locator(".morebtn").first.click(timeout=2000)
+                        pg.wait_for_timeout(300)
                     if c == "SET":
                         if vw <= 820:
                             pg.locator(M).first.click(timeout=2000)

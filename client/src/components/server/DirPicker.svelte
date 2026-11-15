@@ -177,7 +177,8 @@
 			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(browser.typed.trim()).dir })}</p>
 		{:else if browser.listing}
 			{#if browser.listing.parent && !browser.part}
-				<button class="row wide up" onclick={() => void enter(browser.listing!.parent!)}><Icon name="chevron-down" /><span class="mono">..</span><span class="grow"></span><span class="hint">{t("상위 폴더")}</span></button>
+				<!-- the label is a word, not "..": two dots have no ink height and sat 3px below the arrow -->
+				<button class="row wide up" onclick={() => void enter(browser.listing!.parent!)}><Icon name="chevron-down" /><span>{t("상위 폴더")}</span><span class="grow"></span><span class="hint mono">..</span></button>
 			{/if}
 			{#each browser.shown as d, i (d.path)}
 				<button class="row wide" class:hl={i === browser.active} ondblclick={() => void choose(d.path)} onclick={() => void enter(d.path)} title={t("한 번 누르면 열고, 두 번 누르면 바로 선택합니다")}>

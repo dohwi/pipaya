@@ -337,8 +337,8 @@
 		outline-offset: 2px;
 	}
 	.statusline :global(.ring) {
-		width: 13px;
-		height: 13px;
+		width: 12px; /* the same even size as the other marks (StatusItem) */
+		height: 12px;
 		transform: rotate(-90deg);
 		flex: none;
 	}
@@ -414,8 +414,8 @@
 			flex: none;
 		}
 		.statusline :global(.ring) {
-			width: 11px;
-			height: 11px;
+			width: 10px;
+			height: 10px;
 		}
 	}
 </style>

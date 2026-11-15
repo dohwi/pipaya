@@ -138,6 +138,7 @@
 		padding: 8px 12px 4px;
 		font-family: var(--mono);
 		font-size: var(--fs-2xs);
+		line-height: 16px; /* whole pixels: 1.55 of 11px made each group label 29.05px */
 		font-weight: 500;
 		letter-spacing: 0.04em;
 		text-transform: lowercase;
@@ -148,6 +149,7 @@
 		text-align: center;
 		color: var(--text-faint);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 	}
 	@media (max-width: 640px) {
 		.pk-search {

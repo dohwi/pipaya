@@ -99,9 +99,11 @@
 	.unit {
 		font-size: var(--fs-xs);
 	}
+	/* an even size on the 16px line: a 13px glyph centred there sat on a half pixel and its ink landed 1-2.6px off the value
+	   (measured over every item at 1x/2x/4x); 12px keeps it on whole pixels, worst case 0.7px */
 	.b :global(svg:not(.ring)) {
-		width: 13px;
-		height: 13px;
+		width: 12px;
+		height: 12px;
 		flex: none;
 		stroke: currentColor;
 		fill: none;
@@ -116,8 +118,8 @@
 		}
 		/* the same selector as the base rule: a lower specificity would lose to it and leave 13px marks in a narrow pane */
 		.b :global(svg:not(.ring)) {
-			width: 11px;
-			height: 11px;
+			width: 10px; /* even, like the 12px above */
+			height: 10px;
 		}
 	}
 </style>
