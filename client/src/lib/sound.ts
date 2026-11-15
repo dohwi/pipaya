@@ -1,8 +1,9 @@
 // Notification sounds, synthesized (no audio files): a soft rising two-note "done", a two-tap "ask" that
-// asks for attention, and a low descending "failed". Browsers only allow audio after a user gesture,
+// asks for attention, and a low descending "failed". Voice input adds a quieter pair: a rising "recStart" when the
+// microphone starts listening and the same two notes falling, "recStop", when it stops. Browsers only allow audio after a user gesture,
 // so the context is created lazily and resumed on the first interaction.
 
-export type Cue = "done" | "ask" | "failed";
+export type Cue = "done" | "ask" | "failed" | "recStart" | "recStop";
 
 let ctx: AudioContext | null = null;
 
@@ -42,7 +43,19 @@ const NOTES: Record<Cue, [number, number, number, number][]> = {
 		[329.63, 0, 0.18, 0.13], // E4
 		[246.94, 0.14, 0.36, 0.13], // B3
 	],
+	// short and about 6 dB under the notifications: it answers the user's own press, it does not call them
+	recStart: [
+		[523.25, 0, 0.08, 0.07], // C5
+		[659.25, 0.07, 0.1, 0.07], // E5
+	],
+	recStop: [
+		[659.25, 0, 0.08, 0.07], // E5
+		[523.25, 0.07, 0.1, 0.07], // C5
+	],
 };
+
+/** How long `recStart` rings, in ms: recording begins after it so the cue is not in the recording. */
+export const REC_START_MS = 180;
 
 export const MAX_VOLUME = 200;
 

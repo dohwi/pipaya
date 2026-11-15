@@ -1724,7 +1724,7 @@ export const en: Record<string, string> = {
 	"이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.": "Devices connected to this server. A removed device can connect again; change the server token to block it for good.",
 	"작업 완료 · 실패 · 승인 필요 때. 앱을 보고 있으면 보내지 않습니다": "When a run finishes, fails or needs approval. Not while you're looking at the app",
 	"작업 완료 · 실패 · 승인 필요 때. 앱이 닫혀 있어도 받습니다": "When a run finishes, fails or needs approval. Arrives even when the app is closed",
-	"작업 완료 · 확인 필요 · 실패 때. 보고 있는 대화는 승인 요청만 울립니다": "When a run finishes, needs you or fails. The chat on screen only sounds for approvals",
+	"작업 완료 · 확인 필요 · 실패, 음성 녹음 시작·종료 때. 보고 있는 대화는 승인 요청만 울립니다": "When a run finishes, needs you or fails, and when voice recording starts or stops. The chat on screen only sounds for approvals",
 	"작업이 끝난 뒤 보내도록 대기열에 넣습니다": "Queues the message to send after the run",
 	"지금 작업 폴더에서 서버의 셸을 엽니다": "Opens the server's shell in the current folder",
 	"지정하지 않으면 첫 메시지로 대화 이름을 짓습니다.": "Without one, chats are named after their first message.",

@@ -11,6 +11,7 @@ import { Api, ApiError, type VoiceSettings, type VoiceView } from "./api";
 import { app } from "./store.svelte";
 import { t } from "./i18n";
 import { swallowClick } from "./press-menu";
+import { REC_START_MS } from "./sound";
 import {
 	MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType,
 	PressToTalk, serverFailure, voiceState, type VoiceFailure, type VoiceState,
@@ -188,8 +189,14 @@ class VoiceStore {
 			this.fail(failure);
 			return failure;
 		}
+		// The microphone is open: say so, and start recording once the cue has rung, so it is not in the recording.
+		// The cue follows the notification sound setting (off: no cue, no wait).
+		if (app.prefs.soundOn && !this.stopRequested) {
+			app.prefs.cue("recStart");
+			await new Promise((resolve) => setTimeout(resolve, REC_START_MS));
+		}
 		this.opening = false;
-		// let go (or cancelled) while the permission prompt was up: nothing of what was meant to be said got recorded
+		// let go (or cancelled) while the permission prompt or the cue was up: nothing of what was meant to be said got recorded
 		if (this.stopRequested) {
 			this.stopRequested = false;
 			for (const track of stream.getTracks()) track.stop();
@@ -225,10 +232,12 @@ class VoiceStore {
 		this.recorder = null;
 		if (duration < MIN_RECORD_MS) {
 			this.discard(recorder);
+			app.prefs.cue("recStop");
 			this.fail("tooShort");
 			return;
 		}
 		if (recorder && recorder.state !== "inactive") recorder.stop();
+		app.prefs.cue("recStop"); // after the recorder stopped, so the cue is not in the recording
 	}
 
 	/** Throws the recording away (the pill's cancel). */
@@ -241,6 +250,7 @@ class VoiceStore {
 		const recorder = this.recorder;
 		this.recorder = null;
 		this.discard(recorder);
+		app.prefs.cue("recStop");
 	}
 
 	/**
