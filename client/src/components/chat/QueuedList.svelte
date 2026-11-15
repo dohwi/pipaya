@@ -49,6 +49,9 @@
 		resize = { y: e.clientY, h: listH };
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
+	// A press on the grip keeps the focus where it was: the draft stays focused and a phone keyboard stays open.
+	// (The grip is still reachable with Tab for the arrow keys.)
+	const keepFocus = (e: MouseEvent) => e.preventDefault();
 	function onGripMove(e: PointerEvent) {
 		if (!resize) return;
 		// The composer is anchored at the bottom, so pulling up (smaller clientY) makes the list taller.
@@ -60,12 +63,14 @@
 		if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
 		resize = null;
 	}
+	// Window splitter keys: ↑/↓ one row, Home back to the default, End to the most it can show.
 	function onGripKey(e: KeyboardEvent) {
-		const step = e.key === "ArrowUp" ? ROW + GAP : e.key === "ArrowDown" ? -(ROW + GAP) : 0;
-		if (!step) return;
+		const row = ROW + GAP;
+		const h = { ArrowUp: listH + row, ArrowDown: listH - row, Home: baseH, End: maxH }[e.key];
+		if (h === undefined) return;
 		e.preventDefault();
-		const h = Math.min(maxH, Math.max(baseH, listH + step));
-		userH = h <= baseH ? null : h;
+		const c = Math.min(maxH, Math.max(baseH, h));
+		userH = c <= baseH ? null : c;
 	}
 	$effect(() => {
 		const sync = () => (vh = viewH());
@@ -131,10 +136,10 @@
 
 <div class="queued-wrap" bind:this={wrap}>
 {#if canGrow}
-	<!-- A window splitter (WAI-ARIA): focusable, with value attributes; ↑/↓ resize like the drag. -->
+	<!-- A window splitter (WAI-ARIA): focusable, with value attributes; ↑/↓, Home and End resize like the drag. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div class="grip" role="separator" aria-orientation="horizontal" tabindex="0" aria-label={t("대기열 높이 조절")} aria-valuemin={baseH} aria-valuemax={maxH} aria-valuenow={listH} title={t("끌어서 높이 조절 · 더블 클릭으로 원래 크기")}
-		onpointerdown={onGripDown} onpointermove={onGripMove} onpointerup={onGripUp} onpointercancel={onGripUp} ondblclick={() => (userH = null)} onkeydown={onGripKey}></div>
+		onpointerdown={onGripDown} onmousedown={keepFocus} onpointermove={onGripMove} onpointerup={onGripUp} onpointercancel={onGripUp} onlostpointercapture={() => (resize = null)} ondblclick={() => (userH = null)} onkeydown={onGripKey}></div>
 {/if}
 {#if thumb || canGrow}
 	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: queued.length })}>
@@ -196,6 +201,13 @@
 	.grip:active::before,
 	.grip:focus-visible::before {
 		opacity: 1;
+	}
+	/* A finger needs more than 16px: on touch the hit area grows to 96x24, still clear of the first row (32px down). */
+	@media (pointer: coarse) {
+		.grip {
+			width: 96px;
+			height: 24px;
+		}
 	}
 	/* Shown only while the list scrolls: per-mode totals. Centred over the list, so it reads as a summary of it
 	   rather than as a column that has to line up with the badges. */
