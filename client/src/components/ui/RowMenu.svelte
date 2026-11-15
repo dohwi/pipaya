@@ -153,6 +153,7 @@
 		border-radius: var(--radius-sm);
 		text-align: left;
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel label beside the icon (rule 3) */
 		color: var(--text);
 		white-space: nowrap;
 	}

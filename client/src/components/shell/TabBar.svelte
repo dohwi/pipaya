@@ -377,6 +377,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel title beside the session logo (rule 3) */
 		cursor: pointer;
 		user-select: none;
 		-webkit-user-select: none;

@@ -323,6 +323,7 @@
 		border-radius: var(--radius);
 		text-align: left;
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel label beside the folder glyph (rule 3) */
 	}
 	.row.hl {
 		background: var(--bg-hover);

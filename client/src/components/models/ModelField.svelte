@@ -145,7 +145,9 @@
 		display: grid;
 		place-items: center;
 	}
+	/* whole-pixel line beside the logo (rule 3): the inherited 1.55 put the name's ink 1px off the logo's centre */
 	.mname {
+		line-height: 20px;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
