@@ -133,6 +133,7 @@ export const en: Record<string, string> = {
 	"이미 전달되었습니다": "Already delivered",
 	"{name} 취소": "Cancel {name}",
 	"{name} 대화 열기": "Open the {name} chat",
+	"{name} 미리 보기": "Preview {name}",
 	"{n}개 대기 중": "{n} waiting",
 	"대기 중인 메시지가 없습니다": "No waiting messages",
 	"작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령": "Working · Enter to steer / {key} to queue · / for commands",

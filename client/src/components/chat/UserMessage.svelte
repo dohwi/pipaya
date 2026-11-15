@@ -4,7 +4,7 @@
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
-	import MentionText from "./MentionText.svelte";
+	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
@@ -64,7 +64,7 @@
 			<blockquote class="quote">{shown.quote}</blockquote>
 		{/if}
 		{#if shown.rest}
-			<div class="txt" class:clamp={item.note?.collapse && !expanded}><MentionText text={shown.rest} /></div>
+			<div class="txt" class:clamp={item.note?.collapse && !expanded}><TokenText text={shown.rest} images={item.images} sessionId={session?.id ?? null} /></div>
 		{/if}
 		{#if item.note}
 			<div class="tplnote" title={item.note.call}>

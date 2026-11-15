@@ -217,11 +217,11 @@
 	--lv-high: #f472b6;
 	--lv-xhigh: #fb923c;
 	--lv-max: #f87171;
-	/* composer mention marks: #image (violet), #file (mint), @member (sky) */
+	/* mention marks (composer and sent messages): #image (violet), #file (mint), @member (amber, the agent-to-agent hue of --mark-header) */
 	--mark-img: #c4b5fd;
 	--mark-file: #86efac;
 	--mark-header: #fcd34d;
-	--mark-mention: #7dd3fc;
+	--mark-mention: #fcd34d;
 	--info: #5aa9ff;
 	--pinned: #ffffff; /* the pinned mark: white on dark, black on light; no status hue, so it is never read as one */
 	--ok: #3ecf8e;
@@ -282,7 +282,7 @@
 	--mark-img: #8b5cf6;
 	--mark-file: #10b981;
 	--mark-header: #b45309; /* amber-700: the peer header label and tint on light surfaces (dark uses #fcd34d) */
-	--mark-mention: #0284c7;
+	--mark-mention: #b45309;
 	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set
 	   for 4.5:1 or better as text on every light surface, its own soft tint included (worst case: on --bg-active under
 	   the tint). They were 2.5 (ok) to 3.6 (danger): "사용 가능", "오류", "꺼짐" read faint. The soft tints keep the old,
