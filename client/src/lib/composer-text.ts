@@ -57,6 +57,33 @@ export function knownMention(token: string, names: readonly string[]): string | 
 	return best;
 }
 
+/** A run of message text: plain, or an `@name` that names a known session or group (`name` = the known name it matched). */
+export type MentionPart = { text: string; name?: string };
+
+/**
+ * A sent message cut into plain runs and `@name` mentions, by the same rule as the composer highlight: the token starts
+ * the text or follows whitespace, and only a known name counts (`@미나랑` is `@미나` plus "랑"; `a@b.c` is no mention).
+ */
+export function splitMentions(text: string, names: readonly string[]): MentionPart[] {
+	if (!names.length || !text.includes("@")) return [{ text }];
+	const out: MentionPart[] = [];
+	let plain = "";
+	let last = 0;
+	for (const m of text.matchAll(/(^|\s)@([^\s@]+)/g)) {
+		const hit = knownMention(m[2]!, names);
+		if (!hit) continue;
+		const at = m.index! + m[1]!.length;
+		plain += text.slice(last, at);
+		if (plain) out.push({ text: plain });
+		plain = "";
+		out.push({ text: `@${m[2]!.slice(0, hit.length)}`, name: hit });
+		last = at + 1 + hit.length;
+	}
+	plain += text.slice(last);
+	if (plain) out.push({ text: plain });
+	return out;
+}
+
 export interface Known {
 	/** `prefix:name` of the command-family entries (`/snip:review`) that exist */
 	commands: readonly string[];

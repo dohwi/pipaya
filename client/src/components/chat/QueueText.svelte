@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from "../ui/Icon.svelte";
+	import MentionText from "./MentionText.svelte";
 	import { parsePeer } from "../../lib/peers";
 	import { extensions } from "../../lib/extensions/host.svelte";
 
@@ -17,7 +18,7 @@
 
 {#if full}
 	{#if head}<p class="from"><Icon name={server ? "server" : "chat"} /><span>{head.from}</span></p>{/if}
-	<p class="full">{body}</p>
+	<p class="full"><MentionText text={body} /></p>
 {:else}
 	<span class="line">
 		{#if head}<span class="from" title={head.from}><Icon name={server ? "server" : "chat"} /><span class="who">{head.from}</span></span>{/if}
