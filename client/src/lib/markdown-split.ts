@@ -31,8 +31,52 @@ export const NO_INDENTED_CODE: MarkedExtension = {
 	extensions: [{ name: "indented", renderer(token) { return this.parser.parse(token.tokens ?? []); } }],
 };
 
+/** Full-width and CJK punctuation (`）`, `。`, `」`, ...): never part of a bare URL. */
+const CJK_PUNCT = /[\u3000-\u303f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u;
+/** Characters after which a non-ASCII run is still a path or query part (`/wiki/서울`, `?q=한글`). */
+const URL_JOIN = /[/?=&#%+\-_.~:]/;
+
+/**
+ * Where a bare URL really ends. GFM only stops a URL at a space, so in Korean text the particle written right after it
+ * (`https://x.com/a에서`, `(https://x.com/pull/1)에`) becomes part of the link. The URL is cut at CJK punctuation, and
+ * before a non-ASCII letter that follows an ASCII one other than a path or query separator.
+ */
+export function bareUrlEnd(url: string): number {
+	const chars = [...url];
+	let end = 0;
+	for (let i = 0; i < chars.length; i++) {
+		const c = chars[i]!;
+		if (CJK_PUNCT.test(c)) break;
+		const prev = chars[i - 1];
+		if (c.charCodeAt(0) > 0x7f && prev !== undefined && prev.charCodeAt(0) <= 0x7f && !URL_JOIN.test(prev)) break;
+		end += c.length;
+	}
+	return end;
+}
+
+/** Bare URLs end where Korean text resumes (see `bareUrlEnd`); `<...>` autolinks and mail addresses are untouched. */
+export const BARE_URL_END: MarkedExtension = {
+	tokenizer: {
+		url(src) {
+			const tok = Tokenizer.prototype.url.call(this, src);
+			if (!tok || tok.href.startsWith("mailto:")) return tok;
+			let raw = tok.raw.slice(0, bareUrlEnd(tok.raw));
+			if (raw === tok.raw) return tok;
+			// The cut may leave `)` or `.` at the end: take those off the way GFM does.
+			const backpedal = this.rules.inline._backpedal;
+			for (let prev = ""; prev !== raw; ) {
+				prev = raw;
+				raw = backpedal.exec(raw)?.[0] ?? "";
+			}
+			if (!raw) return false;
+			const href = tok.href.startsWith("http://") && raw.startsWith("www.") ? `http://${raw}` : raw;
+			return { type: "link", raw, text: raw, href, autolink: true, tokens: [{ type: "text", raw, text: raw }] } as Tokens.Link;
+		},
+	},
+};
+
 /** Same options and extension as the renderer, so the blocks split here are the blocks it draws. */
-const splitter = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE);
+const splitter = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE, BARE_URL_END);
 const lex = (src: string) => splitter.lexer(src);
 
 /**

@@ -4,10 +4,10 @@ import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf } from "./files";
 import { groupPictures } from "./gallery";
-import { MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
+import { BARE_URL_END, MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 import { highlightCode } from "./code-highlight";
 
-const md = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE);
+const md = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE, BARE_URL_END);
 
 /** Off while the block being streamed is drawn: it is parsed again every frame, so it gets its colours once it is done. */
 let colourCode = true;
