@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention } from "../src/lib/composer-text";
+import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, splitMentions } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -43,6 +43,17 @@ describe("knownMention", () => {
 		expect(knownMention("미나2랑", ["미나", "미나2"])).toBe("미나2");
 		expect(knownMention("bobby", ["bob"])).toBeNull();
 		expect(knownMention("Bob", ["bob"])).toBe("bob");
+	});
+});
+
+describe("splitMentions", () => {
+	test("cuts known @names out of the text, with a particle left as text", () => {
+		expect(splitMentions("@미나랑 @철수 봐 줘", ["미나", "철수"])).toEqual([{ text: "@미나", name: "미나" }, { text: "랑 " }, { text: "@철수", name: "철수" }, { text: " 봐 줘" }]);
+	});
+	test("leaves unknown names, e-mail addresses and text without names alone", () => {
+		expect(splitMentions("@누구 a@미나.com", ["미나"])).toEqual([{ text: "@누구 a@미나.com" }]);
+		expect(splitMentions("hello", [])).toEqual([{ text: "hello" }]);
+		expect(splitMentions("줄\n@Mina", ["mina"])).toEqual([{ text: "줄\n" }, { text: "@Mina", name: "mina" }]);
 	});
 });
 
