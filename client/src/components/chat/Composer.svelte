@@ -762,7 +762,7 @@
 		color: transparent;
 		pointer-events: none;
 	}
-	/* mention tags: #imageN violet, #files mint, @mentions amber; the hues come from the theme (app.css) */
+	/* mention tags: #imageN and #files grey, @mentions amber; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;
 		-webkit-box-decoration-break: clone;
