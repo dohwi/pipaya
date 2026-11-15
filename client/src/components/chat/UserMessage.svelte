@@ -37,7 +37,7 @@
 </script>
 
 <div class="row user" data-part="message.user" class:headed={!!header || scheduled} class:fresh={item.fresh}>
-	<div class="bubble" class:headedbubble={!!header || scheduled} class:glow-working={working} data-level={working ? level : undefined}>
+	<div class="bubble" class:headedbubble={!!header || scheduled} class:scheduled class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
 				{#each item.images as img, i}
@@ -123,10 +123,15 @@
 	.row.user.headed {
 		align-items: flex-start;
 	}
+	/* Peer messages are tinted amber, prompts from a scheduled task blue, so the two read apart at a glance. */
 	.headedbubble {
-		background: color-mix(in srgb, var(--mark-header) 9%, var(--user-bg));
-		border-color: color-mix(in srgb, var(--mark-header) 35%, var(--border));
+		--tint: var(--mark-header);
+		background: color-mix(in srgb, var(--tint) 9%, var(--user-bg));
+		border-color: color-mix(in srgb, var(--tint) 35%, var(--border));
 		border-top-left-radius: 4px;
+	}
+	.headedbubble.scheduled {
+		--tint: var(--info);
 	}
 	.header {
 		display: flex;
@@ -135,7 +140,7 @@
 		margin-bottom: 4px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
-		color: var(--mark-header);
+		color: var(--tint);
 	}
 	.header :global(svg) {
 		width: 14px;
