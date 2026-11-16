@@ -7,7 +7,7 @@
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { getPane } from "../../lib/pane";
+	import { getPane, paneChat } from "../../lib/pane";
 	import { duration } from "../../lib/format";
 	import { isImageTool, toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
 	import PaintingCanvas from "./PaintingCanvas.svelte";
@@ -21,7 +21,7 @@
 	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number) => `opacity:${t.toFixed(3)}` });
 
 	const pane = getPane();
-	const runOf = (id: string): ToolRun => (id && app.chatOf(pane.id)?.tools[id]) || { state: "pending", output: "" };
+	const runOf = (id: string): ToolRun => (id && paneChat(pane)?.tools[id]) || { state: "pending", output: "" };
 	/** Per step: the tool's run state, or null for a thought. */
 	const runs = $derived(steps.map((s) => (s.kind === "tool" ? runOf(s.id) : null)));
 	const tools = $derived(steps.filter((s) => s.kind === "tool"));
@@ -195,7 +195,7 @@
 		</div>
 	{/if}
 
-	{#if awaitingCall && question}
+	{#if awaitingCall && question && !pane.peek}
 		<div in:fadeIn out:fadeOut><QuestionReply id={awaitingCall.id} paneId={pane.id} question={question} /></div>
 	{/if}
 </div>
