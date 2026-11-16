@@ -1299,6 +1299,11 @@ dialog[data-closing]::backdrop {
 		opacity: 0;
 	}
 }
+/* what replaces a skeleton the reader already saw fades in, so bones and content never swap in one hard frame; a load that
+   beat the skeleton's delay (it was never seen) shows at once */
+.skeleton-out {
+	animation: skeleton-in var(--motion-fast) var(--ease-std) both;
+}
 @keyframes skeleton-sweep {
 	to {
 		transform: translateX(100%);

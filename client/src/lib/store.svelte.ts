@@ -1694,6 +1694,16 @@ class AppStore {
     await this.ensureChat(id, force);
   }
 
+  /**
+   * The pointer is on a conversation's row: start reading its transcript so the click finds it ready (or nearly) instead of
+   * starting the request then. It joins the cached transcripts, so events keep it current, and is the first to go when the
+   * cache is trimmed (it was never seen).
+   */
+  prefetchChat(serverId: string, id: string) {
+    if (serverId !== this.serverId || isTerminalId(id) || this.chats[id] || !this.session(id)) return;
+    void this.ensureChat(id);
+  }
+
   /** Make sure a session's transcript is loaded. `fresh` reloads it from the server. */
   async ensureChat(id: string, fresh = false): Promise<void> {
     const api = this.api;
@@ -1747,7 +1757,8 @@ class AppStore {
     const stale = Object.keys(this.chats).filter((id) => !kept.has(id));
     // A cached transcript coming back on screen shows at once, then refreshes in place in the background.
     for (const id of ids) {
-      if (this.chats[id]?.ready && !this.lastVisible.has(id)) void this.chats[id]!.load();
+      // One read moments ago (a prefetch on hover) is current: events have kept it so since.
+      if (this.chats[id]?.ready && !this.lastVisible.has(id) && !this.chats[id]!.fresh) void this.chats[id]!.load();
     }
     this.lastVisible = keep;
     if (stale.length) {

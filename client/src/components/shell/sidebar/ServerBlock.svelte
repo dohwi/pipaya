@@ -10,6 +10,7 @@
 	import DirBlockView from "./DirBlock.svelte";
 	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
+	import { skeletonGate } from "../../../lib/skeleton-gate.svelte";
 
 	/**
 	 * One server's band in the sidebar: its header (fold, status, name, the conversation list and "+") and the folders under it.
@@ -25,6 +26,8 @@
 	/** The most urgent state among the server's conversations: tints the count while folded */
 	const sstate = $derived(sfold ? mostUrgent(n.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))) : "idle");
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
+	/** The bones stay a moment once they were seen, so a list that lands just after they appeared does not flash them */
+	const sk = skeletonGate(() => !n.loaded);
 </script>
 
 	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off>
@@ -42,8 +45,8 @@
 		</div>
 
 		{#if !sfold}
-		<div class="fold" in:collapseIn out:collapseOut>
-			{#if !n.loaded}
+		<div class="fold" class:skeleton-out={sk.revealed} in:collapseIn out:collapseOut>
+			{#if sk.showing}
 				<!-- a folder and two tabs as bones on the sidebar's columns (folder icon 48, titles from x 80), 32px rows like the real ones -->
 				<div class="sklist skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
 					<div class="skrow skdir"><i class="skeleton-bar skglyph"></i><i class="skeleton-bar skbar" style:width="96px"></i></div>
@@ -57,9 +60,11 @@
 				{/if}
 			{/if}
 
-			{#each n.dirs as d (d.path)}
-				<DirBlockView {n} {d} {searching} />
-			{/each}
+			{#if !sk.showing}
+				{#each n.dirs as d (d.path)}
+					<DirBlockView {n} {d} {searching} />
+				{/each}
+			{/if}
 		</div>
 		{/if}
 	</section>

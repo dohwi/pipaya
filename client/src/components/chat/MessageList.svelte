@@ -16,8 +16,11 @@
 	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../../lib/types";
 	import EntryCard from "../extensions/EntryCard.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
+	import { skeletonGate } from "../../lib/skeleton-gate.svelte";
 
 	let { chat }: { chat: ChatState } = $props();
+	/** The outline stays a moment once it was seen, so a load that ends just after it appeared does not flash it */
+	const sk = skeletonGate(() => !chat.ready && !chat.loadError);
 
 	let scroller: HTMLDivElement | undefined = $state();
 	let showJump = $state(false);
@@ -107,7 +110,7 @@
 
 	// A short transcript that does not fill the view has nothing to scroll: fetch the older page right away.
 	$effect(() => {
-		if (!chat.ready || !chat.hasEarlier || chat.loadingEarlier || chat.earlierFailed || !scroller) return; // after a failure the retry button waits for the reader
+		if (!chat.ready || sk.showing || !chat.hasEarlier || chat.loadingEarlier || chat.earlierFailed || !scroller) return; // after a failure the retry button waits for the reader
 		void tick().then(() => {
 			if (scroller && scroller.scrollHeight <= scroller.clientHeight + 40) void loadEarlier();
 		});
@@ -206,7 +209,7 @@
 	// A conversation was opened and loaded: back where it was left, or at its end.
 	$effect(() => {
 		chat.id;
-		if (chat.ready) void tick().then(restore);
+		if (chat.ready && !sk.showing) void tick().then(restore); // after a held skeleton: the list is in place only now
 	});
 
 	// The user just sent something (prompt / steer / queue): go to the bottom once, even if they had scrolled up.
@@ -290,8 +293,8 @@
 	onpointerdown={onPointerDown}
 	role="presentation"
 >
-	<div class="inner" bind:this={content}>
-		{#if !chat.ready && !chat.loadError}
+	<div class="inner" class:skeleton-out={sk.revealed} bind:this={content}>
+		{#if sk.showing}
 			<!-- a conversation's outline while it loads: a question on the right, the start of a reply under it -->
 			<div class="skeleton skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
 				<div class="skbubble"><i class="skeleton-bar skline" style:width="180px"></i></div>
