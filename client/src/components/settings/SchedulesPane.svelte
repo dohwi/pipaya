@@ -27,6 +27,7 @@
 		cadence,
 		everyMs,
 		everyProblem,
+		isUsedUp,
 		labelOf,
 		parseLocal,
 		purgeAt,
@@ -122,11 +123,14 @@
 	};
 	let form = $state<Form | null>(null);
 	let formError = $state("");
+	/** A neutral line above a form that is not wrong yet (scheduling a past task again). */
+	let formNote = $state("");
 
 	function add(sessionId?: string) {
 		const first = sessionId && sessionOf(sessionId) ? sessionId : (app.activeId && sessionOf(app.activeId) ? app.activeId : (sessions[0]?.id ?? ""));
 		form = { original: null, sessionId: first, title: "", prompt: "", kind: "interval", at: "", amount: "1", unit: "hour", revive: false };
 		formError = "";
+		formNote = "";
 	}
 	function edit(s: Schedule, revive = false) {
 		const e = splitEvery(s.everyMs ?? 3_600_000);
@@ -141,7 +145,10 @@
 			unit: e.unit,
 			revive,
 		};
-		formError = revive ? t("지난 시각입니다. 새 시각을 정해야 다시 켤 수 있습니다.") : "";
+		// From the past tasks this is a normal step, not a mistake: say what happens instead of warning.
+		const again = revive && isUsedUp(s);
+		formNote = again ? t("새 시각을 정하면 예정된 작업으로 돌아갑니다.") : "";
+		formError = revive && !again ? t("지난 시각입니다. 새 시각을 정해야 다시 켤 수 있습니다.") : "";
 	}
 
 	// A conversation's menu ("예약 추가…") opens this page with that conversation chosen.
@@ -244,6 +251,12 @@
 		return s ? `${s.title}${s.name ? ` · @${nameInLang(s.name)}` : ""}` : t("닫힌 대화");
 	};
 	const when = (ms: number) => new Date(ms).toLocaleString();
+	/** The time field of a task being scheduled again: it is the one thing to fill in, often below the fold. */
+	const focusWhen = (node: HTMLElement, on: boolean) => {
+		if (!on) return;
+		node.scrollIntoView({ block: "center" });
+		node.focus({ preventScroll: true });
+	};
 	const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	const sessionOptions = $derived(sessions.map((s) => ({ value: s.id, label: sessionLabel(s.id) })));
 	const unitOptions = $derived([
@@ -280,8 +293,9 @@
 				</FormField>
 			{/if}
 			{#if form.kind === "once"}
-				<FormField label={t("날짜와 시각")}>
-					<input class="field" type="datetime-local" bind:value={form.at} min={minAt} required />
+				<!-- the note sits under the one field to fill in, on the form's gutter (a bare info Notice has no box on this page and floated 12px in) -->
+				<FormField label={t("날짜와 시각")} hint={formNote || undefined}>
+					<input class="field" type="datetime-local" bind:value={form.at} min={minAt} required use:focusWhen={form.revive} />
 				</FormField>
 			{:else}
 				<FormField label={t("반복 간격")} hint={t("5분부터 30일까지. 저장하거나 켠 때부터 셉니다.")} group>
@@ -293,7 +307,7 @@
 			{/if}
 			<div class="actions">
 				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>
-				<Button variant="primary" type="submit" disabled={busy}>{t("저장")}</Button>
+				<Button variant="primary" type="submit" disabled={busy}>{form.revive ? t("다시 예약") : t("저장")}</Button>
 			</div>
 		</form>
 	{:else if !list && loading}
@@ -341,7 +355,7 @@
 		{#if finished.length}
 			<!-- "text", not "line": the line variant pads its body 4px and would pull these cards off the gutter of the cards above -->
 			<Accordion variant="text" bind:open={historyOpen}>
-				{#snippet head()}<span>{t("지난 작업")}</span><span class="count">{t("{n}개", { n: finished.length })}</span>{/snippet}
+				{#snippet head()}<span class="hhead">{t("지난 작업")}</span><span class="hhead count">{t("{n}개", { n: finished.length })}</span>{/snippet}
 				<div class="history">
 					<p class="hint">{t("실행을 마친 한 번짜리 작업입니다. 마지막 실행 {days}일 뒤 자동으로 지워집니다.", { days: HISTORY_KEEP_MS / 86_400_000 })}</p>
 					<ul class="list">
@@ -360,7 +374,7 @@
 									<p class="desc">{s.prompt}</p>
 									<p class="meta">{sessionLabel(s.sessionId)}</p>
 									<p class="meta">
-										{#if s.lastRunAt}{t("{when}에 실행 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) })}
+										{#if s.lastRunAt}{s.lastStatus?.startsWith("skipped") ? t("{when}에 건너뜀 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) }) : t("{when}에 실행 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) })}
 										{:else}{t("{day}에 지워짐", { day: day(purgeAt(s)) })}{/if}
 									</p>
 									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
@@ -392,6 +406,8 @@
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.err { color: var(--danger); }
 	.count { font-weight: 400; color: var(--text-faint); }
+	/* whole-pixel line box: the inherited body line-height made the fold's header 18.59px tall */
+	.hhead { line-height: 20px; }
 	.history { display: flex; flex-direction: column; gap: 8px; }
 	/* pinned to the bottom of the scrolling settings page while a delete can still be undone; above the cards (a local layer) */
 	.undo { position: sticky; bottom: 16px; z-index: 1; }

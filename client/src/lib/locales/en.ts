@@ -545,6 +545,8 @@ export const en: Record<string, string> = {
 	"지난 작업": "Past tasks",
 	"실행을 마친 한 번짜리 작업입니다. 마지막 실행 {days}일 뒤 자동으로 지워집니다.": "One-time tasks that have run. Each is deleted automatically {days} days after its last run.",
 	"{when}에 실행 · {day}에 지워짐": "Ran {when} · deleted on {day}",
+	"{when}에 건너뜀 · {day}에 지워짐": "Skipped {when} · deleted on {day}",
+	"새 시각을 정하면 예정된 작업으로 돌아갑니다.": "Pick a new time and it goes back to the scheduled tasks.",
 	"{day}에 지워짐": "Deleted on {day}",
 	"다시 예약": "Schedule again",
 	"지난 작업 모두 지우기": "Clear past tasks",
