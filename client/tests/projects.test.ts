@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, flattenBlocks, needsLook, projectBlocks, subPath, type RepoMap } from "../src/lib/projects";
+import { branchLabel, flattenBlocks, waitingRows, projectBlocks, subPath, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -46,7 +46,7 @@ describe("labels", () => {
 	});
 });
 
-describe("needsLook", () => {
+describe("waitingRows", () => {
 	const states: Record<string, string> = { a: "done", b: "asking", c: "working", d: "failed", g1: "asking", t: "asking" };
 	const sessions = new Set(["a", "b", "c", "d", "g1"]);
 	const dirs: DirBlock[] = [
@@ -54,7 +54,7 @@ describe("needsLook", () => {
 		{ path: "/2", tabs: [{ kind: "group", id: "g", members: [{ id: "g1" }, { id: "a" }] } as never, tab("d"), tab("t")] },
 	];
 	test("waiting conversations, most urgent first, listed order within a state, each once, no terminals", () => {
-		const r = needsLook(dirs, (id) => states[id] ?? "idle", (id) => (sessions.has(id) ? { id } : undefined));
+		const r = waitingRows(dirs, (id) => states[id] ?? "idle", (id) => (sessions.has(id) ? { id } : undefined));
 		expect(r.map((x) => `${x.session.id}:${x.state}`)).toEqual(["b:asking", "g1:asking", "d:failed", "a:done"]);
 	});
 });

@@ -73,7 +73,10 @@ export function branchLabel(path: string, repo: RepoInfo): { name: string; sub: 
 	return { name, sub: subPath(path, repo.top) };
 }
 
-/** What the "확인 필요" list shows, most urgent first: a question waiting, a failure, then a finished run not looked at. */
+/**
+ * What the "확인 필요" list shows, most urgent first: a question waiting, a failure, then a finished run not looked at.
+ * The same order "next needing attention" (Ctrl+J, `nav.needsLook`) walks, so the list's first row is where it goes.
+ */
 const LOOK_ORDER = ["asking", "failed", "done"] as const;
 export type LookState = (typeof LOOK_ORDER)[number];
 
@@ -81,7 +84,7 @@ export type LookState = (typeof LOOK_ORDER)[number];
  * The conversations waiting on the user, in the order they are listed (within one state), skipping terminals. Each
  * appears once even when it is a pane of a split tab.
  */
-export function needsLook<S extends { id: string }>(dirs: readonly DirBlock[], stateOf: (id: string) => string, session: (id: string) => S | undefined): { session: S; state: LookState }[] {
+export function waitingRows<S extends { id: string }>(dirs: readonly DirBlock[], stateOf: (id: string) => string, session: (id: string) => S | undefined): { session: S; state: LookState }[] {
 	const seen = new Set<string>();
 	const out: { session: S; state: LookState; rank: number; at: number }[] = [];
 	for (const d of dirs)

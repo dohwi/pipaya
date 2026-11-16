@@ -2,7 +2,7 @@
 	import { sessionTitle } from "../../../lib/session-title";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL } from "../../../lib/activity";
-	import { needsLook } from "../../../lib/projects";
+	import { waitingRows } from "../../../lib/projects";
 	import { app } from "../../../lib/store.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
@@ -16,7 +16,7 @@
 	let { n }: { n: SidebarNode } = $props();
 
 	const sb = getSidebarCtx();
-	const rows = $derived(needsLook(n.dirs, (id) => sb.stateOfId(n, id), (id) => app.links[n.server.id]?.sessionById.get(id)));
+	const rows = $derived(waitingRows(n.dirs, (id) => sb.stateOfId(n, id), (id) => app.links[n.server.id]?.sessionById.get(id)));
 </script>
 
 {#if rows.length}
