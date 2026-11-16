@@ -67,7 +67,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "clock" | "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin";
+export type MenuIcon = "clock" | "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "repo";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -173,6 +173,10 @@ export interface HeadActions extends NewActions {
 	pinned?: boolean;
 	/** Rename the folder in place (any folder) */
 	rename?(): void;
+	/** Put the folder in a project with other folders (a picker) */
+	joinProject?(): void;
+	/** Take the folder out of the project it is listed in */
+	leaveProject?(): void;
 }
 
 /** A folder or server header's context menu: what its "+" offers, then copying the path and folding. */
@@ -183,7 +187,30 @@ export function headMenuEntries(os: string | undefined, folded: boolean, act: He
 		...newMenuEntries(os, act),
 		...(pin ? [{ icon: "pin", label: act.pinned ? t("고정 해제") : t("폴더 고정"), title: t("고정하면 안에 대화가 없어도 사이드바에 남습니다"), tilt: act.pinned ? 0 : 35, /* pinning drives the pin in at the same slant as a pinned folder's icon; unpinning stands it upright */ run: pin } satisfies MenuEntry] : []),
 		...(act.rename ? [{ icon: "pencil", label: t("이름 바꾸기"), title: t("경로 대신 보일 이름을 붙입니다"), run: act.rename } satisfies MenuEntry] : []),
+		...(act.joinProject ? [{ icon: "repo", label: t("프로젝트로 묶기…"), title: t("다른 폴더와 한 프로젝트 아래에 둡니다"), run: act.joinProject } satisfies MenuEntry] : []),
+		...(act.leaveProject ? [{ icon: "unlink", label: t("프로젝트에서 빼기"), title: t("이 폴더를 프로젝트 밖에 따로 둡니다"), run: act.leaveProject } satisfies MenuEntry] : []),
 		...(copy ? [{ icon: "copy", label: t("경로 복사"), title: "", run: copy } satisfies MenuEntry] : []),
+		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
+	];
+}
+
+/** What a project header's context menu does. */
+export interface ProjectActions extends NewActions {
+	toggle(): void;
+	/** Rename it (hand-made projects only: a repository's project is named by its folder) */
+	rename?(): void;
+	/** Undo a hand-made project, its folders going back to the automatic grouping */
+	dissolve?(): void;
+	copyPath?(): void;
+}
+
+/** A project header's context menu: the "+" entries, renaming and undoing a hand-made project, folding. */
+export function projectMenuEntries(os: string | undefined, folded: boolean, act: ProjectActions): MenuEntry[] {
+	return [
+		...newMenuEntries(os, act),
+		...(act.rename ? [{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: act.rename } satisfies MenuEntry] : []),
+		...(act.copyPath ? [{ icon: "copy", label: t("경로 복사"), title: "", run: act.copyPath } satisfies MenuEntry] : []),
+		...(act.dissolve ? [{ icon: "unlink", label: t("프로젝트 풀기"), title: t("폴더들을 자동 묶기로 되돌립니다"), run: act.dissolve } satisfies MenuEntry] : []),
 		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];
 }

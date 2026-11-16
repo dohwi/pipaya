@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { sessionTitle } from "../../lib/session-title";
-	import { peerLabel } from "../../lib/peers";
+	import { parentLabel, peerLabel } from "../../lib/peers";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { t } from "../../lib/i18n";
 	import { schedule, unschedule } from "../../lib/frame";
@@ -37,6 +37,8 @@
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
+	/** "↳ @parent" on a tab whose session another open session made: who started it, beside it */
+	const parentOf = (x: Tab) => (x.kind === "session" ? parentLabel(x.session, (id) => app.session(id)) : undefined);
 	const handleOf = (x: Tab) => (x.kind === "session" ? (peerLabel(x.session) ?? extensions.labelOf(x.id)) : undefined);
 	/** The most pressing state among a tab's conversations. */
 	function stateOf(x: Tab): Activity {
@@ -248,7 +250,7 @@
 						}}
 					/>
 				{:else}
-					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>
+					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}>{pl.text}</span>{/if}
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
@@ -475,6 +477,15 @@
 	}
 	.who.working {
 		color: var(--info);
+	}
+	/* "↳ @parent": who made this conversation, after its title and quieter than its own handle */
+	.from {
+		flex: none;
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		line-height: 16px; /* whole-pixel line box, like .who */
+		position: relative;
+		top: 1px; /* the same baseline step as .who (measured there) */
 	}
 	.who.asking {
 		color: var(--warn);

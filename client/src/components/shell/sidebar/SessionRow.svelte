@@ -3,7 +3,7 @@
 	import { extensions } from "../../../lib/extensions/host.svelte";
 	import { ACTIVITY_LABEL } from "../../../lib/activity";
 	import { t } from "../../../lib/i18n";
-	import { peerLabel } from "../../../lib/peers";
+	import { parentLabel, peerLabel } from "../../../lib/peers";
 	import type { DropOpts } from "../../../lib/dnd.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import type { Session } from "../../../lib/types";
@@ -21,7 +21,9 @@
 	const sb = getSidebarCtx();
 	const st = $derived(sb.stateOf(n, x));
 	const label = $derived(peerLabel(x) ?? extensions.labelOf(x.id));
-	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", x.parentId ? t("분기된 대화") : ""].filter(Boolean).join(" · "));
+	/** "↳ @parent" when another open session made this one (an agent's peer create, or a fork) */
+	const parent = $derived(parentLabel(x, (id) => app.links[n.server.id]?.sessionById.get(id)));
+	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
 	/** Switched-on scheduled tasks of this conversation. Only the open server's list is kept current, so only its rows show it. */
 	const sched = $derived(n.current ? app.schedules.of(n.server.id, x.id) : { count: 0, next: null });
 	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: whenShort(sched.next) })}`);
@@ -31,6 +33,7 @@
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
 	<RowTitle text={sessionTitle(x.title)} />
+	{#if parent}<span class="from mono">{parent.text}</span>{/if}
 	{#if sched.count}<span class="clock" role="img" aria-label={schedTip} title={schedTip}><Icon name="clock" /></span>{/if}
 {/snippet}
 
@@ -64,6 +67,20 @@
 		   (measured at 1x / 1.25x / 1.5x / 2x / 4x); 1px down puts both on one baseline */
 		position: relative;
 		top: 1px;
+	}
+	/* "↳ @parent" after the title: gives way to it only when the row is narrow (the title shrinks first) */
+	.from {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		max-width: 96px; /* a long parent name never takes the title's room */
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		line-height: 16px; /* whole-pixel line box, like .who */
+		position: relative;
+		top: 1px; /* the same baseline step as .who (measured there) */
 	}
 	.who.working { color: var(--info); }
 	.who.asking { color: var(--warn); }

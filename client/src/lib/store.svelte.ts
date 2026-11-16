@@ -1356,7 +1356,7 @@ class AppStore {
       if (!d) continue;
       const id = server.id;
       const dirs = sidebarDirs(d.sessions, d.groups, d.terminals, { dirOrder: this.sidebar.dirOrder[id], tabOrder: this.sidebar.tabOrder[id], groupDir: this.sidebar.groupDir[id], keep: this.sidebar.pinned[id], pinnedTabs: this.sidebar.pinnedTabs[id] });
-      out[id] = projectBlocks(dirs, link.repos);
+      out[id] = projectBlocks(dirs, link.repos, this.sidebar.overrides(id));
     }
     return out;
   });

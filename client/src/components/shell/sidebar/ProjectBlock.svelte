@@ -4,23 +4,33 @@
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
 	import { tabPanes, type DirBlock as Dir } from "../../../lib/nav";
 	import { app } from "../../../lib/store.svelte";
-	import { projectKey } from "../../../lib/projects";
-	import { asWorkdir, shortName } from "../../../lib/sidebar-model";
+	import { isManualRoot, projectKey } from "../../../lib/projects";
+	import { asWorkdir } from "../../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
 	import DirBlockView from "./DirBlock.svelte";
 	import NewButton from "./NewButton.svelte";
 
 	/**
-	 * A git repository with more than one folder listed: its main checkout and worktrees (and folders inside them) under one
-	 * header, each named by its branch. The header folds the whole project; "+" starts something in the main checkout.
+	 * A project: a git repository with more than one folder listed (its main checkout and worktrees under one header, each
+	 * named by its branch), or folders the user put together by hand (`manual`, each under its own name). The header folds
+	 * the whole project; "+" starts something in the main checkout, or in a hand-made project's first folder. Right click
+	 * or a long press opens its menu (rename, undo a hand-made one).
 	 */
 	let { n, root, dirs, searching }: { n: SidebarNode; root: string; dirs: Dir[]; searching: boolean } = $props();
+	function focusSelect(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
 
 	const sb = getSidebarCtx();
 	const key = $derived(projectKey(n.server.id, root));
 	const folded = $derived(sb.isFolded(key));
-	const name = $derived(app.sidebar.dirName(n.server.id, root) ?? shortName(root, n.home));
+	const manual = $derived(isManualRoot(root));
+	const name = $derived(sb.projectName(n, root));
+	/** Where "+" starts: the repository's main checkout, or a hand-made project's first folder */
+	const home = $derived(manual ? (dirs[0]?.path ?? n.root ?? ".") : root);
+	const workdir = $derived(asWorkdir(home, n.root));
 	const total = $derived(dirs.reduce((k, d) => k + d.tabs.length, 0));
 	const pstate = $derived(mostUrgent(dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))));
 	/** One of its folders is the open one: the header reads as current, like a folder's */
@@ -28,19 +38,37 @@
 </script>
 
 <div class="projblock">
-	<div class="dir proj" class:folded class:cur={cur && folded}>
-		<button class="dirtoggle projtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={sb.pretty(n, root)}>
+	<div class="dir proj grabbable" class:folded class:cur={cur && folded} use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: dirs[0]?.path ?? root, paths: [], disabled: true, menu: (pt) => sb.projectMenuAt(pt, n, root, key, workdir) }}>
+		<button class="dirtoggle projtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={manual ? name : sb.pretty(n, root)}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 			<span class="dicon"><Icon name="repo" /></span>
-			<span class="dname">{name}</span>
+			{#if sb.projectRename.is(key)}
+				<!-- svelte-ignore a11y_autofocus -->
+				<input
+					class="pnameinput"
+					value={sb.projectRename.draft}
+					maxlength="60"
+					oninput={(e) => (sb.projectRename.draft = e.currentTarget.value)}
+					use:focusSelect
+					onclick={(e) => e.stopPropagation()}
+					onblur={() => sb.commitProjectRename(n, root)}
+					onkeydown={(e) => {
+						e.stopPropagation();
+						if (e.key === "Enter") sb.commitProjectRename(n, root);
+						if (e.key === "Escape") sb.projectRename.cancel();
+					}}
+				/>
+			{:else}
+				<span class="dname">{name}</span>
+			{/if}
 			{#if folded && total}<span class="cbadge tint {ACTIVITY_TONE[pstate]}" title={t("{n}개", { n: total }) + (pstate !== "idle" ? ` · ${ACTIVITY_LABEL[pstate]}` : "")}>{total}</span>{/if}
 		</button>
-		<NewButton {n} workdir={asWorkdir(root, n.root)} key={key} name={name} tip={t("이 프로젝트에서 새 대화 또는 터미널")} />
+		<NewButton {n} {workdir} key={key} name={name} tip={t("이 프로젝트에서 새 대화 또는 터미널")} />
 	</div>
 	{#if !folded}
 		<div class="fold projdirs" in:collapseIn out:collapseOut>
 			{#each dirs as d (d.path)}
-				<DirBlockView {n} {d} {searching} inProject />
+				<DirBlockView {n} {d} {searching} inProject={manual ? "manual" : "git"} />
 			{/each}
 		</div>
 	{/if}
@@ -68,6 +96,24 @@
 		text-align: left;
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
+	}
+	.pnameinput {
+		flex: 1;
+		min-width: 0;
+		height: 24px;
+		padding: 0 4px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--accent);
+		background: var(--bg);
+		outline: 0;
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		color: var(--text);
+	}
+	.proj.grabbable {
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
 	}
 	.proj.folded .projtoggle {
 		padding-right: 0; /* the count takes the "+" column, as on a folded folder */

@@ -26,7 +26,8 @@
 	 * the folder (its last used tab). Inside a project the folder is named by its branch. The header can be dragged to
 	 * reorder folders, and a split-tab pane dropped on it steps out of its group.
 	 */
-	let { n, d, searching, inProject = false }: { n: SidebarNode; d: Dir; searching: boolean; inProject?: boolean } = $props();
+	/** `inProject`: listed under a project header; "git" names the folder by its branch, "manual" (hand-made) by its own label */
+	let { n, d, searching, inProject = false }: { n: SidebarNode; d: Dir; searching: boolean; inProject?: false | "git" | "manual" } = $props();
 
 	const sb = getSidebarCtx();
 	function focusSelect(node: HTMLInputElement) {
@@ -36,7 +37,7 @@
 	const key = $derived(dirKey(n.server.id, d.path));
 	const folded = $derived(sb.isDirFolded(key));
 	/** Inside a project: the folder is named by the branch checked out there (a project lists one repository's worktrees) */
-	const repo = $derived(inProject ? n.repos[d.path] ?? null : null);
+	const repo = $derived(inProject === "git" ? n.repos[d.path] ?? null : null);
 	const branch = $derived(repo ? branchLabel(d.path, repo) : null);
 	/** The folder whose tabs the tab bar shows */
 	const cur = $derived(!app.graphOpen && n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs));
@@ -52,7 +53,7 @@
 
 <!-- A drop and drag target for folders; the folder toggle inside is a real button. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="dirblock" class:inproj={inProject} data-block={`dir:${d.path}`} data-server={n.server.id} class:carried={mark.carried} class:before={mark.before} class:after={mark.after}>
+<div class="dirblock" class:inproj={!!inProject} data-block={`dir:${d.path}`} data-server={n.server.id} class:carried={mark.carried} class:before={mark.before} class:after={mark.after}>
 	<div
 		class="dir grabbable"
 		class:folded

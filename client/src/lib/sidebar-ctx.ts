@@ -47,6 +47,13 @@ export interface SidebarCtx {
 	/** The pinned folder being renamed (its dir key) */
 	readonly dirRename: InlineRename;
 	commitDirRename(n: SidebarNode, path: string): void;
+	/** The project header being renamed (its project key) */
+	readonly projectRename: InlineRename;
+	commitProjectRename(n: SidebarNode, root: string): void;
+	/** Context menu of a project header; returns how to close it */
+	projectMenuAt(pt: Point, n: SidebarNode, root: string, key: string, workdir: string): () => void;
+	/** A project's label (a hand-made one's name, else the repository folder's) */
+	projectName(n: SidebarNode, root: string): string;
 	/** Id the "more" / "+" menu is open for (its button stays highlighted) */
 	readonly menuId: string | null;
 	readonly searching: boolean;

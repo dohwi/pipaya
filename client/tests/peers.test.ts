@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, parsePeer, peerLabel, peerMentions } from "../src/lib/peers";
+import { groupHandle, parentLabel, parsePeer, peerLabel, peerMentions } from "../src/lib/peers";
 import type { Group, Session } from "../src/lib/types";
 
 const s = (id: string, name: string, extra: Partial<Session> = {}) => ({ id, name, title: `t-${id}`, purpose: "", cwd: "/home/u/proj/app", closed: false, ...extra }) as Session;
@@ -44,5 +44,15 @@ d2("member names follow the UI language at display time", () => {
 		e2(nameInLang("철수2", "en")).toBe("Cheolsu2");
 		e2(nameInLang("custom", "en")).toBe("custom");
 		e2(romanize("영희")).toBe("Yeonghui");
+	});
+});
+
+describe("parentLabel", () => {
+	const by = (m: Record<string, { name: string; title: string }>) => (id: string) => m[id];
+	test("names the open session that made this one; nothing for one the user started or whose parent is gone", () => {
+		expect(parentLabel({ parentId: "p" }, by({ p: { name: "minji", title: "x" } }))?.text).toBe("↳ @minji");
+		expect(parentLabel({ parentId: "p" }, by({ p: { name: "", title: "Fork source" } }))?.text).toBe("↳ Fork source");
+		expect(parentLabel({ parentId: null }, by({}))).toBeUndefined();
+		expect(parentLabel({ parentId: "gone" }, by({}))).toBeUndefined();
 	});
 });
