@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeWorkdir, relPath, workdirAbs, workdirText } from "../src/lib/workdir-model";
+import { normalizeWorkdir, relPath, workdirAbs } from "../src/lib/workdir-model";
 
 const ctx = { root: "/srv/work", home: "/home/me" };
 
@@ -44,11 +44,5 @@ describe("workdir display", () => {
 		expect(workdirAbs("a", "C:\\Work")).toBe("C:\\Work\\a");
 		expect(workdirAbs("/abs", "/srv/work")).toBe("/abs");
 		expect(workdirAbs(".", null)).toBe("");
-	});
-	test("workdirText is null only for '.' with no root", () => {
-		expect(workdirText(".", null)).toBeNull();
-		expect(workdirText(".", "/srv/work")).toBe("/srv/work");
-		expect(workdirText("a", "/srv/work")).toBe("/srv/work/a");
-		expect(workdirText("/abs", null)).toBe("/abs");
 	});
 });

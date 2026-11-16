@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { parseRetrying, secondsLeft } from "../src/lib/retry-state";
 
 test("parses a full run_retrying payload", () => {

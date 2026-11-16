@@ -5,7 +5,7 @@ import {
   isUnsupportedRoute,
   normalizeUrl,
 } from "./api";
-import { normalizeWorkdir, relPath, workdirAbs, workdirText } from "./workdir-model";
+import { normalizeWorkdir, relPath, workdirAbs } from "./workdir-model";
 import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -1210,30 +1210,9 @@ class AppStore {
     return relPath(cwd, this.workspace?.root);
   }
 
-  /** Human label for a `workdir` value: the server default, a sub-folder of it, or an absolute path. */
-  workdirLabel(rel: string = this.workdir): string {
-    return workdirText(rel, this.workspace?.root) ?? t("서버 기본 디렉터리");
-  }
-
   /** Absolute path the next new chat will start in (best effort until the server confirms). */
   get workdirAbs(): string {
     return workdirAbs(this.workdir, this.workspace?.root);
-  }
-
-  /** Switch one agent tool on or off for every chat. Saved on the server. */
-  async setToolEnabled(name: string, enabled: boolean): Promise<boolean> {
-    if (!this.api || !this.toolsInfo) return false;
-    const before = this.toolsInfo;
-    const disabled = enabled ? before.disabled.filter((n) => n !== name) : [...new Set([...before.disabled, name])];
-    this.toolsInfo = { ...before, disabled };
-    try {
-      this.toolsInfo = await this.api.setDisabledTools(disabled);
-      return true;
-    } catch (e) {
-      this.toolsInfo = before;
-      this.fail(e, t("변경하지 못했습니다"), this.activeId);
-      return false;
-    }
   }
 
   /** Save the server-wide default working directory (null restores the startup default). */
