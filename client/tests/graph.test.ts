@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, CARD_H, CARD_H_LIVE, edgePath, fitView, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, isMouseWheel, CARD_H, CARD_H_LIVE, edgePath, fitView, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -113,6 +113,15 @@ describe("buildGraph", () => {
 });
 
 describe("helpers", () => {
+	test("isMouseWheel: a wheel zooms, two fingers on a trackpad scroll", () => {
+		const w = (deltaY: number, o: { deltaX?: number; deltaMode?: number; wheelDeltaY?: number } = {}) => isMouseWheel({ deltaMode: 0, deltaX: 0, deltaY, ...o });
+		// Chrome / Safari with a mouse: whole 120 steps that are not -3× the pixel delta
+		expect([w(100, { wheelDeltaY: -120 }), w(-100, { wheelDeltaY: 120 }), w(4, { wheelDeltaY: -120 })]).toEqual([true, true, true]);
+		// a trackpad: wheelDeltaY is -3× deltaY, often sideways too
+		expect([w(4, { wheelDeltaY: -12 }), w(40, { wheelDeltaY: -120 }), w(3, { deltaX: 2, wheelDeltaY: -9 })]).toEqual([false, false, false]);
+		// Firefox: a wheel counts in lines; without the legacy delta a big whole step is a wheel
+		expect([w(3, { deltaMode: 1 }), w(102), w(7), w(55.5)]).toEqual([true, true, false, false]);
+	});
 	test("modelName drops the provider", () => {
 		expect([modelName("p/m"), modelName("p/org/m"), modelName("m")]).toEqual(["m", "org/m", "m"]);
 	});
