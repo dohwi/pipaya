@@ -171,14 +171,19 @@
 		position: relative;
 		padding: 12px 16px 0;
 	}
-	/* Pull handle in the wrap's 12px top padding: a 32x4 bar 4px below the box edge, centred over the summary line.
-	   The hit area (64x16) reaches 4px into that line, which is not clickable, so touch gets a fair target. */
+	/* Pull handle in the wrap's 12px top padding: a 4px bar 4px below the box edge, centred over the summary line.
+	   The bar is 10% of the box (32px to 80px), so it stays in proportion: a fixed 32px read as a speck over a wide
+	   desktop composer. The grip's content box is the bar and its side padding (--pad) widens the hit area; the hit area
+	   (16px high) reaches 4px into the summary line, which is not clickable, so touch gets a fair target. */
 	.grip {
+		--pad: 16px;
 		position: absolute;
 		top: 0;
 		inset-inline: 0;
 		margin-inline: auto;
-		width: 64px;
+		box-sizing: content-box;
+		width: clamp(32px, 10%, 80px);
+		padding-inline: var(--pad);
 		height: 16px;
 		cursor: row-resize;
 		touch-action: none;
@@ -189,9 +194,7 @@
 		content: "";
 		position: absolute;
 		top: 4px;
-		inset-inline: 0;
-		margin-inline: auto;
-		width: 32px;
+		inset-inline: var(--pad);
 		height: 4px;
 		border-radius: 2px;
 		background: var(--text-faint);
@@ -202,10 +205,11 @@
 	.grip:focus-visible::before {
 		opacity: 1;
 	}
-	/* A finger needs more than 16px: on touch the hit area grows to 96x24, still clear of the first row (32px down). */
+	/* A finger needs more than 16px: on touch the hit area grows to the bar + 64px (a phone's ~36px bar gives ~100px)
+	   by 24px, still clear of the first row (32px down). */
 	@media (pointer: coarse) {
 		.grip {
-			width: 96px;
+			--pad: 32px;
 			height: 24px;
 		}
 	}
