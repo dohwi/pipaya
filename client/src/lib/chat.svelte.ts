@@ -107,16 +107,16 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
 	};
 }
 
-/**
- * Transcript + live state for one session. Persisted messages come from REST; SSE events keep it current.
- * Events that arrive while a (re)load is in flight are buffered and replayed afterwards; `seq` de-duplicates.
- */
 /** Messages fetched when a conversation opens, and per step when scrolling back. */
 const FIRST_PAGE = 40;
 const EARLIER_PAGE = 100;
 /** Most messages a refresh asks for at once (the server's `tail` limit). */
 const MAX_RELOAD = 5000;
 
+/**
+ * Transcript + live state for one session. Persisted messages come from REST; SSE events keep it current.
+ * Events that arrive while a (re)load is in flight are buffered and replayed afterwards; `seq` de-duplicates.
+ */
 export class ChatState {
 	items = $state<ChatItem[]>([]);
 	tools = $state<Record<string, ToolRun>>({});

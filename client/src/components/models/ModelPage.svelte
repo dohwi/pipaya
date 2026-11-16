@@ -45,7 +45,6 @@
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
-	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
 	/**
 	 * Svelte action for the starting-strength row: keeps the chosen strength in view when the row scrolls sideways
 	 * (a phone with many strengths) and marks which edge still has more behind it (`data-more="start end"`), which the
@@ -73,6 +72,7 @@
 			},
 		};
 	}
+	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
 

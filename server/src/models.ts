@@ -4,9 +4,9 @@ import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
 export interface ModelRegistry {
 	models: MutableModels;
-	/** Persisted defaults take priority over startup environment defaults. */
 	/** Whether this model makes pictures (image generation) instead of writing text. */
 	isImageModel?: (provider: string, id: string) => boolean;
+	/** Persisted defaults take priority over startup environment defaults. */
 	defaultSelection?: () => { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null;
 }
 

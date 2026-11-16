@@ -88,7 +88,6 @@ export interface BarKey {
 const sym = (c: string): BarKey => ({ id: `s${c.charCodeAt(0)}`, label: c, text: c, title: c });
 const ctl = (c: string): BarKey => ({ id: `c${c}`, label: `^${c.toUpperCase()}`, text: ctrlChar(c)!, title: `Ctrl+${c.toUpperCase()}` });
 
-/** The bar's scrolling part: modifiers, navigation, a few symbols and the usual Ctrl combos. The arrows stay pinned beside the keyboard button. */
 /** Pinned at the right end of the bar, next to the keyboard button: never scrolled out of reach */
 export const ARROW_KEYS: readonly BarKey[] = [
 	{ id: "left", label: "←", send: "left", repeat: true, icon: "arrow-left", title: "Left" },
@@ -97,6 +96,7 @@ export const ARROW_KEYS: readonly BarKey[] = [
 	{ id: "right", label: "→", send: "right", repeat: true, icon: "arrow-right", title: "Right" },
 ];
 
+/** The bar's scrolling part: modifiers, navigation, a few symbols and the usual Ctrl combos. The arrows stay pinned beside the keyboard button. */
 export const BAR_KEYS: readonly BarKey[] = [
 	{ id: "esc", label: "Esc", send: "esc", title: "Escape" },
 	{ id: "tab", label: "Tab", send: "tab", title: "Tab" },

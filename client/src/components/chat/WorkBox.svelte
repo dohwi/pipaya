@@ -46,9 +46,9 @@
 		return [...m].map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)).join(" · ");
 	});
 
-	/** The single line the box shows; changing `key` cross-fades the old line into the new one. */
 	/** The step the header names. Between two steps it stays on the tool that just finished instead of a bare "작업 중". */
 	const shown = $derived(cur >= 0 ? cur : active && steps.at(-1)?.kind === "tool" ? steps.length - 1 : -1);
+	/** The single line the box shows; changing `key` cross-fades the old line into the new one. */
 	const line = $derived.by(() => {
 		const s = shown >= 0 ? steps[shown] : undefined;
 		if (s?.kind === "tool") return { key: `t${shown}`, kind: toolKind(s.name, s.args), icon: toolIcon(s.name, s.args), name: toolLabel(s.name, s.args), sum: s.id ? toolSummary(s.name, s.args) : t("준비 중…"), shimmer: shown === cur && awaitingIdx < 0 };

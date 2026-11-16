@@ -5,7 +5,7 @@ import {
   isUnsupportedRoute,
   normalizeUrl,
 } from "./api";
-import { normalizeWorkdir, relPath, workdirAbs, workdirText } from "./workdir-model";
+import { normalizeWorkdir, relPath, workdirAbs } from "./workdir-model";
 import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind, type LocalServerInfo } from "./local-server";
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
@@ -132,7 +132,6 @@ class AppStore {
   set workspace(v: WorkspaceInfo | null) {
     if (this.link) this.link.workspace = v;
   }
-  /** Working directory (relative to the root, "." = root) where the next new chat starts. */
   /** Directory the next new chat starts in: "." = the server's default, else a path relative to it or absolute */
   workdir = $state(".");
   /** The server's default working directory setting (null on servers from before it existed) */
@@ -345,8 +344,10 @@ class AppStore {
     return this.servers.find((s) => s.id === this.serverId);
   }
 
-  /** Update the connected server, then say so and reload what it serves. The one path for every "update the server" button. */
-  /** `force` goes ahead although conversations are running: they are cut off by the restart. */
+  /**
+   * Update the connected server, then say so and reload what it serves. The one path for every "update the server" button.
+   * `force` goes ahead although conversations are running: they are cut off by the restart.
+   */
   async updateServerSoftware(api: Api | null = this.api, force = false): Promise<boolean> {
     if (!api || !(await serverUpdater.apply(api, force))) return false;
     this.toast(serverUpdater.updatedTo ? t("서버를 v{version}(으)로 업데이트했습니다", { version: serverUpdater.updatedTo }) : t("서버를 업데이트했습니다"), "ok");
@@ -1209,30 +1210,9 @@ class AppStore {
     return relPath(cwd, this.workspace?.root);
   }
 
-  /** Human label for a `workdir` value: the server default, a sub-folder of it, or an absolute path. */
-  workdirLabel(rel: string = this.workdir): string {
-    return workdirText(rel, this.workspace?.root) ?? t("서버 기본 디렉터리");
-  }
-
   /** Absolute path the next new chat will start in (best effort until the server confirms). */
   get workdirAbs(): string {
     return workdirAbs(this.workdir, this.workspace?.root);
-  }
-
-  /** Switch one agent tool on or off for every chat. Saved on the server. */
-  async setToolEnabled(name: string, enabled: boolean): Promise<boolean> {
-    if (!this.api || !this.toolsInfo) return false;
-    const before = this.toolsInfo;
-    const disabled = enabled ? before.disabled.filter((n) => n !== name) : [...new Set([...before.disabled, name])];
-    this.toolsInfo = { ...before, disabled };
-    try {
-      this.toolsInfo = await this.api.setDisabledTools(disabled);
-      return true;
-    } catch (e) {
-      this.toolsInfo = before;
-      this.fail(e, t("변경하지 못했습니다"), this.activeId);
-      return false;
-    }
   }
 
   /** Save the server-wide default working directory (null restores the startup default). */
@@ -1800,12 +1780,12 @@ class AppStore {
 
   /* ---------- commands ---------- */
 
-  /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
   /** Put `text` into the composer of `paneId` at the caret (the composer consumes it once). */
   insertIntoComposer(paneId: string, text: string) {
     this.insertText = { paneId, text };
   }
 
+  /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
   toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
     this.feedback.toast(text, tone, sid, action);
   }

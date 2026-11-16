@@ -280,10 +280,6 @@ export class ExtensionHost {
   private storedList(): string | null {
     return localStorage.getItem(this.listKey());
   }
-  private ready!: () => void;
-  private readyPromise = new Promise<void>(resolve => { this.ready = resolve; });
-  /** Resolves once init() has loaded the list of the server that was open at launch */
-  whenReady(): Promise<void> { return this.readyPromise; }
 
   /** Parse the stored list into `installed` / `unreadable`. */
   private readList(text: string | null) {
@@ -350,7 +346,6 @@ export class ExtensionHost {
     if (this.initialized) return;
     this.initialized = true;
     this.loadList();
-    this.ready();
     void this.boot();
   }
 

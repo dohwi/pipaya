@@ -5,7 +5,6 @@
  * server that is not the open one, so this is fed from every server's event stream (the store calls `onEvent` for each),
  * and a page reads `versions(serverId)` to know when to read again. Nothing here is specific to an extension.
  */
-export interface PanelChange { extension: string; panel: unknown }
 
 export class ServerExtensionFeed {
 	/** Per server: bumped on a settings change / a reload. A page reads these in an effect and fetches again. */

@@ -48,8 +48,10 @@ export function parsePairingLink(input: string): PairingLink | null {
 	return { baseUrl, code, name: (url.searchParams.get("n") ?? "").slice(0, 40) };
 }
 
-/** Exchange the code for the access token. Throws an Error with a message fit to show. */
-/** `deviceName` is what this device is called in the server's list of paired devices. */
+/**
+ * Exchange the code for the access token. Throws an Error with a message fit to show.
+ * `deviceName` is what this device is called in the server's list of paired devices.
+ */
 export async function redeemPairing(link: PairingLink, deviceName?: string, timeoutMs = 8000): Promise<string> {
 	const ctl = new AbortController();
 	const timer = setTimeout(() => ctl.abort(), timeoutMs);

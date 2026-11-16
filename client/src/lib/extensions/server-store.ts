@@ -3,7 +3,6 @@ import { canonical } from "./fingerprint";
 import { adoptServerValue, PendingWrites, splitSettings, WriteClock, keepUnowned, writableKeys } from "./settings-store";
 import { clone, identify, plain, within } from "./host-values";
 import { LocalizedError, t } from "../i18n";
-import type { ServerSettingsSync } from "../server-settings";
 import type { Api } from "../api";
 
 /** Same key the open server's list lives under (`ExtensionHost`), so both always read and write the one stored list. */
@@ -282,6 +281,3 @@ export class ServerExtensionStore {
 		this.save();
 	}
 }
-
-/** The sync engine of a server that is not open, so a change here reaches that server and is not lost until it is opened. */
-export type StoreSync = Pick<ServerSettingsSync, "changed" | "pull" | "flush" | "dispose" | "onEvent">;

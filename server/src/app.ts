@@ -105,7 +105,6 @@ export interface BuildOptions {
 	selfUpdate?: Partial<SelfUpdateOptions>;
 }
 
-/** API-only server. No frontend assets, bundling or client-directory dependency. */
 /** The closing text of the latest assistant message: what a person wants to see in a notification. */
 function lastAnswer(store: SessionStore, id: string): string | undefined {
 	const row = store.latestAssistantText(id);

@@ -600,11 +600,6 @@ export const isUnsupportedRoute = (e: unknown): boolean => e instanceof ApiError
 /** Browsers word a failed fetch in their own English ("Failed to fetch", "Load failed", "NetworkError…"). */
 const RAW_NETWORK = /^(failed to fetch|load failed|networkerror|network request failed|fetch failed)/i;
 
-/**
- * User-facing (Korean) text for anything caught: the one way to show an error to the user. An Error gives its message, a
- * string itself; a bare browser network error becomes the app's own "서버에 연결할 수 없습니다". `fallback` is for a
- * value with no message at all (default: "문제가 발생했습니다").
- */
 /** Settings that can hold a model, for translating a provider_in_use error's role ids. */
 const ROLE_LABELS: Record<string, string> = {
 	compaction: msg("컨텍스트 압축 모델"),
@@ -612,6 +607,11 @@ const ROLE_LABELS: Record<string, string> = {
 	image: msg("이미지 모델"),
 };
 
+/**
+ * User-facing (Korean) text for anything caught: the one way to show an error to the user. An Error gives its message, a
+ * string itself; a bare browser network error becomes the app's own "서버에 연결할 수 없습니다". `fallback` is for a
+ * value with no message at all (default: "문제가 발생했습니다").
+ */
 export function errorText(e: unknown, fallback?: string): string {
 	if (e instanceof ApiError) {
 		if (e.status === 0) return t("서버에 연결할 수 없습니다");

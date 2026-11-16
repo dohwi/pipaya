@@ -5,8 +5,10 @@
 	import { ACTIVITY_LABEL, type Activity } from "../../lib/activity";
 	import { logoModelOf } from "../../lib/agent-logo";
 
-	/** A session's agent: the (monochrome) logo of its current model; the logo itself takes the state colour and animation. */
-	/** `server`: the server the session lives on (the open one when left out). */
+	/**
+	 * A session's agent: the (monochrome) logo of its current model; the logo itself takes the state colour and animation.
+	 * `server`: the server the session lives on (the open one when left out).
+	 */
 	let { id, state = "idle", size = 20, server }: { id: string; state?: Activity; size?: number; server?: string } = $props();
 	const link = $derived(app.links[server ?? app.serverId ?? ""]);
 

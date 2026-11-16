@@ -13,13 +13,6 @@ export function workdirAbs(workdir: string, root: string | null | undefined): st
   return workdir === "." ? r : isAbs(workdir) ? workdir : `${r}${sepOf(r)}${workdir}`;
 }
 
-/** A `workdir` value as shown: the root for ".", an absolute path as is, else the sub-folder under the root. */
-export function workdirText(workdir: string, root: string | null | undefined): string | null {
-  if (workdir === ".") return root ?? null;
-  if (isAbs(workdir)) return workdir;
-  return `${root ?? ""}${sepOf(root ?? "")}${workdir}`.replace(/^\//, "/");
-}
-
 /**
  * What a typed folder (`/cd`, the picker) is stored as: "." for the root, a path relative to the root when it lies inside
  * it, else an absolute path. `home` expands a leading `~`.
