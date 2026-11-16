@@ -17,6 +17,8 @@ export interface SidebarNode {
 	current: boolean;
 	state: "online" | "offline" | "unauthorized" | "incompatible" | "checking";
 	loaded: boolean;
+	/** The lists are this device's copy from the last visit, not yet confirmed by the server (see list-cache) */
+	stale: boolean;
 	root: string | undefined;
 	home: string | undefined;
 	total: number;

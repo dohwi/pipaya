@@ -3,6 +3,7 @@ import { compat, isClientTooOld, type ServerVersions } from "./protocol";
 import { t } from "./i18n";
 import { settingsProblems, type SettingsProblem } from "./settings-problems";
 import { emptyLinkData, type LinkData } from "./server-link-model";
+import { fingerprint, readListCache, readShape, toCache, writeListCache } from "./list-cache";
 import type { Server } from "./store-model";
 import type { TerminalInfo, TerminalSupport } from "./terminal";
 import type {
@@ -19,7 +20,12 @@ export interface LinkHooks {
 	 * lists were already there and the events since the last cursor were replayed, so nothing has to be reloaded.
 	 */
 	ready(link: ServerLink, warm: boolean): void;
+	/** Tabs per folder as the sidebar draws this server (the app owns that order), kept with the cached lists. */
+	shape?(link: ServerLink): number[];
 }
+
+/** How long a change to the lists waits before they are written to the cache. */
+const SAVE_DELAY_MS = 2000;
 
 /** How long the initial lists may take before the attempt counts as a network failure (and is retried). */
 const LISTS_TIMEOUT_MS = 15_000;
@@ -49,6 +55,13 @@ export class ServerLink {
 	loaded = $state(false);
 	/** True once what the sidebar draws (sessions, groups, terminals, workspace, activity) was read; comes before `loaded`. */
 	listed = $state(false);
+	/**
+	 * The lists on screen are the ones this device kept from its last visit (see list-cache), not read from the server yet:
+	 * the sidebar draws them at once and marks them as waiting, and nothing that acts on a session trusts them.
+	 */
+	cached = $state(false);
+	/** Tabs per folder at the last visit, for a skeleton of the right height when the copy itself cannot be shown. */
+	readonly shape: number[] | null;
 	data = $state<LinkData>(emptyLinkData());
 	/**
 	 * The listed sessions by id, rebuilt only when the list changes. Every badge in the sidebar, rail and tab bar looks its
@@ -84,6 +97,40 @@ export class ServerLink {
 		private readonly hooks: LinkHooks,
 	) {
 		this.api = new Api({ baseUrl: server.baseUrl, token: server.token });
+		this.shape = readShape(server.id);
+		const c = readListCache(server.id, this.fp);
+		if (c) {
+			this.data = { ...emptyLinkData(), sessions: c.sessions, groups: c.groups, terminals: c.terminals };
+			if (c.workspace) this.workspace = { ...c.workspace, workdirs: [] };
+			this.cached = true;
+		}
+	}
+
+	private get fp(): string {
+		return fingerprint(this.server.baseUrl, this.server.token);
+	}
+
+	private saveTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Follows the lists (whoever writes them: a read, an event, an action of this device) and keeps them for next time. */
+	private stopSaving: (() => void) | null = null;
+	private followLists(): void {
+		if (this.stopSaving) return;
+		this.stopSaving = $effect.root(() => {
+			$effect(() => {
+				// read what is stored, so any change to it (not to activity) schedules a write
+				void this.data.sessions.length, this.data.sessions.map((s) => s.title + s.cwd + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length;
+				this.saveLists();
+			});
+		});
+	}
+
+	/** Keep the lists for the next cold start; a burst of events (a run renaming, a group forming) is written once. */
+	private saveLists(): void {
+		if (!this.listed || this.stopped) return;
+		clearTimeout(this.saveTimer);
+		this.saveTimer = setTimeout(() => {
+			if (this.listed && !this.stopped) writeListCache(this.id, toCache(this.fp, this.data, this.workspace, Date.now(), this.hooks.shape?.(this)));
+		}, SAVE_DELAY_MS);
 	}
 
 	get id(): string {
@@ -108,6 +155,9 @@ export class ServerLink {
 		this.stopped = true;
 		this.token++;
 		clearTimeout(this.retryTimer);
+		clearTimeout(this.saveTimer);
+		this.stopSaving?.();
+		this.stopSaving = null;
 		this.unsubscribe?.();
 		this.unsubscribe = null;
 	}
@@ -301,6 +351,8 @@ export class ServerLink {
 			this.workspace = workspace;
 			this.terminalSupport = terminalSupport;
 			this.listed = true;
+			this.cached = false;
+			this.followLists();
 			const [models, providers, tools, cursor, config] = (await lists)[1];
 			if (token !== this.token) return;
 			this.models = models;

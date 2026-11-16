@@ -20,6 +20,7 @@ const KEEP_CHATS = 8;
 const LONG_AWAY_MS = 30_000;
 import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent } from "./server-link-model";
+import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
 import { dirKey } from "./sidebar-model";
@@ -702,6 +703,7 @@ class AppStore {
       localStorage.removeItem(`${K.active}.${id}`);
       for (const key of serverPrefKeys(id)) localStorage.removeItem(key);
       localStorage.removeItem(`pipaya.settings-sync.${id}`);
+      dropListCache(id);
     } catch {
       /* ignore */
     }
@@ -727,6 +729,7 @@ class AppStore {
         event: (l, e) => this.onLinkEvent(l, e),
         // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
         ready: (l, warm) => { this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {}); void this.attach(l, warm); },
+        shape: (l) => (this.dirsByServer[l.id] ?? []).map((d) => d.tabs.length),
       });
       next[s.id] = link;
       changed = true;
