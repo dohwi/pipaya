@@ -1182,6 +1182,16 @@ export class SessionManager {
 
 
 	/**
+	 * How hard a helper thinks: its role's level, else the calling session's own level when it runs on the same model,
+	 * else that model's default (its connection setting, "auto" = the rules of a new chat). A model without reasoning ignores it.
+	 */
+	private helperThinking(rec: SessionRecord, role: ThinkingLevel | undefined, provider: string, modelId: string): ThinkingLevel {
+		if (role) return role;
+		if (provider === rec.provider && modelId === rec.model) return this.live.get(rec.id)?.agent.state.thinkingLevel ?? rec.thinkingLevel ?? this.defaultThinkingLevel(provider, modelId);
+		return this.defaultThinkingLevel(provider, modelId);
+	}
+
+	/**
 	 * `delegate`: a one-off helper run. The helper is a bare Agent that is never stored, so it is no session and shows in no list;
 	 * only its final text goes back to the parent. Limits are enforced here and reported as conflicts, never dropped silently.
 	 */
@@ -1215,7 +1225,7 @@ export class SessionManager {
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		let turns = 0, limited = false;
 		const agent = new Agent({
-			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: def.thinking ?? "off", tools, messages: [] },
+			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: this.helperThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
 			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), DEFAULT_UPSTREAM_RETRY),
 			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
 			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
@@ -1233,7 +1243,7 @@ export class SessionManager {
 			const { text: answer, error } = finalText(agent.state.messages as any);
 			if (error && !limited) throw new Error(`helper ${def.name} failed: ${error}`);
 			const note = limited ? `\n\n[helper stopped after ${cap} model calls (maxTurns); the answer may be incomplete]` : "";
-			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, turns, limited, usage: helperUsage(agent.state.messages as any), task: input.task.slice(0, 500) } };
+			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, limited, usage: helperUsage(agent.state.messages as any), task: input.task.slice(0, 500) } };
 		} finally {
 			signal?.removeEventListener("abort", stop);
 			release();

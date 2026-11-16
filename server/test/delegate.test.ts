@@ -191,6 +191,26 @@ describe("delegate tool", () => {
 		expect(await call(id, { role: "explore", task: "hi", model: "echo/nope" })).toContain("echo/nope is not available");
 	});
 
+	test("a helper thinks at its role's level, else the session's on the same model, else the chosen model's default", async () => {
+		const think = { ...ECHO_MODEL, id: "think-model", reasoning: true };
+		await api("PUT", "/configuration/providers/think", { ...echoProviderBody(upstream.baseUrl, "Think"), models: [{ ...think, defaultThinkingLevel: "high" }, { ...think, id: "plain-think" }] });
+		await api("PUT", "/configuration/delegate", { roles: "any", policy: "any", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
+		def(join(dir, "home", ".agents", "subagents"), "pinned", "thinking: minimal\ntools: [read]\nmaxTurns: 2");
+		const level = async (id: string, args: object) => {
+			await call(id, args);
+			const msgs = ((await api("GET", `/sessions/${id}/messages`)).json.messages as any[]).map((m) => m.message);
+			return msgs.filter((m) => m.role === "toolResult" && m.toolName === "delegate").at(-1)?.details.thinking;
+		};
+		const id = (await api("POST", "/sessions", { provider: "think", model: "think-model", thinkingLevel: "low" })).json.id as string;
+		expect(await level(id, { role: "anyhelper", task: "a" })).toBe("low"); // same model: the session's own level
+		expect(await level(id, { role: "anyhelper", task: "b", model: "think/plain-think" })).toBe("medium"); // "auto": a new chat's rule
+		const other = (await api("POST", "/sessions", {})).json.id as string;
+		expect(await level(other, { role: "anyhelper", task: "c", model: "think/think-model" })).toBe("high"); // the model's own default
+		expect(await level(other, { role: "pinned", task: "d", model: "think/think-model" })).toBe("minimal"); // the role wins
+		await api("PUT", "/configuration/delegate", { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
+		await api("DELETE", "/configuration/providers/think");
+	});
+
 	test("a helper can use its tools; one outside its tool list cannot", async () => {
 		writeFileSync(join(dir, "ws", "note.txt"), "secret-marker-42");
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
@@ -292,10 +312,10 @@ describe("delegate tool", () => {
 		const make = (policy: "defined" | "allowlist" | "any", models: string[] = []) => buildTools(["delegate"], dir, [], { delegateModels: () => ({ policy, models }) })[0]!;
 		const props = (t: ReturnType<typeof make>) => (t.parameters as any).properties;
 		const listed = make("allowlist", ["a/fast", "b/strong"]);
-		expect(listed.description).toContain("one of: a/fast, b/strong");
 		expect(props(listed).model.description).toContain("one of: a/fast, b/strong");
+		expect(listed.description).not.toContain("a/fast"); // the ids once, in the parameter
 		expect(listed.description).toContain("fast, cheap model");
-		expect(make("any").description).toContain("any configured model");
+		expect(props(make("any")).model.description).toContain("any configured model");
 		expect(props(make("defined")).model).toBeUndefined();
 		expect(make("defined").description).not.toContain("`model`");
 	});
