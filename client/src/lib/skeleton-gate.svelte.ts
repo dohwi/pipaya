@@ -7,9 +7,9 @@ const FADE_MS = 400;
  * A component's skeleton, held on screen per `skeletonHold`: `showing` stays true for a moment after `loading()` turned
  * false when the skeleton had already become visible, and `revealed` tells the content to fade in (it replaces bones the
  * reader saw). A load faster than the skeleton's delay swaps at once and nothing fades.
- * Call during component setup (it registers effects).
+ * Call during component setup (it registers effects). `late`: the skeleton is drawn with no fade-in delay and goes as soon as the content is here.
  */
-export function skeletonGate(loading: () => boolean): { readonly showing: boolean; readonly revealed: boolean } {
+export function skeletonGate(loading: () => boolean, late = false): { readonly showing: boolean; readonly revealed: boolean } {
 	let start = 0;
 	let held = $state(false);
 	let revealed = $state(false);
@@ -22,8 +22,10 @@ export function skeletonGate(loading: () => boolean): { readonly showing: boolea
 		}
 		if (!start) return;
 		const now = performance.now();
-		const left = skeletonHold(start, now);
-		const seen = now - start > SKELETON_DELAY_MS;
+		// `late`: drawn with no delay after the reader already waited on the previous screen; it is a stage of that wait,
+		// so it goes as soon as the content is here (no minimum on top) and only the content's fade-in smooths the swap
+		const left = late ? 0 : skeletonHold(start, now);
+		const seen = late || now - start > SKELETON_DELAY_MS;
 		start = 0;
 		clearTimeout(timer);
 		held = left > 0;

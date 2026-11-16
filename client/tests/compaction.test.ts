@@ -259,12 +259,12 @@ describe("paged transcript", () => {
 		const calls: (number | undefined)[] = [];
 		const { chat } = setup({ tailMessages: server(calls) });
 		await chat.load();
-		expect(chat.items).toHaveLength(40);
+		expect(chat.items).toHaveLength(12);
 		expect(chat.hasEarlier).toBe(true);
 		await chat.loadEarlier();
-		expect(calls.slice(0, 2)).toEqual([undefined, 960]);
-		expect(chat.items).toHaveLength(140);
-		expect(chat.items[0]!.seq).toBe(860);
+		expect(calls.slice(0, 2)).toEqual([undefined, 988]);
+		expect(chat.items).toHaveLength(112);
+		expect(chat.items[0]!.seq).toBe(888);
 		expect(chat.hasEarlier).toBe(true);
 	});
 	test("the next older page is fetched ahead, once, and used when the reader gets there", async () => {
@@ -272,11 +272,11 @@ describe("paged transcript", () => {
 		const { chat } = setup({ tailMessages: server(calls) });
 		await chat.load();
 		await settle();
-		expect(calls).toEqual([undefined, 960]);
+		expect(calls).toEqual([undefined, 988]);
 		await chat.loadEarlier();
-		expect(calls.slice(0, 2)).toEqual([undefined, 960]); // no second request for the same page
+		expect(calls.slice(0, 2)).toEqual([undefined, 988]); // no second request for the same page
 		await settle();
-		expect(calls).toEqual([undefined, 960, 860]); // and the page after it is already on its way
+		expect(calls).toEqual([undefined, 988, 888]); // and the page after it is already on its way
 	});
 	test("a page stretched back to a reply's prompt (more than asked) still offers what is before it", async () => {
 		const { chat } = setup({ tailMessages: async (_id: string, _n: number, before?: number) => (before === undefined ? stored(900, 1000) : stored(800, 900)) });
@@ -293,10 +293,10 @@ describe("paged transcript", () => {
 		const { chat } = setup({ tailMessages: async (id: string, n: number, before?: number) => { if (before === undefined) sizes.push(n); return ok(id, n, before); } });
 		await chat.load();
 		await chat.loadEarlier();
-		expect(chat.items).toHaveLength(140);
+		expect(chat.items).toHaveLength(112);
 		await chat.load(); // the tab is shown again
-		expect(sizes).toEqual([40, 180]);
-		expect(chat.items[0]!.seq).toBe(820);
+		expect(sizes).toEqual([12, 124]);
+		expect(chat.items[0]!.seq).toBe(876);
 		expect(chat.hasEarlier).toBe(true);
 	});
 	test("a short conversation has nothing earlier", async () => {
@@ -318,12 +318,12 @@ describe("paged transcript", () => {
 		await chat.load();
 		await settle();
 		await chat.loadEarlier();
-		expect(chat.items).toHaveLength(40);
+		expect(chat.items).toHaveLength(12);
 		expect(chat.hasEarlier).toBe(true);
 		expect(chat.loadingEarlier).toBe(false);
 		fail = false;
 		await chat.loadEarlier();
-		expect(chat.items).toHaveLength(140);
+		expect(chat.items).toHaveLength(112);
 	});
 	test("the reader's position is measured when the page lands, not when the request left", async () => {
 		let release!: () => void;
@@ -336,7 +336,7 @@ describe("paged transcript", () => {
 		order.push("scrolled meanwhile");
 		release();
 		await pending;
-		expect(order).toEqual(["scrolled meanwhile", "insert@40"]);
-		expect(chat.items).toHaveLength(140);
+		expect(order).toEqual(["scrolled meanwhile", "insert@12"]);
+		expect(chat.items).toHaveLength(112);
 	});
 });

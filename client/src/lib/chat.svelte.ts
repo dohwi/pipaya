@@ -107,8 +107,13 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
 	};
 }
 
-/** Messages fetched when a conversation opens, and per step when scrolling back. */
-const FIRST_PAGE = 40;
+/**
+ * Messages fetched when a conversation opens, and per step when scrolling back. The first page is about two screens (a
+ * page reaches back to the prompt of the reply it starts in, so it is never cut mid-turn): drawing 40 long replies with
+ * their code blocks held the main thread for ~450ms on a slow CPU before the first frame. The older page is fetched
+ * right after and put in front once the reader nears the top (or at once when the list does not fill the view).
+ */
+const FIRST_PAGE = 12;
 const EARLIER_PAGE = 100;
 /** Most messages a refresh asks for at once (the server's `tail` limit). */
 const MAX_RELOAD = 5000;
