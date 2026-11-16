@@ -1890,5 +1890,4 @@ export const en: Record<string, string> = {
 	"작업 중인 에이전트에게 끼워 넣기": "Steer the working agent",
 	"메시지 보내기": "Send a message",
 	"메시지": "Message",
-	"패널 너비 조절": "Resize the panel",
 };
