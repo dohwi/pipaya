@@ -31,6 +31,9 @@ describe("settings search", () => {
 		const hit = find("zoom").find((h) => h.key.startsWith("item:"));
 		expect(hit).toMatchObject({ title: "화면 배율", target: { tab: "general" } });
 	});
+	test("subagent delegation is found by its name, in English, and by its old name", () => {
+		for (const q of ["서브에이전트", "subagent", "delegate", "도우미"]) expect(find(q).some((h) => h.target.tab === "tools"), q).toBe(true);
+	});
 	test("a shortcut is found by its keys and hands its name to the shortcut list as a filter", () => {
 		const hit = find("ctrl+n").find((h) => h.key === "key:newChat");
 		expect(hit).toMatchObject({ combo: "Ctrl+N", target: { tab: "keys", keyFilter: "새 대화" } });

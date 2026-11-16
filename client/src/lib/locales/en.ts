@@ -673,6 +673,7 @@ export const en: Record<string, string> = {
 	"모델": "Models",
 	"모델 연결 · 기본 모델 · 이미지 모델": "Model connections · default model · image model",
 	"도구 허용 · 서브에이전트 위임": "Allowed tools · subagent delegation",
+	"서브에이전트 위임": "Subagent delegation",
 	"MCP 서버 연결": "MCP server connections",
 	"일회성 서브에이전트에게 작업 위임 (delegate)": "Hand a task to a one-off subagent (delegate)",
 	"예약 작업 만들기·변경·삭제 (schedule)": "Create, change and remove scheduled tasks (schedule)",

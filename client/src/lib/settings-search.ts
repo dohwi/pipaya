@@ -41,6 +41,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" }, // i18n-ok: search words in either language
 	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
+	{ tab: "tools", label: msg("서브에이전트 위임"), words: "subagent sub-agent delegate helper role 서브에이전트 위임 역할 도우미" }, // i18n-ok: search words in either language; "helper / 도우미" was the old name
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
