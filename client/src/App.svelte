@@ -71,6 +71,7 @@
 		commands: () => import("./components/agent/CommandFamiliesDialog.svelte"),
 		mcp: () => import("./components/agent/McpDialog.svelte"),
 		schedules: () => import("./components/agent/SchedulesDialog.svelte"),
+		graph: () => import("./components/graph/GraphView.svelte"),
 		subagents: () => import("./components/agent/SubagentsDialog.svelte"),
 		lightbox: () => import("./components/chat/Lightbox.svelte"),
 		queue: () => import("./components/chat/QueueModal.svelte"),
@@ -424,6 +425,10 @@
 		</div>
 
 		<main>
+			{#if app.graphOpen}
+				<!-- the graph view covers the conversation area (header and tabs too); the chat behind keeps its state -->
+				<div class="graph-slot"><Lazy load={load.graph} /></div>
+			{/if}
 			<Header />
 			<TabBar />
 
@@ -578,6 +583,15 @@
 		display: flex;
 		flex-direction: column;
 		position: relative;
+	}
+	.graph-slot {
+		position: absolute;
+		inset: 0;
+		z-index: 11; /* over the header (10) and the panes; under every popover and dialog (they use the --z tokens) */
+		padding-top: var(--sat);
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
 	}
 	/* the conversation area and the extension dock beside it */
 	.work {

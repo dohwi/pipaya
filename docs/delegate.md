@@ -38,3 +38,9 @@
 - 자유: 연결된 모델 아무거나.
 - 저장: `settings.delegate_policy`, API `PUT /configuration/delegate`, 조회는 `GET /configuration`의 `tools.delegate`.
 - 도구 스위치(`delegate`)로 기능 전체를 끌 수 있다(`TOGGLEABLE_TOOLS`).
+
+## 그래프 뷰 (`GET /delegates`, `client/src/components/graph/`)
+
+- 사이드바 아래 "그래프 뷰" 또는 `Ctrl+G` / `⌘G`(설정 > 단축키 `openGraph`). 저장된 모든 서버를 서버 → 프로바이더 → 모델 → 대화 → 서브에이전트 역할 순서의 열로 그린다. 분기한 대화는 부모 오른쪽 열에 놓인다.
+- `GET /delegates`: 열린 대화들의 `delegate` 도구 호출 한 번이 한 줄(`DelegateRun`). 역할, 역할 파일 없이 부른 것인지(`free`), 에이전트가 고른 모델(`asked`), 실제 모델, 시작·끝 시각, 진행 여부, 실패 여부, 턴·토큰 수가 들어 있다. 클라이언트는 delegate 도구 이벤트가 오면 다시 읽고, 그 밖에는 주기적으로 읽는다. 이 경로가 없는 옛 서버에서는 대화만 그린다.
+- 카드를 한 번 누르면 빠른 보기(최근 메시지, 바로 보내기)가 열린다. 작업 중일 때 Enter는 끼워 넣기(steer), Alt+Enter는 대기열(follow_up)이다. 두 번 누르면 그 대화로 간다. 옮긴 카드 위치는 이 기기에만 저장되고, "다시 배치"를 누르면 제자리로 돌아간다.

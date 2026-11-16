@@ -1,4 +1,5 @@
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
+import type { DelegateRun } from "./graph";
 import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
@@ -329,6 +330,8 @@ export class Api {
 		this.req<{ ok: boolean }>("DELETE", `/locales/${encodeURIComponent(tag)}${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`, undefined, signal);
 
 	activity = () => this.req<ActivityInfo>("GET", "/activity");
+	/** Every delegate call of the active sessions (the graph view). Absent on servers from before it: a 404. */
+	delegates = () => this.req<{ runs: DelegateRun[] }>("GET", "/delegates").then((r) => r.runs);
 	/** Marks the session read for every device (the server drops its unread mark). */
 	markRead = (id: string) => this.req<{ ok: boolean }>("POST", `/sessions/${encodeURIComponent(id)}/read`, {}, AbortSignal.timeout(3500));
 

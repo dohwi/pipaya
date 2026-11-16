@@ -340,6 +340,7 @@
 	const problems = $derived(app.problemCount);
 	/** Scheduled tasks of the open server: the button shows for any server that has the feature, even with none (so it can be found). */
 	const scheduled = $derived(app.schedules.all(app.serverId));
+	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
 	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: whenShort(scheduled.next) }));
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. A saved model that no longer works (`problems`) outranks an update. */
@@ -373,6 +374,9 @@
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionPanels placement="sidebar" />
 		<ExtensionMount slot="sidebar.bottom" />
+		<button class="navbtn wide" class:on={app.graphOpen} onclick={() => app.toggleGraph()} title={graphTip} aria-pressed={app.graphOpen}>
+			<span class="sico"><Icon name="fork" /></span> {t("그래프 뷰")}
+		</button>
 		{#if schedulesShown}
 			<button class="navbtn wide" onclick={() => (app.schedulesDialog = true)} title={schedulesTip}>
 				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
@@ -571,7 +575,7 @@
 		padding: 8px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
-	/* the two buttons at the bottom (scheduled tasks, settings) are one shape: same height, padding and glyph column */
+	/* the buttons at the bottom (graph view, scheduled tasks, settings) are one shape: same height, padding and glyph column */
 	.navbtn {
 		display: flex;
 		align-items: center;
@@ -588,6 +592,10 @@
 			background: var(--bg-hover);
 			color: var(--text);
 		}
+	}
+	.navbtn.on {
+		background: var(--bg-active);
+		color: var(--text);
 	}
 	.salert {
 		margin-left: auto;

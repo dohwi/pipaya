@@ -184,6 +184,50 @@ export class SessionStore {
 			.all() as { cwd: string; active: number; closed: number; updatedAt: number }[];
 	}
 
+	/**
+	 * Every `delegate` call of the active sessions, oldest first: the call's arguments and, once it finished, what its
+	 * result's details say (the model it really ran on, its turns and tokens). For the graph of who hands work to which
+	 * subagent; the call and answer texts are left out. `instr` keeps SQLite from parsing the JSON of every message.
+	 */
+	delegateCalls(): DelegateCall[] {
+		const calls = this.db
+			.query(
+				`SELECT m.session_id AS sessionId, m.created_at AS at, json_extract(c.value, '$.id') AS callId,
+				        json_extract(c.value, '$.arguments.role') AS role, json_extract(c.value, '$.arguments.model') AS asked
+				 FROM messages m JOIN sessions s ON s.id = m.session_id AND s.closed = 0, json_each(m.data, '$.content') c
+				 WHERE m.role = 'assistant' AND instr(m.data, '"delegate"') > 0
+				   AND json_extract(c.value, '$.type') = 'toolCall' AND json_extract(c.value, '$.name') = 'delegate'
+				 ORDER BY m.created_at, m.seq`,
+			)
+			.all() as { sessionId: string; at: number; callId: unknown; role: unknown; asked: unknown }[];
+		type Result = { callId: string; at: number; isError: number | null; model: unknown; turns: unknown; tokens: unknown };
+		const results = new Map(
+			(
+				this.db
+					.query(
+						`SELECT json_extract(m.data, '$.toolCallId') AS callId, m.created_at AS at, json_extract(m.data, '$.isError') AS isError,
+						        json_extract(m.data, '$.details.model') AS model, json_extract(m.data, '$.details.turns') AS turns,
+						        json_extract(m.data, '$.details.usage.totalTokens') AS tokens
+						 FROM messages m JOIN sessions s ON s.id = m.session_id AND s.closed = 0
+						 WHERE m.role = 'toolResult' AND instr(m.data, '"delegate"') > 0 AND json_extract(m.data, '$.toolName') = 'delegate'`,
+					)
+					.all() as Result[]
+			).map((r) => [r.callId, r] as const),
+		);
+		const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+		const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+		return calls.flatMap((c) => {
+			const callId = str(c.callId);
+			const role = str(c.role)?.replace(/\.md$/, "");
+			if (!callId || !role) return []; // a call written without a role is refused before anything runs
+			const done = results.get(callId);
+			return [{
+				sessionId: c.sessionId, callId, role, asked: str(c.asked), at: c.at, doneAt: done?.at ?? null, error: !!done?.isError,
+				model: str(done?.model), turns: num(done?.turns), tokens: num(done?.tokens),
+			}];
+		});
+	}
+
 	update(id: string, patch: SessionPatch): SessionRecord | undefined {
 		const sets: string[] = ["updated_at = $updated"];
 		const params: Record<string, string | number> = { id, updated: Date.now() };
@@ -381,6 +425,22 @@ export class SessionStore {
 			turns: main.turns ?? 0,
 		};
 	}
+}
+
+/** One `delegate` call (see `SessionStore.delegateCalls`). `doneAt` null = no result yet: running, or cut off by a restart. */
+export interface DelegateCall {
+	sessionId: string;
+	callId: string;
+	role: string;
+	/** The `model` argument the agent passed, if any (the policy may have refused it). */
+	asked: string | null;
+	at: number;
+	doneAt: number | null;
+	error: boolean;
+	/** provider/model it ran on, from the result; null while running or when it failed before starting. */
+	model: string | null;
+	turns: number | null;
+	tokens: number | null;
 }
 
 export interface CompactionRecord { uptoSeq: number; summary: string; tokensBefore: number; createdAt: number }

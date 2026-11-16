@@ -59,6 +59,7 @@ export type ActionId =
   | "queueMessage"
   | "cancelQueue"
   | "settings"
+  | "openGraph"
   | "toggleTheme"
   | "zoomIn"
   | "zoomOut"
@@ -373,6 +374,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   { id: "voiceInput", label: msg("음성 입력"), hint: msg("짧게 누르면 녹음 시작/정지, 길게 누르면 누르는 동안 녹음합니다"), default: "" },
   { id: "toggleSound", label: msg("알림음 켜기 / 끄기"), hint: "", default: "" },
   { id: "settings", label: msg("설정 열기"), hint: "", default: "Mod+Comma" },
+  { id: "openGraph", label: msg("그래프 뷰 열기 / 닫기"), hint: msg("모든 서버의 대화·모델·서브에이전트를 한 화면에 봅니다. 다시 누르면 보던 대화로 돌아갑니다"), default: "Mod+G" },
   { id: "toggleTheme", label: msg("라이트 / 다크 전환"), hint: "", default: "" },
   { id: "zoomIn", label: msg("화면 배율 키우기"), hint: msg("앱 전체를 10%씩 확대합니다 (최대 200%)"), default: "Mod+Equal" },
   { id: "zoomOut", label: msg("화면 배율 줄이기"), hint: msg("앱 전체를 10%씩 축소합니다 (최소 50%)"), default: "Mod+Minus" },

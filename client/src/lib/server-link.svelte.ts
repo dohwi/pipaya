@@ -361,6 +361,8 @@ export class ServerLink {
 				awaiting,
 				unread,
 				failed,
+				queued: {},
+				tool: {},
 			};
 			this.workspace = workspace;
 			this.terminalSupport = terminalSupport;
