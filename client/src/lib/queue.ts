@@ -34,10 +34,7 @@ export function applyQueueEvent(items: QueuedItem[], type: string, d: Record<str
 			return i < 0 ? items : [...items.slice(0, i), ...items.slice(i + 1)];
 		}
 		case "delivered": {
-			const text = String(d.text ?? "").trim();
-			const same = (x: QueuedItem) => x.text.trim() === text;
-			const sq = items.findIndex((x) => x.mode === "steer" && same(x));
-			const i = sq >= 0 ? sq : items.findIndex(same);
+			const i = deliveredIndex(items, String(d.text ?? ""));
 			return i < 0 ? items : [...items.slice(0, i), ...items.slice(i + 1)];
 		}
 		case "run_finished":
@@ -45,6 +42,21 @@ export function applyQueueEvent(items: QueuedItem[], type: string, d: Record<str
 		default:
 			return items;
 	}
+}
+
+/**
+ * Which waiting message a delivered user message was: the same text, a steer first (steers go in first). The stored
+ * message may carry what the server added after the typed text (`<pipaya-hint>`, a file note), so when nothing matches
+ * exactly, the one it starts with counts.
+ */
+export function deliveredIndex<T extends { mode: string; text: string }>(items: readonly T[], delivered: string): number {
+	const text = delivered.trim();
+	const pick = (same: (x: T) => boolean) => {
+		const sq = items.findIndex((x) => x.mode === "steer" && same(x));
+		return sq >= 0 ? sq : items.findIndex(same);
+	};
+	const exact = pick((x) => x.text.trim() === text);
+	return exact >= 0 ? exact : pick((x) => !!x.text.trim() && text.startsWith(x.text.trim()));
 }
 
 export const queuedEmoji = (mode: QueuedItem["mode"]) => (mode === "steer" ? "⚡" : "⏳");

@@ -1,7 +1,7 @@
 import { parseRetrying, type RetryState } from "./retry-state";
 import { errorText, ApiError, type Api, type StoredMessage } from "./api";
 import { uid } from "./format";
-import { applyQueueEvent } from "./queue";
+import { applyQueueEvent, deliveredIndex } from "./queue";
 import { LocalizedError, t } from "./i18n";
 import type {
 	AgentMessage,
@@ -21,6 +21,13 @@ import type {
 	UploadFile,
 	UserItem,
 } from "./types";
+
+/**
+ * A message on its way out: what was typed, with its pictures and files, and when (`at`, to give several back in the
+ * order they were written; the server drops steers before follow-ups). `pending` while its send is in flight (the
+ * input still holds it, so a stop then marks it `returned` instead of handing it back a second time).
+ */
+export type Outgoing = { text: string; images: ImageBlock[]; files: UploadFile[]; at?: number; pending?: boolean; returned?: boolean };
 
 /** Concatenate the text parts of a content array (or pass a string through). */
 export function textOf(content: unknown): string {
@@ -136,12 +143,31 @@ export class ChatState {
 	/** `deferred`: the server holds it until the run ends (a /compact and what was queued behind it), so it outlives run_finished. */
 	queued = $state<{ mode: "steer" | "follow_up"; text: string; deferred?: boolean }[]>([]);
 	/** Messages sent while a compaction runs: held here and sent as soon as it ends (shown as queued). */
-	held = $state<{ text: string; images: ImageBlock[]; files: UploadFile[] }[]>([]);
+	held = $state<Outgoing[]>([]);
+	/**
+	 * What this client queued (steer / follow_up) and the server has not delivered yet, with its pictures and files, so a
+	 * stop that drops it (`message_dequeued` reason stopped) can hand it back instead of losing it. Matched by text.
+	 */
+	mine: Outgoing[] = [];
+	/** Messages that were not sent because their run was stopped: the composer of this session takes them back once. */
+	restored = $state<Outgoing[]>([]);
+	/** Dropped by a stop while the run still winds down: handed back together when it ends (one notice, written order). */
+	private dropped: Outgoing[] = [];
+	private giveBack(): void {
+		if (!this.dropped.length) return;
+		this.restored.push(...this.dropped.splice(0).sort((a, b) => (a.at ?? 0) - (b.at ?? 0)));
+	}
+	/** Hand what waited behind a compaction back to the input: it was stopped, so it must not go out on its own. */
+	restoreHeld(): void {
+		if (this.held.length) this.restored.push(...this.held.splice(0));
+	}
 	/** Everything waiting for delivery: held messages first (they go out first), then the server's queue. */
 	get waiting(): { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] {
 		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];
 	}
 	running = $state(false);
+	/** The last run was stopped (by anyone): a steer / queue that then finds the session idle must not start a new run. */
+	stopped = false;
 	/** When the current run started (ms), for the elapsed time in the status line; null while idle. */
 	runStartedAt = $state<number | null>(null);
 	/** Set while the server waits out a provider hiccup (502 …) before calling the model again; the chat itself stays untouched. */
@@ -567,6 +593,8 @@ export class ChatState {
 				this.contextRevision++;
 				this.serverCompacting = false;
 				this.compactionError = d.aborted ? t("컨텍스트 압축을 취소했습니다") : (d.errorMessage || t("컨텍스트 압축에 실패했습니다"));
+				// Stopped, not failed: what waited for it is the user's to send again, not something to send by itself.
+				if (d.aborted) this.restoreHeld();
 				break;
 
 			case "run_retrying":
@@ -578,6 +606,7 @@ export class ChatState {
 				this.retrying = null;
 				this.contextRevision++;
 				this.running = true;
+				this.stopped = false;
 				this.runStartedAt = Date.now();
 				break;
 
@@ -589,6 +618,7 @@ export class ChatState {
 			case "run_finished": {
 				this.retrying = null;
 				this.running = false;
+				this.stopped = d.status === "aborted";
 				this.runStartedAt = null;
 				const s = this.streamItem();
 				if (s) s.streaming = false;
@@ -596,6 +626,9 @@ export class ChatState {
 					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
 				this.queued = applyQueueEvent(this.queued, "run_finished", d);
+				this.giveBack();
+				// Only what the server still holds for after the run can be delivered later.
+				this.mine = this.mine.filter((m) => m.pending || this.queued.some((q) => q.text === m.text));
 				// The run-limit abort cut a model call short and left an empty error reply; the server drops it, so hide it here too.
 				if (d.cause === "limit") {
 					const tail = this.items[this.items.length - 1];
@@ -620,9 +653,24 @@ export class ChatState {
 				break;
 
 			case "message_queued":
-			case "message_dequeued":
 				this.queued = applyQueueEvent(this.queued, e.type, d);
 				break;
+
+			case "message_dequeued": {
+				this.queued = applyQueueEvent(this.queued, e.type, d);
+				const i = this.mine.findIndex((m) => m.text === d.text);
+				if (i < 0) break;
+				const [m] = this.mine.splice(i, 1);
+				// Dropped by a stop (not taken back by hand, which refills the input itself): give it back.
+				if (d.reason === "stopped") {
+					if (m!.pending) m!.returned = true;
+					else {
+						this.dropped.push(m!);
+						if (!this.running) this.giveBack(); // a stop with no run to end (a queued /compact running after it)
+					}
+				}
+				break;
+			}
 
 			case "message_end": {
 				const seq = d.seq as number;
@@ -637,6 +685,8 @@ export class ChatState {
 				}
 				if (m.role === "user") {
 					this.queued = applyQueueEvent(this.queued, "delivered", { text: textOf(m.content) });
+					const mi = deliveredIndex(this.mine.map((x) => ({ mode: "", text: x.text })), textOf(m.content));
+					if (mi >= 0) this.mine.splice(mi, 1);
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;

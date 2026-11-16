@@ -141,3 +141,13 @@ const IMG_TOKEN = /#image(\d+)\b/g;
 export function dropImageToken(text: string, gone: number): string {
 	return text.replace(new RegExp(`[ \\t]?#image${gone}\\b`, "g"), "").replace(IMG_TOKEN, (m, n) => (Number(n) > gone ? `#image${Number(n) - 1}` : m));
 }
+
+/**
+ * A message handed back to the input after it was not sent (its run was stopped), merged with what is typed now: the
+ * returned text goes first (it was written first), what is typed follows. Pictures are added after the ones already
+ * attached, so the message's `#imageN` tokens are renumbered to their new places.
+ */
+export function mergeReturned(current: string, imagesBefore: number, back: { text: string; images: number }): string {
+	const shifted = imagesBefore ? back.text.replace(IMG_TOKEN, (m, n) => (Number(n) >= 1 && Number(n) <= back.images ? `#image${Number(n) + imagesBefore}` : m)) : back.text;
+	return current.trim() ? `${shifted.replace(/\s+$/, "")}\n${current}` : shifted;
+}

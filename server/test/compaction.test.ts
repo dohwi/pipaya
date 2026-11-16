@@ -370,9 +370,13 @@ describe("/compact queued as a follow-up", () => {
 		expect((await post(id, { text: "/compact", mode: "steer", command: { name: "compact" } })).status).toBe(400);
 		expect((await post(id, { text: "!bash sleep 5" })).status).toBe(202);
 		expect((await post(id, { text: "/compact", mode: "follow_up", command: { name: "compact" } })).status).toBe(202);
+		expect((await post(id, { text: "after", mode: "follow_up" })).status).toBe(202);
 		await api("POST", `/sessions/${id}/abort`);
 		await untilIdle(id);
 		await Bun.sleep(50);
 		expect((await api("GET", `/sessions/${id}/status`)).json.queuedMessages).toEqual([]);
+		// Each held item is reported as dropped by the stop, so a client can hand it back.
+		const data = app.bus.history({ sessionId: id, after: 0, limit: 500 }).filter((e) => e.type === "message_dequeued").map((e) => e.data);
+		expect(data).toEqual([{ mode: "follow_up", text: "/compact", deferred: true, reason: "stopped" }, { mode: "follow_up", text: "after", deferred: true, reason: "stopped" }]);
 	});
 });

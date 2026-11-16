@@ -530,6 +530,44 @@ describe("tools", () => {
 		await untilIdle(c);
 		expect((await finished(c)).cause).toBeUndefined();
 	});
+
+	test("stopping a run drops what was queued for it; nothing rides along with the next message", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: "!bash sleep 30" });
+		for (let i = 0; i < 100 && !(await api("GET", `/sessions/${id}/status`)).json.pendingToolCalls.length; i++) await Bun.sleep(25);
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "STEER-1", mode: "steer" })).status).toBe(202);
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "FOLLOW-1", mode: "follow_up" })).status).toBe(202);
+		expect((await api("GET", `/sessions/${id}/status`)).json.queuedMessages).toHaveLength(2);
+		await api("POST", `/sessions/${id}/abort`);
+		await untilIdle(id);
+		const st = (await api("GET", `/sessions/${id}/status`)).json;
+		expect(st.queued).toBe(false);
+		expect(st.queuedMessages).toEqual([]);
+		const dropped = (await collectSse(`/sessions/${id}/events?after=0&types=message_dequeued`, (ev) => ev.length >= 2)).map((e: any) => e.data);
+		expect(dropped).toEqual([{ mode: "steer", text: "STEER-1", reason: "stopped" }, { mode: "follow_up", text: "FOLLOW-1", reason: "stopped" }]);
+		// The steer never reached the transcript, and the next message starts a run of its own.
+		await api("POST", `/sessions/${id}/messages`, { text: "NEXT" });
+		await untilIdle(id);
+		const texts = (await api("GET", `/sessions/${id}/messages`)).json.messages.filter((m: any) => m.message.role === "user").map((m: any) => m.message.content[0].text);
+		expect(texts).toEqual(["!bash sleep 30", "NEXT"]);
+	});
+
+	test("a stopped run refuses a late steer / follow_up with reason stopped, until the next run starts", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: "!bash sleep 30" });
+		for (let i = 0; i < 100 && !(await api("GET", `/sessions/${id}/status`)).json.pendingToolCalls.length; i++) await Bun.sleep(25);
+		await api("POST", `/sessions/${id}/abort`);
+		const late = await api("POST", `/sessions/${id}/messages`, { text: "late", mode: "follow_up" });
+		expect(late.status).toBe(409);
+		expect(late.json.error.reason).toBe("stopped");
+		await untilIdle(id);
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "late", mode: "steer" })).json.error.reason).toBe("stopped");
+		await api("POST", `/sessions/${id}/messages`, { text: "again" });
+		await untilIdle(id);
+		const idle = await api("POST", `/sessions/${id}/messages`, { text: "x", mode: "follow_up" });
+		expect(idle.status).toBe(409);
+		expect(idle.json.error.reason).toBeUndefined();
+	});
 });
 
 describe("events", () => {

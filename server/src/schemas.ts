@@ -563,8 +563,8 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "message_dequeued",
 		persisted: true,
-		description: "A queued steer or follow_up message was cancelled before it was delivered",
-		data: Type.Object({ mode: Type.String(), text: Type.String() }),
+		description: "A queued steer or follow_up message was cancelled before it was delivered. `reason` stopped: the run it waited for was stopped, which drops everything still queued (the client that queued it may hand it back to its input)",
+		data: Type.Object({ mode: Type.String(), text: Type.String(), deferred: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.Literal("stopped")) }),
 	},
 	{
 		type: "provider_updated",
