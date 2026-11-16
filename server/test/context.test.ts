@@ -156,7 +156,9 @@ describe("context API and application", () => {
 		const upstream = startEchoUpstream();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"),
 			token: "context-test", workspaceRoot: f.cwd, logLevel: "silent" };
-		let app: App = await buildApp(cfg, { strictResponses: true });
+		// No extension folders: the developer's own `~/.agents/extensions` would add to the system prompt compared below.
+		const opts = { strictResponses: true, extensionDirs: [] };
+		let app: App = await buildApp(cfg, opts);
 		const api = async (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: object, authorized = true) => {
 			const res = await app.server.inject({ method, url, payload, headers: authorized ? { authorization: `Bearer ${cfg.token}` } : {} });
 			return { status: res.statusCode, json: res.body ? res.json() : undefined };
@@ -243,7 +245,7 @@ describe("context API and application", () => {
 			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
 			await app.close();
-			app = await buildApp(cfg, { strictResponses: true });
+			app = await buildApp(cfg, opts);
 			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
 			await run(id, "after restart");
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
