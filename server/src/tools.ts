@@ -38,6 +38,8 @@ export interface ToolContext {
 	delegateRoles?(): "defined" | "any";
 	/** The model policy of `delegate` now (read in `create`, so the tool text lists the models a call may name). */
 	delegateModels?(): { policy: "defined" | "allowlist" | "any"; models: string[] };
+	/** The chat models a new session or helper may run on now, as provider/model (read in `create`, so the tool text lists them). */
+	chatModels?(): readonly string[];
 	/** Other sessions of this server (`peer`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
@@ -511,6 +513,21 @@ const askUserTool: ToolDef = {
 // The tool list is built once per session, but sessions come and go later: never put names in a description (they would go stale).
 const PEER_NOTE = " Sessions are the user's @names; an unknown name is rejected with the current list.";
 
+/** Lists cost tokens on every turn: past this many ids the rest are only counted. */
+const MODEL_LIST_CAP = 40;
+/** "p: a, b; q: c" for provider/model ids (shorter than repeating each provider), capped; empty when there are none. */
+export function modelList(ids: readonly string[]): string {
+	const by = new Map<string, string[]>();
+	for (const id of ids.slice(0, MODEL_LIST_CAP)) {
+		const i = id.indexOf("/");
+		if (i <= 0) continue;
+		const p = id.slice(0, i);
+		by.set(p, [...(by.get(p) ?? []), id.slice(i + 1)]);
+	}
+	const more = ids.length > MODEL_LIST_CAP ? ` (and ${ids.length - MODEL_LIST_CAP} more)` : "";
+	return [...by].map(([p, ms]) => `${p}: ${ms.join(", ")}`).join("; ") + more;
+}
+
 const PEER_ACTIONS = ["send", "read", "list", "abort", "answer", "create", "close", "resume", "delete", "cancel_queued", "rename", "set", "group_create", "group_add", "group_remove", "group_dissolve"] as const;
 type PeerAction = (typeof PEER_ACTIONS)[number];
 const need = <T>(v: T | undefined, what: string, action: string): T => {
@@ -522,6 +539,7 @@ const peerTool: ToolDef = {
 	name: "peer",
 	description: "Work with the other sessions (agents) on this server: message, read, list, create, stop, answer, manage, group.",
 	create(_cwd, _roots, ctx) {
+		const models = modelList(ctx?.chatModels?.() ?? []);
 		return defineTool({
 			name: "peer",
 			label: "Other sessions",
@@ -551,8 +569,8 @@ const peerTool: ToolDef = {
 				title: Type.Optional(Type.String({ maxLength: 100, description: "create" })),
 				purpose: Type.Optional(Type.String({ maxLength: 200, description: "create, set: its role in a few words (shown in @mention hints)" })),
 				cwd: Type.Optional(Type.String({ description: "create: working directory (default: yours)" })),
-				provider: Type.Optional(Type.String({ description: "create, set" })),
-				model: Type.Optional(Type.String({ description: "create, set: model id; omit for the default" })),
+				provider: Type.Optional(Type.String({ description: "create, set: the provider of `model`" })),
+				model: Type.Optional(Type.String({ description: `create, set: model id, given with its provider; omit for the default.${models ? ` Available (provider: models): ${models}.` : ""} Pick a fast, cheap one for light work, a strong one for hard or long work` })),
 				thinkingLevel: Type.Optional(Type.String({ description: "create, set: off, minimal, low, medium, high, xhigh or max" })),
 				text: Type.Optional(Type.String({ maxLength: 500, description: "cancel_queued: a piece of the message to take back" })),
 				newName: Type.Optional(Type.String({ maxLength: 30, description: "rename" })),
@@ -599,9 +617,10 @@ const DELEGATE_DESCRIPTION_FREE =
 
 const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement; the helper thinks at that model's default level. Omit `model` to use the role's own model, else this session's.";
 /** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
-export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined): { tool: string; param: string } | null {
+export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined, available: readonly string[] = []): { tool: string; param: string } | null {
 	if (!p || p.policy === "defined") return null;
-	return { tool: ` ${MODEL_HINT}`, param: p.policy === "allowlist" ? `provider/model, one of: ${p.models.join(", ")}` : "provider/model of any configured model" };
+	if (p.policy === "allowlist") return { tool: ` ${MODEL_HINT}`, param: `provider/model, one of: ${p.models.join(", ")}` };
+	return { tool: ` ${MODEL_HINT}`, param: `provider/model of any configured model${available.length ? `; available (provider: models): ${modelList(available)}` : ""}` };
 }
 
 const delegateTool: ToolDef = {
@@ -609,7 +628,7 @@ const delegateTool: ToolDef = {
 	description: "Run a one-off helper (sub-agent) and return its answer.",
 	create(_cwd, _roots, ctx) {
 		const free = ctx?.delegateRoles?.() === "any";
-		const models = delegateModelText(ctx?.delegateModels?.());
+		const models = delegateModelText(ctx?.delegateModels?.(), ctx?.chatModels?.() ?? []);
 		return defineTool({
 			name: DELEGATE_TOOL,
 			label: "Delegate to a helper",
