@@ -5,7 +5,8 @@ import { findChat, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
 import { stepWorkspaceTarget } from "./step-session";
-import { needsLook, sessionOrder, stepFrom, tabPanes } from "./nav";
+import { projectKey } from "./projects";
+import { needsLook, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -80,7 +81,12 @@ function stepBands() {
       const link = app.links[s.id];
       return { id: s.id, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
     }),
-  ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state) }));
+  ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state), foldedDirs: foldedProjectDirs(b.id) }));
+}
+
+/** The folders of a server that sit inside a folded project (their rows are hidden under its header). */
+function foldedProjectDirs(serverId: string): string[] {
+  return (app.blocksByServer[serverId] ?? []).flatMap((b) => (b.kind === "project" && app.sidebar.folded.includes(projectKey(serverId, b.root)) ? b.dirs.map((d) => d.path) : []));
 }
 
 function goTo(to: { server: string; id: string } | null) {
@@ -89,7 +95,7 @@ function goTo(to: { server: string; id: string } | null) {
   else if (to.id !== app.activeId) void app.openSession(to.id);
 }
 
-/** Previous / next workspace (folder block in the sidebar), across servers like `stepSession`: opens its first tab. */
+/** Previous / next workspace (a folder row in the sidebar: a plain folder or a worktree in a project), across servers: opens its first tab. */
 function stepWorkspace(step: 1 | -1) {
   goTo(stepWorkspaceTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
 }
@@ -111,7 +117,8 @@ function lastSession() {
 
 /** Jump to the conversation that most needs the user: asking first, then failed, then finished unseen. */
 function nextAttention() {
-  const order = sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.currentPinnedTabs);
+  // the sidebar's own order (a project's folders together), so within a state this lands on the "확인 필요" list's first row
+  const order = [...new Set(app.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))))];
   const id = needsLook(order, { awaiting: app.awaiting, failed: app.failed, unread: app.unread }, app.activeId);
   if (id) void app.openSession(id);
   else app.toast(t("확인할 대화가 없습니다"), "error");

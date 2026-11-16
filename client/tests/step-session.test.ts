@@ -42,3 +42,20 @@ describe("stepWorkspaceTarget", () => {
 		expect(ws([], [], null, null, 1)).toBeNull();
 	});
 });
+
+describe("stepWorkspaceTarget with projects", () => {
+	const ws = (servers: StepServer[], server: string | null, id: string | null, n: 1 | -1) => stepWorkspaceTarget(servers, [], { server, id }, n);
+	// /p and /p-x are one project (listed together), /n a plain folder
+	const S: StepServer = { id: "A", dirs: [dir("/p", "p1"), dir("/p-x", "x1", "x2"), dir("/n", "n1")] };
+	test("each worktree row is a stop, landing on its first tab", () => {
+		expect(ws([S], "A", "p1", 1)).toEqual({ server: "A", id: "x1" });
+		expect(ws([S], "A", "x2", 1)).toEqual({ server: "A", id: "n1" });
+	});
+	test("the rows of a folded project are passed by", () => {
+		const F: StepServer = { ...S, dirs: [...S.dirs, dir("/m", "m1")], foldedDirs: ["/p", "/p-x"] };
+		expect(ws([F], "A", "n1", 1)).toEqual({ server: "A", id: "m1" });
+		expect(ws([F], "A", "m1", 1)).toEqual({ server: "A", id: "n1" });
+		// from inside the folded project (its tab is open) the step walks out of it
+		expect(ws([F], "A", "x1", 1)).toEqual({ server: "A", id: "n1" });
+	});
+});

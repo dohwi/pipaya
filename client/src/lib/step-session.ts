@@ -5,6 +5,8 @@ export interface StepServer {
 	id: string;
 	dirs: readonly DirBlock[];
 	hidden?: boolean;
+	/** Folders inside a folded project: their rows are not on screen, so the step passes them by */
+	foldedDirs?: readonly string[];
 }
 
 export interface StepTarget {
@@ -14,8 +16,9 @@ export interface StepTarget {
 
 /**
  * Previous / next workspace (folder block) in sidebar order across servers, landing on the folder's first pane.
- * Folders with no pane are skipped, and so are folded or unreadable servers when several are listed (with one server
- * the server fold is ignored). Folded folders still count: the step opens them. It wraps; with a single folder it goes
+ * A folder is one row: a plain folder, or a worktree / folder inside a project. Folders with no pane are skipped, and so
+ * are folders of a folded project and folded or unreadable servers when several are listed (with one server the server
+ * fold is ignored). Folded folders still count: their row is on screen, and the step opens their first tab. It wraps; with a single folder it goes
  * to that folder's first pane. Returns null when there is nothing to go to.
  */
 export function stepWorkspaceTarget(
@@ -28,9 +31,10 @@ export function stepWorkspaceTarget(
 	const blocks: { server: string; panes: string[]; hidden: boolean }[] = [];
 	for (const s of servers) {
 		const off = !single && (s.hidden === true || folded.includes(s.id));
+		const inFolded = new Set(s.foldedDirs ?? []);
 		for (const d of s.dirs) {
 			const panes = d.tabs.flatMap((t) => tabPanes(t));
-			if (panes.length) blocks.push({ server: s.id, panes, hidden: off });
+			if (panes.length) blocks.push({ server: s.id, panes, hidden: off || inFolded.has(d.path) });
 		}
 	}
 	if (!blocks.length) return null;
