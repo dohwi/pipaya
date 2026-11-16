@@ -91,7 +91,7 @@
 							<span class="facts">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
 							<div class="tags">
 								{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-								<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("비활성")}</span>
+								<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("꺼짐")}</span>
 							</div>
 						</div>
 					{/if}
@@ -130,13 +130,13 @@
 					<h5 class="rsub">{t("요청 권한과 실행 안내")}</h5>
 					<PermissionList pkg={p} />
 					{#if replacement}
-						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 비활성 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 활성화해야 합니다.")}{/if}</Notice>
+						<Notice tone="warn" size="sm">{t("같은 ID의 버전 {version}을 교체합니다.", { version: replacement.package.manifest.version })} {willResume ? t("실행 중이던 확장이며 새 권한이 없어 교체 직후 바로 다시 실행됩니다.") : t("실행 중인 확장은 중지되고 새 패키지는 꺼진 상태가 됩니다.")}{#if replacement.enabled && !willResume && !extensions.safeMode} {t("새 권한을 요청하므로 다시 켜야 합니다.")}{/if}</Notice>
 					{/if}
 				</div>
 				</DialogBody>
 				<DialogFooter rule wrap>
 					<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
-					<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("비활성 상태로 가져오기")}</Button>
+					<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("꺼진 상태로 가져오기")}</Button>
 				</DialogFooter>
 			</div>
 		{/if}

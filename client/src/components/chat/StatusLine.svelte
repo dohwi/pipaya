@@ -232,7 +232,7 @@
 				: (estimated ? t("컨텍스트 추정 {used}{window}", { used: ctx.toLocaleString(localeTag()), window: ctxWindow }) : t("컨텍스트 {used}{window}", { used: ctx.toLocaleString(localeTag()), window: ctxWindow })),
 			estimated ? t("마지막 모델 호출 기준이며, 새 입력과 도구 결과는 포함되지 않습니다") : "",
 			level ? t("컨텍스트 압축으로 오래된 기록을 요약할 수 있습니다") : "",
-			chat?.compaction?.autoEnabled ? t("서버의 pi 자동 압축이 활성화되어 있습니다") : "",
+			chat?.compaction?.autoEnabled ? t("서버의 pi 자동 압축이 켜져 있습니다") : "",
 		]
 			.filter(Boolean)
 			.join("\n"),
@@ -247,7 +247,7 @@
 </script>
 
 <!-- Reserve room before the first reply; allow narrow screens to wrap without clipping. -->
-<div class="statusline mono" data-part="statusline" data-layout={footer.layout} data-align={footer.align} data-expanded={expanded} role="group" aria-label={t("세션 통계")}>
+<div class="statusline mono" data-part="statusline" data-layout={footer.layout} data-align={footer.align} data-expanded={expanded} role="group" aria-label={t("대화 통계")}>
 	{#each extensions.statuses as item (`${item.owner}:${item.id}`)}
 		<StatusItem title={item.owner}>{item.text}</StatusItem>
 	{/each}

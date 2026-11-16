@@ -286,7 +286,7 @@
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
-		<button class="add tap" class:on={menuId === "new"} onpointerenter={(e) => menu?.hover(e, "new", newItems())} onpointerleave={(e) => menu?.leave(e)} onclick={(e) => menu?.click(e, "new", newItems())} aria-label={t("새 대화 또는 터미널")} aria-haspopup="menu" title={t("이 디렉터리에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+		<button class="add tap" class:on={menuId === "new"} onpointerenter={(e) => menu?.hover(e, "new", newItems())} onpointerleave={(e) => menu?.leave(e)} onclick={(e) => menu?.click(e, "new", newItems())} aria-label={t("새 대화 또는 터미널")} aria-haspopup="menu" title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
 	</div>
 	<RowMenu bind:this={menu} bind:open={menuId} />
 {/if}

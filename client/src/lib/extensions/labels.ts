@@ -36,7 +36,7 @@ export const permissionLabels: Record<Permission, string> = {
 		workspace: msg("화면 배치: 사이드바를 열고 닫거나 너비를 바꾸고, 탭을 열고 순서를 바꾸고, 설정·대화상자를 열고, 앱 기본 명령(/new, /compact 등)을 실행합니다."),
 		network: msg("인터넷 접근: 확장 코드가 인터넷의 http(s) 주소 어디로든 요청을 보내고 응답을 읽습니다. 확장이 받은 데이터를 외부로 보낼 수 있습니다. 앱의 쿠키와 서버 토큰은 함께 보내지 않습니다. 이 컴퓨터·LAN·Tailscale 주소는 따로 허용해야 합니다."),
 		"network-local": msg("내부망 접근(주의): 이 컴퓨터(localhost), 같은 LAN, Tailscale 안의 기기와 서비스(공유기 관리 화면, NAS, 로컬 모델 서버 등)에 요청을 보내고 응답을 읽습니다. 인터넷 접근(network) 권한과 함께 써야 합니다."),
-		"server-api": msg("서버 API 전체 사용(고위험): 연결된 pipaya 서버의 API를 사용자 권한으로 호출합니다. 대화 기록 읽기, 세션 생성·삭제, 설정·모델·확장 변경 등 앱이 할 수 있는 일을 모두 할 수 있습니다. 토큰 자체는 확장에 주지 않습니다."),
+		"server-api": msg("서버 API 전체 사용(고위험): 연결된 pipaya 서버의 API를 사용자 권한으로 호출합니다. 대화 기록 읽기, 대화 생성·삭제, 설정·모델·확장 변경 등 앱이 할 수 있는 일을 모두 할 수 있습니다. 토큰 자체는 확장에 주지 않습니다."),
 		"open-url": msg("링크 열기: http(s)·mailto 주소를 시스템 브라우저나 새 탭으로 엽니다."),
 		clipboard: msg("클립보드 쓰기: 확장이 정한 텍스트를 클립보드에 복사합니다."),
 		http: msg("HTTP 읽기: extension이 설정한 서버 주소로 GET 요청을 보내 JSON을 읽습니다 (자격 증명 미전송)."),

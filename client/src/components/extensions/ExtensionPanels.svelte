@@ -162,7 +162,7 @@
 			title={failing.length ? t("오류: {names}", { names: failing.map((panel) => ownerName(panel.owner)).join(", ") }) : undefined}>
 			<Icon name="widgets" /><span>{t("확장 화면")}</span><span class="cbadge" class:danger={failing.length > 0}>{failing.length ? "!" : available.length}</span>
 		</button>
-		{#if !available.length}<span class="toolbar-hint">{t("활성 확장 화면이 없습니다.")}</span>{/if}
+		{#if !available.length}<span class="toolbar-hint">{t("켜진 확장 화면이 없습니다.")}</span>{/if}
 		<div class="feedback" aria-live="polite" aria-atomic="true">{error}</div>
 	</div>
 	{/if}
@@ -226,7 +226,7 @@
 							</section>
 						{/key}
 					{:else}
-						<div class="empty"><Icon name="widgets" /><h3>{t("활성 확장 화면이 없습니다.")}</h3><p>{t("화면을 제공하는 확장을 활성화하면 여기에 표시됩니다.")}</p></div>
+						<div class="empty"><Icon name="widgets" /><h3>{t("켜진 확장 화면이 없습니다.")}</h3><p>{t("화면을 제공하는 확장을 켜면 여기에 표시됩니다.")}</p></div>
 					{/if}
 				</div>
 			</div>

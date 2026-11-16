@@ -80,8 +80,8 @@
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>
-		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 디렉터리의 대화 목록 관리")} />
-		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 디렉터리에서 새 대화 또는 터미널")} />
+		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 폴더의 대화 목록 관리")} />
+		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 폴더에서 새 대화 또는 터미널")} />
 	</div>
 	{#if !folded}
 		<div class="fold" in:collapseIn out:collapseOut>

@@ -25,12 +25,12 @@ export function peerMentions(sessions: readonly Session[], groups: readonly Grou
 		const n = panesOf(g.layout).filter((id) => id !== self && known.has(id)).length;
 		const handle = groupHandle(g.name);
 		if (!n || !handle) continue;
-		items.push({ insert: `@${handle}`, desc: t("{n}개 세션", { n }), group: t("그룹"), keywords: g.name, except: "" });
+		items.push({ insert: `@${handle}`, desc: t("대화 {n}개", { n }), group: t("그룹"), keywords: g.name, except: "" });
 	}
 	for (const s of live) {
 		if (s.id === self) continue;
 		const dir = s.cwd.split("/").slice(-2).join("/");
-		items.push({ insert: `@${nameInLang(s.name)}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("세션"), keywords: `${s.title} ${s.purpose}`, except: "" });
+		items.push({ insert: `@${nameInLang(s.name)}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("대화"), keywords: `${s.title} ${s.purpose}`, except: "" });
 	}
 	return items;
 }

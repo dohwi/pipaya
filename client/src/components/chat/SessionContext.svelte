@@ -28,12 +28,12 @@
 	let part = $state<Part>("all");
 	const inPart = (x: { scope: string }) => part === "all" || (part === "global" ? x.scope === "global" : x.scope !== "global");
 	const partCount = (k: Part) => (data?.instructions ?? []).filter((x) => k === "all" || (k === "global" ? x.scope === "global" : x.scope !== "global")).length;
-	const source = { session: msg("이 세션의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델") };
+	const source = { session: msg("이 대화의 도구 목록"), always: msg("항상 포함"), image: msg("이미지 모델") };
 	const kindName = { sdk: msg("출처 SDK"), runtime: msg("출처 서버"), extension: msg("출처 확장"), helper: msg("출처 보조 모델") };
 	const promptGroups = [
-		{ delivery: "request" as const, name: msg("요청마다 함께 가는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 세션의 모델과 로그인에 해당할 때만 \"적용 중\"입니다.") },
+		{ delivery: "request" as const, name: msg("요청마다 함께 가는 문구"), hint: msg("pi SDK가 제공자별로 요청에 직접 넣는 문구입니다. 이 대화의 모델과 로그인에 해당할 때만 \"적용 중\"입니다.") },
 		{ delivery: "event" as const, name: msg("상황이 생길 때만 가는 문구"), hint: msg("피어 메시지, @멘션, 압축 직후처럼 해당 상황에서만 대화에 들어갑니다. 매 요청에 따라가지 않습니다.") },
-		{ delivery: "separate" as const, name: msg("별도 모델 호출의 프롬프트"), hint: msg("대화와 별개로 서버가 직접 모델을 부르는 프롬프트입니다(요약, 제목, 그룹 이름). 이 세션의 요청 크기에 들어가지 않습니다.") },
+		{ delivery: "separate" as const, name: msg("별도 모델 호출의 프롬프트"), hint: msg("대화와 별개로 서버가 직접 모델을 부르는 프롬프트입니다(요약, 제목, 그룹 이름). 이 대화의 요청 크기에 들어가지 않습니다.") },
 	];
 	const encoder = new TextEncoder();
 	/** Entries that do not apply to this session are left out; the rest is read-only background. */
@@ -70,7 +70,7 @@
 
 	const subText = $derived(
 		data
-			? (data.state === "applied" ? t("이 세션에 적용 중") : sessionId ? t("아직 적용 전 · 다음 메시지부터 적용됩니다") : t("새 대화에 적용될 내용"))
+			? (data.state === "applied" ? t("이 대화에 적용 중") : sessionId ? t("아직 적용 전 · 다음 메시지부터 적용됩니다") : t("새 대화에 적용될 내용"))
 			: null,
 	);
 </script>
@@ -125,7 +125,7 @@
 						{#if opened.base}
 							<div class="inner" in:collapseIn out:collapseOut>
 								{#each [
-									{ key: "system", name: t("시스템"), text: data.systemPrompt, meta: sessionId ? t("이 세션 기본") : t("새 대화 기본") },
+									{ key: "system", name: t("시스템"), text: data.systemPrompt, meta: sessionId ? t("이 대화 기본") : t("새 대화 기본") },
 									{ key: "skills", name: t("스킬"), text: data.skillsPrompt, meta: t("{n}개 주입 중", { n: data.skills.length }) },
 								] as block (block.key)}
 									{#if block.text}
@@ -150,7 +150,7 @@
 						</button>
 						{#if opened.tools}
 							<div class="inner" in:collapseIn out:collapseOut>
-								<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 이 세션에 적용된 도구만 보입니다.")}</p>
+								<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 이 대화에 적용된 도구만 보입니다.")}</p>
 								{#each activeTools as tool (tool.name)}
 									<div class="source">
 										<button class="fold" onclick={() => (opened[`tool:${tool.name}`] = !opened[`tool:${tool.name}`])} aria-expanded={!!opened[`tool:${tool.name}`]}>
@@ -160,7 +160,7 @@
 										{#if opened[`tool:${tool.name}`]}<pre in:collapseIn out:collapseOut>{toolText(tool)}</pre>{/if}
 									</div>
 								{:else}
-									<EmptyState>{t("이 세션에 주어지는 도구가 없습니다.")}</EmptyState>
+									<EmptyState>{t("이 대화에 주어지는 도구가 없습니다.")}</EmptyState>
 								{/each}
 							</div>
 						{/if}

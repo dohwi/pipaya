@@ -130,13 +130,13 @@ const BASE: Omit<ActionDef, "group">[] = [
   },
   {
     id: "prevWorkspace",
-    label: msg("이전 워크스페이스로 이동"),
+    label: msg("이전 폴더로 이동"),
     hint: msg("한 칸 위 폴더의 첫 탭으로"),
     default: "Alt+Shift+ArrowUp",
   },
   {
     id: "nextWorkspace",
-    label: msg("다음 워크스페이스로 이동"),
+    label: msg("다음 폴더로 이동"),
     hint: msg("한 칸 아래 폴더의 첫 탭으로"),
     default: "Alt+Shift+ArrowDown",
   },
@@ -196,7 +196,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   },
   {
     id: "cycleThinking",
-    label: msg("추론 단계 변경"),
+    label: msg("추론 강도 변경"),
     hint: msg("minimal → … → max, 끝에서 처음으로 돌아갑니다"),
     default: "Shift+Tab",
   },

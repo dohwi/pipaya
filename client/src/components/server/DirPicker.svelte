@@ -54,7 +54,7 @@
 	const places = $derived.by(() => {
 		const out: { path: string; label: string; title: string }[] = [];
 		const root = app.workspace?.root;
-		if (root) out.push({ path: root, label: msg("워크스페이스"), title: root });
+		if (root) out.push({ path: root, label: msg("서버 기본 폴더"), title: root });
 		const home = app.workspace?.home ?? browser.listing?.home;
 		if (home && home !== root) out.push({ path: home, label: msg("홈"), title: home });
 		return out;
@@ -70,7 +70,7 @@
 		try {
 			const saved = await client()!.setDefaultWorkdir(path);
 			onsaved?.(saved);
-			app.toast(path ? t("기본 작업 디렉터리를 저장했습니다") : t("기본 작업 디렉터리를 처음 설정으로 되돌렸습니다"), "ok");
+			app.toast(path ? t("기본 작업 폴더를 저장했습니다") : t("기본 작업 폴더를 처음 설정으로 되돌렸습니다"), "ok");
 			return true;
 		} catch (e) {
 			app.toast(errorText(e), "error");
@@ -126,7 +126,7 @@
 </script>
 
 <!-- opened over the server dialog (layer 2) when it picks the default folder -->
-<Modal {onclose} title={mode === "default" ? t("기본 작업 디렉터리") : t("작업 디렉터리 선택")} width="l" layer={3} safeArea>
+<Modal {onclose} title={mode === "default" ? t("기본 작업 폴더") : t("작업 폴더 선택")} width="l" layer={3} safeArea>
 
 	<form
 		class="path"

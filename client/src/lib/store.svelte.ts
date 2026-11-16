@@ -1226,8 +1226,8 @@ class AppStore {
       await this.refreshWorkspace();
       this.toast(
         path
-          ? t("기본 작업 디렉터리를 저장했습니다")
-          : t("기본 작업 디렉터리를 처음 설정으로 되돌렸습니다"),
+          ? t("기본 작업 폴더를 저장했습니다")
+          : t("기본 작업 폴더를 처음 설정으로 되돌렸습니다"),
         "ok",
       );
       return true;
@@ -1404,7 +1404,7 @@ class AppStore {
     if (!norm.ok) {
       this.toast(
         norm.error === "home"
-          ? t("홈 디렉터리를 알 수 없어 ~를 쓸 수 없습니다")
+          ? t("홈 폴더를 알 수 없어 ~를 쓸 수 없습니다")
           : norm.error === "chars"
             ? t("경로에 사용할 수 없는 문자가 있습니다")
             : t("상대 경로에는 ..을 쓸 수 없습니다. 절대 경로(/로 시작)를 입력하세요"),
@@ -2022,7 +2022,7 @@ class AppStore {
       return false;
     }
     if (chat.compaction?.supported === false) {
-      this.toast(t("이 서버는 컨텍스트 압축을 지원하지 않습니다. BE 연동이 필요합니다"), "error", id);
+      this.toast(t("이 서버 버전은 컨텍스트 압축을 지원하지 않습니다. 서버를 업데이트하세요"), "error", id);
       return false;
     }
     // While it works, /compact waits in the queue like a follow-up: the server runs it when the run ends.

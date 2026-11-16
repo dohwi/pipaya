@@ -192,7 +192,7 @@ export class ChatState {
 			return result;
 		} catch (e) {
 			this.compactionError = e instanceof ApiError && (e.status === 404 || e.status === 501)
-				? t("이 서버는 컨텍스트 압축을 지원하지 않습니다. BE 연동이 필요합니다")
+				? t("이 서버 버전은 컨텍스트 압축을 지원하지 않습니다. 서버를 업데이트하세요")
 				: errorText(e);
 			throw new Error(this.compactionError);
 		} finally {

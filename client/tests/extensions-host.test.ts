@@ -399,7 +399,7 @@ describe("safe mode", () => {
 		expect(storage.get("pipaya.extensions.safe")).toBeUndefined();
 		expect(next.host.find(id).state).toBe("disabled");
 		expect(next.host.find(id).enabled).toBe(false);
-		expect(next.host.find(id).error).toBe("시작이 완료되지 않아 비활성화했습니다");
+		expect(next.host.find(id).error).toBe("시작이 끝나지 않아 껐습니다");
 		expect(next.host.find(otherId).state).toBe("active");
 		expect(next.host.commands.map(c => c.name)).toEqual(["review"]);
 		expect(next.host.loadError).toBe("");
