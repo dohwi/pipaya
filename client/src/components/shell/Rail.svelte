@@ -14,7 +14,15 @@
 	import { platformName } from "../../lib/terminal";
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
+	import { whenShort } from "../../lib/schedules";
+	import Badge from "../ui/Badge.svelte";
+	import Icon from "../ui/Icon.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
+	// the bottom of the rail: the same places as the sidebar's bottom (graph view, scheduled tasks, settings), as icons
+	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
+	const scheduled = $derived(app.schedules.all(app.serverId));
+	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: whenShort(scheduled.next) })}`);
 
 	interface Section {
 		server: Server;
@@ -64,7 +72,7 @@
 	{@const st = dirState(sec, d)}
 	{@const name = dirName(sec, d.path)}
 	{@const n = dirCount(sec, d)}
-	{@const cur = sec.current && app.activeTab?.dir.path === d.path}
+	{@const cur = !app.graphOpen && sec.current && app.activeTab?.dir.path === d.path}
 	<button
 		class="agent dir"
 		class:active={cur}
@@ -100,6 +108,14 @@
 	</ul>
 
 	<div class="bottom">
+		<!-- the graph view is a place of its own: while it is open, its button is the selected one (no folder is) -->
+		<button class="nav" class:on={app.graphOpen} onclick={() => app.toggleGraph()} aria-label={t("그래프 뷰")} aria-pressed={app.graphOpen} aria-current={app.graphOpen ? "page" : undefined} title={graphTip}><Icon name="fork" /></button>
+		{#if schedulesShown}
+			<button class="nav" onclick={() => (app.schedulesDialog = true)} aria-label={t("예약 작업")} title={schedulesTip}>
+				<Icon name="clock" />
+				{#if scheduled.count}<span class="cnt"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
+			</button>
+		{/if}
 		<IconButton icon="settings" label={t("설정")} tip onclick={() => app.openSettings()} />
 	</div>
 </aside>
@@ -227,6 +243,53 @@
 	.agents:global([data-indicator-ready]) .agent.active {
 		background: transparent;
 		box-shadow: none;
+	}
+	/* the bottom's own buttons: the settings IconButton's 38px circle and 19px glyph, so the three line up; the graph
+	   view's, while it is the place shown, takes the selected folder tile's fill and edge bar */
+	.nav {
+		position: relative;
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: 38px;
+		height: 38px;
+		border-radius: 50%;
+		color: var(--text-dim);
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
+		-webkit-tap-highlight-color: transparent;
+	}
+	.nav :global(.ic) {
+		width: 19px;
+		height: 19px;
+	}
+	@media (hover: hover) {
+		.nav:hover {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
+	}
+	.nav.on {
+		border-radius: var(--radius-sm);
+		background: var(--accent-soft);
+		color: var(--text);
+	}
+	.nav.on::before {
+		content: "";
+		position: absolute;
+		left: -9px; /* on the rail's edge, where a folder tile's bar is */
+		top: 9px;
+		bottom: 9px;
+		width: 3px;
+		border-radius: 0 2px 2px 0;
+		background: var(--text);
+	}
+	.cnt {
+		position: absolute;
+		top: -4px;
+		right: -6px;
+		pointer-events: none;
 	}
 	.bottom {
 		display: flex;

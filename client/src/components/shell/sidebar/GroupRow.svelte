@@ -46,7 +46,7 @@
 	target={{ kind: "group", g }}
 	{drop}
 	maxlength={100}
-	class={["grprow", folded && "gfolded", n.current && g.id === app.activeGroup?.id && "cur"]}
+	class={["grprow", folded && "gfolded", !app.graphOpen && n.current && g.id === app.activeGroup?.id && "cur"]}
 >
 	<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!folded} aria-label={folded ? t("펼치기") : t("접기")} title={folded ? t("펼치기") : t("접기")}>
 		<span class="chev" class:folded><Icon name="chevron-down" /></span>
