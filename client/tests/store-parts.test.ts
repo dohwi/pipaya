@@ -105,6 +105,12 @@ describe("sidebar shared part", () => {
 		sb.setDirName("s1", "/a", "A");
 		expect(edits).toEqual(["s1", "s1", "s1"]);
 		expect(JSON.parse(JSON.stringify(sb.shared("s1")))).toEqual({ pinnedDirs: ["/a"], pinnedTabs: ["g1"], dirOrder: [], tabOrder: [], dirNames: { "/a": "A" }, groupDir: {} });
+		// hand-made projects travel only when set, so an older server (which rejects unknown fields) still takes the rest
+		sb.setOverrides("s1", { projects: [{ id: "p", name: "회사", dirs: ["/a", "/b"] }], ungrouped: ["/c"] });
+		expect(sb.shared("s1")?.projects).toEqual([{ id: "p", name: "회사", dirs: ["/a", "/b"] }]);
+		expect(sb.shared("s1")?.ungrouped).toEqual(["/c"]);
+		sb.applyShared("s1", { projects: [{ id: "q", name: "x", dirs: [] }, { id: 1 }], ungrouped: "x" });
+		expect(sb.overrides("s1")).toEqual({ projects: [], ungrouped: [] });
 		sb.togglePinned("s2", "/z");
 		sb.applyShared("s1", { pinnedDirs: ["/b"], pinnedTabs: [1, "g2"], dirNames: "bad" });
 		expect(JSON.parse(JSON.stringify(sb.pinned))).toEqual({ s1: ["/b"], s2: ["/z"] });

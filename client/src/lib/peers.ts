@@ -14,6 +14,17 @@ export function peerLabel(s: Pick<Session, "name" | "purpose"> | undefined): { t
 	return { text: shown, title: s.purpose ? `${shown} · ${s.purpose}` : shown };
 }
 
+/**
+ * Who made a session, when it is another active session (an agent's `peer create`, or a fork): the "↳ @parent" mark on
+ * its tab and sidebar row. Undefined for one the user started, or whose parent is gone or closed.
+ */
+export function parentLabel(s: Pick<Session, "parentId"> | undefined, byId: (id: string) => Pick<Session, "name" | "title"> | undefined): { text: string; title: string } | undefined {
+	const p = s?.parentId ? byId(s.parentId) : undefined;
+	if (!p) return undefined;
+	const who = p.name ? `@${nameInLang(p.name)}` : p.title;
+	return { text: `↳ ${who}`, title: t("{who}가 만든 대화", { who }) };
+}
+
 export interface PeerMention { insert: string; desc: string; group: string; keywords: string; except: string }
 
 /** The `@` completions: every group with sessions in it, then every other active session. */

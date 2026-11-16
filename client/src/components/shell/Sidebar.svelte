@@ -12,7 +12,7 @@
 	import Badge from "../ui/Badge.svelte";
 	import { updater } from "../../lib/updater.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
-	import { t } from "../../lib/i18n";
+	import { msg, t } from "../../lib/i18n";
 	import { whenShort } from "../../lib/schedules";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
@@ -34,8 +34,8 @@
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { sidebarDirs, type DirBlock, type Tab } from "../../lib/nav";
-	import { flattenBlocks, projectBlocks, type RepoMap, type SidebarBlock } from "../../lib/projects";
-	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
+	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectBlocks, projectKey, type ProjectOverrides, type RepoMap, type SidebarBlock } from "../../lib/projects";
+	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../../lib/types";
 	import { platformName, type TerminalInfo } from "../../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
@@ -60,7 +60,7 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], repos: RepoMap, shared?: SidebarBlock[]): Pick<Node, "root" | "total" | "dirs" | "blocks"> {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], repos: RepoMap, over: ProjectOverrides, shared?: SidebarBlock[]): Pick<Node, "root" | "total" | "dirs" | "blocks"> {
 		if (shared) {
 			const dirs = flattenBlocks(shared);
 			return { root: ws?.root, total: dirs.reduce((n, d) => n + d.tabs.length, 0), dirs, blocks: shared };
@@ -75,7 +75,7 @@
 			keep: q ? [] : keep, // a search lists matches only
 			pinnedTabs: ptabs,
 		});
-		const blocks = projectBlocks(dirs, repos);
+		const blocks = projectBlocks(dirs, repos, over);
 		const flat = flattenBlocks(blocks);
 		const total = flat.reduce((n, d) => n + d.tabs.length, 0);
 		return { root: ws?.root, total, dirs: flat, blocks };
@@ -96,7 +96,7 @@
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
 			const shared = q ? undefined : app.blocksByServer[server.id] ?? [];
 			const repos = link?.repos ?? {};
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], repos, shared);
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], repos, app.sidebar.overrides(server.id), shared);
 			return { server, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, repos, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
@@ -313,9 +313,70 @@
 			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
 			rename: path !== null ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
 			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
+			joinProject: path !== null && n.current ? () => pickProject(n, path) : undefined,
+			leaveProject: path !== null && projectOf(n, path) ? () => app.sidebar.setOverrides(n.server.id, leaveProject(app.sidebar.overrides(n.server.id), path, !isManualRoot(projectOf(n, path)!.root))) : undefined,
 		});
 		rowMenu?.openAt(pt, id, items);
 		return () => menuId === id && rowMenu?.close();
+	}
+	/** The project folder `path` is listed in, if any. */
+	const projectOf = (n: Node, path: string) => {
+		const b = n.blocks.find((x) => x.kind === "project" && x.dirs.some((d) => d.path === path));
+		return b?.kind === "project" ? b : null;
+	};
+	/** A project's label: the name the user gave it, else the repository folder's short name. */
+	const projectName = (n: Node, root: string) =>
+		isManualRoot(root) ? (app.sidebar.overrides(n.server.id).projects?.find((p) => `manual:${p.id}` === root)?.name ?? "") : (app.sidebar.dirName(n.server.id, root) ?? shortName(root, n.home));
+	/**
+	 * "프로젝트로 묶기…": pick a project (or another folder, which starts a new project with this one) to list folder `path`
+	 * under. A picker rather than dragging, so it works the same on touch.
+	 */
+	function pickProject(n: Node, path: string) {
+		const sid = n.server.id;
+		const own = projectOf(n, path);
+		const projects = n.blocks.filter((b) => b.kind === "project" && b !== own) as Extract<SidebarBlock, { kind: "project" }>[];
+		const folders = n.dirs.filter((d) => d.path !== path && !projectOf(n, d.path));
+		app.palette = {
+			title: t("'{name}'를 묶을 곳", { name: shortLabel(n, path) }),
+			empty: msg("묶을 다른 폴더가 없습니다"),
+			items: [
+				...projects.map((b) => ({ id: `p:${b.root}`, title: projectName(n, b.root), sub: t("프로젝트 · 폴더 {n}개", { n: b.dirs.length }) })),
+				...folders.map((d) => ({ id: `d:${d.path}`, title: shortLabel(n, d.path), sub: t("새 프로젝트 · {path}", { path: pretty(n, d.path) }) })),
+			],
+			onpick: (it) => {
+				const over = app.sidebar.overrides(sid);
+				if (it.id.startsWith("p:")) return app.sidebar.setOverrides(sid, joinProject(over, path, { root: it.id.slice(2) }));
+				const other = it.id.slice(2);
+				const id = newProjectId();
+				app.sidebar.setOverrides(sid, joinProject(over, path, { with: other, id, name: shortLabel(n, other) }));
+				app.sidebar.reveal(projectKey(sid, `manual:${id}`));
+			},
+		};
+	}
+	/** Right click / long press on a project header. */
+	function projectMenuAt(pt: Point, n: Node, root: string, key: string, workdir: string) {
+		const id = newKey(key);
+		const manual = isManualRoot(root);
+		const items = projectMenuEntries(platformName(n.platform), isFolded(key), {
+			chat: () => app.openIn(n.server.id, { workdir }),
+			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
+			toggle: () => app.sidebar.toggleFolded(key),
+			rename: () => projectRename.start(key, projectName(n, root)),
+			dissolve: manual ? () => app.sidebar.setOverrides(n.server.id, dissolveProject(app.sidebar.overrides(n.server.id), root.slice("manual:".length))) : undefined,
+			copyPath: manual ? undefined : () => void copyText(root).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
+		});
+		rowMenu?.openAt(pt, id, items);
+		return () => menuId === id && rowMenu?.close();
+	}
+	const projectRename = new InlineRename();
+	/** Save a project's new name: a hand-made one keeps it in its own entry, a repository's like a folder's name. */
+	function commitProjectRename(n: Node, root: string) {
+		const key = projectKey(n.server.id, root);
+		if (!projectRename.is(key)) return;
+		const name = projectRename.draft;
+		projectRename.cancel();
+		if (isManualRoot(root)) app.sidebar.renameProject(n.server.id, root.slice("manual:".length), name);
+		else app.sidebar.setDirName(n.server.id, root, name);
 	}
 	// What the rows below share, handed down once instead of through a dozen props each.
 	setSidebarCtx({
@@ -324,6 +385,10 @@
 		groupRename,
 		dirRename,
 		commitDirRename,
+		projectRename,
+		commitProjectRename,
+		projectMenuAt,
+		projectName,
 		get menuId() {
 			return menuId;
 		},

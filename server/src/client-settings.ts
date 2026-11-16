@@ -26,10 +26,14 @@ const VALIDATORS: Partial<Record<ClientSettingKey, (value: unknown) => string | 
 	},
 	sidebar: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "sidebar must be an object";
-		const lists = ["pinnedDirs", "pinnedTabs", "dirOrder", "tabOrder"];
+		const lists = ["pinnedDirs", "pinnedTabs", "dirOrder", "tabOrder", "ungrouped"];
 		const maps = ["dirNames", "groupDir"];
 		const o = v as Record<string, unknown>;
-		if (Object.keys(o).some((k) => !lists.includes(k) && !maps.includes(k))) return "sidebar has an unknown field";
+		if (Object.keys(o).some((k) => !lists.includes(k) && !maps.includes(k) && k !== "projects")) return "sidebar has an unknown field";
+		// hand-made projects: [{ id, name, dirs: [path, ...] }, ...]
+		const isStrs = (x: unknown) => Array.isArray(x) && x.every((y) => typeof y === "string");
+		if (o.projects !== undefined && !(Array.isArray(o.projects) && o.projects.every((p) => p && typeof p === "object" && typeof p.id === "string" && typeof p.name === "string" && isStrs(p.dirs))))
+			return "sidebar.projects must be a list of { id, name, dirs }";
 		for (const k of lists) if (o[k] !== undefined && !(Array.isArray(o[k]) && (o[k] as unknown[]).every((x) => typeof x === "string"))) return `sidebar.${k} must be a list of strings`;
 		for (const k of maps) {
 			const m = o[k];
