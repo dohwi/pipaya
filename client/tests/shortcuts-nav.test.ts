@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
-import { firstUnseen, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
+import { needsLook, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
 import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
 import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
@@ -366,18 +366,18 @@ describe("shortcut combinations", () => {
 	});
 });
 
-describe("firstUnseen", () => {
+describe("needsLook", () => {
 	const order = ["a", "b", "c", "d"];
-	test("takes the topmost marked session and walks down as marks clear", () => {
-		const marks = new Set(["b", "d"]);
-		expect(firstUnseen(order, (id) => marks.has(id), "a")).toBe("b");
-		marks.delete("b");
-		expect(firstUnseen(order, (id) => marks.has(id), "b")).toBe("d");
+	const none = { awaiting: {}, failed: {}, unread: {} };
+	test("a question beats a failure, a failure beats an unseen finish, whatever the order", () => {
+		expect(needsLook(order, { awaiting: { d: 1 }, failed: { c: true }, unread: { b: true } }, null)).toBe("d");
+		expect(needsLook(order, { ...none, failed: { c: true }, unread: { b: true } }, null)).toBe("c");
+		expect(needsLook(order, { ...none, unread: { b: true, d: true } }, null)).toBe("b");
 	});
-	test("skips the open session and returns null when nothing is marked", () => {
-		expect(firstUnseen(order, (id) => id === "a", "a")).toBeNull();
-		expect(firstUnseen(order, () => false, null)).toBeNull();
-		expect(firstUnseen(order, (id) => id === "c", null)).toBe("c");
+	test("skips the open session and returns null when nothing needs a look", () => {
+		expect(needsLook(order, { ...none, awaiting: { a: 2 } }, "a")).toBeNull();
+		expect(needsLook(order, none, null)).toBeNull();
+		expect(needsLook(order, { ...none, awaiting: { a: 0 }, unread: { c: true } }, "b")).toBe("c");
 	});
 });
 

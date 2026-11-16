@@ -140,9 +140,9 @@ describe("shortcut catalogue", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 		expect(by.toggleSidebar.default).toBe("Mod+B+B");
 	});
-	test("the four split directions exist and the common two are bound", () => {
+	test("the two split directions are bound", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
-		for (const id of ["splitRight", "splitDown", "splitLeft", "splitUp"]) expect(by[id]?.group).toBe("layout");
+		for (const id of ["splitRight", "splitDown"]) expect(by[id]?.group).toBe("layout");
 		expect(by.splitRight.default).toBe("Mod+B+V");
 		expect(by.splitDown.default).toBe("Mod+B+Minus");
 	});

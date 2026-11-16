@@ -24,8 +24,15 @@ function readBindings(): Record<ActionId, string> {
   const raw = read<Record<string, unknown> | null>(K.keys, null);
   const out = { ...DEFAULT_BINDINGS };
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    for (const [id, combo] of Object.entries(raw))
-      if (isActionId(id) && typeof combo === "string" && !ACTIONS.find((a) => a.id === id)?.fixed) out[id] = combo;
+    const own = new Set<ActionId>();
+    for (const [id, combo] of Object.entries(raw)) {
+      if (!isActionId(id) || typeof combo !== "string" || ACTIONS.find((a) => a.id === id)?.fixed) continue;
+      out[id] = combo;
+      own.add(id);
+    }
+    // A combo the user chose wins over a later default that landed on the same keys: that default is left unbound.
+    const chosen = new Set([...own].map((id) => out[id]).filter(Boolean));
+    for (const a of ACTIONS) if (!own.has(a.id) && chosen.has(out[a.id])) out[a.id] = "";
   }
   return out;
 }

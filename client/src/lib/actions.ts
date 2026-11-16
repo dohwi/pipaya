@@ -1,12 +1,11 @@
 import { errorText } from "./api";
-import { tick } from "svelte";
 import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
-import { resume, runCommand } from "./commands";
+import { findChat, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
-import { stepSessionTarget, stepWorkspaceTarget } from "./step-session";
-import { firstUnseen, sessionOrder, stepFrom, tabPanes } from "./nav";
+import { stepWorkspaceTarget } from "./step-session";
+import { needsLook, sessionOrder, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -90,14 +89,6 @@ function goTo(to: { server: string; id: string } | null) {
   else if (to.id !== app.activeId) void app.openSession(to.id);
 }
 
-/**
- * Previous / next conversation in sidebar order (server bands → folders → tabs), skipping rows hidden by a folded server,
- * folder or split group. Crossing into another server's band switches to that server (see `stepSessionTarget`).
- */
-function stepSession(step: 1 | -1) {
-  goTo(stepSessionTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
-}
-
 /** Previous / next workspace (folder block in the sidebar), across servers like `stepSession`: opens its first tab. */
 function stepWorkspace(step: 1 | -1) {
   goTo(stepWorkspaceTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
@@ -118,21 +109,12 @@ function lastSession() {
   else app.toast(t("돌아갈 이전 대화가 없습니다"), "error");
 }
 
-/** Jump to the topmost conversation that finished while nobody was looking. */
-function nextFinished() {
-  const id = firstUnseen(sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.currentPinnedTabs), (x) => !!(app.unread[x] || app.failed[x]), app.activeId);
+/** Jump to the conversation that most needs the user: asking first, then failed, then finished unseen. */
+function nextAttention() {
+  const order = sessionOrder(app.sessions, app.groups, app.currentDirOrder, app.currentTabOrder, app.terminals, app.currentPinnedTabs);
+  const id = needsLook(order, { awaiting: app.awaiting, failed: app.failed, unread: app.unread }, app.activeId);
   if (id) void app.openSession(id);
-  else app.toast(t("확인하지 않은 완료된 대화가 없습니다"), "error");
-}
-
-async function focusSearch() {
-  // The desktop sidebar can be folded and the mobile one is a drawer: show it before looking for the field.
-  if (matchMedia("(max-width: 860px)").matches) app.sidebar.open = true;
-  else if (app.sidebar.collapsed) app.sidebar.toggleCollapsed();
-  await tick();
-  const input = document.querySelector<HTMLInputElement>("[data-sidebar-search]");
-  input?.focus();
-  input?.select();
+  else app.toast(t("확인할 대화가 없습니다"), "error");
 }
 
 /** Focus the neighbouring pane of the open group, by screen direction. */
@@ -164,13 +146,6 @@ function zoomPane() {
   if (!g || !id) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
   if (app.isFull(g.id)) app.toggleFull(g.id);
   else app.zoomId = app.zoomId === id ? null : id;
-}
-
-/** Undo every enlarging of the open group: the zoomed pane and the full mode. */
-function restorePane() {
-  const g = app.activeGroup;
-  if (g && app.isFull(g.id)) app.toggleFull(g.id);
-  app.zoomId = null;
 }
 
 function toggleFull() {
@@ -213,15 +188,13 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
   closeSession: () => app.closeActive(),
-  prevSession: () => stepSession(-1),
-  nextSession: () => stepSession(1),
   prevWorkspace: () => stepWorkspace(-1),
   nextWorkspace: () => stepWorkspace(1),
   prevTab: () => stepTab(-1),
   nextTab: () => stepTab(1),
   lastSession,
-  nextFinished,
-  focusSearch,
+  nextAttention,
+  findChat: () => void findChat(),
   findInChat: () => void app.findTick++,
   forkSession: () => runCommand("fork", "last"),
   retry: () => runCommand("retry"),
@@ -242,7 +215,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   splitTerminal: () => app.splitTerminal("bottom"),
   splitTerminalRight: () => app.splitTerminal("right"),
   zoomPane,
-  restorePane,
   toggleFull,
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
@@ -253,14 +225,11 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     if (voice.recording) voice.stop();
     else void voice.start(app.activeId ?? "");
   },
-  resume: () => resume(),
   modelPicker: () => void app.modelPickerTick++,
   cycleModel,
   cycleThinking,
   splitRight: () => app.splitActive("right"),
   splitDown: () => app.splitActive("bottom"),
-  splitLeft: () => app.splitActive("left"),
-  splitUp: () => app.splitActive("top"),
   stop: () => {
     if (app.chat?.running) void app.abort();
   },

@@ -25,6 +25,7 @@
 
 	const GROUPS = [
 		{ id: "general", title: msg("일반") },
+		{ id: "nav", title: msg("대화 이동") },
 		{ id: "chat", title: msg("대화") },
 		{ id: "model", title: msg("모델 · 추론") },
 		{ id: "layout", title: msg("화면 분할") },
