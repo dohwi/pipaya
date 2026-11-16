@@ -8,6 +8,7 @@ import type { Api } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
 import { setLang } from "../src/lib/i18n";
 import {
+	HISTORY_KEEP_MS,
 	MAX_EVERY_MS,
 	MIN_EVERY_MS,
 	cadence,
@@ -16,9 +17,11 @@ import {
 	isUsedUp,
 	labelOf,
 	parseLocal,
+	purgeAt,
 	resultOf,
 	sortSchedules,
 	splitEvery,
+	splitSchedules,
 	summarizeSchedules,
 	toLocalInput,
 } from "../src/lib/schedules";
@@ -94,6 +97,25 @@ describe("labels and results", () => {
 		expect(isUsedUp(task({ kind: "once", enabled: false, lastStatus: "ok" }))).toBe(true);
 		expect(isUsedUp(task({ kind: "once", enabled: false, lastStatus: null }))).toBe(false);
 		expect(isUsedUp(task({ kind: "interval", enabled: false, lastStatus: "ok" }))).toBe(false);
+	});
+	test("finished one-time tasks go to the history, latest run first; paused and never-run ones stay pending", () => {
+		const list = [
+			task({ id: "old", kind: "once", enabled: false, lastStatus: "ok", lastRunAt: 100 }),
+			task({ id: "next", nextRunAt: 500 }),
+			task({ id: "new", kind: "once", enabled: false, lastStatus: "skipped_busy", lastRunAt: 300 }),
+			task({ id: "paused", kind: "interval", enabled: false, lastStatus: "ok", nextRunAt: null }),
+			task({ id: "unrun", kind: "once", enabled: false, lastStatus: null, nextRunAt: null }),
+		];
+		const { pending, finished } = splitSchedules(list);
+		expect(finished.map((s) => s.id)).toEqual(["new", "old"]);
+		expect(pending.map((s) => s.id).sort()).toEqual(["next", "paused", "unrun"]);
+		expect(pending[0]!.id).toBe("next");
+		expect(splitSchedules([])).toEqual({ pending: [], finished: [] });
+	});
+	test("a finished task is deleted a week after its last run", () => {
+		expect(HISTORY_KEEP_MS).toBe(7 * 86_400_000);
+		expect(purgeAt(task({ lastRunAt: 1000, updatedAt: 5 }))).toBe(1000 + HISTORY_KEEP_MS);
+		expect(purgeAt(task({ lastRunAt: null, updatedAt: 5 }))).toBe(5 + HISTORY_KEEP_MS);
 	});
 	test("soonest first, switched-off ones last", () => {
 		const list = [task({ id: "off", enabled: false, createdAt: 1 }), task({ id: "late", nextRunAt: 9000 }), task({ id: "soon", nextRunAt: 100 }), task({ id: "none", nextRunAt: null })];

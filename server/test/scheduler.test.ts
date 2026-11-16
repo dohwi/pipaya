@@ -8,7 +8,7 @@ import { openDb } from "../src/db.ts";
 import { HttpError } from "../src/errors.ts";
 import { DAY_MS } from "../src/retention.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
-import { EXPIRE_AFTER_MS, MAX_EVERY_MS, MAX_FAILS, MAX_PROMPT, MAX_TASKS, MAX_TIMER_MS, MIN_EVERY_MS, Scheduler, type SchedulerHost, type Timers } from "../src/scheduler.ts";
+import { EXPIRE_AFTER_MS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_FAILS, MAX_PROMPT, MAX_TASKS, MAX_TIMER_MS, MIN_EVERY_MS, Scheduler, type SchedulerHost, type Timers } from "../src/scheduler.ts";
 
 const MIN = 60_000;
 const T0 = 1_000_000_000_000;
@@ -385,6 +385,69 @@ describe("Scheduler: limits (400)", () => {
 	test("a closed session may still get a schedule (it is skipped until the session is resumed)", () => {
 		const { scheduler } = setup({ sessions: { s1: { closed: true } } });
 		expect(fails(() => every(scheduler, MIN_EVERY_MS))).toBe(0);
+	});
+});
+
+describe("Scheduler: finished one-time tasks (history)", () => {
+	test("a finished one-time task does not count towards the limit", async () => {
+		const { scheduler, clock } = setup();
+		scheduler.start();
+		for (let i = 0; i < 3; i++) once(scheduler, T0 + MIN);
+		for (let i = 3; i < MAX_TASKS; i++) every(scheduler, MIN_EVERY_MS);
+		expect(fails(() => every(scheduler, MIN_EVERY_MS))).toBe(400);
+		await clock.advance(MIN);
+		expect(scheduler.list().filter((t) => t.kind === "once").every((t) => !t.enabled && t.lastStatus === "ok")).toBe(true);
+		expect(fails(() => every(scheduler, MIN_EVERY_MS))).toBe(0);
+		expect(scheduler.list().length).toBe(MAX_TASKS + 1);
+	});
+
+	test("switching a finished task back on takes a place again, refused when the list is full", async () => {
+		const { scheduler, clock } = setup();
+		scheduler.start();
+		const t = once(scheduler, T0 + MIN);
+		await clock.advance(MIN);
+		for (let i = 1; i < MAX_TASKS; i++) every(scheduler, MIN_EVERY_MS);
+		every(scheduler, MIN_EVERY_MS); // the finished one leaves room for the 50th
+		expect(fails(() => scheduler.update(t.id, { runAt: clock.now() + MIN, enabled: true }))).toBe(400);
+		scheduler.delete(scheduler.list().find((x) => x.kind === "interval")!.id);
+		expect(scheduler.update(t.id, { runAt: clock.now() + MIN, enabled: true })).toMatchObject({ enabled: true, nextRunAt: clock.now() + MIN });
+	});
+
+	test(`a finished task is deleted ${HISTORY_KEEP_MS / DAY_MS} days after its last run; paused and never-run ones stay`, async () => {
+		const { scheduler, clock, make } = setup();
+		scheduler.start();
+		const done = once(scheduler, T0 + MIN);
+		const paused = every(scheduler, MIN_EVERY_MS);
+		const unrun = once(scheduler, T0 + 2 * DAY_MS);
+		scheduler.update(paused.id, { enabled: false });
+		scheduler.update(unrun.id, { enabled: false });
+		await clock.advance(MIN);
+		expect(scheduler.get(done.id).lastStatus).toBe("ok");
+		clock.set(T0 + MIN + HISTORY_KEEP_MS);
+		expect(scheduler.list().map((t) => t.id)).toContain(done.id); // exactly the keep time: still there
+		clock.set(T0 + MIN + HISTORY_KEEP_MS + 1);
+		expect(scheduler.list().map((t) => t.id).sort()).toEqual([paused.id, unrun.id].sort());
+		scheduler.stop();
+		const again = once(scheduler, clock.now() + MIN);
+		const restarted = make();
+		restarted.start();
+		await clock.advance(MIN);
+		clock.set(clock.now() + HISTORY_KEEP_MS + 1);
+		restarted.stop();
+		make().start(); // start prunes too
+		expect(restarted.find(again.id)).toBeUndefined();
+	});
+
+	test("an expired one-time task records when it was skipped, so it ages out like the others", async () => {
+		const { scheduler, make, clock } = setup();
+		scheduler.start();
+		const late = once(scheduler, T0 + MIN);
+		scheduler.stop();
+		clock.set(T0 + MIN + EXPIRE_AFTER_MS + 1);
+		const restarted = make();
+		restarted.start();
+		await clock.advance(1000);
+		expect(restarted.get(late.id)).toMatchObject({ lastStatus: "skipped_expired", lastRunAt: clock.now() - 1000 });
 	});
 });
 

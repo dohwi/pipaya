@@ -12,10 +12,18 @@ import { DAY_MS } from "./retention.ts";
  * closed is skipped and recorded: it is never queued and never wakes a session. After downtime a missed task runs once, not once
  * per missed slot; a one-time task more than a day late is switched off instead of run.
  *
+ * A one-time task that has run (or was skipped) is "finished": it stays as history, does not count towards MAX_TASKS, and is
+ * deleted HISTORY_KEEP_MS after its last run. Switching it on again with a new time makes it a pending task again.
+ *
  * Invariant: `nextRunAt` is set exactly when the task is enabled.
  */
 
+/** Pending tasks (everything but finished one-time tasks) at most. */
 export const MAX_TASKS = 50;
+/** A finished one-time task is kept this long after its last run, then deleted. */
+export const HISTORY_KEEP_MS = 7 * DAY_MS;
+/** SQL condition: a one-time task that is used up (switched off after it ran or was skipped). */
+const FINISHED = "kind = 'once' AND enabled = 0 AND last_status IS NOT NULL";
 export const MIN_EVERY_MS = 5 * 60_000;
 export const MAX_EVERY_MS = 30 * DAY_MS;
 export const MAX_PROMPT = 8000;
@@ -204,6 +212,7 @@ export class Scheduler {
 	}
 
 	list(sessionId?: string): ScheduleRecord[] {
+		this.prune();
 		const rows = (sessionId
 			? this.db.query("SELECT * FROM scheduled_tasks WHERE session_id = $sessionId ORDER BY created_at, id").all({ sessionId })
 			: this.db.query("SELECT * FROM scheduled_tasks ORDER BY created_at, id").all()) as Row[];
@@ -231,9 +240,10 @@ export class Scheduler {
 			next = now + everyMs;
 		}
 		const id = randomUUID();
-		// Counted and inserted in one transaction, so two requests cannot both take the last place.
+		this.prune();
+		// Counted and inserted in one transaction, so two requests cannot both take the last place. Finished ones are history and do not count.
 		this.db.transaction(() => {
-			const { n } = this.db.query("SELECT COUNT(*) AS n FROM scheduled_tasks").get() as { n: number };
+			const { n } = this.db.query(`SELECT COUNT(*) AS n FROM scheduled_tasks WHERE NOT (${FINISHED})`).get() as { n: number };
 			if (n >= MAX_TASKS) throw badRequest(`at most ${MAX_TASKS} scheduled tasks`);
 			this.db
 				.query(
@@ -266,6 +276,11 @@ export class Scheduler {
 		}
 		const wasOn = cur.enabled === 1;
 		const on = patch.enabled ?? wasOn;
+		// Switching a finished task back on makes it pending again: it takes a place under the limit.
+		if (on && !wasOn && cur.kind === "once" && cur.last_status !== null) {
+			const { n } = this.db.query(`SELECT COUNT(*) AS n FROM scheduled_tasks WHERE NOT (${FINISHED})`).get() as { n: number };
+			if (n >= MAX_TASKS) throw badRequest(`at most ${MAX_TASKS} scheduled tasks`);
+		}
 		let next: number | null = null;
 		if (on) {
 			if (cur.kind === "once") {
@@ -295,6 +310,13 @@ export class Scheduler {
 	onSessionDeleted(sessionId: string): void {
 		this.db.query("DELETE FROM scheduled_tasks WHERE session_id = $sessionId").run({ sessionId });
 		this.changed(null, "deleted");
+	}
+
+	/** Deletes finished one-time tasks whose last run is more than HISTORY_KEEP_MS ago. Returns how many went. */
+	prune(): number {
+		const n = this.db.query(`DELETE FROM scheduled_tasks WHERE ${FINISHED} AND COALESCE(last_run_at, updated_at) < $before`).run({ before: this.now() - HISTORY_KEEP_MS }).changes;
+		if (n) this.log(`scheduler: deleted ${n} finished task(s) older than ${HISTORY_KEEP_MS / DAY_MS} days`);
+		return n;
 	}
 
 	// ── running ──
@@ -342,7 +364,7 @@ export class Scheduler {
 		// Switched off after more than a day of downtime: a "tomorrow morning" prompt is not wanted next week.
 		if (trigger === "timer" && cur.kind === "once" && now - cur.next_run_at! > EXPIRE_AFTER_MS) {
 			this.db
-				.query("UPDATE scheduled_tasks SET enabled = 0, next_run_at = NULL, last_status = 'skipped_expired', last_error = NULL, updated_at = $now WHERE id = $id")
+				.query("UPDATE scheduled_tasks SET enabled = 0, next_run_at = NULL, last_run_at = $now, last_status = 'skipped_expired', last_error = NULL, updated_at = $now WHERE id = $id")
 				.run({ id, now });
 			this.changed(id, "ran");
 			return;
@@ -407,6 +429,7 @@ export class Scheduler {
 	/** Arms the timer for the first task that is due, and takes up what was left from before the server stopped. */
 	start(): void {
 		this.stopped = false;
+		this.prune();
 		this.arm();
 	}
 
