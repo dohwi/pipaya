@@ -18,7 +18,8 @@
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
 	 * between them moving while work flows. Drag the background to pan, a mouse wheel to zoom (a trackpad scrolls with
-	 * two fingers and zooms with a pinch), a card to move it. One click on a chat opens a quick view to read and write to it in place; a double click opens it.
+	 * two fingers and zooms with a pinch), a card to move it. One click on a chat opens it in a panel beside the
+	 * canvas (read it, its tool calls, write to it); a double click goes to the chat itself.
 	 */
 
 	// ---- data: what every link keeps live, plus each server's delegate calls ----
@@ -104,6 +105,25 @@
 	};
 	/** One step of the zoom: a wheel notch, the +/- keys and buttons. */
 	const ZOOM_STEP = 1.2;
+	/** Pan just enough to bring a card fully into the canvas (the panel opening beside it narrows the canvas). */
+	function reveal(id: string) {
+		const c = graph.cards.get(id);
+		if (!c || !viewEl) return;
+		const pad = 24;
+		const [l, r] = [(c.x - c.w / 2) * view.k + view.x, (c.x + c.w / 2) * view.k + view.x];
+		const [t0, b0] = [(c.y - c.h / 2) * view.k + view.y, (c.y + c.h / 2) * view.k + view.y];
+		const W = viewEl.clientWidth, H = viewEl.clientHeight - BAR_H;
+		const dx = r > W - pad ? W - pad - r : l < pad ? pad - l : 0;
+		const dy = b0 > H - pad ? H - pad - b0 : t0 < pad ? pad - t0 : 0;
+		if (dx || dy) view = { ...view, x: view.x + dx, y: view.y + dy };
+	}
+	/** The canvas width: it narrows when the panel opens or is resized, and the open chat's card must stay in sight. */
+	let viewW = $state(0);
+	$effect(() => {
+		const q = quick;
+		if (!q || !viewW) return;
+		reveal(`s:${q.server}/${q.session}`);
+	});
 	const zoomBy = (f: number) => viewEl && zoomAt(view.k * f, viewEl.clientWidth / 2, viewEl.clientHeight / 2);
 	function wheel(e: WheelEvent) {
 		e.preventDefault();
@@ -161,7 +181,11 @@
 		const tapped = cardAt(e.target);
 		const c = id ? graph.cards.get(id) : undefined;
 		drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, card: id, tapped, cx: c?.x ?? 0, cy: c?.y ?? 0, moved: false };
-		viewEl!.setPointerCapture(e.pointerId);
+		try {
+			viewEl!.setPointerCapture(e.pointerId);
+		} catch {
+			/* a pointer already gone (a synthetic or cancelled one): no capture needed */
+		}
 	}
 	function move(e: PointerEvent) {
 		if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -221,11 +245,12 @@
 		savePins();
 	}
 	function key(e: KeyboardEvent) {
-		if (quick || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, textarea, button")) return;
+		if (e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, textarea, button, aside")) return;
 		const c = selected ? graph.cards.get(selected) : undefined;
-		if (e.key === "Escape" && selected) {
+		if (e.key === "Escape" && (selected || quick)) {
 			e.preventDefault();
-			selected = null;
+			if (quick) quick = null;
+			else selected = null;
 		} else if (e.key === "Enter" && c?.kind === "session") {
 			e.preventDefault();
 			if (e.shiftKey) app.openIn(c.server, { session: c.session!.id });
@@ -279,11 +304,13 @@
 		<button class="close" onclick={() => app.toggleGraph(false)} aria-label={t("그래프 뷰 닫기")} title={t("그래프 뷰 닫기") + keyHint}><Icon name="x" /></button>
 	</header>
 
+	<div class="body">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="view"
 		class:panning
 		bind:this={viewEl}
+		bind:clientWidth={viewW}
 		onpointerdown={down}
 		onpointermove={move}
 		onpointerup={up}
@@ -398,15 +425,18 @@
 		</div>
 	</div>
 
+	{#if quick}
+		<!-- the chat beside the canvas: the canvas and its toolbar keep working; another chat card switches the panel -->
+		<GraphQuick server={quick.server} session={quick.session} onclose={() => (quick = null)} />
+	{/if}
+	</div>
+
 	<!-- hidden copies of the one-line names, to measure a long one -->
 	<div class="measure" bind:this={measure} aria-hidden="true">
 		{#each ["server", "provider", "model", "subagent"] as k (k)}<span class="nm" class:mono={k === "model"} data-kind={k}></span>{/each}
 	</div>
 </section>
 
-{#if quick}
-	<GraphQuick server={quick.server} session={quick.session} onclose={() => (quick = null)} />
-{/if}
 
 <style>
 	.graph {
@@ -462,10 +492,17 @@
 		}
 	}
 
-	/* ---- the canvas ---- */
+	/* ---- the canvas, and the chat panel beside it ---- */
+	.body {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		display: flex;
+	}
 	.view {
 		position: relative;
 		flex: 1;
+		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
 		cursor: grab;
