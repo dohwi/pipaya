@@ -23,6 +23,7 @@ import { applyLinkEvent, applyLiveEvent } from "./server-link-model";
 import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
+import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
@@ -749,7 +750,7 @@ class AppStore {
         event: (l, e) => this.onLinkEvent(l, e),
         // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
         ready: (l, warm) => { this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {}); void this.attach(l, warm); },
-        shape: (l) => (this.dirsByServer[l.id] ?? []).map((d) => d.tabs.length),
+        shape: (l) => this.sidebarShape(l.id),
       });
       next[s.id] = link;
       changed = true;
@@ -1347,14 +1348,35 @@ class AppStore {
    * dozens of sorts of the whole session list in the second after a send. A search narrows the list, so the sidebar
    * still builds its own while a query is typed.
    */
-  dirsByServer: Record<string, DirBlock[]> = $derived.by(() => {
-    const out: Record<string, DirBlock[]> = {};
+  blocksByServer: Record<string, SidebarBlock[]> = $derived.by(() => {
+    const out: Record<string, SidebarBlock[]> = {};
     for (const server of this.servers) {
-      const d = this.links[server.id]?.data;
+      const link = this.links[server.id];
+      const d = link?.data;
       if (!d) continue;
       const id = server.id;
-      out[id] = sidebarDirs(d.sessions, d.groups, d.terminals, { dirOrder: this.sidebar.dirOrder[id], tabOrder: this.sidebar.tabOrder[id], groupDir: this.sidebar.groupDir[id], keep: this.sidebar.pinned[id], pinnedTabs: this.sidebar.pinnedTabs[id] });
+      const dirs = sidebarDirs(d.sessions, d.groups, d.terminals, { dirOrder: this.sidebar.dirOrder[id], tabOrder: this.sidebar.tabOrder[id], groupDir: this.sidebar.groupDir[id], keep: this.sidebar.pinned[id], pinnedTabs: this.sidebar.pinnedTabs[id] });
+      out[id] = projectBlocks(dirs, link.repos);
     }
+    return out;
+  });
+
+  /**
+   * Rows per top-level entry of a server's list as drawn now (its header, then the rows open under it), so a cold start's
+   * skeleton has the height the list will have. Folders start folded, so most entries are a single row.
+   */
+  private sidebarShape(serverId: string): number[] {
+    const open = (path: string) => !this.sidebar.isDirFolded(dirKey(serverId, path));
+    const rows = (d: DirBlock) => 1 + (open(d.path) ? d.tabs.length : 0);
+    return (this.blocksByServer[serverId] ?? []).map((b) =>
+      b.kind === "dir" ? rows(b.dir) : 1 + (this.sidebar.folded.includes(projectKey(serverId, b.root)) ? 0 : b.dirs.reduce((k, d) => k + rows(d), 0)),
+    );
+  }
+
+  /** The same folders in the order the sidebar draws them (a project's folders together), for everything that walks them. */
+  dirsByServer: Record<string, DirBlock[]> = $derived.by(() => {
+    const out: Record<string, DirBlock[]> = {};
+    for (const [id, blocks] of Object.entries(this.blocksByServer)) out[id] = flattenBlocks(blocks);
     return out;
   });
 
@@ -1679,15 +1701,16 @@ class AppStore {
   }
 
   /**
-   * Unfold the sidebar rows that hold `id` (its folder and its server), so whatever is opened there is listed rather than
-   * hidden under a folded node. Only those two nodes move: the rest of the tree stays as the user folded it.
+   * Unfold the sidebar rows that hold `id`'s folder (its project and its server), so the folder whose tabs the tab bar now
+   * shows is listed rather than hidden under a folded node. The folder itself stays as the user left it.
    */
   private revealRow(id: string): void {
     const sid = this.serverId;
     if (!sid) return;
     // the folder as the sidebar lists it (a group's is the one it was placed under), else the pane's own directory
     const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
-    if (path) this.sidebar.reveal(dirKey(sid, path));
+    const project = path ? this.blocksByServer[sid]?.find((b) => b.kind === "project" && b.dirs.some((d) => d.path === path)) : undefined;
+    if (project?.kind === "project") this.sidebar.reveal(projectKey(sid, project.root));
     this.sidebar.reveal(sid);
   }
 

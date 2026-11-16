@@ -37,6 +37,7 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 	ThinkingLevel,
 } from "./types";
 import { msg, t } from "./i18n";
+import type { RepoInfo } from "./projects";
 import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, type ServerUpdateStatus, type ServerVersions } from "./protocol";
 
 export class ApiError extends Error {
@@ -363,6 +364,8 @@ export class Api {
 		this.req<DirListing>("GET", `/fs/dirs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: "true" } : {}) })}`, undefined, signal);
 	listFiles = (cwd: string, q: string, signal?: AbortSignal) =>
 		this.req<{ entries: { path: string; dir: boolean }[] }>("GET", `/fs/files?${new URLSearchParams({ cwd, q })}`, undefined, signal);
+	/** The git repository of each folder (null outside one). A server from before projects answers 404 (`isUnsupportedRoute`). */
+	repos = (paths: string[], signal?: AbortSignal) => this.req<{ repos: Record<string, RepoInfo | null> }>("POST", "/fs/repos", { paths }, signal);
 	makeDir = (parent: string, name: string) => this.req<{ path: string }>("POST", "/fs/dirs", { parent, name });
 	testModel = (sel: ModelSelection) => this.req<ConnectionResult>("POST", "/configuration/test", sel);
 

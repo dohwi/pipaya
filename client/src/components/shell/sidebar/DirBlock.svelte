@@ -8,6 +8,7 @@
 	import { dropTarget } from "../../../lib/dnd.svelte";
 	import type { DirBlock as Dir } from "../../../lib/nav";
 	import { asWorkdir, dirKey, parentPath } from "../../../lib/sidebar-model";
+	import { branchLabel } from "../../../lib/projects";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import type { Session } from "../../../lib/types";
 	import type { TerminalInfo } from "../../../lib/terminal";
@@ -20,10 +21,12 @@
 	import TerminalRow from "./TerminalRow.svelte";
 
 	/**
-	 * One folder of a server: its header (fold, name, "+") and its tabs. The header can be dragged to reorder folders,
-	 * and a split-tab pane dropped on it steps out of its group.
+	 * One folder of a server: its header (fold, name, "+") and, once opened, its tabs. Folders start folded: the tab bar
+	 * lists the open folder's tabs, so the sidebar is a list of places. The chevron opens or folds the list; the name shows
+	 * the folder (its last used tab). Inside a project the folder is named by its branch. The header can be dragged to
+	 * reorder folders, and a split-tab pane dropped on it steps out of its group.
 	 */
-	let { n, d, searching }: { n: SidebarNode; d: Dir; searching: boolean } = $props();
+	let { n, d, searching, inProject = false }: { n: SidebarNode; d: Dir; searching: boolean; inProject?: boolean } = $props();
 
 	const sb = getSidebarCtx();
 	function focusSelect(node: HTMLInputElement) {
@@ -31,7 +34,12 @@
 		node.select();
 	}
 	const key = $derived(dirKey(n.server.id, d.path));
-	const folded = $derived(sb.isFolded(key));
+	const folded = $derived(sb.isDirFolded(key));
+	/** Inside a project: the folder is named by the branch checked out there (a project lists one repository's worktrees) */
+	const repo = $derived(inProject ? n.repos[d.path] ?? null : null);
+	const branch = $derived(repo ? branchLabel(d.path, repo) : null);
+	/** The folder whose tabs the tab bar shows */
+	const cur = $derived(!app.graphOpen && n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs));
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
 	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
 	const label = $derived(sb.shortLabel(n, d.path));
@@ -44,18 +52,20 @@
 
 <!-- A drop and drag target for folders; the folder toggle inside is a real button. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="dirblock" data-block={`dir:${d.path}`} data-server={n.server.id} class:carried={mark.carried} class:before={mark.before} class:after={mark.after}>
+<div class="dirblock" class:inproj={inProject} data-block={`dir:${d.path}`} data-server={n.server.id} class:carried={mark.carried} class:before={mark.before} class:after={mark.after}>
 	<div
 		class="dir grabbable"
 		class:folded
-		class:cur={!app.graphOpen && n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs)}
+		class:cur
 		class:over={sb.marks.over(key)}
 		use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: sb.hover(key), drop: sb.dropOnDir }}
 		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
-		<button class="dirtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={parent}>
+		<button class="dirfold" onclick={() => app.sidebar.toggleDir(key)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-			<span class="dicon"><Icon name="folder" />{#if pinned}<PinMark />{/if}</span>
+		</button>
+		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : app.sidebar.toggleDir(key))} aria-current={cur ? "true" : undefined} title={parent}>
+			<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
 					<!-- svelte-ignore a11y_autofocus -->
@@ -73,10 +83,13 @@
 							if (e.key === "Escape") sb.dirRename.cancel();
 						}}
 					/>
+				{:else if branch && !app.sidebar.dirName(n.server.id, d.path)}
+					<span class="dname mono" title={branch.name}>{branch.name}</span>
+					{#if branch.sub}<span class="dparent mono" use:tail={branch.sub}></span>{/if}
 				{:else}
 					<span class="dname" title={label}>{label}</span>
+					{#if above && !inProject}<span class="dparent mono" use:tail={above}></span>{/if}
 				{/if}
-				{#if above}<span class="dparent mono" use:tail={above}></span>{/if}
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
 		</button>
@@ -147,18 +160,32 @@
 	.dirblock.after::after {
 		bottom: -1px;
 	}
+	/* the chevron is its own button (it opens the tab list); the rest of the row shows the folder. Together they keep the old
+	   columns: chevron x 28, folder icon x 48 */
+	.dirfold {
+		flex: none;
+		display: flex;
+		align-items: center;
+		height: 32px; /* every row is 32px tall */
+		padding-left: 4px; /* the chevron's column, as when it sat inside the toggle */
+		border-radius: var(--radius-sm);
+	}
 	.dirtoggle {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 28 -> 48 -> 68) */
+		gap: 6px; /* alignment, not spacing: the icon 14 + 6 puts the name where it was */
 		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
-		padding: 0 4px 0 4px; /* chevron, folder icon, name: its tabs hang under the icon */
+		padding: 0 4px 0 6px; /* alignment: the gap the chevron used to keep to the icon (14 + 6 = the 20px column step, x 28 -> 48) */
 		text-align: left;
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
+	}
+	/* the open folder while its tabs are folded: the selection marker sits on it (see Sidebar OPEN_ROW) */
+	.dir.cur .dname {
+		font-weight: 700;
 	}
 	/* folded, the list button is hidden, so the toggle runs to the "+" and its count takes the column it gives up: x 256 on a mouse
 	   (the "+" is out of the flow there), x 236 on touch (the "+" keeps x 256, so the count lands on the list column) — both measured */
@@ -221,9 +248,25 @@
 		opacity: 0.45;
 	}
 	@media (pointer: coarse) {
-	.dirtoggle {
+	.dirtoggle,
+	.dirfold {
 		height: 40px;
 	}
+	}
+	/* a folder inside a project: one step in, under the project's icon (x 48 -> chevron, x 68 -> branch icon) */
+	.dirblock.inproj > .dir {
+		margin-top: 0;
+		padding-left: 20px; /* the 20px column step */
+	}
+	.dirblock.inproj:first-child > .dir {
+		margin-top: 1px; /* rows sit 1px apart, like .item */
+	}
+	.dirblock.inproj .dname.mono {
+		font-size: var(--fs-xs);
+		font-weight: 500;
+	}
+	.dirblock.inproj .dir.cur .dname.mono {
+		font-weight: 700;
 	}
 	@media (hover: hover) {
 	.dir.folded {

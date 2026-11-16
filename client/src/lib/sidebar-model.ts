@@ -59,7 +59,7 @@ export function edgeOf(y: number, rect: { top: number; bottom: number; height: n
 export const asWorkdir = (path: string, root: string | undefined) => (path === root ? "." : path);
 
 /** Separator that cannot occur in a path or id, for keys that combine two of them. */
-const SEP = "\u0000";
+export const SEP = "\u0000";
 export const dirKey = (serverId: string, path: string) => `${serverId}${SEP}${path}`;
 export const groupKey = (id: string) => `group${SEP}${id}`;
 export const newKey = (key: string) => `new${SEP}${key}`;

@@ -1,4 +1,6 @@
-import { Api, ApiError, errorText } from "./api";
+import { untrack } from "svelte";
+import { Api, ApiError, errorText, isUnsupportedRoute } from "./api";
+import type { RepoInfo } from "./projects";
 import { compat, isClientTooOld, type ServerVersions } from "./protocol";
 import { t } from "./i18n";
 import { settingsProblems, type SettingsProblem } from "./settings-problems";
@@ -20,7 +22,7 @@ export interface LinkHooks {
 	 * lists were already there and the events since the last cursor were replayed, so nothing has to be reloaded.
 	 */
 	ready(link: ServerLink, warm: boolean): void;
-	/** Tabs per folder as the sidebar draws this server (the app owns that order), kept with the cached lists. */
+	/** Rows per top-level entry as the sidebar draws this server (the app owns that order), kept with the cached lists. */
 	shape?(link: ServerLink): number[];
 }
 
@@ -67,7 +69,7 @@ export class ServerLink {
 	 * the sidebar draws them at once and marks them as waiting, and nothing that acts on a session trusts them.
 	 */
 	cached = $state(false);
-	/** Tabs per folder at the last visit, for a skeleton of the right height when the copy itself cannot be shown. */
+	/** Rows per top-level entry at the last visit, for a skeleton of the right height when the copy itself cannot be shown. */
 	readonly shape: number[] | null;
 	data = $state<LinkData>(emptyLinkData());
 	/**
@@ -75,6 +77,11 @@ export class ServerLink {
 	 * session up, and a `find` per badge turned each list change into (rows x rows) comparisons.
 	 */
 	sessionById: Map<string, Session> = $derived(new Map(this.data.sessions.map((x) => [x.id, x] as const)));
+	/**
+	 * The git repository of each listed folder (null: not in one), so the sidebar can put a repository's worktrees under one
+	 * project. Asked for folders not seen yet; empty on a server from before projects (every folder then stands alone).
+	 */
+	repos = $state<Record<string, RepoInfo | null>>({});
 	models = $state<ModelInfo[]>([]);
 	providers = $state<ProviderInfo[]>([]);
 	tools = $state<ToolInfo[]>([]);
@@ -111,6 +118,7 @@ export class ServerLink {
 		if (c) {
 			this.data = { ...emptyLinkData(), sessions: c.sessions, groups: c.groups, terminals: c.terminals };
 			if (c.workspace) this.workspace = { ...c.workspace, workdirs: [] };
+			if (c.repos) this.repos = c.repos;
 			this.cached = true;
 		}
 	}
@@ -127,10 +135,43 @@ export class ServerLink {
 		this.stopSaving = $effect.root(() => {
 			$effect(() => {
 				// read what is stored, so any change to it (not to activity) schedules a write
-				void this.data.sessions.length, this.data.sessions.map((s) => s.title + s.cwd + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length;
+				void this.data.sessions.length, this.data.sessions.map((s) => s.title + s.cwd + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length, this.repos;
 				this.saveLists();
 			});
+			$effect(() => {
+				const paths = this.listedPaths();
+				untrack(() => void this.lookUpRepos(paths));
+			});
 		});
+	}
+
+	/** Set once the server said it cannot tell repositories apart (an older build): it is not asked again. */
+	private reposUnsupported = false;
+	/** Folders asked about and not answered yet, so a burst of list changes asks once per folder. */
+	private reposAsked = new Set<string>();
+	private listedPaths(): string[] {
+		return [...new Set([...this.data.sessions.map((s) => s.cwd), ...this.data.terminals.map((x) => x.cwd)])];
+	}
+
+	/**
+	 * Look up the repository of the folders not known yet (`all`: every listed folder again, as after a (re)connect, since
+	 * a branch may have been switched meanwhile). A failure leaves them as they were until the next change.
+	 */
+	private async lookUpRepos(paths: string[], all = false): Promise<void> {
+		if (this.reposUnsupported || this.stopped) return;
+		const known = this.repos;
+		const ask = paths.filter((p) => (all || !(p in known)) && !this.reposAsked.has(p));
+		if (!ask.length) return;
+		for (const p of ask) this.reposAsked.add(p);
+		try {
+			const r = await this.api.repos(ask);
+			if (this.stopped) return;
+			this.repos = { ...this.repos, ...Object.fromEntries(ask.map((p) => [p, r.repos[p] ?? null])) };
+		} catch (e) {
+			if (isUnsupportedRoute(e)) this.reposUnsupported = true;
+		} finally {
+			for (const p of ask) this.reposAsked.delete(p);
+		}
 	}
 
 	/** Keep the lists for the next cold start; a burst of events (a run renaming, a group forming) is written once. */
@@ -138,7 +179,7 @@ export class ServerLink {
 		if (!this.listed || this.stopped) return;
 		clearTimeout(this.saveTimer);
 		this.saveTimer = setTimeout(() => {
-			if (this.listed && !this.stopped) writeListCache(this.id, toCache(this.fp, this.data, this.workspace, Date.now(), this.hooks.shape?.(this)));
+			if (this.listed && !this.stopped) writeListCache(this.id, toCache(this.fp, this.data, this.workspace, Date.now(), this.hooks.shape?.(this), this.repos));
 		}, SAVE_DELAY_MS);
 	}
 
@@ -369,6 +410,7 @@ export class ServerLink {
 			this.listed = true;
 			this.cached = false;
 			this.followLists();
+			void this.lookUpRepos(this.listedPaths(), true);
 			const [models, providers, tools, cursor, config] = (await lists)[1];
 			if (token !== this.token) return;
 			this.models = models;

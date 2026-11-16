@@ -34,6 +34,7 @@
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { sidebarDirs, type DirBlock, type Tab } from "../../lib/nav";
+	import { flattenBlocks, projectBlocks, type RepoMap, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session, WorkspaceInfo } from "../../lib/types";
 	import { platformName, type TerminalInfo } from "../../lib/terminal";
@@ -59,9 +60,12 @@
 	type Node = SidebarNode;
 
 	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], shared?: DirBlock[]): Pick<Node, "root" | "total" | "dirs"> {
-		// a copy: a search builds its own list, and the caller's shared one must not be touched
-		const dirs = shared ? [...shared] : sidebarDirs(sessions, groups, terminals, {
+	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], repos: RepoMap, shared?: SidebarBlock[]): Pick<Node, "root" | "total" | "dirs" | "blocks"> {
+		if (shared) {
+			const dirs = flattenBlocks(shared);
+			return { root: ws?.root, total: dirs.reduce((n, d) => n + d.tabs.length, 0), dirs, blocks: shared };
+		}
+		const dirs = sidebarDirs(sessions, groups, terminals, {
 			match: (x) => !q || sessionTitle(x.title).toLowerCase().includes(q),
 			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
 			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
@@ -71,8 +75,10 @@
 			keep: q ? [] : keep, // a search lists matches only
 			pinnedTabs: ptabs,
 		});
-		const total = dirs.reduce((n, d) => n + d.tabs.length, 0);
-		return { root: ws?.root, total, dirs };
+		const blocks = projectBlocks(dirs, repos);
+		const flat = flattenBlocks(blocks);
+		const total = flat.reduce((n, d) => n + d.tabs.length, 0);
+		return { root: ws?.root, total, dirs: flat, blocks };
 	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
@@ -88,9 +94,10 @@
 			const ws = link?.workspace ?? null;
 			const d = link?.data;
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
-			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], shared);
-			return { server, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
+			const shared = q ? undefined : app.blocksByServer[server.id] ?? [];
+			const repos = link?.repos ?? {};
+			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], repos, shared);
+			return { server, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, repos, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
 		return orderServers(list);
@@ -114,6 +121,7 @@
 
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
+	const isDirFolded = (key: string) => !searching && app.sidebar.isDirFolded(key);
 
 	/**
 	 * Keep the open row in view: the list scrolls to it when something else opens (a new conversation in a folder far
@@ -121,9 +129,14 @@
 	 * is unfolded first (store `revealRow`), so the row exists by the time this runs.
 	 */
 	let listEl: HTMLElement | undefined = $state();
+	/**
+	 * The row that stands for what is open: the open tab, or, while its folder (or the project holding it) is folded, that
+	 * folder's row. Only one of them is ever drawn: a folded row hides the tabs under it.
+	 */
+	const OPEN_ROW = ".item.active, .dir.folded.cur";
 	/** The open row, when the list has it out of view (null while it is visible or missing). */
 	function offscreen(host: HTMLElement): HTMLElement | null {
-		const row = host.querySelector<HTMLElement>(".item.active");
+		const row = host.querySelector<HTMLElement>(OPEN_ROW);
 		if (!row) return null;
 		const box = host.getBoundingClientRect();
 		const r = row.getBoundingClientRect();
@@ -132,6 +145,8 @@
 	$effect(() => {
 		void app.activeId;
 		void app.sidebar.folded;
+		void app.sidebar.openDirs;
+		void app.activeTab;
 		const host = listEl;
 		if (!host) return;
 		schedule(host, () => {
@@ -288,10 +303,12 @@
 	function headMenuAt(pt: Point, n: Node, path: string | null, key: string) {
 		const id = newKey(key);
 		const workdir = path === null ? "." : path === n.root ? "." : path;
-		const items = headMenuEntries(platformName(n.platform), isFolded(key), {
+		// a folder folds by its own list (they start folded); a server keeps the shared one
+		const dir = path !== null;
+		const items = headMenuEntries(platformName(n.platform), dir ? isDirFolded(key) : isFolded(key), {
 			chat: () => app.openIn(n.server.id, { workdir }),
 			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
-			toggle: () => app.sidebar.toggleFolded(key),
+			toggle: () => (dir ? app.sidebar.toggleDir(key) : app.sidebar.toggleFolded(key)),
 			togglePin: path === null ? undefined : () => app.sidebar.togglePinned(n.server.id, path),
 			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
 			rename: path !== null ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
@@ -314,6 +331,7 @@
 			return searching;
 		},
 		isFolded,
+		isDirFolded,
 		stateOf,
 		stateOfId,
 		hoverMenu,
@@ -363,7 +381,7 @@
 		<SearchField label={t("대화 검색")} data-sidebar-search bind:value={query} />
 	</div>
 
-	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: ".item.active", radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}

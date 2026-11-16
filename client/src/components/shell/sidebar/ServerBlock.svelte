@@ -7,7 +7,9 @@
 	import { unreachable } from "../../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
+	import AttentionList from "./AttentionList.svelte";
 	import DirBlockView from "./DirBlock.svelte";
+	import ProjectBlock from "./ProjectBlock.svelte";
 	import ListButton from "./ListButton.svelte";
 	import NewButton from "./NewButton.svelte";
 	import { skeletonGate } from "../../../lib/skeleton-gate.svelte";
@@ -28,9 +30,12 @@
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
 	/** The bones stay a moment once they were seen, so a list that lands just after they appeared does not flash them */
 	const sk = skeletonGate(() => !n.loaded);
-	/** Folders and tabs as they were at the last visit (one folder, two tabs when this device has never seen the server) */
+	/**
+	 * Rows as they were at the last visit: per entry its header and the rows that were open under it (`shape`, capped).
+	 * Folders start folded, so a device that never saw the server draws three folder rows.
+	 */
 	const BONE_W = [128, 88, 112, 72];
-	const bones = $derived((app.links[n.server.id]?.shape ?? [2]).map((tabs, d) => ({ dir: [96, 80, 112][d] ?? 96, tabs: BONE_W.slice(0, tabs) })));
+	const bones = $derived((app.links[n.server.id]?.shape ?? [1, 1, 1]).map((rows, d) => ({ dir: [96, 80, 112][d] ?? 96, tabs: BONE_W.slice(0, rows - 1) })));
 </script>
 
 	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off class:stale={n.stale && !off}>
@@ -66,8 +71,13 @@
 			{/if}
 
 			{#if !sk.showing}
-				{#each n.dirs as d (d.path)}
-					<DirBlockView {n} {d} {searching} />
+				{#if !searching}<AttentionList {n} />{/if}
+				{#each n.blocks as b (b.kind === "dir" ? b.dir.path : `project:${b.root}`)}
+					{#if b.kind === "dir"}
+						<DirBlockView {n} d={b.dir} {searching} />
+					{:else}
+						<ProjectBlock {n} root={b.root} dirs={b.dirs} {searching} />
+					{/if}
 				{/each}
 			{/if}
 		</div>

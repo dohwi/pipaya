@@ -5,6 +5,7 @@ import type { Point } from "./press-menu";
 import type { DragMarks } from "./drag-marks.svelte";
 import type { InlineRename } from "./inline-rename.svelte";
 import type { DirBlock, Tab } from "./nav";
+import type { RepoInfo, SidebarBlock } from "./projects";
 import type { RowTarget } from "./sidebar-model";
 import type { Activity } from "./activity";
 import type { Group, Session } from "./types";
@@ -23,6 +24,10 @@ export interface SidebarNode {
 	home: string | undefined;
 	total: number;
 	dirs: DirBlock[];
+	/** The same folders as listed: plain folders, and projects holding a repository's folders together */
+	blocks: SidebarBlock[];
+	/** The git repository of each folder, as far as the server said */
+	repos: Readonly<Record<string, RepoInfo | null>>;
 	/** What the server runs (linux, darwin, win32), when it says so */
 	platform: string | undefined;
 }
@@ -45,8 +50,10 @@ export interface SidebarCtx {
 	/** Id the "more" / "+" menu is open for (its button stays highlighted) */
 	readonly menuId: string | null;
 	readonly searching: boolean;
-	/** Folded state of a tree node (folders, servers and split tabs never fold while searching) */
+	/** Folded state of a server, project or split tab (nothing is folded while searching) */
 	isFolded(key: string): boolean;
+	/** Folded state of a folder: folders start folded and list their tabs only once opened (all open while searching) */
+	isDirFolded(key: string): boolean;
 	/** Activity of a conversation, from its own server's live state */
 	stateOf(n: SidebarNode, x: Session): Activity;
 	/** Activity by id (a terminal or an unknown id is idle) */
