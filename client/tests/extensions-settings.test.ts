@@ -656,7 +656,7 @@ describe("configured gate for new packages with a settings schema", () => {
 		const id = host.install(cfg("example.cfg", [{ key: "interval", type: "number", label: "간격", default: 30 }]));
 		expect(host.find(id).configured).toBe(false);
 		expect(host.configRequired(id)).toBe(true);
-		await expect(host.enable(id)).rejects.toThrow("먼저 설정을 저장해야 활성화할 수 있습니다");
+		await expect(host.enable(id)).rejects.toThrow("먼저 설정을 저장해야 켤 수 있습니다");
 		expect(host.find(id).state).toBe("disabled");
 		expect(host.find(id).enabled).toBe(false);
 		await host.setSettings(id, host.find(id).settings); // confirm the prefilled defaults
@@ -696,7 +696,7 @@ describe("configured gate for new packages with a settings schema", () => {
 		const { host } = await boot(() => null);
 		expect(host.installed[0]!.state).toBe("disabled");
 		expect(host.installed[0]!.enabled).toBe(false);
-		expect(host.installed[0]!.error).toBe("먼저 설정을 저장해야 활성화할 수 있습니다");
+		expect(host.installed[0]!.error).toBe("먼저 설정을 저장해야 켤 수 있습니다");
 		expect(((globalThis as any).__fakeRuntimes as unknown[]).length).toBe(0);
 	});
 	test("a server sync that supplies settings marks the entry configured", async () => {
@@ -725,7 +725,7 @@ describe("never auto-disabling other extensions", () => {
 		expect(host.safeMode).toBe(false);
 		expect(storage.has("pipaya.extensions.safe")).toBe(false);
 		const b = host.find("example.b");
-		expect(b.enabled).toBe(false); expect(b.state).toBe("disabled"); expect(b.error).toBe("시작이 완료되지 않아 비활성화했습니다");
+		expect(b.enabled).toBe(false); expect(b.state).toBe("disabled"); expect(b.error).toBe("시작이 끝나지 않아 껐습니다");
 		expect(host.find("example.a").state).toBe("active");
 		expect(host.find("example.c").state).toBe("active");
 		expect(JSON.parse(storage.get("pipaya.extensions.v1")!).map((e: any) => e.enabled)).toEqual([true, false, true]);

@@ -17,7 +17,7 @@ export const SETTINGS_TABS = [
 	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
-	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
+	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true },
 	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
 	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
 	{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
@@ -43,7 +43,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("서브에이전트 위임"), words: "subagent sub-agent delegate helper role 서브에이전트 위임 역할 도우미" }, // i18n-ok: search words in either language; "helper / 도우미" was the old name
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
-	{ tab: "sessions", label: msg("기본 폴더"), words: "folder workdir directory cwd default 기본 폴더 작업 디렉터리" }, // i18n-ok: search words in either language
+	{ tab: "sessions", label: msg("기본 작업 폴더"), words: "folder workdir directory workspace cwd default 기본 폴더 작업 폴더 작업 디렉터리 워크스페이스" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
 	{ tab: "schedules", label: msg("예약 작업"), words: "schedule scheduled task timer cron repeat interval later 예약 반복 정기 주기 자동 실행 알람" }, // i18n-ok: search words in either language
 ];
@@ -102,7 +102,7 @@ export function toolLabel(name: string): string {
 		case "grep": return t("내용 검색 (grep)");
 		case "bash": return t("셸 명령 실행 (bash)");
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
-		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·중단·답변·그룹 (peer)");
+		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·중지·답변·그룹 (peer)");
 		case "delegate": return t("일회성 서브에이전트에게 작업 위임 (delegate)");
 		case "schedule": return t("예약 작업 만들기·변경·삭제 (schedule)");
 		case "generate_image": return t("이미지 생성 (generate_image)");

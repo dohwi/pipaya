@@ -271,7 +271,7 @@
 				tasks.result = {
 					tone: "ok",
 					title: replaced ? t("확장을 교체했습니다") : t("확장을 가져왔습니다"),
-					detail: t("아직 실행되지 않았습니다. 설치된 확장 목록에서 권한을 확인한 뒤 활성화하세요."),
+					detail: t("아직 실행되지 않았습니다. 설치된 확장 목록에서 권한을 확인한 뒤 켜세요."),
 					pkg,
 					running: false,
 					replaced,
@@ -283,7 +283,7 @@
 				tasks.result = { tone: "ok", title: t("확장을 교체하고 다시 실행했습니다"), detail: t("새 권한이 없어 다시 동의를 받지 않고 바로 실행했습니다."), pkg, running: true, replaced };
 			} catch (cause) {
 				const why = errorText(cause);
-				tasks.result = { tone: "warn", title: t("교체했지만 실행하지 못했습니다"), detail: `${t("비활성 상태로 남아 있습니다.")} ${why}`, pkg, running: false, replaced };
+				tasks.result = { tone: "warn", title: t("교체했지만 실행하지 못했습니다"), detail: `${t("꺼진 상태로 남아 있습니다.")} ${why}`, pkg, running: false, replaced };
 			}
 		}, t("확장을 가져오지 못했습니다"));
 	}
@@ -322,7 +322,7 @@
 
 	function reload(id: string) {
 		void run(id, async () => {
-			if (extensions.safeMode || src.find(id)?.state !== "active") throw new LocalizedError(t("활성 상태의 확장만 다시 불러올 수 있습니다."));
+			if (extensions.safeMode || src.find(id)?.state !== "active") throw new LocalizedError(t("켜진 확장만 다시 불러올 수 있습니다."));
 			await src.enable(id);
 		});
 	}
@@ -344,7 +344,7 @@
 				await src.enable(id);
 				tasks.notice = t("설정을 저장하고 확장을 다시 불러왔습니다.");
 			} else {
-				tasks.notice = t("설정을 저장했습니다. 다음 활성화 때 적용됩니다.");
+				tasks.notice = t("설정을 저장했습니다. 다음에 켤 때 적용됩니다.");
 			}
 		});
 	}
@@ -408,7 +408,7 @@
 	function setSafeMode(on: boolean) {
 		void run("$safe", () => {
 			extensions.setSafeMode(on);
-			tasks.notice = on ? t("모든 확장의 실행을 중지했습니다.") : t("안전 모드를 해제했습니다. 각 확장을 직접 활성화하세요.");
+			tasks.notice = on ? t("모든 확장의 실행을 중지했습니다.") : t("안전 모드를 해제했습니다. 각 확장을 직접 켜세요.");
 		});
 	}
 </script>

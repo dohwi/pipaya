@@ -87,8 +87,8 @@
 					favs={own ? app.favModels : []}
 					onfav={own ? (p, id) => app.toggleFavModel(p, id) : undefined}
 					allowUnset
-					unsetLabel={t("세션 모델 그대로 사용")}
-					placeholder={t("세션 모델 그대로 사용")}
+					unsetLabel={t("대화 모델 그대로 사용")}
+					placeholder={t("대화 모델 그대로 사용")}
 					disabled={busy}
 					invalid={Boolean(s.model) && (noKey || !info || !info.configured)}
 					label={t("압축 모델")}

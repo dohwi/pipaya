@@ -67,7 +67,7 @@ async function cycleModel() {
 async function cycleThinking() {
   const model = app.effectiveModel;
   if (!model?.reasoning)
-    return void app.toast(t("이 모델은 추론 단계를 지원하지 않습니다"), "error", app.activeId);
+    return void app.toast(t("이 모델은 추론 강도를 지원하지 않습니다"), "error", app.activeId);
   // Only the strengths this model accepts.
   const own = model.thinkingLevels.length ? LEVELS.filter((x) => model.thinkingLevels.includes(x)) : LEVELS;
   const l = next(own, (x) => x === app.effective.thinkingLevel);

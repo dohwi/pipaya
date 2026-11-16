@@ -198,7 +198,7 @@ export class ConfigurationManager {
     const job: ConfigurationJob = this.job = { id: String(generation), state: "pending" };
     const message = kind === "authorize" ? t("자동 설정 접근 승인: 이 확장이 실행되는 동안 서버 목록·확장 패키지·비민감 설정을 반복해서 읽고 외부 서버로 전송하며, 일반 설정 변경을 추가 승인 없이 적용할 수 있습니다. 토큰은 제외하고 패키지/활성 상태 변경은 자동 적용하지 않습니다. 승인은 확장 코드와 연결 설정에 묶이며 revoke() 또는 확장 삭제로 해제할 수 있습니다. 허용할까요?")
       : kind === "export" ? t("설정 내보내기: 서버 주소·확장 패키지·비민감 설정을 이 확장에 전달합니다. 확장은 이 데이터를 자신의 서버에 전송할 수 있습니다. 토큰은 제외하지만 코드·기본값에 직접 넣은 비밀값은 제거할 수 없습니다.")
-      : kind === "apply" ? t("설정 가져오기: 서버 {servers}개 병합, 확장 {extensions}개 설치·교체. 확장은 비활성으로 복원됩니다. 토큰은 유지하고 적용 전에 로컬 백업을 만듭니다.", { servers: document!.servers.length, extensions: document!.extensions.length })
+      : kind === "apply" ? t("설정 가져오기: 서버 {servers}개 병합, 확장 {extensions}개 설치·교체. 확장은 꺼진 상태로 복원됩니다. 토큰은 유지하고 적용 전에 로컬 백업을 만듭니다.", { servers: document!.servers.length, extensions: document!.extensions.length })
       : t("설정 복원: 마지막 가져오기 전의 로컬 백업으로 되돌립니다. 확장은 자동 실행하지 않습니다.");
     void (async () => {
       try {

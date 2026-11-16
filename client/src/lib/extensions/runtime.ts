@@ -239,7 +239,7 @@ export class ExtensionRuntime {
     this.callbacks.failed(error);
   }
 
-  stop(reason = t("확장이 비활성화되었습니다")) {
+  stop(reason = t("확장이 꺼졌습니다")) {
     if (this.stopped) return;
     this.stopped = true;
     clearInterval(this.heartbeat); clearTimeout(this.pongDeadline);

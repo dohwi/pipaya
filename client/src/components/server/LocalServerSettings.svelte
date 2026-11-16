@@ -64,7 +64,7 @@
 		<Button size="sm" disabled={!dirty || busy || badPort} onclick={apply}>{busy ? t("적용 중…") : t("적용")}</Button>
 	</div>
 	{#if error}<p class="hint danger" role="alert" in:collapseIn out:collapseOut>{error}</p>{/if}
-	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중단됩니다")}</p>
+	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중지됩니다")}</p>
 </div>
 {/if}
 

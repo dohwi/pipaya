@@ -79,7 +79,7 @@
 	</PickerOption>
 {/snippet}
 
-<PickerModal title={t("OpenRouter 매칭 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="440px" minList="200px">
+<PickerModal title={t("OpenRouter에서 찾은 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="440px" minList="200px">
 	{#snippet footerStart()}
 		{#if onrefresh}
 			<button type="button" class="src" onclick={onrefresh} disabled={refreshing} title={detail}>
@@ -93,7 +93,7 @@
 	{#snippet list()}
 		<PickerOption selected={value === null} onclick={() => onpick(null)}>
 			{#snippet name()}{t("수동 입력")}{/snippet}
-			{#snippet meta()}{t("매칭 없이 한도와 기능을 직접 정합니다")}{/snippet}
+			{#snippet meta()}{t("OpenRouter 정보 없이 한도와 기능을 직접 정합니다")}{/snippet}
 		</PickerOption>
 		{#if showSuggested && suggested}
 			<div class="pk-group">{t("추천")}</div>

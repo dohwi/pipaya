@@ -42,7 +42,7 @@ export const commandQuery = (text: string): string | null => /^\/([a-z][a-z0-9-]
 
 const dirLabel = (cwd: string) => {
 	const r = app.relPath(cwd);
-	return r === "." ? t("워크스페이스 루트") : r;
+	return r === "." ? t("서버 기본 폴더") : r;
 };
 
 function when(ts: number): string {
@@ -207,20 +207,20 @@ const DEFINITIONS: SlashCommand[] = [
 		name: "cd",
 		aliases: ["cwd"],
 		args: "[path]",
-		desc: msg("작업 디렉터리 변경"),
+		desc: msg("작업 폴더 변경"),
 		run: (a) => {
 			if (a.trim()) return void app.changeWorkdir(a);
 			if (app.workdirInfo) return void (app.dirPicker = true);
 			const dirs = app.workspace?.workdirs ?? [];
 			const seen = new Set<string>();
-			const items = [{ id: ".", title: t("서버 기본 디렉터리"), sub: app.workspace?.root, current: app.workdir === "." }];
+			const items = [{ id: ".", title: t("서버 기본 폴더"), sub: app.workspace?.root, current: app.workdir === "." }];
 			seen.add(".");
 			for (const w of dirs) {
 				if (seen.has(w.path)) continue;
 				seen.add(w.path);
 				items.push({ id: w.path, title: w.path, sub: t("활성 {active} · 닫힘 {closed}", { active: w.active, closed: w.closed }), current: w.path === app.workdir });
 			}
-			pickList(t("작업 디렉터리"), items, (id) => void app.changeWorkdir(id));
+			pickList(t("작업 폴더"), items, (id) => void app.changeWorkdir(id));
 		},
 	},
 	{

@@ -327,7 +327,7 @@
 				{:else if !saved}
 					{t("서버 기본값을 씁니다.")}{#if cfg.effectiveDefaults} ({cfg.effectiveDefaults.provider}/{cfg.effectiveDefaults.model}){/if}
 				{:else if shownInfo && !shownInfo.reasoning}
-					{t("이 모델은 추론 모드를 지원하지 않아 추론 강도는 쓰이지 않습니다.")}
+					{t("이 모델은 추론을 지원하지 않아 추론 강도는 쓰이지 않습니다.")}
 				{:else if saved.thinkingLevel}
 					{t("새 대화는 추론 강도 {level}로 시작합니다.", { level: saved.thinkingLevel })}
 				{:else}

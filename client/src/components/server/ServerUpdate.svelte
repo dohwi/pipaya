@@ -49,7 +49,7 @@
 		{#if isNew}
 			<div class="actions">
 				{#if serverUpdater.blockedByRuns && !busy}
-					<ConfirmButton size="sm" confirmLabel={t("정말 중단")} onconfirm={forceUpdate}>{t("중단하고 업데이트")}</ConfirmButton>
+					<ConfirmButton size="sm" confirmLabel={t("정말 중지")} onconfirm={forceUpdate}>{t("중지하고 업데이트")}</ConfirmButton>
 				{/if}
 				<Button size="sm" variant="update" disabled={busy} onclick={update}>{t("서버 업데이트")}</Button>
 			</div>

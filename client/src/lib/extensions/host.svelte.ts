@@ -161,8 +161,8 @@ const PENDING = "pipaya.extensions.pending";
 const SYNC_FETCH_MS = 3000;
 const SYNC_PUT_MS = 10000;
 export const SYNC_SAVE_FAILED = msg("서버에 저장하지 못해 이 브라우저에만 저장됨");
-export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 활성화할 수 있습니다");
-export const BOOT_INTERRUPTED = msg("시작이 완료되지 않아 비활성화했습니다");
+export const CONFIG_REQUIRED = msg("먼저 설정을 저장해야 켤 수 있습니다");
+export const BOOT_INTERRUPTED = msg("시작이 끝나지 않아 껐습니다");
 export const NEEDS_APPROVAL = msg("이 기기에서 아직 승인하지 않은 확장입니다. 권한을 확인한 뒤 직접 켜 주세요");
 export const APPROVAL_HINT = msg("다른 기기에서 켠 확장입니다. 이 기기에서 실행하려면 권한을 확인한 뒤 직접 켜 주세요.");
 export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
@@ -758,10 +758,10 @@ export class ExtensionHost {
     const current = () => this.generations.get(id) === generation && entry.enabled;
     try {
       this.installLocales(id, pkg);
-      for (const c of pkg.commands ?? []) this.registerCommand(id, c.name, c.description, "[input]", async arg => { if (!current()) throw new LocalizedError(t("비활성화된 확장입니다")); this.adapter!.prefill(c.template.split("{{args}}").join(arg)); });
+      for (const c of pkg.commands ?? []) this.registerCommand(id, c.name, c.description, "[input]", async arg => { if (!current()) throw new LocalizedError(t("꺼진 확장입니다")); this.adapter!.prefill(c.template.split("{{args}}").join(arg)); });
       if (pkg.code) {
         const runtime: ExtensionRuntime = new ExtensionRuntime({
-          request: (method, args) => { if (!current()) throw new LocalizedError(t("비활성화된 확장입니다")); return this.request(id, method, args, runtime); },
+          request: (method, args) => { if (!current()) throw new LocalizedError(t("꺼진 확장입니다")); return this.request(id, method, args, runtime); },
           failed: error => { if (current()) this.failure(id, error); },
         });
         this.runtimes.set(id, runtime);
@@ -776,7 +776,7 @@ export class ExtensionHost {
       if (openId && !this.panelOpen && this.panels.some(p => p.owner === id && p.id === openId)) {
         this.activePanel = `${id}:${openId}`; this.panelOpen = true;
       }
-      this.applyThemes(); this.save(); this.log(id, t("활성화됨"));
+      this.applyThemes(); this.save(); this.log(id, t("켜짐"));
     } catch (e) {
       if (current()) this.failure(id, e instanceof Error ? e.message : String(e));
       throw e;
@@ -896,7 +896,7 @@ export class ExtensionHost {
   }
   private revokeNotifications(id: string) {
     if (!this.find(id).package.manifest.permissions.includes("system-notifications")) return;
-    void this.adapter?.systemNotifications?.revoke(id).catch(() => this.adapter?.notify(t("서버 알림 규칙을 해제하지 못했습니다. 서버에 연결한 뒤 다시 비활성화해 주세요.")));
+    void this.adapter?.systemNotifications?.revoke(id).catch(() => this.adapter?.notify(t("서버 알림 규칙을 해제하지 못했습니다. 서버에 연결한 뒤 확장을 다시 끄세요.")));
   }
   disable(id: string) {
     this.revokeNotifications(id);
@@ -1173,7 +1173,7 @@ export class ExtensionHost {
         const placement = spec.placement ?? "panel";
         const panel: ExtensionPanel = { ...spec, owner: id, revision: 0, open: placement === "side" || placement === "floating", placed: 0, run: async event => {
           const current = this.panels.find(p => p.owner === id && p.id === spec.id);
-          if (this.generations.get(id) !== generation || !current || current.run !== panel.run || this.find(id).state !== "active") throw new LocalizedError(t("비활성화된 패널입니다"));
+          if (this.generations.get(id) !== generation || !current || current.run !== panel.run || this.find(id).state !== "active") throw new LocalizedError(t("꺼진 패널입니다"));
           await runtime.execute(token, validateUIEvent(current.view, event));
         } };
         this.panels = [...this.panels, panel]; return;
@@ -1281,7 +1281,7 @@ export class ExtensionHost {
           let result: { status: number; body: unknown };
           try { result = await new Api(connection).extensionRequest(verb, path, body, signal); }
           catch (e) { throw e instanceof LocalizedError ? e : new LocalizedError(t("서버에 연결할 수 없습니다")); }
-          if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다"));
+          if (this.generations.get(id) !== generation) throw new LocalizedError(t("꺼진 확장입니다"));
           return result;
         });
       }
@@ -1335,7 +1335,7 @@ export class ExtensionHost {
         const generation = this.generations.get(id);
         return within(15000, async signal => {
           const result = await new Api(connection).callServerExtension(extension, method, args[2] ?? null, sessionId, signal);
-          if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다"));
+          if (this.generations.get(id) !== generation) throw new LocalizedError(t("꺼진 확장입니다"));
           return result;
         });
       }
@@ -1416,7 +1416,7 @@ export class ExtensionHost {
         const pid = (v: unknown) => string(v, 80, "pane id");
         const edge = (v: unknown): Edge => { if (v === "left" || v === "right" || v === "top" || v === "bottom") return v; throw new LocalizedError(t("방향은 left, right, top, bottom 중 하나여야 합니다")); };
         const generation = this.generations.get(id);
-        const alive = <T,>(v: T): T => { if (this.generations.get(id) !== generation) throw new LocalizedError(t("비활성화된 확장입니다")); return v; };
+        const alive = <T,>(v: T): T => { if (this.generations.get(id) !== generation) throw new LocalizedError(t("꺼진 확장입니다")); return v; };
         const gid = (v: unknown) => string(v, 80, "group id");
         if (method === "panes.list") {
           const o = args[0] === undefined || args[0] === null ? {} : object(args[0]);

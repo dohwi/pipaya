@@ -147,7 +147,7 @@ describe("pi compaction state", () => {
 
 	test("unsupported endpoint has an explicit BE requirement, not a model prompt", async () => {
 		const { chat } = setup({ compactSession: async () => { throw new ApiError(501, "compaction_not_supported", "unsupported"); } });
-		await expect(chat.compact()).rejects.toThrow("BE 연동");
+		await expect(chat.compact()).rejects.toThrow("서버를 업데이트");
 		expect(chat.items).toHaveLength(0);
 		expect(chat.compacting).toBe(false);
 	});

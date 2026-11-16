@@ -164,7 +164,7 @@
 	{:else if editing && tab === "sessions"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
 			<section class="set-group">
-				<div class="section-label">{t("기본 작업 디렉터리")}</div>
+				<div class="section-label">{t("기본 작업 폴더")}</div>
 	{#if wdError && !shownWd}
 			<Notice tone="danger">{wdError}</Notice>
 	{:else}
