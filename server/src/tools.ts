@@ -597,13 +597,11 @@ const DELEGATE_DESCRIPTION_FREE =
 	"The helper does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
 	"Use it to save your own context on searches or noisy commands; limits apply (concurrent helpers, calls per run).";
 
-const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement. Omit it to use the role's own model, else this session's.";
-/** What the tool text says about `model` under the model policy; `null` = the argument is not offered (the role decides). */
+const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement; the helper thinks at that model's default level. Omit `model` to use the role's own model, else this session's.";
+/** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
 export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined): { tool: string; param: string } | null {
 	if (!p || p.policy === "defined") return null;
-	if (p.policy === "allowlist")
-		return { tool: ` \`model\` may name one of: ${p.models.join(", ")}. ${MODEL_HINT}`, param: `provider/model, one of: ${p.models.join(", ")}. ${MODEL_HINT}` };
-	return { tool: ` \`model\` may name any configured model as provider/model. ${MODEL_HINT}`, param: `provider/model of any configured model. ${MODEL_HINT}` };
+	return { tool: ` ${MODEL_HINT}`, param: p.policy === "allowlist" ? `provider/model, one of: ${p.models.join(", ")}` : "provider/model of any configured model" };
 }
 
 const delegateTool: ToolDef = {
