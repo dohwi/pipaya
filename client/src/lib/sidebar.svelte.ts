@@ -31,6 +31,14 @@ const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is st
 const strMap = (v: unknown): Record<string, string> =>
   v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
 
+/**
+ * Folders used to start open and be folded here by their `dirKey` ("<serverId>\u0000<path>"); they start folded now and
+ * the opened ones are listed instead (`openDirs`). Old folder entries would only hide rows from the previous / next walk.
+ */
+export function withoutDirKeys(keys: string[]): string[] {
+  return keys.filter((k) => !k.includes("\u0000") || k.startsWith("group\u0000") || k.startsWith("project\u0000") || k.startsWith("new\u0000"));
+}
+
 export class SidebarState {
   /** Told after the user edits a server's shared part, so it can be uploaded. */
   onEdit: (serverId: string) => void = () => {};
@@ -39,7 +47,13 @@ export class SidebarState {
   open = $state(false);
   collapsed = $state(read<boolean>(K.sidebar, false));
   width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
-  folded = $state<string[]>(read<string[]>(K.folded, []));
+  /** Folded servers, projects and split tabs. Folders are kept apart (`openDirs`): they start folded instead. */
+  folded = $state<string[]>(withoutDirKeys(read<string[]>(K.folded, [])));
+  /**
+   * Folders opened to list their tabs, by `dirKey`. Folders start folded: the tab bar lists the open folder's tabs, so the
+   * sidebar stays a list of places and a folder shows its tabs only when the user opens it.
+   */
+  openDirs = $state<string[]>(read<string[]>(K.openDirs, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
@@ -69,9 +83,18 @@ export class SidebarState {
     write(K.folded, this.folded);
   }
 
+  isDirFolded(key: string): boolean {
+    return !this.openDirs.includes(key);
+  }
+
+  toggleDir(key: string) {
+    this.openDirs = this.openDirs.includes(key) ? this.openDirs.filter((p) => p !== key) : [...this.openDirs, key];
+    write(K.openDirs, this.openDirs);
+  }
+
   /**
-   * Unfold the one node that holds `key` (a folder's `dirKey`, or a server's id), so the row it stands for can be seen
-   * when something opens in it. Nothing else in the tree moves: the rest stays as the user folded it.
+   * Unfold the one node that holds `key` (a server's id or a project's key), so the row it stands for can be seen when
+   * something opens in it. Folders are left as they are: the open folder's row is marked, and the tab bar lists its tabs.
    */
   reveal(key: string) {
     if (!this.folded.includes(key)) return;

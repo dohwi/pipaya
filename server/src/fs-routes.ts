@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import Type from "typebox";
 import { badRequest } from "./errors.ts";
+import { repoOf } from "./git-info.ts";
 import { errors } from "./schemas.ts";
 import { isInside } from "./tools.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
@@ -25,6 +26,18 @@ export const MkdirBody = Type.Object({
 	name: Type.String({ minLength: 1, maxLength: 255, description: "Single folder name, no slashes" }),
 }, { additionalProperties: false });
 export const MkdirResult = Type.Object({ path: Type.String() });
+
+export const ReposBody = Type.Object({
+	paths: Type.Array(Type.String({ minLength: 1 }), { maxItems: 500, description: "Absolute folders to look up" }),
+}, { additionalProperties: false });
+const RepoInfo = Type.Object({
+	root: Type.String({ description: "The repository's main working tree: one value for the main checkout and all its worktrees" }),
+	top: Type.String({ description: "The working tree holding the folder (the main checkout or a worktree)" }),
+	branch: Type.Union([Type.String(), Type.Null()], { description: "null when HEAD is detached" }),
+});
+export const ReposResult = Type.Object({
+	repos: Type.Record(Type.String(), Type.Union([RepoInfo, Type.Null()]), { description: "Per asked folder; null outside a repository" }),
+});
 
 export const FileQuery = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Absolute directory to search in; defaults to the default working directory" })),
@@ -199,6 +212,23 @@ export function registerFsRoutes(server: FastifyInstance, defaultWorkdir: () => 
 			}
 			ranked.sort((a, b) => a.s - b.s || a.item.path.length - b.item.path.length || a.item.path.localeCompare(b.item.path));
 			return { entries: ranked.slice(0, limit).map((r) => ({ path: r.item.path, dir: r.item.dir })) };
+		},
+	});
+
+	/**
+	 * The git repository each folder belongs to, so the sidebar can list a repository's worktrees under one project.
+	 * Read from `.git` files only (git itself is not started); a folder outside the workspace or outside any repository is null.
+	 */
+	app.post("/fs/repos", {
+		schema: { body: ReposBody, response: { 200: ReposResult, ...errors(400, 401) } },
+		handler: async (req) => {
+			const repos: Record<string, { root: string; top: string; branch: string | null } | null> = {};
+			for (const p of new Set(req.body.paths)) {
+				if (!isAbsolute(p) || !inBounds(resolve(p))) { repos[p] = null; continue; }
+				const r = repoOf(p);
+				repos[p] = r && inBounds(r.root) ? r : null;
+			}
+			return { repos };
 		},
 	});
 

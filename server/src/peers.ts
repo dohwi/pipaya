@@ -1,6 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
 import { conflict, notFound } from "./errors.ts";
+import { branchOf } from "./git-info.ts";
 import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
@@ -55,26 +54,6 @@ export interface ManageArgs { mode?: "steer" | "follow_up"; text?: string; newNa
 
 /** A new name must stay readable as an @mention. */
 const NAME_RE = /^[\p{L}\p{N}_-]{1,30}$/u;
-
-/** The checked-out branch of the repository holding `cwd` (a worktree too), read from HEAD without starting git. */
-export function branchOf(cwd: string): string | null {
-	try {
-		for (let dir = resolve(cwd), i = 0; i < 12; i++, dir = dirname(dir)) {
-			const dot = join(dir, ".git");
-			if (existsSync(dot)) {
-				let gitDir = dot;
-				if (statSync(dot).isFile()) {
-					const target = /^gitdir:\s*(.+)$/m.exec(readFileSync(dot, "utf8"))?.[1]?.trim();
-					if (!target) return null;
-					gitDir = isAbsolute(target) ? target : resolve(dir, target);
-				}
-				return /^ref:\s*refs\/heads\/(.+)$/m.exec(readFileSync(join(gitDir, "HEAD"), "utf8"))?.[1]?.trim() ?? null;
-			}
-			if (dirname(dir) === dir) break;
-		}
-	} catch {}
-	return null;
-}
 
 const oneLine = (s: string, max: number) => {
 	const flat = s.replace(/\s+/g, " ").trim();

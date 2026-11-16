@@ -24,7 +24,8 @@ export const K = {
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }
-  folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>" or "<serverId>\u0000<workdir>"
+  folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>", "project\u0000<serverId>\u0000<root>", "group\u0000<groupId>"
+  openDirs: "pipaya.opendirs", // sidebar folders opened to list their tabs (folders start folded): ["<serverId>\u0000<workdir>", ...]
   tabOrder: "pipaya.taborder", // tab order set by dragging (sidebar and tab bar): { <serverId>: [groupId | sessionId | terminalId, ...] }
   fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
   groupDir: "pipaya.groupdir", // folder a group is listed under, fixed once seen: { <serverId>: { <groupId>: cwd } }

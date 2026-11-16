@@ -36,12 +36,21 @@ describe("list cache", () => {
 		expect(fromCache(null, fp, 2000)).toBeNull();
 	});
 
-	test("the shape is the drawn tabs per folder, capped, and survives a copy that cannot be shown", () => {
+	test("the shape is the drawn rows per entry, capped, and survives a copy that cannot be shown", () => {
 		expect(shapeOf(toCache(fp, lists, null, 1, [2, 1]))).toEqual([2, 1]);
-		expect(shapeOf(toCache(fp, lists, null, 1, [9, 3, 1, 5]))).toEqual([4, 3, 1]);
+		expect(shapeOf(toCache(fp, lists, null, 1, [9, 3, 1, 5]))).toEqual([5, 3, 1]);
 		expect(shapeOf({ ...toCache(fp, lists, null, 1, [3]), fp: "other", at: 0 })).toEqual([3]);
 		expect(shapeOf(toCache(fp, lists, null, 1))).toBeNull();
-		expect(shapeOf({ shape: [0, -1] })).toBeNull();
+		expect(shapeOf({ rows: [0, -1] })).toBeNull();
+		expect(shapeOf({ shape: [2] })).toBeNull(); // tabs per open folder, from before folders started folded
 		expect(shapeOf("x")).toBeNull();
+	});
+	test("repositories are kept for the listed folders only, and a malformed map only loses the grouping", () => {
+		const repos = { [lists.sessions[0]!.cwd]: { root: "/r", top: "/r", branch: "main" }, "/gone": null };
+		const c = toCache(fp, lists, null, 1000, undefined, repos);
+		expect(Object.keys(c.repos ?? {})).toEqual([lists.sessions[0]!.cwd]);
+		const bad = fromCache({ ...c, repos: { "/x": { root: 1 } } }, fp, 1000);
+		expect(bad?.sessions.length).toBe(lists.sessions.length);
+		expect(bad?.repos).toBeUndefined();
 	});
 });
