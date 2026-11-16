@@ -374,7 +374,7 @@
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionPanels placement="sidebar" />
 		<ExtensionMount slot="sidebar.bottom" />
-		<button class="navbtn wide" class:on={app.graphOpen} onclick={() => app.toggleGraph()} title={graphTip} aria-pressed={app.graphOpen}>
+		<button class="navbtn wide" class:on={app.graphOpen} onclick={() => app.toggleGraph()} title={graphTip} aria-pressed={app.graphOpen} aria-current={app.graphOpen ? "page" : undefined}>
 			<span class="sico"><Icon name="fork" /></span> {t("그래프 뷰")}
 		</button>
 		{#if schedulesShown}

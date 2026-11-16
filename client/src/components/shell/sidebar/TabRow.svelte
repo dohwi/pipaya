@@ -46,7 +46,7 @@
 	{drop}
 	over={sb.marks.over(x.id)}
 	{member}
-	class={["tab", target.kind === "terminal" && "term", member && "member", n.current && x.id === app.activeId && "active"]}
+	class={["tab", target.kind === "terminal" && "term", member && "member", !app.graphOpen && n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
 	<RowOpen renaming={n.current && sb.rename.is(x.id)} onopen={() => app.openIn(n.server.id, { session: x.id })} onintent={() => app.prefetchChat(n.server.id, x.id)} title={tip}>
