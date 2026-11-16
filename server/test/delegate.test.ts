@@ -288,6 +288,18 @@ describe("delegate tool", () => {
 		expect((make("defined").parameters as any).properties.role.description).not.toContain("any short name");
 	});
 
+	test("the delegate tool text lists the models a call may name, and offers no `model` when the role decides", () => {
+		const make = (policy: "defined" | "allowlist" | "any", models: string[] = []) => buildTools(["delegate"], dir, [], { delegateModels: () => ({ policy, models }) })[0]!;
+		const props = (t: ReturnType<typeof make>) => (t.parameters as any).properties;
+		const listed = make("allowlist", ["a/fast", "b/strong"]);
+		expect(listed.description).toContain("one of: a/fast, b/strong");
+		expect(props(listed).model.description).toContain("one of: a/fast, b/strong");
+		expect(listed.description).toContain("fast, cheap model");
+		expect(make("any").description).toContain("any configured model");
+		expect(props(make("defined")).model).toBeUndefined();
+		expect(make("defined").description).not.toContain("`model`");
+	});
+
 	test("switched off, the helper tool is withheld from sessions", async () => {
 		expect((await api("PUT", "/configuration/tools", { disabled: ["delegate"] })).json.disabled).toEqual(["delegate"]);
 		const id = (await api("POST", "/sessions", {})).json.id as string;

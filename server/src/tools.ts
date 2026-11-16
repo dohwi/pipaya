@@ -36,6 +36,8 @@ export interface ToolContext {
 	delegate?(toolCallId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void): Promise<AgentToolResult<any>>;
 	/** The role policy of `delegate` now: `any` lets `role` name a role with no file (read in `create`, so the tool text matches it). */
 	delegateRoles?(): "defined" | "any";
+	/** The model policy of `delegate` now (read in `create`, so the tool text lists the models a call may name). */
+	delegateModels?(): { policy: "defined" | "allowlist" | "any"; models: string[] };
 	/** Other sessions of this server (`peer`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
@@ -595,23 +597,33 @@ const DELEGATE_DESCRIPTION_FREE =
 	"The helper does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
 	"Use it to save your own context on searches or noisy commands; limits apply (concurrent helpers, calls per run).";
 
+const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement. Omit it to use the role's own model, else this session's.";
+/** What the tool text says about `model` under the model policy; `null` = the argument is not offered (the role decides). */
+export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined): { tool: string; param: string } | null {
+	if (!p || p.policy === "defined") return null;
+	if (p.policy === "allowlist")
+		return { tool: ` \`model\` may name one of: ${p.models.join(", ")}. ${MODEL_HINT}`, param: `provider/model, one of: ${p.models.join(", ")}. ${MODEL_HINT}` };
+	return { tool: ` \`model\` may name any configured model as provider/model. ${MODEL_HINT}`, param: `provider/model of any configured model. ${MODEL_HINT}` };
+}
+
 const delegateTool: ToolDef = {
 	name: DELEGATE_TOOL,
 	description: "Run a one-off helper (sub-agent) and return its answer.",
 	create(_cwd, _roots, ctx) {
 		const free = ctx?.delegateRoles?.() === "any";
+		const models = delegateModelText(ctx?.delegateModels?.());
 		return defineTool({
 			name: DELEGATE_TOOL,
 			label: "Delegate to a helper",
-			description: free ? DELEGATE_DESCRIPTION_FREE : DELEGATE_DESCRIPTION,
+			description: (free ? DELEGATE_DESCRIPTION_FREE : DELEGATE_DESCRIPTION) + (models?.tool ?? ""),
 			parameters: Type.Object({
 				role: Type.String({ minLength: 1, maxLength: 60, description: free ? "Helper role: the name of a role file (without .md, e.g. explore, runner), or any short name for a general read-only helper" : "Helper role, the file name without .md (e.g. explore, runner)" }),
 				task: Type.String({ minLength: 1, maxLength: 12000, description: "Everything the helper needs: goal, paths, symbols, the question, and the answer format you want" }),
-				model: Type.Optional(Type.String({ minLength: 3, maxLength: 200, description: "provider/model to use instead of the role's own model" })),
+				...(models ? { model: Type.Optional(Type.String({ minLength: 3, maxLength: 200, description: models.param })) } : {}),
 			}),
 			async execute(id, p, signal, onUpdate) {
 				if (!ctx?.delegate) throw new Error("delegate is not available in this session");
-				return ctx.delegate(id, { role: p.role, task: p.task, model: p.model }, signal, (t) => onUpdate?.(text(t, { running: true })));
+				return ctx.delegate(id, { role: p.role, task: p.task, model: (p as { model?: string }).model }, signal, (t) => onUpdate?.(text(t, { running: true })));
 			},
 		});
 	},
