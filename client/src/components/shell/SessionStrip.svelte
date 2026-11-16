@@ -117,6 +117,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel line box (rule 3): the body's 1.55 (20.15px) put the title 1px below the handle's lowered baseline */
 		white-space: nowrap;
 		transition: background var(--motion-fast) var(--ease-std);
 	}

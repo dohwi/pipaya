@@ -734,6 +734,10 @@
 		line-height: 16px;
 		color: var(--text-faint);
 		white-space: nowrap;
+		/* baseline, not centre (design-system.md "Text inside pills"): centred on the 20px name row, the 12px time's Hangul ended
+		   1px above the 14px name's (1x and 2x); 1px down puts both on one baseline */
+		position: relative;
+		top: 1px;
 	}
 	.done .when {
 		color: var(--ok); /* the time takes the logo's colour: no badge */
