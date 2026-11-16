@@ -88,6 +88,18 @@ export async function resume() {
 	};
 }
 
+/** Every conversation, open and closed, newest first: type to filter by title or folder, pick to open it. */
+export async function findChat() {
+	const all = await app.listAll();
+	all.sort((a, b) => b.updatedAt - a.updatedAt);
+	app.palette = {
+		title: t("대화 찾기"),
+		empty: msg("대화가 없습니다"),
+		items: sessionRows(all, { current: app.activeId ?? undefined, showClosed: true }),
+		onpick: (it) => void app.openAny(it.id),
+	};
+}
+
 /** Parent/child forks as an indented tree, across active and closed sessions. */
 async function tree() {
 	const all = await app.listAll();

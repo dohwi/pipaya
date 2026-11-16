@@ -14,17 +14,14 @@ export type ActionId =
   | "newChat"
   | "clearChat"
   | "closeSession"
-  | "prevSession"
-  | "nextSession"
   | "prevWorkspace"
   | "nextWorkspace"
   | "prevTab"
   | "nextTab"
   | "lastSession"
-  | "nextFinished"
-  | "focusSearch"
+  | "nextAttention"
+  | "findChat"
   | "findInChat"
-  | "resume"
   | "forkSession"
   | "retry"
   | "compact"
@@ -38,7 +35,6 @@ export type ActionId =
   | "cyclePane"
   | "ungroup"
   | "zoomPane"
-  | "restorePane"
   | "toggleFull"
   | "newTerminal"
   | "splitTerminal"
@@ -52,8 +48,6 @@ export type ActionId =
   | "cycleThinking"
   | "splitRight"
   | "splitDown"
-  | "splitLeft"
-  | "splitUp"
   | "stop"
   | "steer"
   | "queueMessage"
@@ -79,7 +73,7 @@ export interface ActionDef {
    * `RUN` is the tap; `HOLD` (in actions.ts) starts the hold and the keyup ends it.
    */
   hold?: boolean;
-  group: "general" | "chat" | "model" | "layout" | "pane";
+  group: "general" | "nav" | "chat" | "model" | "layout" | "pane";
 }
 
 /** The key that renames what has focus (a sidebar row, a pane title, a chip, the header title). Fixed, see `renameTab`. */
@@ -114,32 +108,20 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "closeSession",
     label: msg("현재 대화 닫기"),
-    hint: msg("사이드바에서 치웁니다. 기록은 남아 다시 열 수 있습니다"),
+    hint: msg("탭을 닫습니다. 기록은 남아 다시 열 수 있습니다"),
     default: "Mod+D",
   },
   {
-    id: "prevSession",
-    label: msg("이전 대화로 이동"),
-    hint: msg("사이드바에서 한 칸 위 대화로"),
+    id: "prevWorkspace",
+    label: msg("이전 작업 폴더로 이동"),
+    hint: msg("사이드바에서 한 줄 위 작업 폴더의 첫 탭을 엽니다"),
     default: "Alt+ArrowUp",
   },
   {
-    id: "nextSession",
-    label: msg("다음 대화로 이동"),
-    hint: msg("사이드바에서 한 칸 아래 대화로"),
-    default: "Alt+ArrowDown",
-  },
-  {
-    id: "prevWorkspace",
-    label: msg("이전 폴더로 이동"),
-    hint: msg("한 칸 위 폴더의 첫 탭으로"),
-    default: "Alt+Shift+ArrowUp",
-  },
-  {
     id: "nextWorkspace",
-    label: msg("다음 폴더로 이동"),
-    hint: msg("한 칸 아래 폴더의 첫 탭으로"),
-    default: "Alt+Shift+ArrowDown",
+    label: msg("다음 작업 폴더로 이동"),
+    hint: msg("사이드바에서 한 줄 아래 작업 폴더의 첫 탭을 엽니다"),
+    default: "Alt+ArrowDown",
   },
   {
     id: "prevTab",
@@ -160,28 +142,22 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "",
   },
   {
-    id: "nextFinished",
-    label: msg("작업이 끝난 대화로 이동"),
-    hint: msg("끝났지만 아직 보지 않은 대화를 차례로 엽니다"),
-    default: "",
+    id: "nextAttention",
+    label: msg("확인할 대화로 이동"),
+    hint: msg("답을 기다리는 대화, 실패한 대화, 끝났지만 아직 보지 않은 대화 순으로 엽니다"),
+    default: "Mod+J",
   },
   {
-    id: "focusSearch",
-    label: msg("대화 검색"),
-    hint: msg("사이드바를 펼치고 검색창으로 포커스를 옮깁니다"),
-    default: "",
+    id: "findChat",
+    label: msg("대화 찾기"),
+    hint: msg("닫은 대화를 포함해 모든 대화를 제목과 폴더로 찾아 엽니다"),
+    default: "Mod+K",
   },
   {
     id: "findInChat",
     label: msg("대화 안에서 찾기"),
     hint: msg("Enter 다음 · Shift+Enter 이전"),
     default: "Mod+F",
-  },
-  {
-    id: "resume",
-    label: msg("대화 열기"),
-    hint: msg("닫은 대화를 포함해 목록에서 골라 열기"),
-    default: "",
   },
   {
     id: "modelPicker",
@@ -294,18 +270,6 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "Mod+B+Minus",
   },
   {
-    id: "splitLeft",
-    label: msg("왼쪽으로 분할"),
-    hint: msg("지금 선택한 창 왼쪽에 새 대화를 만듭니다"),
-    default: "",
-  },
-  {
-    id: "splitUp",
-    label: msg("위로 분할"),
-    hint: msg("지금 선택한 창 위에 새 대화를 만듭니다"),
-    default: "",
-  },
-  {
     id: "focusLeft",
     label: msg("왼쪽 창으로 포커스"),
     hint: msg("그룹 안에서 화면상 왼쪽에 있는 창을 선택합니다"),
@@ -344,14 +308,8 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "zoomPane",
     label: msg("현재 창 크게 / 작게 보기"),
-    hint: msg("선택한 창을 그룹 전체 크기로 키우거나 되돌립니다"),
-    default: "Mod+Alt+ArrowUp",
-  },
-  {
-    id: "restorePane",
-    label: msg("창 크기 원래대로"),
-    hint: msg("분할 화면으로 되돌립니다"),
-    default: "",
+    hint: msg("선택한 창을 그룹 전체 크기로 키우거나 되돌립니다. Esc로도 되돌아갑니다"),
+    default: "Mod+B+Z",
   },
   {
     id: "toggleFull",
@@ -383,13 +341,18 @@ const BASE: Omit<ActionDef, "group">[] = [
 ];
 
 const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
+  prevWorkspace: "nav",
+  nextWorkspace: "nav",
+  prevTab: "nav",
+  nextTab: "nav",
+  lastSession: "nav",
+  nextAttention: "nav",
+  findChat: "nav",
   modelPicker: "model",
   cycleModel: "model",
   cycleThinking: "model",
   splitRight: "layout",
   splitDown: "layout",
-  splitLeft: "layout",
-  splitUp: "layout",
   focusLeft: "pane",
   focusRight: "pane",
   focusUp: "pane",
@@ -397,7 +360,6 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   cyclePane: "pane",
   ungroup: "pane",
   zoomPane: "pane",
-  restorePane: "pane",
   toggleFull: "pane",
   newTerminal: "layout",
   splitTerminal: "layout",

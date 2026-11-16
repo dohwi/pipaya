@@ -122,7 +122,7 @@ export function tabOf(dirs: readonly DirBlock[], id: string | null | undefined):
 	return null;
 }
 
-/** Session and terminal ids in the order the sidebar lists them. "Previous / next conversation" walks this. */
+/** Session and terminal ids in the order the sidebar lists them. "Go to a chat that needs a look" breaks ties with it. */
 export function sessionOrder(sessions: readonly Session[], groups: readonly Group[], dirOrder: readonly string[] = [], tabOrder: readonly string[] = [], terminals: readonly TerminalInfo[] = [], pinnedTabs: readonly string[] = []): string[] {
 	const out: string[] = [];
 	const seen = new Set<string>();
@@ -132,11 +132,22 @@ export function sessionOrder(sessions: readonly Session[], groups: readonly Grou
 }
 
 /**
- * The first session in sidebar order that has finished (or failed) without being looked at, skipping the open one.
- * Opening a session clears its mark, so pressing again walks down the list.
+ * The conversation that most needs the user, skipping the open one: one waiting for an answer first, then one that
+ * failed, then one that finished unseen; ties go to sidebar order. Opening a session clears its mark, so pressing
+ * again walks on to the next one.
  */
-export function firstUnseen(order: readonly string[], marked: (id: string) => boolean, current: string | null): string | null {
-	return order.find((id) => id !== current && marked(id)) ?? null;
+export function needsLook(
+	order: readonly string[],
+	marks: { awaiting: Record<string, number>; failed: Record<string, boolean>; unread: Record<string, boolean> },
+	current: string | null,
+): string | null {
+	const rest = order.filter((id) => id !== current);
+	return (
+		rest.find((id) => (marks.awaiting[id] ?? 0) > 0) ??
+		rest.find((id) => marks.failed[id]) ??
+		rest.find((id) => marks.unread[id]) ??
+		null
+	);
 }
 
 /** The entry `step` places after `current` (wrapping). From nowhere (a new chat): forward starts at the first, back at the last. */
