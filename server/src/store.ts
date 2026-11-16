@@ -366,18 +366,18 @@ export class SessionStore {
 			`SELECT ${sums("usage", "$", "$.cost")}
 			 FROM session_compactions WHERE session_id = $sid AND usage IS NOT NULL`,
 		);
-		// Helpers of `delegate` are model calls too: their totals ride on the tool result's details.
-		const helpers = run(
+		// Subagents of `delegate` are model calls too: their totals ride on the tool result's details.
+		const subagents = run(
 			`SELECT ${sums("data", "$.details.usage", "$.details.usage.cost")}
 			 FROM messages WHERE session_id = $sid AND role = 'toolResult' AND json_extract(data, '$.toolName') = 'delegate' AND json_type(data, '$.details.usage') = 'object'`,
 		);
 		return {
-			input: main.input + summaries.input + helpers.input,
-			output: main.output + summaries.output + helpers.output,
-			cacheRead: main.cacheRead + summaries.cacheRead + helpers.cacheRead,
-			cacheWrite: main.cacheWrite + summaries.cacheWrite + helpers.cacheWrite,
-			totalTokens: main.totalTokens + summaries.totalTokens + helpers.totalTokens,
-			cost: main.cost + summaries.cost + helpers.cost,
+			input: main.input + summaries.input + subagents.input,
+			output: main.output + summaries.output + subagents.output,
+			cacheRead: main.cacheRead + summaries.cacheRead + subagents.cacheRead,
+			cacheWrite: main.cacheWrite + summaries.cacheWrite + subagents.cacheWrite,
+			totalTokens: main.totalTokens + summaries.totalTokens + subagents.totalTokens,
+			cost: main.cost + summaries.cost + subagents.cost,
 			turns: main.turns ?? 0,
 		};
 	}

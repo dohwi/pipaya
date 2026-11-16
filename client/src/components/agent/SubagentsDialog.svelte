@@ -8,7 +8,7 @@
 	import type { Api } from "../../lib/api";
 
 	/**
-	 * The helper roles one conversation can delegate to, opened from the footer: the global ones and the ones in that
+	 * The subagent roles one conversation can delegate to, opened from the footer: the global ones and the ones in that
 	 * conversation's own folder, with add / edit / remove (the same list as in the settings).
 	 */
 	let { dialog: target, onclose }: { dialog: { cwd: string }; api: Api; onclose: () => void } = $props();
@@ -18,7 +18,7 @@
 	const models = $derived(app.models.filter((m) => !m.imageGeneration));
 </script>
 
-<Modal {onclose} title={t("도우미 역할")} sub={count ? `${t("{total}개 중 {on}개 사용", count)} · ${home(target.cwd)}` : home(target.cwd)} width="xl" maxHeight="760px" safeArea>
+<Modal {onclose} title={t("서브에이전트 역할")} sub={count ? `${t("{total}개 중 {on}개 사용", count)} · ${home(target.cwd)}` : home(target.cwd)} width="xl" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} />
 	{/snippet}

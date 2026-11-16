@@ -14,7 +14,7 @@
 		agents: { name: msg("AGENTS.md"), icon: "prompt" },
 		skills: { name: msg("스킬"), icon: "skill" },
 		mcp: { name: msg("MCP 서버"), icon: "plug" },
-		roles: { name: msg("도우미 역할"), icon: "bot" },
+		roles: { name: msg("서브에이전트 역할"), icon: "bot" },
 		commands: { name: msg("확장 명령"), icon: "list" },
 		context: { name: msg("컨텍스트 사용량"), icon: "bolt" },
 		cache: { name: msg("캐시 적중률"), icon: "cache" },

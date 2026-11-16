@@ -33,7 +33,7 @@
 - **Any model**: built-in providers, local servers (Ollama, LM Studio, llama.cpp, vLLM) or your own endpoint
 - **Many devices, one conversation**: Windows, macOS, Android, web
 - **Split view**: up to 8 conversations on one screen
-- **Extensible**: AGENTS.md, skills, templates, sub-agents, server and client extensions
+- **Extensible**: AGENTS.md, skills, templates, subagents, server and client extensions
 
 ## Install
 

@@ -28,7 +28,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, freeRole, helperUsage, loadSubagents, SUBAGENT_NAME, subagentSystem } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, freeRole, subagentUsage, loadSubagents, SUBAGENT_NAME, subagentSystem } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -87,7 +87,7 @@ export class SessionManager {
 	private describeFailedAt = new Map<string, number>();
 	private pendingDescribes = new Set<Promise<void>>();
 	private backfilling = false;
-	/** `delegate` use per session: calls in the current run and helpers running right now. */
+	/** `delegate` use per session: calls in the current run and subagents running right now. */
 	private delegates = new DelegateLimits();
 	/** Chat models usable now (provider/model), for the tool texts; refreshed before a run is set up, at most every few seconds. */
 	private chatModelIds: string[] = [];
@@ -122,11 +122,11 @@ export class SessionManager {
 		private imageModel?: ImageModelSettings,
 		/** MCP servers; the tools of the connected ones reach every session. */
 		private mcp?: McpManager,
-		/** Home directory whose `.agents/subagents` holds the global helper roles; defaults to the OS user home. */
+		/** Home directory whose `.agents/subagents` holds the global subagent roles; defaults to the OS user home. */
 		private home: string = homedir(),
-		/** The user's rules for helpers: which models `delegate` may pick and the limits. */
+		/** The user's rules for subagents: which models `delegate` may pick and the limits. */
 		private delegatePolicy: () => DelegatePolicyValue = () => DEFAULT_DELEGATE_POLICY,
-		/** Helper roles the user switched off (`scope/name`); `delegate` treats them as missing. */
+		/** Subagent roles the user switched off (`scope/name`); `delegate` treats them as missing. */
 		private disabledSubagents: () => string[] = () => [],
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
@@ -1187,17 +1187,17 @@ export class SessionManager {
 
 
 	/**
-	 * How hard a helper thinks: its role's level, else the calling session's own level when it runs on the same model,
+	 * How hard a subagent thinks: its role's level, else the calling session's own level when it runs on the same model,
 	 * else that model's default (its connection setting, "auto" = the rules of a new chat). A model without reasoning ignores it.
 	 */
-	private helperThinking(rec: SessionRecord, role: ThinkingLevel | undefined, provider: string, modelId: string): ThinkingLevel {
+	private subagentThinking(rec: SessionRecord, role: ThinkingLevel | undefined, provider: string, modelId: string): ThinkingLevel {
 		if (role) return role;
 		if (provider === rec.provider && modelId === rec.model) return this.live.get(rec.id)?.agent.state.thinkingLevel ?? rec.thinkingLevel ?? this.defaultThinkingLevel(provider, modelId);
 		return this.defaultThinkingLevel(provider, modelId);
 	}
 
 	/**
-	 * `delegate`: a one-off helper run. The helper is a bare Agent that is never stored, so it is no session and shows in no list;
+	 * `delegate`: a one-off subagent run. The subagent is a bare Agent that is never stored, so it is no session and shows in no list;
 	 * only its final text goes back to the parent. Limits are enforced here and reported as conflicts, never dropped silently.
 	 */
 	private async delegate(sessionId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void) {
@@ -1208,12 +1208,12 @@ export class SessionManager {
 		const pol = this.delegatePolicy();
 		let def = defs.get(name);
 		if (!def && pol.roles === "any") {
-			// Free role: a name with no file is a general read-only helper. A role file that exists but is switched off stays refused.
-			if (!SUBAGENT_NAME.test(name)) throw badRequest(`helper role "${input.role}": role names are letters, digits, '.', '_' and '-' (at most 40, starting with a letter or digit)`);
-			if (loadSubagents(rec.cwd, this.home).has(name)) throw notFound(`helper role "${input.role}" is switched off in the settings`);
+			// Free role: a name with no file is a general read-only subagent. A role file that exists but is switched off stays refused.
+			if (!SUBAGENT_NAME.test(name)) throw badRequest(`subagent role "${input.role}": role names are letters, digits, '.', '_' and '-' (at most 40, starting with a letter or digit)`);
+			if (loadSubagents(rec.cwd, this.home).has(name)) throw notFound(`subagent role "${input.role}" is switched off in the settings`);
 			def = freeRole(name);
 		}
-		if (!def) throw notFound(`helper role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents, or switch a role on in the settings)"}`);
+		if (!def) throw notFound(`subagent role "${input.role}"; available: ${[...defs.keys()].join(", ") || "none (add files to ~/.agents/subagents or .agents/subagents, or switch a role on in the settings)"}`);
 		const spec = chooseModel(pol, input.model, def.model);
 		let provider = rec.provider, modelId = rec.model;
 		if (spec) {
@@ -1221,7 +1221,7 @@ export class SessionManager {
 			[provider, modelId] = i > 0 ? [spec.slice(0, i), spec.slice(i + 1)] : [rec.provider, spec];
 		}
 		const model = this.registry.models.getModel(provider, modelId);
-		if (!model || this.registry.isImageModel?.(provider, modelId)) throw badRequest(`model ${provider}/${modelId} is not available for helpers`);
+		if (!model || this.registry.isImageModel?.(provider, modelId)) throw badRequest(`model ${provider}/${modelId} is not available for subagents`);
 		const defs2 = this.toolDefs();
 		const off = this.disabledTools();
 		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
@@ -1230,7 +1230,7 @@ export class SessionManager {
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		let turns = 0, limited = false;
 		const agent = new Agent({
-			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: this.helperThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
+			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
 			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), DEFAULT_UPSTREAM_RETRY),
 			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
 			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
@@ -1246,9 +1246,9 @@ export class SessionManager {
 			else await agent.prompt(input.task);
 			if (signal?.aborted) throw new Error("delegate aborted");
 			const { text: answer, error } = finalText(agent.state.messages as any);
-			if (error && !limited) throw new Error(`helper ${def.name} failed: ${error}`);
-			const note = limited ? `\n\n[helper stopped after ${cap} model calls (maxTurns); the answer may be incomplete]` : "";
-			return { content: [{ type: "text" as const, text: `${answer || "(the helper returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, limited, usage: helperUsage(agent.state.messages as any), task: input.task.slice(0, 500) } };
+			if (error && !limited) throw new Error(`subagent ${def.name} failed: ${error}`);
+			const note = limited ? `\n\n[subagent stopped after ${cap} model calls (maxTurns); the answer may be incomplete]` : "";
+			return { content: [{ type: "text" as const, text: `${answer || "(the subagent returned no text)"}${note}` }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, limited, usage: subagentUsage(agent.state.messages as any), task: input.task.slice(0, 500) } };
 		} finally {
 			signal?.removeEventListener("abort", stop);
 			release();
@@ -1266,7 +1266,7 @@ export class SessionManager {
 		this.abortRun(sessionId, live, "limit");
 	}
 
-	/** `tool_call` hooks. Shared by the session agent and its helpers so a policy extension cannot be sidestepped. */
+	/** `tool_call` hooks. Shared by the session agent and its subagents so a policy extension cannot be sidestepped. */
 	private async extensionToolCall(sessionId: string, { toolCall, args }: { toolCall: { id: string; name: string }; args: unknown }): Promise<{ block: true; reason: string } | undefined> {
 		if (!this.ext?.has("tool_call")) return undefined;
 		let blocked: { block: true; reason: string } | undefined;
