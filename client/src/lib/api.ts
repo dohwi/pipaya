@@ -473,8 +473,9 @@ export class Api {
 	closeTerminal = (id: string) => this.req<{ ok: boolean }>("DELETE", `/terminals/${encodeURIComponent(id)}`);
 
 
-	questions = () =>
-		this.req<{ questions: Question[] }>("GET", "/questions").then((r) => r.questions).catch(() => [] as Question[]);
+	/** Pending questions; `sessionId` narrows them to one conversation (a server that ignores it sends all, callers filter). */
+	questions = (sessionId?: string) =>
+		this.req<{ questions: Question[] }>("GET", sessionId ? `/questions?sessionId=${encodeURIComponent(sessionId)}` : "/questions").then((r) => r.questions).catch(() => [] as Question[]);
 	answer = (sessionId: string, toolCallId: string, answer: string | string[]) =>
 		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, Array.isArray(answer) ? { answers: answer } : { answer });
 

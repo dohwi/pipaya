@@ -47,6 +47,8 @@ export class ServerLink {
 	versions = $state<ServerVersions | null>(null);
 	/** True once the lists below were read at least once. */
 	loaded = $state(false);
+	/** True once what the sidebar draws (sessions, groups, terminals, workspace, activity) was read; comes before `loaded`. */
+	listed = $state(false);
 	data = $state<LinkData>(emptyLinkData());
 	/**
 	 * The listed sessions by id, rebuilt only when the list changes. Every badge in the sidebar, rail and tab bar looks its
@@ -241,24 +243,32 @@ export class ServerLink {
 		try {
 			// Health and the lists go out together (one round trip over a slow link, not two); health is judged first.
 			const healthReq = api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
-			const listsReq = Promise.all([
+			// What the sidebar draws comes in its own batch: the catalog (models, providers ask every provider for its auth)
+			// can be much slower, and the conversation list used to wait for the slowest of them behind a skeleton.
+			const listedReq = Promise.all([
 				api.listSessions(200, false),
-				api.models(),
-				api.providers(),
-				api.tools(),
-				api.latestEventId(),
 				api.workspace().catch(() => null), // servers from before workspaces existed
-				api.configuration().catch(() => null), // servers from before model configuration existed
 				api.groups().catch(() => [] as Group[]), // servers from before session groups existed
 				api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
 				api.terminalSupport().catch(() => null),
 				api.activity().catch(() => null),
 			]);
+			const catalogReq = Promise.all([
+				api.models(),
+				api.providers(),
+				api.tools(),
+				api.latestEventId(),
+				api.configuration().catch(() => null), // servers from before model configuration existed
+			]);
+			const listsReq = Promise.all([listedReq, catalogReq]);
 			listsReq.catch(() => {}); // judged below; a failure before that point must not go unhandled
 			// Only /health had a deadline: a list request stuck on a connection the OS killed in the background never settled,
 			// so sync hung (spinner forever, no retry scheduled). Past the deadline it fails like any other network error.
 			const lists = withDeadline(listsReq, LISTS_TIMEOUT_MS, () => new ApiError(0, "network", t("서버에 연결할 수 없습니다")));
 			lists.catch(() => {});
+			// The sidebar's part as soon as it is here; past the deadline (or on an error) it fails with the whole batch.
+			const listed = Promise.race([listedReq, lists.then(([l]) => l)]);
+			listed.catch(() => {});
 			const health = await healthReq;
 			if (token !== this.token) return;
 			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
@@ -268,7 +278,7 @@ export class ServerLink {
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
 				return;
 			}
-			const [list, models, providers, tools, cursor, workspace, config, groups, terminals, terminalSupport, activity] = await lists;
+			const [list, workspace, groups, terminals, terminalSupport, activity] = await listed;
 			if (token !== this.token) return;
 			const running: Record<string, boolean> = {};
 			const awaiting: Record<string, number> = {};
@@ -290,6 +300,9 @@ export class ServerLink {
 			};
 			this.workspace = workspace;
 			this.terminalSupport = terminalSupport;
+			this.listed = true;
+			const [models, providers, tools, cursor, config] = (await lists)[1];
+			if (token !== this.token) return;
 			this.models = models;
 			this.providers = providers;
 			this.tools = tools.tools;

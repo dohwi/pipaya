@@ -112,6 +112,8 @@ const FIRST_PAGE = 40;
 const EARLIER_PAGE = 100;
 /** Most messages a refresh asks for at once (the server's `tail` limit). */
 const MAX_RELOAD = 5000;
+/** How long a fresh read counts as current when the transcript comes on screen (a hover prefetch, then the click). */
+const FRESH_MS = 10_000;
 
 /**
  * Transcript + live state for one session. Persisted messages come from REST; SSE events keep it current.
@@ -140,6 +142,12 @@ export class ChatState {
 	}
 	/** True once the first load finished. */
 	ready = $state(false);
+	/** When the last load finished (ms). */
+	private loadedAt = 0;
+	/** Read from the server within the last few seconds (a hover prefetch): coming on screen needs no second read. */
+	get fresh(): boolean {
+		return Date.now() - this.loadedAt < FRESH_MS;
+	}
 	loadError = $state("");
 	/** The session no longer exists on the server. */
 	notFound = $state(false);
@@ -291,7 +299,7 @@ export class ChatState {
 			const [msgs, detail, questions, entries] = await Promise.all([
 				this.api.tailMessages(this.id, want),
 				this.api.getSession(this.id),
-				this.api.questions(),
+				this.api.questions(this.id),
 				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
 			]);
 			if (token !== this.token) return;
@@ -335,6 +343,7 @@ export class ChatState {
 			this.contextRevision++;
 			this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 			this.ready = true;
+			this.loadedAt = Date.now();
 			this.ahead = null;
 			setTimeout(() => { if (token === this.token) this.prefetchEarlier(); }, 0);
 		} catch (e) {
