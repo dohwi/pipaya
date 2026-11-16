@@ -242,6 +242,15 @@
 	}
 	onMount(() => () => clearTimeout(clickTimer));
 
+	/** The sparks are SMIL: a reduced-motion setting does not stop them by CSS, so they are left out. */
+	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
+	onMount(() => {
+		const q = matchMedia("(prefers-reduced-motion: reduce)");
+		const on = () => (motion = !q.matches);
+		q.addEventListener("change", on);
+		return () => q.removeEventListener("change", on);
+	});
+
 	// ---- focus: the cards a pointer is about stand out, the rest steps back ----
 	const focus = $derived(hover && !dragging && graph.cards.has(hover) ? related(graph, hover) : null);
 
@@ -309,7 +318,11 @@
 			{/if}
 			<svg class="edges" aria-hidden="true">
 				<defs>
-					<marker id="gv-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" /></marker>
+					<!-- one arrow head per look: idle lines get a faint one, lines carrying work their own colour -->
+					<marker id="gv-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-idle" d="M1 1.5L8.5 5L1 8.5z" /></marker>
+					<marker id="gv-arrow-live" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="m-live" d="M1 1.5L8.5 5L1 8.5z" /></marker>
+					<marker id="gv-arrow-call" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="m-call" d="M1 1.5L8.5 5L1 8.5z" /></marker>
+					<filter id="gv-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
 				</defs>
 				{#each graph.edges as e (e.id)}
 					{@const a = graph.cards.get(e.from)}
@@ -317,9 +330,21 @@
 					{#if a && b}
 						{@const on = !focus || (focus.has(e.from) && focus.has(e.to))}
 						{@const d = edgePath(a, b)}
+						{@const call = e.kind === "delegate"}
 						<g class="e-{e.kind}" class:live={e.live} class:dim={!on} class:hot={!!focus && on}>
-							<path class="base" {d} marker-end={e.kind === "tree" ? undefined : "url(#gv-arrow)"} style:stroke-width={e.kind === "delegate" && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
-							{#if e.live}<path class="flow" {d} />{/if}
+							{#if e.live}<path class="halo" {d} filter="url(#gv-glow)" />{/if}
+							<path class="base" {d} marker-end={e.kind === "tree" && !e.live ? undefined : `url(#gv-arrow${e.live ? (call ? "-call" : "-live") : call ? "-call" : ""})`} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
+							{#if e.live && motion}
+								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each -->
+								<path class="flow" {d} />
+								{#each { length: call ? 3 : 2 } as _, i (i)}
+									{@const dur = call ? 1.4 : 2.4}
+									<g class="spark">
+										<circle class="tail" r={call ? 5 : 4}><animateMotion dur="{dur}s" begin="{(-dur * i) / (call ? 3 : 2) - 0.08}s" repeatCount="indefinite" path={d} rotate="auto" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1" /></circle>
+										<circle class="dot" r={call ? 2.6 : 2.2}><animateMotion dur="{dur}s" begin="{(-dur * i) / (call ? 3 : 2)}s" repeatCount="indefinite" path={d} rotate="auto" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1" /></circle>
+									</g>
+								{/each}
+							{/if}
 						</g>
 					{/if}
 				{/each}
@@ -329,6 +354,7 @@
 					class="card {c.kind} {c.kind === 'session' ? c.activity : ''}"
 					class:down={c.kind === "server" && !c.online}
 					class:run={c.kind === "subagent" && !!c.running}
+					class:glow-working={(c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running)}
 					class:dim={!!focus && !focus.has(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
@@ -414,7 +440,7 @@
 </section>
 
 {#if quick}
-	<GraphQuick server={quick.server} session={quick.session} onclose={() => (quick = null)} />
+	{#key `${quick.server}/${quick.session}`}<GraphQuick server={quick.server} session={quick.session} onclose={() => (quick = null)} />{/key}
 {/if}
 
 
@@ -530,63 +556,128 @@
 		overflow: visible;
 		pointer-events: none;
 	}
-	.edges marker path {
+	.edges .m-idle {
 		fill: var(--text-faint);
+	}
+	.edges .m-live {
+		fill: var(--ok);
+	}
+	.edges .m-call {
+		fill: var(--info);
 	}
 	.edges path {
 		fill: none;
-		transition: stroke var(--motion-fast) var(--ease-std);
+		transition:
+			stroke var(--motion-fast) var(--ease-std),
+			opacity var(--motion-fast) var(--ease-std);
 	}
 	.edges g {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.edges .base {
 		stroke-width: 1.25;
-		opacity: 0.55;
+		opacity: 0.5;
 	}
-	/* work flowing: short dashes travel from the source to the arrow head, so the direction reads without a legend */
-	.edges .flow {
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-dasharray: 2 14;
-		animation: flow 1.6s linear infinite;
-		opacity: 0.9;
-	}
-	@keyframes flow {
-		to {
-			stroke-dashoffset: -16; /* one dash period (2 + 14) per loop: seamless */
-		}
-	}
+	/* structure (server → provider → model → chat): quiet grey; once a chat under it works, the whole line up lights */
 	.e-tree path {
 		stroke: var(--tree-line);
 	}
-	.e-tree .flow {
-		animation-duration: 3.2s; /* structure: slow and quiet */
-		opacity: 0.6;
-	}
-	.e-spawn path,
-	.e-delegate path {
+	.e-spawn path {
 		stroke: var(--text-faint);
 	}
 	.e-spawn .base {
 		stroke-width: 1.5;
+		stroke-dasharray: 4 4; /* a branch: drawn dashed, so it reads apart from the structure */
 	}
-	.e-delegate.live path {
+	.e-delegate path {
 		stroke: var(--info);
 	}
-	.e-delegate.live .flow {
-		stroke-width: 2.5;
-		stroke-dasharray: 8 8;
-		animation-duration: 0.6s;
+	.e-delegate .base {
+		opacity: 0.4;
 	}
+	/* a line carrying work: a solid coloured stroke, a soft glow under it, a dash train and sparks running along it */
 	.edges g.live .base {
+		stroke-width: 2;
+		opacity: 0.9;
+		stroke-dasharray: none;
+	}
+	.e-tree.live path,
+	.e-spawn.live path {
+		stroke: var(--ok);
+	}
+	.e-delegate.live .base {
+		stroke-width: 2.5;
+	}
+	.edges .halo {
+		stroke-width: 6;
+		opacity: 0.35;
+		animation: halo 2.4s ease-in-out infinite;
+	}
+	.e-delegate .halo {
+		stroke-width: 8;
+		animation-duration: 1.4s;
+	}
+	@keyframes halo {
+		50% {
+			opacity: 0.12;
+		}
+	}
+	.edges .flow {
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-dasharray: 1 11;
 		opacity: 0.8;
+		animation: flow 1.2s linear infinite;
+	}
+	.e-delegate .flow {
+		stroke-dasharray: 1 7;
+		animation-duration: 0.5s;
+	}
+	@keyframes flow {
+		to {
+			stroke-dashoffset: -12; /* one dash period per loop: seamless */
+		}
+	}
+	.e-delegate .flow {
+		animation-name: flow-call;
+	}
+	@keyframes flow-call {
+		to {
+			stroke-dashoffset: -8;
+		}
+	}
+	.spark .dot {
+		fill: #fff;
+	}
+	.e-tree .spark .tail,
+	.e-spawn .spark .tail {
+		fill: var(--ok);
+		opacity: 0.55;
+	}
+	.e-delegate .spark .tail {
+		fill: var(--info);
+		opacity: 0.6;
+	}
+	:global(:root[data-theme="light"]) .spark .dot {
+		fill: var(--bg);
+		stroke-width: 1.5;
+	}
+	:global(:root[data-theme="light"]) .e-tree .spark .dot,
+	:global(:root[data-theme="light"]) .e-spawn .spark .dot {
+		stroke: var(--ok);
+	}
+	:global(:root[data-theme="light"]) .e-delegate .spark .dot {
+		stroke: var(--info);
 	}
 	.edges g.dim {
-		opacity: 0.15;
+		opacity: 0.12;
 	}
-	.edges g.dim .flow {
+	.edges g.dim .flow,
+	.edges g.dim .halo {
 		animation-play-state: paused;
+	}
+	.edges g.dim .spark {
+		display: none;
 	}
 	.edges g.hot .base {
 		opacity: 1;
@@ -885,6 +976,7 @@
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.edges .flow,
+		.edges .halo,
 		.run .lead,
 		.doing > :global(.ic) {
 			animation: none;

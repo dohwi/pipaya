@@ -25,7 +25,7 @@
 		working = false,
 		level,
 		onreply,
-	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; onreply: (text: string, who?: string) => void } = $props();
+	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; onreply?: (text: string, who?: string) => void } = $props();
 
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
 	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
@@ -77,8 +77,8 @@
 	</div>
 	<div class="actions">
 		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text)} />
-		{#if header && !("server" in header && header.server)}
-			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
+		{#if onreply && header && !("server" in header && header.server)}
+			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply?.(header.body, header.from)} />
 		{/if}
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />

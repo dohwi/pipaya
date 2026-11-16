@@ -297,6 +297,9 @@ class AppStore {
   graphOpen = $state(false);
   /** The conversation the graph was opened from, so the toggle can go back to it. */
   graphFrom = $state<{ server: string; session: string } | null>(null);
+  /** The chat the graph view's quick look shows, with the server it is on: its ChatState is fed from that server's stream. */
+  graphPeek: { server: string; chat: ChatState } | null = null;
+
   toggleGraph(open = !this.graphOpen) {
     if (open === this.graphOpen) return;
     if (open) {
@@ -901,6 +904,10 @@ class AppStore {
     this.serverExtensionFeed.onEvent(link.id, e.type, e.data);
     applyLiveEvent(link.data, e);
     if (this.graphOpen) graphRuns.onEvent(link.id, e.type, e.data);
+    // the graph view's quick look at a chat on any server follows that chat's events (the open server's own chats
+    // are fed by `handle` below; a peek never shares their ChatState)
+    const peek = this.graphPeek;
+    if (peek && peek.server === link.id && e.sessionId === peek.chat.id) peek.chat.apply(e);
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
     if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
