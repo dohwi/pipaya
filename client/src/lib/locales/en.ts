@@ -124,6 +124,8 @@ export const en: Record<string, string> = {
 	"취소할 대기열이 없습니다": "Nothing queued to cancel",
 	"이미 전달되어 취소할 수 없습니다": "Already delivered, can't cancel",
 	"대기열에서 빼지 못했습니다": "Couldn't remove it from the queue",
+	"작업이 중지되어 보내지 않았습니다": "Not sent: the task was stopped",
+	"중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다": "Put the messages that weren't sent back in the input, since the task was stopped",
 	"대기열 / 끼워 넣기 취소": "Cancel queued / steered messages",
 	"전달 대기 중인 메시지 목록을 열어 하나씩 뺍니다": "Open the list of waiting messages and remove them one by one",
 	"대기열 관리": "Manage queue",

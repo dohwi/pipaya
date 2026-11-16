@@ -10,7 +10,7 @@ import { moveBundledServer, readBundledBind, startBundledServer, type LocalBind,
 import { compat, type Compat, type ServerVersions } from "./protocol";
 import { serverUpdater } from "./server-update.svelte";
 import { hostOf, uid } from "./format";
-import { ChatState } from "./chat.svelte";
+import { ChatState, type Outgoing } from "./chat.svelte";
 import { ExtensionRequests } from "./extension-requests.svelte";
 import { mergeServers, replaceServers } from "./configuration-servers";
 
@@ -1921,7 +1921,7 @@ class AppStore {
 
       // During a compaction the model context is being rewritten: wait in the queue and go out right after it.
       if (chat.compacting && !chat.running) {
-        chat.held.push({ text, images, files });
+        chat.held.push({ text, images, files, at: Date.now() });
         chat.requestBottom();
         return true;
       }
@@ -1944,13 +1944,16 @@ class AppStore {
     }
   }
 
-  /** Send what was held during a compaction: the first starts the run, the rest queue behind it. */
+  /**
+   * Send what was held during a compaction: the first starts the run, the rest queue behind it. What could not go out
+   * (a failed send, a stop meanwhile) goes back to the input instead of being lost.
+   */
   private async flushHeld(chat: ChatState): Promise<void> {
     if (chat.compacting || !chat.held.length) return;
     const list = chat.held.splice(0);
     for (const [i, h] of list.entries()) {
       const ok = i === 0 ? await this.send(h.text, h.images, chat.id, h.files) : await this.queue(h.text, h.images, chat.id, h.files);
-      if (!ok) break;
+      if (!ok) return void chat.restored.push(...list.slice(i));
     }
   }
 
@@ -1973,10 +1976,22 @@ class AppStore {
     if (!api || !chat || (!text && !images.length && !files.length)) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
     chat.requestBottom();
+    // Kept until delivered: a stop drops it on the server, and then it goes back to the input with its attachments.
+    const own: Outgoing = { text, images, files, at: Date.now(), pending: true };
+    chat.mine.push(own);
+    const notSent = () => (this.toast(t("작업이 중지되어 보내지 않았습니다"), "error", chat.id), false);
     try {
       await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
-      return true;
+      own.pending = false;
+      // Accepted, then dropped by a stop before this answer came back: the caller still holds it, so it stays there.
+      return own.returned ? notSent() : true;
     } catch (e) {
+      own.pending = false;
+      const i = chat.mine.indexOf(own);
+      if (i >= 0) chat.mine.splice(i, 1);
+      // The run was stopped: it takes nothing more, and starting a new run with this text is not what was asked.
+      // The caller keeps the text (this returns false), to send again on purpose.
+      if (e instanceof ApiError && e.status === 409 && (e.data?.reason === "stopped" || chat.stopped)) return notSent();
       if (e instanceof ApiError && e.status === 409) {
         // The run ended a moment ago: start a new one. `send` refuses while another send is in flight, so wait for it.
         for (let i = 0; i < 40 && this.sending; i++) await new Promise((r) => setTimeout(r, 50));
@@ -2062,6 +2077,8 @@ class AppStore {
 
   async abort(id: string | null = this.activeId) {
     if (!this.api || !id) return;
+    // Messages held back for a compaction being stopped would otherwise go out the moment it ends.
+    this.chatOf(id)?.restoreHeld();
     try {
       await this.api.abort(id);
     } catch (e) {

@@ -44,6 +44,36 @@ export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus }
 export const SCHEDULE_OPEN = "<pipaya-schedule>";
 const SCHEDULE_NOTE = `${SCHEDULE_OPEN}This message was sent automatically by a scheduled task, not typed by the user right now.</pipaya-schedule>`;
 
+/**
+ * The text a queued message was sent with (what `message_queued` announced), before the server added its hint, file
+ * and schedule notes. Lets the queue be listed, cancelled and dropped under the same text a client saw queued.
+ */
+const sentText = new WeakMap<AgentMessage, string>();
+
+/** A queued message's text: as sent, or (queued by an older path) every text part joined. */
+function queuedText(m: AgentMessage): string {
+	const known = sentText.get(m);
+	if (known !== undefined) return known;
+	const c = (m as { content?: unknown }).content;
+	return typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
+}
+
+/** pi-agent-core has no read or per-item API for its queues; they are plain arrays. */
+function agentQueue(live: Live, mode: "steer" | "follow_up"): AgentMessage[] | undefined {
+	const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
+	return Array.isArray(queue?.messages) ? queue.messages : undefined;
+}
+
+type Waiting = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
+
+/** What waits for a live run, in delivery order: steers, follow-ups, then what the server holds (see Deferred). */
+function queuedIn(live: Live): Waiting[] {
+	const out: Waiting[] = [];
+	for (const mode of ["steer", "follow_up"] as const) for (const m of agentQueue(live, mode) ?? []) out.push({ mode, text: queuedText(m) });
+	for (const d of live.deferred ?? []) out.push({ mode: "follow_up", text: d.text, deferred: true });
+	return out;
+}
+
 export const NOTE_OPEN = "<pipaya-note>";
 const NOTE_CLOSE = "</pipaya-note>";
 
@@ -83,6 +113,8 @@ export type DelegateRun = DelegateCall & { free: boolean; running: boolean; mode
 
 export class SessionManager {
 	private live = new Map<string, Live>();
+	/** Sessions whose last run was stopped from outside (until the next run starts); outlives a forced stop's dispose. */
+	private stopped = new Set<string>();
 	/** Runs that have not yet published run_finished. Tracked apart from `live`, which shutdown and delete empty first. */
 	private pendingRuns = new Set<Promise<void>>();
 	/** Title/role calls in flight (one per session), and when one last failed. */
@@ -219,21 +251,21 @@ export class SessionManager {
 	}
 
 	/** Messages still waiting in a session's steer / follow-up queues (pi-agent-core keeps them in plain arrays). */
-	private queuedOf(id: string): { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] {
+	private queuedOf(id: string): Waiting[] {
 		const live = this.live.get(id);
-		if (!live) return [];
-		const out: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] = [];
-		for (const mode of ["steer", "follow_up"] as const) {
-			const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
-			for (const m of Array.isArray(queue?.messages) ? queue.messages : []) {
-				const c = (m as { content?: unknown }).content;
-				const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
-				out.push({ mode, text });
-			}
-		}
-		// Held by the server until the run ends; delivered after everything above.
-		for (const d of live.deferred ?? []) out.push({ mode: "follow_up", text: d.text, deferred: true });
-		return out;
+		return live ? queuedIn(live) : [];
+	}
+
+	/**
+	 * A stopped run takes nothing more: drop every message still waiting for it (steers, follow-ups and what the server
+	 * holds behind a queued /compact) and say so per message, so the client that queued one can hand it back to its input.
+	 * pi-agent-core keeps its queues across abort(), so without this they would ride along with the next message.
+	 */
+	private dropQueued(id: string, live: Live): void {
+		const dropped = queuedIn(live);
+		live.agent.clearAllQueues();
+		live.deferred = [];
+		for (const q of dropped) this.bus.publish(id, "message_dequeued", { mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}), reason: "stopped" });
 	}
 
 	// ── CRUD ────────────────────────────────────────────────────────────────
@@ -539,6 +571,7 @@ export class SessionManager {
 		if (live?.running) { live.stopCause ??= "close"; live.agent.abort(); }
 		this.describing.get(id)?.abort();
 		this.dispose(id);
+		this.stopped.delete(id);
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
 	}
@@ -576,8 +609,8 @@ export class SessionManager {
 		if (input.command) {
 			// A command is never a prompt: the server holds it and runs it when the run ends, in order with the other follow-ups.
 			if (mode !== "follow_up") throw badRequest('a command can only be queued with mode "follow_up"');
-			const live = this.live.get(id);
-			if (!live?.running) throw conflict('session is idle; run the command directly (mode "follow_up" needs an active run)');
+			this.assertJoinable(id, mode);
+			const live = this.live.get(id)!;
 			const instructions = input.command.instructions?.trim() || undefined;
 			(live.deferred ??= []).push({ kind: "compact", text: input.text, ...(instructions ? { instructions } : {}) });
 			this.bus.publish(id, "message_queued", { mode, text: input.text, deferred: true });
@@ -594,10 +627,14 @@ export class SessionManager {
 		}
 		// A prompt sent during a manual compaction waits for it to finish instead of being rejected.
 		const compacting = this.live.get(id);
-		if (mode === "prompt" && compacting?.compacting && !compacting.running) await compacting.compactSettled;
-		const active = this.live.get(id)?.running ?? false;
-		if (mode !== "prompt" && !active) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
-		if (mode === "prompt" && active) throw conflict('session is busy; send with mode "steer" or "follow_up"');
+		if (mode === "prompt" && compacting?.compacting && !compacting.running) {
+			const job = compacting.compacting;
+			await compacting.compactSettled;
+			// Stopping the compaction stops what waited for it too: the sender keeps the text instead of it going out later.
+			if (job.signal.aborted) throw conflict("the compaction it waited for was stopped; send it again", { reason: "stopped" });
+		}
+		if (mode !== "prompt") this.assertJoinable(id, mode);
+		if (mode === "prompt" && this.live.get(id)?.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		await this.refreshChatModels();
 		const live = this.ensureLive(record);
 
@@ -621,9 +658,10 @@ export class SessionManager {
 		const origin: RunOrigin = input.origin ?? "user";
 
 		if (mode === "steer" || mode === "follow_up") {
-			if (!live.running) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
+			this.assertJoinable(id, mode); // again: the uploads above took a while, the run may have ended or been stopped
 			// A person joining a run that another session started makes it a run for the person; a peer never takes it back.
 			if (origin === "user") live.origin = "user";
+			sentText.set(message, input.text);
 			if (mode === "steer") live.agent.steer(message);
 			else if (live.deferred?.length) live.deferred.push({ kind: "message", text: input.text, message, origin });
 			else live.agent.followUp(message);
@@ -755,6 +793,17 @@ export class SessionManager {
 		return { handled: false, text: current, parts: withNote(), title };
 	}
 
+	/**
+	 * A steer / follow_up needs a run that is going and not being stopped (a stopped run takes nothing more). The 409
+	 * says `reason: "stopped"` when the run was stopped, so a client keeps the text instead of starting a new run with it.
+	 */
+	private assertJoinable(id: string, mode: "steer" | "follow_up"): void {
+		const live = this.live.get(id);
+		if (live?.running && !live.stopCause) return;
+		if (live?.running || this.stopped.has(id)) throw conflict(`the run was stopped; send again with mode "prompt" to start a new one`, { reason: "stopped" });
+		throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
+	}
+
 	/** Removes one not-yet-delivered steer/follow_up message (the first one in that queue with this text). */
 	cancelQueued(id: string, mode: "steer" | "follow_up", text: string, deferred?: boolean): boolean {
 		this.get(id);
@@ -768,16 +817,9 @@ export class SessionManager {
 			return true;
 		};
 		if (deferred) return mode === "follow_up" && held();
-		// pi-agent-core has no per-item removal API; its queues are plain arrays.
-		const queue = (live.agent as unknown as Record<string, { messages?: AgentMessage[] } | undefined>)[mode === "steer" ? "steeringQueue" : "followUpQueue"];
-		const items = queue?.messages;
-		if (!Array.isArray(items)) return deferred === undefined && mode === "follow_up" && held();
-		const textOf = (m: AgentMessage) => {
-			const c = (m as { content?: unknown }).content;
-			if (typeof c === "string") return c;
-			return Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
-		};
-		const i = items.findIndex((m) => textOf(m) === text);
+		const items = agentQueue(live, mode);
+		if (!items) return deferred === undefined && mode === "follow_up" && held();
+		const i = items.findIndex((m) => queuedText(m) === text);
 		if (i < 0) return deferred === undefined && mode === "follow_up" && held();
 		items.splice(i, 1);
 		this.bus.publish(id, "message_dequeued", { mode, text });
@@ -815,6 +857,8 @@ export class SessionManager {
 		let did = false;
 		if (live.compacting) { live.compacting.abort(); did = true; }
 		if (live.running) { this.abortRun(id, live, "user"); did = true; }
+		// Also stops a queued /compact that already runs after its run: the messages held behind it must not go out.
+		if (did) this.dropQueued(id, live);
 		return did;
 	}
 
@@ -826,7 +870,9 @@ export class SessionManager {
 	private abortRun(id: string, live: Live, cause: RunStopCause): void {
 		const settled = live.settled;
 		live.stopCause ??= cause;
+		this.stopped.add(id);
 		live.agent.abort();
+		this.dropQueued(id, live);
 		// Waiting out a retry is idle work; stopping it there must not wait for the backoff to end.
 		live.retryWait?.abort();
 		const timer = setTimeout(() => {
@@ -834,6 +880,7 @@ export class SessionManager {
 			live.forceStopped = true;
 			live.running = false;
 			live.lastActive = Date.now();
+			this.dropQueued(id, live);
 			this.dispose(id);
 			this.bus.publish(id, "run_finished", {
 				status: "aborted",
@@ -920,6 +967,7 @@ export class SessionManager {
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
+		this.stopped.delete(id);
 		live.origin = origin;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
@@ -977,6 +1025,8 @@ export class SessionManager {
 			error ??= failed ? (last.errorMessage ?? null) : null;
 			if (limited) error = live.limitReason ?? error;
 			const status = limited || interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
+			// Sent while the stop took effect (the run still counted as busy, so they were queued): dropped like the rest.
+			if (status === "aborted") this.dropQueued(id, live);
 			this.bus.publish(id, "run_finished", {
 				status,
 				error,
@@ -985,7 +1035,7 @@ export class SessionManager {
 				usage: this.store.usage(id),
 				...(live.stopCause ? { cause: live.stopCause } : {}),
 			});
-			// Commands and messages queued behind them go on now (not after a stop: the client drops its queue then too).
+			// Commands and messages queued behind them go on now (not after a stop: dropQueued emptied them above).
 			const next = this.drainDeferred(id, live, status);
 			this.pendingRuns.add(next);
 			void next.finally(() => this.pendingRuns.delete(next));
@@ -1000,7 +1050,7 @@ export class SessionManager {
 	 * itself; the messages after it go out as one run, and the next command waits for that run to end.
 	 */
 	private async drainDeferred(id: string, live: Live, status: "ok" | "error" | "aborted"): Promise<void> {
-		if (status === "aborted") { live.deferred = []; return; }
+		if (status === "aborted") return;
 		while (live.deferred?.length && !live.running && !this.closing && this.live.get(id) === live) {
 			const head = live.deferred[0]!;
 			if (head.kind === "compact") {

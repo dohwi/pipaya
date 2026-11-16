@@ -19,7 +19,7 @@
 	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../../lib/slash-menu";
-	import { dropImageToken, insertToken, mentionAt, mirrorHtml, replaceMention, type Mention } from "../../lib/composer-text";
+	import { dropImageToken, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
 	import RetryNotice from "./RetryNotice.svelte";
@@ -42,15 +42,15 @@
 	import WhereChip from "./WhereChip.svelte";
 	import ReplyBadge from "./ReplyBadge.svelte";
 	import FileStrip from "./FileStrip.svelte";
-	import { isTouch } from "../../lib/format";
+	import { isTouch, uid } from "../../lib/format";
 	import { shouldTakeFocus } from "../../lib/focus-guard";
 	import { buildCombo, formatCombo, keyName } from "../../lib/keys";
 	import { msg, t } from "../../lib/i18n";
 	import { voice } from "../../lib/voice.svelte";
 
-	const uid = $props.id();
-	const menuListId = `${uid}-menu`;
-	const menuOptionId = (i: number) => `${uid}-menu-opt-${i}`;
+	const domId = $props.id();
+	const menuListId = `${domId}-menu`;
+	const menuOptionId = (i: number) => `${domId}-menu-opt-${i}`;
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
 	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
@@ -130,6 +130,30 @@
 		// Keep what is already typed: append instead of overwriting.
 		const cur = untrack(() => text);
 		setText(cur.trim() ? `${cur.replace(/\s+$/, "")}\n${p}` : p);
+	});
+
+	// A message that was not sent because its run was stopped (queued, or held for a compaction) comes back here once,
+	// with its pictures and files, ahead of whatever is typed now. Declared after the draft restore so it adds to it.
+	$effect(() => {
+		const back = chat?.restored;
+		if (!back?.length || !chat || chat.id !== pane.id) return;
+		const list = back.splice(0).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+		untrack(() => {
+			// In the order they were sent, as one block ahead of what is typed; each one's #imageN follows the pictures before it.
+			let back = "";
+			let pictures = 0;
+			for (const m of list) {
+				const own = mergeReturned("", pictures, { text: m.text, images: m.images.length });
+				back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
+				pictures += m.images.length;
+			}
+			text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
+			attached.load(
+				[...attached.images, ...list.flatMap((m) => m.images).map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
+				[...attached.files, ...list.flatMap((m) => m.files).map((f) => ({ ...f, id: uid() }))],
+			);
+			app.toast(t("중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다"), "info", pane.id);
+		});
 	});
 
 	// Voice input hands its transcript over once: inserted at the caret, so it continues the sentence being typed.
