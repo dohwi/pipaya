@@ -468,13 +468,6 @@ export function describeSettingErrors(fields: readonly SettingField[], errors: R
 	return parts.slice(0, limit).join(" · ") + (parts.length > limit ? ` ${t("외 {n}개", { n: parts.length - limit })}` : "");
 }
 
-/** Validate portable JSON data and return a fresh package with no input object references. */
-/** Validates the `settings` fields a server extension declares in its package.json (same rules as a client manifest's). Throws on a bad field. */
-export function parseSettingFields(input: unknown): SettingField[] {
-	const keys = new Map<string, SettingField>();
-	return array(input, "settings", MAX_SETTING_FIELDS).map((value, index) => settingField(value, `settings[${index}]`, keys));
-}
-
 /** One field of a list parsed field by field; `earlier` carries the fields before it, so `when` can name them. Throws on a bad field. */
 export function parseSettingField(input: unknown, index: number, earlier: Map<string, SettingField>): SettingField {
 	return settingField(input, `settings[${index}]`, earlier);
@@ -545,6 +538,7 @@ function parseAssets(input: unknown, result: ExtensionPackage, permissions: Perm
 	result.assets = assets;
 }
 
+/** Validate portable JSON data and return a fresh package with no input object references. */
 export function parsePackage(input: unknown): ExtensionPackage {
 	const source = object(input, "package", ["manifest", "theme", "commands", "locales", "styles", "assets", "components", "mounts", "replaces", "code"]);
 	const manifest = object(source.manifest, "manifest", ["id", "name", "version", "sdkVersion", "description", "descriptions", "translations", "permissions", "settings", "settingsScope"]);

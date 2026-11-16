@@ -33,9 +33,6 @@ export type VoiceSettingsValue = Static<typeof VoiceSettingsSchema>;
 
 export const DEFAULT_VOICE_SETTINGS = (): VoiceSettingsValue => ({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
 
-/** What the client may know about the key: only whether one is stored. */
-export type VoiceSettingsView = VoiceSettingsValue & { hasKey: boolean };
-
 /**
  * The last connection test, as the server remembers it. The test runs here (the key never leaves the server), so its
  * result belongs here too: a phone and a desktop that share one server must agree on whether the microphone works.

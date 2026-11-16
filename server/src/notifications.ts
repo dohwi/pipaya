@@ -48,7 +48,6 @@ export interface PushTransport {
 export type PushTransports = Partial<Record<PushProvider, PushTransport>>;
 /** What the notifier needs to know about a chat, without depending on the whole session store. */
 export interface SessionFacts { title(sessionId: string): string; lastAnswer(sessionId: string): string | undefined; /** The "quiet peers" setting: agent-to-agent runs stay silent */ quietPeers?(): boolean }
-export const DEFAULT_TITLES: Record<string, string> = { user_request: "Answer needed", task_failed: "Task failed", task_completed: "Task completed" };
 const LEASE_MS = 45_000;
 /** How long to wait for a PC/browser to confirm it showed a notification before pushing to the phone. A receipt normally takes well under a second. */
 const MOBILE_DELAY_MS = 5_000;

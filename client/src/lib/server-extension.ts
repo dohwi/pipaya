@@ -15,8 +15,8 @@ export const srvKey = (name: string): string => `srv:${name}`;
  * A server extension can be newer than the app reading it, so a field this client does not know is dropped rather
  * than failing the whole form: one unknown key used to hide every setting behind a single warning. A field that is
  * wrong in a way this client can see (a bad key, a missing label) still fails, so a broken manifest is not hidden.
+ * The form is in the language in use: labels, hints and option labels from `pipaya.translations` (see docs/i18n.md).
  */
-/** The form in the language in use: labels, hints and option labels from `pipaya.translations` (see docs/i18n.md). */
 export function serverFields(ext: Pick<ServerExt, "settings"> & { translations?: unknown }): { fields?: SettingField[]; problem?: string } {
 	if (!ext.settings) return {};
 	const declared = Array.isArray(ext.settings) ? ext.settings : [];

@@ -30,7 +30,7 @@
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
 
 	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
-	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
+	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; /** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list */ selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
 	let marketQuery = $state("");
 	$effect(() => { if (installFor) { const id = installFor; installFor = null; void installCompanion(id); } });
 	$effect(() => { if (marketFor) { marketQuery = marketFor; market = true; marketFor = null; } });
@@ -212,7 +212,6 @@
 	}
 	const tasks = new ExtensionTasks();
 	let drafts = $state<Record<string, string>>({});
-	/** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list. */
 	/** The server extension that carries the open client extension as its client half. */
 	const bundleOwner = $derived(selected ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
 	/** The server extension on the open server that pairs with the open client extension */

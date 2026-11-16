@@ -590,10 +590,6 @@ export function splitCombo(combo: string) {
 export const keyCount = (combo: string) => splitCombo(combo).keys.length;
 
 /**
- * Whether a bare Esc should stop the running agent. Esc already closes dialogs, menus and inline editors, so it
- * only stops the agent when none of those is open and focus is not in a text field other than the composer.
- */
-/**
  * Whether Esc may shrink the zoomed pane. Like stopping the agent, it waits while something else uses the key: an open
  * dialog or menu closes, a rename field cancels. The composer counts as free (Esc there is the app's).
  */
@@ -611,6 +607,10 @@ export function escapeShouldUnzoom(o: { overlayOpen: boolean; target: { tagName?
 /** What takes the Esc key before the app does: an open dialog, or an open menu (a row's or chip's context menu). */
 export const OVERLAY_SELECTOR = 'dialog[open], [role="dialog"], [role="alertdialog"], [role="menu"]';
 
+/**
+ * Whether a bare Esc should stop the running agent. Esc already closes dialogs, menus and inline editors, so it
+ * only stops the agent when none of those is open and focus is not in a text field other than the composer.
+ */
 export function escapeShouldStop(o: {
   busy: boolean;
   overlayOpen: boolean;

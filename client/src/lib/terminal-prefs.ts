@@ -1,6 +1,7 @@
 import { clampTo } from "./number";
 
-/** Terminal look settings: shape, defaults and validation (kept free of runes so tests can import it). */
+// Terminal look settings: shape, defaults and validation (kept free of runes so tests can import it).
+
 /** How the terminal looks. `fontFamily` is a CSS font-family list; the fallbacks of the app's mono stack always follow it. */
 export interface TerminalPrefs {
   fontFamily: string;

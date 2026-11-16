@@ -337,15 +337,14 @@
 		shortLabel,
 	});
 	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(Object.fromEntries(Object.entries(app.links).map(([id, l]) => [id, l?.api]))); });
-	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */
-	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. */
-	/** A saved model that no longer works outranks an update: chats, compaction or naming fail until it is fixed. */
 	const problems = $derived(app.problemCount);
 	/** Scheduled tasks of the open server: the button shows for any server that has the feature, even with none (so it can be found). */
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
 	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: whenShort(scheduled.next) }));
+	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. A saved model that no longer works (`problems`) outranks an update. */
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
+	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */
 	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible ? t("업데이트 있음") : serverUpdater.available ? t("서버 업데이트 있음") : "");
 </script>
 

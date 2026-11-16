@@ -68,7 +68,6 @@ function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_update" }>["
 	return rest;
 }
 
-/** How many messages one run may send to group members. */
 /** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
 const DESCRIBE_RETRY_MS = 10 * 60_000;
 
@@ -506,7 +505,6 @@ export class SessionManager {
 		return updated;
 	}
 
-	/** An image model only draws (through the generate_image tool); a chat never runs on it. */
 	/**
 	 * Where a new chat with this model starts: the model's own default (chosen in its connection settings), else the
 	 * saved default model's strength when it is this very model, else "medium".
@@ -519,6 +517,7 @@ export class SessionManager {
 		return saved && saved.provider === provider && saved.model === model && saved.thinkingLevel ? saved.thinkingLevel : "medium";
 	}
 
+	/** An image model only draws (through the generate_image tool); a chat never runs on it. */
 	private assertChatModel(provider: string, model: string): void {
 		if (this.registry.isImageModel?.(provider, model)) throw new HttpError(409, "image_model_not_chat", IMAGE_MODEL_IN_CHAT);
 	}

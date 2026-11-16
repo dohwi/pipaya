@@ -30,7 +30,6 @@
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const problems = $derived(app.problemsOf(serverId));
 	/** A problem's row jumps to the broken field so it can be fixed without hunting for it. */
-	/** A problem's row jumps to the broken field so it can be fixed without hunting for it. */
 	const sections: Record<Exclude<ProblemRole, "default"> | ProblemRole, HTMLElement | undefined> = $state({ default: undefined, compaction: undefined, system: undefined });
 	function goto(role: ProblemRole) {
 		const el = sections[role];

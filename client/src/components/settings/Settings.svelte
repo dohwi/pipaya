@@ -73,10 +73,10 @@
 	$effect(() => {
 		if (!server && current.server) tab = "general";
 	});
-	/** The shown server does not answer: its sections are off, only "정보" stays so the address or token can be fixed. */
 	/** Same order as the sidebar: up, checking, then unreachable (shown only; the saved order is untouched). */
 	const chips = $derived(orderServers(app.servers.map((s) => ({ s, state: connectionState(app.links[s.id]?.net ?? "connecting") }))));
 	const serverOnline = $derived(!server || app.links[server.id]?.net === "online");
+	/** The shown server does not answer: its sections are off, only "정보" stays so the address or token can be fixed. */
 	$effect(() => {
 		if (!serverOnline && needsOnlineServer(tab)) { extId = null; tab = "info"; }
 	});

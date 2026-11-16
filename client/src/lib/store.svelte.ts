@@ -132,7 +132,6 @@ class AppStore {
   set workspace(v: WorkspaceInfo | null) {
     if (this.link) this.link.workspace = v;
   }
-  /** Working directory (relative to the root, "." = root) where the next new chat starts. */
   /** Directory the next new chat starts in: "." = the server's default, else a path relative to it or absolute */
   workdir = $state(".");
   /** The server's default working directory setting (null on servers from before it existed) */
@@ -345,8 +344,10 @@ class AppStore {
     return this.servers.find((s) => s.id === this.serverId);
   }
 
-  /** Update the connected server, then say so and reload what it serves. The one path for every "update the server" button. */
-  /** `force` goes ahead although conversations are running: they are cut off by the restart. */
+  /**
+   * Update the connected server, then say so and reload what it serves. The one path for every "update the server" button.
+   * `force` goes ahead although conversations are running: they are cut off by the restart.
+   */
   async updateServerSoftware(api: Api | null = this.api, force = false): Promise<boolean> {
     if (!api || !(await serverUpdater.apply(api, force))) return false;
     this.toast(serverUpdater.updatedTo ? t("서버를 v{version}(으)로 업데이트했습니다", { version: serverUpdater.updatedTo }) : t("서버를 업데이트했습니다"), "ok");
@@ -1800,12 +1801,12 @@ class AppStore {
 
   /* ---------- commands ---------- */
 
-  /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
   /** Put `text` into the composer of `paneId` at the caret (the composer consumes it once). */
   insertIntoComposer(paneId: string, text: string) {
     this.insertText = { paneId, text };
   }
 
+  /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
   toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
     this.feedback.toast(text, tone, sid, action);
   }
