@@ -568,12 +568,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			// The Claude Code identity line is only added for a subscription (OAuth) sign-in, not an API key.
 			const provider = sessions.get(req.params.id).provider;
 			const credential = await credentials.read(provider).catch(() => undefined);
+			await sessions.refreshChatModels();
 			return sessions.context(req.params.id, { anthropicOAuth: credential?.type === "oauth" });
 		},
 	});
 	app.get("/context", {
 		schema: { querystring: Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096 })) }), response: { 200: S.SessionContext, ...S.errors(400, 401) } },
-		handler: async (req) => sessions.previewContext(req.query.cwd),
+		handler: async (req) => { await sessions.refreshChatModels(); return sessions.previewContext(req.query.cwd); },
 	});
 	app.patch("/sessions/:id", {
 		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409) } },

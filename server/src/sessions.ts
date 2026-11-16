@@ -1370,7 +1370,7 @@ export class SessionManager {
 	}
 
 	/** The configured chat models (credentials present, no image models), cached briefly: a run's tool texts list them. */
-	private async refreshChatModels(): Promise<void> {
+	async refreshChatModels(): Promise<void> {
 		if (Date.now() - this.chatModelsAt < 5_000) return;
 		try {
 			const all = await this.registry.models.getAvailable();
