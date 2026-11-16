@@ -14,7 +14,7 @@ import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
-import { type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
+import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
@@ -28,7 +28,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, freeRole, subagentUsage, loadSubagents, SUBAGENT_NAME, subagentSystem } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, freeRole, subagentUsage, loadSubagents, SUBAGENT_NAME, subagentSystem, type SubagentDef } from "./subagents.ts";
 import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -77,6 +77,9 @@ const IMAGE_MODEL_IN_CHAT = "this is an image model: it does not chat. Pick a ch
 
 /** Errors compact() has already published as compaction_failed. */
 const reported = new WeakSet<object>();
+
+/** A `delegate` call as the graph view shows it (see `SessionManager.delegateRuns`). */
+export type DelegateRun = DelegateCall & { free: boolean; running: boolean; model: string };
 
 export class SessionManager {
 	private live = new Map<string, Live>();
@@ -854,6 +857,31 @@ export class SessionManager {
 			if (live.running) { live.stopCause ??= "shutdown"; live.agent.abort(); }
 			this.dispose(id);
 		}
+	}
+
+	/**
+	 * The `delegate` calls of the active sessions, for the graph view. Each says whether its role has a file (a free role
+	 * has none) and the model it ran on; for a call still running (no result yet) that is the model it would get by the same
+	 * rule as `delegate`: the `model` argument when the policy takes one, else the role file's, else the session's own.
+	 */
+	delegateRuns(): DelegateRun[] {
+		const pol = this.delegatePolicy();
+		const roles = new Map<string, Map<string, SubagentDef>>(); // per cwd, read once per request
+		return this.store.delegateCalls().flatMap((c) => {
+			const rec = this.store.get(c.sessionId);
+			if (!rec) return [];
+			let defs = roles.get(rec.cwd);
+			if (!defs) roles.set(rec.cwd, (defs = loadSubagents(rec.cwd, this.home, this.disabledSubagents())));
+			const def = defs.get(c.role);
+			const running = c.doneAt === null && (this.live.get(c.sessionId)?.agent.state.pendingToolCalls.has(c.callId) ?? false);
+			let model = c.model;
+			if (!model) {
+				const asked = c.asked && pol.policy !== "defined" ? c.asked : undefined;
+				const spec = asked ?? def?.model;
+				model = !spec ? `${rec.provider}/${rec.model}` : spec.includes("/") ? spec : `${rec.provider}/${spec}`;
+			}
+			return [{ ...c, free: !def, running, model }];
+		});
 	}
 
 	/** Live state of every session that is running or waiting on the user (idle sessions are omitted). */

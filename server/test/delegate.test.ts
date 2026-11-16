@@ -300,6 +300,23 @@ describe("delegate tool", () => {
 		expect(await call(id, { role: "summarize", task: "x" })).toContain("subagent role");
 	});
 
+	test("GET /delegates lists the calls of active sessions with the model each ran on, a free role, and leaves closed sessions out", async () => {
+		await api("PUT", "/configuration/delegate", { roles: "any", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		await call(id, { role: "explore.md", task: "first" });
+		await call(id, { role: "adhoc", task: "second", model: "echo/ignored" }); // policy "defined": the asked model is not used
+		await call(id, { task: "no role" }); // refused before it ran: not listed
+		const runs = ((await api("GET", "/delegates")).json.runs as any[]).filter((r) => r.sessionId === id);
+		expect(runs.map((r) => r.role)).toEqual(["explore", "adhoc"]);
+		expect(runs[0]).toMatchObject({ free: false, model: `echo/${ECHO_MODEL.id}`, running: false, error: false, asked: null });
+		expect(runs[0].doneAt).toBeGreaterThanOrEqual(runs[0].at);
+		expect(runs[0].tokens).toBeGreaterThan(0);
+		expect(runs[1]).toMatchObject({ free: true, asked: "echo/ignored", model: `echo/${ECHO_MODEL.id}` });
+		await api("PATCH", `/sessions/${id}`, { closed: true });
+		expect(((await api("GET", "/delegates")).json.runs as any[]).some((r) => r.sessionId === id)).toBe(false);
+		await api("PUT", "/configuration/delegate", { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
+	});
+
 	test("the delegate tool text follows the role policy", () => {
 		const make = (roles: "defined" | "any") => buildTools(["delegate"], dir, [], { delegateRoles: () => roles })[0]!;
 		expect(make("any").description).toContain("any other short name");

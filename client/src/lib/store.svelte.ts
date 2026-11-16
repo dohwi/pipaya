@@ -19,7 +19,7 @@ const KEEP_CHATS = 8;
 /** Away longer than this and a mobile OS may have killed the streams: coming back forces a full resync. */
 const LONG_AWAY_MS = 30_000;
 import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
-import { applyLinkEvent } from "./server-link-model";
+import { applyLinkEvent, applyLiveEvent } from "./server-link-model";
 import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
 import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
@@ -38,6 +38,7 @@ import { CloseGuard } from "./close-guard.svelte";
 import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { queuedShown } from "./queue";
+import { graphRuns } from "./graph-runs.svelte";
 import { fetchLocalePacks } from "./locale-sync";
 import { groupNameFor } from "./group-name";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
@@ -288,6 +289,25 @@ class AppStore {
   mcpTick = $state(0);
   /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
   schedulesTick = $state(0);
+  /**
+   * The graph view (every server's chats, their models and subagents) shown in place of the conversation. Opening a
+   * conversation, a new chat or a terminal leaves it (`openIn`, `openSession`, `newChat`); Ctrl+G toggles it.
+   */
+  graphOpen = $state(false);
+  /** The conversation the graph was opened from, so the toggle can go back to it. */
+  graphFrom = $state<{ server: string; session: string } | null>(null);
+  toggleGraph(open = !this.graphOpen) {
+    if (open === this.graphOpen) return;
+    if (open) {
+      this.graphFrom = this.serverId && this.activeId ? { server: this.serverId, session: this.activeId } : null;
+      this.graphOpen = true;
+      this.sidebar.open = false;
+      return;
+    }
+    this.graphOpen = false;
+    const from = this.graphFrom;
+    if (from && from.server !== this.serverId) this.openIn(from.server, { session: from.session });
+  }
   /** The scheduled-tasks window opened from the sidebar (the open server's list and form), or false. */
   schedulesDialog = $state(false);
   /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
@@ -814,6 +834,7 @@ class AppStore {
 
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
   openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean }) {
+    this.graphOpen = false;
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal asked for on another server opens once that server is connected (see sync).
       this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
@@ -877,6 +898,8 @@ class AppStore {
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
     // Server extension pages follow their server's events whether or not it is the open one.
     this.serverExtensionFeed.onEvent(link.id, e.type, e.data);
+    applyLiveEvent(link.data, e);
+    if (this.graphOpen) graphRuns.onEvent(link.id, e.type, e.data);
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
     if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
@@ -1550,6 +1573,7 @@ class AppStore {
   /* ---------- navigation ---------- */
 
   newChat() {
+    this.graphOpen = false;
     if (this.activeId) this.previousId = this.activeId;
     this.activeId = null;
     try {
@@ -1673,6 +1697,7 @@ class AppStore {
    */
   async openSession(id: string, force = false, reveal = true) {
     if (!this.api) return;
+    this.graphOpen = false;
     if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
       // already open: only make sure its row can be seen (it may sit under a fold the user made since)
       if (reveal) this.revealRow(id);

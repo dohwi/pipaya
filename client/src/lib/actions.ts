@@ -272,6 +272,7 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     if (app.settingsOpen) app.settingsOpen = false;
     else app.openSettings();
   },
+  openGraph: () => app.toggleGraph(),
   toggleTheme: () => app.prefs.setTheme(app.prefs.resolvedDark ? "light" : "dark"),
   zoomIn: () => app.prefs.stepUiScale(1),
   zoomOut: () => app.prefs.stepUiScale(-1),

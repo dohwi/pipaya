@@ -1,4 +1,5 @@
 import type { Group, PipayaEvent, Session } from "./types";
+import { applyQueueEvent, type QueuedItem } from "./queue";
 import type { TerminalInfo } from "./terminal";
 
 /** What the client keeps live about one server: its lists and what each session is doing. */
@@ -10,9 +11,67 @@ export interface LinkData {
 	awaiting: Record<string, number>;
 	unread: Record<string, boolean>;
 	failed: Record<string, boolean>;
+	/**
+	 * What waits in each session's queue and which tool each running session is in, followed from the stream (only the
+	 * graph view reads them; the open chat keeps its own). Empty until something is queued or a tool starts after connecting.
+	 */
+	queued: Record<string, QueuedItem[]>;
+	tool: Record<string, { name: string; args: Record<string, unknown> }>;
 }
 
-export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {} });
+export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {}, queued: {}, tool: {} });
+
+/** Forget what a session was doing (it closed, was deleted, or its run ended). */
+function clearLive(d: LinkData, id: string) {
+	delete d.queued[id];
+	delete d.tool[id];
+}
+
+function queue(d: LinkData, sid: string, type: string, data: unknown) {
+	const next = applyQueueEvent(d.queued[sid] ?? [], type, (data ?? {}) as Record<string, unknown>);
+	if (next.length) d.queued[sid] = next;
+	else delete d.queued[sid];
+}
+
+/** The text parts of a message's content (a plain string passes through). */
+const textOf = (c: unknown): string => (typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b && b.type === "text" ? String(b.text ?? "") : "")).join("") : "");
+
+/**
+ * The queue and current tool of a link's sessions (`LinkData.queued` / `tool`). Separate from `applyLinkEvent` because the
+ * server in view runs its own handler for the rest, and calls only this.
+ */
+export function applyLiveEvent(d: LinkData, e: PipayaEvent): void {
+	// a closed or deleted session names itself in its data
+	if (e.type === "session_deleted" || (e.type === "session_updated" && (e.data as Session).closed)) {
+		clearLive(d, (e.data as { id: string }).id);
+		return;
+	}
+	const sid = e.sessionId;
+	if (!sid) return;
+	switch (e.type) {
+		case "run_finished":
+			delete d.tool[sid];
+			queue(d, sid, e.type, e.data);
+			break;
+		case "message_queued":
+		case "message_dequeued":
+			queue(d, sid, e.type, e.data);
+			break;
+		case "message_end": {
+			const m = (e.data as { message?: { role?: string; content?: unknown } } | null)?.message;
+			if (m?.role === "user" && d.queued[sid]) queue(d, sid, "delivered", { text: textOf(m.content) });
+			break;
+		}
+		case "tool_execution_start": {
+			const t = e.data as { toolName?: unknown; args?: unknown };
+			if (typeof t.toolName === "string") d.tool[sid] = { name: t.toolName, args: t.args && typeof t.args === "object" ? (t.args as Record<string, unknown>) : {} };
+			break;
+		}
+		case "tool_execution_end":
+			delete d.tool[sid];
+			break;
+	}
+}
 
 /** Events that can change a link's lists (the rest are about a transcript, which a background server does not hold). */
 export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {

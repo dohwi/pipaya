@@ -1,6 +1,7 @@
 import { parseRetrying, type RetryState } from "./retry-state";
 import { errorText, ApiError, type Api, type StoredMessage } from "./api";
 import { uid } from "./format";
+import { applyQueueEvent } from "./queue";
 import { LocalizedError, t } from "./i18n";
 import type {
 	AgentMessage,
@@ -594,7 +595,7 @@ export class ChatState {
 				for (const run of Object.values(this.tools)) {
 					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
-				this.queued = this.queued.filter((x) => x.deferred && d.status !== "aborted");
+				this.queued = applyQueueEvent(this.queued, "run_finished", d);
 				// The run-limit abort cut a model call short and left an empty error reply; the server drops it, so hide it here too.
 				if (d.cause === "limit") {
 					const tail = this.items[this.items.length - 1];
@@ -619,14 +620,9 @@ export class ChatState {
 				break;
 
 			case "message_queued":
-				this.queued.push({ mode: d.mode === "steer" ? "steer" : "follow_up", text: String(d.text ?? ""), ...(d.deferred ? { deferred: true } : {}) });
+			case "message_dequeued":
+				this.queued = applyQueueEvent(this.queued, e.type, d);
 				break;
-
-			case "message_dequeued": {
-				const i = this.queued.findIndex((x) => x.mode === (d.mode === "steer" ? "steer" : "follow_up") && x.text === String(d.text ?? "") && !!x.deferred === !!d.deferred);
-				if (i >= 0) this.queued.splice(i, 1);
-				break;
-			}
 
 			case "message_end": {
 				const seq = d.seq as number;
@@ -640,12 +636,7 @@ export class ChatState {
 					this.context = { ...this.context, tokens: m.usage.totalTokens };
 				}
 				if (m.role === "user") {
-					const text = textOf(m.content);
-					// Same text queued twice (steer and follow_up): steers are delivered first, so that one is the one that landed.
-					const same = (x: { text: string }) => x.text.trim() === text.trim();
-					const sq = this.queued.findIndex((x) => x.mode === "steer" && same(x));
-					const q = sq >= 0 ? sq : this.queued.findIndex(same);
-					if (q >= 0) this.queued.splice(q, 1);
+					this.queued = applyQueueEvent(this.queued, "delivered", { text: textOf(m.content) });
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;

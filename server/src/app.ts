@@ -527,6 +527,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { response: { 200: S.ActivityInfo, ...S.errors(401) } },
 		handler: async () => ({ sessions: sessions.activity(), unread: unread.list() }),
 	});
+	app.get("/delegates", {
+		schema: { response: { 200: S.DelegateRuns, ...S.errors(401) } },
+		handler: async () => ({ runs: sessions.delegateRuns() }),
+	});
 	app.post("/sessions/:id/read", {
 		schema: { params: S.IdParams, response: { 200: Type.Object({ ok: Type.Boolean() }), ...S.errors(401) } },
 		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },

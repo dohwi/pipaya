@@ -83,6 +83,26 @@ export const CompactResult = Type.Object({
 	model: Type.Object({ provider: Type.String(), model: Type.String(), thinkingLevel: Type.Optional(Thinking), custom: Type.Boolean({ description: "false = the session's own model wrote the summary" }) }),
 });
 
+export const DelegateRuns = Type.Object({
+	runs: Type.Array(
+		Type.Object({
+			sessionId: Type.String(),
+			callId: Type.String(),
+			role: Type.String(),
+			free: Type.Boolean({ description: "No role file has this name: a free role the agent named itself (role policy \"any\")" }),
+			asked: Nullable(Type.String({ description: "The `model` argument the agent passed (the policy may have refused it)" })),
+			model: Type.String({ description: "provider/model it ran on; while running, the one it gets by the delegate rule" }),
+			at: Type.Integer({ description: "Unix ms of the call" }),
+			doneAt: Nullable(Type.Integer({ description: "Unix ms of its result; null while running or when a restart cut it off" })),
+			running: Type.Boolean(),
+			error: Type.Boolean(),
+			turns: Nullable(Type.Integer()),
+			tokens: Nullable(Type.Integer()),
+		}),
+		{ description: "Every delegate call of the active sessions, oldest first" },
+	),
+});
+
 export const ActivityInfo = Type.Object({
 	sessions: Type.Array(
 		Type.Object({
