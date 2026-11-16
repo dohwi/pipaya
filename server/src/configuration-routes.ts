@@ -8,7 +8,7 @@ import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { helperTools, listSubagents, removeSubagent, saveSubagent, subagentKey } from "./subagents.ts";
+import { subagentTools, listSubagents, removeSubagent, saveSubagent, subagentKey } from "./subagents.ts";
 import { TOOL_DEFS } from "./tools.ts";
 import { THINKING_LEVELS } from "./store.ts";
 const Scope = Type.Union([Type.Literal("global"), Type.Literal("project")], { description: "global: ~/.agents/subagents; project: .agents/subagents of the server's default working folder" });
@@ -20,7 +20,7 @@ const SubagentInfo = Type.Object({
 });
 const SubagentList = Type.Object({
 	subagents: Type.Array(SubagentInfo),
-	tools: Type.Array(Type.String(), { description: "Tool names a helper may be given" }),
+	tools: Type.Array(Type.String(), { description: "Tool names a subagent may be given" }),
 	projectDir: Type.String({ description: "Folder the project scope writes to" }),
 });
 const SubagentFields = {
@@ -64,7 +64,7 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 	// Project roles live in `<cwd>/.agents/subagents`. `cwd` is the folder of the conversation asking (the footer); without it the
 	// default working folder is used (the settings page). Relative paths resolve against the default working folder.
 	const where = (cwd?: string) => (cwd?.trim() ? resolve(config.defaultWorkdir(), cwd.trim()) : config.defaultWorkdir());
-	const roles = (cwd?: string) => ({ subagents: listSubagents(where(cwd), home, config.disabledSubagents()), tools: helperTools(Object.keys(TOOL_DEFS)), projectDir: join(where(cwd), ".agents", "subagents") });
+	const roles = (cwd?: string) => ({ subagents: listSubagents(where(cwd), home, config.disabledSubagents()), tools: subagentTools(Object.keys(TOOL_DEFS)), projectDir: join(where(cwd), ".agents", "subagents") });
 	const changed = () => bus.publish(null, "skills_updated", { name: "", scope: "global", project: "", source: "files" });
 	app.get("/configuration/subagents", {
 		schema: { querystring: SubagentCwd, response: { 200: SubagentList, ...errors(400, 401) } },
@@ -93,7 +93,7 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 		handler: async (req) => {
 			const { scope, enabled, cwd } = req.body;
 			// Only roles that exist can be switched, so the saved list never collects keys of deleted files.
-			if (!listSubagents(where(cwd), home).some((d) => d.scope === scope && d.name === req.params.name)) throw notFound(`helper role "${req.params.name}"`);
+			if (!listSubagents(where(cwd), home).some((d) => d.scope === scope && d.name === req.params.name)) throw notFound(`subagent role "${req.params.name}"`);
 			config.setSubagentEnabled(subagentKey({ scope, name: req.params.name }), enabled);
 			changed();
 			return roles(cwd);

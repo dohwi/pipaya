@@ -117,7 +117,7 @@
 				].filter(Boolean).join("\n")
 			: "",
 	);
-	// Helper roles `delegate` can start here: the global ones plus the ones in this conversation's folder. Hidden while the
+	// Subagent roles `delegate` can start here: the global ones plus the ones in this conversation's folder. Hidden while the
 	// `delegate` tool is off (nothing could start them); dimmed when there are none, like the other items.
 	let roles = $state<{ key: string; global: string[]; project: string[] } | null>(null);
 	const rolesCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
@@ -138,7 +138,7 @@
 	const rolesTip = $derived(
 		rolesHere
 			? [
-					rolesCount ? t("도우미 역할 {n}개 (전역 {g} · 프로젝트 {p})", { n: rolesCount, g: rolesHere.global.length, p: rolesHere.project.length }) : t("등록된 도우미 역할이 없습니다."),
+					rolesCount ? t("서브에이전트 역할 {n}개 (전역 {g} · 프로젝트 {p})", { n: rolesCount, g: rolesHere.global.length, p: rolesHere.project.length }) : t("등록된 서브에이전트 역할이 없습니다."),
 					rolesHere.project.length ? `${t("프로젝트")}: ${list(rolesHere.project)}` : "",
 					rolesHere.global.length ? `${t("전역")}: ${list(rolesHere.global)}` : "",
 					t("눌러서 관리"),
@@ -270,7 +270,7 @@
 			{/if}
 		{:else if id === "roles"}
 			{#if rolesHere && rolesCount > 0}
-				<StatusItem more icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("도우미 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
+				<StatusItem more icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("서브에이전트 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
 			{/if}
 		{:else if id === "commands"}
 			{#if tplNames && tplNames.length > 0}

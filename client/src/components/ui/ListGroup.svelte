@@ -2,7 +2,7 @@
 	import type { Snippet } from "svelte";
 
 	/**
-	 * One block of a list dialog (skills, MCP servers, extension commands, helper roles): a small heading with a count and,
+	 * One block of a list dialog (skills, MCP servers, extension commands, subagent roles): a small heading with a count and,
 	 * optionally, the folder the entries come from, then the entries. Every list dialog uses it, so the four read the same.
 	 *
 	 *  title   the group's name ("전역", "프로젝트", an extension's name)

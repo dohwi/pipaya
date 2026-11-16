@@ -57,7 +57,7 @@ def check_modals(p):
     cases = [
         ("mcp", ["SET", '.nav button.srvtab:has-text("MCP")']),  # the status item only shows once a server is connected
         ("skills", ['button[aria-label^="스킬"]']),
-        ("cmds", ['button[aria-label^="도우미 역할"]']),
+        ("cmds", ['button[aria-label^="서브에이전트 역할"]']),
         ("ctx", ['button[aria-label^="AGENTS.md"]']),
         ("settings", ["SET"]),
         # the server's panes are in the same settings nav (srvtab); on a phone the nav item opens the pane as its own page

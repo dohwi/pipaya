@@ -22,7 +22,7 @@
 	import type { ModelInfo, SubagentInfo, SubagentList, ThinkingLevel } from "../../lib/types";
 
 	/**
-	 * The helper roles `delegate` can start: the files in `~/.agents/subagents` (global) and the default working folder's
+	 * The subagent roles `delegate` can start: the files in `~/.agents/subagents` (global) and the default working folder's
 	 * `.agents/subagents` (project), listed, added, edited and removed here. The server writes the role files; a role changed
 	 * by hand on disk shows up here by itself. Shown in the settings (project scope = the default working folder) and in the
 	 * footer's dialog (`cwd` = that conversation's folder). `bare` drops the settings-card chrome for use inside a dialog. `globalOnly` (the settings) shows and saves only global roles.
@@ -131,9 +131,9 @@
 
 <!-- the list and the form are two pages of different heights: centre the dialog again on each switch -->
 <section class:set-group={!bare} class:bare use:recentreOn={form !== null}>
-	{#if !bare}<div class="section-label">{t("도우미 역할")}</div>{/if}
+	{#if !bare}<div class="section-label">{t("서브에이전트 역할")}</div>{/if}
 	<ExtrasIntro
-		what={t("에이전트가 delegate 도구로 일을 맡길 수 있는 도우미입니다. 각자 모델, 도구, 지침을 따로 가집니다.")}
+		what={t("에이전트가 delegate 도구로 일을 맡길 수 있는 서브에이전트입니다. 각자 모델, 도구, 지침을 따로 가집니다.")}
 		how={t("역할마다 파일 하나(.md)이고, 같은 이름이면 프로젝트 역할이 전역 역할보다 우선합니다.")}
 	/>
 	{#if loadError}<Notice tone="warn">{loadError}</Notice>{/if}
@@ -162,7 +162,7 @@
 				<input class="field" bind:value={form.description} maxlength="500" autocomplete="off" />
 			</FormField>
 			<FormField label={t("지침")}>
-				<textarea class="field mono area" bind:value={form.prompt} rows="8" placeholder={t("이 도우미가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
+				<textarea class="field mono area" bind:value={form.prompt} rows="8" placeholder={t("이 서브에이전트가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
 			</FormField>
 			<FormField label={t("모델")} group hint={t("비워 두면 호출한 대화의 모델로 실행합니다")}>
 				<ModelField
@@ -175,7 +175,7 @@
 					unsetLabel={t("호출한 대화의 모델")}
 					placeholder={t("호출한 대화의 모델")}
 					disabled={busy}
-					label={t("도우미 모델")}
+					label={t("서브에이전트 모델")}
 					onpick={(c) => { if (form) { form.model = c ? `${c.provider}/${c.model}` : ""; form.thinking = c?.thinkingLevel ?? null; } }}
 				/>
 			</FormField>
@@ -225,13 +225,13 @@
 							</ListItem>
 						</li>
 					{:else}
-						<EmptyState as="li">{t("등록된 도우미 역할이 없습니다.")}</EmptyState>
+						<EmptyState as="li">{t("등록된 서브에이전트 역할이 없습니다.")}</EmptyState>
 					{/each}
 				</ul>
 			</ListGroup>
 		{/each}
 		</div>
-		<Button variant="dashed" onclick={add}>{t("도우미 역할 추가")}</Button>
+		<Button variant="dashed" onclick={add}>{t("서브에이전트 역할 추가")}</Button>
 	{:else if !loadError}
 		<EmptyState loading />
 	{/if}

@@ -295,7 +295,7 @@ class AppStore {
   openMcp() {
     if (this.api) this.mcpDialog = true;
   }
-  /** Helper roles dialog (`delegate` roles, opened from the footer). cwd decides which folder's project roles are listed. */
+  /** Subagent roles dialog (`delegate` roles, opened from the footer). cwd decides which folder's project roles are listed. */
   subagentsDialog = $state<{ cwd: string } | null>(null);
   openSubagents(sessionId: string | null = this.activeId) {
     if (!this.api) return;

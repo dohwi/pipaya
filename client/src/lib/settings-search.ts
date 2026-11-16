@@ -15,7 +15,7 @@ export const SETTINGS_TABS = [
 	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
 	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
-	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 도우미 위임"), server: true },
+	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 폴더 · 자동 삭제"), server: true },
 	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
@@ -102,7 +102,7 @@ export function toolLabel(name: string): string {
 		case "bash": return t("셸 명령 실행 (bash)");
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
 		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·중단·답변·그룹 (peer)");
-		case "delegate": return t("일회성 도우미에게 작업 위임 (delegate)");
+		case "delegate": return t("일회성 서브에이전트에게 작업 위임 (delegate)");
 		case "schedule": return t("예약 작업 만들기·변경·삭제 (schedule)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		default: return name;

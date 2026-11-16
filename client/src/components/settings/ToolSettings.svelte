@@ -52,7 +52,7 @@
 		{ id: "any", label: t("자유") },
 	];
 	const modeHint: Record<DelegateMode, string> = {
-		defined: t("도우미는 역할 파일에 적힌 모델만 씁니다. 에이전트가 모델을 고르려 하면 거절됩니다"),
+		defined: t("서브에이전트는 역할 파일에 적힌 모델만 씁니다. 에이전트가 모델을 고르려 하면 거절됩니다"),
 		allowlist: t("에이전트는 아래에서 켠 모델 중에서만 고를 수 있습니다"),
 		any: t("에이전트가 연결된 모델 중 아무거나 고를 수 있습니다"),
 	};
@@ -62,7 +62,7 @@
 	];
 	const roleHint: Record<DelegateRoles, string> = {
 		defined: t("역할 파일로 정의된 역할만 씁니다. 다른 이름은 거절됩니다"),
-		any: t("파일 없는 이름도 허용합니다. 그 도우미는 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다"),
+		any: t("파일 없는 이름도 허용합니다. 그 서브에이전트는 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다"),
 	};
 	const nums = (xs: number[]) => xs.map((n) => ({ value: n, label: String(n) }));
 
@@ -126,12 +126,12 @@
 {#if shown?.tools?.delegate && shown.tools.toggleable.includes("delegate")}
 	{@const d = shown.tools.delegate}
 	<section class="set-group">
-		<div class="section-label">{t("도우미 위임 (delegate)")}</div>
-		<SettingRow label={t("도우미 역할")} hint={roleHint[d.roles]}>
-			<Segmented size="sm" full={false} label={t("도우미 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />
+		<div class="section-label">{t("서브에이전트 위임 (delegate)")}</div>
+		<SettingRow label={t("서브에이전트 역할")} hint={roleHint[d.roles]}>
+			<Segmented size="sm" full={false} label={t("서브에이전트 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />
 		</SettingRow>
-		<SettingRow label={t("도우미 모델")} hint={modeHint[d.policy]}>
-			<Segmented size="sm" full={false} label={t("도우미 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
+		<SettingRow label={t("서브에이전트 모델")} hint={modeHint[d.policy]}>
+			<Segmented size="sm" full={false} label={t("서브에이전트 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
 		</SettingRow>
 		{#if d.policy === "allowlist"}
 			{#each modelList as m (`${m.provider}/${m.id}`)}
@@ -147,14 +147,14 @@
 			{/each}
 		{/if}
 		{#if delegateError}<span class="hint danger">{delegateError}</span>{/if}
-		<SettingRow label={t("동시에 실행할 도우미")} hint={t("한 대화에서 동시에 돌 수 있는 수")}>
-			<Select size="sm" width="96px" label={t("동시에 실행할 도우미")} value={d.maxConcurrent} options={nums([1, 2, 3, 4, 6, 8])} onchange={(n) => saveDelegate({ maxConcurrent: n })} />
+		<SettingRow label={t("동시에 실행할 서브에이전트")} hint={t("한 대화에서 동시에 돌 수 있는 수")}>
+			<Select size="sm" width="96px" label={t("동시에 실행할 서브에이전트")} value={d.maxConcurrent} options={nums([1, 2, 3, 4, 6, 8])} onchange={(n) => saveDelegate({ maxConcurrent: n })} />
 		</SettingRow>
 		<SettingRow label={t("실행당 위임 횟수")} hint={t("에이전트가 한 번 일하는 동안 부를 수 있는 횟수")}>
 			<Select size="sm" width="96px" label={t("실행당 위임 횟수")} value={d.maxCalls} options={nums([4, 8, 12, 20, 30, 50])} onchange={(n) => saveDelegate({ maxCalls: n })} />
 		</SettingRow>
-		<SettingRow label={t("도우미 최대 모델 호출")} hint={t("역할 파일이 더 크게 적어도 이 값을 넘지 않습니다")}>
-			<Select size="sm" width="96px" label={t("도우미 최대 모델 호출")} value={d.maxTurns} options={nums([5, 10, 15, 20, 30, 50])} onchange={(n) => saveDelegate({ maxTurns: n })} />
+		<SettingRow label={t("서브에이전트 최대 모델 호출")} hint={t("역할 파일이 더 크게 적어도 이 값을 넘지 않습니다")}>
+			<Select size="sm" width="96px" label={t("서브에이전트 최대 모델 호출")} value={d.maxTurns} options={nums([5, 10, 15, 20, 30, 50])} onchange={(n) => saveDelegate({ maxTurns: n })} />
 		</SettingRow>
 	</section>
 	<SubagentsPanel {serverId} models={modelList} globalOnly />

@@ -9,14 +9,14 @@ import { badRequest, conflict, notFound } from "./errors.ts";
 import { parseFrontmatter } from "./skills.ts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
-/** Helpers running at the same time for one session. */
+/** Subagents running at the same time for one session. */
 export const MAX_CONCURRENT_SUBAGENTS = 4;
 /** `delegate` calls in one run of the parent (the counter is reset when a new run starts). */
 export const MAX_DELEGATES_PER_RUN = 12;
-/** Model calls a helper may use when its definition says nothing, and the most a definition may ask for. */
+/** Model calls a subagent may use when its definition says nothing, and the most a definition may ask for. */
 export const DEFAULT_SUBAGENT_TURNS = 12;
 export const MAX_SUBAGENT_TURNS = 30;
-/** Tools a helper never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions or schedule prompts. */
+/** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions or schedule prompts. */
 const FORBIDDEN = (n: string) => n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule";
 export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
 
@@ -97,8 +97,8 @@ export function listSubagents(cwd: string, home: string, disabled: readonly stri
 export const SUBAGENT_NAME = /^[A-Za-z0-9][\w.-]{0,39}$/;
 export interface SubagentInput { description: string; model?: string; thinking?: ThinkingLevel; tools: string[]; maxTurns: number; prompt: string }
 
-/** Tool names a role file may list: everything a helper may get (never the ones in FORBIDDEN). */
-export const helperTools = (all: readonly string[]) => all.filter((n) => !FORBIDDEN(n));
+/** Tool names a role file may list: everything a subagent may get (never the ones in FORBIDDEN). */
+export const subagentTools = (all: readonly string[]) => all.filter((n) => !FORBIDDEN(n));
 
 /**
  * Writes `<dir>/<name>.md`. Frontmatter keys this editor does not know are kept as they are. `create` refuses to overwrite an
@@ -110,8 +110,8 @@ export function saveSubagent(scope: SubagentDef["scope"], cwd: string, home: str
 	const dir = dirOf(scope, cwd, home);
 	const file = join(dir, `${name}.md`);
 	const exists = existsSync(file);
-	if (create && exists) throw conflict(`helper role "${name}" already exists in the ${scope} folder`);
-	if (!create && !exists) throw notFound(`helper role "${name}"`);
+	if (create && exists) throw conflict(`subagent role "${name}" already exists in the ${scope} folder`);
+	if (!create && !exists) throw notFound(`subagent role "${name}"`);
 	let meta: Record<string, unknown> = {};
 	if (exists) { try { meta = parseFrontmatter(readFileSync(file, "utf8")) ?? {}; } catch { /* unreadable: rewritten from the form */ } }
 	const set = (k: string, v: unknown) => { if (v === undefined || v === "") delete meta[k]; else meta[k] = v; };
@@ -130,15 +130,15 @@ export function saveSubagent(scope: SubagentDef["scope"], cwd: string, home: str
 export function removeSubagent(scope: SubagentDef["scope"], cwd: string, home: string, name: string): void {
 	if (!SUBAGENT_NAME.test(name)) throw badRequest("invalid role name");
 	const file = join(dirOf(scope, cwd, home), `${name}.md`);
-	if (!existsSync(file)) throw notFound(`helper role "${name}"`);
+	if (!existsSync(file)) throw notFound(`subagent role "${name}"`);
 	rmSync(file);
 }
 
-/** What a helper is told besides its role text. */
+/** What a subagent is told besides its role text. */
 export const subagentSystem = (def: SubagentDef, cwd: string) =>
-	`${def.prompt || `You are the "${def.name}" helper.`}\n\nYou work for another agent and cannot ask questions: you get one task and answer with your final message only. Working directory: ${cwd}`;
+	`${def.prompt || `You are the "${def.name}" subagent.`}\n\nYou work for another agent and cannot ask questions: you get one task and answer with your final message only. Working directory: ${cwd}`;
 
-/** The text of the last assistant message of a helper run. */
+/** The text of the last assistant message of a subagent run. */
 export function finalText(messages: readonly { role: string; content?: unknown; stopReason?: string; errorMessage?: string }[]): { text: string; error?: string } {
 	const last = [...messages].reverse().find((m) => m.role === "assistant");
 	if (!last) return { text: "" };
@@ -146,7 +146,7 @@ export function finalText(messages: readonly { role: string; content?: unknown; 
 	return { text, ...(last.stopReason === "error" ? { error: last.errorMessage ?? "the model call failed" } : {}) };
 }
 
-/** Per-session bookkeeping of the limits: calls in the current run and helpers running now. Throws a conflict when one is hit. */
+/** Per-session bookkeeping of the limits: calls in the current run and subagents running now. Throws a conflict when one is hit. */
 export class DelegateLimits {
 	private use = new Map<string, { calls: number; running: number }>();
 	constructor(private defaults = { calls: MAX_DELEGATES_PER_RUN, running: MAX_CONCURRENT_SUBAGENTS }) {}
@@ -156,7 +156,7 @@ export class DelegateLimits {
 		const u = this.use.get(id) ?? { calls: 0, running: 0 };
 		this.use.set(id, u);
 		if (u.calls >= max.calls) throw conflict(`at most ${max.calls} delegate calls per run; do the rest yourself or report to the user`);
-		if (u.running >= max.running) throw conflict(`at most ${max.running} helpers can run at the same time; wait for one to finish`);
+		if (u.running >= max.running) throw conflict(`at most ${max.running} subagents can run at the same time; wait for one to finish`);
 		u.calls++;
 		u.running++;
 		let done = false;
@@ -171,7 +171,7 @@ export class DelegateLimits {
 }
 
 /**
- * A helper for a role name that has no file, under the free role policy: a general helper with the default read-only tools
+ * A subagent for a role name that has no file, under the free role policy: a general subagent with the default read-only tools
  * (never write, edit or bash), the calling session's model unless the model policy says otherwise, and the task as its instructions.
  */
 export function freeRole(name: string): SubagentDef {
@@ -180,19 +180,19 @@ export function freeRole(name: string): SubagentDef {
 
 export type ModelPolicy = { policy: "defined" | "allowlist" | "any"; models: string[] };
 
-/** Which model a helper runs on, or a conflict explaining why the request is refused. `requested` is the call's `model` argument. */
+/** Which model a subagent runs on, or a conflict explaining why the request is refused. `requested` is the call's `model` argument. */
 export function chooseModel(policy: ModelPolicy, requested: string | undefined, defined: string | undefined): string | undefined {
 	if (!requested) return defined;
 	if (policy.policy === "any") return requested;
 	if (policy.policy === "allowlist") {
 		if (policy.models.includes(requested)) return requested;
-		throw conflict(`model ${requested} is not allowed for helpers; allowed: ${policy.models.join(", ")}. Omit \`model\` to use the role's own`);
+		throw conflict(`model ${requested} is not allowed for subagents; allowed: ${policy.models.join(", ")}. Omit \`model\` to use the role's own`);
 	}
-	throw conflict("choosing a helper model is switched off in the settings; omit `model` to use the role's own");
+	throw conflict("choosing a subagent model is switched off in the settings; omit `model` to use the role's own");
 }
 
-/** What a helper's model calls used, summed over its assistant messages (stored on the `delegate` result so the session's totals include it). */
-export function helperUsage(messages: readonly { role: string; usage?: any }[]) {
+/** What a subagent's model calls used, summed over its assistant messages (stored on the `delegate` result so the session's totals include it). */
+export function subagentUsage(messages: readonly { role: string; usage?: any }[]) {
 	const sum = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: 0 };
 	for (const m of messages) {
 		if (m.role !== "assistant" || !m.usage) continue;

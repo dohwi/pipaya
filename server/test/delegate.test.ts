@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import { buildTools, modelList } from "../src/tools.ts";
 import { readFileSync } from "node:fs";
-import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, helperUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
+import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, subagentUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -83,14 +83,14 @@ describe("subagent switches", () => {
 });
 
 describe("DelegateLimits", () => {
-	test("caps concurrent helpers and calls per run with conflict errors, and a new run starts over", () => {
+	test("caps concurrent subagents and calls per run with conflict errors, and a new run starts over", () => {
 		const l = new DelegateLimits({ calls: 4, running: 2 });
 		const a = l.acquire("s"), b = l.acquire("s");
-		expect(() => l.acquire("s")).toThrow(/at most 2 helpers/);
+		expect(() => l.acquire("s")).toThrow(/at most 2 subagents/);
 		a();
 		a(); // releasing twice frees one slot only
 		const c = l.acquire("s");
-		expect(() => l.acquire("s")).toThrow(/at most 2 helpers/);
+		expect(() => l.acquire("s")).toThrow(/at most 2 subagents/);
 		b(); c();
 		l.acquire("s")(); // fourth and last call
 		expect(() => l.acquire("s")).toThrow(/at most 4 delegate calls per run/);
@@ -122,10 +122,10 @@ describe("freeRole", () => {
 	});
 });
 
-describe("helperUsage", () => {
+describe("subagentUsage", () => {
 	test("sums assistant usage only", () => {
 		const u = (n: number) => ({ input: n, output: n, cacheRead: 1, cacheWrite: 2, totalTokens: 2 * n + 3, cost: { total: 0.5 } });
-		expect(helperUsage([{ role: "user" }, { role: "assistant", usage: u(4) }, { role: "toolResult" }, { role: "assistant", usage: u(6) }]))
+		expect(subagentUsage([{ role: "user" }, { role: "assistant", usage: u(4) }, { role: "toolResult" }, { role: "assistant", usage: u(6) }]))
 			.toEqual({ input: 10, output: 10, cacheRead: 2, cacheWrite: 4, totalTokens: 26, cost: 1 });
 	});
 });
@@ -157,7 +157,7 @@ describe("delegate tool", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 
-	test("is built in, switchable, and runs a helper without creating a session", async () => {
+	test("is built in, switchable, and runs a subagent without creating a session", async () => {
 		expect((await api("GET", "/configuration")).json.tools.toggleable).toContain("delegate");
 		const id = (await api("POST", "/sessions", { tools: ["read"] })).json.id as string;
 		const before = (await api("GET", "/sessions")).json;
@@ -177,7 +177,7 @@ describe("delegate tool", () => {
 		expect((await put({ maxTurns: 0 })).status).toBe(400);
 		expect((await put({ policy: "allowlist", models: [m] })).json.delegate.models).toEqual([m]);
 		expect(await call(id, { role: "explore", task: "b", model: m })).toContain("Echo: b");
-		expect(await call(id, { role: "explore", task: "c", model: "echo/other" })).toContain("not allowed for helpers");
+		expect(await call(id, { role: "explore", task: "c", model: "echo/other" })).toContain("not allowed for subagents");
 		expect((await put({ policy: "any", maxCalls: 1 })).json.delegate.policy).toBe("any");
 		expect(await call(id, { role: "explore", task: "d", model: m })).toContain("Echo: d");
 		expect(await call(id, { role: "explore", task: "e" })).toContain("Echo: e"); // a new message is a new run: the allowance is full again
@@ -191,7 +191,7 @@ describe("delegate tool", () => {
 		expect(await call(id, { role: "explore", task: "hi", model: "echo/nope" })).toContain("echo/nope is not available");
 	});
 
-	test("a helper thinks at its role's level, else the session's on the same model, else the chosen model's default", async () => {
+	test("a subagent thinks at its role's level, else the session's on the same model, else the chosen model's default", async () => {
 		const think = { ...ECHO_MODEL, id: "think-model", reasoning: true };
 		await api("PUT", "/configuration/providers/think", { ...echoProviderBody(upstream.baseUrl, "Think"), models: [{ ...think, defaultThinkingLevel: "high" }, { ...think, id: "plain-think" }] });
 		await api("PUT", "/configuration/delegate", { roles: "any", policy: "any", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
@@ -202,16 +202,16 @@ describe("delegate tool", () => {
 			return msgs.filter((m) => m.role === "toolResult" && m.toolName === "delegate").at(-1)?.details.thinking;
 		};
 		const id = (await api("POST", "/sessions", { provider: "think", model: "think-model", thinkingLevel: "low" })).json.id as string;
-		expect(await level(id, { role: "anyhelper", task: "a" })).toBe("low"); // same model: the session's own level
-		expect(await level(id, { role: "anyhelper", task: "b", model: "think/plain-think" })).toBe("medium"); // "auto": a new chat's rule
+		expect(await level(id, { role: "anysubagent", task: "a" })).toBe("low"); // same model: the session's own level
+		expect(await level(id, { role: "anysubagent", task: "b", model: "think/plain-think" })).toBe("medium"); // "auto": a new chat's rule
 		const other = (await api("POST", "/sessions", {})).json.id as string;
-		expect(await level(other, { role: "anyhelper", task: "c", model: "think/think-model" })).toBe("high"); // the model's own default
+		expect(await level(other, { role: "anysubagent", task: "c", model: "think/think-model" })).toBe("high"); // the model's own default
 		expect(await level(other, { role: "pinned", task: "d", model: "think/think-model" })).toBe("minimal"); // the role wins
 		await api("PUT", "/configuration/delegate", { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
 		await api("DELETE", "/configuration/providers/think");
 	});
 
-	test("a helper can use its tools; one outside its tool list cannot", async () => {
+	test("a subagent can use its tools; one outside its tool list cannot", async () => {
 		writeFileSync(join(dir, "ws", "note.txt"), "secret-marker-42");
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
 		expect(await call(id, { role: "explore", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("secret-marker-42");
@@ -219,13 +219,13 @@ describe("delegate tool", () => {
 		expect(denied).not.toContain("\\nhi");
 	});
 
-	test("a helper that keeps calling tools is stopped at maxTurns and says so", async () => {
+	test("a subagent that keeps calling tools is stopped at maxTurns and says so", async () => {
 		def(join(dir, "home", ".agents", "subagents"), "short", `model: echo/${ECHO_MODEL.id}\ntools: [read]\nmaxTurns: 1`);
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
-		expect(await call(id, { role: "short", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("helper stopped after 1 model calls");
+		expect(await call(id, { role: "short", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("subagent stopped after 1 model calls");
 	});
 
-	test("aborting the parent stops the helper and what it started", async () => {
+	test("aborting the parent stops the subagent and what it started", async () => {
 		def(join(dir, "home", ".agents", "subagents"), "shell", `model: echo/${ECHO_MODEL.id}\ntools: [bash]\nmaxTurns: 3`);
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
 		const started = Date.now();
@@ -267,24 +267,24 @@ describe("delegate tool", () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const off = await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: false });
 		expect(off.json.subagents.find((r: any) => r.name === "explore")).toMatchObject({ enabled: false });
-		expect(await call(id, { role: "explore", task: "x" })).toContain("helper role");
+		expect(await call(id, { role: "explore", task: "x" })).toContain("subagent role");
 		expect((await api("PUT", "/configuration/subagents/ghost/enabled", { scope: "global", enabled: false })).status).toBe(404);
 		const on = await api("PUT", "/configuration/subagents/explore/enabled", { scope: "global", enabled: true });
 		expect(on.json.subagents.find((r: any) => r.name === "explore").enabled).toBe(true);
-		expect(await call(id, { role: "explore", task: "x" })).toContain("Echo: x"); // the history keeps the earlier refusal; the new answer is the helper's
+		expect(await call(id, { role: "explore", task: "x" })).toContain("Echo: x"); // the history keeps the earlier refusal; the new answer is the subagent's
 	});
 	test("an unknown role lists the available ones", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const out = await call(id, { role: "ghost", task: "x" });
-		expect(out).toContain('helper role');
+		expect(out).toContain('subagent role');
 		expect(out).toContain("available: explore");
 	});
 
-	test("the role policy: defined refuses a role with no file; any runs a read-only general helper that takes the task as its instructions", async () => {
+	test("the role policy: defined refuses a role with no file; any runs a read-only general subagent that takes the task as its instructions", async () => {
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
 		const put = (b: object) => api("PUT", "/configuration/delegate", { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30, ...b });
 		expect((await api("GET", "/configuration")).json.tools.delegate).toMatchObject({ roles: "defined" });
-		expect(await call(id, { role: "summarize", task: "x" })).toContain("helper role");
+		expect(await call(id, { role: "summarize", task: "x" })).toContain("subagent role");
 		expect((await put({ roles: "any" })).json.delegate.roles).toBe("any");
 		expect(await call(id, { role: "summarize", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("secret-marker-42");
 		// No write or shell for a free role: the denial comes back as a tool error, not a result.
@@ -297,7 +297,7 @@ describe("delegate tool", () => {
 		// An update without `roles` (an older client) keeps the saved policy.
 		expect((await api("PUT", "/configuration/delegate", { policy: "any", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 })).json.delegate.roles).toBe("any");
 		expect((await put({ roles: "defined" })).json.delegate.roles).toBe("defined");
-		expect(await call(id, { role: "summarize", task: "x" })).toContain("helper role");
+		expect(await call(id, { role: "summarize", task: "x" })).toContain("subagent role");
 	});
 
 	test("the delegate tool text follows the role policy", () => {
@@ -347,7 +347,7 @@ describe("delegate tool", () => {
 		expect((await api("POST", "/sessions", { model: "echo/nope" })).status).toBe(400);
 	});
 
-	test("switched off, the helper tool is withheld from sessions", async () => {
+	test("switched off, the subagent tool is withheld from sessions", async () => {
 		expect((await api("PUT", "/configuration/tools", { disabled: ["delegate"] })).json.disabled).toEqual(["delegate"]);
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const specs = (await api("GET", `/sessions/${id}/context`)).json.toolSpecs as { name: string; enabled: boolean }[];
@@ -359,7 +359,7 @@ describe("delegate tool", () => {
 });
 
 describe("delegate usage in the session totals", () => {
-	test("the helper's tokens are added to the calling session", async () => {
+	test("the subagent's tokens are added to the calling session", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "pipaya-delegate-usage-"));
 		def(join(dir, "home", ".agents", "subagents"), "explore", `model: echo/${ECHO_MODEL.id}\ntools: [read]`);
 		const upstream = startEchoUpstream();
