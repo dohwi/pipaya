@@ -69,7 +69,8 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - A box can be centred and its text still look off: the fonts (Manrope, SUIT, JetBrains Mono) leave more room under the baseline than above. Measured at 8x on Hangul, Latin and digits, centred text sits **+1.0px low at 11px** (Badge, `.chip`), +0.66 at 12px, +0.3 at 13px, ~0 in mono.
 - So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new pill style gets its own measured value, never a guess.
 - Dialogs sit on whole pixels (`Modal` places the panel by pixel offsets, not `top: 50%` + `translate`), otherwise a panel with the other parity than the window lands on x.5 and its badges are painted 0.5px higher than in the next dialog. Header title/subtitle have whole-pixel line boxes (28 / 18).
-- A small label next to bigger text in a centred row (the `@name` handle before a conversation title) is aligned on the **baseline**, not the centre: the handle is lowered 1.5px.
+- A small label next to bigger text in a centred row (the `@name` handle before a conversation title) is aligned on the **baseline**, not the centre: the handle is lowered 1px (`position: relative; top: 1px`; centred, its Hangul ended 1px above the title's at 1x, 1.25x, 1.5x, 2x and 4x).
+- An icon beside a label in a flex row is centred by the row, not nudged: the queued row's sender icon once carried `top: -1px` from a 4x measurement and sat 1px high at 1x.
 - An extension's horizontal `stack` aligns its items on the baseline (badge included), so a status badge and the small text after it read as one line (measured: ink centres equal at 1440/820/390; `flex-start` left the text 4px high).
 - The `@name` handle is one style everywhere it appears (sidebar row, split tab's title bar, tab, group chip inside the group box): 11px
   `--fs-2xs`, weight 600, `--text-faint`, on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
