@@ -302,12 +302,6 @@
 		line-height: 22px; /* the 22px row of the ✕ beside it (ROW in the script) */
 		border-radius: var(--radius-xs);
 	}
-	/* The sender label's 12px icon beside 12px text on the 22px row: measured at 4x (ui-pairs method) the text ink sat 0.75px
-	   above the icon's (@name; 서버 알림 0.38). Raised 1px it is +0.25 / +0.62; a margin does not move a glyph centred by flex. */
-	.qo :global(.from svg) {
-		position: relative;
-		top: -1px;
-	}
 	@media (hover: hover) {
 		.qo:hover :global(.qt) {
 			color: var(--text);
