@@ -28,9 +28,12 @@
 	const srvMark = $derived(sb.marks.blockMark(`server:${n.server.id}`));
 	/** The bones stay a moment once they were seen, so a list that lands just after they appeared does not flash them */
 	const sk = skeletonGate(() => !n.loaded);
+	/** Folders and tabs as they were at the last visit (one folder, two tabs when this device has never seen the server) */
+	const BONE_W = [128, 88, 112, 72];
+	const bones = $derived((app.links[n.server.id]?.shape ?? [2]).map((tabs, d) => ({ dir: [96, 80, 112][d] ?? 96, tabs: BONE_W.slice(0, tabs) })));
 </script>
 
-	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off>
+	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off class:stale={n.stale && !off}>
 		<div class="srvhead grabbable" class:folded={sfold} use:sb.dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: single || off, menu: (pt) => sb.headMenuAt(pt, n, null, n.server.id) }}>
 			<button class="srvtoggle" disabled={off} onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={(n.state === "online" ? "" : `${t(statusText[n.state])}\n`) + (n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl)}>
 				<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
@@ -47,11 +50,13 @@
 		{#if !sfold}
 		<div class="fold" class:skeleton-out={sk.revealed} in:collapseIn out:collapseOut>
 			{#if sk.showing}
-				<!-- a folder and two tabs as bones on the sidebar's columns (folder icon 48, titles from x 80), 32px rows like the real ones -->
+				<!-- folders and tabs as bones on the sidebar's columns (folder icon 48, titles from x 80), 32px rows like the real ones -->
 				<div class="sklist skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
-					<div class="skrow skdir"><i class="skeleton-bar skglyph"></i><i class="skeleton-bar skbar" style:width="96px"></i></div>
-					{#each [128, 88] as w, i (i)}
-						<div class="skrow sktab"><i class="skeleton-bar skbar" style:width="{w}px" style:--sk-i={i + 1}></i></div>
+					{#each bones as b, d (d)}
+						<div class="skrow skdir"><i class="skeleton-bar skglyph"></i><i class="skeleton-bar skbar" style:width="{b.dir}px"></i></div>
+						{#each b.tabs as w, i (i)}
+							<div class="skrow sktab"><i class="skeleton-bar skbar" style:width="{w}px" style:--sk-i={d * 2 + i + 1}></i></div>
+						{/each}
 					{/each}
 				</div>
 			{:else if n.total === 0}
@@ -100,6 +105,13 @@
 	}
 	:global(:where(.side) .srv.band + .srv.band) {
 		margin-top: 8px;
+	}
+	/* the rows are the copy kept from the last visit: drawn at once, a step quieter until the server confirms them */
+	.srv.stale > .fold {
+		opacity: 0.7;
+	}
+	.srv > .fold {
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	/* unreachable: the header is dimmed and locked (the icon's colour still says why) */
 	:global(:where(.side) .srv.off .srvhead) {
@@ -218,8 +230,16 @@
 		margin: 1px 0; /* rows sit 1px apart, like .item */
 	}
 	.skdir {
-		margin-top: 4px; /* the folder sits 4 under the header, like .dirblock:first-child > .dir */
+		margin-top: 12px; /* a later folder sits 12 under the tab above, like .dir */
 		padding-left: 24px; /* the folder glyph centres on x 48: .dirtoggle's 4 + the chevron's 14 + 6 */
+	}
+	.skdir:first-child {
+		margin-top: 4px; /* the folder sits 4 under the header, like .dirblock:first-child > .dir */
+	}
+	@media (pointer: coarse) {
+		.skrow {
+			height: 40px; /* touch rows are 40px, like .dirtoggle and .item */
+		}
 	}
 	.sktab {
 		padding-left: 63px; /* the bone starts where a row's text does, after its icon (x 80: .item 4 + .open 39 + the 16px lead + its 4 gap, measured) */

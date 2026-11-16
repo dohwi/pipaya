@@ -90,7 +90,7 @@
 			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
 			const shared = q ? undefined : app.dirsByServer[server.id] ?? [];
 			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], shared);
-			return { server, current, state, loaded: Boolean(link?.listed), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
+			return { server, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, ...data };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
 		return orderServers(list);
