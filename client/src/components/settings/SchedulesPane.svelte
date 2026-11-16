@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { untrack } from "svelte";
+	import { onDestroy, untrack } from "svelte";
+	import Accordion from "../ui/Accordion.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
@@ -22,15 +23,16 @@
 		MAX_PROMPT,
 		MAX_TASKS,
 		MAX_TITLE,
+		HISTORY_KEEP_MS,
 		cadence,
 		everyMs,
 		everyProblem,
-		isUsedUp,
 		labelOf,
 		parseLocal,
+		purgeAt,
 		resultOf,
-		sortSchedules,
 		splitEvery,
+		splitSchedules,
 		toLocalInput,
 		type EveryUnit,
 	} from "../../lib/schedules";
@@ -79,8 +81,12 @@
 		}
 	}
 
-	const shown = $derived(list ? sortSchedules(list) : []);
-	const full = $derived((list?.length ?? 0) >= MAX_TASKS);
+	const split = $derived(splitSchedules((list ?? []).filter((s) => !hidden.includes(s.id))));
+	const pending = $derived(split.pending);
+	const finished = $derived(split.finished);
+	// finished one-time tasks are history: they do not take one of the MAX_TASKS places
+	const full = $derived(pending.length >= MAX_TASKS);
+	let historyOpen = $state(false);
 
 	/** Runs an action on the server, then re-reads the list. Returns whether it worked. */
 	async function act(fn: (a: Api) => Promise<unknown>): Promise<boolean> {
@@ -194,13 +200,51 @@
 		void act((a) => a.patchSchedule(s.id, { enabled: on }));
 	}
 	const runNow = (s: Schedule) => act((a) => a.runSchedule(s.id));
-	const remove = (s: Schedule) => act((a) => a.deleteSchedule(s.id));
+
+	/* ---------- delete with undo ---------- */
+	/**
+	 * A delete waits UNDO_MS before it reaches the server; meanwhile the task is hidden and a bar at the bottom of the page offers
+	 * "되돌리기". The bar lives in the pane, not in a global toast: the settings dialog covers the toast strip.
+	 */
+	const UNDO_MS = 5000;
+	type Pending = { key: number; ids: string[]; text: string; timer: ReturnType<typeof setTimeout> };
+	let pendingDeletes = $state<Pending[]>([]);
+	const hidden = $derived(pendingDeletes.flatMap((d) => d.ids));
+	const lastDelete = $derived(pendingDeletes.at(-1) ?? null);
+	let seq = 0;
+
+	async function commit(d: Pending) {
+		clearTimeout(d.timer);
+		const failed: string[] = [];
+		const a = api;
+		if (a) for (const id of d.ids) await a.deleteSchedule(id).catch(() => failed.push(id));
+		await reload();
+		pendingDeletes = pendingDeletes.filter((x) => x.key !== d.key);
+		if (failed.length) error = t("예약 작업을 지우지 못했습니다");
+	}
+	function remove(ids: string[], text: string) {
+		if (!api || !ids.length) return;
+		const key = ++seq;
+		const d: Pending = { key, ids, text, timer: setTimeout(() => { const x = pendingDeletes.find((p) => p.key === key); if (x) void commit(x); }, UNDO_MS) };
+		pendingDeletes = [...pendingDeletes, d];
+	}
+	function undo(d: Pending) {
+		clearTimeout(d.timer);
+		pendingDeletes = pendingDeletes.filter((x) => x.key !== d.key);
+	}
+	// Leaving the page does not cancel a delete: what is still waiting goes out now.
+	onDestroy(() => {
+		for (const d of pendingDeletes) void commit(d);
+	});
+	const removeOne = (s: Schedule) => remove([s.id], t("‘{name}’ 작업을 지웠습니다", { name: labelOf(s, 30) }));
+	const clearHistory = () => remove(finished.map((s) => s.id), t("지난 작업 {n}개를 지웠습니다", { n: finished.length }));
 
 	const sessionLabel = (id: string) => {
 		const s = sessionOf(id);
 		return s ? `${s.title}${s.name ? ` · @${nameInLang(s.name)}` : ""}` : t("닫힌 대화");
 	};
 	const when = (ms: number) => new Date(ms).toLocaleString();
+	const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	const sessionOptions = $derived(sessions.map((s) => ({ value: s.id, label: sessionLabel(s.id) })));
 	const unitOptions = $derived([
 		{ id: "minute" as const, label: t("분") },
@@ -215,7 +259,7 @@
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 	<ExtrasIntro
 		what={t("정해진 때나 일정한 간격으로 기존 대화에 프롬프트를 자동으로 보냅니다.")}
-		how={t("대화가 그때 실행 중이거나 닫혀 있으면 보내지 않고 건너뜁니다. 서버가 꺼져 있던 동안 놓친 반복은 한 번만 실행하고, 하루 넘게 지난 한 번짜리는 실행하지 않습니다. 연속 5번 실패하면 꺼집니다.")}
+		how={t("대화가 그때 실행 중이거나 닫혀 있으면 보내지 않고 건너뜁니다. 서버가 꺼져 있던 동안 놓친 반복은 한 번만 실행하고, 하루 넘게 지난 한 번짜리는 실행하지 않습니다. 연속 5번 실패하면 꺼집니다. 실행을 마친 한 번짜리는 지난 작업으로 옮겨지고 {days}일 뒤 지워집니다.", { days: HISTORY_KEEP_MS / 86_400_000 })}
 	/>
 
 	{#if form}
@@ -255,9 +299,9 @@
 	{:else if !list && loading}
 		<EmptyState loading />
 	{:else if list}
-		<ListGroup title={t("예약 작업")} count={t("{n}/{max}개", { n: list.length, max: MAX_TASKS })}>
+		<ListGroup title={t("예약 작업")} count={t("{n}/{max}개", { n: pending.length, max: MAX_TASKS })}>
 			<ul class="list">
-				{#each shown as s (s.id)}
+				{#each pending as s (s.id)}
 					{@const result = resultOf(s)}
 					<li animate:reflow in:rowIn out:rowOut>
 						<ListItem off={!s.enabled}>
@@ -270,13 +314,12 @@
 							{#snippet actions()}
 								<Button size="sm" onclick={() => runNow(s)} disabled={busy}>{t("지금 실행")}</Button>
 								<Button size="sm" onclick={() => edit(s)} disabled={busy}>{t("수정")}</Button>
-								<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={busy}>{t("삭제")}</ConfirmButton>
+								<Button size="sm" variant="danger" onclick={() => removeOne(s)} disabled={busy}>{t("삭제")}</Button>
 							{/snippet}
 							<p class="desc">{s.prompt}</p>
 							<p class="meta">{sessionLabel(s.sessionId)}</p>
 							<p class="meta">
 								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: when(s.nextRunAt) })}
-								{:else if isUsedUp(s)}{t("실행을 마쳤습니다")}
 								{:else}{t("꺼져 있음")}{/if}
 								{#if s.lastRunAt} · {t("마지막 {when}", { when: when(s.lastRunAt) })}{/if}
 							</p>
@@ -284,7 +327,7 @@
 						</ListItem>
 					</li>
 				{:else}
-					<EmptyState as="li">{t("예약된 작업이 없습니다.")}</EmptyState>
+					<EmptyState as="li">{finished.length ? t("예정된 작업이 없습니다.") : t("예약된 작업이 없습니다.")}</EmptyState>
 				{/each}
 			</ul>
 		</ListGroup>
@@ -295,6 +338,51 @@
 		{:else}
 			<Button variant="dashed" onclick={() => add()}>{t("예약 추가")}</Button>
 		{/if}
+		{#if finished.length}
+			<!-- "text", not "line": the line variant pads its body 4px and would pull these cards off the gutter of the cards above -->
+			<Accordion variant="text" bind:open={historyOpen}>
+				{#snippet head()}<span>{t("지난 작업")}</span><span class="count">{t("{n}개", { n: finished.length })}</span>{/snippet}
+				<div class="history">
+					<p class="hint">{t("실행을 마친 한 번짜리 작업입니다. 마지막 실행 {days}일 뒤 자동으로 지워집니다.", { days: HISTORY_KEEP_MS / 86_400_000 })}</p>
+					<ul class="list">
+						{#each finished as s (s.id)}
+							{@const result = resultOf(s)}
+							<li animate:reflow in:rowIn out:rowOut>
+								<ListItem off>
+									{#snippet title()}
+										<span class="name">{labelOf(s)}</span>
+										{#if result}<Badge size="sm" tone={result.tone}>{result.label}</Badge>{/if}
+									{/snippet}
+									{#snippet actions()}
+										<Button size="sm" onclick={() => edit(s, true)} disabled={busy || full}>{t("다시 예약")}</Button>
+										<Button size="sm" variant="danger" onclick={() => removeOne(s)} disabled={busy}>{t("삭제")}</Button>
+									{/snippet}
+									<p class="desc">{s.prompt}</p>
+									<p class="meta">{sessionLabel(s.sessionId)}</p>
+									<p class="meta">
+										{#if s.lastRunAt}{t("{when}에 실행 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) })}
+										{:else}{t("{day}에 지워짐", { day: day(purgeAt(s)) })}{/if}
+									</p>
+									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
+								</ListItem>
+							</li>
+						{/each}
+					</ul>
+					<div class="actions">
+						<ConfirmButton size="sm" danger confirmLabel={t("정말 모두 지우기")} onconfirm={clearHistory} disabled={busy}>{t("지난 작업 모두 지우기")}</ConfirmButton>
+					</div>
+				</div>
+			</Accordion>
+		{/if}
+	{/if}
+	{#if lastDelete}
+		{@const d = lastDelete}
+		<div class="undo">
+			<Notice tone="ok" raised animated role="status">
+				{d.text}
+				{#snippet action()}<Button size="sm" onclick={() => undo(d)}>{t("되돌리기")}</Button>{/snippet}
+			</Notice>
+		</div>
 	{/if}
 </div>
 
@@ -303,6 +391,10 @@
 	.hint { margin: 0; font-size: var(--fs-xs); line-height: 18px; color: var(--text-dim); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.err { color: var(--danger); }
+	.count { font-weight: 400; color: var(--text-faint); }
+	.history { display: flex; flex-direction: column; gap: 8px; }
+	/* pinned to the bottom of the scrolling settings page while a delete can still be undone; above the cards (a local layer) */
+	.undo { position: sticky; bottom: 16px; z-index: 1; }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
 	.every { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: stretch; }

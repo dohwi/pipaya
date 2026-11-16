@@ -9,7 +9,10 @@ export const MIN_EVERY_MS = 5 * 60_000;
 export const MAX_EVERY_MS = 30 * 86_400_000;
 export const MAX_PROMPT = 8000;
 export const MAX_TITLE = 100;
+/** Pending tasks at most; finished one-time tasks do not count. */
 export const MAX_TASKS = 50;
+/** A finished one-time task is deleted this long after its last run (server: HISTORY_KEEP_MS). */
+export const HISTORY_KEEP_MS = 7 * 86_400_000;
 
 export type EveryUnit = "minute" | "hour" | "day";
 export const UNIT_MS: Record<EveryUnit, number> = { minute: 60_000, hour: 3_600_000, day: 86_400_000 };
@@ -88,6 +91,15 @@ export function labelOf(s: Pick<Schedule, "title" | "prompt">, max = 60): string
 
 /** Why a one-time task is not shown as "next": used up. */
 export const isUsedUp = (s: Pick<Schedule, "kind" | "enabled" | "lastStatus">): boolean => s.kind === "once" && !s.enabled && s.lastStatus !== null;
+
+/** The list split in two: what is still to come (sorted by sortSchedules) and the finished one-time tasks, latest run first. */
+export function splitSchedules(list: readonly Schedule[]): { pending: Schedule[]; finished: Schedule[] } {
+	const finished = list.filter(isUsedUp).sort((a, b) => (b.lastRunAt ?? b.updatedAt) - (a.lastRunAt ?? a.updatedAt) || b.createdAt - a.createdAt);
+	return { pending: sortSchedules(list.filter((s) => !isUsedUp(s))), finished };
+}
+
+/** When the server deletes a finished task. */
+export const purgeAt = (s: Pick<Schedule, "lastRunAt" | "updatedAt">): number => (s.lastRunAt ?? s.updatedAt) + HISTORY_KEEP_MS;
 
 /** Soonest first; switched-off ones last, in the order they were made. */
 export function sortSchedules(list: readonly Schedule[]): Schedule[] {

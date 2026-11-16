@@ -47,7 +47,8 @@ const clip = (s: string, n: number) => {
 
 export function describeTask(t: ScheduleRecord, label: (sessionId: string) => string): string {
 	const when = t.kind === "once" ? `once at ${localTime(t.runAt!)}` : `every ${minutes(t.everyMs!)}`;
-	const state = t.enabled ? `next ${localTime(t.nextRunAt!)}` : "off";
+	// a used-up one-time task is history (does not count towards the limit, deleted a week after its last run)
+	const state = t.enabled ? `next ${localTime(t.nextRunAt!)}` : t.kind === "once" && t.lastStatus ? "finished" : "off";
 	const last = t.lastRunAt ? `; last ${t.lastStatus ?? "?"} at ${localTime(t.lastRunAt)}${t.lastError ? ` (${clip(t.lastError, 120)})` : ""}` : "";
 	return `- ${t.id} · ${when} · ${state}${last} · to ${label(t.sessionId)}${t.title ? ` · "${t.title}"` : ""}\n  prompt: ${clip(t.prompt, 200)}`;
 }
