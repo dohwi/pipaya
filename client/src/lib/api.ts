@@ -108,7 +108,31 @@ export const normalizeUrl = (url: string): string => {
 };
 
 export class Api {
-	constructor(private conn: Connection) {}
+	constructor(
+		private conn: Connection,
+		/** Cancels every request of this instance (see `scoped`). */
+		private readonly bound?: AbortSignal,
+	) {}
+
+	/**
+	 * The same server, with every request also cancelled by `signal`. A batch that gave up (deadline, superseded) must not
+	 * leave its requests open: a server that does not answer keeps them on their sockets until the OS gives up, often
+	 * minutes later, and the browser's few connections per host stay taken, so the next attempt queues behind them.
+	 */
+	scoped(signal: AbortSignal): Api {
+		return new Api(this.conn, signal);
+	}
+
+	private signalFor(signal: AbortSignal | undefined): AbortSignal | undefined {
+		if (!this.bound || !signal) return signal ?? this.bound;
+		if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, this.bound]);
+		const ctl = new AbortController();
+		for (const s of [signal, this.bound]) {
+			if (s.aborted) ctl.abort(s.reason);
+			else s.addEventListener("abort", () => ctl.abort(s.reason), { once: true });
+		}
+		return ctl.signal;
+	}
 
 	get baseUrl() {
 		return this.conn.baseUrl;
@@ -123,7 +147,7 @@ export class Api {
 		try {
 			res = await fetch(this.conn.baseUrl + path, {
 				method,
-				signal,
+				signal: this.signalFor(signal),
 				headers: {
 					Authorization: `Bearer ${this.conn.token}`,
 					[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
@@ -166,7 +190,7 @@ export class Api {
 
 	/** Public endpoint; also used to validate a URL before a token is known. */
 	async health(signal?: AbortSignal) {
-		const res = await fetch(`${this.conn.baseUrl}/health`, { signal });
+		const res = await fetch(`${this.conn.baseUrl}/health`, { signal: this.signalFor(signal) });
 		if (!res.ok) throw new ApiError(res.status, "http_error", res.statusText);
 		return (await res.json()) as { ok: boolean; uptimeMs?: number; runningSessions?: number; subscribers?: number } & ServerVersions;
 	}

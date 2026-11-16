@@ -119,6 +119,11 @@ const EARLIER_PAGE = 100;
 const MAX_RELOAD = 5000;
 /** How long a fresh read counts as current when the transcript comes on screen (a hover prefetch, then the click). */
 const FRESH_MS = 10_000;
+/**
+ * How long a load may take before it gives up with a retry button. A server that went silent (the tailnet dropped, the
+ * phone switched networks) otherwise left the skeleton up until the OS timed the socket out, minutes later.
+ */
+const LOAD_TIMEOUT_MS = 30_000;
 
 /**
  * Transcript + live state for one session. Persisted messages come from REST; SSE events keep it current.
@@ -270,6 +275,8 @@ export class ChatState {
 	private syncing = false;
 	private buffer: PipayaEvent[] = [];
 	private token = 0;
+	/** Cancels the requests of the load in progress (a newer load, or its deadline). */
+	private loading: AbortController | null = null;
 
 	constructor(
 		readonly id: string,
@@ -300,12 +307,16 @@ export class ChatState {
 		// view jump on every return, then grow again once the older page came back.
 		const loaded = this.ready && this.lastSeq >= 0 ? this.lastSeq - this.firstSeq + 1 : 0;
 		const want = Math.min(MAX_RELOAD, Math.max(FIRST_PAGE, loaded + FIRST_PAGE));
+		this.loading?.abort();
+		const ctl = (this.loading = new AbortController());
+		const deadline = setTimeout(() => ctl.abort(), LOAD_TIMEOUT_MS);
+		const api = typeof this.api.scoped === "function" ? this.api.scoped(ctl.signal) : this.api; // test doubles have no scope
 		try {
 			const [msgs, detail, questions, entries] = await Promise.all([
-				this.api.tailMessages(this.id, want),
-				this.api.getSession(this.id),
-				this.api.questions(this.id),
-				Promise.resolve().then(() => this.api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
+				api.tailMessages(this.id, want),
+				api.getSession(this.id),
+				api.questions(this.id),
+				Promise.resolve().then(() => api.serverExtensionEntries(this.id)).catch(() => []), // a server without extensions has none
 			]);
 			if (token !== this.token) return;
 
@@ -354,9 +365,13 @@ export class ChatState {
 		} catch (e) {
 			if (token !== this.token) return;
 			this.notFound = e instanceof ApiError && e.status === 404;
+			// Past the deadline: the server did not answer, which is what the reader needs to hear (not "aborted").
+			const why = ctl.signal.aborted ? t("서버에 연결할 수 없습니다") : errorText(e) || t("불러오지 못했습니다");
 			// Already showing a transcript (a background refresh failed): keep it instead of replacing it with an error.
-			if (!this.ready || this.notFound) this.loadError = errorText(e) || t("불러오지 못했습니다");
+			if (!this.ready || this.notFound) this.loadError = why;
 		} finally {
+			clearTimeout(deadline);
+			if (this.loading === ctl) this.loading = null;
 			if (token === this.token) {
 				this.syncing = false;
 				for (const e of this.buffer.splice(0)) this.reduce(e);

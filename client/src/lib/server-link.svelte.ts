@@ -30,6 +30,13 @@ const SAVE_DELAY_MS = 2000;
 /** How long the initial lists may take before the attempt counts as a network failure (and is retried). */
 const LISTS_TIMEOUT_MS = 15_000;
 
+/**
+ * Longest wait between two tries at a server that does not answer. A tailnet that comes back (VPN reconnected, phone off
+ * the lift) fires no browser event, so this is how long the app may stay offline after the server is reachable again.
+ * A failed try is cheap: its requests are cancelled together once /health gives up.
+ */
+const MAX_RETRY_MS = 5_000;
+
 function withDeadline<T>(p: Promise<T>, ms: number, fail: () => Error): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const timer = setTimeout(() => reject(fail()), ms);
@@ -87,6 +94,8 @@ export class ServerLink {
 	private unsubscribe: (() => void) | null = null;
 	private retryTimer: ReturnType<typeof setTimeout> | undefined;
 	private retryDelay = 1000;
+	/** Cancels the requests of the sync in progress. */
+	private attempt: AbortController | null = null;
 	private token = 0;
 	private stopped = false;
 	/** The newest event id that reached `hooks.event`: where a reopened stream resumes from. */
@@ -154,6 +163,7 @@ export class ServerLink {
 	stop(): void {
 		this.stopped = true;
 		this.token++;
+		this.attempt?.abort();
 		clearTimeout(this.retryTimer);
 		clearTimeout(this.saveTimer);
 		this.stopSaving?.();
@@ -170,7 +180,7 @@ export class ServerLink {
 		clearTimeout(this.retryTimer);
 		if (this.stopped) return;
 		this.retryTimer = setTimeout(() => void (this.loaded ? this.reopen(false) : this.sync()), this.retryDelay);
-		this.retryDelay = Math.min(this.retryDelay * 2, 15_000);
+		this.retryDelay = Math.min(this.retryDelay * 2, MAX_RETRY_MS);
 	}
 
 	/**
@@ -289,7 +299,11 @@ export class ServerLink {
 		this.unsubscribe = null;
 		// "connecting" only before the first attempt settles; a retry keeps showing online/offline instead of flickering
 		if (this.net === "idle") this.net = "connecting";
-		const api = this.api;
+		// This attempt's requests end with it: a deadline, a newer attempt or stop() cancels the ones still out, so a server
+		// that went silent does not keep the browser's connections to it busy for the retry (see Api.scoped).
+		this.attempt?.abort();
+		const attempt = (this.attempt = new AbortController());
+		const api = this.api.scoped(attempt.signal);
 		try {
 			// Health and the lists go out together (one round trip over a slow link, not two); health is judged first.
 			const healthReq = api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
@@ -402,6 +416,7 @@ export class ServerLink {
 				this.netError = t("토큰이 거부되었습니다");
 				return;
 			}
+			attempt.abort(); // what is still out (the catalog after a health failure, the rest after a deadline) stops here
 			this.net = "offline";
 			this.netError = errorText(e);
 			this.scheduleRetry();

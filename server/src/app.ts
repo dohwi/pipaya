@@ -60,6 +60,7 @@ import { NotificationService, type PushTransports } from "./notifications.ts";
 import { UnreadTracker } from "./unread.ts";
 import { registerNotificationRoutes } from "./notification-routes.ts";
 import { createCorsPolicy, redactUrl } from "./security.ts";
+import { registerCompression } from "./compression.ts";
 import { StreamTickets } from "./stream-tickets.ts";
 import { AuthThrottle } from "./auth-throttle.ts";
 import { createPushTransports } from "./push.ts";
@@ -110,6 +111,9 @@ function lastAnswer(store: SessionStore, id: string): string | undefined {
 	const row = store.latestAssistantText(id);
 	return row || undefined;
 }
+
+/** How long a browser may reuse a CORS preflight answer (seconds; Chromium caps it at 7200). */
+export const CORS_MAX_AGE_S = 7200;
 
 export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<App> {
 	const startedAt = Date.now();
@@ -286,7 +290,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	server.setSerializerCompiler(makeSerializerCompiler(opts.strictResponses ?? false));
 	const corsPolicy = createCorsPolicy(cfg.corsOrigins);
 	if (corsPolicy.allowsAll) server.log.warn("PIPAYA_CORS_ORIGINS=* lets every web page call this server from a browser that holds a token; list exact origins instead");
-	await server.register(cors, { origin: (origin, cb) => cb(null, !origin || corsPolicy.allows(origin)), methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] });
+	// Every request carries a bearer token, so a browser client asks first (OPTIONS) for each new URL: a whole extra round
+	// trip on a slow link. `maxAge` lets it reuse the answer (Chromium caps it at 2h).
+	await server.register(cors, { origin: (origin, cb) => cb(null, !origin || corsPolicy.allows(origin)), methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"], maxAge: CORS_MAX_AGE_S });
+	registerCompression(server);
 
 	const deviceTokens = new DeviceTokens(db, Date.now, cfg.deviceTokenIdleDays);
 	const streamTickets = new StreamTickets();
