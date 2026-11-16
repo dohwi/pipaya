@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
-import { buildTools } from "../src/tools.ts";
+import { buildTools, modelList } from "../src/tools.ts";
 import { readFileSync } from "node:fs";
 import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, helperUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
@@ -318,6 +318,33 @@ describe("delegate tool", () => {
 		expect(props(make("any")).model.description).toContain("any configured model");
 		expect(props(make("defined")).model).toBeUndefined();
 		expect(make("defined").description).not.toContain("`model`");
+	});
+
+	test("peer and delegate list the models a session can run on, grouped by provider", async () => {
+		const peer = buildTools(["peer"], dir, [], { chatModels: () => ["a/fast", "a/strong", "b/other"] })[0]!;
+		expect((peer.parameters as any).properties.model.description).toContain("a: fast, strong; b: other");
+		expect((buildTools(["peer"], dir, [], {})[0]!.parameters as any).properties.model.description).not.toContain("Available");
+		const free = buildTools(["delegate"], dir, [], { delegateModels: () => ({ policy: "any", models: [] }), chatModels: () => ["a/fast"] })[0]!;
+		expect((free.parameters as any).properties.model.description).toContain("a: fast");
+		expect(modelList(Array.from({ length: 45 }, (_, i) => `p/m${i}`))).toEndWith("(and 5 more)");
+	});
+
+	test("a running session's tool text names the configured chat models", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const n = upstream.requests.length;
+		await api("POST", `/sessions/${id}/messages`, { text: "hello" });
+		await idle(id);
+		const req = upstream.requests.slice(n).find((r: any) => r.body?.tools);
+		const peer = (req!.body as any).tools.find((t: any) => t.function?.name === "peer");
+		expect(peer.function.parameters.properties.model.description).toContain(`echo: ${ECHO_MODEL.id}`);
+	});
+
+	test("a session's model may be given as provider/model in `model` alone", async () => {
+		const made = (await api("POST", "/sessions", { model: `echo/${ECHO_MODEL.id}` })).json;
+		expect([made.provider, made.model]).toEqual(["echo", ECHO_MODEL.id]);
+		const set = (await api("PATCH", `/sessions/${made.id}`, { model: `echo/${ECHO_MODEL.id}` })).json;
+		expect([set.provider, set.model]).toEqual(["echo", ECHO_MODEL.id]);
+		expect((await api("POST", "/sessions", { model: "echo/nope" })).status).toBe(400);
 	});
 
 	test("switched off, the helper tool is withheld from sessions", async () => {

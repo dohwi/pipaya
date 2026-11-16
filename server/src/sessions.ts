@@ -89,6 +89,9 @@ export class SessionManager {
 	private backfilling = false;
 	/** `delegate` use per session: calls in the current run and helpers running right now. */
 	private delegates = new DelegateLimits();
+	/** Chat models usable now (provider/model), for the tool texts; refreshed before a run is set up, at most every few seconds. */
+	private chatModelIds: string[] = [];
+	private chatModelsAt = 0;
 	private closing = false;
 	private sweeper: ReturnType<typeof setInterval>;
 	/** Names, messages between sessions and `@name` hints. */
@@ -466,6 +469,7 @@ export class SessionManager {
 
 	update(id: string, patch: SessionPatch): SessionRecord {
 		const current = this.get(id);
+		if (patch.model !== undefined && patch.provider === undefined) patch = { ...patch, ...this.splitSpec(undefined, patch.model, current.provider) };
 		const clean: SessionPatch = { ...patch };
 
 		if (patch.provider !== undefined || patch.model !== undefined) {
@@ -591,6 +595,7 @@ export class SessionManager {
 		const active = this.live.get(id)?.running ?? false;
 		if (mode !== "prompt" && !active) throw conflict(`session is idle; use mode "prompt" (mode "${mode}" needs an active run)`);
 		if (mode === "prompt" && active) throw conflict('session is busy; send with mode "steer" or "follow_up"');
+		await this.refreshChatModels();
 		const live = this.ensureLive(record);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
@@ -1150,7 +1155,7 @@ export class SessionManager {
 	/** What tools may ask of the running session. */
 	private toolContext(sessionId: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), delegateRoles: () => this.delegatePolicy().roles, delegateModels: () => this.delegatePolicy(), peers: {
+		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), delegateRoles: () => this.delegatePolicy().roles, delegateModels: () => this.delegatePolicy(), chatModels: () => this.chatModelIds, peers: {
 			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
 			list: () => this.peers.list(sessionId),
@@ -1364,8 +1369,30 @@ export class SessionManager {
 		}
 	}
 
+	/** The configured chat models (credentials present, no image models), cached briefly: a run's tool texts list them. */
+	private async refreshChatModels(): Promise<void> {
+		if (Date.now() - this.chatModelsAt < 5_000) return;
+		try {
+			const all = await this.registry.models.getAvailable();
+			this.chatModelIds = all.filter((m) => !this.registry.isImageModel?.(m.provider, m.id)).map((m) => `${m.provider}/${m.id}`);
+			this.chatModelsAt = Date.now();
+		} catch { /* keep the last list: the tool text only loses its hint */ }
+	}
+
+	/**
+	 * A `model` written as provider/model with no `provider` (how the tool texts list them) is split, unless the id itself
+	 * contains a slash under the provider it would fall to (an OpenRouter id like `anthropic/claude-x`).
+	 */
+	private splitSpec(provider: string | undefined, model: string | undefined, fallback: string | undefined): { provider?: string; model?: string } {
+		if (provider || !model) return { provider, model };
+		const i = model.indexOf("/");
+		if (i <= 0 || (fallback && this.registry.models.getModel(fallback, model))) return { provider, model };
+		return this.registry.models.getModel(model.slice(0, i), model.slice(i + 1)) ? { provider: model.slice(0, i), model: model.slice(i + 1) } : { provider, model };
+	}
+
 	private async resolveModel(provider?: string, model?: string): Promise<{ provider: string; model: string }> {
 		const defaults = this.registry.defaultSelection?.();
+		({ provider, model } = this.splitSpec(provider, model, defaults?.provider));
 		const p = provider ?? defaults?.provider;
 		const m = model ?? (!provider || provider === defaults?.provider ? defaults?.model : undefined);
 		if (p && m) {
