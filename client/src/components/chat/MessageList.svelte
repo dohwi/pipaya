@@ -18,9 +18,12 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { skeletonGate } from "../../lib/skeleton-gate.svelte";
 
-	let { chat }: { chat: ChatState } = $props();
+	/** `held`: the conversation kept on screen (dimmed) while the pane's newly opened one loads; it must not record scroll */
+	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
+	let { chat, held = false, late = false }: { chat: ChatState; held?: boolean; late?: boolean } = $props();
 	/** The outline stays a moment once it was seen, so a load that ends just after it appeared does not flash it */
-	const sk = skeletonGate(() => !chat.ready && !chat.loadError);
+	const lateStart = untrack(() => late);
+	const sk = skeletonGate(() => !chat.ready && !chat.loadError, lateStart);
 
 	let scroller: HTMLDivElement | undefined = $state();
 	let showJump = $state(false);
@@ -69,7 +72,7 @@
 		lastTop = scroller.scrollTop;
 		showJump = gap() >= NEAR;
 		// Remember the reader's place for when this session comes back. Before the first restore the map still holds it.
-		if (!firstOpen) {
+		if (!firstOpen && !held) {
 			if (stuck) leftAt.delete(chat.id);
 			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
 		}
@@ -296,7 +299,7 @@
 	<div class="inner" class:skeleton-out={sk.revealed} bind:this={content}>
 		{#if sk.showing}
 			<!-- a conversation's outline while it loads: a question on the right, the start of a reply under it -->
-			<div class="skeleton skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
+			<div class="skeleton" class:skeleton-in={!lateStart} aria-busy="true" aria-label={t("불러오는 중…")}>
 				<div class="skbubble"><i class="skeleton-bar skline" style:width="180px"></i></div>
 				<div class="skpara">
 					{#each [96, 88, 56] as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={i + 1}></i>{/each}

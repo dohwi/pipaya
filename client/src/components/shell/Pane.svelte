@@ -29,6 +29,7 @@
 	import Lazy from "../ui/Lazy.svelte";
 	import { isTerminalId, platformName } from "../../lib/terminal";
 	import { viewport } from "../../lib/viewport.svelte";
+	import { holdPrevious } from "../../lib/hold-previous.svelte";
 
 	const loadTerminal = () => import("../terminal/TerminalView.svelte");
 
@@ -51,6 +52,12 @@
 		else app.zoomId = zoomed ? null : id;
 	}
 	const chat = $derived(app.chatOf(id));
+	/**
+	 * What the list draws: the conversation that was on screen stays a moment (dimmed) while a newly opened one loads, so
+	 * a switch is one swap instead of an empty frame and a skeleton (see hold-previous).
+	 */
+	const hold = holdPrevious(() => chat, (c) => c.ready);
+	const shown = $derived(hold.value);
 	const session = $derived(app.session(id));
 	/** A terminal pane: the server's shell instead of a conversation */
 	const term = $derived(app.terminal(id));
@@ -184,9 +191,11 @@
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
 			<ExtensionPart part="pane.empty" props={{ paneId: id }}><EmptyHero /></ExtensionPart>
 		{/if}
-		{#if chat}
-			{#key chat.id}
-				<MessageList {chat} />
+		{#if shown.chat}
+			{#key shown.chat.id}
+				<div class="list" class:held={shown.held} inert={shown.held} aria-hidden={shown.held || undefined}>
+					<MessageList chat={shown.chat} held={shown.held} late={shown.late} />
+				</div>
 			{/key}
 			<FindBar paneId={id} {focused} />
 		{:else if !id}
@@ -432,6 +441,18 @@
 		display: flex;
 		flex-direction: column;
 		position: relative;
+	}
+	/* the list's own box, so the conversation kept during a switch can be dimmed as a whole (its fade and jump button too) */
+	.list {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		position: relative;
+	}
+	.list.held {
+		opacity: 0.5;
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.empty {
 		flex: 1;
