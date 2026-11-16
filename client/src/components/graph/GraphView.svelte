@@ -9,7 +9,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { buildGraph, edgePath, fitView, modelName, related, type Card, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, buildGraph, edgePath, fitView, modelName, related, type Card, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -17,8 +17,8 @@
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
-	 * between them moving while work flows. Drag the background to pan, the wheel to scroll (Ctrl or a pinch to zoom), a
-	 * card to move it. One click on a chat opens a quick view to read and write to it in place; a double click opens it.
+	 * between them moving while work flows. Drag the background to pan, a mouse wheel to zoom (a trackpad scrolls with
+	 * two fingers and zooms with a pinch), a card to move it. One click on a chat opens a quick view to read and write to it in place; a double click opens it.
 	 */
 
 	// ---- data: what every link keeps live, plus each server's delegate calls ----
@@ -102,12 +102,17 @@
 		const nk = Math.min(2, Math.max(0.3, k));
 		view = { k: nk, x: cx - ((cx - view.x) / view.k) * nk, y: cy - ((cy - view.y) / view.k) * nk };
 	};
+	/** One step of the zoom: a wheel notch, the +/- keys and buttons. */
+	const ZOOM_STEP = 1.2;
 	const zoomBy = (f: number) => viewEl && zoomAt(view.k * f, viewEl.clientWidth / 2, viewEl.clientHeight / 2);
 	function wheel(e: WheelEvent) {
 		e.preventDefault();
 		const r = viewEl!.getBoundingClientRect();
-		// a pinch on a trackpad arrives as ctrl + wheel
-		if (e.ctrlKey || e.metaKey) zoomAt(view.k * Math.exp(-e.deltaY / 300), e.clientX - r.left, e.clientY - r.top);
+		// a mouse wheel zooms; so does a pinch on a trackpad (it arrives as ctrl + wheel). Two fingers on a trackpad scroll.
+		const [cx, cy] = [e.clientX - r.left, e.clientY - r.top];
+		if (e.ctrlKey || e.metaKey) zoomAt(view.k * Math.exp(-e.deltaY / 300), cx, cy);
+		// one notch, one step of the +/- buttons; units differ between browsers, the direction does not
+		else if (isMouseWheel(e)) zoomAt(view.k * ZOOM_STEP ** -Math.sign(e.deltaY), cx, cy);
 		else {
 			touched = true;
 			view = { ...view, x: view.x - e.deltaX, y: view.y - e.deltaY };
@@ -226,8 +231,8 @@
 			if (e.shiftKey) app.openIn(c.server, { session: c.session!.id });
 			else quick = { server: c.server, session: c.session!.id };
 		} else if (e.key === "f") fit();
-		else if (e.key === "+" || e.key === "=") zoomBy(1.2);
-		else if (e.key === "-") zoomBy(1 / 1.2);
+		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
+		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
 	}
 	onMount(() => () => clearTimeout(clickTimer));
 
@@ -386,9 +391,9 @@
 		<div class="bar">
 			<button class="tbtn" onclick={arrange} disabled={!Object.keys(pins).length} title={t("옮긴 카드를 제자리로")}><Icon name="columns" />{t("다시 배치")}</button>
 			<span class="sep"></span>
-			<button class="tbtn icon" onclick={() => zoomBy(1 / 1.2)} aria-label={t("축소")} title={t("축소")}>−</button>
+			<button class="tbtn icon" onclick={() => zoomBy(1 / ZOOM_STEP)} aria-label={t("축소")} title={t("축소")}>−</button>
 			<span class="pct mono">{Math.round(view.k * 100)}%</span>
-			<button class="tbtn icon" onclick={() => zoomBy(1.2)} aria-label={t("확대")} title={t("확대")}><Icon name="plus" /></button>
+			<button class="tbtn icon" onclick={() => zoomBy(ZOOM_STEP)} aria-label={t("확대")} title={t("확대")}><Icon name="plus" /></button>
 			<button class="tbtn icon" onclick={fit} aria-label={t("전체 보기")} title={t("전체 보기 (F)")}><Icon name="expand" /></button>
 		</div>
 	</div>

@@ -309,3 +309,17 @@ export function fitView(g: Graph, w: number, h: number, pad = 24): { k: number; 
 	// too wide even at the floor: start at the left (servers first) and pan for the rest
 	return { k, x: pad + (sw < aw ? (aw - sw) / 2 : 0) + multi * k, y: pad + (sh < ah ? (ah - sh) / 2 : 0) + multi * k };
 }
+
+/**
+ * Whether a wheel event came from a mouse wheel (zoom) rather than two fingers on a trackpad (scroll). Browsers do not
+ * say, so this reads the signs a wheel leaves: Firefox counts it in lines, Chrome and Safari report the old
+ * `wheelDeltaY` in steps of 120 that is not -3× the pixel delta (a trackpad's always is), and a trackpad scrolls
+ * sideways too. With no legacy delta, a whole step of 50 px or more is taken to be a wheel.
+ */
+export function isMouseWheel(e: Pick<WheelEvent, "deltaMode" | "deltaX" | "deltaY"> & { wheelDeltaY?: number }): boolean {
+	if (e.deltaMode !== 0) return true;
+	if (e.deltaX !== 0 || e.deltaY === 0) return false;
+	const legacy = e.wheelDeltaY;
+	if (typeof legacy === "number" && legacy !== 0) return legacy % 120 === 0 && legacy !== -3 * e.deltaY;
+	return Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50;
+}
