@@ -4,9 +4,9 @@
 	import { app } from "../../lib/store.svelte";
 
 	/**
-	 * The tab count in a small rounded square, a mobile browser's tab button: opens the tab overview. `bar` is the 28px
-	 * button at the end of the tab strip, `header` the 32 x 40 one of the phone header (beside the title, where the strip
-	 * is folded away for a lone tab).
+	 * The tab count in a small rounded square, a mobile browser's tab button: opens the tab overview. It sits in
+	 * TabControls beside "+": `bar` is the 28px button pinned to the right end of the tab strip, `header` the 32 x 40 one
+	 * of the phone header (where the strip is folded away for a lone tab).
 	 */
 	let { count, place = "bar" }: { count: number; place?: "bar" | "header" } = $props();
 	const label = $derived(t("탭 {n}개 모두 보기", { n: count }));
@@ -33,7 +33,7 @@
 		width: 28px;
 		height: 28px;
 		border-radius: var(--radius-sm);
-		color: var(--text-faint);
+		color: var(--text-dim); /* the "+" beside it (TabControls) has the same ink */
 		transition:
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
@@ -43,7 +43,6 @@
 		width: 32px;
 		height: 40px;
 		border-radius: 50%;
-		color: var(--text-dim);
 	}
 	.count.header:focus-visible {
 		outline-offset: -2px; /* 40px in a 44px bar, like the header's other buttons */

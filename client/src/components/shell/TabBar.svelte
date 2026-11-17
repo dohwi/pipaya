@@ -7,11 +7,11 @@
 	import Icon from "../ui/Icon.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
-	import TabCountButton from "./TabCountButton.svelte";
+	import TabControls from "./TabControls.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import PinMark from "../ui/PinMark.svelte";
 	import RowMenu, { type RowMenuItem } from "../ui/RowMenu.svelte";
-	import { newMenuEntries, rowMenuEntries, type RowTarget } from "../../lib/sidebar-model";
+	import { rowMenuEntries, type RowTarget } from "../../lib/sidebar-model";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { chooseGroup } from "../../lib/group-picker";
@@ -23,7 +23,6 @@
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
-	import { platformName } from "../../lib/terminal";
 
 	/**
 	 * The tabs of the working directory in front of the user, like an editor's: a lone conversation, a lone terminal,
@@ -119,12 +118,6 @@
 
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
 	let menuId = $state<string | null>(null);
-	const workdir = $derived(path === app.workspace?.root ? "." : path);
-	const newItems = (): RowMenuItem[] =>
-		newMenuEntries(platformName(app.terminalSupport?.platform), {
-			chat: () => void (app.serverId && app.openIn(app.serverId, { workdir })),
-			terminal: () => void (app.serverId && app.openIn(app.serverId, { workdir, terminal: true })),
-		});
 
 	/* ---- context menu (right click / long press): the sidebar row's entries, renaming in place ---- */
 	const rename = new InlineRename();
@@ -197,7 +190,7 @@
 	}
 </script>
 
-{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>, first: boolean)}
 	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
 	{@const who = handleOf(x)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -228,6 +221,8 @@
 					}
 				}}
 			>
+				<!-- the hover pill and the hairline before this tab: boxes of their own, since ::before / ::after are the drop line -->
+				<span class="fill" aria-hidden="true"></span>{#if !first}<span class="sep" aria-hidden="true"></span>{/if}
 				{#if x.kind === "group"}
 					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}{#if pinned}<PinMark />{/if}</span>
 				{:else if x.kind === "terminal"}
@@ -261,8 +256,8 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on", radius: "var(--radius-sm)" }}>
-			{#each tabs as x (x.id)}
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gbox.on" }}>
+			{#each tabs as x, i (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
 				<!-- a group is a bordered box around its sessions, laid out inline with the other tabs (its name is in the page
@@ -284,34 +279,34 @@
 						<SessionStrip tab={x} />
 					</div>
 				{:else}
-					{@render tabItem(x, on, st)}
+					{@render tabItem(x, on, st, i === 0)}
 				{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
-		<button class="add tap" class:on={menuId === "new"} onpointerenter={(e) => menu?.hover(e, "new", newItems())} onpointerleave={(e) => menu?.leave(e)} onclick={(e) => menu?.click(e, "new", newItems())} aria-label={t("새 대화 또는 터미널")} aria-haspopup="menu" title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
-		<!-- the overview of these tabs (on a phone this button sits in the header instead, see Header.svelte) -->
-		{#if tabs.length}<span class="countslot"><TabCountButton count={tabs.length} /></span>{/if}
+		<!-- "+" and the tab count, pinned to the bar's right end whatever the number of tabs (on a phone the same cluster
+		     sits in the header instead, see Header.svelte) -->
+		<span class="ctlslot"><TabControls /></span>
 	</div>
 	<RowMenu bind:this={menu} bind:open={menuId} />
 {/if}
 
 <style>
-	/* Navigation rows share one shape: rounded rectangles of --radius-sm, a soft fill for hover and the selection
-	   (the sidebar rows, the pane frames and the phone strip look the same way). */
+	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
+	   colour with rounded top corners and runs over the bar's bottom hairline into the conversation below, so the two read as
+	   one sheet. The other tabs have no fill, only a hairline between them. Tabs share the width evenly up to 200px each and
+	   scroll sideways below 112px. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
+	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
 		flex: none;
 		display: flex;
-		align-items: center;
-		gap: 4px;
+		align-items: stretch;
 		height: 38px;
-		padding: 0 8px 0 max(8px, var(--sal));
-		padding-right: max(8px, var(--sar));
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
+		padding: 0 11px 0 max(0px, var(--sal)); /* right: the count's 18px square sits 5px inside its 28px button, so its edge lands on the 16px gutter (DESIGN rule 5); left: the strip pads itself (room for the front tab's flare) */
+		background: var(--bg-tabbar);
+		box-shadow: inset 0 -1px var(--border); /* the hairline under the strip, drawn below the tabs so the front one covers it */
 	}
-	/* a phone with one tab or none: the strip would hold only a "+", a row of height for nothing. New chats still start from the
-	   drawer's folder "+" and the empty screen's folder chip; the desktop keeps its strip. */
+	/* a phone with one tab or none: the strip would be a row of height for nothing ("+" and the count live in the header there) */
 	@media (max-width: 600px) {
 		.bar.solo {
 			display: none;
@@ -327,15 +322,14 @@
 			transform: translateX(-12px);
 		}
 	}
-	/* the strip is only as wide as its tabs, so the + follows the last one; once they overflow it stops at the bar's right end */
+	/* the tabs take every pixel left of the controls; what they do not fill stays empty */
 	.tabs {
 		position: relative;
-		flex: 0 1 auto;
+		flex: 1 1 auto;
 		min-width: 0;
-		height: 100%;
 		display: flex;
-		align-items: center;
-		gap: 4px;
+		align-items: flex-end;
+		padding-left: 8px; /* the first tab's left flare draws here; its icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -343,43 +337,54 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the open group as one bordered unit of its sessions (on phones with its own tab in front). The sessions are what picks the
-	   pane while the group is enlarged, so the box keeps its whole width and the bar scrolls past it: the other tabs are
-	   the ones that make way, never a chip hidden behind a narrow box. */
-	.gbox {
-		position: relative;
+	/* the controls share the tabs' row: 4px down like the tabs, so the buttons centre on the titles (21px from the top) */
+	.ctlslot {
 		flex: none;
-		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		height: 28px;
-		padding: 0 4px;
-		transition: margin var(--motion-fast) var(--ease-std);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
+		padding-top: 4px;
+		padding-left: 8px;
 	}
-	.gbox.carried {
-		opacity: 0.45;
+	@media (max-width: 600px) {
+		.ctlslot {
+			display: none;
+		}
 	}
-	.gbox.menuopen {
-		background: var(--bg-hover);
+
+	/* the front tab's fill is the sliding marker: the page colour, rounded on top, with the two outward curves at its foot */
+	.tabs > :global(.slide-ind) {
+		background: var(--bg);
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 	}
-	.gbox.on {
-		border-color: var(--text-faint);
+	.tabs > :global(.slide-ind)::before,
+	.tabs > :global(.slide-ind)::after {
+		content: "";
+		position: absolute;
+		bottom: 0;
+		width: 8px;
+		height: 8px;
 	}
+	.tabs > :global(.slide-ind)::before {
+		left: -8px;
+		background: radial-gradient(circle at 0 0, transparent 8px, var(--bg) 8.5px); /* the flare's curve: --radius-sm, half a pixel of antialiasing */
+	}
+	.tabs > :global(.slide-ind)::after {
+		right: -8px;
+		background: radial-gradient(circle at 100% 0, transparent 8px, var(--bg) 8.5px); /* the mirror of ::before */
+	}
+
 	.tab {
 		position: relative;
 		z-index: 1; /* above the sliding fill */
-		flex: none;
+		flex: 0 1 200px;
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 28px;
-		max-width: 220px;
-		min-width: 0;
+		height: 34px;
+		min-width: 112px;
+		max-width: 200px;
 		padding: 0 4px 0 8px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel title beside the session logo (rule 3) */
@@ -388,41 +393,116 @@
 		-webkit-user-select: none;
 		transition:
 			background var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std);
-	}
-	@media (hover: hover) {
-		.tab:hover {
-			background: var(--bg-hover);
-			color: var(--text);
-		}
+			color var(--motion-fast) var(--ease-std),
+			margin var(--motion-fast) var(--ease-std);
 	}
 	.tab.on {
-		background: var(--bg-active);
+		background: var(--bg); /* until the sliding marker is placed */
 		color: var(--text);
 	}
-	/* the sliding marker draws the selection */
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
+	}
+	/* hover: a soft pill inside the tab, 4px in, like the tab strips of today's browsers */
+	.fill {
+		position: absolute;
+		inset: 4px 4px;
+		z-index: -1;
+		border-radius: var(--radius-sm);
+		background: var(--bg-tabbar-hover);
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	@media (hover: hover) {
+		.tab:not(.on):hover {
+			color: var(--text);
+		}
+		.tab:not(.on):hover .fill {
+			opacity: 1;
+		}
+	}
+	.tab.menuopen:not(.on) .fill {
+		opacity: 1;
+	}
+	/* the hairline between two plain tabs, gone beside the front tab, a hovered one and a group's frame */
+	.sep {
+		position: absolute;
+		left: 0;
+		top: 8px;
+		bottom: 8px;
+		width: 1px;
+		background: var(--border-strong);
+		pointer-events: none;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.tab.on .sep,
+	.tab.on + .tab .sep,
+	:global(.gbox) + .tab .sep,
+	.tab.before .sep,
+	.tab.after + .tab .sep {
+		opacity: 0;
+	}
+	@media (hover: hover) {
+		.tab:hover .sep,
+		.tab:hover + .tab .sep {
+			opacity: 0;
+		}
 	}
 	.tab.carried {
 		opacity: 0.45;
 	}
-	/* the neighbours step aside: the tab grows a 24px gap (4 of the strip's own + 20) on the side where the carried one
-	   would land, animated, with the line in the middle of it. The pseudo-element fills the gap and takes the pointer,
-	   so the tab under it stays the same one while the gap opens (no flicker). */
-	.tab {
+
+	/* the open group as one unit of its sessions: a tab of the strip whose content is the sessions' chips. Behind it is
+	   a frame 4px in (the hover pill's place); in front, the frame gives way to the front tab's sheet. The sessions are what
+	   picks the pane while the group is enlarged, so the box keeps its whole width and the bar scrolls past it. */
+	.gbox {
+		position: relative;
+		z-index: 1; /* above the sliding fill, like a tab */
+		flex: none;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 34px;
+		padding: 0 8px;
+		border-radius: 12px; /* the frame drawn 4px in below comes out at --radius-sm */
+		outline: 1px solid var(--border-strong);
+		outline-offset: -4px;
 		transition:
-			background var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std),
-			margin var(--motion-fast) var(--ease-std);
+			margin var(--motion-fast) var(--ease-std),
+			outline-color var(--motion-fast) var(--ease-std);
 	}
+	.gbox + .gbox {
+		margin-left: 4px;
+	}
+	.gbox.on {
+		outline-color: transparent;
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+	}
+	.gbox:not(.on).menuopen {
+		outline-color: var(--text-faint);
+	}
+	/* a chip under the pointer on the strip's tone (SessionStrip's own hover is the page's --bg-hover) */
+	@media (hover: hover) and (min-width: 601px) {
+		.gbox:not(.on) :global(.gchip:hover) {
+			background: var(--bg-tabbar-hover);
+		}
+	}
+	.gbox.carried {
+		opacity: 0.45;
+	}
+
+	/* the neighbours step aside: the tab grows a 24px gap on the side where the carried one would land, animated, with
+	   the line in the middle of it. The pseudo-element fills the gap and takes the pointer, so the tab under it stays the
+	   same one while the gap opens (no flicker). */
 	.tab.before,
 	.gbox.before {
-		margin-left: 20px;
+		margin-left: 24px;
 	}
 	.tab.after,
 	.gbox.after {
-		margin-right: 20px;
+		margin-right: 24px;
 	}
 	.tab.before::before,
 	.tab.after::after,
@@ -430,9 +510,9 @@
 	.gbox.after::after {
 		content: "";
 		position: absolute;
-		top: 4px;
+		top: 8px;
 		bottom: 4px;
-		width: 24px; /* the 20px margin plus the strip's 4px gap */
+		width: 24px; /* the margin it fills */
 		background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 		z-index: 2;
 	}
@@ -444,28 +524,27 @@
 	.gbox.after::after {
 		right: -24px;
 	}
+	.tail {
+		position: relative;
+		flex: none;
+		width: 8px; /* the last tab's right flare draws here */
+		align-self: stretch;
+	}
 	.tail.over::before {
 		content: "";
 		position: absolute;
-		top: 4px;
+		top: 8px;
 		bottom: 4px;
+		left: 0;
 		width: 2px;
 		border-radius: 1px;
 		background: var(--accent);
 		z-index: 2;
 		pointer-events: none;
 	}
-	.tail {
-		position: relative;
-		flex: none;
-		width: 8px;
-		align-self: stretch;
-	}
-	.tail.over::before {
-		left: 0;
-	}
+
 	/* the `@name` other sessions call this one by, before its title: the same small dim handle the sidebar row and the
-	   split tab's title bar carry (11px on a 16px line box, so it centres on the 28px tab like the title does). It takes the
+	   split tab's title bar carry (11px on a 16px line box, so it centres on the tab like the title does). It takes the
 	   same activity colour as the sidebar's handle, so a working conversation reads blue in both places. */
 	.who {
 		flex: none;
@@ -476,6 +555,15 @@
 	}
 	.who.working {
 		color: var(--info);
+	}
+	.who.asking {
+		color: var(--warn);
+	}
+	.who.done {
+		color: var(--ok);
+	}
+	.who.failed {
+		color: var(--danger);
 	}
 	/* the parent mark (fork icon + "@parent", like "forked from"): who made this conversation, after its title and quieter than its own handle */
 	.from {
@@ -492,16 +580,9 @@
 		height: 12px;
 		stroke-width: 2;
 	}
-	.who.asking {
-		color: var(--warn);
-	}
-	.who.done {
-		color: var(--ok);
-	}
-	.who.failed {
-		color: var(--danger);
-	}
+	/* the title takes the tab's spare width, so the close button sits at its right end as in a browser */
 	.t {
+		flex: 1 1 auto;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -510,11 +591,9 @@
 	.tab.on .t {
 		font-weight: 600;
 	}
-	.tab.menuopen {
-		background: var(--bg-hover);
-	}
 	.rename {
-		width: 140px;
+		flex: 1 1 auto;
+		width: 0;
 		min-width: 0;
 		height: 22px;
 		padding: 0 4px;
@@ -536,8 +615,7 @@
 		flex: none;
 	}
 	.ico > :global(svg), /* the icon's own glyph only: the pinned mark keeps its own size */
-	.x :global(svg),
-	.add :global(svg) {
+	.x :global(svg) {
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.9;
@@ -568,34 +646,79 @@
 			color: var(--text);
 		}
 	}
-	.add {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-sm);
-		color: var(--text-faint);
-		transition: background var(--motion-fast) var(--ease-std);
-	}
-	/* the count sits right beside the +, the strip's 4px apart: the two are one cluster of tab controls, so a short strip
-	   does not leave the count stranded at the far end of the bar */
-	.countslot {
-		display: contents;
-	}
+
+	/* A phone keeps the compact strip it had: rounded chips of their own width on the page colour, the selection a soft fill
+	   (the sidebar rows and the drawer look the same way). "+" and the count are in the header there. */
 	@media (max-width: 600px) {
-		.countslot {
+		.bar {
+			align-items: center;
+			padding: 0 8px 0 max(8px, var(--sal));
+			background: var(--bg);
+		}
+		.tabs {
+			height: 100%;
+			align-items: center;
+			gap: 4px;
+			padding-left: 0;
+		}
+		.tabs > :global(.slide-ind) {
+			background: var(--bg-active);
+			border-radius: var(--radius-sm);
+		}
+		.tabs > :global(.slide-ind)::before,
+		.tabs > :global(.slide-ind)::after {
 			display: none;
 		}
-	}
-	.add.on {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	@media (hover: hover) {
-		.add:hover {
-			background: var(--bg-hover);
-			color: var(--text);
+		.tab {
+			flex: none;
+			height: 28px;
+			min-width: 0;
+			max-width: 220px;
+			border-radius: var(--radius-sm);
+		}
+		.tab.on {
+			background: var(--bg-active);
+		}
+		.t {
+			flex: 0 1 auto;
+		}
+		.rename {
+			flex: none;
+			width: 140px;
+		}
+		.sep,
+		.fill {
+			display: none;
+		}
+		.gbox {
+			height: 28px;
+			padding: 0 4px;
+			border-radius: var(--radius-sm);
+			outline: 0;
+			border: 1px solid var(--border);
+		}
+		.gbox.on {
+			border-color: var(--text-faint);
+			border-radius: var(--radius-sm);
+		}
+		.gbox + .gbox {
+			margin-left: 0;
+		}
+		.tab.before,
+		.gbox.before {
+			margin-left: 20px; /* with the strip's 4px gap, the 24px the line's box fills */
+		}
+		.tab.after,
+		.gbox.after {
+			margin-right: 20px; /* as above */
+		}
+		.tab.before::before,
+		.tab.after::after,
+		.gbox.before::before,
+		.gbox.after::after,
+		.tail.over::before {
+			top: 4px;
+			bottom: 4px;
 		}
 	}
 </style>
