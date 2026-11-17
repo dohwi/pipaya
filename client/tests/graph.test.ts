@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, fitView, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, fitView, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -171,5 +171,47 @@ describe("springStep", () => {
 	});
 	test("at the target and still, it stays", () => {
 		expect(springStep(42, 0, 42, 0.1)).toEqual([42, 0]);
+	});
+});
+
+describe("growth", () => {
+	const T = { lead: 80, draw: 380 };
+	const g1 = buildGraph([server("v", [session("a", { provider: "cliproxy", model: "opus" })], { states: { a: "working" } })]);
+	test("on an empty screen a branch grows column by column, each card as its line reaches it", () => {
+		const p = growthPlan(g1, () => undefined, () => false, 1000, T);
+		const at = (id: string) => p.cards.get(id)!;
+		expect(at("v:v")).toBe(1000);
+		expect(at("p:v/cliproxy")).toBe(1000 + 80 + 380);
+		expect(at("m:v/cliproxy/opus")).toBe(at("p:v/cliproxy") + 80 + 380);
+		expect(at("s:v/a")).toBe(at("m:v/cliproxy/opus") + 80 + 380);
+		// every line starts a moment after the card it leaves, and ends as the next one appears
+		for (const e of g1.edges) expect(p.edges.get(e.id)! + T.draw).toBe(at(e.to));
+	});
+	test("a new chat on a known model grows only from there", () => {
+		const g2 = buildGraph([server("v", [session("a", { provider: "cliproxy", model: "opus" }), session("b", { provider: "cliproxy", model: "opus" })], { states: { a: "working" } })]);
+		const p = growthPlan(g2, (id) => (g1.cards.has(id) ? 0 : undefined), (id) => g1.edges.some((e) => e.id === id), 5000, T);
+		expect([...p.cards.keys()]).toEqual(["s:v/b"]);
+		expect([...p.edges.keys()]).toEqual(["t:s:v/b"]);
+		expect(p.edges.get("t:s:v/b")).toBe(5000);
+		expect(p.cards.get("s:v/b")).toBe(5000 + 380);
+	});
+	test("leaving runs right to left: the line pulls back after the card at its end has faded", () => {
+		const L = { fade: 200, retract: 260 };
+		const gone = new Set(["m:v/cliproxy/opus", "s:v/a"]);
+		const edges = g1.edges.filter((e) => gone.has(e.to));
+		const p = leavePlan(gone, edges, 0, L);
+		expect(p.cards.get("s:v/a")).toBe(0);
+		expect(p.edges.get("t:s:v/a")).toBe(200);
+		expect(p.cards.get("m:v/cliproxy/opus")).toBe(200 + 260);
+		expect(p.edges.get("t:m:v/cliproxy/opus")).toBe(200 + 260 + 200);
+	});
+	test("a cut-short curve starts where the whole one does and ends on it", () => {
+		const a = g1.cards.get("v:v")!, b = g1.cards.get("p:v/cliproxy")!;
+		const full = edgePath(a, b), half = edgePath(a, b, 0.5), none = edgePath(a, b, 0);
+		expect(half.split("C")[0]).toBe(full.split("C")[0]);
+		expect(half).not.toBe(full);
+		const end = (d: string) => d.split(" ").slice(-2).map(Number);
+		expect(end(none)).toEqual([a.x + a.w / 2, a.y]);
+		expect(edgePath(a, b, 1)).toBe(full);
 	});
 });
