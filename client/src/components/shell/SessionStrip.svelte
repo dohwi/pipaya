@@ -117,7 +117,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
-		line-height: 20px; /* whole-pixel line box (rule 3): the body's 1.55 (20.15px) put the title 1px below the handle's lowered baseline */
+		line-height: 20px; /* whole-pixel line box (rule 3), not the body's 1.55 (20.15px), so the title's centre lands on a whole pixel */
 		white-space: nowrap;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
@@ -163,10 +163,6 @@
 		font-weight: 600;
 		color: var(--text-faint);
 		line-height: 16px;
-		/* baseline, not centre (design-system.md "Text inside pills"): centred, the 11px handle's Hangul ends 1px above the 13px title's
-		   (measured at 1x / 1.25x / 1.5x / 2x / 4x); 1px down puts both on one baseline */
-		position: relative;
-		top: 1px;
 	}
 	.who.working {
 		color: var(--info);
