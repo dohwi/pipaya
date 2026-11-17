@@ -10,7 +10,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, buildGraph, edgePath, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgePath, edgeTip, fitGraph, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -83,7 +83,10 @@
 		return w;
 	}
 
-	const graph: Graph = $derived(buildGraph(servers, { widths: widthOf, pins }));
+	/** The view's size: the layout wraps many chats into columns when that shows the graph larger in it. */
+	let viewW = $state(0);
+	let viewH = $state(0);
+	const graph: Graph = $derived(fitGraph(servers, { widths: widthOf, pins }, viewW, viewH));
 
 	/** Reduced motion: no sparks (SMIL, which CSS cannot stop), cards and the view go straight to their place. */
 	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -93,8 +96,6 @@
 	let view = $state({ k: 1, x: 24, y: 24 });
 	/** Until the user pans, zooms or moves a card, the view keeps fitting the graph as it grows (the subagents arrive later). */
 	let touched = false;
-	/** Room the floating bar takes at the bottom of the view. */
-	const BAR_H = 64;
 	/** The frame loop that moves cards, lines and the view (running only while something moves). */
 	let raf = 0;
 	let last = 0;
@@ -117,7 +118,7 @@
 	};
 	function fit() {
 		if (!viewEl) return;
-		const to = fitView(graph, viewEl.clientWidth, viewEl.clientHeight - BAR_H);
+		const to = fitView(graph, viewEl.clientWidth, viewEl.clientHeight); // FIT_PAD keeps the floating bar clear
 		// the first fit places the view; later ones (the graph grew, F, the button) glide there
 		if (!fitted || !motion) view = to;
 		else {
@@ -127,9 +128,21 @@
 		fitted = true;
 	}
 	$effect(() => {
-		void graph.width;
-		void graph.height;
+		void graph;
+		void viewW;
+		void viewH;
 		if (!touched && graph.cards.size && viewEl && measure) untrack(fit);
+	});
+	// the window or the sidebar changes the view's size: the layout and the fit follow (until the user takes the view)
+	$effect(() => {
+		if (!viewEl) return;
+		const el = viewEl;
+		const ro = new ResizeObserver(() => {
+			viewW = el.clientWidth;
+			viewH = el.clientHeight;
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
 	});
 	const clampK = (k: number) => Math.min(2, Math.max(0.3, k));
 	/** Zoom right now about a point (a pinch: the fingers lead, nothing may lag behind them). */
@@ -552,13 +565,9 @@
 			{/if}
 			<svg class="edges" aria-hidden="true">
 				<defs>
-					<!-- one arrow head per look: idle lines get a faint one, lines carrying work their own colour -->
-					<marker id="gv-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-idle" d="M1 1.5L8.5 5L1 8.5z" /></marker>
-					<marker id="gv-arrow-live" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="m-live" d="M1 1.5L8.5 5L1 8.5z" /></marker>
-					<marker id="gv-arrow-call" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="m-call" d="M1 1.5L8.5 5L1 8.5z" /></marker>
 					<filter id="gv-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
 				</defs>
-				{#each [...graph.edges, ...ghostEdges] as e (e.id)}
+				{#each [...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges] as e (e.id)}
 					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdges.includes(e)}
 					{@const ca = graph.cards.get(e.from) ?? ghostById.get(e.from)}
 					{@const cb = graph.cards.get(e.to) ?? ghostById.get(e.to)}
@@ -567,12 +576,17 @@
 						{@const a = at(ca)}
 						{@const b = at(cb)}
 						{@const on = !focus || (focus.has(e.from) && focus.has(e.to))}
-						{@const d = edgePath(a, b, r)}
 						{@const call = e.kind === "delegate"}
+						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
 						{@const full = r >= 1 && !ghost}
 						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on}>
 							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
-							<path class="base" {d} marker-end={(e.kind === "tree" && !e.live) || ghost ? undefined : `url(#gv-arrow${e.live ? (call ? "-call" : "-live") : call ? "-call" : ""})`} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
+							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
+							{#if call && full}
+								<!-- a call points at the subagent: a small level chevron on the card's edge (the line arrives level) -->
+								{@const tip = edgeTip(a, b)}
+								<path class="tip" d="M{tip.x - 6 * tip.dir} {tip.y - 4.5}L{tip.x} {tip.y}L{tip.x - 6 * tip.dir} {tip.y + 4.5}" />
+							{/if}
 							{#if e.live && motion && full}
 								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each;
 								     they fade in and out with the work instead of popping -->
@@ -810,15 +824,6 @@
 		overflow: visible;
 		pointer-events: none;
 	}
-	.edges .m-idle {
-		fill: var(--text-faint);
-	}
-	.edges .m-live {
-		fill: var(--ok);
-	}
-	.edges .m-call {
-		fill: var(--info);
-	}
 	/* a line that starts or stops carrying work changes colour and weight over a moment, not in one frame */
 	.edges path {
 		fill: none;
@@ -833,6 +838,17 @@
 	.edges .base {
 		stroke-width: 1.25;
 		opacity: 0.5;
+		stroke-linejoin: round;
+	}
+	.edges .tip {
+		stroke-width: 1.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		opacity: 0.7;
+	}
+	.edges g.live .tip {
+		stroke-width: 2;
+		opacity: 1;
 	}
 	/* structure (server → provider → model → chat): quiet grey; once a chat under it works, the whole line up lights */
 	.e-tree path {

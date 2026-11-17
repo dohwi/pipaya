@@ -79,6 +79,13 @@ export interface Card {
 	asked?: number;
 	/** No role file: a name the agent made up (role policy "any"). */
 	free?: boolean;
+	/** A chat in a wrapped block (many chats under one card): which of its columns, 0 the first. */
+	lane?: number;
+	/**
+	 * How the line reaches a chat in a block's second or later column: along a bus above the block, then down a spine
+	 * in the gap left of its column. Offsets from the card's centre, so the route moves with the card.
+	 */
+	bus?: { dy: number; gx: number; sx: number };
 }
 
 export interface Edge {
@@ -119,6 +126,11 @@ export const ROW_GAP = 12;
 /** Between two servers' frames: 24 inside each frame + 24 between them. */
 export const BAND_GAP = 72;
 export const BAND_PAD = 24;
+/** A card with this many chats or more may wrap them into columns (at least 3 rows each, up to `lanes`). */
+export const WRAP_MIN = 6;
+const WRAP_ROWS = 3;
+/** Room above a wrapped block for its bus line: the line runs 18px from the cards above and below it. */
+const BUS_GAP = 24;
 
 /** The app's urgency order for chats in one column: the ones that want the user first, then by last activity. */
 const RANK: Record<Activity, number> = { asking: 0, failed: 1, working: 2, done: 3, idle: 4 };
@@ -131,10 +143,14 @@ export const modelName = (m: string) => (m.includes("/") ? m.slice(m.indexOf("/"
  * Builds the cards and lays them out in columns. `widths` measures a card that needs more than its kind's width (a long
  * model id); `pins` are cards moved by hand, kept where they were put.
  */
-export function buildGraph(
-	servers: GraphServer[],
-	opts: { widths?: (c: Card) => number; pins?: Record<string, { x: number; y: number }> } = {},
-): Graph {
+export interface LayoutOpts {
+	widths?: (c: Card) => number;
+	pins?: Record<string, { x: number; y: number }>;
+	/** Up to how many columns many chats under one card may wrap into (1 = never). */
+	lanes?: number;
+}
+
+export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph {
 	const cards = new Map<string, Card>();
 	const add = (c: Omit<Card, "children" | "col" | "x" | "y" | "live"> & Partial<Card>) => {
 		const card: Card = { children: [], col: 0, x: 0, y: 0, live: false, ...c };
@@ -191,7 +207,7 @@ export function buildGraph(
 	return layout(cards, servers, [...delegateEdges.values()], opts);
 }
 
-function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edge[], opts: { widths?: (c: Card) => number; pins?: Record<string, { x: number; y: number }> }): Graph {
+function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edge[], opts: LayoutOpts): Graph {
 	const get = (id: string) => cards.get(id)!;
 	const count = (id: string): number => {
 		const c = get(id);
@@ -205,15 +221,45 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 		return y.count - x.count || x.label.localeCompare(y.label);
 	};
 	let cursor = 0, maxCol = 0;
-	/** Leaves take the next row; a card with children is centred on them. */
+	const maxLanes = Math.max(1, Math.floor(opts.lanes ?? 1));
+	const calls = new Set(delegates.map((e) => e.from));
+	/** The bus line's height for each wrapped chat, set once the columns have their x. */
+	const busY = new Map<string, number>();
+	/**
+	 * Leaves take the next row; a card with children is centred on them. Many chats under one card (each with nothing
+	 * under it) wrap into a block of columns, filled top to bottom so the first column keeps the urgency order; the
+	 * chats that call subagents go last, nearest the subagents, so their lines cross no other column.
+	 */
 	const place = (id: string, col: number) => {
 		const c = get(id);
 		c.col = col;
 		maxCol = Math.max(maxCol, col);
 		c.children.sort(order);
 		if (!c.children.length) { c.y = cursor + c.h / 2; cursor += c.h + ROW_GAP; return; }
-		for (const k of c.children) place(k, col + 1);
-		c.y = (get(c.children[0]!).y + get(c.children[c.children.length - 1]!).y) / 2;
+		const leaves = c.children.filter((k) => get(k).kind === "session" && !get(k).children.length);
+		const lanes = leaves.length >= WRAP_MIN ? Math.min(maxLanes, Math.ceil(leaves.length / WRAP_ROWS)) : 1;
+		if (lanes < 2) for (const k of c.children) place(k, col + 1);
+		else {
+			const wrap = new Set(leaves);
+			for (const k of c.children) if (!wrap.has(k)) place(k, col + 1);
+			const grid = [...leaves.filter((k) => !calls.has(k)), ...leaves.filter((k) => calls.has(k))];
+			const rows = Math.ceil(grid.length / lanes);
+			const bus = cursor + BUS_GAP / 4; // 18 below the cards above (their 12 gap + 6), 18 above the block
+			cursor += BUS_GAP;
+			const rowH = Array.from({ length: rows }, (_, r) => Math.max(...grid.filter((_, i) => i % rows === r).map((k) => get(k).h)));
+			const rowTop: number[] = [];
+			for (const h of rowH) { rowTop.push(cursor); cursor += h + ROW_GAP; }
+			grid.forEach((k, i) => {
+				const kc = get(k), lane = Math.floor(i / rows);
+				kc.col = col + 1 + lane;
+				kc.lane = lane;
+				kc.y = rowTop[i % rows]! + kc.h / 2; // top-aligned rows
+				if (lane) busY.set(k, bus);
+				maxCol = Math.max(maxCol, kc.col);
+			});
+		}
+		const ys = c.children.map((k) => get(k).y);
+		c.y = (Math.min(...ys) + Math.max(...ys)) / 2;
 	};
 	const roles = [...cards.values()].filter((c) => c.kind === "subagent");
 	const bands: Band[] = [];
@@ -247,8 +293,11 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	for (const c of cards.values()) {
 		c.w = cols[c.col]!.w;
 		c.x = cols[c.col]!.x + c.w / 2;
+		const by = busY.get(c.id);
+		// the bus enters over the block's first column; the spine runs down the middle of the gap left of this column
+		if (by !== undefined && c.lane) c.bus = { dy: by - c.y, gx: cols[c.col - c.lane]!.x - c.x, sx: cols[c.col]!.x - COL_GAP / 2 - c.x };
 		const pin = opts.pins?.[c.id];
-		if (pin) { c.x = pin.x; c.y = pin.y; }
+		if (pin) { c.x = pin.x; c.y = pin.y; c.bus = undefined; } // moved by hand: a plain line to wherever it is
 	}
 
 	// live: a working chat, every card above it, and a role with a running call
@@ -269,26 +318,111 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	return { cards, edges, bands, cols, width: Math.max(0, x - COL_GAP), height: Math.max(0, cursor - ROW_GAP) };
 }
 
+/** A drawn line: cubic curves and straight runs, each from where the last one ended. */
+type Seg = { c: true; p: number[] } | { c: false; p: number[] };
+const KAPPA = 0.5523; // a quarter circle as a cubic
+/** Corner radius where a routed line turns (bus → spine → card). */
+const TURN = 12;
+
 /**
- * A curve from the right edge of `a` to the left edge of `b` (or back out of the right side when `b` is not to its right).
- * `p` < 1 draws only its first part, the same curve cut short (a line growing from `a` toward `b`).
+ * A line from the right edge of `a` to the left edge of `b` (or back out of the right side when `b` is not to its right).
+ * `elbow` (the structure: server → … → chat) runs square through the middle of the gap with round corners, so the lines
+ * out of one card share one spine instead of fanning out; a chat in a wrapped block's later column is reached along its
+ * bus above the block and a spine left of its column (see `Card.bus`). `curve` (a delegate call, across columns) is one
+ * S-curve. `p` < 1 draws only the first part (a line growing from `a` toward `b`).
  */
-export function edgePath(a: Card, b: Card, p = 1): string {
+export function edgePath(a: Card, b: Card, p = 1, style: "curve" | "elbow" = "curve"): string {
 	const ax = a.x + a.w / 2;
-	let pts: number[];
+	let segs: Seg[];
 	if (b.x - b.w / 2 > ax + 8) {
-		const bx = b.x - b.w / 2 - 2; // the arrow tip sits just off the card's border
-		const c = Math.max(32, (bx - ax) / 2);
-		pts = [ax, a.y, ax + c, a.y, bx - c, b.y, bx, b.y];
+		const bx = b.x - b.w / 2 - (style === "elbow" ? 0 : 2); // a structure line meets the border; a call's tip sits just off it
+		if (style === "elbow") {
+			const first = b.bus ? b.x + b.bus.gx : bx; // the block's first column: the spine sits in the gap before it
+			const mx = (ax + first) / 2;
+			const pts = b.bus
+				? [[ax, a.y], [mx, a.y], [mx, b.y + b.bus.dy], [b.x + b.bus.sx, b.y + b.bus.dy], [b.x + b.bus.sx, b.y], [bx, b.y]]
+				: [[ax, a.y], [mx, a.y], [mx, b.y], [bx, b.y]];
+			segs = squared(pts as [number, number][]);
+		} else {
+			const c = Math.max(32, (bx - ax) / 2);
+			segs = [{ c: true, p: [ax, a.y, ax + c, a.y, bx - c, b.y, bx, b.y] }];
+		}
 	} else if (b.x + b.w / 2 < a.x - a.w / 2 - 8) {
 		const x0 = a.x - a.w / 2, bx = b.x + b.w / 2 + 2, c = Math.max(32, (x0 - bx) / 2);
-		pts = [x0, a.y, x0 - c, a.y, bx + c, b.y, bx, b.y];
+		segs = [{ c: true, p: [x0, a.y, x0 - c, a.y, bx + c, b.y, bx, b.y] }];
 	} else {
 		const bx = b.x + b.w / 2 + 2, c = 40 + Math.min(120, Math.abs(b.y - a.y) * 0.3);
-		pts = [ax, a.y, ax + c, a.y, bx + c, b.y, bx, b.y];
+		segs = [{ c: true, p: [ax, a.y, ax + c, a.y, bx + c, b.y, bx, b.y] }];
 	}
-	const [x0, y0, x1, y1, x2, y2, x3, y3] = p >= 1 ? pts : splitCubic(pts, Math.max(0, p));
-	return `M${x0} ${y0}C${x1} ${y1} ${x2} ${y2} ${x3} ${y3}`;
+	if (p < 1) segs = cut(segs, Math.max(0, p));
+	const r = (n: number) => Math.round(n * 100) / 100;
+	let d = `M${r(segs[0]!.p[0]!)} ${r(segs[0]!.p[1]!)}`;
+	for (const s of segs) d += s.c ? `C${r(s.p[2]!)} ${r(s.p[3]!)} ${r(s.p[4]!)} ${r(s.p[5]!)} ${r(s.p[6]!)} ${r(s.p[7]!)}` : `L${r(s.p[2]!)} ${r(s.p[3]!)}`;
+	return d;
+}
+
+/** Where a line ends and which way it points there (1 right, -1 left): for the chevron on a delegate call. */
+export function edgeTip(a: Card, b: Card): { x: number; y: number; dir: 1 | -1 } {
+	if (b.x - b.w / 2 > a.x + a.w / 2 + 8) return { x: b.x - b.w / 2 - 2, y: b.y, dir: 1 };
+	return { x: b.x + b.w / 2 + 2, y: b.y, dir: -1 };
+}
+
+/**
+ * Straight runs through `pts` (each one level or upright), the corners rounded: a quarter circle of `TURN`, smaller where
+ * a run is too short for it (two cards almost level get a soft step, not a hook).
+ */
+function squared(input: [number, number][]): Seg[] {
+	// drop repeated points and the middle of three in a line: no zero-length runs, no corner that does not turn
+	const pts: [number, number][] = [];
+	for (const q of input) {
+		const l = pts[pts.length - 1];
+		if (l && Math.abs(l[0] - q[0]) < 0.01 && Math.abs(l[1] - q[1]) < 0.01) continue;
+		const m = pts[pts.length - 2];
+		if (m && l && ((Math.abs(m[0] - l[0]) < 0.01 && Math.abs(l[0] - q[0]) < 0.01) || (Math.abs(m[1] - l[1]) < 0.01 && Math.abs(l[1] - q[1]) < 0.01))) pts.pop();
+		pts.push(q);
+	}
+	if (pts.length < 2) return [{ c: false, p: [...input[0]!, ...input[input.length - 1]!] }];
+	const segs: Seg[] = [];
+	let [cx, cy] = pts[0]!;
+	for (let i = 1; i < pts.length - 1; i++) {
+		const [px, py] = pts[i - 1]!, [x, y] = pts[i]!, [nx, ny] = pts[i + 1]!;
+		const lin = Math.hypot(x - px, y - py), lout = Math.hypot(nx - x, ny - y);
+		const r = Math.min(TURN, lin / 2, lout / 2);
+		const [ix, iy] = [(x - px) / lin, (y - py) / lin], [ox, oy] = [(nx - x) / lout, (ny - y) / lout];
+		const [sx, sy] = [x - ix * r, y - iy * r], [ex, ey] = [x + ox * r, y + oy * r];
+		segs.push({ c: false, p: [cx, cy, sx, sy] });
+		const k = r * (1 - KAPPA);
+		segs.push({ c: true, p: [sx, sy, x - ix * k, y - iy * k, x + ox * k, y + oy * k, ex, ey] });
+		[cx, cy] = [ex, ey];
+	}
+	const [lx, ly] = pts[pts.length - 1]!;
+	segs.push({ c: false, p: [cx, cy, lx, ly] });
+	return segs.filter((s) => s.c || Math.hypot(s.p[2]! - s.p[0]!, s.p[3]! - s.p[1]!) > 0.01);
+}
+
+/** The first `p` of a line, by length: whole segments, then the one it stops in, cut short. */
+function cut(segs: Seg[], p: number): Seg[] {
+	const len = (s: Seg) => {
+		if (!s.c) return Math.hypot(s.p[2]! - s.p[0]!, s.p[3]! - s.p[1]!);
+		let l = 0, [px, py] = [s.p[0]!, s.p[1]!];
+		for (let i = 1; i <= 8; i++) {
+			const [x, y] = splitCubic(s.p, i / 8).slice(6);
+			l += Math.hypot(x! - px, y! - py);
+			[px, py] = [x!, y!];
+		}
+		return l;
+	};
+	const lens = segs.map(len);
+	let left = p * lens.reduce((a, b) => a + b, 0);
+	const out: Seg[] = [];
+	for (const [i, s] of segs.entries()) {
+		const l = lens[i]!;
+		if (left >= l && i < segs.length - 1) { out.push(s); left -= l; continue; }
+		const t = l ? Math.min(1, left / l) : 0;
+		out.push(s.c ? { c: true, p: splitCubic(s.p, t) } : { c: false, p: [s.p[0]!, s.p[1]!, s.p[0]! + (s.p[2]! - s.p[0]!) * t, s.p[1]! + (s.p[3]! - s.p[1]!) * t] });
+		break;
+	}
+	return out;
 }
 
 /** The first part of a cubic Bézier, up to `t` (de Casteljau): the same curve, cut short. */
@@ -391,16 +525,60 @@ export function related(g: Graph, id: string): Set<string> {
 	return out;
 }
 
-/** The zoom and offset that show the whole graph in a `w` × `h` view: every column across, never below 60%. */
-export function fitView(g: Graph, w: number, h: number, pad = 24): { k: number; x: number; y: number } {
-	if (!g.cards.size) return { k: 1, x: pad, y: pad };
-	const multi = g.bands.length > 1 ? BAND_PAD : 0;
-	const gw = g.width + multi * 2, gh = g.height + multi * 2;
-	const aw = w - pad * 2, ah = h - pad * 2;
-	const k = Math.max(0.6, Math.min(1, aw / gw, Math.max(ah / gh, Math.min(0.85, aw / gw))));
-	const sw = gw * k, sh = gh * k;
-	// too wide even at the floor: start at the left (servers first) and pan for the rest
-	return { k, x: pad + (sw < aw ? (aw - sw) / 2 : 0) + multi * k, y: pad + (sh < ah ? (ah - sh) / 2 : 0) + multi * k };
+/** Room kept around the graph when it is fitted: the sides, and top and bottom (the floating bar sits in the bottom one). */
+export const FIT_PAD = { x: 32, y: 56 };
+/** The fitted zoom: never above 100%, never below 50% (names stay legible; zoom in for the rest). */
+export const FIT_MIN = 0.5;
+
+/** What the cards take up, with the server frames around them when there are two or more. */
+function bounds(g: Graph) {
+	let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+	for (const c of g.cards.values()) {
+		x0 = Math.min(x0, c.x - c.w / 2); x1 = Math.max(x1, c.x + c.w / 2);
+		y0 = Math.min(y0, c.y - c.h / 2); y1 = Math.max(y1, c.y + c.h / 2);
+	}
+	const m = g.bands.length > 1 ? BAND_PAD : 0;
+	return { x0: x0 - m, y0: y0 - m, w: x1 - x0 + m * 2, h: y1 - y0 + m * 2 };
+}
+/** How much of 100% the whole graph fits a `w` × `h` view at, across and down (above 1: room to spare). */
+function fitScales(g: Graph, w: number, h: number, pad = FIT_PAD) {
+	const b = bounds(g);
+	return { across: (w - pad.x * 2) / b.w, down: (h - pad.y * 2) / b.h };
+}
+function fitScale(g: Graph, w: number, h: number, pad = FIT_PAD) {
+	const s = fitScales(g, w, h, pad);
+	return Math.min(s.across, s.down);
+}
+
+/**
+ * The zoom and offset that show the whole graph in a `w` × `h` view, centred. Too wide even at the floor, it starts at
+ * the left (the servers) and pans for the rest; too tall, it stays centred on the middle.
+ */
+export function fitView(g: Graph, w: number, h: number, pad = FIT_PAD): { k: number; x: number; y: number } {
+	if (!g.cards.size) return { k: 1, x: pad.x, y: pad.y };
+	const b = bounds(g);
+	const k = Math.max(FIT_MIN, Math.min(1, fitScale(g, w, h, pad)));
+	const x = b.w * k <= w - pad.x * 2 ? w / 2 - (b.x0 + b.w / 2) * k : pad.x - b.x0 * k;
+	return { k, x, y: h / 2 - (b.y0 + b.h / 2) * k };
+}
+
+/**
+ * The layout that fits the view best: many chats under one card wrap into 1 to 4 columns, as many as make the whole
+ * graph show largest. Wrapping never makes it wider than the view at the smallest fitted zoom (the subagents on the
+ * right must not fall off), and a graph that fits anyway keeps one column (fewer columns win a tie).
+ */
+export function fitGraph(servers: GraphServer[], opts: Omit<LayoutOpts, "lanes">, w: number, h: number): Graph {
+	let best = buildGraph(servers, { ...opts, lanes: 1 });
+	if (w <= 0 || h <= 0) return best;
+	let score = Math.min(1, fitScale(best, w, h));
+	for (let lanes = 2; lanes <= 4 && score < 1; lanes++) {
+		const g = buildGraph(servers, { ...opts, lanes });
+		const f = fitScales(g, w, h);
+		if (f.across < FIT_MIN) break; // wider still would only be worse
+		const s = Math.min(1, f.across, f.down);
+		if (s > score * 1.03) [best, score] = [g, s]; // a real gain, not a wash
+	}
+	return best;
 }
 
 /**

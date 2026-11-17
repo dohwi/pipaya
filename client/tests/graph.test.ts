@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, fitView, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, edgeTip, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -138,12 +138,33 @@ describe("helpers", () => {
 		expect(edgePath(a, b)).toStartWith("M50 0C");
 		expect(edgePath(a, b)).toEndWith("248 50");
 		expect(edgePath(a, same)).toEndWith("52 100");
+		// the structure runs square through the middle of the gap, meeting the card's border
+		const el = edgePath(a, b, 1, "elbow");
+		expect(el).toStartWith("M50 0L");
+		expect(el).toEndWith("L250 50");
+		expect(el).toContain("150"); // the spine at the gap's middle (50 … 250)
+		// two cards almost level: a soft step, never a hook past the ends
+		const lv = edgePath(a, { x: 300, y: 3, w: 100 } as never, 1, "elbow");
+		const xs = [...lv.matchAll(/-?[\d.]+ -?[\d.]+/g)].map((m) => +m[0].split(" ")[0]!);
+		expect(Math.min(...xs)).toBeGreaterThanOrEqual(50);
+		expect(Math.max(...xs)).toBeLessThanOrEqual(250);
 	});
-	test("fitView: every column across, never below 60%, never above 100%; nothing to show keeps 100%", () => {
+	test("fitView: centred in the view, never below 50%, never above 100%; nothing to show keeps 100%", () => {
 		const g = buildGraph([server("a", [session("s1")])]);
-		expect(fitView(g, 4000, 3000).k).toBe(1);
-		expect(fitView(g, 300, 300).k).toBe(0.6);
-		expect(fitView(buildGraph([]), 800, 600)).toEqual({ k: 1, x: 24, y: 24 });
+		const big = fitView(g, 4000, 3000);
+		expect(big.k).toBe(1);
+		// the graph's middle lands on the view's middle, both ways
+		expect(big.x + (g.width / 2) * big.k).toBeCloseTo(2000, 5);
+		expect(big.y + (g.height / 2) * big.k).toBeCloseTo(1500, 5);
+		expect(fitView(g, 300, 300).k).toBe(FIT_MIN);
+		// too wide even at the floor: it starts at the left, the servers first
+		expect(fitView(g, 300, 300).x).toBe(FIT_PAD.x);
+		expect(fitView(buildGraph([]), 800, 600)).toEqual({ k: 1, x: FIT_PAD.x, y: FIT_PAD.y });
+	});
+	test("edgeTip: where a call's chevron sits and which way it points", () => {
+		const a = { x: 0, y: 0, w: 100 } as never, b = { x: 300, y: 50, w: 100 } as never;
+		expect(edgeTip(a, b)).toEqual({ x: 248, y: 50, dir: 1 });
+		expect(edgeTip(b, a)).toEqual({ x: 52, y: 0, dir: -1 });
 	});
 });
 
@@ -213,5 +234,57 @@ describe("growth", () => {
 		const end = (d: string) => d.split(" ").slice(-2).map(Number);
 		expect(end(none)).toEqual([a.x + a.w / 2, a.y]);
 		expect(edgePath(a, b, 1)).toBe(full);
+	});
+});
+
+describe("many chats", () => {
+	const many = (n: number, over: Partial<GraphServer> = {}) => server("a", Array.from({ length: n }, (_, i) => session(`s${i}`, { updatedAt: 100 - i })), over);
+	test("a short list stays one column", () => {
+		const g = buildGraph([many(5)], { lanes: 4 });
+		expect(new Set([...g.cards.values()].filter((c) => c.kind === "session").map((c) => c.col))).toEqual(new Set([3]));
+	});
+	test("many chats under one model wrap into columns, filled top to bottom, rows lined up", () => {
+		const g = buildGraph([many(12)], { lanes: 3 });
+		const chats = [...g.cards.values()].filter((c) => c.kind === "session");
+		expect(new Set(chats.map((c) => c.col))).toEqual(new Set([3, 4, 5]));
+		// the first column keeps the order: the newest four, top to bottom
+		const first = chats.filter((c) => c.col === 3).sort((x, y) => x.y - y.y).map((c) => c.id);
+		expect(first).toEqual(["s:a/s0", "s:a/s1", "s:a/s2", "s:a/s3"]);
+		// the same row is the same height across columns, and nothing overlaps
+		const row = (id: string) => g.cards.get(id)!.y;
+		expect(row("s:a/s4")).toBe(row("s:a/s0"));
+		expect(row("s:a/s8")).toBe(row("s:a/s0"));
+		// later columns are reached along a bus above the block; the first column directly
+		expect(g.cards.get("s:a/s0")!.bus).toBeUndefined();
+		const b = g.cards.get("s:a/s5")!.bus!;
+		expect(g.cards.get("s:a/s5")!.y + b.dy).toBeLessThan(Math.min(...chats.map((c) => c.y - c.h / 2)));
+		// a wrapped block is far shorter than a single column
+		expect(g.height).toBeLessThan(buildGraph([many(12)], { lanes: 1 }).height / 2);
+	});
+	test("a chat that calls subagents goes to the last column, nearest them", () => {
+		const g = buildGraph([many(9, { runs: [run("s0", "explore")] })], { lanes: 3 });
+		const chats = [...g.cards.values()].filter((c) => c.kind === "session");
+		expect(g.cards.get("s:a/s0")!.col).toBe(Math.max(...chats.map((c) => c.col)));
+	});
+	test("fitGraph wraps only when that shows the graph larger", () => {
+		const cols = (g: ReturnType<typeof buildGraph>) => new Set([...g.cards.values()].filter((c) => c.kind === "session").map((c) => c.col)).size;
+		// a wide, short view and many chats: wrapped
+		expect(cols(fitGraph([many(30)], {}, 1600, 800))).toBeGreaterThan(1);
+		// a few chats fit anyway: one column
+		expect(cols(fitGraph([many(6)], {}, 1600, 800))).toBe(1);
+		// a narrow view gains nothing from going wider
+		expect(cols(fitGraph([many(30)], {}, 400, 2000))).toBe(1);
+		// never wider than the view at the floor: everything on the right stays in view
+		for (const [w, h] of [[1152, 847], [820, 1127], [1600, 800]] as const) {
+			const g = fitGraph([many(30)], {}, w, h);
+			expect(g.width * FIT_MIN).toBeLessThanOrEqual(w - FIT_PAD.x * 2);
+		}
+	});
+	test("a routed line ends level on its card, from the bus, without crossing its column", () => {
+		const g = buildGraph([many(12)], { lanes: 3 });
+		const m = g.cards.get("m:a/p/m")!, c = g.cards.get("s:a/s9")!;
+		const d = edgePath(m, c, 1, "elbow");
+		expect(d).toEndWith(`L${c.x - c.w / 2} ${c.y}`);
+		expect(d).toContain(` ${c.y + c.bus!.dy}`);
 	});
 });
