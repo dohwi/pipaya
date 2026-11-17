@@ -758,6 +758,7 @@
 		outline: 0;
 		background: transparent;
 		padding: 12px 16px 4px;
+		font-family: var(--font-input); /* Manrope with a shorter caret (app.css); the mirror and hint share it */
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		max-height: 220px;
@@ -778,6 +779,7 @@
 		min-width: 0;
 		max-height: 220px;
 		padding: 12px 16px 4px;
+		font-family: var(--font-input);
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		white-space: pre-wrap;
@@ -832,6 +834,7 @@
 		top: 14px;
 		left: 16px; /* the box has a 1px border, so the hint text lands on the textarea's own 16px (x 17) */
 		right: 16px;
+		font-family: var(--font-input);
 		font-size: var(--fs-lg);
 		line-height: 1.5;
 		overflow: hidden;

@@ -5,6 +5,18 @@
 	font-weight: 200 800;
 	font-display: swap;
 }
+/* The same Manrope with a shorter box, for the composer only (--font-input). Its own metrics (ascent 1.066em + descent
+   0.3em = 1.366em) drew the text caret 22px tall at 16px, 2.5x a lowercase "o"; this face is 1.166em (Roboto's height,
+   18px at 16px). ascent - descent stays 0.766em, so the text keeps its line position. Not applied app-wide: Chromium rounds
+   ascent and descent to whole pixels separately, so at 12, 18 and 28px the baseline moved 1px in every fixed line box. */
+@font-face {
+	font-family: "Manrope Input";
+	src: url("/fonts/manrope-variable.woff2") format("woff2");
+	font-weight: 200 800;
+	font-display: swap;
+	ascent-override: 96.6%;
+	descent-override: 20%;
+}
 @font-face {
 	font-family: "JetBrains Mono";
 	src: url("/fonts/jetbrainsmono-variable.woff2") format("woff2");
@@ -76,6 +88,7 @@
 /* ---------- design tokens (design tokens: monochrome, accent by contrast, not hue) ---------- */
 :root {
 	--font: "Manrope", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+	--font-input: "Manrope Input", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif; /* composer text: a shorter caret, see @font-face */
 	--mono: "JetBrains Mono", "SUIT", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
 	/* Shape: actions and fields share one radius and height; pills are for tags, circles for icon-only buttons.
