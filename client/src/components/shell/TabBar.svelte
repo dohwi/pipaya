@@ -380,6 +380,7 @@
 		height: 34px;
 		min-width: 112px;
 		max-width: 200px;
+		container: tab / inline-size; /* a narrow back tab drops its close button (below) */
 		padding: 0 8px 0 12px; /* the hover pill sits 4px in, so the icon and the close glyph both clear its edges by 8px */
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 		color: var(--text-dim);
@@ -631,16 +632,13 @@
 		height: 20px;
 		border-radius: var(--radius-xs);
 		color: var(--text-faint);
-		opacity: 0;
 	}
-	.tab:hover .x,
-	.tab.on .x,
-	.x:focus-visible {
-		opacity: 1;
-	}
-	@media (pointer: coarse) {
-		.x {
-			opacity: 1;
+	/* every tab shows its close button, as in a browser: the hairline then sits between one tab's × and the next one's icon,
+	   11 and 12px off, instead of floating in the blank a hidden × left. A back tab under 120px (100 inside its padding) drops it
+	   until the pointer is on it. */
+	@container tab (width < 100px) {
+		.tab:not(.on):not(:hover) .x:not(:focus-visible) {
+			display: none;
 		}
 	}
 	@media (hover: hover) {
@@ -705,10 +703,14 @@
 		.gbox:first-child {
 			margin-left: 0;
 		}
+		.tab {
+			container-type: normal; /* chips are as wide as their content: no size containment */
+		}
 		.x {
 			width: 22px;
 			height: 22px;
 		}
+
 		.tab.before,
 		.gbox.before {
 			margin-left: 20px; /* with the strip's 4px gap, the 24px the line's box fills */
