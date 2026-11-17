@@ -658,6 +658,8 @@ export interface ToolRun {
 	images?: ImageBlock[];
 	details?: Record<string, unknown>;
 	durationMs?: number;
+	/** When the call finished (epoch ms): the result message's timestamp, or the moment the live end event came in. */
+	endedAt?: number;
 	/** Set while a call using ctx.ask waits for the user (state is "awaiting_input"). */
 	question?: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items">;
 }

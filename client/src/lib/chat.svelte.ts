@@ -113,6 +113,7 @@ function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun 
 		images: imagesOf(m.content),
 		details: m.details,
 		durationMs: m.durationMs,
+		endedAt: m.timestamp,
 	};
 }
 
@@ -750,6 +751,7 @@ export class ChatState {
 					images: imagesOf(d.result?.content),
 					details: d.result?.details,
 					durationMs: d.durationMs,
+					endedAt: Date.now(),
 				};
 				break;
 			}
