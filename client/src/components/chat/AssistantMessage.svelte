@@ -13,6 +13,7 @@
 	import { onDestroy } from "svelte";
 	import { compact, duration, timeOfDay } from "../../lib/format";
 	import { plainTextOf, replyActions, segmentsOf } from "../../lib/reply-blocks";
+	import { modelDisplayName } from "../../lib/model-name";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 
@@ -100,16 +101,20 @@
 	const actions = $derived(replyActions(tail, last, live));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
+	/** The name the model is registered under on this server ("Echo"), else its id as the reply recorded it ("echo-model"). */
+	const modelName = $derived(modelDisplayName(app.models, tail?.provider, tail?.model));
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
 	/** The reasoning level the reply ran at: "off" for a model that cannot think (it ignores the session's level). */
 	const level = $derived(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? ""));
 	/** "level · 1.2k 토큰 · 3.4s", each part only when known: the details the line shows only with the buttons. */
 	const statsMore = $derived([level, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "));
+	const ref = $derived(tail?.model ? (tail.provider ? `${tail.provider}/${tail.model}` : tail.model) : "");
 	/** The full line on hover, with the provider and the exact token count, for when the pane cuts it short. */
 	const statsTitle = $derived(
 		[
-			tail?.model ? (tail.provider ? `${tail.provider}/${tail.model}` : tail.model) : "",
+			// the registered name with the exact provider/id it stands for, so the tooltip still tells two same-named models apart
+			tail?.model ? (modelName !== tail.model ? `${modelName} (${ref})` : ref) : "",
 			level ? `${t("추론 강도")} ${level}` : "",
 			tokens ? t("{n} 토큰", { n: tokens.toLocaleString(localeTag()) }) : "",
 			took ? duration(took) : "",
@@ -171,7 +176,7 @@
 					{#if tail.ts && (tail.model || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					<!-- at rest only who wrote it; the level, tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
-					{#if tail.model || statsMore}<span class="stext">{tail.model ?? ""}{#if statsMore}<span class="more">{tail.model ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
+					{#if modelName || statsMore}<span class="stext">{modelName}{#if statsMore}<span class="more">{modelName ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>
 				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
 				{#if actions.retry}
