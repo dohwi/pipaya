@@ -100,20 +100,19 @@
 	.ping {
 		animation: pin-ping var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
-	/* a count breathes with its fill only: fading the whole pin washed the digits out and let the tile's edge show
-	   through the ring, so at the low point it read as neither there nor gone. The digits and the ring stay solid;
-	   75% keeps the digits at 4.5:1 (dark) / 3.5:1 (light) on the fill. */
+	/* a pin breathes with its fill only: fading the whole pin made its ring see-through too, so the host's icon or tile
+	   edge showed through the cut-out and the digits washed out; at the low point it read as neither there nor gone.
+	   The ring and the digits stay solid. A dot sinks half way (the logos' --anim-working-dim); a count only to 75%,
+	   which keeps its digits at 4.5:1 (dark) / 3.5:1 (light) on the fill. */
+	.pulse {
+		--pin-dim: 50%;
+	}
 	.num.pulse {
-		animation-name: pin-pulse-fill;
+		--pin-dim: 75%;
 	}
 	@keyframes pin-pulse {
 		50% {
-			opacity: var(--anim-working-dim);
-		}
-	}
-	@keyframes pin-pulse-fill {
-		50% {
-			background-color: color-mix(in srgb, var(--pin-bg) 75%, var(--pin-ring, var(--bg-side)));
+			background-color: color-mix(in srgb, var(--pin-bg) var(--pin-dim), var(--pin-ring, var(--bg-side)));
 		}
 	}
 	@keyframes pin-ping {

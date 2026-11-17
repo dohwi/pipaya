@@ -214,14 +214,17 @@
 		/* the chip is a pill, so its corner is empty: pull the dot in onto the curve */
 		--pin-inset: 2px;
 	}
-	/* unreachable: the chip falls back to a dimmed, dashed outline (still pressable: its "정보" tab fixes the address or token) */
+	/* unreachable: the chip falls back to a dashed outline and a quieter name (still pressable: its "정보" tab fixes the
+	   address or token). No opacity: at 0.5 the name sank to 2.4:1 and the chip looked disabled rather than offline. */
 	.chipwrap.off :global(.fchip) {
-		opacity: 0.5;
 		border-style: dashed;
 		color: var(--text-faint);
 	}
+	.chipwrap.off :global(.fchip:not(.on)) {
+		border-color: var(--border-strong);
+	}
 	.chipwrap.off :global(.fchip.on) {
-		opacity: 0.75;
+		color: var(--text-dim);
 	}
 	.srvname {
 		min-width: 0;
