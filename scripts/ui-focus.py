@@ -2,7 +2,7 @@
 """Audit focus rings: walk every screen with the keyboard and report each ring that is cut off by a scroll box or a clipping
 parent (`overflow: hidden / auto / clip`), or that runs off the window.
 
-Usage: python3 scripts/ui-focus.py [--size 1440x900]... [--seed] [--out DIR] [--max-tabs 80]
+Usage: python3 scripts/ui-focus.py [--size 1440x900]... [--seed [--echo]] [--only a,b] [--out DIR] [--max-tabs 80]
 Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair). `--seed` adds a few conversations, a terminal and a
 split tab first, so the tab strip and the tab overview have cards.
 
@@ -27,6 +27,9 @@ url = f"http://127.0.0.1:{env['CLIENT_PORT']}/"
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("--size", action="append", help="WxH (default 1440x900, 820x1180, 390x844)")
 ap.add_argument("--seed", action="store_true")
+ap.add_argument("--echo", action="store_true", help="with --seed: also run a tool call through the echo model (left running until the script ends)")
+ap.add_argument("--only", help="comma-separated screen names")
+ap.add_argument("--theme", default="dark", choices=["dark", "light"], help="colour scheme (rings and clipping do not change with it; light is a spot check)")
 ap.add_argument("--out", help="screenshots of each cut ring (default: <worktree>/tmp/ui-focus)")
 ap.add_argument("--max-tabs", type=int, default=80, help="Tab presses per screen")
 a = ap.parse_args()
@@ -41,6 +44,7 @@ def api(method, path, body=None):
     return json.loads(urllib.request.urlopen(r).read() or b"null")
 
 
+echo_up = None
 if a.seed:
     # a model that never answers: the sessions only need to exist (the same stub ui-rulers.py seeds with)
     api("PUT", "/configuration/providers/fake", {"name": "fake", "baseUrl": "http://127.0.0.1:9/v1", "api": "openai-completions", "authRequired": False,
@@ -52,18 +56,36 @@ if a.seed:
     pane = lambda i: {"type": "pane", "sessionId": i}
     api("POST", "/groups", {"layout": {"type": "split", "dir": "row", "ratio": 0.5, "a": pane(x), "b": pane(y)}})
     api("POST", "/terminals", {"cwd": "alpha", "title": "zsh"})
+    # a conversation with tool calls and a finished answer (the echo model runs `!bash`): work boxes, the answer's foot
+    if a.echo:
+        echo_up = up = subprocess.Popen(["bun", "scripts/echo-upstream.ts"], cwd=root / "server", stdout=subprocess.PIPE, text=True)
+        ready = json.loads(up.stdout.readline()[6:])
+        api("PUT", "/configuration/providers/echo", ready["provider"])
+        sid = api("POST", "/sessions", {"cwd": "alpha", "title": "도구 실행", "provider": "echo", "model": ready["model"]})["id"]
+        api("POST", f"/sessions/{sid}/messages", {"text": "!bash echo one && echo two", "mode": "prompt"})
+        import time
+        time.sleep(4)
 
 SEED = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": tok}]), "pipaya.server": json.dumps("dev")}
 
-# The screens and how to reach each one. A step is a selector to click; "key:<Key>" presses a key.
-# "open:<text>" opens a conversation from the sidebar (through the drawer on a narrow window).
+# The screens and how to reach each one. A step is a selector to click; "key:<Key>" presses a key, "open:<text>" opens a
+# conversation from the sidebar (through the drawer on a narrow window). Settings panes are listed by their nav label.
+SETTINGS = ["내 설정", "단축키", "백업", "정보", "모델", "음성 입력", "에이전트 도구", "MCP", "대화", "예약 작업", "확장", "기기"]
 SCREENS = [
     ("home", []),
     ("main", ["open:로그인 버그 수정"]),
+    ("work", ["open:도구 실행"]),
     ("tab-overview", ["open:로그인 버그 수정", '[data-part="tab-count"] >> visible=true']),
-    ("settings", ["button.settings"]),
+    *[(f"settings-{n}", ["button.settings", f'.nav button:has-text("{n}")']) for n in SETTINGS],
     ("model-picker", [".trigger.inline"]),
     ("sessions-panel", [".listbtn"]),
+    ("dir-picker", [".where"]),
+    ("context", ["open:로그인 버그 수정", ".statusline .b >> nth=0"]),
+    ("palette", ["open:로그인 버그 수정", "key:Control+k"]),
+    ("find", ["open:도구 실행", "key:Control+f"]),
+    ("schedules", ['button.navbtn:has-text("예약 작업")']),
+    ("graph", ['button.navbtn:has-text("그래프 뷰")']),
+    ("new-menu", ["open:로그인 버그 수정", 'button.add[aria-haspopup="menu"] >> visible=true']),  # the strip's "+", the header's on a phone
 ]
 
 CHECK = r"""() => {
@@ -150,11 +172,13 @@ with sync_playwright() as p:
     b = p.chromium.launch()
     for size in sizes:
         w, h = map(int, size.split("x"))
-        for theme in ("dark",):
+        for theme in (a.theme,):
             ctx = b.new_context(viewport={"width": w, "height": h}, is_mobile=w < 600, has_touch=w < 600, locale="ko-KR", color_scheme=theme)
             ctx.add_init_script(f"if(!sessionStorage.__s){{for(const[k,v]of Object.entries({json.dumps(SEED)}))localStorage.setItem(k,v);sessionStorage.__s=1}}")
             pg = ctx.new_page()
             for name, steps in SCREENS:
+                if a.only and name not in a.only.split(","):
+                    continue
                 try:
                     reach(pg, steps)
                 except Exception as e:
@@ -186,5 +210,7 @@ with sync_playwright() as p:
                 print(f"{size} {name}: {checked} focusable, {found} cut")
             ctx.close()
     b.close()
+if echo_up:
+    echo_up.terminate()
 print(f"done: {bad} cut ring(s)")
 sys.exit(1 if bad else 0)
