@@ -292,6 +292,21 @@
 	.foot :global(.iconbtn) {
 		margin-inline: -2px;
 	}
+	/* copy / reply / branch are lighter than the app's other buttons: a 14px glyph at 1.75 in the stats line's faint colour,
+	   so they read as part of that quiet line instead of three dark marks after it (16px at stroke 2 did). Hover brings the text colour */
+	.foot :global(.iconbtn) {
+		color: var(--text-faint);
+	}
+	.foot :global(.iconbtn svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.75;
+	}
+	@media (hover: hover) {
+		.foot :global(.iconbtn:hover:not(:disabled)) {
+			color: var(--text);
+		}
+	}
 	.acts {
 		display: flex;
 		flex: none;
@@ -366,7 +381,7 @@
 		flex: 0 1 auto;
 		align-items: center;
 		min-width: 0;
-		margin-right: 8px; /* the next box overlaps 2px and holds its glyph 8px in: 14px to the ink, as the time sat after the last glyph before */
+		margin-right: 4px; /* the next box overlaps 2px and holds its 14px glyph 9px in: 11px to the ink */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		white-space: nowrap;

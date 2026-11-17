@@ -235,6 +235,21 @@
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
+	/* copy / reply / branch are lighter than the app's other buttons: a 14px glyph at 1.75 in the time's faint colour,
+	   so they read as part of the time's line instead of three dark marks after it (16px at stroke 2 did). Hover brings the text colour */
+	.actions :global(.iconbtn) {
+		color: var(--text-faint);
+	}
+	.actions :global(.iconbtn svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.75;
+	}
+	@media (hover: hover) {
+		.actions :global(.iconbtn:hover:not(:disabled)) {
+			color: var(--text);
+		}
+	}
 	/* same 28px pitch as the answer's foot: 32px boxes overlapping 2px, so the 16px glyphs do not read 20px apart */
 	.actions :global(.iconbtn) {
 		margin-inline: -2px;
