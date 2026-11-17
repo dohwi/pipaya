@@ -26,7 +26,7 @@
 	.hits button {
 		width: 100%;
 		display: flex;
-		align-items: baseline;
+		align-items: center; /* where it lives on the title's centre line, not its baseline (design-system.md) */
 		gap: 8px;
 		padding: 8px 8px;
 		border-top: 1px solid var(--border);

@@ -405,7 +405,7 @@
 	.ftitle {
 		flex: 1;
 		display: flex;
-		align-items: baseline;
+		align-items: center; /* the small sub on the title's centre line, not its baseline (design-system.md) */
 		gap: 8px;
 		min-width: 0;
 	}
