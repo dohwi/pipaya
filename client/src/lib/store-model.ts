@@ -43,7 +43,17 @@ export interface Server {
 export function loadServers(): Server[] {
   const list = read<Server[]>(K.servers, []);
   if (list.length) void snapshotSettingsToDurable();
-  return list;
+  return pinLocal(list);
+}
+
+/**
+ * The desktop app's own server is always the first one and is never dropped: `list` with `local` (the one held, else the
+ * one in `list`) at the front, once. Without a local server the list is returned as it is.
+ */
+export function pinLocal(list: readonly Server[], local: Server | undefined = list.find((s) => s.local)): Server[] {
+  if (!local) return [...list];
+  // A backup restored from before (its entries carry no `local` flag) may list the same server by id or address again.
+  return [local, ...list.filter((s) => s.id !== local.id && !s.local && s.baseUrl !== local.baseUrl)];
 }
 
 const DEFAULT_THINKING: ThinkingLevel = "medium";

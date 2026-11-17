@@ -38,7 +38,7 @@
 </script>
 
 	<section class="srv band" data-block={`server:${n.server.id}`} data-server="" class:carried={srvMark.carried} class:before={srvMark.before} class:after={srvMark.after} class:cur={n.current} class:off class:stale={n.stale && !off}>
-		<div class="srvhead grabbable" class:folded={sfold} use:sb.dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: single || off, menu: (pt) => sb.headMenuAt(pt, n, null, n.server.id) }}>
+		<div class="srvhead grabbable" class:folded={sfold} use:sb.dirSource={{ kind: "server", serverId: "", path: n.server.id, paths: [], disabled: single || off || Boolean(n.server.local), menu: (pt) => sb.headMenuAt(pt, n, null, n.server.id) }}>
 			<button class="srvtoggle" disabled={off} onclick={() => app.sidebar.toggleFolded(n.server.id)} aria-expanded={!sfold} title={(n.state === "online" ? "" : `${t(statusText[n.state])}\n`) + (n.root ? `${n.server.baseUrl}\n${n.root}` : n.server.baseUrl)}>
 				<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 				<span class="sicon {n.state}"><Icon name="server" /></span>

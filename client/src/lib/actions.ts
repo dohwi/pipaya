@@ -79,7 +79,7 @@ function stepBands() {
   return orderServers(
     app.servers.map((s) => {
       const link = app.links[s.id];
-      return { id: s.id, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
+      return { id: s.id, local: s.local, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
     }),
   ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state), foldedDirs: foldedProjectDirs(b.id) }));
 }
