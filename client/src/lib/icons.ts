@@ -25,7 +25,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	trash: "M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
 	edit: "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4",
 	pencil: "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4",
-	copy: "M9 9h10v11H9zM5 15V4h10",
+	// two sheets with the same soft corners as the other line icons; the back one shows only its two visible sides
+	copy: "M10 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zM5 15a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1",
 	check: "M5 12.5l4.5 4.5L19 7.5",
 	x: "M6 6l12 12M18 6L6 18",
 	"chevron-down": "M6 9l6 6 6-6",
@@ -47,7 +48,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 3.6 9 14 14 0 0 1-3.6 9 14 14 0 0 1-3.6-9A14 14 0 0 1 12 3z",
 	repo: "M12 3l8.5 4v10L12 21l-8.5-4V7zM3.5 7l8.5 4 8.5-4M12 11v10",
 	brain: "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1",
-	fork: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9",
+	// a branch: three 5px nodes (the old 6px ones read heavy beside copy and reply), the side branch joining the trunk's lower node
+	fork: "M6 8v8M6 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6 16a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM18 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM18 8a8 8 0 0 1-8 8H8.5",
 	undo: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5",
 	reply: "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 6 6v4",
 	retry: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
