@@ -146,6 +146,17 @@ When you add an icon or a button to a sidebar row: pick the column it belongs to
   dialogs `--z-scrim-1..5` / `--z-modal-1..5`; above them `--z-toast` 100, `--z-dropdown` 110, `--z-lightbox` 120, `--z-tooltip` 130.
   Anything that crosses components uses a token; a raw 0-9 stays inside one component (`ui-lint` flags anything higher without a comment).
 
+### Loading skeletons
+
+- **Few blunt blocks, never a stack of hairlines.** One bone per thing that is coming (a row, a bubble, a line of the reply), at least 16px thick:
+  sidebar rows 16px, reply lines 24px, the question bubble 40px. Two lines of a reply are enough; more reads as content.
+- Corners: `.skeleton-bar` is `--radius-xs` 4; a 24px line takes `--radius-sm` 8, a bubble the real bubble's `--radius` 12. No pills.
+- **Each bone sits where the real thing lands** (measured, not guessed): sidebar bones start on the folder-icon column (x 41) centred in a 32px row (40 on touch);
+  the chat's bubble top and first reply line match the loaded transcript (`ChatSkeleton`: bubble at the first bubble's top, the first bar around the reply's first line).
+  The swap then changes colour, not layout.
+- Colour and motion come from `app.css` only (`.skeleton-bar`, `--sk-i` for the sweep's order, `.skeleton-in` / `.skeleton-out`, held by `skeletonGate`).
+  A new skeleton reuses them and gets its own component when it is more than a row (`ChatSkeleton.svelte`).
+
 ### Question and tool-call blocks (chat)
 
 Applies to `ToolCard`, `QuestionReply` and the work box. Measured on 320 / 390 / 820 px; all values below are on the 4/8/12/16 scale.
@@ -292,4 +303,5 @@ sidebar, header, tab bar, composer, status line, messages, terminal, split tab.
 - 맞춤용 `margin: -1px`이나 `translate`로 땜질하지 않습니다. 크기가 틀린 박스를 고칩니다.
 - 색만 바꾸는 `:hover`는 `@media (hover: hover)` 안에 둡니다. 터치에서는 마지막으로 탭한 행에 hover가 남아 선택된 것처럼 보입니다(`ui-lint`의 `hover`).
 - 펼친 카드·그룹 카드 안쪽은 위·아래·좌우 여백을 같게 하고, 안쪽 행 사이 간격은 바깥 카드 사이와 같게 합니다. 부모가 `gap`을 주면 자식은 마진을 더하지 않습니다.
+- 로딩 스켈레톤: 얇은 선 여러 줄 대신 굵은 블록 몇 개(사이드바 16px, 답변 줄 24px 두 줄, 질문 버블 40px)를 씁니다. 모서리는 4 / 8 / 12, 알약 모양은 쓰지 않습니다. 각 블록은 실제 내용이 놓일 자리에 재서 맞추고(사이드바 x 41, 버블 위치·첫 답변 줄), 색·움직임은 `app.css`의 `.skeleton-bar`만 씁니다.
 - 질문·도구 호출 블록: 상태는 색으로 말하고 칩은 쓰지 않습니다(실행 중·준비 중·실행 안 됨만 칩). 실패는 빨간 테두리와 빨간 글씨, 대기는 주황 테두리. 보기는 같은 폭의 40px 버튼, 추천은 글자 앞 반짝이, 고른 답은 굵은 테두리와 체크, 입력창 안에 보내기 화살표. 여러 질문은 28px 번호 원(4개까지)을 선으로 이은 단계 표시, 5개부터는 `‹ 3 / 8 ›`. 어느 탭에서도 카드 높이는 같습니다.
