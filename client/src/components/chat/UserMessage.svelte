@@ -7,6 +7,7 @@
 	import FileChip from "./FileChip.svelte";
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { reveal } from "../../lib/reveal.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -38,7 +39,9 @@
 	let expanded = $state(false);
 </script>
 
-<div class="row user" data-part="message.user" class:headed={!!header || scheduled} class:fresh={item.fresh}>
+<!-- a tap shows this message's buttons on a touch screen (reveal.svelte.ts); the buttons themselves are reachable on their own -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="row user" data-part="message.user" class:headed={!!header || scheduled} class:fresh={item.fresh} class:shown={reveal.key === item.key} onclick={(e) => reveal.tap(e, item.key)}>
 	<div class="bubble" class:headedbubble={!!header || scheduled} class:scheduled class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
@@ -246,11 +249,14 @@
 	.actions:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
 	}
+	/* no hover on a phone: a tap on the message shows its buttons (the answer's do the same); hidden ones take no taps */
 	@media (pointer: coarse) {
-
-		/* no hover on a phone: hidden actions would be unreachable, so they stay on */
 		.actions :global(.iconbtn) {
+			pointer-events: none;
+		}
+		.row.user.shown .actions :global(.iconbtn) {
 			opacity: 1;
+			pointer-events: auto;
 		}
 	}
 </style>

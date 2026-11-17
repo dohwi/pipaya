@@ -8,6 +8,7 @@
 	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { reveal } from "../../lib/reveal.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { compact, duration, timeOfDay } from "../../lib/format";
@@ -120,7 +121,9 @@
 	);
 </script>
 
-<div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} use:swipeable>
+<!-- a tap shows this answer's buttons on a touch screen (reveal.svelte.ts); the buttons themselves are reachable on their own -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} class:shown={last || reveal.key === item.key} onclick={(e) => reveal.tap(e, item.key)} use:swipeable>
 	<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
 	<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
 		{#each segments as seg, n (seg.i)}
@@ -304,10 +307,15 @@
 	.acts:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
 	}
-	/* no hover on a touch screen: hidden actions would be unreachable, so they stay on */
+	/* no hover on a touch screen: the newest answer keeps its buttons on, an older one shows them when tapped. Hidden ones
+	   take no taps, so a tap where they sit reveals them instead of copying blind */
 	@media (pointer: coarse) {
 		.acts :global(.iconbtn) {
+			pointer-events: none;
+		}
+		.row.shown .acts :global(.iconbtn) {
 			opacity: 1;
+			pointer-events: auto;
 		}
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
