@@ -107,21 +107,12 @@ export class NotificationClient {
   private cleanup: (() => void)[] = [];
   private navigate: (sessionId: string, api?: Api) => void = () => {};
   private pendingSession: string | null = null;
-  private lastShown: { sid: string; at: number } | null = null;
   private openSession(sid: string) { if (this.api) this.navigate(sid, this.home.get(sid)); else this.pendingSession = sid; }
   private native?: NativePushAdapter;
   private providers: ("fcm" | "apns")[] = [];
   init(visible: () => string[], navigate: (sessionId: string, api?: Api) => void, native?: NativePushAdapter, active: () => string | null = () => null) {
     this.active = active; this.visible = visible; this.navigate = navigate; this.native = native;
     const update = () => { void this.heartbeat(); };
-    // Desktop Tauri gives no click event for system notifications. Clicking one brings the window to the front,
-    // so a focus shortly after a notification was shown is treated as the click.
-    const onFocus = () => {
-      const shown = this.lastShown; this.lastShown = null;
-      if (shown && Date.now() - shown.at < 120_000) this.openSession(shown.sid);
-    };
-    window.addEventListener("focus", onFocus);
-    this.cleanup.push(() => window.removeEventListener("focus", onFocus));
     window.addEventListener("focus", update); window.addEventListener("blur", update); window.addEventListener("pagehide", update); document.addEventListener("visibilitychange", update);
     this.cleanup.push(() => { window.removeEventListener("focus", update); window.removeEventListener("blur", update); window.removeEventListener("pagehide", update); document.removeEventListener("visibilitychange", update); });
     // Shorter than the server's phone focus window (25 s), so a phone that stays in front keeps counting as looked at.
@@ -271,12 +262,12 @@ export class NotificationClient {
         // Our own toast: clicking it raises the window and opens the session (the plugin's toast has no click handler).
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("show_toast", { title, body: payload.body ?? null, sessionId: payload.sessionId ?? null });
-        // no lastShown here: the click is handled exactly by the toast, not guessed from a later focus
       } else if (isTauri()) {
         const plugin = await import("@tauri-apps/plugin-notification");
         // "ic_stat_pipaya" is the status-bar glyph made by scripts/make-icons.py; Android's own default is a generic "i" bubble
+        // macOS/Linux report no click, so tapping the notification only raises the app. Guessing the click from a later
+        // window focus also hijacked plain app switches (Cmd+Tab, Dock) and moved away from the session being worked on.
         plugin.sendNotification({ title, body: payload.body, icon: "ic_stat_pipaya", extra: { sessionId: payload.sessionId ?? "", notificationId: payload.id }, autoCancel: true });
-        if (payload.sessionId && !["android", "ios"].includes(notificationPlatform())) this.lastShown = { sid: payload.sessionId, at: Date.now() };
       } else {
         const notification = new Notification(title, { body: payload.body, tag: payload.sessionId ?? payload.id });
         notification.onclick = () => { window.focus(); if (payload.sessionId) this.openSession(payload.sessionId); notification.close(); };
