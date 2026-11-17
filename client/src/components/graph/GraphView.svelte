@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
-	import { cardIn, glowFade } from "../../lib/motion";
+	import { glowFade } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { hostOf } from "../../lib/format";
@@ -10,7 +10,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, buildGraph, edgePath, fitView, modelName, related, springStep, type Card, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, buildGraph, edgePath, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -94,6 +94,9 @@
 	let touched = false;
 	/** Room the floating bar takes at the bottom of the view. */
 	const BAR_H = 64;
+	/** The frame loop that moves cards, lines and the view (running only while something moves). */
+	let raf = 0;
+	let last = 0;
 	/**
 	 * Where the view is gliding to (fit, a zoom step), or null while the hand moves it directly (drag, pinch, a trackpad).
 	 * A zoom step keeps the graph point under the pointer still: it springs the scale only and places x, y around it.
@@ -169,29 +172,127 @@
 	const shown = new Map<string, { x: number; y: number; h: number; vx: number; vy: number; vh: number }>();
 	/** Bumped once per animation frame: what reads `at()` redraws. */
 	let frame = $state(0);
-	/** A new card comes in from a little to its left (where its line comes from), fading in. */
-	const ENTER_DX = 24;
-	$effect(() => {
+	/** The animation clock (performance.now), advanced each frame. */
+	let clock = $state(typeof performance === "object" ? performance.now() : 0);
+
+	/*
+	 * Growth: a branch grows from left to right. A line draws itself out of the card it leaves, and the card at its end
+	 * fades in as the line reaches it, column after column (graph.ts `growthPlan`). Leaving is the reverse: the rightmost
+	 * fades first and its line pulls back into the card it came from (`leavePlan`); until then the card stays drawn as a
+	 * ghost (not clickable). Opening the view grows the whole graph a little faster.
+	 */
+	const GROW = { lead: 80, draw: 380, fade: 300 };
+	const GROW_OPEN = { lead: 40, draw: 240, fade: 240 };
+	const LEAVE = { fade: 200, retract: 260 };
+	/** When each card starts to fade in, and each line to draw (ms, on `clock`). */
+	const born = new Map<string, number>();
+	const edgeBorn = new Map<string, number>();
+	/** The fade-in each card was given and the draw time of each line (opening is quicker). */
+	const fadeOf = new Map<string, number>();
+	const drawOf = new Map<string, number>();
+	let ghostCards = $state<Card[]>([]);
+	let ghostEdges = $state<Edge[]>([]);
+	const leaveAt = new Map<string, number>();
+	const leaveEdgeAt = new Map<string, number>();
+	let prev: Graph | null = null;
+	// before the DOM updates: a new card must not show for one frame before its plan hides it
+	$effect.pre(() => {
 		const g = graph;
 		untrack(() => {
-			const first = !shown.size;
-			for (const c of g.cards.values()) {
-				if (shown.has(c.id)) continue;
-				const dx = first || !motion ? 0 : ENTER_DX;
-				shown.set(c.id, { x: c.x - dx, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+			const now = performance.now();
+			const opening = !prev;
+			const timing = opening ? GROW_OPEN : GROW;
+			// back before it finished leaving: it is simply there again
+			if (ghostCards.some((c) => g.cards.has(c.id))) ghostCards = ghostCards.filter((c) => !g.cards.has(c.id));
+			if (ghostEdges.some((e) => g.edges.some((x) => x.id === e.id))) ghostEdges = ghostEdges.filter((e) => !g.edges.some((x) => x.id === e.id));
+			if (motion) {
+				const plan = growthPlan(g, (id) => born.get(id), (id) => edgeBorn.has(id), now, timing);
+				for (const [id, t] of plan.cards) {
+					born.set(id, t);
+					fadeOf.set(id, timing.fade);
+				}
+				for (const [id, t] of plan.edges) {
+					edgeBorn.set(id, t);
+					drawOf.set(id, timing.draw);
+				}
+			} else {
+				for (const id of g.cards.keys()) if (!born.has(id)) born.set(id, -Infinity);
+				for (const e of g.edges) if (!edgeBorn.has(e.id)) edgeBorn.set(e.id, -Infinity);
 			}
-			for (const id of shown.keys()) if (!g.cards.has(id)) shown.delete(id);
+			// what left the layout leaves the screen right to left
+			if (prev && motion) {
+				const goneCards = [...prev.cards.values()].filter((c) => !g.cards.has(c.id));
+				const ids = new Set(g.edges.map((e) => e.id));
+				const goneEdges = prev.edges.filter((e) => !ids.has(e.id) && prev!.cards.has(e.from) && prev!.cards.has(e.to));
+				if (goneCards.length || goneEdges.length) {
+					const plan = leavePlan(new Set(goneCards.map((c) => c.id)), goneEdges, now, LEAVE);
+					for (const [id, t] of plan.cards) leaveAt.set(id, t);
+					for (const [id, t] of plan.edges) leaveEdgeAt.set(id, t);
+					ghostCards = [...ghostCards, ...goneCards];
+					// a line keeps its ends drawn: a gone card from this snapshot, a staying one from the layout
+					ghostEdges = [...ghostEdges, ...goneEdges];
+				}
+			}
+			for (const id of born.keys()) if (!g.cards.has(id) && !ghostCards.some((c) => c.id === id)) born.delete(id);
+			for (const id of edgeBorn.keys()) if (!g.edges.some((e) => e.id === id)) {
+				edgeBorn.delete(id);
+				drawOf.delete(id);
+			}
+			for (const c of g.cards.values()) if (!shown.has(c.id)) shown.set(c.id, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+			for (const id of shown.keys()) if (!g.cards.has(id) && !ghostCards.some((c) => c.id === id)) shown.delete(id);
+			prev = g;
 			kick();
 		});
 	});
+	const ghostById = $derived(new Map(ghostCards.map((c) => [c.id, c])));
 	/** A card where it is drawn this frame (the layout's place once it has settled). */
 	function at(c: Card): Card {
 		void frame;
 		const s = shown.get(c.id);
 		return s ? { ...c, x: s.x, y: s.y, h: s.h } : c;
 	}
-	let raf = 0;
-	let last = 0;
+	const clamp01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
+	const inOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+	/** How far a card has come in (0 hidden, 1 there), or how much of it is left while it leaves. */
+	function presence(id: string): number {
+		const lv = leaveAt.get(id);
+		if (lv !== undefined && ghostById.has(id)) return 1 - clamp01((clock - lv) / LEAVE.fade);
+		const b = born.get(id);
+		return b === undefined ? 1 : clamp01((clock - b) / (fadeOf.get(id) ?? GROW.fade));
+	}
+	/** How much of a line is drawn: it grows out of its first card, and pulls back into it when it leaves. */
+	function reach(e: Edge, ghost: boolean): number {
+		if (ghost) {
+			const lv = leaveEdgeAt.get(e.id);
+			return lv === undefined ? 0 : 1 - clamp01((clock - lv) / LEAVE.retract) ** 2;
+		}
+		const b = edgeBorn.get(e.id);
+		return b === undefined ? 1 : inOut(clamp01((clock - b) / (drawOf.get(e.id) ?? GROW.draw)));
+	}
+	/** Something still grows or leaves: the frame loop keeps going. */
+	function growing(now: number): boolean {
+		let busy = false;
+		for (const [id, b] of born) if (now < b + (fadeOf.get(id) ?? GROW.fade)) busy = true;
+		for (const [id, b] of edgeBorn) if (now < b + (drawOf.get(id) ?? GROW.draw)) busy = true;
+		if (ghostCards.length || ghostEdges.length) {
+			const cards = ghostCards.filter((c) => now < (leaveAt.get(c.id) ?? 0) + LEAVE.fade);
+			const edges = ghostEdges.filter((e) => now < (leaveEdgeAt.get(e.id) ?? 0) + LEAVE.retract);
+			if (cards.length !== ghostCards.length) {
+				for (const c of ghostCards) if (!cards.includes(c)) {
+					leaveAt.delete(c.id);
+					born.delete(c.id);
+					if (!graph.cards.has(c.id)) shown.delete(c.id);
+				}
+				ghostCards = cards;
+			}
+			if (edges.length !== ghostEdges.length) {
+				for (const e of ghostEdges) if (!edges.includes(e)) leaveEdgeAt.delete(e.id);
+				ghostEdges = edges;
+			}
+			busy ||= cards.length > 0 || edges.length > 0;
+		}
+		return busy;
+	}
 	function kick() {
 		if (raf || typeof requestAnimationFrame !== "function") return;
 		last = performance.now();
@@ -205,7 +306,7 @@
 		let moving = false;
 		for (const [id, s] of shown) {
 			const c = graph.cards.get(id);
-			if (!c) continue;
+			if (!c) continue; // a ghost: it stays where it was while it leaves
 			// the card under the hand, or no motion wanted: exactly where it belongs
 			if (!motion || dragging === id) {
 				Object.assign(s, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
@@ -234,6 +335,8 @@
 			if (view.k === g.k && view.x === g.x && view.y === g.y) hold();
 			else moving = true;
 		}
+		clock = now;
+		if (growing(now)) moving = true;
 		frame++;
 		raf = moving ? requestAnimationFrame(tick) : 0;
 	}
@@ -448,19 +551,22 @@
 					<marker id="gv-arrow-call" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="m-call" d="M1 1.5L8.5 5L1 8.5z" /></marker>
 					<filter id="gv-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
 				</defs>
-				{#each graph.edges as e (e.id)}
-					{@const ca = graph.cards.get(e.from)}
-					{@const cb = graph.cards.get(e.to)}
-					{#if ca && cb}
+				{#each [...graph.edges, ...ghostEdges] as e (e.id)}
+					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdges.includes(e)}
+					{@const ca = graph.cards.get(e.from) ?? ghostById.get(e.from)}
+					{@const cb = graph.cards.get(e.to) ?? ghostById.get(e.to)}
+					{@const r = reach(e, ghost)}
+					{#if ca && cb && r > 0}
 						{@const a = at(ca)}
 						{@const b = at(cb)}
 						{@const on = !focus || (focus.has(e.from) && focus.has(e.to))}
-						{@const d = edgePath(a, b)}
+						{@const d = edgePath(a, b, r)}
 						{@const call = e.kind === "delegate"}
-						<g class="e-{e.kind}" class:live={e.live} class:dim={!on} class:hot={!!focus && on}>
-							{#if e.live}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
-							<path class="base" {d} marker-end={e.kind === "tree" && !e.live ? undefined : `url(#gv-arrow${e.live ? (call ? "-call" : "-live") : call ? "-call" : ""})`} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
-							{#if e.live && motion}
+						{@const full = r >= 1 && !ghost}
+						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on}>
+							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
+							<path class="base" {d} marker-end={(e.kind === "tree" && !e.live) || ghost ? undefined : `url(#gv-arrow${e.live ? (call ? "-call" : "-live") : call ? "-call" : ""})`} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
+							{#if e.live && motion && full}
 								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each;
 								     they fade in and out with the work instead of popping -->
 								<g class="moving" transition:glowFade>
@@ -478,10 +584,11 @@
 					{/if}
 				{/each}
 			</svg>
-			{#each [...graph.cards.values()] as c (c.id)}
+			{#each [...graph.cards.values(), ...ghostCards] as c (c.id)}
 				{@const p = at(c)}
+				{@const ghost = !graph.cards.has(c.id)}
+				{@const u = presence(c.id)}
 				<div
-					in:cardIn
 					class="card {c.kind} {c.kind === 'session' ? c.activity : ''}"
 					class:down={c.kind === "server" && !c.online}
 					class:run={c.kind === "subagent" && !!c.running}
@@ -489,7 +596,10 @@
 					class:dim={!!focus && !focus.has(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
-					data-card={c.id}
+					class:ghost
+					class:arriving={u < 1}
+					data-card={ghost ? undefined : c.id}
+					style:--in={u}
 					style:width="{c.w}px"
 					style:height="{p.h}px"
 					style:transform="translate({p.x - c.w / 2}px, {p.y - p.h / 2}px)"
@@ -865,6 +975,20 @@
 	}
 	.card.dim {
 		opacity: 0.45; /* still readable: the related cards stand out, the rest stays legible */
+	}
+	/* coming in (or going): --in runs 0 → 1 per frame as its line reaches it; it fades up, from a touch smaller and from the
+	   left where the line comes from. `scale` and `translate` leave the transform that places the card alone. */
+	.card.arriving {
+		opacity: var(--in);
+		scale: calc(0.96 + 0.04 * var(--in));
+		translate: calc((1 - var(--in)) * -12px) 0;
+		transition: none;
+	}
+	.card.dim.arriving {
+		opacity: calc(0.45 * var(--in));
+	}
+	.card.ghost {
+		pointer-events: none;
 	}
 	.lead {
 		grid-row: 1 / 3;

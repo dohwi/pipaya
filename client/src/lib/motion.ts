@@ -135,14 +135,6 @@ export function glowFade(node: Element, { delay = 0 }: { delay?: number } = {}) 
 	const o = targetOpacity(node);
 	return { duration: ms("slow"), delay: reduced() ? 0 : delay, easing: easeEnter, css: (t: number) => `opacity:${(t * o).toFixed(3)}` };
 }
-/**
- * A card that arrives on a canvas (a new chat or subagent in the graph view): it fades up from slightly smaller. It sets the
- * `scale` property, not `transform`, so the transform that places the card on the canvas is left alone.
- */
-export function cardIn(_node: Element) {
-	return { duration: ms("normal"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)};scale:${(0.96 + 0.04 * t).toFixed(4)}` };
-}
-
 /* ---------- surfaces: menus, pickers, toasts. Translate + fade only, no scale. ---------- */
 export function surfaceIn(node: Element, { y = 8 }: { y?: number } = {}) {
 	const o = targetOpacity(node);

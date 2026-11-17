@@ -269,20 +269,113 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	return { cards, edges, bands, cols, width: Math.max(0, x - COL_GAP), height: Math.max(0, cursor - ROW_GAP) };
 }
 
-/** A curve from the right edge of `a` to the left edge of `b` (or back out of the right side when `b` is not to its right). */
-export function edgePath(a: Card, b: Card): string {
+/**
+ * A curve from the right edge of `a` to the left edge of `b` (or back out of the right side when `b` is not to its right).
+ * `p` < 1 draws only its first part, the same curve cut short (a line growing from `a` toward `b`).
+ */
+export function edgePath(a: Card, b: Card, p = 1): string {
 	const ax = a.x + a.w / 2;
+	let pts: number[];
 	if (b.x - b.w / 2 > ax + 8) {
 		const bx = b.x - b.w / 2 - 2; // the arrow tip sits just off the card's border
 		const c = Math.max(32, (bx - ax) / 2);
-		return `M${ax} ${a.y}C${ax + c} ${a.y} ${bx - c} ${b.y} ${bx} ${b.y}`;
-	}
-	if (b.x + b.w / 2 < a.x - a.w / 2 - 8) {
+		pts = [ax, a.y, ax + c, a.y, bx - c, b.y, bx, b.y];
+	} else if (b.x + b.w / 2 < a.x - a.w / 2 - 8) {
 		const x0 = a.x - a.w / 2, bx = b.x + b.w / 2 + 2, c = Math.max(32, (x0 - bx) / 2);
-		return `M${x0} ${a.y}C${x0 - c} ${a.y} ${bx + c} ${b.y} ${bx} ${b.y}`;
+		pts = [x0, a.y, x0 - c, a.y, bx + c, b.y, bx, b.y];
+	} else {
+		const bx = b.x + b.w / 2 + 2, c = 40 + Math.min(120, Math.abs(b.y - a.y) * 0.3);
+		pts = [ax, a.y, ax + c, a.y, bx + c, b.y, bx, b.y];
 	}
-	const bx = b.x + b.w / 2 + 2, c = 40 + Math.min(120, Math.abs(b.y - a.y) * 0.3);
-	return `M${ax} ${a.y}C${ax + c} ${a.y} ${bx + c} ${b.y} ${bx} ${b.y}`;
+	const [x0, y0, x1, y1, x2, y2, x3, y3] = p >= 1 ? pts : splitCubic(pts, Math.max(0, p));
+	return `M${x0} ${y0}C${x1} ${y1} ${x2} ${y2} ${x3} ${y3}`;
+}
+
+/** The first part of a cubic Bézier, up to `t` (de Casteljau): the same curve, cut short. */
+export function splitCubic([x0, y0, x1, y1, x2, y2, x3, y3]: number[], t: number): number[] {
+	const l = (a: number, b: number) => a + (b - a) * t;
+	const [ax, ay, bx, by, cx, cy] = [l(x0!, x1!), l(y0!, y1!), l(x1!, x2!), l(y1!, y2!), l(x2!, x3!), l(y2!, y3!)];
+	const [dx, dy, ex, ey] = [l(ax, bx), l(ay, by), l(bx, cx), l(by, cy)];
+	const r = (n: number) => Math.round(n * 100) / 100;
+	return [x0!, y0!, r(ax), r(ay), r(dx), r(dy), r(l(dx, ex)), r(l(dy, ey))];
+}
+
+/**
+ * When each new card and line shows, so a branch grows from left to right: a line starts drawing once the card it leaves
+ * has appeared, and the card at its end appears when the line reaches it. `known` holds the cards already on screen (and
+ * when they appear, which may still be ahead); a card with no line into it (a new server) appears at `now`.
+ * Returns when each fresh card appears and each fresh line starts, in ms on the same clock as `now`.
+ */
+export function growthPlan(
+	g: Pick<Graph, "cards" | "edges">,
+	known: (id: string) => number | undefined,
+	knownEdge: (id: string) => boolean,
+	now: number,
+	{ lead, draw }: { lead: number; draw: number },
+): { cards: Map<string, number>; edges: Map<string, number> } {
+	const cards = new Map<string, number>();
+	const edges = new Map<string, number>();
+	const into = new Map<string, Edge[]>();
+	for (const e of g.edges) if (g.cards.has(e.from) && e.from !== e.to) into.set(e.to, [...(into.get(e.to) ?? []), e]);
+	const visiting = new Set<string>();
+	/** A line leaves its card a moment after the card starts to show (at once from a card already there). */
+	const start = (from: string) => Math.max(now, appear(from) + lead);
+	const appear = (id: string): number => {
+		const k = known(id);
+		if (k !== undefined) return k;
+		const hit = cards.get(id);
+		if (hit !== undefined) return hit;
+		if (visiting.has(id)) return now; // never a loop in this graph; if one came, it stops here
+		visiting.add(id);
+		// the structural line (its column's parent) leads; a subagent has only delegate lines: the earliest caller's
+		const ins = into.get(id) ?? [];
+		const first = ins.find((e) => e.kind !== "delegate") ?? ins[0];
+		const at = first ? start(first.from) + draw : now;
+		visiting.delete(id);
+		cards.set(id, at);
+		return at;
+	};
+	for (const id of g.cards.keys()) appear(id);
+	for (const e of g.edges) if (!knownEdge(e.id) && g.cards.has(e.from)) edges.set(e.id, start(e.from));
+	return { cards, edges };
+}
+
+/**
+ * The way out, growth in reverse: the rightmost goes first. A line pulls back into the card it leaves, and a card fades
+ * once every line out of it has pulled back; the line into it follows. `gone` are the cards that left the layout,
+ * `edges` the lines that did (their ends may stay). Returns when each card starts to fade and each line to pull back.
+ */
+export function leavePlan(
+	gone: ReadonlySet<string>,
+	edges: Edge[],
+	now: number,
+	{ fade, retract }: { fade: number; retract: number },
+): { cards: Map<string, number>; edges: Map<string, number> } {
+	const cards = new Map<string, number>();
+	const lines = new Map<string, number>();
+	const out = new Map<string, Edge[]>();
+	for (const e of edges) out.set(e.from, [...(out.get(e.from) ?? []), e]);
+	const visiting = new Set<string>();
+	const leave = (id: string): number => {
+		const hit = cards.get(id);
+		if (hit !== undefined) return hit;
+		if (visiting.has(id)) return now;
+		visiting.add(id);
+		const at = Math.max(now, ...(out.get(id) ?? []).map((e) => line(e) + retract));
+		visiting.delete(id);
+		cards.set(id, at);
+		return at;
+	};
+	const line = (e: Edge): number => {
+		const hit = lines.get(e.id);
+		if (hit !== undefined) return hit;
+		const at = gone.has(e.to) ? leave(e.to) + fade : now;
+		lines.set(e.id, at);
+		return at;
+	};
+	for (const id of gone) leave(id);
+	for (const e of edges) line(e);
+	return { cards, edges: lines };
 }
 
 /** The cards a pointer on `id` is about: its line up to the server, everything below it, and both ends of its delegate edges. */
