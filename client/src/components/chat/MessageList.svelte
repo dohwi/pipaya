@@ -318,9 +318,9 @@
 		{#if sk.showing}
 			<!-- a conversation's outline while it loads: a question on the right, the start of a reply under it -->
 			<div class="skeleton" class:skeleton-in={!lateStart} aria-busy="true" aria-label={t("불러오는 중…")}>
-				<div class="skbubble"><i class="skeleton-bar skline" style:width="180px"></i></div>
+				<i class="skeleton-bar skbubble"></i>
 				<div class="skpara">
-					{#each [96, 88, 56] as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={i + 1}></i>{/each}
+					{#each [100, 64] as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={i + 1}></i>{/each}
 				</div>
 			</div>
 		{:else if chat.loadError}
@@ -506,19 +506,20 @@
 		gap: 24px;
 		padding-top: 8px;
 	}
+	/* a few blunt blocks, not a stack of hairlines: two thick bars for the start of a reply */
 	.skline {
 		display: block;
-		height: 12px;
+		height: 24px;
 		max-width: 100%;
+		border-radius: var(--radius-sm);
 	}
-	/* the question: a bubble on the right, drawn like the real one (UserMessage .bubble) */
+	/* the question: one solid block on the right, the size and corners of a short bubble (UserMessage .bubble) */
 	.skbubble {
+		display: block;
 		align-self: flex-end;
-		max-width: min(85%, 560px);
-		padding: 12px 16px;
+		width: min(85%, 240px);
+		height: 48px;
 		border-radius: var(--radius);
-		background: var(--user-bg);
-		border: 1px solid var(--border);
 	}
 	.skpara {
 		display: flex;

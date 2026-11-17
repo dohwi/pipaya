@@ -58,7 +58,7 @@
 				<!-- folders and tabs as bones on the sidebar's columns (folder icon 48, titles from x 80), 32px rows like the real ones -->
 				<div class="sklist skeleton-in" aria-busy="true" aria-label={t("불러오는 중…")}>
 					{#each bones as b, d (d)}
-						<div class="skrow skdir"><i class="skeleton-bar skglyph"></i><i class="skeleton-bar skbar" style:width="{b.dir}px"></i></div>
+						<div class="skrow skdir"><i class="skeleton-bar skbar" style:width="{b.dir + 20}px"></i></div>
 						{#each b.tabs as w, i (i)}
 							<div class="skrow sktab"><i class="skeleton-bar skbar" style:width="{w}px" style:--sk-i={d * 2 + i + 1}></i></div>
 						{/each}
@@ -235,13 +235,12 @@
 	.skrow {
 		display: flex;
 		align-items: center;
-		gap: 6px; /* alignment, not spacing: the folder glyph 14 + 6, so the name bone starts where .dname does (as in .dirtoggle) */
 		height: 32px;
 		margin: 1px 0; /* rows sit 1px apart, like .item */
 	}
 	.skdir {
 		margin-top: 12px; /* a later folder sits 12 under the tab above, like .dir */
-		padding-left: 24px; /* the folder glyph centres on x 48: .dirtoggle's 4 + the chevron's 14 + 6 */
+		padding-left: 24px; /* the bone starts where the folder glyph does (.dirtoggle's 4 + the chevron's 14 + 6) and covers its name too */
 	}
 	.skdir:first-child {
 		margin-top: 4px; /* the folder sits 4 under the header, like .dirblock:first-child > .dir */
@@ -254,16 +253,10 @@
 	.sktab {
 		padding-left: 63px; /* the bone starts where a row's text does, after its icon (x 80: .item 4 + .open 39 + the 16px lead + its 4 gap, measured) */
 	}
-	.skglyph {
-		display: block;
-		flex: none;
-		width: 14px;
-		height: 14px;
-		border-radius: var(--radius-xs);
-	}
+	/* one blunt block per row (a folder's glyph and name are a single bone), thick enough to read as a row, not a hairline */
 	.skbar {
 		display: block;
-		height: 10px;
+		height: 16px;
 		max-width: 100%;
 	}
 	.sicon :global(svg) {
