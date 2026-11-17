@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bezier, cssMs, dialogFrame, easeEnter, easeExit, ms, surfaceFrame } from "../src/lib/motion";
+import { bezier, cssMs, dialogFrame, easeEnter, easeExit, modalIn, modalQuickIn, ms, surfaceFrame } from "../src/lib/motion";
 import { rippleSize } from "../src/lib/ripple";
 
 describe("bezier", () => {
@@ -36,6 +36,10 @@ describe("frames", () => {
 		expect(out.y).toBeLessThan(into.y);
 		expect(dialogFrame(0, "in")).toEqual({ opacity: 1, y: 0, scale: 1 });
 		for (const dir of ["in", "out"] as const) for (const u of [0, 0.5, 1]) expect(dialogFrame(u, dir).scale).toBe(1);
+		// a quick look comes in faster and from half as far
+		const node = {} as Element;
+		expect(modalQuickIn(node).duration).toBeLessThan(modalIn(node).duration);
+		expect(modalQuickIn(node).css!(0, 1)).toContain("translateY(8.00px)");
 	});
 	test("surfaces never scale (a large panel scaling wobbles every edge)", () => {
 		for (const dir of ["in", "out"] as const) for (const u of [0, 0.5, 1]) expect(surfaceFrame(u, 10, dir).scale).toBe(1);
@@ -161,7 +165,9 @@ describe("modals mounted by their parent animate", () => {
 	test("the shared Modal's scrim and panel use global transitions", () => {
 		const s = markup(read("components/ui/Modal.svelte"));
 		expect(s).toMatch(/class="scrim"[^>]*in:fadeIn\|global out:fadeOut\|global/);
-		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
+		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:enter\|global\s+out:modalOut\|global/);
+		// `enter` is modalIn, or the quicker modalQuickIn for a quick look
+		expect(read("components/ui/Modal.svelte")).toMatch(/const enter = \(node: Element\) => \(quick \? modalQuickIn\(node\) : modalIn\(node\)\)/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
 		for (const f of ["server/ServerForm", "settings/Settings", "server/DirPicker", "chat/QueueModal", "models/ConnectionForm", "extensions/ImportDialogs", "agent/SkillsDialog", "agent/CommandFamiliesDialog", "ui/PickerModal", "ui/ConfirmDialog", "chat/StatusCard"]) {

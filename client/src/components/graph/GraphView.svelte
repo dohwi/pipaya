@@ -7,7 +7,7 @@
 	import { sessionTitle } from "../../lib/session-title";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { activityOf } from "../../lib/activity";
-	import { formatCombo } from "../../lib/keys";
+	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
@@ -21,7 +21,7 @@
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
 	 * between them moving while work flows. Drag the background to pan, a mouse wheel to zoom (a trackpad scrolls with
 	 * two fingers and zooms with a pinch), a card to move it. One click on a chat opens it in a large dialog
-	 * (read it, its tool calls, write to it); a double click goes to the chat itself.
+	 * (read it, its tool calls, write to it) at once; Ctrl/⌘ + click goes to the chat itself.
 	 */
 
 	// ---- data: what every link keeps live, plus each server's delegate calls ----
@@ -195,10 +195,9 @@
 	 * Growth: a branch grows from left to right. A line draws itself out of the card it leaves, and the card at its end
 	 * fades in as the line reaches it, column after column (graph.ts `growthPlan`). Leaving is the reverse: the rightmost
 	 * fades first and its line pulls back into the card it came from (`leavePlan`); until then the card stays drawn as a
-	 * ghost (not clickable). Opening the view grows the whole graph a little faster.
+	 * ghost (not clickable). Opening the view shows the whole graph at once: growth is for what changes while it is open.
 	 */
 	const GROW = { lead: 80, draw: 380, fade: 300 };
-	const GROW_OPEN = { lead: 40, draw: 240, fade: 240 };
 	const LEAVE = { fade: 200, retract: 260 };
 	/** When each card starts to fade in, and each line to draw (ms, on `clock`). */
 	const born = new Map<string, number>();
@@ -217,11 +216,11 @@
 		untrack(() => {
 			const now = performance.now();
 			const opening = !prev;
-			const timing = opening ? GROW_OPEN : GROW;
+			const timing = GROW;
 			// back before it finished leaving: it is simply there again
 			if (ghostCards.some((c) => g.cards.has(c.id))) ghostCards = ghostCards.filter((c) => !g.cards.has(c.id));
 			if (ghostEdges.some((e) => g.edges.some((x) => x.id === e.id))) ghostEdges = ghostEdges.filter((e) => !g.edges.some((x) => x.id === e.id));
-			if (motion) {
+			if (motion && !opening) {
 				const plan = growthPlan(g, (id) => born.get(id), (id) => edgeBorn.has(id), now, timing);
 				for (const [id, t] of plan.cards) {
 					born.set(id, t);
@@ -369,9 +368,8 @@
 	let drag: { x: number; y: number; vx: number; vy: number; card: string | null; tapped: string | null; cx: number; cy: number; moved: boolean } | null = null;
 	let dragging = $state<string | null>(null);
 	let panning = $state(false);
-	/** One click waits this long to see whether it becomes a double click. */
-	const DOUBLE_MS = 250;
-	let clickTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Ctrl (⌘ on a Mac) held with the click: go to the chat instead of looking at it. */
+	const goKey = (e: { ctrlKey: boolean; metaKey: boolean }) => (isMac ? e.metaKey : e.ctrlKey);
 
 	/** Fingers on the canvas: two make a pinch, which zooms about their midpoint and pans with it. */
 	const fingers = new Map<number, { x: number; y: number }>();
@@ -391,7 +389,6 @@
 				drag = null;
 				dragging = null;
 				panning = false;
-				clearTimeout(clickTimer);
 				pinch = pinchOf();
 				viewEl!.setPointerCapture(e.pointerId);
 				return;
@@ -461,16 +458,9 @@
 		const c = d.tapped ? graph.cards.get(d.tapped) : undefined;
 		selected = c?.id ?? null;
 		if (c?.kind !== "session") return;
-		clearTimeout(clickTimer);
-		clickTimer = setTimeout(() => peek(c.server, c.session!.id), DOUBLE_MS);
-	}
-	function dbl(e: MouseEvent) {
-		// the canvas holds the pointer capture, so the event's target is the canvas: find the card under the pointer
-		const c = graph.cards.get(cardAt(document.elementFromPoint(e.clientX, e.clientY)) ?? "");
-		if (c?.kind !== "session") return;
-		clearTimeout(clickTimer);
-		app.closePeek();
-		app.openIn(c.server, { session: c.session!.id });
+		// a click opens the chat's dialog at once (no wait for a second click); Ctrl/⌘ + click goes to the chat
+		if (goKey(e)) app.openIn(c.server, { session: c.session!.id });
+		else peek(c.server, c.session!.id);
 	}
 	function arrange() {
 		pins = {};
@@ -491,7 +481,6 @@
 		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
 		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
 	}
-	onMount(() => () => clearTimeout(clickTimer));
 
 	onMount(() => {
 		const q = matchMedia("(prefers-reduced-motion: reduce)");
@@ -529,10 +518,13 @@
 			t("서브에이전트 위임 {n}회", { n: runs }),
 		].join(" · ");
 	});
+	/** On a chat card: what a click does, and the modifier that goes to the chat instead. */
+	const openHint = t("클릭: 빠른 보기 · {key}+클릭: 대화로 이동", { key: isMac ? "⌘" : "Ctrl" });
 	const keyHint = $derived(app.prefs.bindings.openGraph ? ` (${formatCombo(app.prefs.bindings.openGraph)})` : "");
 </script>
 
-<!-- A region the keyboard can reach: F fits, +/- zoom, Enter opens the selected chat (Shift+Enter: the chat itself). -->
+<!-- A region the keyboard can reach: F fits, +/- zoom, Enter opens the selected chat (Shift+Enter: the chat itself).
+     A click on a chat opens its dialog; Ctrl/⌘ + click goes to the chat. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <section class="graph" aria-label={t("그래프 뷰")} tabindex="0" onkeydown={key}>
 	<header class="head">
@@ -554,7 +546,6 @@
 		onpointerup={up}
 		onpointercancel={up}
 		onpointerleave={() => (hover = null)}
-		ondblclick={dbl}
 		onwheel={wheel}
 		style:background-size="{32 * view.k}px {32 * view.k}px"
 		style:background-position="{view.x}px {view.y}px"
@@ -628,6 +619,7 @@
 					class:ghost
 					class:arriving={u < 1}
 					data-card={ghost ? undefined : c.id}
+					title={c.kind === "session" && !ghost ? openHint : undefined}
 					style:--in={u}
 					style:width="{c.w}px"
 					style:height="{p.h}px"

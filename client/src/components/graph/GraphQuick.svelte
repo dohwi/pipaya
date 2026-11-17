@@ -34,7 +34,7 @@
 </script>
 
 <!-- Large on a desktop (most of the window, up to a comfortable reading width); the usual 90% sheet on a phone -->
-<Modal {onclose} label={sessionTitle(s?.title)} title={sessionTitle(s?.title)} {sub} subMono width="min(1080px, calc(var(--vw) * 0.8))" height="calc(var(--dvh) * 0.86)" maxHeight="1000px" divider>
+<Modal {onclose} label={sessionTitle(s?.title)} title={sessionTitle(s?.title)} {sub} subMono width="min(1080px, calc(var(--vw) * 0.8))" height="calc(var(--dvh) * 0.86)" maxHeight="1000px" divider quick>
 	{#snippet headerLead()}
 		<span class="st" title={ACTIVITY_LABEL[activity]}><AgentBadge id={session} {server} state={activity} size={24} /></span>
 	{/snippet}
