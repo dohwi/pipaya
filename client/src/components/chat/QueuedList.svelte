@@ -5,6 +5,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
+	import { released } from "../../lib/pointer";
 
 	type Queued = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
 	/** Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it). */
@@ -119,6 +120,7 @@
 	}
 	function onMove(e: PointerEvent) {
 		if (!drag || !ul) return;
+		if (released(e)) return onUp(e);
 		const dy = e.clientY - drag.y;
 		if (!drag.moved) {
 			if (Math.abs(dy) < THRESHOLD) return;

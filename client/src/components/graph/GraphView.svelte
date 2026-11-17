@@ -15,6 +15,7 @@
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
 	import GraphQuick from "./GraphQuick.svelte";
+	import { released } from "../../lib/pointer";
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
@@ -406,6 +407,12 @@
 		}
 		if (!drag) {
 			if (e.pointerType === "mouse") hover = cardAt(e.target);
+			return;
+		}
+		// let go where no pointerup reached us: end a pan or card move, and a press that never moved is not a click
+		if (released(e)) {
+			if (drag.moved) up(e);
+			else drag = null;
 			return;
 		}
 		if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 3) {

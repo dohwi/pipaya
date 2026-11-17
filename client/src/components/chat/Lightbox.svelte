@@ -11,6 +11,7 @@
 	import { copyImage } from "../../lib/clipboard";
 	import { errorText } from "../../lib/api";
 	import { onDestroy } from "svelte";
+	import { released } from "../../lib/pointer";
 
 	/** Full-screen image viewer: zoom, pan, step through the images of one message, save. */
 	let { onclose }: { onclose: () => void } = $props();
@@ -113,6 +114,7 @@
 
 	function onmove(e: PointerEvent) {
 		if (!pts.has(e.pointerId)) return;
+		if (released(e)) return onup(e); // let go where no pointerup reached us: the picture stops following the pointer
 		if (Math.hypot(e.clientX - from.x, e.clientY - from.y) > 8 || pts.size > 1) cancelHold();
 		pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		if (pts.size === 2) {

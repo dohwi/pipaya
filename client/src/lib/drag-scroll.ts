@@ -1,3 +1,5 @@
+import { released } from "./pointer";
+
 const THRESHOLD = 4;
 
 /** Mouse press-and-drag scrolls an overflow-x container sideways. Touch keeps its native scrolling.
@@ -18,6 +20,7 @@ export function dragScroll(node: HTMLElement) {
 	}
 	function move(e: PointerEvent) {
 		if (e.pointerId !== pointerId) return;
+		if (released(e)) return end(e);
 		const dx = e.clientX - startX;
 		if (!moved) {
 			if (Math.abs(dx) < THRESHOLD) return;

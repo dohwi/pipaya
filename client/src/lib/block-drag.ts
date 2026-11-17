@@ -6,6 +6,7 @@
  * The component draws the state it is given through `set` and applies the move in `move`.
  * With a `menu`, a right click opens it, and so does a touch hold once the finger lifts (moving on from the hold drags the block instead).
  */
+import { released } from "./pointer";
 import { buzz, contextAt, swallowClick, type MenuOpener } from "./press-menu";
 
 export interface DirSrc {
@@ -63,6 +64,7 @@ export function blockDrag(h: BlockDragHost) {
 		}
 		function move(e: PointerEvent) {
 			if (!st || e.pointerId !== st.pid) return;
+			if (released(e)) return cleanup(); // let go where no pointerup reached us
 			if (!active) {
 				if (Math.hypot(e.clientX - st.x, e.clientY - st.y) <= (st.touch ? 10 : 5)) return;
 				if ((st.touch && !st.held) || o.disabled) return cleanup(); // scrolling, not dragging (or nothing to drag)

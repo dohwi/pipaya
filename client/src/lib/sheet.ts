@@ -11,6 +11,7 @@
  * Off phone (> 640px) it does nothing. Taps on buttons/fields inside the handle keep their meaning.
  */
 import { isPhone } from "./motion";
+import { released } from "./pointer";
 
 export interface SheetPullOpts {
 	onclose: () => void;
@@ -66,6 +67,7 @@ export function sheetPull(node: HTMLElement, initial: SheetPullOpts) {
 	}
 	function move(e: PointerEvent) {
 		if (e.pointerId !== id) return;
+		if (released(e)) return up(e); // let go where no pointerup reached us: settle back, not dismiss
 		const dt = e.timeStamp - lastT;
 		if (dt > 0) v = (e.clientY - lastY) / dt;
 		lastY = e.clientY;
