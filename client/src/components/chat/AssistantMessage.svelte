@@ -104,10 +104,8 @@
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
 	/** The reasoning level the reply ran at: "off" for a model that cannot think (it ignores the session's level). */
 	const level = $derived(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? ""));
-	/** "model · level · 1.2k 토큰 · 3.4s", each part only when known. */
-	const statsText = $derived(
-		[tail?.model ?? "", level, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "),
-	);
+	/** "level · 1.2k 토큰 · 3.4s", each part only when known: the details the line shows only with the buttons. */
+	const statsMore = $derived([level, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "));
 	/** The full line on hover, with the provider and the exact token count, for when the pane cuts it short. */
 	const statsTitle = $derived(
 		[
@@ -170,9 +168,10 @@
 				     narrow pane cuts the model text, never the time -->
 				<span class="stats" title={statsTitle || undefined}>
 					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
-					{#if tail.ts && (tail.model || statsText)}<span class="sep" aria-hidden="true">·</span>{/if}
+					{#if tail.ts && (tail.model || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
-					{#if statsText}<span class="stext">{statsText}</span>{/if}
+					<!-- at rest only who wrote it; the level, tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
+					{#if tail.model || statsMore}<span class="stext">{tail.model ?? ""}{#if statsMore}<span class="more">{tail.model ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>
 				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
 				{#if actions.retry}
@@ -331,6 +330,23 @@
 		.row.shown .acts :global(.iconbtn) {
 			opacity: 1;
 			pointer-events: auto;
+		}
+	}
+	/* the line at rest is "time · model"; the rest of the stats shows with the buttons. Nothing to its left moves when it
+	   appears, and the buttons were invisible until then, so their shift goes unseen */
+	.more {
+		display: none;
+	}
+	.row:hover .more,
+	.foot:has(:global(:focus-visible)) .more {
+		display: inline;
+	}
+	@media (pointer: coarse) {
+		.row:hover .more {
+			display: none;
+		}
+		.row.shown .more {
+			display: inline;
 		}
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
