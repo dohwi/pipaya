@@ -117,7 +117,7 @@ function lastSession() {
 
 /** Jump to the conversation that most needs the user: asking first, then failed, then finished unseen. */
 function nextAttention() {
-  // the sidebar's own order (a project's folders together), so within a state this lands on the "확인 필요" list's first row
+  // the sidebar's own order (a project's folders together) within a state
   const order = [...new Set(app.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))))];
   const id = needsLook(order, { awaiting: app.awaiting, failed: app.failed, unread: app.unread }, app.activeId);
   if (id) void app.openSession(id);
