@@ -19,6 +19,7 @@
 	import EntryCard from "../extensions/EntryCard.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { skeletonGate } from "../../lib/skeleton-gate.svelte";
+	import ChatSkeleton from "./ChatSkeleton.svelte";
 
 	/** `held`: the conversation kept on screen (dimmed) while the pane's newly opened one loads; it must not record scroll */
 	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
@@ -317,12 +318,7 @@
 	<div class="inner" class:skeleton-out={sk.revealed} bind:this={content}>
 		{#if sk.showing}
 			<!-- a conversation's outline while it loads: a question on the right, the start of a reply under it -->
-			<div class="skeleton" class:skeleton-in={!lateStart} aria-busy="true" aria-label={t("불러오는 중…")}>
-				<i class="skeleton-bar skbubble"></i>
-				<div class="skpara">
-					{#each [100, 64] as w, i (i)}<i class="skeleton-bar skline" style:width="{w}%" style:--sk-i={i + 1}></i>{/each}
-				</div>
-			</div>
+			<ChatSkeleton fade={!lateStart} />
 		{:else if chat.loadError}
 			<div class="loaderr">
 				<Icon name="alert" />
@@ -499,32 +495,6 @@
 		width: 18px;
 		height: 18px;
 		stroke-width: 2;
-	}
-	.skeleton {
-		display: flex;
-		flex-direction: column;
-		gap: 24px;
-		padding-top: 8px;
-	}
-	/* a few blunt blocks, not a stack of hairlines: two thick bars for the start of a reply */
-	.skline {
-		display: block;
-		height: 24px;
-		max-width: 100%;
-		border-radius: var(--radius-sm);
-	}
-	/* the question: one solid block on the right, the size and corners of a short bubble (UserMessage .bubble) */
-	.skbubble {
-		display: block;
-		align-self: flex-end;
-		width: min(85%, 240px);
-		height: 48px;
-		border-radius: var(--radius);
-	}
-	.skpara {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
 	}
 	.loaderr {
 		display: flex;

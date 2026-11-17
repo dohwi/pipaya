@@ -1294,6 +1294,7 @@ dialog[data-closing]::backdrop {
 /* Loading placeholder: grey bones in the shape of what is coming (rows, lines, bubbles); a light band sweeps across each one,
    and `--sk-i` (the bone's order) delays it so the sweep travels down the block as one wave instead of flashing everywhere at once. */
 .skeleton-bar {
+	display: block;
 	position: relative;
 	overflow: hidden;
 	border-radius: var(--radius-xs); /* blunt blocks, not pills: thin rounded lines read as fine print, not a placeholder */

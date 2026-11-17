@@ -253,7 +253,6 @@
 	}
 	/* one blunt block per row (a folder's glyph and name are a single bone), thick enough to read as a row, not a hairline */
 	.skbar {
-		display: block;
 		height: 16px;
 		max-width: 100%;
 	}
