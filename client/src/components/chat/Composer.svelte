@@ -50,6 +50,7 @@
 	import { shouldTakeFocus } from "../../lib/focus-guard";
 	import { buildCombo, formatCombo, keyName } from "../../lib/keys";
 	import { msg, t } from "../../lib/i18n";
+	import { uniqueBy } from "../../lib/unique";
 	import { voice } from "../../lib/voice.svelte";
 
 	const domId = $props.id();
@@ -311,8 +312,11 @@
 	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, atMention: atMention !== null }));
 	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, mentions: atMatches.length, attachments: attached.images.length }));
 
-	/** Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. */
-	const menuItems = $derived(
+	/**
+	 * Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. Rows are keyed by id: two
+	 * sources naming one row (a session and an extension both offering `@name`) show it once.
+	 */
+	const menuItems = $derived(uniqueBy(
 		menuKind === "cd"
 			? folderRows(cdRows, cdValue)
 			: menuKind === "file"
@@ -322,7 +326,8 @@
 					: argSuggestions
 						? optionRows(argSuggestions.options)
 						: slashRows(slashList.map((it) => ("skill" in it || "family" in it ? it : { command: it }))),
-	);
+		(r) => r.id,
+	));
 
 	function syncCaret() {
 		caret = ta?.selectionStart ?? text.length;

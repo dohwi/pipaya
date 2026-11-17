@@ -1,6 +1,7 @@
 import { panesOf } from "./layout";
 import type { TerminalInfo } from "./terminal";
 import type { Group, Session } from "./types";
+import { uniqueBy } from "./unique";
 
 /** Something a pane can show: a conversation or a terminal. */
 export type Member = Session | TerminalInfo;
@@ -92,7 +93,8 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	const pin = (id: string) => (pinnedTabs.has(id) ? 0 : 1);
 	all.sort((a, b) => pin(a.tab.id) - pin(b.tab.id) || trank(a.tab.id) - trank(b.tab.id) || a.created - b.created);
 	const by = new Map<string, { tabs: Tab[]; first: number }>();
-	for (const x of all) {
+	// A session listed twice (a list read while an event added it too) gets one tab: every row is keyed by the tab id.
+	for (const x of uniqueBy(all, (y) => y.tab.id)) {
 		const d = by.get(x.cwd);
 		if (d) (d.tabs.push(x.tab), (d.first = Math.min(d.first, x.created)));
 		else by.set(x.cwd, { tabs: [x.tab], first: x.created });

@@ -12,7 +12,8 @@ import type { ModelInfo } from "./types";
 const MAX_FAV_MODELS = 200;
 const MAX_FAV_DIRS = 100;
 
-const strings = (v: unknown, max: number): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, max) : []);
+/** A stored or synced list of strings, without repeats (each is drawn as a keyed row: a repeat would crash the list). */
+const strings = (v: unknown, max: number): string[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))].slice(0, max) : []);
 const isChoice = (v: unknown): v is number => typeof v === "number" && (ESCALATE_CHOICES as readonly number[]).includes(v);
 const modelKey = (provider: string, id: string) => `${provider}\u0000${id}`;
 
