@@ -658,6 +658,10 @@ export const en: Record<string, string> = {
 	"새 프로젝트 · {path}": "New project · {path}",
 	"탭 펼치기": "Show tabs",
 	"탭 접기": "Hide tabs",
+	/* ---- tab overview ---- */
+	"탭 {n}개 모두 보기": "Show all {n} {n#tab|tabs}",
+	"아직 메시지가 없습니다": "No messages yet",
+	"이 폴더에 열린 탭이 없습니다": "No open tabs in this folder",
 	"터미널 닫기 (셸 종료)": "Close terminal (ends the shell)",
 	"터미널이 닫혔습니다": "The terminal was closed",
 	"이 서버는 터미널이 꺼져 있습니다 (PIPAYA_TERMINAL=0)": "Terminals are turned off on this server (PIPAYA_TERMINAL=0)",
