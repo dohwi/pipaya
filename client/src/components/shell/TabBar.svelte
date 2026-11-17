@@ -7,6 +7,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
+	import TabCountButton from "./TabCountButton.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import PinMark from "../ui/PinMark.svelte";
 	import RowMenu, { type RowMenuItem } from "../ui/RowMenu.svelte";
@@ -289,6 +290,8 @@
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
 		<button class="add tap" class:on={menuId === "new"} onpointerenter={(e) => menu?.hover(e, "new", newItems())} onpointerleave={(e) => menu?.leave(e)} onclick={(e) => menu?.click(e, "new", newItems())} aria-label={t("새 대화 또는 터미널")} aria-haspopup="menu" title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button>
+		<!-- the overview of these tabs (on a phone this button sits in the header instead, see Header.svelte) -->
+		{#if tabs.length}<span class="countslot"><TabCountButton count={tabs.length} /></span>{/if}
 	</div>
 	<RowMenu bind:this={menu} bind:open={menuId} />
 {/if}
@@ -574,6 +577,18 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 		transition: background var(--motion-fast) var(--ease-std);
+	}
+	/* the count goes to the far right, the + stays right after the last tab */
+	.countslot {
+		display: contents;
+	}
+	.countslot :global(.count) {
+		margin-left: auto;
+	}
+	@media (max-width: 600px) {
+		.countslot {
+			display: none;
+		}
 	}
 	.add.on {
 		background: var(--bg-hover);

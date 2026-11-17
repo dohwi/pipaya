@@ -71,6 +71,7 @@
 		commands: () => import("./components/agent/CommandFamiliesDialog.svelte"),
 		mcp: () => import("./components/agent/McpDialog.svelte"),
 		schedules: () => import("./components/agent/SchedulesDialog.svelte"),
+		tabOverview: () => import("./components/shell/TabOverview.svelte"),
 		graph: () => import("./components/graph/GraphView.svelte"),
 		subagents: () => import("./components/agent/SubagentsDialog.svelte"),
 		lightbox: () => import("./components/chat/Lightbox.svelte"),
@@ -479,6 +480,9 @@
 {/if}
 {#if app.mcpDialog && app.api}
 	{#key app.serverId}<Lazy load={load.mcp} api={app.api} onclose={() => (app.mcpDialog = false)} />{/key}
+{/if}
+{#if app.tabOverview && app.serverId}
+	{#key app.serverId}<Lazy load={load.tabOverview} onclose={() => (app.tabOverview = false)} />{/key}
 {/if}
 {#if app.schedulesDialog && app.serverId}
 	{#key app.serverId}<Lazy load={load.schedules} serverId={app.serverId} onclose={() => (app.schedulesDialog = false)} />{/key}

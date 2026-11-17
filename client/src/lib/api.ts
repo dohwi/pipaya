@@ -443,6 +443,9 @@ export class Api {
 			"GET",
 			`/sessions/${id}/messages?limit=5000&tail=${n}&turn=true${before !== undefined ? `&before=${before}` : ""}`,
 		).then((r) => r.messages);
+	/** The newest `n` messages, oldest first, without reaching back to the turn's prompt: a preview needs only the end. */
+	recentMessages = (id: string, n: number, signal?: AbortSignal) =>
+		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?tail=${n}`, undefined, signal).then((r) => r.messages);
 	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[], files?: { name: string; data: string }[]) =>
 		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
 			text,

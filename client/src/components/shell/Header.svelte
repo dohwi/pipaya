@@ -4,6 +4,7 @@
 	import { t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
+	import TabCountButton from "./TabCountButton.svelte";
 	import NavbarItems from "../extensions/NavbarItems.svelte";
 	import ExtensionSlot from "../extensions/ExtensionSlot.svelte";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
@@ -18,6 +19,8 @@
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
 	const s = $derived(app.current);
+	/** The folder's tab count, for the phone's tab button (the strip that carries it on wider screens folds away there). */
+	const tabCount = $derived(app.tabDir?.tabs.length ?? 0);
 	const term = $derived(app.terminal(app.activeId));
 	/** The open group: the header reads as a path, "group › the session being looked at" (on every screen size). */
 	const group = $derived(app.activeGroup);
@@ -115,6 +118,7 @@
 
 		<NavbarItems />
 		<ExtensionMount slot="header.end" />
+		{#if app.serverId && app.net !== "idle" && tabCount > 0}<span class="tabs"><TabCountButton count={tabCount} place="header" /></span>{/if}
 
 	</div>
 </header>
@@ -237,6 +241,19 @@
 	}
 	.menu {
 		display: none;
+	}
+	/* a phone only: the tab strip folds away there for a lone tab, so the count lives where the thumb always finds it,
+	   like a mobile browser's tab button beside its address bar */
+	.tabs {
+		display: none;
+	}
+	@media (max-width: 600px) {
+		.tabs {
+			display: contents;
+		}
+		.tabs :global(.count) {
+			margin-right: -3px; /* the 18px square sits 7px inside its 32px box; 12px capsule padding + 7 - 3 = 16, the window gutter */
+		}
 	}
 	@media (max-width: 640px) {
 		/* the nav slot pads 2px here */

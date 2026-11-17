@@ -120,6 +120,8 @@ class AppStore {
   set sessions(v: Session[]) {
     if (this.link) this.link.data.sessions = v;
   }
+  /** The tab overview (the folder's tabs as a grid of cards, behind the tab count button) is open. */
+  tabOverview = $state(false);
   /** The server whose conversation list (close / delete) is open, or null. */
   sessionsDialog = $state<string | null>(null);
   /** Narrows the open conversation list to one folder (`cwd`). */
@@ -818,6 +820,7 @@ class AppStore {
     serverUpdater.reset();
     this.workdir = read<string>(`${K.workdir}.${id}`, ".");
     this.palette = null;
+    this.tabOverview = false;
     this.skillsDialog = null;
     this.commandsDialog = null;
     this.mcpDialog = false;
@@ -1412,6 +1415,11 @@ class AppStore {
 
   /** The tab the focused pane is in, and its directory. */
   activeTab: { dir: DirBlock; tab: Tab } | null = $derived.by(() => tabOf(this.dirs, this.activeId));
+
+  /** The folder whose tabs the strip shows: the open tab's, else the folder a new chat would start in. */
+  get tabDir(): DirBlock | null {
+    return this.activeTab?.dir ?? this.dirs.find((d) => d.path === this.workdirAbs) ?? null;
+  }
 
   /** The pane last focused in each tab (by tab id), so switching back to a group lands where it was left. */
   private lastPane: Record<string, string> = {};

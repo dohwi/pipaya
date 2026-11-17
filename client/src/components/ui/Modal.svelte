@@ -30,6 +30,7 @@
 		layer = 1,
 		elevated = false,
 		sheet = true,
+		full = false,
 		safeArea = false,
 		portal = false,
 		dismissible = true,
@@ -65,6 +66,8 @@
 		elevated?: boolean;
 		/** false: stays a centred card on phones instead of becoming a bottom sheet */
 		sheet?: boolean;
+		/** on phones the sheet takes the whole screen (a switcher that is a screen of its own, like the tab overview) */
+		full?: boolean;
 		/** pad the bottom by the home-indicator inset when the sheet has no footer of its own doing it */
 		safeArea?: boolean;
 		/** lift to <body>: needed when opened from inside a transformed panel */
@@ -185,6 +188,7 @@
 		data-part="modal"
 		class:elevated
 		class:sheet
+		class:full={sheet && full}
 		class:safe={safeArea}
 		class:fixed={!!height}
 		{role}
@@ -257,6 +261,14 @@
 		}
 		.modal.sheet.fixed {
 			height: calc(var(--dvh) * 0.9);
+		}
+		/* the whole screen: no gap above for the page behind, the status bar's inset inside instead */
+		.modal.sheet.full {
+			height: var(--dvh);
+			max-height: var(--dvh);
+			padding-top: var(--sat);
+			border: 0;
+			border-radius: 0;
 		}
 		.modal.sheet.safe {
 			padding-bottom: var(--sab);
