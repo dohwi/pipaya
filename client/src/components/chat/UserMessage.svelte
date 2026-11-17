@@ -120,6 +120,7 @@
 		background: var(--user-bg);
 		border: 1px solid var(--border);
 		overflow-wrap: anywhere;
+		text-wrap: pretty; /* a sent message never changes, so avoid leaving one short word alone on the last line */
 	}
 	.row.user.headed {
 		align-items: flex-start;
