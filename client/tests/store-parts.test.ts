@@ -12,6 +12,7 @@ import type * as PairingFlowModule from "../src/lib/pairing-flow.svelte";
 import type * as CloseGuardModule from "../src/lib/close-guard.svelte";
 import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
+import { pinLocal } from "../src/lib/store-model";
 
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
 let Feedback: typeof FeedbackModule.Feedback;
@@ -302,6 +303,20 @@ describe("configuration servers", () => {
 		expect(out[0]).toMatchObject({ id: "2", token: "t2" });
 		expect(out[1]!.token).toBe("");
 		expect(out[1]!.id).not.toBe("2");
+	});
+});
+
+describe("pinned local server", () => {
+	const local = { id: "l", name: "Local", baseUrl: "http://127.0.0.1:8788", token: "t", local: true };
+	const a = { id: "a", name: "a", baseUrl: "http://a:8787", token: "1" };
+	const b = { id: "b", name: "b", baseUrl: "http://b:8787", token: "2" };
+	test("the local server moves to the front, once", () => {
+		expect(pinLocal([a, local, b]).map((s) => s.id)).toEqual(["l", "a", "b"]);
+		expect(pinLocal([a, b]).map((s) => s.id)).toEqual(["a", "b"]);
+	});
+	test("a list without it (a restored document) gets the held one back, without its old copy", () => {
+		const stale = { ...local, local: undefined, id: "old" };
+		expect(pinLocal([b, stale, a], local).map((s) => s.id)).toEqual(["l", "b", "a"]);
 	});
 });
 

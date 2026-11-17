@@ -192,3 +192,10 @@ describe("the pin entry's lean", () => {
 		expect(pin(true).tilt).toBe(0);
 	});
 });
+
+describe("the desktop app's own server", () => {
+	test("is listed first whatever its state", () => {
+		const s = (id: string, state: ServerState, local?: boolean) => ({ id, state, local });
+		expect(orderServers([s("a", "online"), s("l", "offline", true), s("b", "checking")]).map((x) => x.id)).toEqual(["l", "a", "b"]);
+	});
+});

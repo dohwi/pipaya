@@ -228,7 +228,7 @@
 
 			<DialogFooter safe>
 				{#snippet start()}
-					{#if editing}
+					{#if editing && !editing.local}
 						<ConfirmButton danger confirmLabel={t("정말 삭제")} onconfirm={remove}>{t("삭제")}</ConfirmButton>
 					{/if}
 				{/snippet}

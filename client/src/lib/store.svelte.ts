@@ -79,7 +79,7 @@ export { NOTICE_MS, NOTICE_MAX } from "./feedback.svelte";
 export { SIDEBAR_W } from "./sidebar.svelte";
 export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
-import { draftFromDefault, loadServers, normalizeThinking, readDraft } from "./store-model";
+import { draftFromDefault, loadServers, normalizeThinking, pinLocal, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ThinkingLevel } from "./types";
 import type { SettingsProblem } from "./settings-problems";
@@ -656,7 +656,7 @@ class AppStore {
       }
     } else {
       const server: Server = { id: uid(), name: t("로컬"), baseUrl, token: info.token, local: true };
-      this.servers.push(server);
+      this.servers = pinLocal([...this.servers, server]);
       this.saveServers();
       this.syncLinks();
     }
@@ -737,11 +737,13 @@ class AppStore {
   moveServer(id: string, target: string, after: boolean) {
     const ids = reorder(this.servers.map((s) => s.id), id, target, after);
     if (!ids) return;
-    this.servers = ids.map((i) => this.servers.find((s) => s.id === i)!);
+    this.servers = pinLocal(ids.map((i) => this.servers.find((s) => s.id === i)!));
     this.saveServers();
   }
 
+  /** Forget a server. The desktop app's own server cannot be removed: the app starts it and lists it itself. */
   removeServer(id: string) {
+    if (this.servers.find((s) => s.id === id)?.local) return;
     const wasOpen = id === this.serverId;
     this.servers = this.servers.filter((s) => s.id !== id);
     this.saveServers();
@@ -2613,6 +2615,8 @@ class AppStore {
   }
   /** A new server list from a document or a backup: save it, reconnect, and close the open server if it is gone. */
   private replaceServerList(servers: Server[]) {
+    // The app's own server stays, first, whatever the document lists (documents carry no `local` flag).
+    servers = pinLocal(servers, this.servers.find((s) => s.local));
     this.servers = servers;
     this.saveServers();
     this.syncLinks();
