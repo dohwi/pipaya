@@ -16,6 +16,14 @@ export const duration = (ms: number): string =>
 export const clip = (s: string, n: number): string =>
   s.length > n ? `${s.slice(0, n - 1)}…` : s;
 
+/** When a message was sent: the time of day, with the date in front when it is not today ("9:04 AM", "11/16 9:04 AM"). */
+export function clockTime(ts: number, locale?: string, now: number = Date.now()): string {
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  if (d.toDateString() === new Date(now).toDateString()) return time;
+  return `${d.toLocaleDateString(locale, { month: "numeric", day: "numeric" })} ${time}`;
+}
+
 export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";
 
 /** `20261024-1530`: a local date and time that sorts as text, for file names. */

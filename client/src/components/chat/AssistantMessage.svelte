@@ -1,6 +1,6 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
@@ -10,7 +10,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
-	import { compact, duration } from "../../lib/format";
+	import { clockTime, compact, duration } from "../../lib/format";
 	import { plainTextOf, replyActions, segmentsOf } from "../../lib/reply-blocks";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
@@ -148,6 +148,7 @@
 					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
 				{/if}
 				<span class="stats">
+					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{clockTime(tail.ts, localeTag())}</time>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					<span class="stext">
 						{#if tail.model}{tail.model}{/if}
@@ -281,6 +282,13 @@
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
 	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */
+	/* when the answer was written, ahead of the model: a narrow pane cuts the model line first, never the time */
+	.when {
+		flex: none;
+		margin-right: 8px;
+		padding-bottom: 2px; /* same lift as .stext: the x-height onto the glyph centre */
+		line-height: 20px;
+	}
 	.slogo {
 		display: flex;
 		flex: none;

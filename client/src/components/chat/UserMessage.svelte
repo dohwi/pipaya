@@ -1,6 +1,7 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
+	import { clockTime } from "../../lib/format";
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -76,6 +77,7 @@
 		{/if}
 	</div>
 	<div class="actions">
+		{#if item.ts}<time class="when" datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{clockTime(item.ts, localeTag())}</time>{/if}
 		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text)} />
 		{#if header && !("server" in header && header.server)}
 			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
@@ -212,8 +214,6 @@
 	/* the same 32px row as the answer's foot (one height for every action row), right-aligned on the content's right line:
 	   the box ends 2px past where the answer's text ends, and the 6px bleed puts the last glyph on that line */
 	.actions {
-		opacity: 0;
-		transition: opacity var(--motion-fast) var(--ease-std);
 		height: 32px;
 		display: flex;
 		align-items: center;
@@ -221,19 +221,33 @@
 		/* 8px glyph inset less the 2px the last box is pulled in: the last glyph's right edge lands on the content's right edge */
 		margin-right: -6px;
 	}
+	/* when it was sent, before the buttons: the answer's stats size and colour; 8px to the first glyph (whose box bleeds 2px) */
+	.when {
+		margin-right: 8px;
+		padding-bottom: 2px; /* lifts the x-height onto the glyph centre, as the answer's stats line does */
+		font-size: var(--fs-2xs);
+		line-height: 20px;
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
 	/* same 28px pitch as the answer's foot: 32px boxes overlapping 2px, so the 16px glyphs do not read 20px apart */
 	.actions :global(.iconbtn) {
 		margin-inline: -2px;
 	}
+	/* only the buttons wait for the hover: the time stays readable, as the answer's stats line does */
+	.actions :global(.iconbtn) {
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
 	/* the buttons are IconButton's markup: `:global`, or the compiler drops the rule and Tab never reveals them */
-	.row.user:hover .actions,
-	.actions:has(:global(:focus-visible)) {
+	.row.user:hover .actions :global(.iconbtn),
+	.actions:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
 	}
 	@media (pointer: coarse) {
 
 		/* no hover on a phone: hidden actions would be unreachable, so they stay on */
-		.actions {
+		.actions :global(.iconbtn) {
 			opacity: 1;
 		}
 	}
