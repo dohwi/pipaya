@@ -159,7 +159,7 @@
 </Modal>
 
 {#snippet copyAction()}
-	<IconButton icon={copied.done ? "check" : "copy"} label={copied.done ? t("복사됨") : t("복사")} tip onclick={() => view && void copied.copy(queuedShown(view.text))} />
+	<IconButton icon={copied.done ? "check" : "copy"} label={copied.done ? t("복사됨") : t("복사")} tip onclick={() => view && void copied.copy(queuedShown(view.text), chat?.ownImages(view.text) ?? [])} />
 {/snippet}
 
 <style>

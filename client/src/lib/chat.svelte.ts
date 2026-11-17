@@ -162,6 +162,10 @@ export class ChatState {
 	restoreHeld(): void {
 		if (this.held.length) this.restored.push(...this.held.splice(0));
 	}
+	/** The pictures of a waiting message sent from here (none for one from elsewhere: only its text is known). */
+	ownImages(text: string): ImageBlock[] {
+		return (this.held.find((m) => m.text === text) ?? this.mine.find((m) => m.text === text))?.images ?? [];
+	}
 	/** Everything waiting for delivery: held messages first (they go out first), then the server's queue. */
 	get waiting(): { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[] {
 		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];

@@ -20,6 +20,9 @@
 	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../../lib/slash-menu";
+	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
+	import type { ImageBlock } from "../../lib/types";
+	import { MAX_IMAGES } from "../../lib/files";
 	import { dropImageToken, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
@@ -594,11 +597,53 @@
 	}
 
 	function onPaste(e: ClipboardEvent) {
+		const html = e.clipboardData?.getData("text/html") ?? "";
+		// A message copied in pipaya: its text at the caret, its pictures attached with `#imageN` after the ones already here.
+		const own = html ? pastedMessage(html) : null;
+		if (own?.images.length) {
+			e.preventDefault();
+			pasteWithImages(own.text, own.images);
+			return;
+		}
 		const pasted = [...(e.clipboardData?.files ?? [])];
 		if (pasted.length) {
 			e.preventDefault();
 			void attached.add(pasted);
+			return;
 		}
+		// HTML from elsewhere with inline pictures: the text pastes as usual, the pictures come along like picked files
+		// (downscaled, a file for a model that cannot see, a `#imageN` token each).
+		const pics = html ? htmlImages(html) : [];
+		if (pics.length) void attached.add(pics.map((b, i) => blockFile(b, i)));
+	}
+
+	const blockFile = (b: ImageBlock, i: number) => {
+		const bin = atob(b.data);
+		const bytes = new Uint8Array(bin.length);
+		for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+		return new File([bytes], `pasted-${i + 1}.${b.mimeType.split("/")[1]?.replace(/\+.*$/, "") || "png"}`, { type: b.mimeType });
+	};
+
+	function pasteWithImages(body: string, images: ImageBlock[]) {
+		// A model that cannot see takes them as files (attached the usual way), and the text as it is.
+		if (!vision) {
+			void attached.add(images.map((b, i) => blockFile(b, i)));
+			images = [];
+		}
+		const before = attached.images.length;
+		const room = Math.max(0, MAX_IMAGES - before);
+		if (images.length > room) app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
+		const taken = images.slice(0, room);
+		attached.load(
+			[...attached.images, ...taken.map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
+			attached.files,
+		);
+		const at = ta?.selectionStart ?? text.length;
+		const end = ta?.selectionEnd ?? at;
+		const piece = shiftImageTokens(body, before, taken.length);
+		text = text.slice(0, at) + piece + text.slice(end);
+		const caretAt = at + piece.length;
+		queueMicrotask(() => { ta?.setSelectionRange(caretAt, caretAt); syncCaret(); });
 	}
 
 	/** This pane's input is the recording surface (recording or transcribing). */

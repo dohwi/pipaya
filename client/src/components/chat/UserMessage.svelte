@@ -77,7 +77,7 @@
 		{/if}
 	</div>
 	<div class="actions">
-		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text)} />
+		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text, item.images)} />
 		{#if header && !("server" in header && header.server)}
 			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
 		{/if}
