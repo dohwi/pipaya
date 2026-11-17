@@ -7,7 +7,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration } from "../../lib/format";
-	import { toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
+	import { splitCd, toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import ExtensionView from "../extensions/ExtensionView.svelte";
@@ -23,6 +23,8 @@
 
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
+	/** A shell summary drops its leading `cd <folder> &&`; hovering it still says the whole line, folder included */
+	const fullLine = $derived(name === "bash" && splitCd(str(args.command)).dir ? str(args.command).split("\n", 1)[0] : undefined);
 
 	// An extension may draw the finished call (`sdk.tools.registerRenderer`). Whatever it returns is validated data shown
 	// in a read-only view; on any failure the card keeps its usual look.
@@ -82,8 +84,8 @@
 
 <div class="card" data-part="tool" class:awaiting class:failed data-state={run.state}>
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
-		<ToolChip {kind} icon={toolIcon(name, args)} label={toolLabel(name, args)} shimmer={run.state === "running" || run.state === "pending"} />
-		<span class="what">{#if summary}<span class="sum mono">{summary}</span>{/if}</span>
+		<span class="lead"><ToolChip {kind} icon={toolIcon(name, args)} label={toolLabel(name, args)} shimmer={run.state === "running" || run.state === "pending"} /></span>
+		<span class="what">{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}</span>
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
 			{#if !quiet && !failed && !awaiting}<span class="chip {tone}">{label}</span>{/if}
@@ -132,15 +134,29 @@
 
 <style>
 	.custom { margin-top: 8px; min-width: 0; }
+	/* A card alone; calls in a row are joined into one list by the work box (WorkBox.svelte, .steps) */
 	.card {
-		margin: 8px 0;
+		position: relative;
+		margin: 0;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		overflow: hidden;
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
+	/* a failed call: a red edge on the row's left, so it is found in a long list without reading every right end */
+	.card.failed::before {
+		content: "";
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 2px;
+		background: var(--danger);
+		pointer-events: none;
+		z-index: 1; /* over the header's hover fill */
+	}
+	/* raised over its neighbours, so its warn border is whole where it shares a hairline with them */
 	.card.awaiting {
+		z-index: 1;
 		border-color: var(--warn);
 		box-shadow: 0 0 0 3px var(--warn-soft);
 	}
@@ -152,11 +168,27 @@
 		padding: 8px 12px;
 		text-align: left;
 		min-height: 44px;
+		transition: background-color var(--motion-fast) var(--ease-std);
+	}
+	@media (hover: hover) {
+		.head:hover {
+			background-color: var(--bg-hover);
+		}
+		.head:hover .chev {
+			color: var(--text-dim);
+		}
 	}
 	/* the card clips (overflow: hidden) and the header fills it, so an outer ring would be cut away entirely */
 	.head:focus-visible {
 		outline-offset: -2px;
-		border-radius: var(--radius);
+		border-radius: inherit; /* the card's: rounded at the ends of a run, square in its middle */
+	}
+	/* the chips of the common tools (bash, read, grep, ls, edit, write) are 50 to 64px wide: a 64px slot starts every row's
+	   summary on one line down the list; a wider chip (a skill's name) just takes its room */
+	.lead {
+		flex: none;
+		display: flex;
+		min-width: 64px;
 	}
 	.what {
 		flex: 1;
@@ -171,7 +203,7 @@
 		min-width: 0;
 		font-size: var(--fs-xs);
 		line-height: 20px;
-		color: var(--text-dim);
+		color: var(--text);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -194,6 +226,7 @@
 	.dur {
 		font-size: var(--fs-2xs);
 		line-height: 16px;
+		font-variant-numeric: tabular-nums; /* 940ms over 212ms: every digit as wide, so the times line up row to row */
 		color: var(--text-faint);
 	}
 	/* the failure mark: the same 16px box as the arrow next to it, in the danger colour */
@@ -215,7 +248,7 @@
 		height: 16px;
 		place-items: center;
 		color: var(--text-faint);
-		transition: transform var(--motion-fast) var(--ease);
+		transition: transform var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease-std);
 	}
 	.chev.open {
 		transform: rotate(90deg);
