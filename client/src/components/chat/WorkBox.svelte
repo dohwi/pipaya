@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import ToolCard from "./ToolCard.svelte";
@@ -37,6 +37,9 @@
 	const finished = $derived(runs.filter(settled).length);
 	const failed = $derived(runs.filter((r) => r && (r.state === "error" || (r.state === "done" && Number(r.details?.exitCode) > 0))).length);
 	const total = $derived(runs.reduce((n, r) => n + (r?.durationMs ?? 0), 0));
+	/** When the last call finished: the duration shows how long the work took, hovering it says on which day and at what time. */
+	const endedAt = $derived(runs.reduce((n, r) => Math.max(n, r?.endedAt ?? 0), 0));
+	const endedTitle = $derived(endedAt ? t("{when} 완료", { when: new Date(endedAt).toLocaleString(localeTag()) }) : undefined);
 
 	/** The quiet line: what the calls did, kind by kind ("명령 4개 실행 및 웹 1회 검색"). While nothing but thoughts came yet, "생각 중". */
 	const summary = $derived(active && !tools.length ? t("생각 중") : workSummary(steps));
@@ -222,11 +225,17 @@
 		{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 	{:else}
 		{#if failed}
-			<span class="fail" title={t("실패")}><span class="fail-dot"></span><span class="mono">{failed}</span><span class="sr-only">{t("실패")}</span></span>
+			<!-- the check turns into a red cross; with several calls, how many of them failed -->
+			<span class="fail" title={tools.length > 1 ? t("{n}개 실패", { n: failed }) : t("실패")}>
+				<span class="mark"><Icon name="x" /></span>{#if tools.length > 1}<span class="mono">{failed}</span>{/if}<span class="sr-only">{t("실패")}</span>
+			</span>
 		{:else if tools.length}
 			<span class="ok"><Icon name="check" /><span class="sr-only">{t("완료")}</span></span>
 		{/if}
-		{#if total}<span class="dur">{duration(total)}</span>{/if}
+		{#if total}
+			{#if endedAt}<time class="dur" datetime={new Date(endedAt).toISOString()} title={endedTitle}>{duration(total)}</time>
+			{:else}<span class="dur">{duration(total)}</span>{/if}
+		{/if}
 	{/if}
 	{#if steps.length}<span class="chev" class:open><Icon name="chevron-right" /></span>{/if}
 {/snippet}
@@ -297,6 +306,7 @@
 	}
 	.kind,
 	.ok,
+	.mark,
 	.chev {
 		flex: none;
 		display: grid;
@@ -307,6 +317,7 @@
 	}
 	.kind :global(svg),
 	.ok :global(svg),
+	.mark :global(svg),
 	.chev :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -321,6 +332,9 @@
 	}
 	.chev.open {
 		transform: rotate(90deg);
+	}
+	.mark {
+		color: var(--danger);
 	}
 	.fail {
 		flex: none;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import ToolChip from "./ToolChip.svelte";
@@ -48,7 +48,7 @@
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
 	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
 	const quiet = $derived(run.state === "done" && !exitCode);
-	/** A failed call (error, or a non-zero exit code): a red dot by the time instead of a pill */
+	/** A failed call (error, or a non-zero exit code): a red cross by the time instead of a pill */
 	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
 		{
@@ -87,8 +87,11 @@
 		<span class="meta">
 			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
 			{#if !quiet && !failed && !awaiting}<span class="chip {tone}">{label}</span>{/if}
-			{#if failed}<span class="fail-dot" title={label}></span>{/if}
-			{#if run.durationMs != null && run.state !== "running"}<span class="dur">{duration(run.durationMs)}</span>{/if}
+			{#if failed}<span class="mark" title={label}><Icon name="x" /><span class="sr-only">{label}</span></span>{/if}
+			{#if run.durationMs != null && run.state !== "running"}
+				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: new Date(run.endedAt).toLocaleString(localeTag()) })}>{duration(run.durationMs)}</time>
+				{:else}<span class="dur">{duration(run.durationMs)}</span>{/if}
+			{/if}
 			{#if awaiting}<span class="sr-only">{label}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
 		</span>
@@ -192,6 +195,19 @@
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
+	}
+	/* the failure mark: the same 16px box as the arrow next to it, in the danger colour */
+	.mark {
+		display: grid;
+		width: 16px;
+		height: 16px;
+		place-items: center;
+		color: var(--danger);
+	}
+	.mark :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke-width: 2;
 	}
 	.chev {
 		display: grid;

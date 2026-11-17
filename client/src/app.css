@@ -1504,15 +1504,6 @@ html.dnd {
 	overscroll-behavior: none;
 }
 
-/* a failed tool call or work box: one small red dot beside the time, nothing else changes colour */
-.fail-dot {
-	width: 8px;
-	height: 8px;
-	flex: none;
-	border-radius: 50%;
-	background: var(--danger);
-}
-
 /* The video player (lib/video-view.ts): a bare <video> under a bar of our own. The bar floats over the bottom edge and
    hides a moment after the last touch while the video plays. Open (`.open`), the player fills the viewport. */
 .wd-video-wrap {
