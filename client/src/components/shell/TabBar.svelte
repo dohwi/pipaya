@@ -202,7 +202,7 @@
 	}
 </script>
 
-{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>, first: boolean)}
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
 	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
 	{@const who = handleOf(x)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -233,8 +233,8 @@
 					}
 				}}
 			>
-				<!-- the hover pill and the hairline before this tab: boxes of their own, since ::before / ::after are the drop line -->
-				<span class="fill" aria-hidden="true"></span>{#if !first}<span class="sep" aria-hidden="true"></span>{/if}
+				<!-- the hover pill: a box of its own, since ::before / ::after are the drop line -->
+				<span class="fill" aria-hidden="true"></span>
 				{#if x.kind === "group"}
 					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}{#if pinned}<PinMark />{/if}</span>
 				{:else if x.kind === "terminal"}
@@ -291,7 +291,7 @@
 						<SessionStrip tab={x} />
 					</div>
 				{:else}
-					{@render tabItem(x, on, st, i === 0)}
+					{@render tabItem(x, on, st)}
 				{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
@@ -306,8 +306,8 @@
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
 	   colour, a square block (4px corners on top) that runs over the bar's bottom hairline into the conversation below, so the two read as
-	   one sheet. The other tabs have no fill, only a hairline between them. Tabs share the width evenly up to 200px each and
-	   scroll sideways below 112px. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
+	   one sheet. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
 		flex: none;
@@ -373,14 +373,13 @@
 	.tab {
 		position: relative;
 		z-index: 1; /* above the sliding fill */
-		flex: 0 1 200px;
+		flex: 0 1 auto; /* as wide as its icon, title and close button: no blank between tabs, so no hairline is needed */
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		height: 34px;
-		min-width: 112px;
+		min-width: 136px; /* with the × always shown, room for about three syllables of title before the strip scrolls instead */
 		max-width: 200px;
-		container: tab / inline-size; /* a narrow back tab drops its close button (below) */
 		padding: 0 8px 0 12px; /* the hover pill sits 4px in, so the icon and the close glyph both clear its edges by 8px */
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 		color: var(--text-dim);
@@ -422,30 +421,6 @@
 	}
 	.tab.menuopen:not(.on) .fill {
 		opacity: 1;
-	}
-	/* the hairline between two plain tabs, gone beside the front tab, a hovered one and a group's frame */
-	.sep {
-		position: absolute;
-		left: 0;
-		top: 8px;
-		bottom: 8px;
-		width: 1px;
-		background: var(--border-strong);
-		pointer-events: none;
-		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	.tab.on .sep,
-	.tab.on + .tab .sep,
-	:global(.gbox) + .tab .sep,
-	.tab.before .sep,
-	.tab.after + .tab .sep {
-		opacity: 0;
-	}
-	@media (hover: hover) {
-		.tab:hover .sep,
-		.tab:hover + .tab .sep {
-			opacity: 0;
-		}
 	}
 	.tab.carried {
 		opacity: 0.45;
@@ -633,14 +608,8 @@
 		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 	}
-	/* every tab shows its close button, as in a browser: the hairline then sits between one tab's × and the next one's icon,
-	   11 and 12px off, instead of floating in the blank a hidden × left. A back tab under 120px (100 inside its padding) drops it
-	   until the pointer is on it. */
-	@container tab (width < 100px) {
-		.tab:not(.on):not(:hover) .x:not(:focus-visible) {
-			display: none;
-		}
-	}
+	/* every tab shows its close button, as in a browser: it ends the tab, and the next one's icon starts 23px on, which is
+	   what tells two tabs apart now that there is no hairline */
 	@media (hover: hover) {
 		.x:hover {
 			background: color-mix(in srgb, var(--text) 10%, transparent); /* a step darker than whatever is under it: the hover pill or the front tab */
@@ -684,7 +653,6 @@
 			flex: none;
 			width: 140px;
 		}
-		.sep,
 		.fill {
 			display: none;
 		}
@@ -702,9 +670,6 @@
 		.gbox + .gbox,
 		.gbox:first-child {
 			margin-left: 0;
-		}
-		.tab {
-			container-type: normal; /* chips are as wide as their content: no size containment */
 		}
 		.x {
 			width: 22px;

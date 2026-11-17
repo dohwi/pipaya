@@ -219,8 +219,8 @@ Header title, the first tab's label, the conversation text, the composer box and
 padding in a narrow pane (it used to step down to 8 and stood 8px out from the text). The tab strip pads 4px and a tab 12px (8px inside its hover pill, which sits 4px in), so the first icon is at 16.
 The tab strip (wider than 600px) is a browser's: the bar is `--bg-tabbar`, a step below the page, and the header above it takes the same tone with no
 hairline between them (one chrome band, like a browser's title bar over its tabs; a white header over a grey strip read as three stacked tones). The front tab is `--bg`, a square block (4px corners on top, no foot curves) that
-covers the bar's bottom hairline, so it joins the conversation below; the other tabs have no fill, a 1px `--border-strong` line between them. Every tab shows its × (a back tab under 120px only on hover), so the line always sits between a × and the next icon (11 and 12px off) rather than in the blank a hidden × leaves. Tabs share
-the width up to 200px and scroll below 112px. **`+` and the tab count are one cluster (`TabControls`) pinned to the bar's right end**, never after the
+covers the bar's bottom hairline, so it joins the conversation below; the other tabs have no fill and no hairline. Each tab is as wide as its content (icon, handle, title, ×; 136 to 200px, the title ellipsised past that), so the tabs sit
+edge to edge with no blank between them, and every tab shows its ×: the × closing one tab and the next tab's icon 23px on are what separate them. The strip scrolls when they do not fit. **`+` and the tab count are one cluster (`TabControls`) pinned to the bar's right end**, never after the
 last tab, so they stay put with one tab or twenty; the count's square ends on the 16px gutter. On a phone the same cluster sits at the header's right end.
 Inside messages: quote text sits 16px from its 3px bar, a list's text 24px from the column, a user bubble 16px inside; code and tables fill the column. Check
 with `tmp`-style scripts that measure each pane's own box, not the window (a split group has one column per pane).
