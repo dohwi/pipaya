@@ -7,7 +7,6 @@
 	import { unreachable } from "../../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
-	import AttentionList from "./AttentionList.svelte";
 	import DirBlockView from "./DirBlock.svelte";
 	import ProjectBlock from "./ProjectBlock.svelte";
 	import ListButton from "./ListButton.svelte";
@@ -71,7 +70,6 @@
 			{/if}
 
 			{#if !sk.showing}
-				{#if !searching}<AttentionList {n} />{/if}
 				{#each n.blocks as b (b.kind === "dir" ? b.dir.path : `project:${b.root}`)}
 					{#if b.kind === "dir"}
 						<DirBlockView {n} d={b.dir} {searching} />
