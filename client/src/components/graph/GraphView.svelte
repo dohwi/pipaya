@@ -10,7 +10,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgePath, edgeTip, fitGraph, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -588,15 +588,20 @@
 								<path class="tip" d="M{tip.x - 6 * tip.dir} {tip.y - 4.5}L{tip.x} {tip.y}L{tip.x - 6 * tip.dir} {tip.y + 4.5}" />
 							{/if}
 							{#if e.live && motion && full}
-								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each;
-								     they fade in and out with the work instead of popping -->
+								<!-- work travelling: sparks glide down the line at an even speed (sparkPlan: a long line gets more of them, not
+								     faster ones), each fading in as it leaves the card and out as it arrives, a soft two-step tail behind it.
+								     Timed on the layout's line, not the easing one, so a card settling does not restart them. -->
+								{@const sp = sparkPlan(edgeLength(ca, cb, call ? "curve" : "elbow"), call)}
 								<g class="moving" transition:glowFade>
-								<path class="flow" {d} />
-								{#each { length: call ? 3 : 2 } as _, i (i)}
-									{@const dur = call ? 1.4 : 2.4}
+								{#each { length: sp.n } as _, i (i)}
+									{@const t0 = (-sp.dur * i) / sp.n}
 									<g class="spark">
-										<circle class="tail" r={call ? 5 : 4}><animateMotion dur="{dur}s" begin="{(-dur * i) / (call ? 3 : 2) - 0.08}s" repeatCount="indefinite" path={d} rotate="auto" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1" /></circle>
-										<circle class="dot" r={call ? 2.6 : 2.2}><animateMotion dur="{dur}s" begin="{(-dur * i) / (call ? 3 : 2)}s" repeatCount="indefinite" path={d} rotate="auto" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1" /></circle>
+										{#each [[0.16, call ? 3.6 : 3.2, "tail2"], [0.07, call ? 4.6 : 4, "tail"], [0, call ? 2.4 : 2.1, "dot"]] as [lag, rad, part] (part)}
+											<circle class={part as string} r={rad as number}>
+												<animateMotion dur="{sp.dur}s" begin="{t0 - (lag as number)}s" repeatCount="indefinite" path={d} />
+												<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.14;0.86;1" dur="{sp.dur}s" begin="{t0 - (lag as number)}s" repeatCount="indefinite" />
+											</circle>
+										{/each}
 									</g>
 								{/each}
 								</g>
@@ -613,7 +618,8 @@
 					class="card {c.kind} {c.kind === 'session' ? c.activity : ''}"
 					class:down={c.kind === "server" && !c.online}
 					class:run={c.kind === "subagent" && !!c.running}
-					class:glow-working={(c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running)}
+					class:working={!ghost && ((c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running))}
+					class:asking={!ghost && c.kind === "session" && c.activity === "asking"}
 					class:dim={!!focus && !focus.has(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
@@ -880,55 +886,36 @@
 	.e-delegate.live .base {
 		stroke-width: 2.5;
 	}
+	/* the glow under a live line breathes slowly, in step with the working cards (same beat as the card ring's glow) */
 	.edges .halo {
 		stroke-width: 6;
-		opacity: 0.35;
-		animation: halo 2.4s ease-in-out infinite;
+		opacity: 0.3;
+		animation: halo 3.2s ease-in-out infinite;
 	}
 	.e-delegate .halo {
-		stroke-width: 8;
-		animation-duration: 1.4s;
+		stroke-width: 7;
 	}
 	@keyframes halo {
 		50% {
-			opacity: 0.12;
+			opacity: 0.1;
 		}
 	}
-	.edges .flow {
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-dasharray: 1 11;
-		opacity: 0.8;
-		animation: flow 1.2s linear infinite;
-	}
-	.e-delegate .flow {
-		stroke-dasharray: 1 7;
-		animation-duration: 0.5s;
-	}
-	@keyframes flow {
-		to {
-			stroke-dashoffset: -12; /* one dash period per loop: seamless */
-		}
-	}
-	.e-delegate .flow {
-		animation-name: flow-call;
-	}
-	@keyframes flow-call {
-		to {
-			stroke-dashoffset: -8;
-		}
-	}
+	/* a spark: a bright head and a tail that thins out behind it (fill-opacity: the opacity itself fades it at the ends) */
 	.spark .dot {
 		fill: #fff;
 	}
-	.e-tree .spark .tail,
-	.e-spawn .spark .tail {
+	.e-tree .spark circle:not(.dot),
+	.e-spawn .spark circle:not(.dot) {
 		fill: var(--ok);
-		opacity: 0.55;
 	}
-	.e-delegate .spark .tail {
+	.e-delegate .spark circle:not(.dot) {
 		fill: var(--info);
-		opacity: 0.6;
+	}
+	.spark .tail {
+		fill-opacity: 0.4;
+	}
+	.spark .tail2 {
+		fill-opacity: 0.16;
 	}
 	:global(:root[data-theme="light"]) .spark .dot {
 		fill: var(--bg);
@@ -944,7 +931,6 @@
 	.edges g.dim {
 		opacity: 0.12;
 	}
-	.edges g.dim .flow,
 	.edges g.dim .halo {
 		animation-play-state: paused;
 	}
@@ -989,6 +975,56 @@
 		cursor: grabbing;
 		border-color: var(--text-faint);
 		box-shadow: var(--shadow);
+	}
+	/*
+	 * A card at work: a light runs round its border (a conic gradient behind a transparent border, turning on the
+	 * registered --ring-a), in the colour of the line it sits on: green for a chat, blue for a subagent. A soft glow
+	 * breathes around it. A chat waiting for an answer holds a steady amber ring that breathes, no running light.
+	 */
+	.card.working,
+	.card.asking {
+		--ring: var(--ok);
+		border-color: transparent;
+		background:
+			linear-gradient(var(--bg), var(--bg)) padding-box,
+			conic-gradient(
+					from var(--ring-a),
+					color-mix(in srgb, var(--ring) 35%, var(--border-strong)) 0 52%,
+					var(--ring) 76%,
+					color-mix(in srgb, var(--ring) 35%, var(--border-strong)) 100%
+				)
+				border-box;
+		animation:
+			ring-turn 3.2s linear infinite,
+			ring-glow 3.2s ease-in-out infinite;
+	}
+	.card.subagent.working {
+		--ring: var(--info);
+	}
+	.card.asking {
+		--ring: var(--warn);
+		background:
+			linear-gradient(var(--bg), var(--bg)) padding-box,
+			linear-gradient(color-mix(in srgb, var(--ring) 70%, var(--border-strong)), color-mix(in srgb, var(--ring) 70%, var(--border-strong))) border-box;
+		animation: ring-glow 3.2s ease-in-out infinite;
+	}
+	@keyframes ring-turn {
+		to {
+			--ring-a: 360deg;
+		}
+	}
+	@keyframes ring-glow {
+		0%,
+		100% {
+			box-shadow:
+				0 0 0 0 color-mix(in srgb, var(--ring) 0%, transparent),
+				var(--shadow-soft);
+		}
+		50% {
+			box-shadow:
+				0 0 16px 0 color-mix(in srgb, var(--ring) 24%, transparent),
+				var(--shadow-soft);
+		}
 	}
 	.card.sel {
 		border-color: var(--text);
@@ -1264,7 +1300,14 @@
 		.card {
 			transition: none;
 		}
-		.edges .flow,
+		/* still: the ring stays where it is, a steady colour all round */
+		.card.working {
+			animation: none;
+			background:
+				linear-gradient(var(--bg), var(--bg)) padding-box,
+				linear-gradient(color-mix(in srgb, var(--ring) 70%, var(--border-strong)), color-mix(in srgb, var(--ring) 70%, var(--border-strong))) border-box;
+		}
+		.card.asking,
 		.edges .halo,
 		.run .lead,
 		.doing > :global(.ic) {

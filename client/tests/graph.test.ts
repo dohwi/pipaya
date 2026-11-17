@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, edgeTip, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -286,5 +286,25 @@ describe("many chats", () => {
 		const d = edgePath(m, c, 1, "elbow");
 		expect(d).toEndWith(`L${c.x - c.w / 2} ${c.y}`);
 		expect(d).toContain(` ${c.y + c.bus!.dy}`);
+	});
+});
+
+describe("sparks", () => {
+	test("an even speed: a longer line takes longer and carries more sparks, within bounds", () => {
+		const short = sparkPlan(120, false), long = sparkPlan(520, false);
+		expect(long.dur).toBeGreaterThan(short.dur);
+		expect(long.n).toBeGreaterThan(short.n);
+		expect(sparkPlan(5000, false)).toEqual({ n: 4, dur: 4.2 });
+		expect(sparkPlan(10, false)).toEqual({ n: 1, dur: 1.6 });
+		// a call is quicker than work on the structure, and always shows at least two
+		expect(sparkPlan(300, true).dur).toBeLessThan(sparkPlan(300, false).dur);
+		expect(sparkPlan(10, true).n).toBe(2);
+	});
+	test("durations are rounded: a card easing a few px does not change them", () => {
+		expect(sparkPlan(300, false)).toEqual(sparkPlan(303, false));
+	});
+	test("edgeLength matches the drawn line", () => {
+		const a = { x: 0, y: 0, w: 100 } as never, b = { x: 300, y: 0, w: 100 } as never;
+		expect(edgeLength(a, b, "elbow")).toBeCloseTo(200, 3);
 	});
 });

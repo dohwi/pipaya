@@ -332,6 +332,20 @@ const TURN = 12;
  * S-curve. `p` < 1 draws only the first part (a line growing from `a` toward `b`).
  */
 export function edgePath(a: Card, b: Card, p = 1, style: "curve" | "elbow" = "curve"): string {
+	let segs = edgeSegs(a, b, style);
+	if (p < 1) segs = cut(segs, Math.max(0, p));
+	const r = (n: number) => Math.round(n * 100) / 100;
+	let d = `M${r(segs[0]!.p[0]!)} ${r(segs[0]!.p[1]!)}`;
+	for (const s of segs) d += s.c ? `C${r(s.p[2]!)} ${r(s.p[3]!)} ${r(s.p[4]!)} ${r(s.p[5]!)} ${r(s.p[6]!)} ${r(s.p[7]!)}` : `L${r(s.p[2]!)} ${r(s.p[3]!)}`;
+	return d;
+}
+
+/** How long a line is, in graph px: what the work running along it takes to cross it. */
+export function edgeLength(a: Card, b: Card, style: "curve" | "elbow" = "curve"): number {
+	return edgeSegs(a, b, style).reduce((n, s) => n + segLen(s), 0);
+}
+
+function edgeSegs(a: Card, b: Card, style: "curve" | "elbow"): Seg[] {
 	const ax = a.x + a.w / 2;
 	let segs: Seg[];
 	if (b.x - b.w / 2 > ax + 8) {
@@ -354,11 +368,7 @@ export function edgePath(a: Card, b: Card, p = 1, style: "curve" | "elbow" = "cu
 		const bx = b.x + b.w / 2 + 2, c = 40 + Math.min(120, Math.abs(b.y - a.y) * 0.3);
 		segs = [{ c: true, p: [ax, a.y, ax + c, a.y, bx + c, b.y, bx, b.y] }];
 	}
-	if (p < 1) segs = cut(segs, Math.max(0, p));
-	const r = (n: number) => Math.round(n * 100) / 100;
-	let d = `M${r(segs[0]!.p[0]!)} ${r(segs[0]!.p[1]!)}`;
-	for (const s of segs) d += s.c ? `C${r(s.p[2]!)} ${r(s.p[3]!)} ${r(s.p[4]!)} ${r(s.p[5]!)} ${r(s.p[6]!)} ${r(s.p[7]!)}` : `L${r(s.p[2]!)} ${r(s.p[3]!)}`;
-	return d;
+	return segs;
 }
 
 /** Where a line ends and which way it points there (1 right, -1 left): for the chevron on a delegate call. */
@@ -401,18 +411,18 @@ function squared(input: [number, number][]): Seg[] {
 }
 
 /** The first `p` of a line, by length: whole segments, then the one it stops in, cut short. */
+function segLen(s: Seg): number {
+	if (!s.c) return Math.hypot(s.p[2]! - s.p[0]!, s.p[3]! - s.p[1]!);
+	let l = 0, [px, py] = [s.p[0]!, s.p[1]!];
+	for (let i = 1; i <= 8; i++) {
+		const [x, y] = splitCubic(s.p, i / 8).slice(6);
+		l += Math.hypot(x! - px, y! - py);
+		[px, py] = [x!, y!];
+	}
+	return l;
+}
 function cut(segs: Seg[], p: number): Seg[] {
-	const len = (s: Seg) => {
-		if (!s.c) return Math.hypot(s.p[2]! - s.p[0]!, s.p[3]! - s.p[1]!);
-		let l = 0, [px, py] = [s.p[0]!, s.p[1]!];
-		for (let i = 1; i <= 8; i++) {
-			const [x, y] = splitCubic(s.p, i / 8).slice(6);
-			l += Math.hypot(x! - px, y! - py);
-			[px, py] = [x!, y!];
-		}
-		return l;
-	};
-	const lens = segs.map(len);
+	const lens = segs.map(segLen);
 	let left = p * lens.reduce((a, b) => a + b, 0);
 	const out: Seg[] = [];
 	for (const [i, s] of segs.entries()) {
@@ -608,4 +618,16 @@ export function springStep(x: number, v: number, to: number, dt: number, omega =
 	const c = v + omega * d;
 	const e = Math.exp(-omega * dt);
 	return [to + (d + c * dt) * e, (c - omega * (d + c * dt)) * e];
+}
+
+/**
+ * The work running along a live line: how many sparks and how long each takes to cross. A constant speed rather than a
+ * constant time, so a long line does not rush and a short one does not crawl; sparks spaced evenly, more on a longer line.
+ * Durations are rounded so a card easing into place does not restart them every frame.
+ */
+export function sparkPlan(length: number, call: boolean): { n: number; dur: number } {
+	const speed = call ? 220 : 130; // px per second: a call is quick, work on the structure flows calmly
+	const dur = Math.round(Math.min(call ? 2.6 : 4.2, Math.max(call ? 0.9 : 1.6, length / speed)) * 10) / 10;
+	const n = Math.max(call ? 2 : 1, Math.min(4, Math.round(length / (call ? 110 : 170))));
+	return { n, dur };
 }
