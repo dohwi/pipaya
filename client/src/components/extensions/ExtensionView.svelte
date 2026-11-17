@@ -588,9 +588,12 @@
 	td { overflow-wrap: anywhere; min-width: 6rem; }
 
 	.list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-	.list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 12px; }
+	/* A row's badge sits on the row's vertical centre, beside both lines of text, and keeps to one line: it is a status
+	   next to the item, not a third line hanging from the title. */
+	.list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
 	.list li + li { border-top: 1px solid var(--border); }
-	.list-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+	.list-text { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+	.list li > .badge { flex: none; align-self: center; white-space: nowrap; }
 	.list-title { font-size: var(--fs-md); font-weight: 550; }
 
 	/* tabs */
