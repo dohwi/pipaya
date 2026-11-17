@@ -1896,6 +1896,7 @@ export const en: Record<string, string> = {
 	"옮긴 카드를 제자리로": "Put moved cards back in place",
 	"전체 보기": "Show all",
 	"전체 보기 (F)": "Show all (F)",
+	"클릭: 빠른 보기 · {key}+클릭: 대화로 이동": "Click: quick look · {key}+click: go to the chat",
 	"확인할 대화가 없습니다": "No chats need a look",
 	"대화 찾기": "Find a chat",
 	"대화 이동": "Navigation",

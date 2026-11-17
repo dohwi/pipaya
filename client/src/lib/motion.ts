@@ -186,6 +186,14 @@ export function modalIn(node: Element) {
 	if (isPhone()) return sheet(node, "in");
 	return { duration: ms("normal"), easing: easeEnter, css: (_: number, u: number) => css(dialogFrame(u, "in")) };
 }
+/**
+ * A dialog opened as a quick look (the graph view's chat): it is there almost at once, over `fast`, with half the lift,
+ * so clicking card after card feels immediate. Phones keep the sheet.
+ */
+export function modalQuickIn(node: Element) {
+	if (isPhone()) return sheet(node, "in");
+	return { duration: ms("fast"), easing: easeEnter, css: (_: number, u: number) => css(dialogFrame(u * 0.5, "in")) };
+}
 export function modalOut(node: Element) {
 	flagClosing(node);
 	if (isPhone()) return sheet(node, "out");

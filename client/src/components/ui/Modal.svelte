@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { schedule, unschedule } from "../../lib/frame";
 	import type { Snippet } from "svelte";
-	import { fadeIn, fadeOut, modalIn, modalOut } from "../../lib/motion";
+	import { fadeIn, fadeOut, modalIn, modalOut, modalQuickIn } from "../../lib/motion";
 	import { RECENTRE, modalLayer, portal as lift } from "../../lib/dialog";
 	import ModalHeader from "./ModalHeader.svelte";
 
@@ -44,6 +44,7 @@
 		headerActions,
 		headerLead,
 		titleExtra,
+		quick = false,
 		children,
 	}: {
 		onclose: () => void;
@@ -91,8 +92,11 @@
 		headerLead?: Snippet;
 		/** inline after the title (a count) */
 		titleExtra?: Snippet;
+		/** a quick look opened by a click on something (the graph view's chat): a shorter, lighter entrance */
+		quick?: boolean;
 		children: Snippet;
 	} = $props();
+	const enter = (node: Element) => (quick ? modalQuickIn(node) : modalIn(node));
 
 	const tokens = ["s", "m", "l", "xl"];
 	const w = $derived(tokens.includes(width) ? `var(--modal-w-${width})` : width);
@@ -204,7 +208,7 @@
 		style:--modal-gut={gutter}
 		use:whole
 		use:modalLayer={{ onclose: onescape ?? onclose, dismissible, opener }}
-		in:modalIn|global
+		in:enter|global
 		out:modalOut|global
 	>
 		{#if title}
