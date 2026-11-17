@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { setLang } from "../src/lib/i18n";
 import type { Step } from "../src/lib/types";
-import { joinAnd, workKind, workSummary } from "../src/lib/work-summary";
+import { joinAnd, workIcon, workKind, workSummary } from "../src/lib/work-summary";
 
 afterEach(() => setLang("ko"));
 
@@ -28,6 +28,19 @@ describe("workKind", () => {
 		for (const n of ["web_search", "mcp_search_web_fetch", "fetch_url", "browse"]) expect(workKind(n), n).toBe("web");
 		expect(workKind("peer")).toBe("other");
 		expect(workKind("ask_user")).toBe("other");
+	});
+});
+
+describe("workIcon", () => {
+	test("the kind the summary names first", () => {
+		expect(workIcon(many(3, "bash"))).toBe("terminal");
+		expect(workIcon([tool("web_search"), tool("bash")])).toBe("globe");
+		expect(workIcon([tool("peer"), tool("read", { path: "a" })])).toBe("file");
+	});
+	test("unknown tools only: a bolt; thoughts only: a brain", () => {
+		expect(workIcon([tool("peer")])).toBe("bolt");
+		expect(workIcon([think])).toBe("brain");
+		expect(workIcon([])).toBe("brain");
 	});
 });
 

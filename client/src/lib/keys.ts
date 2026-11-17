@@ -26,6 +26,7 @@ export type ActionId =
   | "retry"
   | "compact"
   | "copyLast"
+  | "toggleWorkExpand"
   | "scrollTop"
   | "scrollBottom"
   | "focusLeft"
@@ -202,6 +203,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     default: "",
   },
   {
+    id: "toggleWorkExpand",
+    label: msg("작업 내역 모두 펼치기 / 접기"),
+    hint: msg("답변 속 도구 호출 묶음을 모두 펼치거나 한 줄 요약으로 접습니다. 설정의 기본값도 함께 바뀝니다"),
+    default: "Mod+O",
+  },
+  {
     id: "scrollTop",
     label: msg("대화 맨 위로"),
     hint: msg("대화의 처음으로 스크롤합니다"),
@@ -369,6 +376,7 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   compact: "chat",
   copyLast: "chat",
   findInChat: "chat",
+  toggleWorkExpand: "chat",
   scrollTop: "chat",
   scrollBottom: "chat",
   stop: "chat",

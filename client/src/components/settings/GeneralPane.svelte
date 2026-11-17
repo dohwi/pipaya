@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { app, type ThemePref } from "../../lib/store.svelte";
+	import { formatCombo } from "../../lib/keys";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Button from "../ui/Button.svelte";
@@ -20,6 +21,12 @@
 		{ id: "dark", label: msg("다크"), icon: "moon" },
 	];
 	/** Language names stay in their own language so they can be found from any other. */
+	const workKey = $derived(formatCombo(app.prefs.bindings.toggleWorkExpand));
+	const workHint = $derived(
+		workKey
+			? t("답변 속 도구 호출을 한 줄 요약 대신 모두 펼쳐 보여 줍니다. 단축키 {key}", { key: workKey })
+			: t("답변 속 도구 호출을 한 줄 요약 대신 모두 펼쳐 보여 줍니다"),
+	);
 	const langOptions = $derived([{ tag: "system", name: t("시스템") }, ...languages()]);
 </script>
 
@@ -39,6 +46,9 @@
 			{#snippet trailing()}<Button size="sm" disabled={app.prefs.uiScale === 100} onclick={() => app.prefs.setUiScale(100)}>{t("100%로")}</Button>{/snippet}
 		</RangeField>
 	</div>
+	<SettingRow label={t("작업 내역 펼쳐 두기")} hint={workHint}>
+		<Switch checked={app.prefs.expandWork} label={t("작업 내역 펼쳐 두기")} onchange={(on) => app.prefs.setExpandWork(on)} />
+	</SettingRow>
 </section>
 
 <section class="set-group"><NotificationSettings /></section>

@@ -8,7 +8,7 @@
 	import { getPane } from "../../lib/pane";
 	import { duration } from "../../lib/format";
 	import { isImageTool, toolIcon, toolSummary } from "../../lib/tools";
-	import { workSummary } from "../../lib/work-summary";
+	import { workIcon, workSummary } from "../../lib/work-summary";
 	import PaintingCanvas from "./PaintingCanvas.svelte";
 	import type { Step, ToolRun } from "../../lib/types";
 
@@ -40,11 +40,19 @@
 
 	/** The quiet line: what the calls did, kind by kind ("명령 4개 실행 및 웹 1회 검색"). While nothing but thoughts came yet, "생각 중". */
 	const summary = $derived(active && !tools.length ? t("생각 중") : workSummary(steps));
+	/** What kind of work the box holds at a glance: the icon of the kind the summary names first. */
+	const icon = $derived(workIcon(steps));
 	/** A box of one call (and no thoughts) also names what it touched, the way its card would. */
 	const single = $derived(tools.length === 1 && steps.length === 1 && !active ? toolSummary(tools[0]!.name, tools[0]!.args) : "");
 
-	/** Folded by default; opening shows every step in place. */
-	let open = $state(false);
+	/**
+	 * Folded by default; opening shows every step in place. The "expand work" setting (Ctrl/⌘+O) opens or folds every
+	 * box at once; a box opened or folded by hand keeps that until the setting changes again.
+	 */
+	let open = $state(app.prefs.expandWork);
+	$effect.pre(() => {
+		open = app.prefs.expandWork;
+	});
 
 	/** The step the "now" line names. Between two steps it stays on the tool that just finished instead of going blank. */
 	const shown = $derived(cur >= 0 ? cur : active && steps.at(-1)?.kind === "tool" ? steps.length - 1 : -1);
@@ -204,6 +212,7 @@
 </div>
 
 {#snippet row()}
+	<span class="kind"><Icon name={icon} /></span>
 	<span class="what" class:shimmer={active && awaitingIdx < 0}>{summary}</span>
 	{#if single}<span class="single mono">{single}</span>{/if}
 	{#if awaitingIdx >= 0}
@@ -286,6 +295,7 @@
 		line-height: 16px;
 		color: var(--text-faint);
 	}
+	.kind,
 	.ok,
 	.chev {
 		flex: none;
@@ -295,11 +305,16 @@
 		height: 16px;
 		color: var(--text-faint);
 	}
+	.kind :global(svg),
 	.ok :global(svg),
 	.chev :global(svg) {
 		width: 16px;
 		height: 16px;
 		stroke-width: 2;
+	}
+	/* the same 16px glyph and stroke as the "now" line's icon right under it, so both sit on the guide line's centre */
+	.kind :global(svg) {
+		stroke-width: 1.8;
 	}
 	.chev {
 		transition: transform var(--motion-fast) var(--ease);

@@ -63,6 +63,8 @@ export class Preferences {
   bindings = $state<Record<ActionId, string>>(readBindings());
   terminal = $state<TerminalPrefs>(sanitizeTerminal(read<unknown>(K.terminal, null)));
   footer = $state<FooterPrefs>(sanitizeFooter(read<unknown>(K.footer, null)));
+  /** Work boxes (the tool calls of a reply) show every step open instead of one summary line. */
+  expandWork = $state(read<boolean>(K.expandWork, false) === true);
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
   recordingKey = $state(false);
 
@@ -83,6 +85,7 @@ export class Preferences {
     this.soundVolume = readVolume();
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
     this.footer = sanitizeFooter(read<unknown>(K.footer, null));
+    this.expandWork = read<boolean>(K.expandWork, false) === true;
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
     applyUiScale(this.uiScale);
     this.applyTheme();
@@ -157,6 +160,13 @@ export class Preferences {
   /** Let the user hear the current volume (called when they let go of the slider) */
   previewSound() {
     play("done", volumeGain(this.soundVolume));
+  }
+
+  /* ---------- work boxes ---------- */
+
+  setExpandWork(on: boolean) {
+    this.expandWork = on;
+    write(K.expandWork, on);
   }
 
   /* ---------- terminal ---------- */

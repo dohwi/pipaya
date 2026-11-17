@@ -6,7 +6,7 @@ export type IconName =
 	| "menu" | "plus" | "send" | "stop" | "mic" | "mic-rec" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 	| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 	| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
-	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off" | "repo";
+	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off" | "repo" | "globe";
 
 export const ICON_PATHS: Record<IconName, string> = {
 	menu: "M4 7h16M4 12h16M4 17h16",
@@ -43,6 +43,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 	search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",
 	folder: "M3 6h6l2 2h10v11H3z",
 	// a project (a git repository): a box, so it reads apart from the folders listed in it
+	// the web: a globe with its equator and one meridian
+	globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 3.6 9 14 14 0 0 1-3.6 9 14 14 0 0 1-3.6-9A14 14 0 0 1 12 3z",
 	repo: "M12 3l8.5 4v10L12 21l-8.5-4V7zM3.5 7l8.5 4 8.5-4M12 11v10",
 	brain: "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1",
 	fork: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9",

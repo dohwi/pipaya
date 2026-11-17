@@ -22,6 +22,7 @@ export const K = {
   terminal: "pipaya.terminal", // terminal look: { fontFamily, fontSize, lineHeight, cursorBlink, scrollback }
   footer: "pipaya.footer", // footer items: { order, hidden, layout, align }
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
+  expandWork: "pipaya.work.expand", // work boxes (a reply's tool calls) open by default: true | false
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>", "project\u0000<serverId>\u0000<root>", "group\u0000<groupId>"
