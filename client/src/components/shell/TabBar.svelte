@@ -37,7 +37,7 @@
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
-	/** "↳ @parent" on a tab whose session another open session made: who started it, beside it */
+	/** the parent mark ("made by @parent") on a tab whose session another open session made: who started it, beside it */
 	const parentOf = (x: Tab) => (x.kind === "session" ? parentLabel(x.session, (id) => app.session(id)) : undefined);
 	const handleOf = (x: Tab) => (x.kind === "session" ? (peerLabel(x.session) ?? extensions.labelOf(x.id)) : undefined);
 	/** The most pressing state among a tab's conversations. */
@@ -250,7 +250,7 @@
 						}}
 					/>
 				{:else}
-					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}>{pl.text}</span>{/if}
+					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
@@ -474,12 +474,20 @@
 	.who.working {
 		color: var(--info);
 	}
-	/* "↳ @parent": who made this conversation, after its title and quieter than its own handle */
+	/* the parent mark (fork icon + "@parent", like "forked from"): who made this conversation, after its title and quieter than its own handle */
 	.from {
 		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		line-height: 16px; /* whole-pixel line box, centred on the title's like .who */
+	}
+	.from :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 2;
 	}
 	.who.asking {
 		color: var(--warn);

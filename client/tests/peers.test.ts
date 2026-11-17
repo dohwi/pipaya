@@ -50,8 +50,8 @@ d2("member names follow the UI language at display time", () => {
 describe("parentLabel", () => {
 	const by = (m: Record<string, { name: string; title: string }>) => (id: string) => m[id];
 	test("names the open session that made this one; nothing for one the user started or whose parent is gone", () => {
-		expect(parentLabel({ parentId: "p" }, by({ p: { name: "minji", title: "x" } }))?.text).toBe("↳ @minji");
-		expect(parentLabel({ parentId: "p" }, by({ p: { name: "", title: "Fork source" } }))?.text).toBe("↳ Fork source");
+		expect(parentLabel({ parentId: "p" }, by({ p: { name: "minji", title: "x" } }))?.text).toBe("@minji");
+		expect(parentLabel({ parentId: "p" }, by({ p: { name: "", title: "Fork source" } }))?.text).toBe("Fork source");
 		expect(parentLabel({ parentId: null }, by({}))).toBeUndefined();
 		expect(parentLabel({ parentId: "gone" }, by({}))).toBeUndefined();
 	});
