@@ -341,7 +341,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: flex-end;
-		padding-left: 8px; /* with the tab's own 8px, the first icon lands on 16, the header title's line */
+		padding-left: 4px; /* with the tab's own 12px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -380,7 +380,7 @@
 		height: 34px;
 		min-width: 112px;
 		max-width: 200px;
-		padding: 0 4px 0 8px;
+		padding: 0 8px 0 12px; /* the hover pill sits 4px in, so the icon and the close glyph both clear its edges by 8px */
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -475,8 +475,9 @@
 			margin var(--motion-fast) var(--ease-std),
 			outline-color var(--motion-fast) var(--ease-std);
 	}
-	.gbox + .gbox {
-		margin-left: 4px;
+	.gbox + .gbox,
+	.gbox:first-child {
+		margin-left: 4px; /* first: the strip pads only 4px, so the chips still land on 16 */
 	}
 	.gbox.on {
 		outline-color: transparent;
@@ -626,8 +627,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 		opacity: 0;
@@ -644,7 +645,7 @@
 	}
 	@media (hover: hover) {
 		.x:hover {
-			background: var(--bg-active);
+			background: color-mix(in srgb, var(--text) 10%, transparent); /* a step darker than whatever is under it: the hover pill or the front tab */
 			color: var(--text);
 		}
 	}
@@ -670,6 +671,7 @@
 		.tab {
 			flex: none;
 			height: 28px;
+			padding: 0 4px 0 8px;
 			min-width: 0;
 			max-width: 220px;
 			border-radius: var(--radius-sm);
@@ -699,8 +701,13 @@
 			border-color: var(--text-faint);
 			border-radius: var(--radius-sm);
 		}
-		.gbox + .gbox {
+		.gbox + .gbox,
+		.gbox:first-child {
 			margin-left: 0;
+		}
+		.x {
+			width: 22px;
+			height: 22px;
 		}
 		.tab.before,
 		.gbox.before {
