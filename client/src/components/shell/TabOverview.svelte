@@ -174,7 +174,7 @@
 									<p class="term mono"><span class="prompt">$</span> {x.terminal.shell.split(/[\\/]/).pop()}</p>
 								{:else}
 									<ul class="members">
-										{#each x.members.slice(0, 4) as m (m.id)}
+										{#each x.members.slice(0, 3) as m (m.id)}
 											<li>{"shell" in m ? m.title : sessionTitle(m.title)}</li>
 										{/each}
 									</ul>
@@ -182,7 +182,7 @@
 							</div>
 							<div class="meta">
 								{#if st !== "idle"}<span class="state {st}"><StatusDot tone={ACTIVITY_TONE[st]} pulse={st === "working"} size={7} />{ACTIVITY_LABEL[st]}</span>{/if}
-								<span class="facts">
+								<span class="info">
 									{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
 									{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
 									{:else}{agoText(x.session.updatedAt, now)}{/if}
@@ -244,7 +244,7 @@
 	.cell {
 		min-width: 0;
 	}
-	/* a bordered card 12px inside its border (DESIGN rule 4): title row 28, preview 4 lines of 18, facts 16 */
+	/* a bordered card 12px inside its border (DESIGN rule 4): title row 20, preview 3 lines of 18, facts 16; 8px between them */
 	.card {
 		position: relative;
 		display: flex;
@@ -276,11 +276,13 @@
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
+	/* the title row is the title's own 20px line, so the card reads 12px of air on all four sides; the 28px close box
+	   overhangs it by 4px above and below instead of pushing the title down */
 	.top {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 28px;
+		height: 20px;
 	}
 	.ico {
 		position: relative; /* hosts the group's status dot (Pin) */
@@ -311,6 +313,7 @@
 		width: 28px;
 		height: 28px;
 		margin-right: -7px; /* the glyph's inset in its 28px box (DESIGN rule 5) */
+		margin-block: -4px; /* overhangs the 20px title row: the box keeps its 28px target, the row its title height */
 		border-radius: var(--radius-sm);
 		color: var(--text-faint);
 	}
@@ -327,7 +330,7 @@
 	}
 	.prev {
 		flex: 1;
-		min-height: 72px; /* four 18px lines, so every card in a row starts its facts line on the same height */
+		min-height: 54px; /* three 18px lines, so every card in a row starts its facts line on the same height */
 	}
 	.prev p {
 		margin: 0;
@@ -337,8 +340,8 @@
 		line-height: 18px;
 		color: var(--text-dim);
 		display: -webkit-box;
-		-webkit-line-clamp: 4;
-		line-clamp: 4;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 		overflow-wrap: anywhere;
@@ -405,7 +408,8 @@
 	.state.failed {
 		color: var(--danger);
 	}
-	.facts {
+	/* "2분 전", "대화 2개": body type like the state beside it (the global `.facts` is mono and spread the Korean out) */
+	.info {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

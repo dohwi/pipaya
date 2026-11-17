@@ -578,12 +578,10 @@
 		color: var(--text-faint);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	/* the count goes to the far right, the + stays right after the last tab */
+	/* the count sits right beside the +, the strip's 4px apart: the two are one cluster of tab controls, so a short strip
+	   does not leave the count stranded at the far end of the bar */
 	.countslot {
 		display: contents;
-	}
-	.countslot :global(.count) {
-		margin-left: auto;
 	}
 	@media (max-width: 600px) {
 		.countslot {
