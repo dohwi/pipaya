@@ -10,7 +10,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
-	import { clockTime, compact, duration } from "../../lib/format";
+	import { compact, duration, timeOfDay } from "../../lib/format";
 	import { plainTextOf, replyActions, segmentsOf } from "../../lib/reply-blocks";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
@@ -93,6 +93,9 @@
 	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
+	/** When each block was written: the time its message (one model call) started. A text the reply went on from (a
+	 *  progress note between tool calls) shows it underneath; the closing text has it in the foot. */
+	const blockTs = $derived(parts.flatMap((p) => p.blocks.map(() => p.ts)));
 	const actions = $derived(replyActions(tail, last, live));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
@@ -108,6 +111,10 @@
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
 			{:else}
 				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
+				{#if n < segments.length - 1 && blockTs[seg.i]}
+					{@const ts = blockTs[seg.i]!}
+					<time class="note-when" datetime={new Date(ts).toISOString()} title={new Date(ts).toLocaleString(localeTag())}>{timeOfDay(ts, localeTag())}</time>
+				{/if}
 			{/if}
 		{/each}
 
@@ -148,7 +155,7 @@
 					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
 				{/if}
 				<span class="stats">
-					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{clockTime(tail.ts, localeTag())}</time>{/if}
+					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					<span class="stext">
 						{#if tail.model}{tail.model}{/if}
@@ -282,6 +289,14 @@
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
 	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */
+	/* the time under a progress note: on the text's left line, the foot's size and colour, 4px under the text */
+	.note-when {
+		display: block;
+		margin-top: 4px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
 	/* when the answer was written, ahead of the model: a narrow pane cuts the model line first, never the time */
 	.when {
 		flex: none;

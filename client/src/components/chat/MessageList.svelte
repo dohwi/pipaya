@@ -6,7 +6,9 @@
 
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
+	import { dayLabel, dayStart } from "../../lib/format";
+	import { today } from "../../lib/today.svelte";
 	import { fadeIn, fadeOut } from "../../lib/motion";
 	import { tick, untrack } from "svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -271,6 +273,22 @@
 		return out;
 	});
 
+	const unitTs = (u: Unit) => (u.kind === "turn" ? u.items[0]!.ts : u.item.ts);
+	/** A unit that starts a new local day gets that day's heading above it ("오늘", "어제", "11월 15일 (일)"). Reading
+	 *  `today.day` relabels the headings when midnight passes with the transcript open. */
+	const dayOf = $derived.by(() => {
+		const now = today.day;
+		const out: (string | null)[] = [];
+		let prev = -1;
+		for (const u of units) {
+			const ts = unitTs(u);
+			const d = ts ? dayStart(ts) : prev;
+			out.push(ts && d !== prev ? dayLabel(ts, localeTag(), now) : null);
+			prev = d;
+		}
+		return out;
+	});
+
 	// A compaction is shown as a "/compact" command to the agent, so its bubble gets the same working wave as a prompt.
 	const lastUserKey = $derived.by(() => {
 		if (chat.compacting && chat.compactKey) return chat.compactKey;
@@ -323,6 +341,7 @@
 				</div>
 			{/if}
 			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
+				{#if dayOf[n]}<div class="day" role="separator" aria-label={dayOf[n]}><span>{dayOf[n]}</span></div>{/if}
 				<div class="unit" class:live={chat.running && n === units.length - 1}>
 					{#if u.kind === "notice"}
 						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
@@ -409,6 +428,26 @@
 		max-width: calc(var(--content-w) + 32px);
 		margin: 0 auto;
 		padding: 16px 16px 28px;
+	}
+	/* a day's heading: centred small text between two hairlines across the conversation column */
+	.day {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin: 16px 0 8px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.day:first-child {
+		margin-top: 0;
+	}
+	.day::before,
+	.day::after {
+		content: "";
+		flex: 1;
+		height: 1px;
+		background: var(--border);
 	}
 	.notice {
 		display: flex;
