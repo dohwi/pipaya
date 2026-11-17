@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { IconName } from "./icons";
 import { toolKind } from "./tools";
 import type { Step } from "./types";
 
@@ -26,6 +27,30 @@ export function workKind(name: string, args: Record<string, unknown> = {}): Work
 	// web tools come from MCP servers and extensions under many names (web_search, mcp_search_web_fetch, browse …)
 	if (/search|fetch|web|browse/i.test(name)) return "web";
 	return "other";
+}
+
+const ICON: Record<WorkKind, IconName> = {
+	bash: "terminal",
+	read: "file",
+	edit: "pencil",
+	search: "search",
+	web: "globe",
+	delegate: "bot",
+	skill: "skill",
+	image: "sparkles",
+	other: "bolt",
+};
+
+/** The icon in front of a work box's summary: the kind it names first (see `workSummary`), or a brain for thoughts only. */
+export function workIcon(steps: readonly Step[]): IconName {
+	let other = false;
+	for (const s of steps) {
+		if (s.kind !== "tool") continue;
+		const k = workKind(s.name, s.args);
+		if (k !== "other") return ICON[k];
+		other = true;
+	}
+	return other ? ICON.other : "brain";
 }
 
 const phrase = (kind: Exclude<WorkKind, "other">, n: number): string => {

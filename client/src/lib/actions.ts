@@ -207,6 +207,11 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   retry: () => runCommand("retry"),
   compact: () => runCommand("compact"),
   copyLast: () => runCommand("copy"),
+  toggleWorkExpand: () => {
+    const on = !app.prefs.expandWork;
+    app.prefs.setExpandWork(on);
+    app.toast(on ? t("작업 내역을 모두 펼칩니다") : t("작업 내역을 한 줄로 접습니다"));
+  },
   scrollTop: () => scrollTo("top"),
   scrollBottom: () => scrollTo("bottom"),
   focusLeft: () => focusToward("left"),
