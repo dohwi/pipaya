@@ -1,7 +1,8 @@
-import { copyText } from "./clipboard";
+import { copyMessage, copyText } from "./clipboard";
+import type { ImageBlock } from "./types";
 
 /**
- * "Copied" feedback for a copy button: `copy(text)` puts the text on the clipboard and, when that worked, `done` stays
+ * "Copied" feedback for a copy button: `copy(text, images?)` puts the text on the clipboard and, when that worked, `done` stays
  * true for a moment (the button shows a check mark meanwhile). A `.svelte.ts` module: `done` is a rune.
  */
 export class CopyFlag {
@@ -10,8 +11,10 @@ export class CopyFlag {
 
 	constructor(private readonly ms = 1400) {}
 
-	async copy(text: string): Promise<boolean> {
-		const ok = await copyText(text);
+	/** With `images`, they go along (HTML with the pictures, read back by a pipaya input); the text alone if that fails. */
+	async copy(text: string, images: readonly ImageBlock[] = []): Promise<boolean> {
+		// Before any await: the rich copy needs the click that started it.
+		const ok = (images.length > 0 && copyMessage(text, images)) || (await copyText(text));
 		if (ok) {
 			this.done = true;
 			clearTimeout(this.timer);

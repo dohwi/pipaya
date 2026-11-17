@@ -13,7 +13,7 @@ beforeAll(async () => {
 	dir = await mkdtemp(join(process.cwd(), "tests", ".copy-flag-"));
 	const source = ts.transpileModule(await Bun.file(resolve("src/lib/copy-flag.svelte.ts")).text(), { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText;
 	await writeFile(join(dir, "copy-flag.mjs"), compileModule(source, { filename: "copy-flag.svelte.js", generate: "client" }).js.code.replace('"./clipboard"', '"./clipboard.mjs"'));
-	await writeFile(join(dir, "clipboard.mjs"), `let ok = true; export const __set = (v) => (ok = v); export const copyText = async (t) => { globalThis.__copied = t; return ok; };`);
+	await writeFile(join(dir, "clipboard.mjs"), `let ok = true; export const __set = (v) => (ok = v); export const copyText = async (t) => { globalThis.__copied = t; return ok; }; export const copyMessage = (t, i) => { globalThis.__copied = t; globalThis.__images = i.length; return ok; };`);
 	({ CopyFlag } = await import(join(dir, "copy-flag.mjs")));
 	setResult = (await import(join(dir, "clipboard.mjs"))).__set;
 });
