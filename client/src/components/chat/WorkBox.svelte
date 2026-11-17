@@ -2,21 +2,21 @@
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
-	import ToolChip from "./ToolChip.svelte";
-	import Modal from "../ui/Modal.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { duration } from "../../lib/format";
-	import { isImageTool, toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
+	import { isImageTool, toolIcon, toolSummary } from "../../lib/tools";
+	import { workSummary } from "../../lib/work-summary";
 	import PaintingCanvas from "./PaintingCanvas.svelte";
 	import type { Step, ToolRun } from "../../lib/types";
 
 	/** `live`: the agent is still working and this box is the newest thing in the reply. */
 	let { steps, live = false }: { steps: Step[]; live?: boolean } = $props();
+	const uid = $props.id();
 
-	/** The status line changes by fading in place: no vertical shift, so a new call that looks like the old one (bash after bash) does not wobble. */
+	/** The "now" line changes by fading in place: no vertical shift, so a new call that looks like the old one (bash after bash) does not wobble. */
 	const rollIn = (_: Element) => ({ duration: ms("normal"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
 	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number) => `opacity:${t.toFixed(3)}` });
 
@@ -25,7 +25,6 @@
 	/** Per step: the tool's run state, or null for a thought. */
 	const runs = $derived(steps.map((s) => (s.kind === "tool" ? runOf(s.id) : null)));
 	const tools = $derived(steps.filter((s) => s.kind === "tool"));
-	const thoughts = $derived(steps.filter((s) => s.kind === "think").length);
 
 	const awaitingIdx = $derived(runs.findIndex((r) => r?.state === "awaiting_input"));
 	const runningIdx = $derived(live ? runs.findIndex((r) => r?.state === "running" || r?.state === "pending") : -1);
@@ -37,35 +36,31 @@
 	const settled = (r: ToolRun | null) => !!r && r.state !== "pending" && r.state !== "running" && r.state !== "awaiting_input";
 	const finished = $derived(runs.filter(settled).length);
 	const failed = $derived(runs.filter((r) => r && (r.state === "error" || (r.state === "done" && Number(r.details?.exitCode) > 0))).length);
-	const tone = $derived(awaitingIdx >= 0 ? "warn" : active ? "accent" : failed ? "danger" : "ok");
 	const total = $derived(runs.reduce((n, r) => n + (r?.durationMs ?? 0), 0));
 
-	const tally = $derived.by(() => {
-		const m = new Map<string, number>();
-		for (const tool of tools) m.set(tool.name, (m.get(tool.name) ?? 0) + 1);
-		return [...m].map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)).join(" · ");
-	});
+	/** The quiet line: what the calls did, kind by kind ("명령 4개 실행 및 웹 1회 검색"). While nothing but thoughts came yet, "생각 중". */
+	const summary = $derived(active && !tools.length ? t("생각 중") : workSummary(steps));
+	/** A box of one call (and no thoughts) also names what it touched, the way its card would. */
+	const single = $derived(tools.length === 1 && steps.length === 1 && !active ? toolSummary(tools[0]!.name, tools[0]!.args) : "");
 
-	/** The step the header names. Between two steps it stays on the tool that just finished instead of a bare "작업 중". */
+	/** Folded by default; opening shows every step in place. */
+	let open = $state(false);
+
+	/** The step the "now" line names. Between two steps it stays on the tool that just finished instead of going blank. */
 	const shown = $derived(cur >= 0 ? cur : active && steps.at(-1)?.kind === "tool" ? steps.length - 1 : -1);
-	/** The single line the box shows; changing `key` cross-fades the old line into the new one. */
-	const line = $derived.by(() => {
-		const s = shown >= 0 ? steps[shown] : undefined;
-		if (s?.kind === "tool") return { key: `t${shown}`, kind: toolKind(s.name, s.args), icon: toolIcon(s.name, s.args), name: toolLabel(s.name, s.args), sum: s.id ? toolSummary(s.name, s.args) : t("준비 중…"), shimmer: shown === cur && awaitingIdx < 0 };
-		if (s?.kind === "think") return { key: `k${shown}`, kind: "think" as const, icon: "brain" as const, name: t("생각 중"), sum: "", shimmer: false };
-		if (active) return { key: steps.length ? "gap" : "start", kind: "think" as const, icon: "brain" as const, name: steps.length ? t("작업 중") : t("생각 중"), sum: "", shimmer: false };
-		const only = tools[0];
-		if (!only) return { key: "done", kind: "think" as const, icon: "brain" as const, name: t("생각 과정"), sum: "", shimmer: false };
-		if (tools.length === 1 && !thoughts) return { key: "done", kind: toolKind(only.name, only.args), icon: toolIcon(only.name, only.args), name: toolLabel(only.name, only.args), sum: toolSummary(only.name, only.args), shimmer: false };
-		return { key: "done", kind: "other" as const, icon: "list" as const, name: t("도구 {n}개", { n: tools.length }), sum: tally, shimmer: false };
+	const now = $derived.by(() => {
+		if (!active || shown < 0) return null;
+		const s = steps[shown]!;
+		if (s.kind === "think") return { key: `k${shown}`, icon: "brain" as const, text: t("생각 중"), mono: false };
+		return { key: `t${shown}`, icon: toolIcon(s.name, s.args), text: s.id ? toolSummary(s.name, s.args) || s.name : t("준비 중…"), mono: !!s.id };
 	});
 	/**
 	 * Live preview: the last lines of what the box is about right now. Between two steps (nothing running, the
 	 * next one not started) it keeps showing the step that just finished, so the preview is never an empty box.
 	 */
-	const PEEK_LINES = 4;
+	const PEEK_LINES = 2;
 	const LINE_H = 18;
-	/** Natural height of the preview text. The window follows it, up to PEEK_LINES lines, so a short output stays a small box. */
+	/** Natural height of the preview text. The window follows it, up to PEEK_LINES lines, so a short output stays short. */
 	let peekH = $state(0);
 	const peekWin = $derived(Math.min(peekH, PEEK_LINES * LINE_H));
 	const tail = (text: string) =>
@@ -139,41 +134,49 @@
 	/** The question the waiting call asks the user (ctx.ask); it is answered right here. */
 	const question = $derived(awaitingIdx >= 0 ? runs[awaitingIdx]?.question : undefined);
 
-	let modal = $state(false);
-
 </script>
 
-<div class="group {tone}" class:live={active}>
-	<button class="box wide" onclick={() => (modal = true)} aria-haspopup="dialog" aria-label={t("작업 {n}단계 자세히 보기", { n: steps.length })}>
-		<span class="roll" aria-live="polite">
-			{#key line.key}
-				<span class="line" in:rollIn out:rollOut>
-					<ToolChip kind={line.kind} icon={line.icon} label={line.name} shimmer={line.shimmer} />
-					{#if line.sum}<span class="sum mono">{line.sum}</span>{/if}
+<div class="work" class:live={active} class:warn={awaitingIdx >= 0}>
+	{#if steps.length}
+		<button class="sumrow" onclick={() => (open = !open)} aria-expanded={open} aria-controls={uid}>
+			{@render row()}
+		</button>
+	{:else}
+		<div class="sumrow">{@render row()}</div>
+	{/if}
+
+	{#if now && !open}
+		<div class="now" aria-live="polite">
+			{#key now.key}
+				<span class="nowline" in:rollIn out:rollOut>
+					<Icon name={now.icon} />
+					<span class="nowtext" class:mono={now.mono}>{now.text}</span>
 				</span>
 			{/key}
-		</span>
+		</div>
+	{/if}
 
-		<span class="meta">
-			{#if awaitingIdx >= 0}
-				<span class="sr-only">{t("답변 필요")}</span>
-			{:else if active}
-				<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
-				{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
-			{:else}
-				{#if failed}<span class="fail-dot" title={t("실패")}></span><span class="sr-only">{t("실패")} {failed}</span>{/if}
-				{#if total}<span class="dur">{duration(total)}</span>{/if}
-			{/if}
-			<span class="open"><Icon name="chevron-right" /></span>
-		</span>
-	</button>
-
-	{#if painting}
+	{#if open}
+		<div class="steps" id={uid} in:collapseIn out:collapseOut>
+			{#each steps as s, i (i)}
+				{#if s.kind === "think"}
+					<div class="thought">
+						<div class="thead"><Icon name="brain" /> {s.done ? t("생각 과정") : t("생각 중")}</div>
+						<div class="tbody">{s.text}</div>
+					</div>
+				{:else if s.id}
+					<ToolCard id={s.id} name={s.name} args={s.args} />
+				{:else}
+					<div class="prep"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("도구 호출 준비 중…")}</div>
+				{/if}
+			{/each}
+		</div>
+	{:else if painting}
 		<div class="canvas" in:collapseIn out:collapseOut><PaintingCanvas /></div>
 	{:else if active && shownPeek.lines.length}
-		<!-- A mouse shortcut to the same dialog the "details" button above opens (hidden from assistive tech on purpose). -->
+		<!-- A mouse shortcut to the same steps the summary line above opens (hidden from assistive tech on purpose). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="peek mono {shownPeek.kind}" onclick={() => (modal = true)} aria-hidden="true" in:collapseIn out:collapseOut>
+		<div class="peek mono {shownPeek.kind}" onclick={() => (open = true)} aria-hidden="true" in:collapseIn out:collapseOut>
 			<div class="pin" class:clip={peekH > PEEK_LINES * LINE_H} style:height="{peekWin}px">
 				<div class="inner" bind:clientHeight={peekH}>
 					{#each shownPeek.lines as l, i (i)}
@@ -196,28 +199,28 @@
 	{/if}
 
 	{#if awaitingCall && question}
-		<div in:fadeIn out:fadeOut><QuestionReply id={awaitingCall.id} paneId={pane.id} question={question} /></div>
+		<div class="ask" in:fadeIn out:fadeOut><QuestionReply id={awaitingCall.id} paneId={pane.id} question={question} /></div>
 	{/if}
 </div>
 
-{#if modal}
-	<Modal onclose={() => (modal = false)} label={t("작업 상세")} title={t("작업 {n}단계", { n: steps.length })} sub={`${tally || t("생각 과정")}${total ? ` · ${duration(total)}` : ""}`} subMono divider width="xl" maxHeight="760px" portal safeArea>
-		<div class="list">
-			{#each steps as s, i (i)}
-				{#if s.kind === "think"}
-					<div class="thought">
-						<div class="thead"><Icon name="brain" /> {s.done ? t("생각 과정") : t("생각 중")}</div>
-						<div class="tbody">{s.text}</div>
-					</div>
-				{:else if s.id}
-					<ToolCard id={s.id} name={s.name} args={s.args} />
-				{:else}
-					<div class="prep"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("도구 호출 준비 중…")}</div>
-				{/if}
-			{/each}
-		</div>
-	</Modal>
-{/if}
+{#snippet row()}
+	<span class="what" class:shimmer={active && awaitingIdx < 0}>{summary}</span>
+	{#if single}<span class="single mono">{single}</span>{/if}
+	{#if awaitingIdx >= 0}
+		<span class="need">{t("답변 필요")}</span>
+	{:else if active}
+		<span class="dots" role="status" aria-label={t("작업 중")}><i></i><i></i><i></i></span>
+		{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
+	{:else}
+		{#if failed}
+			<span class="fail" title={t("실패")}><span class="fail-dot"></span><span class="mono">{failed}</span><span class="sr-only">{t("실패")}</span></span>
+		{:else if tools.length}
+			<span class="ok"><Icon name="check" /><span class="sr-only">{t("완료")}</span></span>
+		{/if}
+		{#if total}<span class="dur">{duration(total)}</span>{/if}
+	{/if}
+	{#if steps.length}<span class="chev" class:open><Icon name="chevron-right" /></span>{/if}
+{/snippet}
 
 <style>
 	.sr-only {
@@ -228,105 +231,150 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
-	.group {
+	/* No card: the work sits in the text column as one quiet line, the way a footnote would */
+	.work {
 		margin: 8px 0;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		overflow: hidden;
-		transition: border-color var(--motion-fast) var(--ease-std);
 	}
-	.group.warn {
-		border-color: var(--warn);
-	}
-	.box {
-		position: relative;
+	/* as wide as its text (up to the column), starting on the column's left line like the paragraphs around it */
+	.sumrow {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		width: 100%;
-		height: 44px;
-		padding: 0 12px;
+		max-width: 100%;
+		padding: 4px 0;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+		color: var(--text-dim);
 		text-align: left;
-		overflow: hidden;
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.box:hover {
-			background: var(--bg-hover);
+		button.sumrow:hover {
+			color: var(--text);
+		}
+		button.sumrow:hover .chev {
+			color: var(--text-dim);
 		}
 	}
-	/* the group clips (overflow: hidden) and the button fills it, so an outer ring would be cut away entirely */
-	.box:focus-visible {
-		outline-offset: -2px;
-		border-radius: var(--radius);
+	/* the row has no fill of its own, so the press tint of row buttons (app.css) would paint a bare block behind the text */
+	button.sumrow:active:not(:disabled) {
+		background-color: transparent;
 	}
-	.ico {
+	/* the summary keeps its words; only when the column is too narrow for it alone does it shrink to an ellipsis */
+	.what {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	/* basis 0: what one call touched takes only the room the summary leaves, so it is the part that gets cut */
+	.single {
+		flex: 1 1 0;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
+	}
+	.count,
+	/* an even 16px box like the dot (8) and the arrow (16): the 11px text's own 17.05px height is odd */
+	.dur {
+		flex: none;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.ok,
+	.chev {
+		flex: none;
 		display: grid;
-		color: var(--text-dim);
-	}
-	.ico :global(svg),
-	.open :global(svg) {
+		place-items: center;
 		width: 16px;
 		height: 16px;
-		stroke-width: 1.8;
+		color: var(--text-faint);
 	}
-	.roll {
+	.ok :global(svg),
+	.chev :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke-width: 2;
+	}
+	.chev {
+		transition: transform var(--motion-fast) var(--ease);
+	}
+	.chev.open {
+		transform: rotate(90deg);
+	}
+	.fail {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--danger);
+	}
+	.need {
+		flex: none;
+		font-size: var(--fs-xs);
+		line-height: 16px;
+		color: var(--warn);
+	}
+	.dots {
+		color: var(--text-faint);
+	}
+
+	/* the step being worked on: its icon and one line of what it does, cut short rather than wrapped */
+	.now {
 		position: relative;
-		flex: 1;
-		min-width: 0;
-		height: 22px;
+		height: 20px;
 	}
-	.line {
+	.nowline {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		min-width: 0;
-		white-space: nowrap;
+		color: var(--text-dim);
 	}
-	.name {
+	.nowline :global(svg) {
 		flex: none;
-		font-weight: 600;
-		font-size: var(--fs-sm);
+		width: 16px;
+		height: 16px;
+		stroke-width: 1.8;
+		color: var(--text-faint);
 	}
-	.sum {
+	.warn .nowline :global(svg) {
+		color: var(--warn);
+	}
+	.nowtext {
 		min-width: 0;
 		overflow: hidden;
+		white-space: nowrap;
 		text-overflow: ellipsis;
 		font-size: var(--fs-xs);
-		color: var(--text-dim);
+		line-height: 20px;
 	}
-	.meta {
-		flex: none;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: var(--text-dim);
-	}
-	.count,
-	/* an even 16px box like the dot (8) and the arrow (16): the 11px text's own 17.05px height is odd, so the row's centring rounded it a pixel low */
-	.dur {
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		color: var(--text-faint);
-	}
-	.open {
-		display: grid;
-		color: var(--text-faint);
-	}
-	/* the live preview is plain text under the header, not a box of its own: no border or fill, only a thin guide line */
-	.peek {
-		margin: 0 12px 12px 20px; /* the guide line sits under the header icon's centre */
-		padding: 0 0 0 16px;
-		cursor: pointer;
+
+	/* the live preview and the opened steps hang off one thin guide line under the 16px icon's centre (8 - 2/2 = 7) */
+	.peek,
+	.steps {
+		margin-left: 7px; /* optical: puts the 2px guide line on the centre of the 16px icon above */
+		padding-left: 15px; /* optical: 7 + 2 + 15 = 24, the "now" line's text start (16px icon + 8px gap) */
 		border-left: 2px solid var(--border);
+	}
+	.peek {
+		margin-top: 4px;
+		cursor: pointer;
 		font-size: var(--fs-xs);
 		line-height: 18px;
 		color: var(--text-dim);
 		overflow: hidden;
 	}
-	/* as tall as its text, up to four lines, newest at the bottom: past that, older text scrolls off the top under a soft fade */
+	/* as tall as its text, up to two lines, newest at the bottom: past that, older text scrolls off the top under a soft fade */
 	.pin {
 		display: flex;
 		flex-direction: column;
@@ -337,7 +385,7 @@
 		contain: layout paint;
 	}
 	.pin.clip {
-		mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+		mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
 	}
 	.inner {
 		flex: none;
@@ -354,16 +402,39 @@
 		font-family: inherit;
 		font-style: italic;
 	}
+	.steps {
+		margin-top: 4px;
+		margin-bottom: 8px;
+		padding-top: 4px;
+		padding-bottom: 4px;
+	}
+	.steps > :global(:first-child) {
+		margin-top: 0;
+	}
+	.steps > :global(:last-child) {
+		margin-bottom: 0;
+	}
 
-	/* the canvas and the latest live picture sit under the header inside the same frame, so the box visibly grows to hold them */
+	/* a question waiting for the user keeps its warn-tinted frame: the one part of the box that asks for attention */
+	.ask {
+		margin-top: 8px;
+		border: 1px solid var(--warn);
+		border-radius: var(--radius);
+		overflow: hidden;
+	}
+	.ask :global(.reply) {
+		border-top: 0;
+	}
+
+	/* the canvas and the latest live picture sit under the summary line, so the box visibly grows to hold them */
 	.canvas {
-		padding: 4px 12px 12px;
+		padding: 8px 0 0;
 	}
 	.drawn {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		padding: 4px 12px 12px;
+		padding: 8px 0 0;
 	}
 	.drawn .zoom {
 		position: relative;
@@ -425,18 +496,6 @@
 		}
 	}
 
-	.list {
-		padding: 4px 16px 16px;
-		overflow-y: auto;
-	}
-	.prep {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 8px 0;
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-	}
 	.thought {
 		margin: 8px 0;
 		padding: 8px 12px;
@@ -465,5 +524,13 @@
 		overflow-wrap: anywhere;
 		max-height: 300px;
 		overflow: auto;
+	}
+	.prep {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 8px 0;
+		color: var(--text-dim);
+		font-size: var(--fs-sm);
 	}
 </style>

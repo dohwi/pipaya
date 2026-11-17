@@ -164,7 +164,7 @@ describe("modals mounted by their parent animate", () => {
 		expect(s).toMatch(/class="modal[^"]*"[\s\S]*?in:modalIn\|global\s+out:modalOut\|global/);
 	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
-		for (const f of ["server/ServerForm", "settings/Settings", "server/DirPicker", "chat/QueueModal", "chat/WorkBox", "models/ConnectionForm", "extensions/ImportDialogs", "agent/SkillsDialog", "agent/CommandFamiliesDialog", "ui/PickerModal", "ui/ConfirmDialog", "chat/StatusCard"]) {
+		for (const f of ["server/ServerForm", "settings/Settings", "server/DirPicker", "chat/QueueModal", "models/ConnectionForm", "extensions/ImportDialogs", "agent/SkillsDialog", "agent/CommandFamiliesDialog", "ui/PickerModal", "ui/ConfirmDialog", "chat/StatusCard"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toMatch(/class="r?scrim"/);
@@ -190,7 +190,7 @@ describe("modals mounted by their parent animate", () => {
 		expect(read("components/models/ModelConnections.svelte")).toContain('kind: "edit"');
 	});
 	test("dialog titles go through the shared header (one close button, one pull handle)", () => {
-		for (const f of ["chat/QueueModal", "server/DirPicker", "chat/WorkBox", "chat/FilePreview", "agent/SkillsDialog", "agent/CommandFamiliesDialog"]) {
+		for (const f of ["chat/QueueModal", "server/DirPicker", "chat/FilePreview", "agent/SkillsDialog", "agent/CommandFamiliesDialog"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toMatch(/<Modal\b[^\n]*\stitle=/);
 			expect(s, f).not.toContain('aria-label={t("닫기")}');
