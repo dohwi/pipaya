@@ -50,12 +50,31 @@ export function toolLabel(name: string, args: Record<string, unknown> = {}): str
 	return name;
 }
 
+/**
+ * A shell command split into the folder it first `cd`s into and the work after it: `cd ../app && git pull` →
+ * `{ dir: "../app", rest: "git pull" }`. Agents prefix nearly every command with the same `cd`, which ate the summary's
+ * room and cut off the part that tells two calls apart. A command that is only a `cd` keeps it as its work.
+ */
+export function splitCd(command: string): { dir: string; rest: string } {
+	const line = firstLine(command).trim();
+	const lead = /^cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*/;
+	let rest = line;
+	let dir = "";
+	for (let m = lead.exec(rest); m; m = lead.exec(rest)) {
+		const next = rest.slice(m[0].length);
+		if (!next) break;
+		dir = m[1]!.replace(/^(["'])(.*)\1$/, "$2");
+		rest = next;
+	}
+	return { dir, rest };
+}
+
 /** One line that says what a tool call is doing. */
 export function toolSummary(name: string, args: Record<string, unknown>): string {
 	if (toolKind(name, args) === "skill") return "";
 	switch (name) {
 		case "bash":
-			return firstLine(str(args.command));
+			return splitCd(str(args.command)).rest;
 		case IMAGE_TOOL:
 			return clip(str(args.prompt), 90);
 		case "grep":

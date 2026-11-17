@@ -302,6 +302,7 @@
 		flex: none;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
+		font-variant-numeric: tabular-nums;
 		color: var(--text-faint);
 	}
 	.kind,
@@ -437,6 +438,18 @@
 		padding-top: 4px;
 		padding-bottom: 4px;
 	}
+	/* Calls in a row read as one list: one outer frame, a hairline between rows, only the ends rounded. Separate cards
+	   stacked a box per call with an 8px gap each, which got heavy past three or four calls. */
+	.steps > :global([data-part="tool"] + [data-part="tool"]) {
+		margin-top: -1px; /* hairline: neighbours share one border, so a run of n rows is n * 45 + 1 tall */
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
+	}
+	.steps > :global([data-part="tool"]:has(+ [data-part="tool"])) {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	/* a thought or the "preparing" line between two runs keeps its 8px margin from both (.thought, .prep) */
 	.steps > :global(:first-child) {
 		margin-top: 0;
 	}
