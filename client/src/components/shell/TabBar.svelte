@@ -293,7 +293,7 @@
 
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
-	   colour with rounded top corners and runs over the bar's bottom hairline into the conversation below, so the two read as
+	   colour, a square block (4px corners on top) that runs over the bar's bottom hairline into the conversation below, so the two read as
 	   one sheet. The other tabs have no fill, only a hairline between them. Tabs share the width evenly up to 200px each and
 	   scroll sideways below 112px. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
@@ -302,7 +302,7 @@
 		display: flex;
 		align-items: stretch;
 		height: 38px;
-		padding: 0 11px 0 max(0px, var(--sal)); /* right: the count's 18px square sits 5px inside its 28px button, so its edge lands on the 16px gutter (DESIGN rule 5); left: the strip pads itself (room for the front tab's flare) */
+		padding: 0 11px 0 max(0px, var(--sal)); /* right: the count's 18px square sits 5px inside its 28px button, so its edge lands on the 16px gutter (DESIGN rule 5); left: the strip pads itself */
 		background: var(--bg-tabbar);
 		box-shadow: inset 0 -1px var(--border); /* the hairline under the strip, drawn below the tabs so the front one covers it */
 	}
@@ -329,7 +329,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: flex-end;
-		padding-left: 8px; /* the first tab's left flare draws here; its icon lands on 16, the header title's line */
+		padding-left: 8px; /* with the tab's own 8px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -351,26 +351,11 @@
 		}
 	}
 
-	/* the front tab's fill is the sliding marker: the page colour, rounded on top, with the two outward curves at its foot */
+	/* the front tab's fill is the sliding marker: a plain block of the page colour, square but for a 4px softening on top,
+	   with no curves at its foot, so the tab reads as a box cut out of the bar */
 	.tabs > :global(.slide-ind) {
 		background: var(--bg);
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-	}
-	.tabs > :global(.slide-ind)::before,
-	.tabs > :global(.slide-ind)::after {
-		content: "";
-		position: absolute;
-		bottom: 0;
-		width: 8px;
-		height: 8px;
-	}
-	.tabs > :global(.slide-ind)::before {
-		left: -8px;
-		background: radial-gradient(circle at 0 0, transparent 8px, var(--bg) 8.5px); /* the flare's curve: --radius-sm, half a pixel of antialiasing */
-	}
-	.tabs > :global(.slide-ind)::after {
-		right: -8px;
-		background: radial-gradient(circle at 100% 0, transparent 8px, var(--bg) 8.5px); /* the mirror of ::before */
+		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 	}
 
 	.tab {
@@ -384,7 +369,7 @@
 		min-width: 112px;
 		max-width: 200px;
 		padding: 0 4px 0 8px;
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel title beside the session logo (rule 3) */
@@ -403,12 +388,12 @@
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
 	}
-	/* hover: a soft pill inside the tab, 4px in, like the tab strips of today's browsers */
+	/* hover: a block inside the tab, 4px in, with the same small corners as the front tab */
 	.fill {
 		position: absolute;
 		inset: 4px 4px;
 		z-index: -1;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: var(--bg-tabbar-hover);
 		opacity: 0;
 		pointer-events: none;
@@ -466,7 +451,7 @@
 		gap: 4px;
 		height: 34px;
 		padding: 0 8px;
-		border-radius: 12px; /* the frame drawn 4px in below comes out at --radius-sm */
+		border-radius: 8px; /* the frame drawn 4px in below comes out at --radius-xs, the tabs' corner */
 		outline: 1px solid var(--border-strong);
 		outline-offset: -4px;
 		transition:
@@ -478,7 +463,7 @@
 	}
 	.gbox.on {
 		outline-color: transparent;
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 	}
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
@@ -527,7 +512,7 @@
 	.tail {
 		position: relative;
 		flex: none;
-		width: 8px; /* the last tab's right flare draws here */
+		width: 8px; /* air after the last tab, where a drop at the end shows its line */
 		align-self: stretch;
 	}
 	.tail.over::before {
@@ -664,10 +649,6 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
-		}
-		.tabs > :global(.slide-ind)::before,
-		.tabs > :global(.slide-ind)::after {
-			display: none;
 		}
 		.tab {
 			flex: none;
