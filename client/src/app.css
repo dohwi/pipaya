@@ -179,6 +179,9 @@
 	--sidebar-w: 288px;
 	--rail-w: 56px;
 	--content-w: 760px;
+	/* a tab of the strip under the pointer: a step from the strip toward the text, so it reads on either theme (and on a theme
+	   pack's own --bg, which --bg-tabbar follows) */
+	--bg-tabbar-hover: color-mix(in srgb, var(--bg-tabbar) 92%, var(--text));
 }
 
 @media (max-width: 640px) {
@@ -193,6 +196,7 @@
 	--bg: #161616;
 	--bg-side: #191919;
 	--bg-group: #202022; /* nav while a group is open: a touch lighter than --bg */
+	--bg-tabbar: color-mix(in srgb, var(--bg) 55%, #000); /* the tab strip, a step below the page (#0c0c0c on #161616): the front tab is the page's colour */
 	--bg-elev: #1c1c1c;
 	--bg-lift: #242424; /* something carried off a list: clearly off the sidebar (#191919) */
 	--bg-set: #222224; /* a group of settings on the dialog surface */
@@ -256,6 +260,7 @@
 	--bg: #ffffff;
 	--bg-side: #fafafa;
 	--bg-group: #f1f1f3; /* nav while a group is open: a touch darker than --bg */
+	--bg-tabbar: color-mix(in srgb, var(--bg) 94%, #000); /* the tab strip, a step below the page (#f0f0f0 on #fff): the front tab is the page's colour */
 	--bg-elev: #fafafa;
 	--bg-lift: #ffffff; /* something carried off a list: clearly off the sidebar (#fafafa) */
 	--bg-set: #f1f1f3;

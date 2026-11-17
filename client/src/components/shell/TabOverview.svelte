@@ -8,7 +8,7 @@
 	import { agoText, gridNext, previewOfItems, previewOfStored, shortPath, type Preview } from "../../lib/tab-overview";
 	import { reflow, rowOut } from "../../lib/motion";
 	import Modal from "../ui/Modal.svelte";
-	import Button from "../ui/Button.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import StatusDot from "../ui/StatusDot.svelte";
@@ -163,30 +163,33 @@
 									<button class="x tap" tabindex="-1" onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>
 								{/if}
 							</div>
-							<div class="prev">
-								{#if x.kind === "session"}
-									{#if p}
-										<p class="text"><span class="who">{p.who === "user" ? t("나") : t("에이전트")}</span>&nbsp;{p.text}</p>
+							<!-- the sheet under the title band: what the tab holds, then its facts -->
+							<div class="sheet">
+								<div class="prev">
+									{#if x.kind === "session"}
+										{#if p}
+											<p class="text"><span class="who">{p.who === "user" ? t("나") : t("에이전트")}</span>&nbsp;{p.text}</p>
+										{:else}
+											<p class="text none">{t("아직 메시지가 없습니다")}</p>
+										{/if}
+									{:else if x.kind === "terminal"}
+										<p class="term mono"><span class="prompt">$</span> {x.terminal.shell.split(/[\\/]/).pop()}</p>
 									{:else}
-										<p class="text none">{t("아직 메시지가 없습니다")}</p>
+										<ul class="members">
+											{#each x.members.slice(0, 3) as m (m.id)}
+												<li>{"shell" in m ? m.title : sessionTitle(m.title)}</li>
+											{/each}
+										</ul>
 									{/if}
-								{:else if x.kind === "terminal"}
-									<p class="term mono"><span class="prompt">$</span> {x.terminal.shell.split(/[\\/]/).pop()}</p>
-								{:else}
-									<ul class="members">
-										{#each x.members.slice(0, 3) as m (m.id)}
-											<li>{"shell" in m ? m.title : sessionTitle(m.title)}</li>
-										{/each}
-									</ul>
-								{/if}
-							</div>
-							<div class="meta">
-								{#if st !== "idle"}<span class="state {st}"><StatusDot tone={ACTIVITY_TONE[st]} pulse={st === "working"} size={7} />{ACTIVITY_LABEL[st]}</span>{/if}
-								<span class="info">
-									{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
-									{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
-									{:else}{agoText(x.session.updatedAt, now)}{/if}
-								</span>
+								</div>
+								<div class="meta">
+									{#if st !== "idle"}<span class="state {st}"><StatusDot tone={ACTIVITY_TONE[st]} pulse={st === "working"} size={7} />{ACTIVITY_LABEL[st]}</span>{/if}
+									<span class="info">
+										{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
+										{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
+										{:else}{agoText(x.session.updatedAt, now)}{/if}
+									</span>
+								</div>
 							</div>
 						</div>
 					</li>
@@ -199,7 +202,8 @@
 </Modal>
 
 {#snippet titleExtra()}<span class="n">{tabs.length}</span>{/snippet}
-{#snippet headerActions()}<Button size="sm" onclick={newChat}><Icon name="plus" />{t("새 대화")}</Button>{/snippet}
+<!-- beside the close button, as a browser's tab switcher keeps its "+" by the corner -->
+{#snippet headerActions()}<IconButton icon="plus" label={t("새 대화")} tip onclick={newChat} />{/snippet}
 
 <style>
 	.body {
@@ -244,14 +248,15 @@
 	.cell {
 		min-width: 0;
 	}
-	/* a bordered card 12px inside its border (DESIGN rule 4): title row 20, preview 3 lines of 18, facts 16; 8px between them */
+	/* A browser's tab card: a title band in the tab strip's tone over a sheet in the page's, a hairline between them. Both
+	   are 12px inside the card's border on every side (DESIGN rule 4): band 12 + 20 + 12, sheet 12 + preview 54 + 8 + facts
+	   16 + 12, so every card is 2 + 44 + 1 + 102 = 149px and a row of them lines up. */
 	.card {
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
 		height: 100%;
-		padding: 12px;
+		overflow: hidden; /* the band's corners follow the card's */
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
@@ -260,29 +265,40 @@
 		-webkit-user-select: none;
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
-			background var(--motion-fast) var(--ease-std);
+			box-shadow var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.card:hover {
-			background: var(--bg-hover);
+			border-color: var(--text-faint);
 		}
 	}
-	/* the tab in front: the strong accent outline, 1px border plus a 1px inset ring so the box does not grow */
+	/* the tab in front: a 3px accent frame (the border plus a 2px ring outside it), so the box does not grow */
 	.card.on {
 		border-color: var(--accent);
-		box-shadow: inset 0 0 0 1px var(--accent);
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 	.card:focus-visible {
 		outline: 2px solid var(--accent);
-		outline-offset: 2px;
+		outline-offset: 4px; /* clear of the current card's 2px ring */
 	}
-	/* the title row is the title's own 20px line, so the card reads 12px of air on all four sides; the 28px close box
-	   overhangs it by 4px above and below instead of pushing the title down */
+	/* the title band is the title's own 20px line with 12px of air above and below; the 28px close box overhangs the line
+	   by 4px above and below instead of pushing the title down */
 	.top {
+		flex: none;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 20px;
+		height: 45px; /* 12 + the 20px title line + 12, and the 1px hairline below */
+		padding: 12px;
+		border-bottom: 1px solid var(--border);
+		background: var(--bg-tabbar);
+	}
+	.sheet {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 12px;
 	}
 	.ico {
 		position: relative; /* hosts the group's status dot (Pin) */
