@@ -163,21 +163,24 @@
 
 		{#if tail && !live}
 			<div class="foot">
-				<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
-				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
-				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
-					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
-				{/if}
-				{#if actions.retry}
-					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
-				{/if}
-				<!-- one quiet line right after the buttons: when, then who wrote it and what it cost. The time comes first so a
+				<!-- the quiet line on the text's left line: when, then who wrote it and what it cost. The time comes first so a
 				     narrow pane cuts the model text, never the time -->
 				<span class="stats" title={statsTitle || undefined}>
 					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
 					{#if tail.ts && (tail.model || statsText)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					{#if statsText}<span class="stext">{statsText}</span>{/if}
+				</span>
+				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
+				{#if actions.retry}
+					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
+				{/if}
+				<span class="acts">
+					<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} tip size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
+					<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
+					{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
+						<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
+					{/if}
 				</span>
 			</div>
 		{/if}
@@ -273,32 +276,37 @@
 		stroke-width: 1.8;
 	}
 
+	/* 32px tall like every action row; starts on the text's left line (the stats text comes first, so no bleed) */
 	.foot {
 		display: flex;
 		align-items: center;
 		gap: 0;
+		height: 32px;
 		margin-top: 4px;
-		/* 8px glyph inset less the 2px the first box is pulled in: the first glyph lands on the text's left edge */
-		margin-left: -6px;
-	}
-	/* Only the buttons rest faded until the answer is hovered: the whole line used to, and the model / token text in it
-	   then read 2.3:1 (light theme). The text stays --text-faint at full strength (6:1); the buttons stay quiet. */
-	.foot :global(.iconbtn) {
-		opacity: 0.55;
-		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	/* A 16px glyph in a 32px box leaves 8px of air on each side, so side by side boxes read 20px apart and the icons look
 	   scattered. The boxes overlap 2px instead: a 28px pitch, the spacing the action rows had before they shared a size. */
 	.foot :global(.iconbtn) {
 		margin-inline: -2px;
 	}
-	.row:hover .foot :global(.iconbtn),
-	.foot:has(:focus-visible) :global(.iconbtn) {
+	.acts {
+		display: flex;
+		flex: none;
+		align-items: center;
+	}
+	/* copy / reply / branch show while the answer is hovered or one of them has keyboard focus, like the question's own
+	   actions (UserMessage.svelte); they keep their room, so nothing moves when they appear */
+	.acts :global(.iconbtn) {
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.row:hover .acts :global(.iconbtn),
+	.acts:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
 	}
-	/* no hover on a touch screen: full strength there, as the user message's actions are (UserMessage.svelte) */
+	/* no hover on a touch screen: hidden actions would be unreachable, so they stay on */
 	@media (pointer: coarse) {
-		.foot :global(.iconbtn) {
+		.acts :global(.iconbtn) {
 			opacity: 1;
 		}
 	}
@@ -347,25 +355,13 @@
 	   next to the 16px glyphs; 2px of bottom margin lifts the text (not the box) onto the row centre */
 	.stats {
 		display: flex;
+		flex: 0 1 auto;
 		align-items: center;
 		min-width: 0;
-		margin-left: 8px;
+		margin-right: 8px; /* the next box overlaps 2px and holds its glyph 8px in: 14px to the ink, as the time sat after the last glyph before */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		white-space: nowrap;
 		overflow: hidden;
-	}
-	/* narrow pane: the stats line gives way before the buttons do, and the text shrinks a notch */
-	@container (max-width: 420px) {
-
-		.foot {
-			min-width: 0;
-		}
-		.stats {
-			flex: 1;
-			min-width: 0;
-			margin-left: 4px;
-			font-size: var(--fs-2xs);
-		}
 	}
 </style>
