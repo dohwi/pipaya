@@ -123,7 +123,9 @@
 	// ---- pointer: pan the background, drag a card, click / double click a chat ----
 	let hover = $state<string | null>(null);
 	let selected = $state<string | null>(null);
-	let quick = $state<{ server: string; session: string } | null>(null);
+	/** The chat the quick look shows (the store keeps it: it opens that chat on its server under the dialog). */
+	const quick = $derived(app.graphPeek);
+	const peek = (server: string, session: string) => void app.peekChat(server, session);
 	/** card: the one being moved (mouse or pen only); tapped: the one under the pointer, which a click selects */
 	let drag: { x: number; y: number; vx: number; vy: number; card: string | null; tapped: string | null; cx: number; cy: number; moved: boolean } | null = null;
 	let dragging = $state<string | null>(null);
@@ -211,14 +213,14 @@
 		selected = c?.id ?? null;
 		if (c?.kind !== "session") return;
 		clearTimeout(clickTimer);
-		clickTimer = setTimeout(() => (quick = { server: c.server, session: c.session!.id }), DOUBLE_MS);
+		clickTimer = setTimeout(() => peek(c.server, c.session!.id), DOUBLE_MS);
 	}
 	function dbl(e: MouseEvent) {
 		// the canvas holds the pointer capture, so the event's target is the canvas: find the card under the pointer
 		const c = graph.cards.get(cardAt(document.elementFromPoint(e.clientX, e.clientY)) ?? "");
 		if (c?.kind !== "session") return;
 		clearTimeout(clickTimer);
-		quick = null;
+		app.closePeek();
 		app.openIn(c.server, { session: c.session!.id });
 	}
 	function arrange() {
@@ -235,7 +237,7 @@
 		} else if (e.key === "Enter" && c?.kind === "session") {
 			e.preventDefault();
 			if (e.shiftKey) app.openIn(c.server, { session: c.session!.id });
-			else quick = { server: c.server, session: c.session!.id };
+			else peek(c.server, c.session!.id);
 		} else if (e.key === "f") fit();
 		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
 		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
@@ -440,7 +442,7 @@
 </section>
 
 {#if quick}
-	{#key `${quick.server}/${quick.session}`}<GraphQuick server={quick.server} session={quick.session} onclose={() => (quick = null)} />{/key}
+	{#key `${quick.server}/${quick.session}`}<GraphQuick server={quick.server} session={quick.session} onclose={() => app.closePeek()} />{/key}
 {/if}
 
 

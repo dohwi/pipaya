@@ -31,14 +31,12 @@
 		session,
 		paneId,
 		onreply,
-	}: { item: AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; session: Session | undefined; paneId: string | null; onreply?: (text: string) => void } = $props();
+	}: { item: AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; session: Session | undefined; paneId: string | null; onreply: (text: string) => void } = $props();
 
 	const parts = $derived<AssistantItem[]>(turn.length ? turn : [item]);
 	const tail = $derived(parts[parts.length - 1]);
 	const plainText = $derived(plainTextOf(parts.flatMap((p) => p.blocks)));
-	const reply = () => onreply?.(plainText);
-	/** Without `onreply` (a transcript looked at from elsewhere, not the open server's pane) nothing acts on the chat: no reply, retry, continue */
-	const acts = $derived(!!onreply);
+	const reply = () => onreply(plainText);
 
 	/**
 	 * Mobile: drag an answer right -> left to reply to it. The gesture is lib/swipe-reply (plain TS); the two numbers the
@@ -53,7 +51,7 @@
 	};
 
 	function swipeable(node: HTMLElement) {
-		const canReply = () => acts && !live && !!plainText;
+		const canReply = () => !live && !!plainText;
 		const start = (e: TouchEvent) => {
 			// Horizontally scrollable content (code, tables, formulas) and form fields keep their own gestures.
 			const blocked = (e.target as Element | null)?.closest(SWIPE_BLOCKERS);
@@ -126,7 +124,7 @@
 
 		{#if actions.cut}
 			<div class="cut">
-				{#if actions.resume && acts}
+				{#if actions.resume}
 					<Notice tone="warn" size="sm" role="status">
 						{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
 						{#snippet action()}
@@ -142,8 +140,8 @@
 		{#if tail && !live}
 			<div class="foot">
 				<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
-				{#if acts}<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />{/if}
-				{#if acts && actions.retry}
+				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
+				{#if actions.retry}
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
 				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}

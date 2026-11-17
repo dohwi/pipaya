@@ -297,8 +297,25 @@ class AppStore {
   graphOpen = $state(false);
   /** The conversation the graph was opened from, so the toggle can go back to it. */
   graphFrom = $state<{ server: string; session: string } | null>(null);
-  /** The chat the graph view's quick look shows, with the server it is on: its ChatState is fed from that server's stream. */
-  graphPeek: { server: string; chat: ChatState } | null = null;
+  /**
+   * The graph view's quick look: the chat shown in a dialog over the graph. It is the real conversation (the pane, its
+   * input and status line), opened on its server the usual way while the graph stays up; the graph remembers where the
+   * user came from (`graphFrom`) and goes back there when it closes.
+   */
+  graphPeek = $state<{ server: string; session: string } | null>(null);
+  async peekChat(server: string, session: string) {
+    this.graphPeek = { server, session };
+    // the chat's own server becomes the open one (its transcript, composer and status read from it)
+    if (server !== this.serverId || this.net === "idle") {
+      write(`${K.active}.${server}`, session);
+      this.openServer(server, true);
+      return; // attach opens the remembered session once connected (with the graph kept open: see openSession)
+    }
+    await this.openSession(session, false, false);
+  }
+  closePeek() {
+    this.graphPeek = null;
+  }
 
   toggleGraph(open = !this.graphOpen) {
     if (open === this.graphOpen) return;
@@ -309,8 +326,12 @@ class AppStore {
       return;
     }
     this.graphOpen = false;
+    this.graphPeek = null;
+    // back to the chat the graph was opened from (a quick look may have opened others meanwhile)
     const from = this.graphFrom;
-    if (from && from.server !== this.serverId) this.openIn(from.server, { session: from.session });
+    if (!from) return;
+    if (from.server !== this.serverId) this.openIn(from.server, { session: from.session });
+    else if (from.session !== this.activeId && this.shows(from.session)) void this.openSession(from.session, false, false);
   }
   /** The scheduled-tasks window opened from the sidebar (the open server's list and form), or false. */
   schedulesDialog = $state(false);
@@ -839,6 +860,7 @@ class AppStore {
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
   openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean }) {
     this.graphOpen = false;
+    this.graphPeek = null;
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal asked for on another server opens once that server is connected (see sync).
       this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
@@ -904,10 +926,6 @@ class AppStore {
     this.serverExtensionFeed.onEvent(link.id, e.type, e.data);
     applyLiveEvent(link.data, e);
     if (this.graphOpen) graphRuns.onEvent(link.id, e.type, e.data);
-    // the graph view's quick look at a chat on any server follows that chat's events (the open server's own chats
-    // are fed by `handle` below; a peek never shares their ChatState)
-    const peek = this.graphPeek;
-    if (peek && peek.server === link.id && e.sessionId === peek.chat.id) peek.chat.apply(e);
     if (link.id === this.serverId) return this.handle(e);
     // The client extensions of a server shown in settings follow what its other devices change.
     if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
@@ -1603,6 +1621,7 @@ class AppStore {
 
   newChat() {
     this.graphOpen = false;
+    this.graphPeek = null;
     if (this.activeId) this.previousId = this.activeId;
     this.activeId = null;
     try {
@@ -1727,7 +1746,8 @@ class AppStore {
    */
   async openSession(id: string, force = false, reveal = true) {
     if (!this.api) return;
-    this.graphOpen = false;
+    // opening a chat leaves the graph, unless it is the one the graph's quick look shows
+    if (this.graphPeek?.session !== id) this.graphOpen = false;
     if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
       // already open: only make sure its row can be seen (it may sit under a fold the user made since)
       if (reveal) this.revealRow(id);
