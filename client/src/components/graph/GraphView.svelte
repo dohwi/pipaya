@@ -46,7 +46,9 @@
 			const link = app.links[s.id];
 			return link ? [[s.id, { api: link.api, data: link.data }] as const] : [];
 		}));
-		return graphRuns.follow(map);
+		// untracked: follow reads what its own requests write (the runs, the links' running chats), and tracking that restarted
+		// it on every answer: a request loop that took the browser's connections and left a chat opened from here on its skeleton
+		return untrack(() => graphRuns.follow(map));
 	});
 
 	// ---- layout: pins are cards moved by hand, kept on this device until "다시 배치" ----

@@ -1291,7 +1291,7 @@ dialog[data-closing]::backdrop {
 .skeleton-bar {
 	position: relative;
 	overflow: hidden;
-	border-radius: var(--radius-pill);
+	border-radius: var(--radius-xs); /* blunt blocks, not pills: thin rounded lines read as fine print, not a placeholder */
 	background: color-mix(in srgb, var(--text) 7%, transparent); /* translucent: reads on the page, the sidebar band and a bubble alike */
 }
 .skeleton-bar::after {
