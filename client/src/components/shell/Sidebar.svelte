@@ -507,7 +507,6 @@
 		box-sizing: content-box;
 		height: 44px;
 		padding: 0 8px; /* the search box shares the card's left and right edges (8) */
-		border-bottom: 1px solid var(--border);
 	}
 	/* a 32px field like the list's rows; touch keeps the shared 34px / 16px field (iOS zooms below 16px) */
 	@media (pointer: fine) {
