@@ -323,3 +323,18 @@ export function isMouseWheel(e: Pick<WheelEvent, "deltaMode" | "deltaX" | "delta
 	if (typeof legacy === "number" && legacy !== 0) return legacy % 120 === 0 && legacy !== -3 * e.deltaY;
 	return Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50;
 }
+
+/**
+ * How briskly a card or the view settles on a new place: a critically damped spring (it never overshoots), about half a
+ * second to come to rest. A spring rather than a timed curve so a target that moves again mid-way (a second chat starts,
+ * the column re-sorts) bends the path instead of restarting it.
+ */
+export const SPRING_OMEGA = 12;
+
+/** One exact step of that spring: from `x` moving at `v`, `dt` seconds toward `to`. Returns the new place and speed. */
+export function springStep(x: number, v: number, to: number, dt: number, omega = SPRING_OMEGA): [number, number] {
+	const d = x - to;
+	const c = v + omega * d;
+	const e = Math.exp(-omega * dt);
+	return [to + (d + c * dt) * e, (c - omega * (d + c * dt)) * e];
+}

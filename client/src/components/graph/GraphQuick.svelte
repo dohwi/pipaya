@@ -35,8 +35,10 @@
 
 <!-- Large on a desktop (most of the window, up to a comfortable reading width); the usual 90% sheet on a phone -->
 <Modal {onclose} label={sessionTitle(s?.title)} title={sessionTitle(s?.title)} {sub} subMono width="min(1080px, calc(var(--vw) * 0.8))" height="calc(var(--dvh) * 0.86)" maxHeight="1000px" divider>
+	{#snippet headerLead()}
+		<span class="st" title={ACTIVITY_LABEL[activity]}><AgentBadge id={session} {server} state={activity} size={24} /></span>
+	{/snippet}
 	{#snippet headerActions()}
-		<span class="st" title={ACTIVITY_LABEL[activity]}><AgentBadge id={session} {server} state={activity} size={16} /></span>
 		<button class="open" onclick={openChat} title={t("대화 열기")}><Icon name="arrow-right" /><span class="lbl">{t("대화 열기")}</span></button>
 	{/snippet}
 	<div class="quick">
@@ -69,8 +71,8 @@
 	.st {
 		display: inline-grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
+		width: 24px;
+		height: 24px; /* the agent's mark beside a two-line title, the size the graph's chat card shows it */
 	}
 	.open {
 		flex: none;

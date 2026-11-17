@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, isMouseWheel, CARD_H, CARD_H_LIVE, edgePath, fitView, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgePath, fitView, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -144,5 +144,32 @@ describe("helpers", () => {
 		expect(fitView(g, 4000, 3000).k).toBe(1);
 		expect(fitView(g, 300, 300).k).toBe(0.6);
 		expect(fitView(buildGraph([]), 800, 600)).toEqual({ k: 1, x: 24, y: 24 });
+	});
+});
+
+describe("springStep", () => {
+	const run = (from: number, to: number, seconds: number, dt = 1 / 60) => {
+		let [x, v] = [from, 0];
+		const path: number[] = [];
+		for (let t = 0; t < seconds; t += dt) {
+			[x, v] = springStep(x, v, to, dt);
+			path.push(x);
+		}
+		return { x, v, path };
+	};
+	test("settles on the target in about half a second, never past it", () => {
+		const { x, path } = run(0, 100, 0.7);
+		expect(Math.abs(x - 100)).toBeLessThan(0.5);
+		expect(path.every((p) => p <= 100)).toBe(true);
+		// it eases: each frame moves it closer, never back
+		expect(path.every((p, i) => i === 0 || p >= path[i - 1]!)).toBe(true);
+	});
+	test("one long frame lands where many small frames do (exact, not stepped)", () => {
+		const fine = run(0, 100, 0.2, 1 / 240).x;
+		const [coarse] = springStep(0, 0, 100, 0.2);
+		expect(Math.abs(fine - coarse)).toBeLessThan(0.5);
+	});
+	test("at the target and still, it stays", () => {
+		expect(springStep(42, 0, 42, 0.1)).toEqual([42, 0]);
 	});
 });
