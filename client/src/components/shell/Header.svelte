@@ -133,6 +133,20 @@
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 	}
+	/* Above a browser-style tab strip (wider than a phone) the header is the strip's own tone with no hairline between them,
+	   one chrome band like a browser's title bar over its tabs: the front tab is the only page-coloured thing up there and
+	   reads as the top of the sheet below. A white header over a grey strip stacked three tones (white, grey, white). */
+	@media (min-width: 601px) {
+		:global(main:has(> [data-part="tabbar"])) > header {
+			border-bottom-color: transparent;
+			background: var(--bg-tabbar);
+		}
+		@media (hover: hover) {
+			:global(main:has(> [data-part="tabbar"])) > header .tool:hover {
+				background: var(--bg-tabbar-hover); /* --bg-hover is lighter than the strip's tone on light */
+			}
+		}
+	}
 	.capsule {
 		display: flex;
 		align-items: center;
