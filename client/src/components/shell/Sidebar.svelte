@@ -497,6 +497,12 @@
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
+	/* Over a tab strip the header drops its hairline (Header.svelte), so this one would end alone at the sidebar edge: drop it too */
+	@media (min-width: 601px) {
+		:global(:root:has(main > [data-part="tabbar"])) .brandrow {
+			border-bottom-color: transparent;
+		}
+	}
 	/* the same 44px strip as the brand row above it: the field is centred in the box, not padded into place */
 	.tools {
 		display: flex;
