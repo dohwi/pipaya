@@ -37,14 +37,30 @@ export function registerCompression(server: FastifyInstance): void {
 		if (Buffer.byteLength(payload) < COMPRESS_MIN_BYTES) return payload;
 		const encoding = pickEncoding(req.headers["accept-encoding"]);
 		if (!encoding) return payload;
-		// Quality 4 and level 6: within a few ms for the largest list, close to the best ratio.
-		const body = encoding === "br"
-			? await brotli(payload, { params: { [constants.BROTLI_PARAM_QUALITY]: 4, [constants.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(payload) } })
-			: await gz(payload, { level: 6 });
+		let body: Buffer;
+		try {
+			body = await compress(encoding, payload);
+		} catch (err) {
+			// A response sent as it is beats a 500: the client asked for compression, it did not require it.
+			req.log.warn({ err, encoding }, "compressing a response failed; sending it uncompressed");
+			return payload;
+		}
 		void reply.header("content-encoding", encoding);
 		reply.removeHeader("content-length");
 		return body;
 	});
+}
+
+/**
+ * Always hands zlib a Buffer: for a string Bun's `node:zlib` takes a path that references the `SharedArrayBuffer`
+ * global, which the compiled desktop sidecar (macOS) does not have, so every compressed response failed there.
+ * Quality 4 and level 6: within a few ms for the largest list, close to the best ratio.
+ */
+export function compress(encoding: "br" | "gzip", payload: string | Buffer): Promise<Buffer> {
+	const input = typeof payload === "string" ? Buffer.from(payload) : payload;
+	return encoding === "br"
+		? brotli(input, { params: { [constants.BROTLI_PARAM_QUALITY]: 4, [constants.BROTLI_PARAM_SIZE_HINT]: input.length } })
+		: gz(input, { level: 6 });
 }
 
 function appendVary(current: unknown, value: string): string {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { buildApp, CORS_MAX_AGE_S, type App } from "../src/app.ts";
-import { pickEncoding } from "../src/compression.ts";
+import { compress, pickEncoding } from "../src/compression.ts";
 import type { Config } from "../src/config.ts";
 
 describe("pickEncoding", () => {
@@ -15,6 +15,21 @@ describe("pickEncoding", () => {
 		expect(pickEncoding("identity")).toBeNull();
 		expect(pickEncoding(undefined)).toBeNull();
 		expect(pickEncoding(["gzip", "br"])).toBe("br");
+	});
+});
+
+describe("compress", () => {
+	test("works without the SharedArrayBuffer global (the compiled macOS sidecar has none)", async () => {
+		const g = globalThis as { SharedArrayBuffer?: unknown };
+		const saved = g.SharedArrayBuffer;
+		delete g.SharedArrayBuffer;
+		try {
+			const body = JSON.stringify({ list: "x".repeat(4096) });
+			expect(gunzipSync(await compress("gzip", body)).toString()).toBe(body);
+			expect(brotliDecompressSync(await compress("br", body)).toString()).toBe(body);
+		} finally {
+			g.SharedArrayBuffer = saved;
+		}
 	});
 });
 
