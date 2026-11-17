@@ -332,9 +332,10 @@
 		   onto the row the items' values sit on (scripts/ui-ink.py, morebtn) */
 		padding-top: 1px;
 	}
+	/* inside: the one-row status line scrolls sideways and so clips, and its bottom edge is the button's (scripts/ui-focus.py) */
 	.morebtn:focus-visible {
 		outline: 2px solid var(--accent);
-		outline-offset: 2px;
+		outline-offset: -2px;
 	}
 	.statusline :global(.ring) {
 		width: 12px; /* the same even size as the other marks (StatusItem) */

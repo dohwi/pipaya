@@ -525,7 +525,7 @@
 	}
 	/* 38px in a 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
 	:global(.iconbtn.foldbtn:focus-visible) {
-		outline-offset: -2px;
+		outline-offset: -3px; /* -2 like the other header buttons, 1 more: the -9.5px bleed puts the box 0.5px past the sidebar's clipping edge */
 	}
 	@media (min-width: 861px) {
 		.side {

@@ -211,7 +211,7 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		padding: 4px var(--dlg-px) var(--dlg-body-b);
+		padding: 8px var(--dlg-px) var(--dlg-body-b); /* top: the scroll box clips, and a focused current card's ring reaches 6px out (2px frame + 4px offset); 4 lost its top */
 	}
 	@media (max-width: 640px) {
 		.body {
