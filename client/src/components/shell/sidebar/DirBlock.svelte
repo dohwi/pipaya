@@ -136,6 +136,8 @@
 		display: flex;
 		align-items: center;
 		margin-top: 12px;
+		margin-right: -8px; /* like a tab row, the highlight (open, drop) runs 8px past the content and the padding gives it back: the count and "+" keep x 256, 8px inside its edge */
+		padding-right: 8px;
 		border-radius: var(--radius-sm);
 	}
 	.dirblock:first-child > .dir {
@@ -257,7 +259,7 @@
 	/* a folder inside a project: one step in, under the project's icon (x 48 -> chevron, x 68 -> branch icon) */
 	.dirblock.inproj > .dir {
 		margin-top: 0;
-		padding-left: 20px; /* the 20px column step */
+		margin-left: 20px; /* the 20px column step; a margin, so the highlight starts at the folder's own column, not the project's */
 	}
 	.dirblock.inproj:first-child > .dir {
 		margin-top: 1px; /* rows sit 1px apart, like .item */
@@ -279,7 +281,7 @@
 		translate: 0 -50%;
 	}
 	:global(:where(.side) .dir.folded .dirnew) {
-		right: 0; /* the same centre (x 256) as when unfolded */
+		right: 8px; /* the row's right padding: the same centre (x 256) as when unfolded */
 	}
 	.dir.folded .cbadge {
 		transition: opacity var(--motion-fast) var(--ease-std);

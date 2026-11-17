@@ -79,6 +79,8 @@
 		display: flex;
 		align-items: center;
 		margin-top: 12px;
+		margin-right: -8px; /* the highlight runs 8px past the content, like .dir and tab rows */
+		padding-right: 8px;
 		border-radius: var(--radius-sm);
 	}
 	.projblock:first-child > .proj {
@@ -164,7 +166,7 @@
 			position: absolute;
 			top: 50%;
 			translate: 0 -50%;
-			right: 0; /* the same centre (x 256) as when unfolded */
+			right: 8px; /* the row's right padding: the same centre (x 256) as when unfolded */
 		}
 		.proj.folded .cbadge {
 			transition: opacity var(--motion-fast) var(--ease-std);
