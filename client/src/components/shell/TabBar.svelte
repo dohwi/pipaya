@@ -182,6 +182,18 @@
 		});
 		return () => unschedule(host);
 	});
+	/**
+	 * Keyboard focus on something the strip has scrolled out of view (a split tab's chip, a close button) brings it in.
+	 * The browser does not: a chip sits in the group's own scroll box, which has nothing to scroll, and the strip around it
+	 * stayed put, so the ring was drawn off screen (scripts/ui-focus.py).
+	 */
+	function reveal(e: FocusEvent) {
+		if (!strip || !(e.target instanceof HTMLElement) || !e.target.matches(":focus-visible")) return;
+		const r = e.target.getBoundingClientRect();
+		const box = strip.getBoundingClientRect();
+		if (r.left < box.left) strip.scrollLeft -= box.left - r.left + 8;
+		else if (r.right > box.right) strip.scrollLeft += r.right - box.right + 8;
+	}
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {
 		if (!strip || e.ctrlKey || strip.scrollWidth <= strip.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
@@ -256,7 +268,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gbox.on" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gbox.on" }}>
 			{#each tabs as x, i (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -436,6 +448,11 @@
 	}
 	.tab.carried {
 		opacity: 0.45;
+	}
+	/* the tab fills the strip to its bottom edge and the strip scrolls (clips): an outer ring lost its bottom and, on the
+	   first tab of a phone, its left side, so the ring is drawn inside (scripts/ui-focus.py) */
+	.tab:focus-visible {
+		outline-offset: -2px;
 	}
 
 	/* the open group as one unit of its sessions: a tab of the strip whose content is the sessions' chips. Behind it is

@@ -268,6 +268,19 @@ such as `tps` is not beside the glyph), and ink is the rows that reach half of t
 does not count. The script exits 1 when a pair is 1px or more off. Audit result at the time of writing: 224 pairs over every screen at
 1440 / 820 / 390, worst 0.88px, none at 1px or more.
 
+### Focus rings (`scripts/ui-focus.py`)
+
+Tabs through every screen (home, a conversation, the tab overview, settings, the model picker, the conversation list) at
+1440 / 820 / 390 and checks each focused element's ring: its border box grown by `outline-offset + outline-width` (or a
+`box-shadow` ring's spread) against the padding box of every ancestor that clips (`overflow` other than `visible`,
+`contain: paint`) and the window. A cut of 0.5px or more is a bug; the script prints the element, the clipping parent and the
+sides, saves a screenshot and exits 1. An item that fills a scroll box edge to edge (a strip tab, a group chip, the status
+line's `⋯`) draws its ring inside (`outline-offset: -2px`); a grid of cards gets padding in its scroll box the ring fits in
+(the tab overview's `.body` pads 8px on top for the current card's 2px frame + 4px offset). A strip that scrolls brings a
+focused item into view itself (`TabBar` `reveal`): a chip inside a nested scroll box is not scrolled to by the browser.
+`--seed` adds the conversations, a terminal and a split tab the screens need. Result at the time of writing: 0 cut rings
+(16 before the fix).
+
 ### Alignment lint (finds the misses by itself)
 
 Walk each screen and compare the **edges** of everything that has a border or fill (inputs, buttons, cards, rows):

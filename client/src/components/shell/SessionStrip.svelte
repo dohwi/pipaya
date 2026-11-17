@@ -104,6 +104,10 @@
 		height: 14px;
 		stroke-width: 1.9;
 	}
+	/* the chips sit edge to edge in a strip that clips: an outer ring lost its sides (scripts/ui-focus.py) */
+	.gchip:focus-visible {
+		outline-offset: -2px;
+	}
 	.gchip {
 		position: relative;
 		z-index: 1;
