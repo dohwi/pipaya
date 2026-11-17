@@ -187,9 +187,9 @@
 <div class="md" class:streaming bind:this={root} onclick={onClick} use:patchHtml={html}></div>
 
 <style>
+	/* Korean wraps between words like the rest of the app (app.css keep-all); only a word wider than the line breaks */
 	.md {
 		overflow-wrap: anywhere;
-		word-break: break-word;
 	}
 	.md :global(> :first-child) {
 		margin-top: 0;
