@@ -316,7 +316,7 @@
 		height: 38px;
 		padding: 0 11px 0 max(0px, var(--sal)); /* right: the count's 18px square sits 5px inside its 28px button, so its edge lands on the 16px gutter (DESIGN rule 5); left: the strip pads itself */
 		background: var(--bg-tabbar);
-		box-shadow: inset 0 -1px var(--border); /* the hairline under the strip, drawn below the tabs so the front one covers it */
+		box-shadow: inset 0 -1px var(--tabbar-line); /* the hairline under the strip, drawn below the tabs so the front one covers it */
 	}
 	/* a phone with one tab or none: the strip would be a row of height for nothing ("+" and the count live in the header there) */
 	@media (max-width: 600px) {
@@ -365,9 +365,15 @@
 
 	/* the front tab's fill is the sliding marker: a plain block of the page colour, square but for a 4px softening on top,
 	   with no curves at its foot, so the tab reads as a box cut out of the bar */
+	/* its outline runs up from the bar's hairline, over the top and back down (no bottom side), so the line under the strip
+	   steps around the front tab and the tab reads as a sheet lifted out of the bar, not a patch of colour in it */
 	.tabs > :global(.slide-ind) {
 		background: var(--bg);
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+		box-shadow:
+			inset 0 1px var(--tabbar-line),
+			inset 1px 0 var(--tabbar-line),
+			inset -1px 0 var(--tabbar-line);
 	}
 
 	.tab {
@@ -395,10 +401,15 @@
 	}
 	.tab.on {
 		background: var(--bg); /* until the sliding marker is placed */
+		box-shadow:
+			inset 0 1px var(--tabbar-line),
+			inset 1px 0 var(--tabbar-line),
+			inset -1px 0 var(--tabbar-line);
 		color: var(--text);
 	}
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
+		box-shadow: none;
 	}
 	/* hover: a block inside the tab, 4px in, with the same small corners as the front tab */
 	.fill {
@@ -634,6 +645,7 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
+			box-shadow: none;
 		}
 		.tab {
 			flex: none;
@@ -645,6 +657,7 @@
 		}
 		.tab.on {
 			background: var(--bg-active);
+			box-shadow: none;
 		}
 		.t {
 			flex: 0 1 auto;
