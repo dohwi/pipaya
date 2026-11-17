@@ -2078,10 +2078,12 @@ class AppStore {
     if (!this.api || !chat) return;
     const h = item.mode === "follow_up" && !item.deferred ? chat.held.findIndex((x) => x.text === item.text) : -1;
     if (h >= 0) {
-      chat.held.splice(h, 1);
-      if (chat.id === this.activeId) this.prefill = item.text;
+      const [held] = chat.held.splice(h, 1);
+      chat.restored.push({ ...held!, byHand: true });
       return;
     }
+    // Taken now: the `message_dequeued` event may drop it from `mine` before the answer comes back.
+    const own = chat.mine.find((m) => !m.pending && m.text === item.text);
     try {
       const r = await this.api.cancelQueued(chat.id, item.mode, item.text, item.deferred ? true : undefined);
       if (!r.cancelled) {
@@ -2089,8 +2091,11 @@ class AppStore {
         const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text);
         if (i >= 0) chat.queued.splice(i, 1);
         this.toast(t("이미 전달되어 취소할 수 없습니다"), "error", chat.id);
+      } else if (own) {
+        // Cancelled in time, and sent from here: back to the input with its pictures and files, to edit or re-send.
+        chat.restored.push({ ...own, byHand: true });
       } else if (chat.id === this.activeId) {
-        // Cancelled in time: hand the text back to the input so it can be edited or re-sent (without the server's hint blocks).
+        // A message from elsewhere (a peer, another device): only its text is known (without the server's hint blocks).
         this.prefill = queuedShown(item.text);
       }
     } catch (e) {

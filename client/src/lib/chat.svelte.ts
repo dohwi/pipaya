@@ -25,9 +25,10 @@ import type {
 /**
  * A message on its way out: what was typed, with its pictures and files, and when (`at`, to give several back in the
  * order they were written; the server drops steers before follow-ups). `pending` while its send is in flight (the
- * input still holds it, so a stop then marks it `returned` instead of handing it back a second time).
+ * input still holds it, so a stop then marks it `returned` instead of handing it back a second time). `byHand` when the
+ * user took it back out of the queue (the input takes it without the "stopped" notice).
  */
-export type Outgoing = { text: string; images: ImageBlock[]; files: UploadFile[]; at?: number; pending?: boolean; returned?: boolean };
+export type Outgoing = { text: string; images: ImageBlock[]; files: UploadFile[]; at?: number; pending?: boolean; returned?: boolean; byHand?: boolean };
 
 /** Concatenate the text parts of a content array (or pass a string through). */
 export function textOf(content: unknown): string {

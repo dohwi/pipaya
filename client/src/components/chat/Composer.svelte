@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import type { Attachment as DraftAttachment } from "../../lib/images";
+	import type { Outgoing } from "../../lib/chat.svelte";
 	/** Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. */
 	import type { FileDraft } from "../../lib/files";
 	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
@@ -132,7 +133,7 @@
 		setText(cur.trim() ? `${cur.replace(/\s+$/, "")}\n${p}` : p);
 	});
 
-	// A message that was not sent because its run was stopped (queued, or held for a compaction) comes back here once,
+	// A message that was not sent (its run was stopped, or it was taken back out of the queue) comes back here once,
 	// with its pictures and files, ahead of whatever is typed now. Declared after the draft restore so it adds to it.
 	$effect(() => {
 		const back = chat?.restored;
@@ -143,18 +144,22 @@
 			let back = "";
 			let pictures = 0;
 			for (const m of list) {
-				const own = mergeReturned("", pictures, { text: m.text, images: m.images.length });
-				back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
+				const own = mergeReturned("", pictures, { text: placeholderless(m), images: m.images.length });
+				if (own.trim()) back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
 				pictures += m.images.length;
 			}
-			text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
+			if (back) text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
 			attached.load(
 				[...attached.images, ...list.flatMap((m) => m.images).map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
 				[...attached.files, ...list.flatMap((m) => m.files).map((f) => ({ ...f, id: uid() }))],
 			);
-			app.toast(t("중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다"), "info", pane.id);
+			if (list.some((m) => !m.byHand)) app.toast(t("중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다"), "info", pane.id);
 		});
 	});
+
+	/** The stand-in text sent with attachments only goes back as an empty line: the attachments come back on their own. */
+	const placeholderless = (m: Outgoing) =>
+		(m.images.length || m.files.length) && (m.text === t("(첨부한 이미지를 봐 주세요)") || m.text === t("(첨부한 파일을 봐 주세요)")) ? "" : m.text;
 
 	// Voice input hands its transcript over once: inserted at the caret, so it continues the sentence being typed.
 	// Focus stays where it was: a focused field keeps a bare voice shortcut (` ) as typing, so taking focus here would make
