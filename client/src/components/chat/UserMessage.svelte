@@ -1,7 +1,7 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import { localeTag, t } from "../../lib/i18n";
-	import { clockTime } from "../../lib/format";
+	import { timeOfDay } from "../../lib/format";
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -77,7 +77,6 @@
 		{/if}
 	</div>
 	<div class="actions">
-		{#if item.ts}<time class="when" datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{clockTime(item.ts, localeTag())}</time>{/if}
 		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text)} />
 		{#if header && !("server" in header && header.server)}
 			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
@@ -85,6 +84,7 @@
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
+		{#if item.ts}<time class="when" datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{timeOfDay(item.ts, localeTag())}</time>{/if}
 	</div>
 </div>
 
@@ -221,9 +221,11 @@
 		/* 8px glyph inset less the 2px the last box is pulled in: the last glyph's right edge lands on the content's right edge */
 		margin-right: -6px;
 	}
-	/* when it was sent, before the buttons: the answer's stats size and colour; 8px to the first glyph (whose box bleeds 2px) */
+	/* when it was sent, last in the row so it ends on the bubble's right line whether or not the buttons show: the row
+	   bleeds 6px for a last glyph (below), which the time takes back; 8px from the glyph before it (its box bleeds 2px) */
 	.when {
-		margin-right: 8px;
+		margin-left: 6px;
+		margin-right: 6px;
 		padding-bottom: 2px; /* lifts the x-height onto the glyph centre, as the answer's stats line does */
 		font-size: var(--fs-2xs);
 		line-height: 20px;

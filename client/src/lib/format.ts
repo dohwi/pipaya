@@ -16,12 +16,22 @@ export const duration = (ms: number): string =>
 export const clip = (s: string, n: number): string =>
   s.length > n ? `${s.slice(0, n - 1)}…` : s;
 
-/** When a message was sent: the time of day, with the date in front when it is not today ("9:04 AM", "11/16 9:04 AM"). */
-export function clockTime(ts: number, locale?: string, now: number = Date.now()): string {
+/** The time of day a message was sent ("9:04 AM", "오전 9:04"); the day it belongs to is the divider above it (dayLabel). */
+export const timeOfDay = (ts: number, locale?: string): string =>
+  new Date(ts).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+
+/** Local midnight of the day `ts` falls on: two times are on the same day when these match. */
+export const dayStart = (ts: number): number => {
   const d = new Date(ts);
-  const time = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
-  if (d.toDateString() === new Date(now).toDateString()) return time;
-  return `${d.toLocaleDateString(locale, { month: "numeric", day: "numeric" })} ${time}`;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+};
+
+/** The heading of a day in a transcript: "오늘" / "어제", else the date with its weekday, and the year once it is not this year's. */
+export function dayLabel(ts: number, locale?: string, now: number = Date.now()): string {
+  const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
+  if (days === 0 || days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
+  const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
+  return new Date(ts).toLocaleDateString(locale, { year: year ? "numeric" : undefined, month: "long", day: "numeric", weekday: "short" });
 }
 
 export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";
