@@ -20,6 +20,7 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { skeletonGate } from "../../lib/skeleton-gate.svelte";
 	import ChatSkeleton from "./ChatSkeleton.svelte";
+	import { uniqueBy } from "../../lib/unique";
 
 	/** `held`: the conversation kept on screen (dimmed) while the pane's newly opened one loads; it must not record scroll */
 	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
@@ -255,6 +256,7 @@
 	const waitingFirst = $derived(chat.running && chat.ready && chat.items[chat.items.length - 1]?.kind === "user");
 
 	type Unit = { kind: "user"; item: UserItem } | { kind: "notice"; item: NoticeItem } | { kind: "entry"; item: EntryItem } | { kind: "turn"; key: string; items: AssistantItem[] };
+	const unitKey = (u: Unit) => (u.kind === "turn" ? u.key : u.item.key);
 	/** One prompt gets one reply: consecutive assistant messages (one per LLM call) are drawn as a single turn. */
 	const units = $derived.by<Unit[]>(() => {
 		const out: Unit[] = [];
@@ -271,7 +273,9 @@
 				else out.push({ kind: "turn", key: it.key, items: [it] });
 			}
 		}
-		return out;
+		// Two items with one key (a message delivered twice by a replay and a reload racing) must not crash the transcript:
+		// the first one is drawn, the copy is left out.
+		return uniqueBy(out, unitKey);
 	});
 
 	const unitTs = (u: Unit) => (u.kind === "turn" ? u.items[0]!.ts : u.item.ts);
@@ -336,7 +340,7 @@
 					{/if}
 				</div>
 			{/if}
-			{#each units as u, n (u.kind === "turn" ? u.key : u.item.key)}
+			{#each units as u, n (unitKey(u))}
 				{#if dayOf[n]}<div class="day" role="separator" aria-label={dayOf[n]}><span>{dayOf[n]}</span></div>{/if}
 				<div class="unit" class:live={chat.running && n === units.length - 1}>
 					{#if u.kind === "notice"}

@@ -40,6 +40,13 @@ interface Pending {
 
 export type DecideResult = "ok" | "not_found" | "invalid";
 
+/**
+ * Options without repeats (an agent sometimes offers the same answer twice). The client keys its answer buttons by their
+ * text, so a repeated option used to crash the whole screen; it is also a choice the user cannot tell apart.
+ */
+const uniqueOptions = (o: string[] | undefined): string[] | undefined => (o ? [...new Set(o)] : o);
+const cleanItem = <T extends { options?: string[] }>(item: T): T => (item.options ? { ...item, options: uniqueOptions(item.options) } : item);
+
 const valid = (item: QuestionItem, answer: string) =>
 	!!answer && (item.allowFreeText || !item.options?.length || item.options.includes(answer));
 
@@ -55,7 +62,7 @@ export class QuestionManager {
 	private key = (sessionId: string, toolCallId: string) => `${sessionId}:${toolCallId}`;
 
 	ask(req: Omit<QuestionRequest, "requestedAt">, signal?: AbortSignal): Promise<QuestionOutcome> {
-		const request: QuestionRequest = { ...req, requestedAt: Date.now() };
+		const request: QuestionRequest = { ...cleanItem(req), ...(req.items ? { items: req.items.map(cleanItem) } : {}), requestedAt: Date.now() };
 		const key = this.key(req.sessionId, req.toolCallId);
 
 		return new Promise<QuestionOutcome>((resolve) => {

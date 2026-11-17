@@ -6,6 +6,7 @@
 	import { fadeIn, fadeOut, isPhone, surfaceIn, surfaceOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { uniqueBy } from "../../lib/unique";
 
 	/** Ties the search field to the list for assistive tech: focus stays in the field while the arrows move the selection. */
 	const uid = $props.id();
@@ -19,7 +20,8 @@
 
 	const items = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		const all = spec?.items ?? [];
+		// rows are keyed by id: a list that names one twice (two pages of one listing) shows it once
+		const all = uniqueBy(spec?.items ?? [], (i) => i.id);
 		return q ? all.filter((i) => `${i.title} ${i.sub ?? ""}`.toLowerCase().includes(q)) : all;
 	});
 

@@ -4,6 +4,7 @@
 	import { app } from "../../lib/store.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import type { Question } from "../../lib/types";
+	import { unique } from "../../lib/unique";
 
 	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items"> } = $props();
 
@@ -18,6 +19,8 @@
 	let tab = $state(0);
 	let answers = $state<string[]>([]);
 	const cur = $derived(items ? items[tab]! : question);
+	/** A repeated option is one choice (and a repeated key would crash the list): the first one stays. */
+	const options = $derived(unique(cur.options ?? []));
 
 	/**
 	 * How the options are laid out, always in equal columns so every button is the same width whatever it says.
@@ -25,7 +28,7 @@
 	 */
 	const SHORT = 8; // a cell is ~105px wide: eight Korean characters fit on a line, with the sparkle counted below
 	const cols = $derived.by(() => {
-		const o = cur.options ?? [];
+		const o = options;
 		// the recommended answer carries a sparkle (about 2 characters wide)
 		const width = (x: string) => [...x].length + (x === cur.recommended ? 2 : 0);
 		if (o.length < 2 || o.length > 4 || !o.every((x) => width(x) <= SHORT)) return 1;
@@ -84,9 +87,9 @@
 <div class="reply">
 	{#if items}{@render stepper()}{/if}
 	<div class="q">{cur.question}</div>
-	{#if cur.options?.length}
+	{#if options.length}
 		<div class="opts" style:--cols={cols}>
-			{#each cur.options as o (o)}
+			{#each options as o (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
 					<span class="txt">{#if cur.recommended === o}<span class="rec-mark" title={t("추천")} role="img" aria-label={t("추천")}><Icon name="sparkles" /></span>{/if}{o}</span>
 					{#if items && answers[tab] === o}<Icon name="check" />{/if}

@@ -1166,6 +1166,7 @@ export const en: Record<string, string> = {
 	"복사할 답변이 없습니다": "No reply to copy",
 	"마지막 답변을 복사했습니다": "Copied the last reply",
 	"복사하지 못했습니다": "Couldn't copy",
+	"오류 정보 복사": "Copy error details",
 	"경로 복사": "Copy path",
 	"고정 해제": "Unpin",
 	"폴더 고정": "Pin folder",

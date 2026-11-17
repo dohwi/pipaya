@@ -186,6 +186,21 @@ describe("API contracts", () => {
 		expect(msgs).toContain("Tool ask_user finished:\\nblue");
 	});
 
+	test("ask_user shows a repeated option once", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const args = JSON.stringify({ questions: [{ question: "A?", options: ["yes", "no", "yes"] }, { question: "B?", options: ["x", "x"] }] });
+		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${args}` });
+		let q: any;
+		for (let i = 0; i < 100 && !q; i++) {
+			q = (await api("GET", `/questions?sessionId=${id}`)).json.questions[0];
+			await Bun.sleep(20);
+		}
+		expect(q.options).toEqual(["yes", "no"]);
+		expect(q.items.map((x: any) => x.options)).toEqual([["yes", "no"], ["x"]]);
+		expect((await api("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answers: ["yes", "x"] })).status).toBe(200);
+		await untilIdle(id);
+	});
+
 	test("switchable tools can be turned off, locked ones cannot", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
 		expect(info.toggleable).toEqual(["ask_user", "peer", "delegate", "schedule"]); // plus whatever extensions mark `switchable`
