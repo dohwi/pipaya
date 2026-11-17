@@ -202,7 +202,7 @@
 	}
 </script>
 
-{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>, first: boolean)}
+{#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
 	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
 	{@const who = handleOf(x)}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -233,8 +233,8 @@
 					}
 				}}
 			>
-				<!-- the hover pill and the hairline before this tab: boxes of their own, since ::before / ::after are the drop line -->
-				<span class="fill" aria-hidden="true"></span>{#if !first}<span class="sep" aria-hidden="true"></span>{/if}
+				<!-- the hover pill: a box of its own, since ::before / ::after are the drop line -->
+				<span class="fill" aria-hidden="true"></span>
 				{#if x.kind === "group"}
 					<span class="ico gico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={st === "working" ? "info" : st === "asking" ? "warn" : st === "done" ? "ok" : "danger"} pulse={st === "working"} ping={st === "asking"} />{/if}{#if pinned}<PinMark />{/if}</span>
 				{:else if x.kind === "terminal"}
@@ -269,7 +269,7 @@
 	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gbox.on" }}>
-			{#each tabs as x, i (x.id)}
+			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
 				<!-- a group is a bordered box around its sessions, laid out inline with the other tabs (its name is in the page
@@ -291,7 +291,7 @@
 						<SessionStrip tab={x} />
 					</div>
 				{:else}
-					{@render tabItem(x, on, st, i === 0)}
+					{@render tabItem(x, on, st)}
 				{/if}
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
@@ -306,8 +306,8 @@
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
 	   colour, a square block (4px corners on top) that runs over the bar's bottom hairline into the conversation below, so the two read as
-	   one sheet. The other tabs have no fill, only a hairline between them. Tabs share the width evenly up to 200px each and
-	   scroll sideways below 112px. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
+	   one sheet. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
 		flex: none;
@@ -316,7 +316,7 @@
 		height: 38px;
 		padding: 0 11px 0 max(0px, var(--sal)); /* right: the count's 18px square sits 5px inside its 28px button, so its edge lands on the 16px gutter (DESIGN rule 5); left: the strip pads itself */
 		background: var(--bg-tabbar);
-		box-shadow: inset 0 -1px var(--border); /* the hairline under the strip, drawn below the tabs so the front one covers it */
+		box-shadow: inset 0 -1px var(--tabbar-line); /* the hairline under the strip, drawn below the tabs so the front one covers it */
 	}
 	/* a phone with one tab or none: the strip would be a row of height for nothing ("+" and the count live in the header there) */
 	@media (max-width: 600px) {
@@ -341,7 +341,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: flex-end;
-		padding-left: 8px; /* with the tab's own 8px, the first icon lands on 16, the header title's line */
+		padding-left: 4px; /* with the tab's own 12px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -365,22 +365,28 @@
 
 	/* the front tab's fill is the sliding marker: a plain block of the page colour, square but for a 4px softening on top,
 	   with no curves at its foot, so the tab reads as a box cut out of the bar */
+	/* its outline runs up from the bar's hairline, over the top and back down (no bottom side), so the line under the strip
+	   steps around the front tab and the tab reads as a sheet lifted out of the bar, not a patch of colour in it */
 	.tabs > :global(.slide-ind) {
 		background: var(--bg);
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+		box-shadow:
+			inset 0 1px var(--tabbar-line),
+			inset 1px 0 var(--tabbar-line),
+			inset -1px 0 var(--tabbar-line);
 	}
 
 	.tab {
 		position: relative;
 		z-index: 1; /* above the sliding fill */
-		flex: 0 1 200px;
+		flex: 0 1 auto; /* as wide as its icon, title and close button: no blank between tabs, so no hairline is needed */
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		height: 34px;
-		min-width: 112px;
+		min-width: 136px; /* with the × always shown, room for about three syllables of title before the strip scrolls instead */
 		max-width: 200px;
-		padding: 0 4px 0 8px;
+		padding: 0 8px 0 12px; /* the hover pill sits 4px in, so the icon and the close glyph both clear its edges by 8px */
 		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -395,10 +401,15 @@
 	}
 	.tab.on {
 		background: var(--bg); /* until the sliding marker is placed */
+		box-shadow:
+			inset 0 1px var(--tabbar-line),
+			inset 1px 0 var(--tabbar-line),
+			inset -1px 0 var(--tabbar-line);
 		color: var(--text);
 	}
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
+		box-shadow: none;
 	}
 	/* hover: a block inside the tab, 4px in, with the same small corners as the front tab */
 	.fill {
@@ -421,30 +432,6 @@
 	}
 	.tab.menuopen:not(.on) .fill {
 		opacity: 1;
-	}
-	/* the hairline between two plain tabs, gone beside the front tab, a hovered one and a group's frame */
-	.sep {
-		position: absolute;
-		left: 0;
-		top: 8px;
-		bottom: 8px;
-		width: 1px;
-		background: var(--border-strong);
-		pointer-events: none;
-		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	.tab.on .sep,
-	.tab.on + .tab .sep,
-	:global(.gbox) + .tab .sep,
-	.tab.before .sep,
-	.tab.after + .tab .sep {
-		opacity: 0;
-	}
-	@media (hover: hover) {
-		.tab:hover .sep,
-		.tab:hover + .tab .sep {
-			opacity: 0;
-		}
 	}
 	.tab.carried {
 		opacity: 0.45;
@@ -475,8 +462,9 @@
 			margin var(--motion-fast) var(--ease-std),
 			outline-color var(--motion-fast) var(--ease-std);
 	}
-	.gbox + .gbox {
-		margin-left: 4px;
+	.gbox + .gbox,
+	.gbox:first-child {
+		margin-left: 4px; /* first: the strip pads only 4px, so the chips still land on 16 */
 	}
 	.gbox.on {
 		outline-color: transparent;
@@ -626,25 +614,16 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 		border-radius: var(--radius-xs);
 		color: var(--text-faint);
-		opacity: 0;
 	}
-	.tab:hover .x,
-	.tab.on .x,
-	.x:focus-visible {
-		opacity: 1;
-	}
-	@media (pointer: coarse) {
-		.x {
-			opacity: 1;
-		}
-	}
+	/* every tab shows its close button, as in a browser: it ends the tab, and the next one's icon starts 23px on, which is
+	   what tells two tabs apart now that there is no hairline */
 	@media (hover: hover) {
 		.x:hover {
-			background: var(--bg-active);
+			background: color-mix(in srgb, var(--text) 10%, transparent); /* a step darker than whatever is under it: the hover pill or the front tab */
 			color: var(--text);
 		}
 	}
@@ -666,16 +645,19 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
+			box-shadow: none;
 		}
 		.tab {
 			flex: none;
 			height: 28px;
+			padding: 0 4px 0 8px;
 			min-width: 0;
 			max-width: 220px;
 			border-radius: var(--radius-sm);
 		}
 		.tab.on {
 			background: var(--bg-active);
+			box-shadow: none;
 		}
 		.t {
 			flex: 0 1 auto;
@@ -684,7 +666,6 @@
 			flex: none;
 			width: 140px;
 		}
-		.sep,
 		.fill {
 			display: none;
 		}
@@ -699,9 +680,15 @@
 			border-color: var(--text-faint);
 			border-radius: var(--radius-sm);
 		}
-		.gbox + .gbox {
+		.gbox + .gbox,
+		.gbox:first-child {
 			margin-left: 0;
 		}
+		.x {
+			width: 22px;
+			height: 22px;
+		}
+
 		.tab.before,
 		.gbox.before {
 			margin-left: 20px; /* with the strip's 4px gap, the 24px the line's box fills */
