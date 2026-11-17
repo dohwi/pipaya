@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, untrack } from "svelte";
+	import { cardIn, glowFade } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { hostOf } from "../../lib/format";
@@ -9,7 +10,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, buildGraph, edgePath, fitView, modelName, related, type Card, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, buildGraph, edgePath, fitView, modelName, related, springStep, type Card, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -83,6 +84,9 @@
 
 	const graph: Graph = $derived(buildGraph(servers, { widths: widthOf, pins }));
 
+	/** Reduced motion: no sparks (SMIL, which CSS cannot stop), cards and the view go straight to their place. */
+	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
+
 	// ---- view: pan and zoom ----
 	let viewEl: HTMLDivElement | undefined = $state();
 	let view = $state({ k: 1, x: 24, y: 24 });
@@ -90,22 +94,58 @@
 	let touched = false;
 	/** Room the floating bar takes at the bottom of the view. */
 	const BAR_H = 64;
+	/**
+	 * Where the view is gliding to (fit, a zoom step), or null while the hand moves it directly (drag, pinch, a trackpad).
+	 * A zoom step keeps the graph point under the pointer still: it springs the scale only and places x, y around it.
+	 */
+	let goal: { k: number; x: number; y: number; at?: { cx: number; cy: number; px: number; py: number } } | null = null;
+	const vel = { k: 0, x: 0, y: 0 };
+	/** The hand takes the view: any glide stops where it is. */
+	const hold = () => {
+		goal = null;
+		vel.k = vel.x = vel.y = 0;
+	};
+	let fitted = false;
+	/** F and the button: fit, and keep fitting as the graph grows (as at the start). */
+	const refit = () => {
+		touched = false;
+		fit();
+	};
 	function fit() {
-		if (viewEl) view = fitView(graph, viewEl.clientWidth, viewEl.clientHeight - BAR_H);
+		if (!viewEl) return;
+		const to = fitView(graph, viewEl.clientWidth, viewEl.clientHeight - BAR_H);
+		// the first fit places the view; later ones (the graph grew, F, the button) glide there
+		if (!fitted || !motion) view = to;
+		else {
+			goal = to;
+			kick();
+		}
+		fitted = true;
 	}
 	$effect(() => {
 		void graph.width;
 		void graph.height;
-		if (!touched && graph.cards.size && viewEl && measure) fit();
+		if (!touched && graph.cards.size && viewEl && measure) untrack(fit);
 	});
+	const clampK = (k: number) => Math.min(2, Math.max(0.3, k));
+	/** Zoom right now about a point (a pinch: the fingers lead, nothing may lag behind them). */
 	const zoomAt = (k: number, cx: number, cy: number) => {
 		touched = true;
-		const nk = Math.min(2, Math.max(0.3, k));
+		hold();
+		const nk = clampK(k);
 		view = { k: nk, x: cx - ((cx - view.x) / view.k) * nk, y: cy - ((cy - view.y) / view.k) * nk };
 	};
-	/** One step of the zoom: a wheel notch, the +/- keys and buttons. */
+	/** One step of the zoom: a wheel notch, the +/- keys and buttons. Steps in a row add up while it glides. */
 	const ZOOM_STEP = 1.2;
-	const zoomBy = (f: number) => viewEl && zoomAt(view.k * f, viewEl.clientWidth / 2, viewEl.clientHeight / 2);
+	function zoomStep(f: number, cx: number, cy: number) {
+		touched = true;
+		const nk = clampK((goal?.k ?? view.k) * f);
+		const px = (cx - view.x) / view.k, py = (cy - view.y) / view.k;
+		if (!motion) return void (view = { k: nk, x: cx - px * nk, y: cy - py * nk });
+		goal = { k: nk, x: cx - px * nk, y: cy - py * nk, at: { cx, cy, px, py } };
+		kick();
+	}
+	const zoomBy = (f: number) => viewEl && zoomStep(f, viewEl.clientWidth / 2, viewEl.clientHeight / 2);
 	function wheel(e: WheelEvent) {
 		e.preventDefault();
 		const r = viewEl!.getBoundingClientRect();
@@ -113,12 +153,92 @@
 		const [cx, cy] = [e.clientX - r.left, e.clientY - r.top];
 		if (e.ctrlKey || e.metaKey) zoomAt(view.k * Math.exp(-e.deltaY / 300), cx, cy);
 		// one notch, one step of the +/- buttons; units differ between browsers, the direction does not
-		else if (isMouseWheel(e)) zoomAt(view.k * ZOOM_STEP ** -Math.sign(e.deltaY), cx, cy);
+		else if (isMouseWheel(e)) zoomStep(ZOOM_STEP ** -Math.sign(e.deltaY), cx, cy);
 		else {
 			touched = true;
+			hold();
 			view = { ...view, x: view.x - e.deltaX, y: view.y - e.deltaY };
 		}
 	}
+
+	// ---- motion: cards and the view ease to where the layout puts them instead of jumping ----
+	/**
+	 * Where each card is drawn now, and how fast it moves. The layout (`graph`) says where it belongs; a spring carries it
+	 * there, so a chat that starts working, a column that re-sorts or a subagent that arrives slides into place.
+	 */
+	const shown = new Map<string, { x: number; y: number; h: number; vx: number; vy: number; vh: number }>();
+	/** Bumped once per animation frame: what reads `at()` redraws. */
+	let frame = $state(0);
+	/** A new card comes in from a little to its left (where its line comes from), fading in. */
+	const ENTER_DX = 24;
+	$effect(() => {
+		const g = graph;
+		untrack(() => {
+			const first = !shown.size;
+			for (const c of g.cards.values()) {
+				if (shown.has(c.id)) continue;
+				const dx = first || !motion ? 0 : ENTER_DX;
+				shown.set(c.id, { x: c.x - dx, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+			}
+			for (const id of shown.keys()) if (!g.cards.has(id)) shown.delete(id);
+			kick();
+		});
+	});
+	/** A card where it is drawn this frame (the layout's place once it has settled). */
+	function at(c: Card): Card {
+		void frame;
+		const s = shown.get(c.id);
+		return s ? { ...c, x: s.x, y: s.y, h: s.h } : c;
+	}
+	let raf = 0;
+	let last = 0;
+	function kick() {
+		if (raf || typeof requestAnimationFrame !== "function") return;
+		last = performance.now();
+		raf = requestAnimationFrame(tick);
+	}
+	const near = (a: number, b: number, v: number, eps: number) => Math.abs(a - b) < eps && Math.abs(v) < eps * 10;
+	function tick(now: number) {
+		// a frame late (a busy tab, the window in the background) moves at most 50ms: no leap across the canvas
+		const dt = Math.min(0.05, (now - last) / 1000);
+		last = now;
+		let moving = false;
+		for (const [id, s] of shown) {
+			const c = graph.cards.get(id);
+			if (!c) continue;
+			// the card under the hand, or no motion wanted: exactly where it belongs
+			if (!motion || dragging === id) {
+				Object.assign(s, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+				continue;
+			}
+			[s.x, s.vx] = springStep(s.x, s.vx, c.x, dt);
+			[s.y, s.vy] = springStep(s.y, s.vy, c.y, dt);
+			[s.h, s.vh] = springStep(s.h, s.vh, c.h, dt);
+			if (near(s.x, c.x, s.vx, 0.05) && near(s.y, c.y, s.vy, 0.05) && near(s.h, c.h, s.vh, 0.05)) Object.assign(s, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+			else moving = true;
+		}
+		if (goal) {
+			const g = goal;
+			if (g.at) {
+				const [k, vk] = springStep(view.k, vel.k, g.k, dt);
+				vel.k = vk;
+				view = { k, x: g.at.cx - g.at.px * k, y: g.at.cy - g.at.py * k };
+				if (near(k, g.k, vk, 0.0005)) view = { k: g.k, x: g.x, y: g.y };
+			} else {
+				let k, x, y;
+				[k, vel.k] = springStep(view.k, vel.k, g.k, dt);
+				[x, vel.x] = springStep(view.x, vel.x, g.x, dt);
+				[y, vel.y] = springStep(view.y, vel.y, g.y, dt);
+				view = near(k, g.k, vel.k, 0.0005) && near(x, g.x, vel.x, 0.1) && near(y, g.y, vel.y, 0.1) ? { k: g.k, x: g.x, y: g.y } : { k, x, y };
+			}
+			if (view.k === g.k && view.x === g.x && view.y === g.y) hold();
+			else moving = true;
+		}
+		frame++;
+		raf = moving ? requestAnimationFrame(tick) : 0;
+	}
+	onMount(() => () => cancelAnimationFrame(raf));
+
 
 	// ---- pointer: pan the background, drag a card, click / double click a chat ----
 	let hover = $state<string | null>(null);
@@ -164,6 +284,7 @@
 		const tapped = cardAt(e.target);
 		const c = id ? graph.cards.get(id) : undefined;
 		drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, card: id, tapped, cx: c?.x ?? 0, cy: c?.y ?? 0, moved: false };
+		if (!id) hold(); // a press on the background stops a glide where it is
 		try {
 			viewEl!.setPointerCapture(e.pointerId);
 		} catch {
@@ -191,7 +312,10 @@
 			else panning = true;
 		}
 		if (!drag.moved) return;
-		if (drag.card) pins = { ...pins, [drag.card]: { x: drag.cx + (e.clientX - drag.x) / view.k, y: drag.cy + (e.clientY - drag.y) / view.k } };
+		if (drag.card) {
+			pins = { ...pins, [drag.card]: { x: drag.cx + (e.clientX - drag.x) / view.k, y: drag.cy + (e.clientY - drag.y) / view.k } };
+			kick(); // the dragged card follows the hand this frame, the cards it pushes ease along
+		}
 		else view = { ...view, x: drag.vx + e.clientX - drag.x, y: drag.vy + e.clientY - drag.y };
 	}
 	function up(e: PointerEvent) {
@@ -238,14 +362,12 @@
 			e.preventDefault();
 			if (e.shiftKey) app.openIn(c.server, { session: c.session!.id });
 			else peek(c.server, c.session!.id);
-		} else if (e.key === "f") fit();
+		} else if (e.key === "f") refit();
 		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
 		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
 	}
 	onMount(() => () => clearTimeout(clickTimer));
 
-	/** The sparks are SMIL: a reduced-motion setting does not stop them by CSS, so they are left out. */
-	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
 	onMount(() => {
 		const q = matchMedia("(prefers-reduced-motion: reduce)");
 		const on = () => (motion = !q.matches);
@@ -327,17 +449,21 @@
 					<filter id="gv-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
 				</defs>
 				{#each graph.edges as e (e.id)}
-					{@const a = graph.cards.get(e.from)}
-					{@const b = graph.cards.get(e.to)}
-					{#if a && b}
+					{@const ca = graph.cards.get(e.from)}
+					{@const cb = graph.cards.get(e.to)}
+					{#if ca && cb}
+						{@const a = at(ca)}
+						{@const b = at(cb)}
 						{@const on = !focus || (focus.has(e.from) && focus.has(e.to))}
 						{@const d = edgePath(a, b)}
 						{@const call = e.kind === "delegate"}
 						<g class="e-{e.kind}" class:live={e.live} class:dim={!on} class:hot={!!focus && on}>
-							{#if e.live}<path class="halo" {d} filter="url(#gv-glow)" />{/if}
+							{#if e.live}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
 							<path class="base" {d} marker-end={e.kind === "tree" && !e.live ? undefined : `url(#gv-arrow${e.live ? (call ? "-call" : "-live") : call ? "-call" : ""})`} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
 							{#if e.live && motion}
-								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each -->
+								<!-- work travelling: a few sparks run down the line from the caller to what it calls, a comet's tail behind each;
+								     they fade in and out with the work instead of popping -->
+								<g class="moving" transition:glowFade>
 								<path class="flow" {d} />
 								{#each { length: call ? 3 : 2 } as _, i (i)}
 									{@const dur = call ? 1.4 : 2.4}
@@ -346,13 +472,16 @@
 										<circle class="dot" r={call ? 2.6 : 2.2}><animateMotion dur="{dur}s" begin="{(-dur * i) / (call ? 3 : 2)}s" repeatCount="indefinite" path={d} rotate="auto" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1" /></circle>
 									</g>
 								{/each}
+								</g>
 							{/if}
 						</g>
 					{/if}
 				{/each}
 			</svg>
 			{#each [...graph.cards.values()] as c (c.id)}
+				{@const p = at(c)}
 				<div
+					in:cardIn
 					class="card {c.kind} {c.kind === 'session' ? c.activity : ''}"
 					class:down={c.kind === "server" && !c.online}
 					class:run={c.kind === "subagent" && !!c.running}
@@ -362,8 +491,8 @@
 					class:dragging={dragging === c.id}
 					data-card={c.id}
 					style:width="{c.w}px"
-					style:height="{c.h}px"
-					style:transform="translate({c.x - c.w / 2}px, {c.y - c.h / 2}px)"
+					style:height="{p.h}px"
+					style:transform="translate({p.x - c.w / 2}px, {p.y - p.h / 2}px)"
 				>
 					{#if c.kind === "server"}
 						<span class="lead"><Icon name="server" /></span>
@@ -403,7 +532,7 @@
 						{#if !busy}<span class="when">{ago(s.updatedAt)}</span>{/if}
 						<span class="title">{sessionTitle(s.title)}</span>
 						{#if busy}
-							<span class="doing" class:ask={c.activity === "asking"}>
+							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>
 								{#if c.activity === "asking"}
 									<Icon name="alert" /><span class="what">{t("답을 기다립니다")}</span>
 								{:else if tool}
@@ -429,7 +558,7 @@
 			<button class="tbtn icon" onclick={() => zoomBy(1 / ZOOM_STEP)} aria-label={t("축소")} title={t("축소")}>−</button>
 			<span class="pct mono">{Math.round(view.k * 100)}%</span>
 			<button class="tbtn icon" onclick={() => zoomBy(ZOOM_STEP)} aria-label={t("확대")} title={t("확대")}><Icon name="plus" /></button>
-			<button class="tbtn icon" onclick={fit} aria-label={t("전체 보기")} title={t("전체 보기 (F)")}><Icon name="expand" /></button>
+			<button class="tbtn icon" onclick={refit} aria-label={t("전체 보기")} title={t("전체 보기 (F)")}><Icon name="expand" /></button>
 		</div>
 	</div>
 
@@ -535,6 +664,12 @@
 		background: color-mix(in srgb, var(--text) 2%, transparent);
 		pointer-events: none;
 	}
+	.band {
+		transition:
+			top var(--motion-slow) var(--ease-std),
+			height var(--motion-slow) var(--ease-std),
+			width var(--motion-slow) var(--ease-std);
+	}
 	.band.down {
 		border-style: dashed;
 	}
@@ -567,14 +702,16 @@
 	.edges .m-call {
 		fill: var(--info);
 	}
+	/* a line that starts or stops carrying work changes colour and weight over a moment, not in one frame */
 	.edges path {
 		fill: none;
 		transition:
-			stroke var(--motion-fast) var(--ease-std),
-			opacity var(--motion-fast) var(--ease-std);
+			stroke var(--motion-slow) var(--ease-std),
+			stroke-width var(--motion-slow) var(--ease-std),
+			opacity var(--motion-slow) var(--ease-std);
 	}
 	.edges g {
-		transition: opacity var(--motion-fast) var(--ease-std);
+		transition: opacity var(--motion-normal) var(--ease-std);
 	}
 	.edges .base {
 		stroke-width: 1.25;
@@ -705,8 +842,9 @@
 		cursor: pointer;
 		overflow: hidden;
 		transition:
-			opacity var(--motion-fast) var(--ease-std),
-			border-color var(--motion-fast) var(--ease-std);
+			opacity var(--motion-normal) var(--ease-std),
+			border-color var(--motion-normal) var(--ease-std),
+			box-shadow var(--motion-normal) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.card:hover {
@@ -973,6 +1111,12 @@
 		overflow: visible;
 	}
 	@media (prefers-reduced-motion: reduce) {
+		.edges path,
+		.edges g,
+		.band,
+		.card {
+			transition: none;
+		}
 		.edges .flow,
 		.edges .halo,
 		.run .lead,

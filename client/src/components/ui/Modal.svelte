@@ -41,6 +41,7 @@
 		compact = false,
 		onback,
 		headerActions,
+		headerLead,
 		titleExtra,
 		children,
 	}: {
@@ -83,6 +84,8 @@
 		onback?: () => void;
 		/** icon buttons placed before the header's close button */
 		headerActions?: Snippet;
+		/** a mark before the title (see ModalHeader `lead`) */
+		headerLead?: Snippet;
 		/** inline after the title (a count) */
 		titleExtra?: Snippet;
 		children: Snippet;
@@ -202,7 +205,7 @@
 	>
 		{#if title}
 			<!-- a card that stays centred on phones (`sheet={false}`) is not pulled down: no handle -->
-			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} pull={sheet} closeDisabled={!dismissible} actions={headerActions} {titleExtra} />
+			<ModalHeader {title} {sub} {subMono} {divider} {compact} {onback} {onclose} pull={sheet} closeDisabled={!dismissible} actions={headerActions} lead={headerLead} {titleExtra} />
 		{/if}
 		{@render children()}
 	</div>

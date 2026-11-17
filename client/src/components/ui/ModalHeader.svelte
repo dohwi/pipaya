@@ -21,6 +21,7 @@
 		divider = false,
 		compact = false,
 		titleExtra,
+		lead,
 		actions,
 	}: {
 		title: string;
@@ -43,11 +44,14 @@
 		titleExtra?: Snippet;
 		/** icon buttons before the close button */
 		actions?: Snippet;
+		/** a mark before the title (what the dialog is about: a chat's agent logo), centred on the title and subtitle */
+		lead?: Snippet;
 	} = $props();
 </script>
 
 <header class="mh" class:divider class:compact use:sheetPull={{ onclose: () => onclose?.(), disabled: !pull || !onclose || closeDisabled }}>
 	{#if onback}<IconButton icon="chevron-left" label={t("뒤로")} onclick={onback} />{/if}
+	{#if lead}<span class="mh-lead">{@render lead()}</span>{/if}
 	<div class="mh-title">
 		<h2 {id}>{title}{@render titleExtra?.()}</h2>
 		{#if sub}<span class="mh-sub" class:mono={subMono}>{sub}</span>{/if}
@@ -73,6 +77,12 @@
 	}
 	.mh.compact {
 		padding: 12px 7px 4px 16px; /* compact list popover: fixed 16px gutter (its rows start at 16), the 38px close button's 9.5px puts the glyph at 16.5 */
+	}
+	.mh-lead {
+		flex: none;
+		display: inline-grid;
+		place-items: center;
+		margin-right: 4px; /* 8 (the header's gap) + 4 = 12 from the title, as a list card's mark sits from its text */
 	}
 	.mh-title {
 		flex: 1;
