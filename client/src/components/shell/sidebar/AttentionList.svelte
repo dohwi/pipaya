@@ -79,9 +79,10 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		width: 100%;
+		width: calc(100% + 8px); /* with the margin below: the highlight runs 8px past the content, like a tab row's (x 274) */
+		margin-right: -8px; /* the row's highlight bleed; the padding gives it back so the state text keeps its column */
 		height: 32px; /* every row is 32px tall */
-		padding: 0 0 0 23px; /* alignment: the 16px logo centres on x 48, the folder icon's column */
+		padding: 0 8px 0 23px; /* alignment: the 16px logo centres on x 48, the folder icon's column */
 		border-radius: var(--radius-control);
 		text-align: left;
 		color: var(--text-dim);
