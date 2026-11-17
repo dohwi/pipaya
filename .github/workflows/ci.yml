@@ -65,8 +65,10 @@ jobs:
         run: python3 ../scripts/ui-lint.py
       - run: bun run test
       - run: bun run build
+      # GHSA-fc5q-39xc-vjpf: picomatch <=4.0.7 ReDoS with no patched release yet. It only reaches build tools
+      # (vite, svelte-check) matching our own globs, never the shipped app. Drop the ignore once picomatch ships a fix.
       - name: No high or critical advisory in the dependencies
-        run: bun audit --audit-level=high
+        run: bun audit --audit-level=high --ignore=GHSA-fc5q-39xc-vjpf
 
   # The main flows in a real browser (first screen, send, retry notice, phone settings). See scripts/e2e-smoke.py.
   e2e:
