@@ -4,6 +4,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { alignPosition, isolate, linkedDividers, measure, moveDividers, positionOf, snapPosition, type Divider, type Layout, type Path } from "../../lib/layout";
 	import type { Group } from "../../lib/types";
+	import { released } from "../../lib/pointer";
 
 	let { group }: { group: Group } = $props();
 
@@ -85,6 +86,7 @@
 	}
 	function move(e: PointerEvent) {
 		if (!active || !live) return;
+		if (released(e)) return up(e); // let go where no pointerup reached us: the divider stays where it was left
 		// The tree is only turned once the pointer really drags, so a click or double click changes nothing.
 		if (grab) {
 			const split = grab.at === null ? null : isolate(live, grab.path, grab.at);

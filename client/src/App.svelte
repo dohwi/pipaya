@@ -8,6 +8,7 @@
 	import Sidebar from "./components/shell/Sidebar.svelte";
 	import Rail from "./components/shell/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
+	import { released } from "./lib/pointer";
 	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
 	import Header from "./components/shell/Header.svelte";
 	import Pane from "./components/shell/Pane.svelte";
@@ -243,6 +244,7 @@
 		document.body.style.userSelect = "none";
 	}
 	function gripMove(e: PointerEvent) {
+		if (resizing && released(e)) return gripUp(); // let go where no pointerup reached us
 		if (resizing) app.sidebar.setWidth(gripFrom.w + e.clientX - gripFrom.x, false);
 	}
 	function gripUp() {

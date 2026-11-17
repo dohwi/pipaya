@@ -10,6 +10,7 @@
  *    and moving on from there lifts the session (the menu closes); letting go keeps the menu.
  *  - a right click on a source with a `menu` opens it where the pointer is
  */
+import { released } from "./pointer";
 import { buzz, contextAt, swallowClick, type MenuOpener } from "./press-menu";
 
 export interface Point {
@@ -243,6 +244,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	}
 	function move(e: PointerEvent) {
 		if (!st || e.pointerId !== st.pid) return;
+		if (released(e)) return cancel(e); // the button was let go where no pointerup reached us: drop nothing, carry nothing
 		const from = { x: st.x, y: st.y };
 		if (active) {
 			st.x = e.clientX;

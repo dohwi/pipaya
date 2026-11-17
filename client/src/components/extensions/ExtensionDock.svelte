@@ -5,6 +5,7 @@
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
+	import { released } from "../../lib/pointer";
 
 	/**
 	 * `side` panels: a dock at the right of the conversation area, one tab per shown panel. Its width starts at the
@@ -38,6 +39,7 @@
 	}
 	function move(e: PointerEvent) {
 		if (!from || !current) return;
+		if (released(e)) return up();
 		const w = Math.round(Math.min(Math.max(200, from.w + from.x - e.clientX), window.innerWidth * 0.7));
 		dragged = { ...dragged, [key(current)]: { w, placed: current.placed } };
 	}

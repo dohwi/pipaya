@@ -5,6 +5,7 @@
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import type { UIPanelPosition } from "../../lib/extensions/ui";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
+	import { released } from "../../lib/pointer";
 	import { MARGIN as M, clampBox as clampTo, nudgeBox, type Box } from "../../lib/extensions/float-box";
 
 	/**
@@ -50,6 +51,7 @@
 	}
 	function move(e: PointerEvent) {
 		if (!drag) return;
+		if (released(e)) return up();
 		const dx = e.clientX - drag.x, dy = e.clientY - drag.y, f = drag.from;
 		boxes = { ...boxes, [drag.k]: drag.mode === "move" ? { ...f, x: f.x + dx, y: f.y + dy } : { ...f, w: f.w + dx, h: f.h + dy } };
 	}
