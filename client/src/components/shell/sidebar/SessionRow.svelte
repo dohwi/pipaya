@@ -62,11 +62,7 @@
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box centred by the row; the handle's ink centre lands on the row's centre line, level with the title */
-		/* baseline, not centre (design-system.md "Text inside pills"): centred, the 11px handle's Hangul ends 1px above the 13px title's
-		   (measured at 1x / 1.25x / 1.5x / 2x / 4x); 1px down puts both on one baseline */
-		position: relative;
-		top: 1px;
+		line-height: 16px; /* whole-pixel line box centred by the row: the handle's ink centre lands on the title's (centre line, not baseline) */
 	}
 	/* "↳ @parent" after the title: gives way to it only when the row is narrow (the title shrinks first) */
 	.from {
@@ -78,9 +74,7 @@
 		max-width: 96px; /* a long parent name never takes the title's room */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box, like .who */
-		position: relative;
-		top: 1px; /* the same baseline step as .who (measured there) */
+		line-height: 16px; /* whole-pixel line box, centred on the title's like .who */
 	}
 	.who.working { color: var(--info); }
 	.who.asking { color: var(--warn); }
