@@ -101,6 +101,23 @@
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
+	/** The reasoning level the reply ran at: "off" for a model that cannot think (it ignores the session's level). */
+	const level = $derived(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? ""));
+	/** "model · level · 1.2k 토큰 · 3.4s", each part only when known. */
+	const statsText = $derived(
+		[tail?.model ?? "", level, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "),
+	);
+	/** The full line on hover, with the provider and the exact token count, for when the pane cuts it short. */
+	const statsTitle = $derived(
+		[
+			tail?.model ? (tail.provider ? `${tail.provider}/${tail.model}` : tail.model) : "",
+			level ? `${t("추론 강도")} ${level}` : "",
+			tokens ? t("{n} 토큰", { n: tokens.toLocaleString(localeTag()) }) : "",
+			took ? duration(took) : "",
+		]
+			.filter(Boolean)
+			.join(" · "),
+	);
 </script>
 
 <div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} use:swipeable>
@@ -148,22 +165,21 @@
 			<div class="foot">
 				<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
 				<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
-				{#if actions.retry}
-					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
-				{/if}
 				{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
 					<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
 				{/if}
-				<span class="stats">
-					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
-					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
-					<span class="stext">
-						{#if tail.model}{tail.model}{/if}
-						{#if tailModel && !tailModel.reasoning}· off{:else if tail.thinkingLevel}· {tail.thinkingLevel}{/if}
-						{#if tokens}· {t("{n} 토큰", { n: compact(tokens) })}{/if}
-						{#if took}· {duration(took)}{/if}
+				{#if actions.retry}
+					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
+				{/if}
+				<!-- who wrote it and what it cost, right after the buttons; cut first when the pane is narrow -->
+				{#if tail.model || tokens || took}
+					<span class="stats" title={statsTitle}>
+						{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
+						<span class="stext">{statsText}</span>
 					</span>
-				</span>
+				{/if}
+				<!-- when, last and on the right line: the same place the question's time sits, so every time in the column lines up -->
+				{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
 			</div>
 		{/if}
 	</div>
@@ -297,12 +313,17 @@
 		line-height: 16px;
 		color: var(--text-faint);
 	}
-	/* when the answer was written, ahead of the model: a narrow pane cuts the model line first, never the time */
+	/* when the answer was written: pushed to the row's right end, 8px clear of the stats, never cut. The foot only bleeds on
+	   the left (for the first glyph), so the time's right edge is the content's right line, where the question's time ends */
 	.when {
 		flex: none;
-		margin-right: 8px;
+		margin-left: auto;
+		padding-left: 8px;
 		padding-bottom: 2px; /* same lift as .stext: the x-height onto the glyph centre */
+		font-size: var(--fs-2xs);
 		line-height: 20px;
+		color: var(--text-faint);
+		white-space: nowrap;
 	}
 	.slogo {
 		display: flex;
