@@ -497,18 +497,28 @@
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
+	/* the same 44px strip as the brand row above it: the field is centred in the box, not padded into place */
 	.tools {
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
+		justify-content: center;
 		gap: 8px;
-		padding: 12px 8px; /* the search box shares the card's left and right edges (8) */
+		box-sizing: content-box;
+		height: 44px;
+		padding: 0 8px; /* the search box shares the card's left and right edges (8) */
 		border-bottom: 1px solid var(--border);
 	}
+	/* a 32px field like the list's rows; touch keeps the shared 34px / 16px field (iOS zooms below 16px) */
+	@media (pointer: fine) {
+		.tools :global(.searchfield input) {
+			height: 32px;
+		}
+	}
 	.navbtn :global(svg) {
-		width: 18px;
-		height: 18px;
-		stroke-width: 1.9;
+		width: 16px;
+		height: 16px;
+		stroke-width: 2;
 	}
 	:global(.iconbtn.foldbtn) {
 		margin-left: auto;
@@ -658,15 +668,18 @@
 		padding: 8px 8px calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
 	}
-	/* the buttons at the bottom (graph view, scheduled tasks, settings) are one shape: same height, padding and glyph column */
+	/* the buttons at the bottom (graph view, scheduled tasks, settings) are one shape: same height, padding and glyph column.
+	   32px rows like the list's; the 16px glyph sits 12 in, on the search magnifier's column (x 28) */
 	.navbtn {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		width: 100%;
-		height: 38px;
-		padding: 0 8px;
+		height: 32px;
+		padding: 0 12px;
 		border-radius: var(--radius-sm);
+		font-size: var(--fs-md);
+		line-height: 20px;
 		color: var(--text-dim);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
@@ -727,6 +740,9 @@
 		:global(:where(.side) .open:not(.acc):not(.chev)),
 		:global(:where(.side) .grp .item.member .open) {
 			min-height: 40px;
+		}
+		.navbtn {
+			height: 40px;
 		}
 	}
 </style>
