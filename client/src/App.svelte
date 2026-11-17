@@ -454,10 +454,14 @@
 				</div>
 				<div class="work">
 					<div class="panes">
-						{#if group}
-							<GroupView {group} />
-						{:else}
-							<Pane id={app.activeId} />
+						<!-- under the graph view nothing is drawn: its quick look holds the one live pane (one input, one set of
+						     window listeners); the chat comes back as it was when the graph closes -->
+						{#if !app.graphOpen}
+							{#if group}
+								<GroupView {group} />
+							{:else}
+								<Pane id={app.activeId} />
+							{/if}
 						{/if}
 					</div>
 					<ExtensionDock />

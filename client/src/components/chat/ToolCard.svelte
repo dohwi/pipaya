@@ -4,7 +4,8 @@
 	import Icon from "../ui/Icon.svelte";
 	import ToolChip from "./ToolChip.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
-	import { getPane, paneChat } from "../../lib/pane";
+	import { app } from "../../lib/store.svelte";
+	import { getPane } from "../../lib/pane";
 	import { clip, duration } from "../../lib/format";
 	import { toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
@@ -15,7 +16,7 @@
 	let { id, name, args }: { id: string; name: string; args: Record<string, unknown> } = $props();
 
 	const pane = getPane();
-	const run = $derived<ToolRun>(paneChat(pane)?.tools[id] ?? { state: "pending", output: "" });
+	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
 	/** The kind of work (read, bash, edit …) tints the icon and the name, so a list of calls reads at a glance */
 	const kind = $derived(toolKind(name, args));
@@ -122,7 +123,7 @@
 	{/if}
 
 	{#if awaiting && run.question}
-		{#if !pane.peek}<div in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>{/if}
+		<div in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
 	{/if}
 </div>
 

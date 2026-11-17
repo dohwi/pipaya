@@ -21,20 +21,19 @@
 	}: { item: UserItem | AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; working?: boolean } = $props();
 
 	const pane = getPane();
-	/** In a peek the session may belong to another server: no session, so nothing offers to act on it through this one */
-	const session = $derived(pane.peek ? undefined : app.session(pane.id));
+	const session = $derived(app.session(pane.id));
 	/** The thinking colour of the bubble while the agent works on it: only a model that reasons has one. */
-	const level = $derived(pane.peek ? undefined : app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined);
+	const level = $derived(app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined);
 </script>
 
 {#if item.kind === "user"}
 	<ExtensionPart part="message.user" props={{ item, working, paneId: pane.id }}>
-		<UserMessage {item} {session} {working} {level} onreply={pane.peek ? undefined : (text, who) => (app.replyTo = { text, who })} />
+		<UserMessage {item} {session} {working} {level} onreply={(text, who) => (app.replyTo = { text, who })} />
 	</ExtensionPart>
 	<ExtensionMount slot="message.user.after" props={{ item, paneId: pane.id }} />
 {:else}
 	<ExtensionPart part="message.assistant" props={{ item, turn, last, live, paneId: pane.id }}>
-		<AssistantMessage {item} {turn} {last} {live} {session} paneId={pane.id} onreply={pane.peek ? undefined : (text) => (app.replyTo = { text })} />
+		<AssistantMessage {item} {turn} {last} {live} {session} paneId={pane.id} onreply={(text) => (app.replyTo = { text })} />
 	</ExtensionPart>
 	<ExtensionMount slot="message.assistant.after" props={{ item, turn, last, live, paneId: pane.id }} />
 {/if}
