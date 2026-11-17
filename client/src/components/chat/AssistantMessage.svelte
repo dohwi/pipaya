@@ -171,15 +171,14 @@
 				{#if actions.retry}
 					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
 				{/if}
-				<!-- who wrote it and what it cost, right after the buttons; cut first when the pane is narrow -->
-				{#if tail.model || tokens || took}
-					<span class="stats" title={statsTitle}>
-						{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
-						<span class="stext">{statsText}</span>
-					</span>
-				{/if}
-				<!-- when, last and on the right line: the same place the question's time sits, so every time in the column lines up -->
-				{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
+				<!-- one quiet line right after the buttons: when, then who wrote it and what it cost. The time comes first so a
+				     narrow pane cuts the model text, never the time -->
+				<span class="stats" title={statsTitle || undefined}>
+					{#if tail.ts}<time class="when" datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
+					{#if tail.ts && (tail.model || statsText)}<span class="sep" aria-hidden="true">·</span>{/if}
+					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
+					{#if statsText}<span class="stext">{statsText}</span>{/if}
+				</span>
 			</div>
 		{/if}
 	</div>
@@ -313,17 +312,18 @@
 		line-height: 16px;
 		color: var(--text-faint);
 	}
-	/* when the answer was written: pushed to the row's right end, 8px clear of the stats, never cut. The foot only bleeds on
-	   the left (for the first glyph), so the time's right edge is the content's right line, where the question's time ends */
+	/* when the answer was written: first in the stats line, never cut */
 	.when {
 		flex: none;
-		margin-left: auto;
-		padding-left: 8px;
 		padding-bottom: 2px; /* same lift as .stext: the x-height onto the glyph centre */
-		font-size: var(--fs-2xs);
 		line-height: 20px;
-		color: var(--text-faint);
-		white-space: nowrap;
+	}
+	/* the same "·" the stats text uses between its parts, with the 4px the logo keeps on its own right */
+	.sep {
+		flex: none;
+		margin-inline: 4px;
+		padding-bottom: 2px; /* same lift as .stext */
+		line-height: 20px;
 	}
 	.slogo {
 		display: flex;
