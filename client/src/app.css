@@ -1323,6 +1323,14 @@ dialog[data-closing]::backdrop {
 	}
 }
 
+/* The angle a running light turns at round a working card's border (graph view). Registered so it can be animated;
+   without @property support the light simply stands still. */
+@property --ring-a {
+	syntax: "<angle>";
+	inherits: false;
+	initial-value: 0deg;
+}
+
 /*
  * Working glow: the outline of a box breathes softly in the thinking colour (--lv) while the agent works.
  * Used on the user's prompt bubble and the composer box. --glow-base is the resting border colour.
