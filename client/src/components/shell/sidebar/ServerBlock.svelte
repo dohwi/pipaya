@@ -121,9 +121,10 @@
 	.srv > .fold {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	/* unreachable: the header is dimmed and locked (the icon's colour still says why) */
-	:global(:where(.side) .srv.off .srvhead) {
-		opacity: 0.55;
+	/* unreachable: the header steps its name down a colour and is locked. Fading the whole strip to 0.55 took the name to
+	   2.6:1 and the red icon to 2.3:1 on the band, so it read as half gone rather than "down"; the icon's colour still says why */
+	:global(:where(.side) .srv.off .sname) {
+		font-weight: 500;
 	}
 	.srvtoggle:disabled {
 		cursor: default;
@@ -191,6 +192,10 @@
 	}
 	:global(:where(.side) .srv.cur .srvtoggle) {
 		color: var(--text);
+	}
+	/* after .cur: the open server can be the unreachable one */
+	:global(:where(.side) .srv.off .srvtoggle) {
+		color: var(--text-faint);
 	}
 	/* the icon takes the folder-icon column, so the name lines up with the directory names */
 	.sicon {
