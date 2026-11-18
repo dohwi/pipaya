@@ -539,6 +539,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="view"
+		data-own-swipe
 		class:panning
 		bind:this={viewEl}
 		onpointerdown={down}

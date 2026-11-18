@@ -2,6 +2,7 @@
 	import ExtensionMount from "./components/extensions/ExtensionMount.svelte";
 	import { onMount, untrack } from "svelte";
 	import { backLayer, handleBack } from "./lib/dialog";
+	import { BackTrail } from "./lib/back-trail";
 	import { OVERLAY_SELECTOR } from "./lib/keys";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/ui/Icon.svelte";
@@ -150,6 +151,28 @@
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	});
+	// Back closes the graph view too, landing on the chat it was opened from.
+	$effect(() => {
+		if (!(mobile || viewport.narrow) || !app.graphOpen) return;
+		return backLayer({ onclose: () => app.toggleGraph(false) });
+	});
+	// With nothing left to close, back goes to the conversation seen before (any server) rather than leaving the app.
+	// The graph and its quick look are not pages: what they open while up is not remembered.
+	const trail = new BackTrail();
+	$effect(() => {
+		if (!mobile || !app.serverId || app.graphOpen) return;
+		trail.visit({ server: app.serverId, session: app.activeId });
+	});
+	function goBack(): boolean {
+		const page = trail.back((p) => {
+			const l = app.links[p.server];
+			return !!l && !!p.session && (l.sessionById.has(p.session) || l.data.terminals.some((x) => x.id === p.session));
+		});
+		if (!page?.session) return false;
+		if (page.server === app.serverId && app.net !== "idle") void app.openSession(page.session);
+		else app.openIn(page.server, { session: page.session });
+		return true;
+	}
 	onMount(() => {
 		if (!mobile) return;
 		let off: (() => void) | undefined;
@@ -157,7 +180,7 @@
 		// plugin-process is desktop only; the app module's exit() finishes the Android activity (core:app:allow-exit).
 		void import("@tauri-apps/api/app").then(async ({ onBackButtonPress, exit }) => {
 			const l = await onBackButtonPress(async () => {
-				if (handleBack()) return;
+				if (handleBack() || goBack()) return;
 				await exit(0);
 			});
 			if (gone) void l.unregister();
@@ -293,8 +316,9 @@
 	let locked = false; // decided: this gesture is a horizontal drag of the drawer
 	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
 	let drawerW = $state(320);
-	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging).
-	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip";
+	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging, panning a canvas
+	// that marks itself `data-own-swipe`, such as the graph view). The 24px screen edge still opens the drawer.
+	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip, [data-own-swipe]";
 	// pre / table are not listed: they only keep the swipe when they really scroll sideways (scrollsSideways below),
 	// so a short code block or table inside a chat no longer swallows the drawer swipe.
 	const MODAL = 'dialog[open], [role="dialog"], [role="alertdialog"]';
