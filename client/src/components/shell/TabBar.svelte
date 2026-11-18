@@ -613,33 +613,55 @@
 		height: 14px;
 		stroke-width: 1.9;
 	}
-	/* the close button takes the icon's place while the pointer is on the tab (as in Safari): it needs no room of its own,
-	   so a tab is only as wide as its icon and title, never grows on hover, and leaves no blank where a hidden × would wait
-	   (that blank set "+" after the last tab apart like a tab without a title). Centred on the icon: 20px over its 16px. */
+	/* the close button sits at the tab's right end, where a browser's is, but only while the pointer is on the tab, and over
+	   the end of the title rather than in a slot of its own: a tab is only as wide as its icon and title, never grows on
+	   hover, and leaves no blank where a hidden × would wait (that blank set "+" after the last tab apart like a tab without
+	   a title). Its box is the pill's own colour (--xbg) with a 24px fade on its left, so the title runs out under it instead
+	   of being cut. The glyph's right edge is 8px in from the pill's, as the icon's left edge is on the other side. */
+	.tab {
+		--xbg: var(--bg-tabbar);
+	}
+	.tab.menuopen {
+		--xbg: var(--bg-tabbar-hover);
+	}
+	@media (hover: hover) {
+		.tab:hover {
+			--xbg: var(--bg-tabbar-hover);
+		}
+	}
+	.tab.on.tab {
+		--xbg: var(--bg-tabbar-on); /* .tab.on.tab: outranks the hover rule above, the front pill keeps its own colour */
+	}
 	.x {
 		position: absolute;
-		left: 6px;
+		right: 5px;
 		top: 4px;
 		display: grid;
 		place-items: center;
 		width: 20px;
 		height: 20px;
 		border-radius: var(--radius-pill); /* a round close target, as in Chrome */
+		background-color: var(--xbg);
 		color: var(--text-dim);
 		opacity: 0;
 		transition:
-			background var(--motion-fast) var(--ease-std),
+			opacity var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
+	}
+	.x::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 100%;
+		width: 24px;
+		background: linear-gradient(to right, color-mix(in srgb, var(--xbg) 0%, transparent), color-mix(in srgb, var(--xbg) 60%, transparent) 50%, var(--xbg));
+		pointer-events: none;
 	}
 	.tab:hover .x,
 	.tab.menuopen .x,
 	.x:focus-visible {
 		opacity: 1;
-	}
-	.tab:hover:has(.x) .ico,
-	.tab.menuopen:has(.x) .ico,
-	.tab:has(.x:focus-visible) .ico {
-		visibility: hidden;
 	}
 	/* no hover on a touch screen: the × is always there, after the title as before */
 	@media (pointer: coarse) {
@@ -652,15 +674,19 @@
 		.tab.on .x {
 			color: var(--text-dim);
 		}
-		.tab:hover:has(.x) .ico,
-		.tab.menuopen:has(.x) .ico,
-		.tab:has(.x:focus-visible) .ico {
-			visibility: visible;
+	}
+	/* where the × sits after the title (touch, the phone strip) it has room of its own: no backing, no fade */
+	@media (pointer: coarse), (max-width: 600px) {
+		.x {
+			background-color: transparent;
+		}
+		.x::before {
+			display: none;
 		}
 	}
 	@media (hover: hover) {
 		.x:hover {
-			background: color-mix(in srgb, var(--text) 10%, transparent); /* a step darker than whatever is under it: the hover pill or the front tab */
+			background-image: linear-gradient(color-mix(in srgb, var(--text) 10%, transparent), color-mix(in srgb, var(--text) 10%, transparent)); /* a step darker than the pill it sits on */
 			color: var(--text);
 		}
 	}
@@ -733,11 +759,6 @@
 		}
 		.tab.on .x {
 			opacity: 1;
-		}
-		.tab:hover:has(.x) .ico,
-		.tab.menuopen:has(.x) .ico,
-		.tab:has(.x:focus-visible) .ico {
-			visibility: visible;
 		}
 
 		.tab.before,
