@@ -1472,6 +1472,7 @@ export const en: Record<string, string> = {
 	"파일을 놓아서 첨부": "Drop files to attach",
 	"파일 첨부": "Attach file",
 	"파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)": "Attach file (this model can't see images, so they are sent as files)",
+	"이 모델은 이미지를 직접 보지 못해 파일로 첨부했습니다": "This model can't see images, so they were attached as files",
 	"파일은 최대 {n}개까지 첨부할 수 있습니다": "You can attach up to {n} files",
 	"{name}: 파일은 {n}MB까지 첨부할 수 있습니다": "{name}: files can be up to {n} MB",
 	"한 메시지에 첨부할 수 있는 파일은 모두 합쳐 {n}MB까지입니다": "Files in one message can total up to {n} MB",

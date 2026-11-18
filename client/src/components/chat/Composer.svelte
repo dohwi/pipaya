@@ -71,6 +71,7 @@
 	const attached = new Attachments({
 		vision: () => vision,
 		error: (m) => app.toast(m, "error", pane.id),
+		notice: (m) => app.toast(m, "info", pane.id),
 		imageAdded: (n) => insertImageToken(n),
 	});
 	/** Message being answered: shown as a badge above the input, quoted into the prompt on send (never pasted into the text). */

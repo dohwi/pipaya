@@ -393,6 +393,21 @@
 			justify-content: center;
 		}
 	}
+	/* touch: a 40px-wide hit box around the 24px "⋯" (the look and the row stay as they are). Sideways only: the row scrolls
+	   sideways and clips anything taller, and the row's 16px padding leaves room for the 8px it reaches past the button. */
+	@media (pointer: coarse) {
+		.morebtn {
+			position: relative;
+		}
+		.morebtn::after {
+			content: "";
+			position: absolute;
+			top: -4px; /* into the row's 4px top padding: 28px high */
+			bottom: 0;
+			left: -8px;
+			right: -8px;
+		}
+	}
 	@container (max-width: 420px) {
 		.statusline {
 			column-gap: 8px;

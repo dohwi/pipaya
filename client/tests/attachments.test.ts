@@ -38,7 +38,8 @@ const file = (name: string, size = 10, type = "text/plain") => ({ name, size, ty
 function host(vision = true) {
 	const errors: string[] = [];
 	const tokens: number[] = [];
-	return { errors, tokens, h: { vision: () => vision, error: (m: string) => void errors.push(m), imageAdded: (n: number) => void tokens.push(n) } };
+	const notices: string[] = [];
+	return { errors, tokens, notices, h: { vision: () => vision, error: (m: string) => void errors.push(m), notice: (m: string) => void notices.push(m), imageAdded: (n: number) => void tokens.push(n) } };
 }
 
 describe("Attachments.add", () => {
@@ -57,6 +58,17 @@ describe("Attachments.add", () => {
 		expect(a.images).toEqual([]);
 		expect(a.files.map((x) => x.name)).toEqual(["a.png"]);
 		expect(tokens).toEqual([]);
+	});
+	test("pictures sent as files to a blind model are said once per batch; other files say nothing", async () => {
+		const blind = host(false);
+		await new Attachments(blind.h).add([file("a.png", 10, "image/png"), file("b.png", 10, "image/png")]);
+		expect(blind.notices).toHaveLength(1);
+		const plain = host(false);
+		await new Attachments(plain.h).add([file("n.txt")]);
+		expect(plain.notices).toEqual([]);
+		const seeing = host(true);
+		await new Attachments(seeing.h).add([file("a.png", 10, "image/png")]);
+		expect(seeing.notices).toEqual([]);
 	});
 	test("a third image is refused with a message and the rest still go through", async () => {
 		const { h, errors } = host();

@@ -413,6 +413,8 @@
 	.undo { position: sticky; bottom: 16px; z-index: 1; }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
+	/* touch: 16px, or iOS zooms the page in when the field takes focus */
+	@media (pointer: coarse) { .area { font-size: var(--fs-lg); } }
 	.every { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: stretch; }
 	/* the Segmented beside it is 44px tall: the number field takes the same height instead of floating 2px inside it */
 	.every :global(.field) { height: auto; }

@@ -102,7 +102,7 @@
 </script>
 
 {#if open}
-	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal>
+	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal safeArea>
 		{#snippet headerActions()}
 			{#if kind === "html"}
 				<IconButton icon="terminal" label={t("소스 보기")} tip class={{ on: source }} onclick={() => (source = !source)} aria-pressed={source} />

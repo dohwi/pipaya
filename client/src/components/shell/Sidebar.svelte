@@ -609,10 +609,15 @@
 		opacity: 1;
 	}
 	/* touch rows are 40px (a finger needs more than 32); the 20px buttons keep the x 236 / 256 columns and their hit boxes are
-	   20 wide x the full row high, so the list button's and the "+" boxes touch but never overlap (the 44px .tap box overlapped by 24) */
+	   28 wide x the full row high, each grown 8px away from the other (the list button to the left, the "+" to the right
+	   into the row's padding), so the two boxes touch at x 246 but never overlap (the 44px .tap box overlapped by 24) */
 	:global(:where(.side) .dirnew.tap::after) {
-		width: 100%;
+		width: 28px;
 		height: 40px;
+		transform: translate(calc(-50% + 4px), -50%);
+	}
+	:global(:where(.side) .dirnew.listbtn.tap::after) {
+		transform: translate(calc(-50% - 4px), -50%);
 	}
 	}
 	:global(:where(.side) .dirnew:hover),
