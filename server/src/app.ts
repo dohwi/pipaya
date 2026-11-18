@@ -70,6 +70,7 @@ import { registerExtensionHttpRoutes, registerServerExtensionRoutes } from "./ex
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
 import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
 import { join, resolve } from "node:path";
+import { IdleSockets } from "./idle-sockets.ts";
 
 /** How long persisted events are kept for a client that reconnects with a cursor. */
 export const EVENT_RETENTION_MS = 3 * 24 * 3600_000;
@@ -285,6 +286,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		forceCloseConnections: true,
 	});
 	// Voice input uploads the browser's own recording as multipart; the runtime's FormData parser reads it (no plugin).
+	// Bun ignores keepAliveTimeout: sockets left by sleeping or vanished devices are closed here instead.
+	const idleSockets = new IdleSockets();
+	idleSockets.attach(server.server);
+	server.addHook("onRequest", async (req) => idleSockets.requestStarted(req.raw.socket, req.raw));
 	server.addContentTypeParser("multipart/form-data", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(makeSerializerCompiler(opts.strictResponses ?? false));
@@ -730,6 +735,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	pruneEvents();
 	const prune = setInterval(pruneEvents, 6 * 3600_000);
 	prune.unref?.();
+	idleSockets.start();
 	retention.start();
 	scheduler.start();
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
@@ -738,6 +744,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	void configuration.refreshCatalog();
 	return { server, sessions, bus, async close() {
 		clearInterval(prune);
+		idleSockets.stop();
 		retention.stop();
 		scheduler.stop();
 		configuration.close();
