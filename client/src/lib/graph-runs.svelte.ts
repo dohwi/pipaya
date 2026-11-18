@@ -31,10 +31,15 @@ export class GraphRuns {
 		for (const id of Object.keys(this.runs)) if (!servers.has(id)) delete this.runs[id];
 		for (const id of this.apis.keys()) void this.read(id);
 		clearInterval(this.poll);
-		this.poll = setInterval(() => { for (const id of this.apis.keys()) void this.read(id); }, POLL_MS);
+		// A hidden window skips the poll (events still pull changes in) and catches up once it is shown again.
+		const readAll = () => { for (const id of this.apis.keys()) void this.read(id); };
+		this.poll = setInterval(() => { if (!document.hidden) readAll(); }, POLL_MS);
+		const shown = () => { if (!document.hidden) readAll(); };
+		document.addEventListener("visibilitychange", shown);
 		return () => {
 			clearInterval(this.poll);
 			this.poll = undefined;
+			document.removeEventListener("visibilitychange", shown);
 			for (const t of this.timers.values()) clearTimeout(t);
 			this.timers.clear();
 			this.apis = new Map();
