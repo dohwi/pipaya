@@ -7,7 +7,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { duration } from "../../lib/format";
-	import { isImageTool, toolIcon, toolSummary } from "../../lib/tools";
+	import { isImageTool, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import { workIcon, workSummary } from "../../lib/work-summary";
 	import PaintingCanvas from "./PaintingCanvas.svelte";
 	import type { Step, ToolRun } from "../../lib/types";
@@ -25,6 +25,12 @@
 	/** Per step: the tool's run state, or null for a thought. */
 	const runs = $derived(steps.map((s) => (s.kind === "tool" ? runOf(s.id) : null)));
 	const tools = $derived(steps.filter((s) => s.kind === "tool"));
+	/**
+	 * The name column of the opened rows: as wide as the longest tool name in this box, 4 to 8 characters of the mono font
+	 * (bash … delegate, schedule), so every summary starts on one line. A longer name (a skill's) pushes only its own row:
+	 * a wider column would eat the commands' room on a phone.
+	 */
+	const nameCh = $derived(Math.min(8, Math.max(4, ...tools.map((s) => toolLabel(s.name, s.args).length))));
 
 	const awaitingIdx = $derived(runs.findIndex((r) => r?.state === "awaiting_input"));
 	const runningIdx = $derived(live ? runs.findIndex((r) => r?.state === "running" || r?.state === "pending") : -1);
@@ -168,7 +174,7 @@
 	{/if}
 
 	{#if open}
-		<div class="steps" id={uid} in:collapseIn out:collapseOut>
+		<div class="steps" id={uid} style:--name-w="{nameCh}ch" in:collapseIn out:collapseOut>
 			{#each steps as s, i (i)}
 				{#if s.kind === "think"}
 					<div class="thought">

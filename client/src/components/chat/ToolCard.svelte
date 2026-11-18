@@ -178,9 +178,11 @@
 		stroke-width: 1.8;
 	}
 	/* the tool's name: what kind of work, in the quiet colour */
+	/* one column per work box (--name-w, set by WorkBox from its longest name, 4 to 8ch): every summary starts on one line.
+	   A longer name only pushes its own row; outside a work box it falls back to bash / read / grep / edit's 4ch. */
 	.name {
 		flex: none;
-		min-width: 4ch; /* ls and the four-letter names (bash, read, grep, edit) end on one line, so the commands after them start on one */
+		min-width: var(--name-w, 4ch);
 		max-width: 40%;
 		overflow: hidden;
 		white-space: nowrap;
@@ -213,19 +215,25 @@
 		white-space: nowrap;
 	}
 	/* an even 16px box like the icons: the 11px text's own 17.05px height is odd */
+	/* right-aligned in a 5-digit box ("940ms", "12.8s"), so the word before it ("종료 코드 2", "실패") ends on one line too */
 	.dur {
+		min-width: 5ch;
+		text-align: right;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums; /* 940ms over 212ms: every digit as wide, so the times line up row to row */
 		color: var(--text-faint);
 	}
-	/* how it ended when that is not plain success: a faint word in the time's size. The one red notice is the folded
-	   work box's "N개 실패"; once it is opened the rows stay calm */
+	/* how it ended when that is not plain success: a short word in the time's size. A failure says it in red ("종료 코드 2",
+	   "실패", like the folded box's "N개 실패"); the rest of the row keeps its colours, so the list stays calm */
 	.note {
 		flex: none;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
+	}
+	.failed .note {
+		color: var(--danger);
 	}
 	.need {
 		font-size: var(--fs-xs);
