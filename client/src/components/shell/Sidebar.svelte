@@ -122,6 +122,13 @@
 
 	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
 	const isDirFolded = (key: string) => !searching && app.sidebar.isDirFolded(key);
+	/** The folder of what is open lists its tabs on its own (not on the graph, which shows no tab); see `SidebarState.autoDir`. */
+	$effect(() => {
+		const sid = app.serverId;
+		const path = app.activeTab?.dir.path ?? app.workdirAbs;
+		const key = sid && !app.graphOpen ? dirKey(sid, path) : null;
+		untrack(() => app.sidebar.setAutoDir(key));
+	});
 
 	/**
 	 * Keep the open row in view: the list scrolls to it when something else opens (a new conversation in a folder far
@@ -146,6 +153,7 @@
 		void app.activeId;
 		void app.sidebar.folded;
 		void app.sidebar.openDirs;
+		void app.sidebar.autoDir;
 		void app.activeTab;
 		const host = listEl;
 		if (!host) return;
@@ -446,7 +454,7 @@
 		<SearchField label={t("대화 검색")} data-sidebar-search bind:value={query} />
 	</div>
 
-	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()} onpointerenter={(e) => e.pointerType === "mouse" && app.sidebar.hold(true)} onpointerleave={() => app.sidebar.hold(false)}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} {searching} single={nodes.length < 2} />
 		{/each}
