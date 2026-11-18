@@ -10,7 +10,7 @@
 	import { tabPanes, type DirBlock } from "../../lib/nav";
 	import type { Server } from "../../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../../lib/activity";
-	import { asWorkdir, newMenuEntries, shortName } from "../../lib/sidebar-model";
+	import { asWorkdir, connectionState, newMenuEntries, orderServers, shortName, unreachable } from "../../lib/sidebar-model";
 	import { platformName } from "../../lib/terminal";
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
@@ -31,9 +31,19 @@
 		/** activity of this server's sessions, by id */
 		state: Record<string, Activity>;
 	}
-	/** Every server's active sessions, each read live from its own server. Servers with none are left out. */
+	/**
+	 * Every server's active sessions, each read live from its own server, in the sidebar's server order. Servers with none
+	 * are left out, and so are the unreachable ones: their list is only the copy last seen, and the sidebar folds and locks
+	 * them, so the rail does not offer their folders either.
+	 */
 	const sections = $derived.by<Section[]>(() =>
-		app.servers.flatMap((server) => {
+		orderServers(
+			app.servers.map((server) => {
+				const link = app.links[server.id];
+				return { server, local: server.local, state: link ? connectionState(link.net) : ("checking" as const) };
+			}),
+		).flatMap(({ server, state: conn }) => {
+			if (unreachable(conn)) return [];
 			const current = server.id === app.serverId;
 			const ov = app.links[server.id]?.data;
 			const sessions = ov?.sessions ?? [];
