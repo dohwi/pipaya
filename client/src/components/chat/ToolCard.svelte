@@ -206,14 +206,6 @@
 		gap: 8px;
 		margin-left: auto;
 	}
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
-	}
 	/* an even 16px box like the icons: the 11px text's own 17.05px height is odd */
 	/* right-aligned in a 5-digit box ("940ms", "12.8s"), so the word before it ("종료 코드 2", "실패") ends on one line too */
 	.dur {
