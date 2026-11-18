@@ -67,7 +67,7 @@
 		border-radius: var(--radius-xs);
 		font-size: var(--fs-2xs);
 		font-weight: 700;
-		line-height: 15px; /* 18 - 2 x 1.5 border: the number centres in the inner box */
+		line-height: 17px; /* the mono digits sit high in their em box: a 15px line (the inner box) left their ink 1px above the square's centre */
 		text-align: center;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: -0.02em;

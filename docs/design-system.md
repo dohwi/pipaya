@@ -221,7 +221,7 @@ The tab strip (wider than 600px) is a browser's: the bar is `--bg-tabbar`, a ste
 hairline between them (one chrome band, like a browser's title bar over its tabs; a white header over a grey strip read as three stacked tones). The front tab is `--bg`, a square block (4px corners on top, no foot curves) that
 covers the bar's bottom hairline, so it joins the conversation below, and is outlined on its top and sides in the same `--tabbar-line` as that hairline, so the line steps up around it; the other tabs have no fill and no hairline. Each tab is as wide as its content (icon, handle, title, ×; 136 to 200px, the title ellipsised past that), so the tabs sit
 edge to edge. The × shows on the front tab and under the pointer (always on touch); elsewhere it keeps its place unseen, so a tab never changes width on hover and the blank it leaves sets two tabs apart. The strip scrolls when they do not fit. **`+` and the tab count are one cluster (`TabControls`) pinned to the bar's right end**, never after the
-last tab, so they stay put with one tab or twenty; the count's square ends on the 16px gutter. On a phone the same cluster sits at the header's right end.
+last tab, so they stay put with one tab or twenty; the count's square ends on the 16px gutter. On a phone the same cluster sits at the header's right end, its 32px buttons with no gap so the `+` ink and the count's square stand 16px apart (the menu glyph's step to the title).
 Inside messages: quote text sits 16px from its 3px bar, a list's text 24px from the column, a user bubble 16px inside; code and tables fill the column. Check
 with `tmp`-style scripts that measure each pane's own box, not the window (a split group has one column per pane).
 
