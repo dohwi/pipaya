@@ -74,7 +74,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - An icon beside a label in a flex row is centred by the row, not nudged: the queued row's sender icon once carried `top: -1px` from a 4x measurement and sat 1px high at 1x.
 - An extension's horizontal `stack` aligns its items on the baseline (badge included), so a status badge and the small text after it read as one line (measured: ink centres equal at 1440/820/390; `flex-start` left the text 4px high).
 - The `@name` handle is one style everywhere it appears (sidebar row, split tab's title bar, tab, group chip inside the group box): 11px
-  `--fs-2xs`, weight 600, `--text-faint`, on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
+  `--fs-2xs`, weight 600, `--text-faint` while idle and the agent badge's state colour otherwise (working, asking, done, failed; badge and handle always match), on a 16px line box so it centres on the 28px tab / 22px chip and never inherits the body's 1.55.
   It sits between the agent badge and the title (4px gaps, the row's own), never after the title. It does not shrink (`flex: none`): a tab
   too narrow for both shows the handle whole and ellipsises the title, which is what the tab's `max-width: 220px` leaves room for.
   It also carries the activity colour (`working` `--info`, `asking` `--warn`, `done` `--ok`, `failed` `--danger`, idle `--text-faint`) in
