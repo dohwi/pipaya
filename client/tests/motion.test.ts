@@ -169,6 +169,11 @@ describe("modals mounted by their parent animate", () => {
 		// `enter` is modalIn, or the quicker modalQuickIn for a quick look
 		expect(read("components/ui/Modal.svelte")).toMatch(/const enter = \(node: Element\) => \(quick \? modalQuickIn\(node\) : modalIn\(node\)\)/);
 	});
+	test("the scrim closes only on a press that started on it (not the click of the tap that opened the dialog)", () => {
+		const s = markup(read("components/ui/Modal.svelte"));
+		expect(s).toMatch(/class="scrim"[^>]*onpointerdown=\{press\}[^>]*onclick=\{dismiss\}/);
+		expect(read("components/ui/Modal.svelte")).toMatch(/if \(own && dismissible\) onclose\(\)/);
+	});
 	test("dialog panels go through the shared Modal instead of their own scrim", () => {
 		for (const f of ["server/ServerForm", "settings/Settings", "server/DirPicker", "chat/QueueModal", "models/ConnectionForm", "extensions/ImportDialogs", "agent/SkillsDialog", "agent/CommandFamiliesDialog", "ui/PickerModal", "ui/ConfirmDialog", "chat/StatusCard"]) {
 			const s = markup(read(`components/${f}.svelte`));
