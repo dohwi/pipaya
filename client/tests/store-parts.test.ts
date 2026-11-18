@@ -94,6 +94,47 @@ describe("sidebar reveal", () => {
 	});
 });
 
+describe("sidebar auto-opened folder", () => {
+	test("the focused folder opens on its own and folds again when focus moves on", () => {
+		const sb = new SidebarState();
+		sb.openDirs = ["s\u0000/kept"];
+		sb.setAutoDir("s\u0000/a");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(false);
+		expect(sb.isDirFolded("s\u0000/b")).toBe(true);
+		sb.setAutoDir("s\u0000/b");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(true);
+		expect(sb.isDirFolded("s\u0000/b")).toBe(false);
+		expect(sb.isDirFolded("s\u0000/kept")).toBe(false);
+		expect(sb.openDirs).toEqual(["s\u0000/kept"]);
+	});
+	test("folding the auto-opened folder holds until focus leaves it; opening it keeps it", () => {
+		const sb = new SidebarState();
+		sb.setAutoDir("s\u0000/a");
+		sb.toggleDir("s\u0000/a");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(true);
+		sb.setAutoDir("s\u0000/b");
+		sb.setAutoDir("s\u0000/a");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(false);
+		sb.toggleDir("s\u0000/a");
+		sb.toggleDir("s\u0000/a");
+		sb.setAutoDir("s\u0000/b");
+		expect(sb.openDirs).toEqual(["s\u0000/a"]);
+		expect(sb.isDirFolded("s\u0000/a")).toBe(false);
+	});
+	test("while the pointer is on the list the folder left behind stays open until it leaves", () => {
+		const sb = new SidebarState();
+		sb.setAutoDir("s\u0000/a");
+		sb.hold(true);
+		sb.setAutoDir("s\u0000/b");
+		sb.setAutoDir("s\u0000/c");
+		expect(["/a", "/b", "/c"].map((p) => sb.isDirFolded(`s\u0000${p}`))).toEqual([false, false, false]);
+		sb.setAutoDir("s\u0000/a");
+		expect(sb.linger).toEqual(["s\u0000/b", "s\u0000/c"]);
+		sb.hold(false);
+		expect(["/a", "/b", "/c"].map((p) => sb.isDirFolded(`s\u0000${p}`))).toEqual([false, true, true]);
+	});
+});
+
 describe("sidebar shared part", () => {
 	test("edits are reported; the server's value replaces one server's pins only", () => {
 		(globalThis as any).localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
