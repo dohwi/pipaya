@@ -124,7 +124,9 @@ const FOCUSABLE =
 	'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 
 export function focusables(root: HTMLElement): HTMLElement[] {
-	return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest("[inert]"));
+	// tabIndex < 0: a control the keyboard reaches some other way (a card's X): Tab skips it, so the trap must too, or the
+	// wrap waits on an element Tab never lands on and focus slips out of the modal first
+	return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest("[inert]"));
 }
 
 /** Keep Tab / Shift+Tab inside `root`. Returns true when it moved focus. */
