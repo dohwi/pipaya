@@ -87,4 +87,9 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
+	/* the handle takes the state colour with the badge (as in the tab bar and the pane header): the name is the bigger mark, so a glance at the list finds who is working, asking or failed */
+	.who.working { color: var(--info); }
+	.who.asking { color: var(--warn); }
+	.who.done { color: var(--ok); }
+	.who.failed { color: var(--danger); }
 </style>
