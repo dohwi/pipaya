@@ -17,6 +17,7 @@
 	import { recentreOn } from "../../lib/dialog";
 	import { Api, errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
+	import { fullTime, shortDate } from "../../lib/format";
 	import { nameInLang } from "../../lib/member-names";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import {
@@ -250,14 +251,12 @@
 		const s = sessionOf(id);
 		return s ? `${s.title}${s.name ? ` · @${nameInLang(s.name)}` : ""}` : t("닫힌 대화");
 	};
-	const when = (ms: number) => new Date(ms).toLocaleString();
 	/** The time field of a task being scheduled again: it is the one thing to fill in, often below the fold. */
 	const focusWhen = (node: HTMLElement, on: boolean) => {
 		if (!on) return;
 		node.scrollIntoView({ block: "center" });
 		node.focus({ preventScroll: true });
 	};
-	const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	const sessionOptions = $derived(sessions.map((s) => ({ value: s.id, label: sessionLabel(s.id) })));
 	const unitOptions = $derived([
 		{ id: "minute" as const, label: t("분") },
@@ -333,9 +332,9 @@
 							<p class="desc">{s.prompt}</p>
 							<p class="meta">{sessionLabel(s.sessionId)}</p>
 							<p class="meta">
-								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: when(s.nextRunAt) })}
+								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: fullTime(s.nextRunAt) })}
 								{:else}{t("꺼져 있음")}{/if}
-								{#if s.lastRunAt} · {t("마지막 {when}", { when: when(s.lastRunAt) })}{/if}
+								{#if s.lastRunAt} · {t("마지막 {when}", { when: fullTime(s.lastRunAt) })}{/if}
 							</p>
 							{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
 						</ListItem>
@@ -374,8 +373,8 @@
 									<p class="desc">{s.prompt}</p>
 									<p class="meta">{sessionLabel(s.sessionId)}</p>
 									<p class="meta">
-										{#if s.lastRunAt}{s.lastStatus?.startsWith("skipped") ? t("{when}에 건너뜀 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) }) : t("{when}에 실행 · {day}에 지워짐", { when: when(s.lastRunAt), day: day(purgeAt(s)) })}
-										{:else}{t("{day}에 지워짐", { day: day(purgeAt(s)) })}{/if}
+										{#if s.lastRunAt}{s.lastStatus?.startsWith("skipped") ? t("{when}에 건너뜀 · {day}에 지워짐", { when: fullTime(s.lastRunAt), day: shortDate(purgeAt(s)) }) : t("{when}에 실행 · {day}에 지워짐", { when: fullTime(s.lastRunAt), day: shortDate(purgeAt(s)) })}
+										{:else}{t("{day}에 지워짐", { day: shortDate(purgeAt(s)) })}{/if}
 									</p>
 									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
 								</ListItem>

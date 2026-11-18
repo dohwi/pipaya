@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { dayLabel, dayStart, fileStamp, timeOfDay } from "../src/lib/format";
+import { dayLabel, dayStart, fileStamp, fullTime, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
+import { setLang } from "../src/lib/i18n";
 
 describe("fileStamp", () => {
 	test("local date and time, zero padded", () => {
@@ -32,5 +33,21 @@ describe("dayLabel", () => {
 	test("dayStart groups times by their local day", () => {
 		expect(dayStart(new Date(2026, 10, 17, 23, 59).getTime())).toBe(dayStart(new Date(2026, 10, 17, 0, 0).getTime()));
 		expect(dayStart(new Date(2026, 10, 18, 0, 0).getTime())).not.toBe(dayStart(new Date(2026, 10, 17, 23, 59).getTime()));
+	});
+});
+
+describe("fullTime / shortDate / shortDateTime", () => {
+	const ts = new Date(2026, 10, 19, 15, 4, 5).getTime();
+	test("follow the app's language, not the browser's", () => {
+		setLang("en");
+		expect(fullTime(ts)).toBe(new Date(ts).toLocaleString("en-US"));
+		expect(shortDate(ts)).toBe("Nov 19");
+		setLang("ko");
+		expect(fullTime(ts)).toBe(new Date(ts).toLocaleString("ko-KR"));
+		expect(shortDate(ts)).toBe("11월 19일");
+	});
+	test("a day and a time, no year or seconds", () => {
+		expect(shortDateTime(ts, "en-US")).toBe("Nov 19, 03:04 PM");
+		expect(shortDateTime(ts, "ko-KR")).toBe("11월 19일 오후 03:04");
 	});
 });

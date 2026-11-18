@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { localeTag, t } from "../../lib/i18n";
+	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
-	import { clip, duration } from "../../lib/format";
+	import { clip, duration, fullTime } from "../../lib/format";
 	import { splitCd, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -86,7 +86,7 @@
 			{:else if awaiting}<span class="need">{label}</span>
 			{:else if failed || run.state === "skipped"}<span class="note">{label}</span>{/if}
 			{#if run.durationMs != null && !working}
-				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: new Date(run.endedAt).toLocaleString(localeTag()) })}>{duration(run.durationMs)}</time>
+				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: fullTime(run.endedAt) })}>{duration(run.durationMs)}</time>
 				{:else}<span class="dur">{duration(run.durationMs)}</span>{/if}
 			{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>

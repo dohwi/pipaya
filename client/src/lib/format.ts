@@ -1,3 +1,4 @@
+import { localeTag } from "./i18n";
 
 export const compact = (n: number): string =>
   n >= 1_000_000
@@ -19,6 +20,21 @@ export const clip = (s: string, n: number): string =>
 /** The time of day a message was sent ("9:04 AM", "오전 9:04"); the day it belongs to is the divider above it (dayLabel). */
 export const timeOfDay = (ts: number, locale?: string): string =>
   new Date(ts).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+
+/**
+ * Date and time formats, in the app's language (`localeTag()`), never the browser's: with the app set to English on a
+ * Korean system a bare `toLocaleString()` printed "2026. 11. 19. 오후 3:04:05" in an English screen. `locale` is for tests.
+ */
+/** The whole date and time, for a tooltip or a "last run" line: "11/19/2026, 3:04:05 PM", "2026. 11. 19. 오후 3:04:05". */
+export const fullTime = (ts: number, locale: string = localeTag()): string => new Date(ts).toLocaleString(locale);
+
+/** A day without the year: "Nov 19", "11월 19일". */
+export const shortDate = (ts: number, locale: string = localeTag()): string =>
+  new Date(ts).toLocaleDateString(locale, { month: "short", day: "numeric" });
+
+/** A day and a time without the year or seconds, for a tooltip: "Nov 19, 03:04 PM", "11월 19일 오후 03:04". */
+export const shortDateTime = (ts: number, locale: string = localeTag()): string =>
+  new Date(ts).toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /** Local midnight of the day `ts` falls on: two times are on the same day when these match. */
 export const dayStart = (ts: number): number => {

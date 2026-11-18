@@ -136,6 +136,3 @@ export function summarizeSchedules(list: readonly Pick<Schedule, "sessionId" | "
 	}
 	return { all, bySession };
 }
-
-/** A time for a tooltip: `11월 13일 09:30` (the app's language), shorter than the page's full date and seconds. */
-export const whenShort = (ms: number): string => new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });

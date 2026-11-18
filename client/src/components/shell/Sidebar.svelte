@@ -10,7 +10,6 @@
 	import { updater } from "../../lib/updater.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 	import { msg, t } from "../../lib/i18n";
-	import { whenShort } from "../../lib/schedules";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
@@ -21,7 +20,7 @@
 	import { activityOf, type Activity } from "../../lib/activity";
 	import { app } from "../../lib/store.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
-	import { tilde } from "../../lib/format";
+	import { shortDateTime, tilde } from "../../lib/format";
 	import { copyText } from "../../lib/clipboard";
 	import { chooseGroup } from "../../lib/group-picker";
 	import type { Point } from "../../lib/press-menu";
@@ -400,7 +399,7 @@
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
-	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: whenShort(scheduled.next) }));
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: shortDateTime(scheduled.next) }));
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. A saved model that no longer works (`problems`) outranks an update. */
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */

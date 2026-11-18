@@ -6,7 +6,7 @@
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { tilde } from "../../lib/format";
+	import { shortDateTime, tilde } from "../../lib/format";
 	import { tabPanes, type DirBlock } from "../../lib/nav";
 	import type { Server } from "../../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../../lib/activity";
@@ -14,7 +14,6 @@
 	import { platformName } from "../../lib/terminal";
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
-	import { whenShort } from "../../lib/schedules";
 	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -22,7 +21,7 @@
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
-	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: whenShort(scheduled.next) })}`);
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: shortDateTime(scheduled.next) })}`);
 
 	interface Section {
 		server: Server;
