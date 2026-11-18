@@ -173,15 +173,6 @@ function flagClosing(node: Element) {
 	if (typeof HTMLDialogElement !== "undefined" && node instanceof HTMLDialogElement) node.dataset.closing = "";
 }
 
-/**
- * Out transition for a component whose root is a native <dialog>: CSS (`dialog[data-closing]`) draws the
- * exit, this only keeps the element mounted until it has finished. Use with `out:holdClosing|global`.
- */
-export function holdClosing(node: Element) {
-	flagClosing(node);
-	return { duration: ms("fast"), tick: () => {} };
-}
-
 export function modalIn(node: Element) {
 	if (isPhone()) return sheet(node, "in");
 	return { duration: ms("normal"), easing: easeEnter, css: (_: number, u: number) => css(dialogFrame(u, "in")) };
