@@ -280,7 +280,8 @@
 
 	const unitTs = (u: Unit) => (u.kind === "turn" ? u.items[0]!.ts : u.item.ts);
 	/** A unit that starts a new local day gets that day's heading above it ("오늘", "어제", "11월 15일 (일)"). Reading
-	 *  `today.day` relabels the headings when midnight passes with the transcript open. */
+	 *  `today.day` relabels the headings when midnight passes with the transcript open. The first heading is left out
+	 *  when it would say "오늘": a transcript started today needs no date on top. */
 	const dayOf = $derived.by(() => {
 		const now = today.day;
 		const out: (string | null)[] = [];
@@ -288,7 +289,7 @@
 		for (const u of units) {
 			const ts = unitTs(u);
 			const d = ts ? dayStart(ts) : prev;
-			out.push(ts && d !== prev ? dayLabel(ts, localeTag(), now) : null);
+			out.push(ts && d !== prev && !(prev === -1 && d === now) ? dayLabel(ts, localeTag(), now) : null);
 			prev = d;
 		}
 		return out;
