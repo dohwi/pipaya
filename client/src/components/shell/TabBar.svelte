@@ -272,7 +272,7 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				<!-- a group is a bordered box around its sessions, laid out inline with the other tabs (its name is in the page
+				<!-- a group is a tray of its sessions' chips, laid out inline with the other tabs (its name is in the page
 				     header's "group › session" and the sidebar) -->
 				{#if x.kind === "group"}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -307,7 +307,7 @@
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px grey pill
 	   (--bg-tabbar-on, 8px corners all round, no ring or shadow) set into the middle of the bar, clear of its bottom hairline:
-	   filled rather than outlined, so it never reads like a group's outlined box beside it. The other tabs have no fill and no hairline: each is as wide as its content (up to 200px, the title
+	   a step past a group's faint tray, so it reads as the one in front. The other tabs have no fill and no hairline: each is as wide as its content (up to 200px, the title
 	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" follows the last tab
 	   like a browser's new-tab button (at the strip's edge once the tabs overflow); the tab count is pinned to the bar's right end. */
 	.bar {
@@ -435,9 +435,10 @@
 		outline-offset: -2px;
 	}
 
-	/* the open group as one unit of its sessions: a tab of the strip whose content is the sessions' chips. Behind it is
-	   a frame 4px in (the hover pill's place); in front, the frame gives way to the front tab's sheet. The sessions are what
-	   picks the pane while the group is enlarged, so the box keeps its whole width and the bar scrolls past it. */
+	/* a group is a tray of its sessions' chips, the same 28px row and 8px corners as a tab: a faint fill (the strip 5%
+	   toward --text, under hover's 8%) with no ring, the chips edge to edge inside it at a tab's own height and padding. So
+	   the open chip is the front tab's grey pill exactly, and the group's first and last icons stand where a tab's would.
+	   The chips are what pick the pane while the group is enlarged, so the tray keeps its whole width and the bar scrolls. */
 	.gbox {
 		position: relative;
 		z-index: 1; /* above the sliding fill, like a tab */
@@ -445,35 +446,27 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		height: 32px;
-		padding: 0 4px; /* the chips sit 4px in on every side, so the box's 12px corner and their 8px are concentric */
-		border-radius: 12px; /* --radius-sm + the 4px inset */
-		outline: 1px solid var(--border-strong);
-		outline-offset: -1px;
+		height: 28px;
+		border-radius: var(--radius-sm);
 		transition:
 			margin var(--motion-fast) var(--ease-std),
-			outline-color var(--motion-fast) var(--ease-std);
+			background var(--motion-fast) var(--ease-std);
 	}
 	.gbox + .gbox {
 		margin-left: 4px;
 	}
-	.gbox:not(.on).menuopen {
-		outline-color: var(--text-faint);
-	}
-	/* open, the whole box is the selected tab: a faint fill and a firmer ring, so the group reads as
-	   one lit unit with its open chip a step brighter inside, not an empty frame floating beside the strip */
 	@media (min-width: 601px) {
-		.gbox.on {
-			background: color-mix(in srgb, var(--bg-tabbar) 95%, var(--text)); /* under the hover step (8%), so the open chip (12%) stands out inside */
-			outline-color: var(--tabbar-line);
+		.gbox {
+			background: var(--bg-tabbar-group);
 		}
-	}
-	/* the group stays an outlined box whether open or not; open, its front chip is the front tab's own grey pill, the same
-	   height and corner as a lone tab's, so "this one is open" looks the same inside a group as outside */
-	@media (min-width: 601px) {
+		.gbox:not(.on).menuopen {
+			background: var(--bg-tabbar-hover);
+		}
+		.gbox :global(.strip) {
+			gap: 0;
+		}
 		.gbox :global(.gchip) {
-			height: 24px;
+			height: 28px;
 		}
 		.gbox :global(.gchip.on),
 		.gbox :global(.strip > .slide-ind) {
