@@ -296,9 +296,10 @@
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
-		<!-- "+" and the tab count, pinned to the bar's right end whatever the number of tabs (on a phone the same cluster
-		     sits in the header instead, see Header.svelte) -->
-		<span class="ctlslot"><TabControls /></span>
+		<!-- "+" right after the last tab (a browser's new-tab button; it stays at the strip's edge once the tabs overflow), the
+		     tab count pinned to the bar's right end (on a phone both sit in the header instead, see Header.svelte) -->
+		<span class="ctlslot add"><TabControls part="add" /></span>
+		<span class="ctlslot count"><TabControls part="count" /></span>
 	</div>
 	<RowMenu bind:this={menu} bind:open={menuId} />
 {/if}
@@ -307,8 +308,8 @@
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px grey pill
 	   (--bg-tabbar-on, 8px corners all round, no ring or shadow) set into the middle of the bar, clear of its bottom hairline:
 	   filled rather than outlined, so it never reads like a group's outlined box beside it. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
-	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
-	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
+	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" follows the last tab
+	   like a browser's new-tab button (at the strip's edge once the tabs overflow); the tab count is pinned to the bar's right end. */
 	.bar {
 		flex: none;
 		display: flex;
@@ -334,10 +335,10 @@
 			transform: translateX(-12px);
 		}
 	}
-	/* the tabs take every pixel left of the controls; what they do not fill stays empty */
+	/* the tabs are as wide as they need, up to every pixel left of the controls, so "+" right after them follows the last tab */
 	.tabs {
 		position: relative;
-		flex: 1 1 auto;
+		flex: 0 1 auto;
 		min-width: 0;
 		display: flex;
 		align-items: center;
@@ -350,11 +351,16 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the controls share the tabs' row and centre on it like the tabs */
+	/* the controls share the tabs' row and centre on it like the tabs. "+" comes after the strip's 8px tail (the last tab's
+	   pill and the button's box stand 8px apart); the count takes the rest of the bar's width and sits at its right end. */
 	.ctlslot {
 		flex: none;
 		display: flex;
 		align-items: center;
+	}
+	.ctlslot.count {
+		flex: 1 0 auto;
+		justify-content: flex-end;
 		padding-left: 8px;
 	}
 	@media (max-width: 600px) {
@@ -511,7 +517,7 @@
 	.tail {
 		position: relative;
 		flex: none;
-		width: 8px; /* air after the last tab, where a drop at the end shows its line */
+		width: 4px; /* air after the last tab, where a drop at the end shows its line: with the strip's 4px gap, "+" stands 8px after the last pill */
 		align-self: stretch;
 	}
 	.tail.over::before {
@@ -672,6 +678,9 @@
 		.rename {
 			flex: none;
 			width: 140px;
+		}
+		.tail {
+			width: 8px; /* no "+" after the tabs here: the strip's own air at its end */
 		}
 		.fill {
 			display: none;
