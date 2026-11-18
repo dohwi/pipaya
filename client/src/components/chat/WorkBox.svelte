@@ -225,12 +225,8 @@
 		{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 	{:else}
 		{#if failed}
-			<!-- the check turns into a red cross; with several calls, how many of them failed -->
-			<span class="fail" title={tools.length > 1 ? t("{n}개 실패", { n: failed }) : t("실패")}>
-				<span class="mark"><Icon name="x" /></span>{#if tools.length > 1}<span class="mono">{failed}</span>{/if}<span class="sr-only">{t("실패")}</span>
-			</span>
-		{:else if tools.length}
-			<span class="ok"><Icon name="check" /><span class="sr-only">{t("완료")}</span></span>
+			<!-- no check for work that went fine; a failure is only a short word in red, how many when there were several -->
+			<span class="fail">{tools.length > 1 ? t("{n}개 실패", { n: failed }) : t("실패")}</span>
 		{/if}
 		{#if total}
 			{#if endedAt}<time class="dur" datetime={new Date(endedAt).toISOString()} title={endedTitle}>{duration(total)}</time>
@@ -306,8 +302,6 @@
 		color: var(--text-faint);
 	}
 	.kind,
-	.ok,
-	.mark,
 	.chev {
 		flex: none;
 		display: grid;
@@ -317,8 +311,6 @@
 		color: var(--text-faint);
 	}
 	.kind :global(svg),
-	.ok :global(svg),
-	.mark :global(svg),
 	.chev :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -334,14 +326,9 @@
 	.chev.open {
 		transform: rotate(90deg);
 	}
-	.mark {
-		color: var(--danger);
-	}
+	/* the light notice on a folded box: a short word, the same size as the time next to it */
 	.fail {
 		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--danger);

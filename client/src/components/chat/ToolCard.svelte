@@ -79,12 +79,12 @@
 	<!-- One quiet line, built like the work box's own summary line above it: icon, what, how it went, time, arrow -->
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="kind"><Icon name={toolIcon(name, args)} /></span>
-		<span class="name mono" class:shimmer={working}>{toolLabel(name, args)}</span>
+		<span class="name mono" class:shimmer={working} title={failed ? label : undefined}>{toolLabel(name, args)}</span>
 		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}
 		<span class="meta">
 			{#if working}<span class="dots" role="status" aria-label={label}><i></i><i></i><i></i></span>
 			{:else if awaiting}<span class="need">{label}</span>
-			{:else if failed}<span class="mark" title={label}><Icon name="x" /><span class="sr-only">{label}</span></span>
+			{:else if failed}<span class="sr-only">{label}</span>
 			{:else if run.state === "skipped"}<span class="note">{label}</span>{/if}
 			{#if run.durationMs != null && !working}
 				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: new Date(run.endedAt).toLocaleString(localeTag()) })}>{duration(run.durationMs)}</time>
@@ -160,7 +160,6 @@
 		background-color: transparent;
 	}
 	.kind,
-	.mark,
 	.chev {
 		flex: none;
 		display: grid;
@@ -170,7 +169,6 @@
 		color: var(--text-faint);
 	}
 	.kind :global(svg),
-	.mark :global(svg),
 	.chev :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -235,10 +233,8 @@
 	.dots {
 		color: var(--text-faint);
 	}
-	/* a failed call: its icon, name and the cross turn red; the command keeps its colour so it stays readable */
-	.failed .kind,
-	.failed .name,
-	.mark {
+	/* a failed call: only its name turns red (no cross, no frame); why it failed is under "출력" when it is opened */
+	.failed .name {
 		color: var(--danger);
 	}
 	.awaiting .kind,
