@@ -50,8 +50,8 @@
 		align-items: center;
 		gap: 4px;
 	}
-	/* the header's 32px buttons already leave 6.5px around a 19px glyph: no gap on top, so the "+" ink and the count's square
-	   stand 16px apart, the header's own step (the menu glyph to the title) instead of a loose 20 */
+	/* the header's buttons already leave room around their glyphs: no gap, and both 28px wide (below and TabCountButton)
+	   instead of 32, so the "+" ink and the count's square stand 12px apart and read as one pair rather than two loose icons */
 	.ctl.header {
 		gap: 0;
 	}
@@ -74,9 +74,9 @@
 	}
 	/* the header's tool buttons: 32 wide, 40 tall, round, a 19px glyph (Header.svelte `.tool` on a phone) */
 	.header .add {
-		width: 32px;
+		width: 28px;
 		height: 40px;
-		border-radius: 50%;
+		border-radius: 14px; /* a pill, 28 x 40: a circle would leave the 40px height unrounded */
 	}
 	.header .add :global(svg) {
 		width: 19px;

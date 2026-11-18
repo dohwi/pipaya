@@ -265,7 +265,7 @@
 			display: contents;
 		}
 		.tabs :global(.ctl) {
-			margin-right: -3px; /* the count's 18px square sits 7px inside its 32px box; 12px capsule padding + 7 - 3 = 16, the window gutter */
+			margin-right: -1px; /* the count's 18px square sits 5px inside its 28px box; 12px capsule padding + 5 - 1 = 16, the window gutter */
 		}
 	}
 	@media (max-width: 640px) {
