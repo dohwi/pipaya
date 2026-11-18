@@ -17,7 +17,7 @@
 	 * One server's band in the sidebar: its header (fold, status, name, the conversation list and "+") and the folders under it.
 	 * The header can be dragged to reorder servers (`single`: there is nothing to reorder).
 	 */
-	let { n, searching, single }: { n: SidebarNode; searching: boolean; single: boolean } = $props();
+	let { n, single }: { n: SidebarNode; single: boolean } = $props();
 
 	const sb = getSidebarCtx();
 	const statusText = { online: "", offline: msg("연결 안 됨"), unauthorized: msg("토큰 거부됨"), incompatible: msg("앱 업데이트 필요"), checking: msg("확인 중") };
@@ -66,16 +66,16 @@
 				</div>
 			{:else if n.total === 0}
 				{#if n.dirs.length === 0}
-					<div class="nosess">{searching ? t("검색 결과 없음") : t("활성 대화 없음")}</div>
+					<div class="nosess">{t("활성 대화 없음")}</div>
 				{/if}
 			{/if}
 
 			{#if !sk.showing}
 				{#each n.blocks as b (b.kind === "dir" ? b.dir.path : `project:${b.root}`)}
 					{#if b.kind === "dir"}
-						<DirBlockView {n} d={b.dir} {searching} />
+						<DirBlockView {n} d={b.dir} />
 					{:else}
-						<ProjectBlock {n} root={b.root} dirs={b.dirs} {searching} />
+						<ProjectBlock {n} root={b.root} dirs={b.dirs} />
 					{/if}
 				{/each}
 			{/if}

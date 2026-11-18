@@ -884,8 +884,6 @@ export const en: Record<string, string> = {
 	"더 보기": "More",
 	"닫기 (/resume 으로 다시 열기)": "Close (reopen with /resume)",
 	"사이드바 접기": "Collapse sidebar",
-	"대화 검색": "Search chats",
-	"검색 결과 없음": "No results",
 	"활성 대화 없음": "No active chats",
 	"그룹 이름 바꾸기": "Rename group",
 	"그룹 해제": "Ungroup",

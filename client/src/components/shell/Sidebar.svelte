@@ -1,7 +1,4 @@
 <script lang="ts">
-	import { sessionTitle } from "../../lib/session-title";
-	import EmptyState from "../ui/EmptyState.svelte";
-	import SearchField from "../ui/SearchField.svelte";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
@@ -33,16 +30,15 @@
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
-	import { sidebarDirs, type DirBlock, type Tab } from "../../lib/nav";
-	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectBlocks, projectKey, type ProjectOverrides, type RepoMap, type SidebarBlock } from "../../lib/projects";
+	import type { DirBlock, Tab } from "../../lib/nav";
+	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
-	import type { Group, Session, WorkspaceInfo } from "../../lib/types";
-	import { platformName, type TerminalInfo } from "../../lib/terminal";
+	import type { Group, Session } from "../../lib/types";
+	import { platformName } from "../../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
 	import ServerBlock from "./sidebar/ServerBlock.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 
-	let query = $state("");
 	/** The conversation or terminal being renamed in place, and the split tab (group) being renamed. */
 	const rename = new InlineRename();
 	const groupRename = new InlineRename();
@@ -59,59 +55,33 @@
 
 	type Node = SidebarNode;
 
-	/** Everything shown comes from the servers themselves: their session lists and workspace roots. */
-	function build(sessions: Session[], groups: Group[], ws: WorkspaceInfo | null, q: string, order: string[] | undefined, torder: string[] | undefined, gdir: Record<string, string> | undefined, keep: string[] | undefined, ptabs: string[] | undefined, terminals: TerminalInfo[], repos: RepoMap, over: ProjectOverrides, shared?: SidebarBlock[]): Pick<Node, "root" | "total" | "dirs" | "blocks"> {
-		if (shared) {
-			const dirs = flattenBlocks(shared);
-			return { root: ws?.root, total: dirs.reduce((n, d) => n + d.tabs.length, 0), dirs, blocks: shared };
-		}
-		const dirs = sidebarDirs(sessions, groups, terminals, {
-			match: (x) => !q || sessionTitle(x.title).toLowerCase().includes(q),
-			matchGroup: (g) => !!q && g.name.toLowerCase().includes(q),
-			matchTerminal: (x) => !q || x.title.toLowerCase().includes(q),
-			dirOrder: order,
-			tabOrder: torder,
-			groupDir: gdir,
-			keep: q ? [] : keep, // a search lists matches only
-			pinnedTabs: ptabs,
-		});
-		const blocks = projectBlocks(dirs, repos, over);
-		const flat = flattenBlocks(blocks);
-		const total = flat.reduce((n, d) => n + d.tabs.length, 0);
-		return { root: ws?.root, total, dirs: flat, blocks };
-	}
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
 	/** A folder's label on server `n` (see sidebar-model). */
 	const shortLabel = (n: Node, path: string) => app.sidebar.dirName(n.server.id, path) ?? shortName(path, n.home);
 
 	const nodes = $derived.by<Node[]>(() => {
-		const q = query.trim().toLowerCase();
 		const list = app.servers.map((server) => {
 			const current = server.id === app.serverId;
 			const link = app.links[server.id];
 			const state = link ? connectionState(link.net) : "checking";
 			const ws = link?.workspace ?? null;
-			const d = link?.data;
-			// Not searching: the shared list (see app.dirsByServer); a search narrows it, so only then is it built here.
-			const shared = q ? undefined : app.blocksByServer[server.id] ?? [];
-			const repos = link?.repos ?? {};
-			const data = build(d?.sessions ?? [], d?.groups ?? [], ws, q, app.sidebar.dirOrder[server.id], app.sidebar.tabOrder[server.id], app.sidebar.groupDir[server.id], app.sidebar.pinned[server.id], app.sidebar.pinnedTabs[server.id], d?.terminals ?? [], repos, app.sidebar.overrides(server.id), shared);
-			return { server, local: server.local, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, repos, ...data };
+			// The shared list (see app.blocksByServer): the rail and the shortcuts walk the same one.
+			const blocks = app.blocksByServer[server.id] ?? [];
+			const dirs = flattenBlocks(blocks);
+			const total = dirs.reduce((sum, x) => sum + x.tabs.length, 0);
+			return { server, local: server.local, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, repos: link?.repos ?? {}, root: ws?.root, total, dirs, blocks };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).
 		return orderServers(list);
 	});
 
-	const searching = $derived(query.trim().length > 0);
-	/* Freeze the order as listed (never while searching: that list is partial), so nothing jumps when tabs close or group. */
+	/* Freeze the order as listed, so nothing jumps when tabs close or group. */
 	$effect(() => {
-		if (searching) return;
 		for (const n of nodes)
 			if (n.loaded && n.state === "online" && n.dirs.length)
 				untrack(() => app.sidebar.pin(n.server.id, n.dirs.map((d) => d.path), n.dirs.flatMap((d) => d.tabs.map((x) => x.id)), Object.fromEntries(n.dirs.flatMap((d) => d.tabs.filter((x) => x.kind === "group").map((x) => [x.id, d.path])))));
 	});
-	const nothingFound = $derived(searching && nodes.every((n) => n.total === 0));
 	/** Activity of a session, from its own server's live state. */
 	const stateOfId = (n: Node, id: string): Activity => {
 		const d = app.links[n.server.id]?.data;
@@ -120,8 +90,8 @@
 	const stateOf = (n: Node, x: Session): Activity => stateOfId(n, x.id);
 
 
-	const isFolded = (key: string) => !searching && app.sidebar.folded.includes(key);
-	const isDirFolded = (key: string) => !searching && app.sidebar.isDirFolded(key);
+	const isFolded = (key: string) => app.sidebar.folded.includes(key);
+	const isDirFolded = (key: string) => app.sidebar.isDirFolded(key);
 	/** The folder of what is open lists its tabs on its own (not on the graph, which shows no tab); see `SidebarState.autoDir`. */
 	$effect(() => {
 		const sid = app.serverId;
@@ -219,7 +189,7 @@
 	const ofDir = (d: DirBlock, id: string) => d.tabs.some((x) => x.id === id || (x.kind === "group" && x.members.some((m) => m.id === id)));
 	/** The edge a drag over tab `x` means, when it is a reorder. */
 	const reorderEdge = (d: DirBlock, x: string, pt: { x: number; y: number }, carried: string | null = drag.id) =>
-		!searching && carried && carried !== x && ofDir(d, carried) ? edgeAt(pt, isGroupId(carried)) : null;
+		carried && carried !== x && ofDir(d, carried) ? edgeAt(pt, isGroupId(carried)) : null;
 	/**
 	 * A pinned tab always leads its folder, so a reorder across that border cannot happen (the list would sort it right
 	 * back): dragging a lone tab to the edge of a row of the other kind opens no gap and drops nothing.
@@ -400,9 +370,6 @@
 		get menuId() {
 			return menuId;
 		},
-		get searching() {
-			return searching;
-		},
 		isFolded,
 		isDirFolded,
 		stateOf,
@@ -450,16 +417,11 @@
 		<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
 	</div>
 	<ExtensionMount slot="sidebar.top" />
-	<div class="tools">
-		<SearchField label={t("대화 검색")} data-sidebar-search bind:value={query} />
-	</div>
 
 	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()} onpointerenter={(e) => e.pointerType === "mouse" && app.sidebar.hold(true)} onpointerleave={() => app.sidebar.hold(false)}>
 		{#each nodes as n (n.server.id)}
-			<ServerBlock {n} {searching} single={nodes.length < 2} />
+			<ServerBlock {n} single={nodes.length < 2} />
 		{/each}
-
-		{#if nothingFound}<EmptyState tone="plain">{t("검색 결과가 없습니다")}</EmptyState>{/if}
 	</nav>
 
 	<div class="bottom" data-part="sidebar.bottom">
@@ -512,23 +474,6 @@
 			border-bottom-color: var(--tabbar-line);
 		}
 	}
-	/* the same 44px strip as the brand row above it: the field is centred in the box, not padded into place */
-	.tools {
-		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		justify-content: center;
-		gap: 8px;
-		box-sizing: content-box;
-		height: 44px;
-		padding: 0 8px; /* the search box shares the card's left and right edges (8) */
-	}
-	/* a 32px field like the list's rows; touch keeps the shared 34px / 16px field (iOS zooms below 16px) */
-	@media (pointer: fine) {
-		.tools :global(.searchfield input) {
-			height: 32px;
-		}
-	}
 	.navbtn :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -552,7 +497,7 @@
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
-		padding: 8px 0 16px; /* 8 below the search box, 16 above the window edge */
+		padding: 8px 0 16px; /* 8 below the brand row, 16 above the window edge */
 		overscroll-behavior: contain;
 	}
 	/* the line where a carried server, folder or tab would land: its own rules below only place it */

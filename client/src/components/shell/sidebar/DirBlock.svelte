@@ -28,7 +28,7 @@
 	 * reorder folders, and a split-tab pane dropped on it steps out of its group.
 	 */
 	/** `inProject`: listed under a project header; "git" names the folder by its branch, "manual" (hand-made) by its own label */
-	let { n, d, searching, inProject = false }: { n: SidebarNode; d: Dir; searching: boolean; inProject?: false | "git" | "manual" } = $props();
+	let { n, d, inProject = false }: { n: SidebarNode; d: Dir; inProject?: false | "git" | "manual" } = $props();
 
 	const sb = getSidebarCtx();
 	function focusSelect(node: HTMLInputElement) {
@@ -64,7 +64,7 @@
 		class:cur
 		class:over={sb.marks.over(key)}
 		use:dropTarget={{ accepts: (id) => n.current && !!app.groupOf(id), hover: sb.hover(key), drop: sb.dropOnDir }}
-		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: searching || n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
+		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
 		<button class="dirfold" onclick={() => app.sidebar.toggleDir(key)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>

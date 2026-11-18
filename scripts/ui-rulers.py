@@ -55,7 +55,7 @@ MEASURE = """()=>{const R=e=>e.getBoundingClientRect();const q=s=>[...document.q
  return {W:R(q('.side')[0]).width,
   cols:[['chevron',cx('.dir .chev')],['folder icon',cx('.dir .dicon')],['tab icon',cx('.item.nested.tab .lead')],['list button',cx('.dir .listbtn')],['+ ⋯ ↺',cx('.dir .dirnew:not(.listbtn)')]],
   extra:[['group icon',cx('.grprow .lead')],['pane icon',cx('.item.member .lead')],['⋯ (tab)',cx('.item.tab .more')],['server chevron',cx('.srvhead .chev')],['server +',cx('.srvhead .dirnew:not(.listbtn)')]],
-  brand:box('.brandrow'),search:box('.tools input'),tools:box('.tools'),card:box('.srv.band'),
+  brand:box('.brandrow'),card:box('.srv.band'),
   rows:q('.srvhead,.dir,.item').map(e=>{const b=R(e);return [b.top,b.bottom]})}}"""
 S, H = 3, 520
 with sync_playwright() as p:
@@ -112,7 +112,7 @@ def space(t, b_, label):
     d.rectangle([(RX0, Y(t)), (RX1, Y(b_))], fill="#c0c")
     if label:
         d.text((RX1 + 8, (Y(t) + Y(b_)) / 2 - 10), label, fill="#c0c", font=fl)
-parts = [("brand", m["brand"]), ("search", m["search"])]
+parts = [("brand", m["brand"])]
 prev = 0
 for _, bx in parts:
     if bx:
