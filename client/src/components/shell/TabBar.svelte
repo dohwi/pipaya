@@ -649,6 +649,7 @@
 			align-items: center;
 			padding: 0 8px 0 max(8px, var(--sal));
 			background: var(--bg);
+			box-shadow: inset 0 -1px var(--border); /* the header's hairline above: the strip's darker --tabbar-line is for the grey bar only */
 		}
 		.tabs {
 			height: 100%;

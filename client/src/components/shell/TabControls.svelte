@@ -9,7 +9,7 @@
 
 	/**
 	 * The tab controls as one cluster, a browser's corner: "+" (a new chat or terminal in this folder) and the tab count
-	 * (opens the overview), 4px apart. `bar` sits pinned at the right end of the tab strip (wider screens), `header` at the
+	 * (opens the overview), 4px apart (none in the header, whose wider buttons already space them). `bar` sits pinned at the right end of the tab strip (wider screens), `header` at the
 	 * right end of the phone header, where the strip folds away. Both behave the same; only the button sizes differ.
 	 */
 	let { place = "bar" }: { place?: "bar" | "header" } = $props();
@@ -49,6 +49,11 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+	}
+	/* the header's 32px buttons already leave 6.5px around a 19px glyph: no gap on top, so the "+" ink and the count's square
+	   stand 16px apart, the header's own step (the menu glyph to the title) instead of a loose 20 */
+	.ctl.header {
+		gap: 0;
 	}
 	.add {
 		flex: none;
