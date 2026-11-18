@@ -79,7 +79,7 @@
 {/if}
 
 <style>
-	/* the open group's sessions, laid out inside the group's box in the tab bar (TabBar's .gbox draws the border and decides its
+	/* the open group's sessions, laid out inside the group's box in the tab bar (TabBar's .gbox draws the tray and decides its
 	   width). Only a box wider than the bar itself scrolls its chips. */
 	.strip {
 		position: relative;

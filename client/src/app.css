@@ -182,9 +182,10 @@
 	/* a tab of the strip under the pointer: a step from the strip toward the text, so it reads on either theme (and on a theme
 	   pack's own --bg, which --bg-tabbar follows) */
 	--bg-tabbar-hover: color-mix(in srgb, var(--bg-tabbar) 92%, var(--text));
-	/* the front tab: a grey pill sunk into the strip, a step past hover, so it reads as "in here" next to a
-	   group's outlined box without a ring or shadow of its own */
+	/* the front tab: a grey pill sunk into the strip, a step past hover, without a ring or shadow of its own */
 	--bg-tabbar-on: color-mix(in srgb, var(--bg-tabbar) 88%, var(--text));
+	/* a group's tray behind its chips: under hover's step, so a chip under the pointer and the open chip both stand out on it */
+	--bg-tabbar-group: color-mix(in srgb, var(--bg-tabbar) 95%, var(--text));
 	/* the line under the tab strip and around its front tab: --border is lost on light's strip (#ededed on #f0f0f0) */
 	--tabbar-line: color-mix(in srgb, var(--bg-tabbar) 82%, var(--text));
 }
