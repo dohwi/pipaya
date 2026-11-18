@@ -42,11 +42,14 @@
 	/** The folder whose tabs the tab bar shows */
 	const cur = $derived(!app.graphOpen && n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs));
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
-	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
+	/** The pin only marks a folder apart from unpinned ones: when every folder of the server is pinned it says nothing and is left out */
+	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path) && n.dirs.some((x) => !app.sidebar.isPinned(n.server.id, x.path)));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
 	/** What shows dim after the name: the path above it, without the part the name already says */
 	const above = $derived(parentPath(d.path, n.home, label));
+	/** Another folder of this server has the same name: the path after it stays in view to tell them apart (otherwise it shows on hover) */
+	const twin = $derived(n.dirs.some((x) => x.path !== d.path && sb.shortLabel(n, x.path) === label));
 	/** The most urgent state among the folder's tabs: tints the count while folded */
 	const dstate = $derived(mostUrgent(d.tabs.flatMap((x) => tabPanes(x)).map((id) => sb.stateOfId(n, id))));
 </script>
@@ -89,7 +92,7 @@
 					{#if branch.sub}<span class="dparent mono" use:tail={branch.sub}></span>{/if}
 				{:else}
 					<span class="dname" title={label}>{label}</span>
-					{#if above && !inProject}<span class="dparent mono" use:tail={above}></span>{/if}
+					{#if above && !inProject}<span class="dparent mono" class:twin use:tail={above}></span>{/if}
 				{/if}
 			</span>
 			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
@@ -135,13 +138,18 @@
 	.dir {
 		display: flex;
 		align-items: center;
-		margin-top: 12px;
+		margin-top: 4px; /* folded folders sit 4 apart; an open folder's tab list gets 8 around it (below) */
 		margin-right: -8px; /* like a tab row, the highlight (open, drop) runs 8px past the content and the padding gives it back: the count and "+" keep x 256, 8px inside its edge */
 		padding-right: 8px;
 		border-radius: var(--radius-sm);
 	}
 	.dirblock:first-child > .dir {
 		margin-top: 4px;
+	}
+	/* an open folder stands 8 off the folder above, and the next one 8 off its tabs */
+	:global(:where(.side) .dirblock:not(.inproj):has(> .fold):not(:first-child) > .dir),
+	:global(:where(.side) :is(.dirblock, .projblock):has(> .fold) + .dirblock:not(.inproj) > .dir) {
+		margin-top: 8px;
 	}
 	.dir.grabbable {
 		cursor: grab;
@@ -226,6 +234,17 @@
 		white-space: nowrap; /* no ellipsis: `tail` cuts at folder boundaries or hides the path, never mid-name */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	/* the path after the name shows on hover (the tooltip has it too); a folder that shares its name with another keeps it */
+	@media (hover: hover) {
+		.dparent:not(.twin) {
+			opacity: 0;
+		}
+		.dir:hover .dparent,
+		.dir:has(:focus-visible) .dparent {
+			opacity: 1;
+		}
 	}
 	.dname {
 		flex: 0 1 auto; /* the name takes what it needs; only when it alone is too long does it shrink (the parent path, flex 1 from 0, gives way first) */

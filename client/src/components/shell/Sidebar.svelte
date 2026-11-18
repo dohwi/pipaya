@@ -540,7 +540,6 @@
 	}
 	.list {
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
-		--band-head: color-mix(in srgb, var(--text) 8%, var(--bg-side));
 		position: relative;
 		flex: 1;
 		overflow-y: auto;
@@ -582,6 +581,11 @@
 		margin-left: auto;
 		min-width: 20px;
 		padding: 0 3px 2px; /* same 1px lift as the base badge (measured at 3x: digits centred in the circle; 4px sat them 1px high) */
+	}
+	/* a quiet count is a bare number, like the server's; only a state inside (working, asking, done, failed) gets the tinted circle */
+	:global(:where(.side) .cbadge.neutral) {
+		background: transparent;
+		font-weight: 500;
 	}
 	:global(:where(.side) .dirnew) {
 		display: grid;
@@ -647,12 +651,11 @@
 	:global(:where(.side) .list[data-indicator-ready] .item.active) {
 		background: transparent;
 	}
-	/* the open tab: a soft wash that fades out to the right, a faint hairline and a lifted title; no bar, so it stays quiet */
+	/* the open tab: a soft wash that fades out to the right and a lifted title; no bar and no outline (a framed row inside the framed card read as a box in a box) */
 	:global(:where(.side) .list .slide-ind) {
 		border-radius: var(--radius-control) !important;
 		z-index: 1; /* above the server band's own background, which would otherwise hide it; the wash is translucent */
 		background: linear-gradient(90deg, color-mix(in srgb, var(--text) 13%, transparent), color-mix(in srgb, var(--text) 5%, transparent));
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
 	}
 	:global(:where(.side) .item.active .lead > svg) {
 		color: var(--text);
