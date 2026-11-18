@@ -4,7 +4,6 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { RENAME_KEY } from "../../lib/keys";
 	import { t } from "../../lib/i18n";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { rovingKeys } from "../../lib/roving";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -51,7 +50,7 @@
 </script>
 
 {#if items.length}
-	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })} use:slidingIndicator={{ selector: ".gchip.on", radius: "var(--radius-sm)" }} use:rovingKeys={{ item: ".gchip" }}>
+	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })} use:rovingKeys={{ item: ".gchip" }}>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{@const who = whoOf(x.id)}
@@ -80,7 +79,7 @@
 
 <style>
 	/* the open group's sessions, laid out inside the group's box in the tab bar (TabBar's .gbox draws the tray and decides its
-	   width). Only a box wider than the bar itself scrolls its chips. */
+	   width; the tab bar's own sliding marker is the open chip's fill). Only a box wider than the bar itself scrolls its chips. */
 	.strip {
 		position: relative;
 		flex: 0 1 auto;
@@ -138,9 +137,6 @@
 		background: var(--bg-active);
 		color: var(--text);
 		font-weight: 600;
-	}
-	.strip:global([data-indicator-ready]) .gchip.on {
-		background: transparent;
 	}
 	.rename {
 		flex: none;

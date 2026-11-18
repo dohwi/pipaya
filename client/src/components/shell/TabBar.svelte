@@ -268,7 +268,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gchip.on" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -369,8 +369,12 @@
 		}
 	}
 
-	/* the front tab's fill is the sliding marker: a grey pill sunk into the bar, a step past hover */
+	/* the front tab's fill is the sliding marker: a grey pill sunk into the bar, a step past hover. It is one marker for the
+	   tabs and the group chips alike, so going from a tab into a group (or back) slides like going from tab to tab instead of
+	   one pill vanishing and another appearing. It sits over a group's tray (which is why .gbox makes no stacking context)
+	   and under the tabs' and chips' content, which come after it at the same z-index. */
 	.tabs > :global(.slide-ind) {
+		z-index: 1;
 		background: var(--bg-tabbar-on);
 		border-radius: var(--radius-sm);
 	}
@@ -401,7 +405,8 @@
 		background: var(--bg-tabbar-on); /* until the sliding marker is placed */
 		color: var(--text);
 	}
-	.tabs:global([data-indicator-ready]) .tab.on {
+	.tabs:global([data-indicator-ready]) .tab.on,
+	.tabs:global([data-indicator-ready]) :global(.gchip.on) {
 		background: transparent;
 	}
 	/* hover: the same pill as the front tab, filled a step darker than the bar */
@@ -440,8 +445,7 @@
 	   the open chip is the front tab's grey pill exactly, and the group's first and last icons stand where a tab's would.
 	   The chips are what pick the pane while the group is enlarged, so the tray keeps its whole width and the bar scrolls. */
 	.gbox {
-		position: relative;
-		z-index: 1; /* above the sliding fill, like a tab */
+		position: relative; /* no z-index: its tray paints under the strip's marker, its chips over it */
 		flex: none;
 		min-width: 0;
 		display: flex;
@@ -468,8 +472,7 @@
 		.gbox :global(.gchip) {
 			height: 28px;
 		}
-		.gbox :global(.gchip.on),
-		.gbox :global(.strip > .slide-ind) {
+		.gbox :global(.gchip.on) {
 			background: var(--bg-tabbar-on);
 		}
 	}
