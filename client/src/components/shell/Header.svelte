@@ -24,7 +24,7 @@
 	const group = $derived(app.activeGroup);
 	/** The session in the group shown alone (a phone, or one pane enlarged), named after the group; none while all panes show. */
 	const crumb = $derived(group && (viewport.narrow || app.isFull(group.id) || app.zoomId) ? (term ?? s) : undefined);
-	const crumbTitle = $derived(crumb ? ("shell" in crumb ? crumb.title : (crumb.title ?? t("대화"))) : "");
+	const crumbTitle = $derived(crumb ? ("shell" in crumb ? crumb.title : sessionTitle(crumb.title)) : "");
 	/** The title being renamed in place: the group's, the terminal's or the conversation's (double click or right click). */
 	const rename = new InlineRename();
 	/** What the title is about, for renaming: nothing for a chat that has no session yet. With a "group › session" path the
