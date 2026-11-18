@@ -197,6 +197,8 @@
 		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
 	}
 	textarea { height: auto; min-height: 110px; resize: vertical; padding: 8px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
+	/* touch: 16px, or iOS zooms the page in when the field takes focus */
+	@media (pointer: coarse) { textarea { font-size: var(--fs-lg); } }
 	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }

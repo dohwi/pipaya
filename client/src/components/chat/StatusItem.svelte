@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import Icon from "../ui/Icon.svelte";
+	import { app } from "../../lib/store.svelte";
 
 	/**
 	 * One item of the line under the input: an icon (or a ring, via `icon`), a value and a tooltip, all on one baseline.
@@ -37,6 +38,12 @@
 		mark?: Snippet;
 		children: Snippet;
 	} = $props();
+
+	/** Touch has no hover: a tap on a plain item shows its tooltip (context, cache, speed details) as a toast instead. */
+	function tapTip() {
+		if (!title || typeof matchMedia !== "function" || !matchMedia("(hover: none)").matches) return;
+		app.toast(title.replace(/\s*\n\s*/g, " · "));
+	}
 </script>
 
 {#if onclick}
@@ -44,7 +51,8 @@
 		{@render inner()}
 	</button>
 {:else}
-	<span class="b {level}" class:more class:empty role={label ? "group" : undefined} aria-label={label} {title}>
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<span class="b {level}" class:more class:empty role={label ? "group" : undefined} aria-label={label} {title} onclick={tapTip}>
 		{@render inner()}
 	</span>
 {/if}

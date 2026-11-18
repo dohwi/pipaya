@@ -209,6 +209,12 @@
 		font-size: var(--fs-sm);
 		padding: 4px 4px;
 	}
+	/* touch: 16px, or iOS zooms the page in when the field takes focus */
+	@media (pointer: coarse) {
+		input {
+			font-size: var(--fs-lg);
+		}
+	}
 	.n {
 		min-width: 44px;
 		text-align: right;

@@ -7,6 +7,8 @@ export interface AttachmentHost {
 	/** Whether the model in use can look at pictures (else they travel as plain files) */
 	vision(): boolean;
 	error(message: string): void;
+	/** Pictures went in as plain files because the model cannot see them (said once per batch, so it is not a surprise) */
+	notice?(message: string): void;
 	/** An image was added: put its `#imageN` token in the text */
 	imageAdded(n: number): void;
 }
@@ -42,6 +44,7 @@ export class Attachments {
 	/** Pictures the model can see go in as images (downscaled); everything else is attached as a file. */
 	async add(picked: Iterable<File>): Promise<void> {
 		const fail = (name: string, fallback: string) => this.host.error(t("{name}을(를) 읽지 못했습니다", { name: name || fallback }));
+		let blind = 0;
 		for (const f of picked) {
 			if (isInlineImage(f, this.host.vision())) {
 				if (this.images.length >= MAX_IMAGES) {
@@ -64,10 +67,12 @@ export class Attachments {
 			}
 			try {
 				this.files.push(await fileToDraft(f));
+				if (f.type.startsWith("image/") && !this.host.vision()) blind++;
 			} catch {
 				fail(f.name, t("파일"));
 			}
 		}
+		if (blind) this.host.notice?.(t("이 모델은 이미지를 직접 보지 못해 파일로 첨부했습니다"));
 	}
 
 	/** Remove an image; returns its 1-based number so the caller can drop the `#imageN` token. */
