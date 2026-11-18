@@ -462,6 +462,14 @@
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
 	}
+	/* open, the whole box is the selected tab: a faint fill and a firmer ring, so the group reads as
+	   one lit unit with its open chip a step brighter inside, not an empty frame floating beside the strip */
+	@media (min-width: 601px) {
+		.gbox.on {
+			background: color-mix(in srgb, var(--bg-tabbar) 95%, var(--text)); /* under the hover step (8%), so the open chip (12%) stands out inside */
+			outline-color: var(--tabbar-line);
+		}
+	}
 	/* the group stays an outlined box whether open or not; open, its front chip is the front tab's own grey pill, the same
 	   height and corner as a lone tab's, so "this one is open" looks the same inside a group as outside */
 	@media (min-width: 601px) {
