@@ -43,6 +43,7 @@
 				<span class="chev" class:folded={sfold}><Icon name="chevron-down" /></span>
 				<span class="sicon {n.state}"><Icon name="server" /></span>
 				<span class="sname">{app.serverLabel(n.server)}</span>
+				{#if off}<span class="sstat {n.state}">{t(statusText[n.state])}</span>{/if}
 				{#if sfold && !off && (n.state === "online" || n.loaded)}<span class="cbadge tint {ACTIVITY_TONE[sstate]}" title={t("{n}개", { n: n.total }) + (sstate !== "idle" ? ` · ${ACTIVITY_LABEL[sstate]}` : "")}>{n.total}</span>{/if}
 			</button>
 			{#if !off}
@@ -138,10 +139,11 @@
 		align-items: center;
 		margin: 0 -12px 4px -8px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
 		padding: 0 12px 0 8px;
-		background: var(--band-head);
+		box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text) 8%, transparent); /* open: one hairline under the header instead of a darker strip (a shadow, so the row stays 32px) */
 		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
 	}
 	.srvhead:last-child {
+		box-shadow: none;
 		border-radius: 11px;
 		margin-bottom: 0;
 	}
@@ -150,13 +152,13 @@
 	}
 	@media (hover: hover) {
 		.srvhead:hover {
-			background: color-mix(in srgb, var(--text) 11%, var(--bg-side));
+			background: color-mix(in srgb, var(--text) 6%, var(--bg-side));
 		}
 	}
 	/* pressing the name or the "+" darkens the whole strip one more step; the global row tint (a lighter square inside the strip) is switched off here */
 	.srvhead:has(.srvtoggle:active),
 	:global(:where(.side) .srvhead:has(.dirnew:active)) {
-		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
+		background: color-mix(in srgb, var(--text) 9%, var(--bg-side));
 	}
 	.srvhead .srvtoggle:active:not(:disabled) {
 		background-color: transparent;
@@ -206,9 +208,10 @@
 		height: 14px;
 		color: var(--text-faint);
 	}
-	/* the status is the server icon's colour (green online, red offline, amber needs attention, blinking while checking); only a problem adds a text pill after the name */
+	/* the status is the server icon's colour, and only a problem gets one: online stays faint (no news), red offline, amber needs
+	   attention, blinking while checking. A problem also says itself in words after the name (.sstat), so colour is never the only cue */
 	.sicon.online {
-		color: var(--ok);
+		color: var(--text-faint);
 	}
 	.sicon.offline {
 		color: var(--danger);
@@ -229,6 +232,21 @@
 		font-size: var(--fs-md);
 		font-weight: 600;
 	}
+	.sstat {
+		flex: none;
+		margin-left: 4px;
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		line-height: 16px; /* whole-pixel line box, centred on the name like .who */
+		white-space: nowrap;
+	}
+	.sstat.offline {
+		color: var(--danger);
+	}
+	.sstat.unauthorized,
+	.sstat.incompatible {
+		color: var(--warn);
+	}
 	.nosess {
 		padding: 4px 8px 4px 48px;
 		font-size: var(--fs-xs);
@@ -242,7 +260,7 @@
 		margin: 1px 0; /* rows sit 1px apart, like .item */
 	}
 	.skdir {
-		margin-top: 12px; /* a later folder sits 12 under the tab above, like .dir */
+		margin-top: 4px; /* folded folders sit 4 apart, like .dir */
 		padding-left: 24px; /* the bone starts where the folder glyph does (.dirtoggle's 4 + the chevron's 14 + 6) and covers its name too */
 	}
 	.skdir:first-child {

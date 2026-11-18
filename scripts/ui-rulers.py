@@ -81,7 +81,7 @@ rows = m["rows"]
 heights = sorted({round(b - t) for t, b in rows})
 print("row heights:", heights, "(expected [32] for every row)")
 gaps = sorted({round(t - rows[i][1]) for i, (t, _) in enumerate(rows[1:])} )
-print("gaps between rows:", gaps, "(expected 0/1 inside a block, 4 under the server header, 12 between folders)")
+print("gaps between rows:", gaps, "(expected 0/1 inside a block, 4 under the server header, 4 between folded folders, 8 around an open one)")
 
 raw = Image.open(out / f"{name}-plain.png").convert("RGB")
 PADT, PADL, PADB = 110, 150, 70

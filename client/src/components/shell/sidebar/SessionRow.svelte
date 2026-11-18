@@ -87,8 +87,4 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
 </style>

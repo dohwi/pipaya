@@ -78,13 +78,17 @@
 	.proj {
 		display: flex;
 		align-items: center;
-		margin-top: 12px;
+		margin-top: 4px; /* like a folded folder row; open blocks get 8 around them (DirBlock) */
 		margin-right: -8px; /* the highlight runs 8px past the content, like .dir and tab rows */
 		padding-right: 8px;
 		border-radius: var(--radius-sm);
 	}
 	.projblock:first-child > .proj {
 		margin-top: 4px;
+	}
+	:global(:where(.side) .projblock:has(> .fold):not(:first-child) > .proj),
+	:global(:where(.side) :is(.dirblock, .projblock):has(> .fold) + .projblock > .proj) {
+		margin-top: 8px;
 	}
 	.projtoggle {
 		flex: 1;
