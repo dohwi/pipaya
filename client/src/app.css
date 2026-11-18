@@ -1368,62 +1368,6 @@ html .glow-working.glow-working {
 	}
 }
 
-/* Tool badge: a tinted pill (icon + label) like the thinking badge. --th is the hue; each kind of tool sets its own. */
-.tbadge {
-	--th: 265;
-	--tb-fg: oklch(0.84 0.11 var(--th));
-	--tb-bg: oklch(0.7 0.12 var(--th) / 0.16);
-	--tb-bd: oklch(0.75 0.12 var(--th) / 0.3);
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	flex: none;
-	max-width: 100%;
-	height: 24px;
-	padding: 0 8px 0 8px;
-	border: 1px solid var(--tb-bd);
-	border-radius: 999px;
-	background: var(--tb-bg);
-	color: var(--tb-fg);
-	font-size: var(--fs-xs);
-	font-weight: 600;
-	white-space: nowrap;
-}
-:root[data-theme="light"] .tbadge {
-	/* lighter and more chromatic than before (L .45 / C .14 read as near-black), still above 4.5:1 on the tinted pill */
-	--tb-fg: oklch(0.52 0.18 var(--th));
-	--tb-bg: oklch(0.65 0.16 var(--th) / 0.14);
-	--tb-bd: oklch(0.6 0.16 var(--th) / 0.35);
-}
-.tbadge svg {
-	width: 14px;
-	height: 14px;
-	flex: none;
-	stroke: currentColor;
-	fill: none;
-	stroke-width: 1.9;
-	stroke-linecap: round;
-	stroke-linejoin: round;
-}
-/* no label next to the icon: centre the icon in the pill instead of leaving it left-aligned */
-.tbadge.bare {
-	justify-content: center;
-	padding: 0 8px;
-}
-.tbadge .tb-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-/* shimmer clips its gradient to the text, so it goes on the label only, tinted with the badge colour */
-.tbadge .tb-label.shimmer {
-	--sh-base: var(--tb-fg);
-	--sh-hi: var(--text);
-}
-/* on the light theme --text is near black, so the band would be a black streak; use a lighter tone of the chip's own hue instead */
-:root[data-theme="light"] .tbadge .tb-label.shimmer {
-	--sh-hi: oklch(0.78 0.14 var(--th));
-}
-
 /* Three dots that rise in turn: the quiet "working" mark for the work box (the round spinner stays for buttons and forms). */
 .dots {
 	display: inline-flex;
