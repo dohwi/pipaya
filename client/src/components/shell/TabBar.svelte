@@ -307,7 +307,7 @@
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px grey pill
 	   (--bg-tabbar-on, 8px corners all round, no ring or shadow) set into the middle of the bar, clear of its bottom hairline:
-	   filled rather than outlined, so it never reads like a group's outlined box beside it. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	   filled rather than outlined, so it never reads like a group's outlined box beside it. The other tabs have no fill and no hairline: each is as wide as its content (up to 200px, the title
 	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" follows the last tab
 	   like a browser's new-tab button (at the strip's edge once the tabs overflow); the tab count is pinned to the bar's right end. */
 	.bar {
@@ -378,12 +378,11 @@
 	.tab {
 		position: relative;
 		z-index: 1; /* above the sliding fill */
-		flex: 0 1 auto; /* as wide as its icon, title and close button: no blank between tabs, so no hairline is needed */
+		flex: none; /* as wide as its icon and title, up to 200px: a short title makes a short tab, and the strip scrolls when they do not fit */
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		height: 28px;
-		min-width: 136px; /* with the × always shown, room for about three syllables of title before the strip scrolls instead */
 		max-width: 200px;
 		padding: 0 8px; /* the icon and the close glyph both clear the pill's edges by 8px */
 		border-radius: var(--radius-sm);
@@ -618,28 +617,49 @@
 		height: 14px;
 		stroke-width: 1.9;
 	}
+	/* the close button takes the icon's place while the pointer is on the tab (as in Safari): it needs no room of its own,
+	   so a tab is only as wide as its icon and title, never grows on hover, and leaves no blank where a hidden × would wait
+	   (that blank set "+" after the last tab apart like a tab without a title). Centred on the icon: 20px over its 16px. */
 	.x {
+		position: absolute;
+		left: 6px;
+		top: 4px;
 		display: grid;
 		place-items: center;
-		flex: none;
 		width: 20px;
 		height: 20px;
 		border-radius: var(--radius-pill); /* a round close target, as in Chrome */
-		color: var(--text-faint);
+		color: var(--text-dim);
+		opacity: 0;
 		transition:
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	/* the close button shows on every tab, as in Chrome: it closes each tab's right end, so the blank a hidden × left no
-	   longer reads as a gap of its own (that blank set "+" after the last tab apart like a tab without a title). Faint on
-	   the tabs behind, the title's dim on the front one and the one under the pointer. */
-	.tab.on .x,
-	.tab.menuopen .x {
-		color: var(--text-dim);
+	.tab:hover .x,
+	.tab.menuopen .x,
+	.x:focus-visible {
+		opacity: 1;
 	}
-	@media (hover: hover) {
-		.tab:hover .x {
+	.tab:hover:has(.x) .ico,
+	.tab.menuopen:has(.x) .ico,
+	.tab:has(.x:focus-visible) .ico {
+		visibility: hidden;
+	}
+	/* no hover on a touch screen: the × is always there, after the title as before */
+	@media (pointer: coarse) {
+		.x {
+			position: static;
+			flex: none;
+			opacity: 1;
+			color: var(--text-faint);
+		}
+		.tab.on .x {
 			color: var(--text-dim);
+		}
+		.tab:hover:has(.x) .ico,
+		.tab.menuopen:has(.x) .ico,
+		.tab:has(.x:focus-visible) .ico {
+			visibility: visible;
 		}
 	}
 	@media (hover: hover) {
@@ -707,9 +727,21 @@
 		.gbox:first-child {
 			margin-left: 0;
 		}
+		/* the phone strip keeps its × after the title (shown on the front tab, under a mouse, always on touch) */
 		.x {
+			position: static;
+			flex: none;
+			color: var(--text-faint);
 			width: 22px;
 			height: 22px;
+		}
+		.tab.on .x {
+			opacity: 1;
+		}
+		.tab:hover:has(.x) .ico,
+		.tab.menuopen:has(.x) .ico,
+		.tab:has(.x:focus-visible) .ico {
+			visibility: visible;
 		}
 
 		.tab.before,
