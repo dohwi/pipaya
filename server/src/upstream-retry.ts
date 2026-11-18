@@ -36,6 +36,23 @@ export function retryReason(message: string | undefined): string {
 	return s.length > 200 ? `${s.slice(0, 199)}…` : s;
 }
 
+/**
+ * Raw socket failures that pi-ai's retry list misses but that a gateway passes through verbatim, e.g. CLIProxyAPI
+ * answering with Go's "read tcp a->b: read: connection reset by peer" when the provider drops the stream.
+ */
+const TRANSPORT_ERROR = /reset by peer|ECONNRESET|ECONNABORTED|ETIMEDOUT|EPIPE|broken pipe|unexpected EOF|EHOSTUNREACH|ENETUNREACH|no route to host|network is unreachable/gi;
+
+/**
+ * pi-ai's isRetryableAssistantError plus TRANSPORT_ERROR. The matched phrase is renamed to one pi-ai already retries,
+ * so its never-retry rules (quota, billing) still win over a reset in the same message.
+ */
+export function isTransientUpstreamError(message: AssistantMessage): boolean {
+	if (isRetryableAssistantError(message)) return true;
+	const text = message.errorMessage;
+	if (message.stopReason !== "error" || !text || !text.match(TRANSPORT_ERROR)) return false;
+	return isRetryableAssistantError({ ...message, errorMessage: text.replace(TRANSPORT_ERROR, "connection error") });
+}
+
 export const sleepAbortable = (ms: number, signal?: AbortSignal) =>
 	new Promise<void>((resolve) => {
 		if (signal?.aborted) return resolve();
@@ -67,7 +84,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					for await (const ev of stream) {
 						if (committed) { out.push(ev); continue; }
 						if (ev.type === "start") { pending.push(ev); continue; }
-						if (ev.type === "error" && ev.reason === "error" && isRetryableAssistantError(ev.error) && attempt < opts.maxRetries && !signal?.aborted) {
+						if (ev.type === "error" && ev.reason === "error" && isTransientUpstreamError(ev.error) && attempt < opts.maxRetries && !signal?.aborted) {
 							failure = ev.error;
 							break;
 						}
@@ -80,7 +97,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					if (committed) throw e;
 					const message = e instanceof Error ? e.message : String(e);
 					const probe = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
-					if (!isRetryableAssistantError(probe) || attempt >= opts.maxRetries || signal?.aborted) throw e;
+					if (!isTransientUpstreamError(probe) || attempt >= opts.maxRetries || signal?.aborted) throw e;
 					failure = probe;
 				}
 				if (!failure) return out.end();

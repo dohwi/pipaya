@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, isRetryableAssistantError, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
+import { isContextOverflow, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -29,7 +29,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, subagentUsage, loadSubagents, SUBAGENT_NAME, subagentSystem, type SubagentDef } from "./subagents.ts";
-import { DEFAULT_UPSTREAM_RETRY, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { DEFAULT_UPSTREAM_RETRY, isTransientUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
@@ -1110,7 +1110,7 @@ export class SessionManager {
 	private droppedMidStream(live: Live): boolean {
 		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
 		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return false;
-		return isRetryableAssistantError(last);
+		return isTransientUpstreamError(last);
 	}
 
 	/** `{ reason }` for run_retrying from the failed reply at the tail, or nothing. */
