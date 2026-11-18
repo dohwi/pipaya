@@ -17,7 +17,7 @@
 	 * the whole project; "+" starts something in the main checkout, or in a hand-made project's first folder. Right click
 	 * or a long press opens its menu (rename, undo a hand-made one).
 	 */
-	let { n, root, dirs, searching }: { n: SidebarNode; root: string; dirs: Dir[]; searching: boolean } = $props();
+	let { n, root, dirs }: { n: SidebarNode; root: string; dirs: Dir[] } = $props();
 	function focusSelect(node: HTMLInputElement) {
 		node.focus();
 		node.select();
@@ -68,7 +68,7 @@
 	{#if !folded}
 		<div class="fold projdirs" in:collapseIn out:collapseOut>
 			{#each dirs as d (d.path)}
-				<DirBlockView {n} {d} {searching} inProject={manual ? "manual" : "git"} />
+				<DirBlockView {n} {d} inProject={manual ? "manual" : "git"} />
 			{/each}
 		</div>
 	{/if}

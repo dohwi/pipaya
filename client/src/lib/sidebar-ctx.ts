@@ -56,10 +56,9 @@ export interface SidebarCtx {
 	projectName(n: SidebarNode, root: string): string;
 	/** Id the "more" / "+" menu is open for (its button stays highlighted) */
 	readonly menuId: string | null;
-	readonly searching: boolean;
-	/** Folded state of a server, project or split tab (nothing is folded while searching) */
+	/** Folded state of a server, project or split tab */
 	isFolded(key: string): boolean;
-	/** Folded state of a folder: folders start folded and list their tabs only once opened (all open while searching) */
+	/** Folded state of a folder: folders start folded and list their tabs only once opened */
 	isDirFolded(key: string): boolean;
 	/** Activity of a conversation, from its own server's live state */
 	stateOf(n: SidebarNode, x: Session): Activity;
