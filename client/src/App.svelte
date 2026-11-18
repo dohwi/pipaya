@@ -476,7 +476,7 @@
 			<div class="stage">
 				<!-- One column for everything pinned to the top of the stage: notices first, the extension button below them, so they never overlap -->
 				<div class="overlay">
-					{#if viewport.narrow || group}<DoneNotice />{/if}
+					<DoneNotice />
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
 				<div class="work">
