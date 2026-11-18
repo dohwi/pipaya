@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
-import { retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
+import { isTransientUpstreamError, retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
 
 const msg = (over: Partial<AssistantMessage>): AssistantMessage =>
 	({ role: "assistant", content: [], stopReason: "stop", timestamp: 0, ...over }) as AssistantMessage;
@@ -72,4 +72,22 @@ test("onRetry receives the failure message", async () => {
 	const fn = withUpstreamRetry((() => (++n < 2 ? failing("503 Service Unavailable") : ok())) as any, { ...opts([]), onRetry: (_a, _m, _d, m) => void seen.push(m) });
 	await call(fn).result();
 	expect(seen).toEqual(["503 Service Unavailable"]);
+});
+
+test("retries a raw socket reset passed through by the gateway", async () => {
+	const waits: number[] = [];
+	let n = 0;
+	const reset = "read tcp 172.24.0.3:57226->160.79.104.10:443: read: connection reset by peer";
+	const fn = withUpstreamRetry((() => (++n < 2 ? failing(reset) : ok())) as any, opts(waits));
+	expect((await call(fn).result()).stopReason).toBe("stop");
+	expect(n).toBe(2);
+});
+
+test("isTransientUpstreamError covers socket failures but still refuses quota errors", () => {
+	const err = (errorMessage: string) => msg({ stopReason: "error", errorMessage });
+	for (const m of ["read: connection reset by peer", "write: broken pipe", "unexpected EOF", "ECONNRESET", "dial tcp: connect: no route to host", "502 Bad Gateway"])
+		expect(isTransientUpstreamError(err(m))).toBe(true);
+	for (const m of ["insufficient_quota: connection reset by peer", "401 invalid api key", "unexpected token in JSON"])
+		expect(isTransientUpstreamError(err(m))).toBe(false);
+	expect(isTransientUpstreamError(msg({ stopReason: "stop", errorMessage: "connection reset by peer" }))).toBe(false);
 });
