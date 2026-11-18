@@ -305,8 +305,8 @@
 
 <style>
 	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
-	   colour, a square block (4px corners on top) that runs over the bar's bottom hairline into the conversation below, so the two read as
-	   one sheet. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	   colour, rounded on top (8px) with two outward curves at its foot, like Chrome's: it runs over the bar's bottom hairline into
+	   the conversation below, so the two read as one sheet lifted out of the bar. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
 	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
@@ -341,7 +341,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: flex-end;
-		padding-left: 4px; /* with the tab's own 12px, the first icon lands on 16, the header title's line */
+		padding-left: 8px; /* the first tab's left foot curve draws here; with the tab's own 8px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -363,17 +363,27 @@
 		}
 	}
 
-	/* the front tab's fill is the sliding marker: a plain block of the page colour, square but for a 4px softening on top,
-	   with no curves at its foot, so the tab reads as a box cut out of the bar */
-	/* its outline runs up from the bar's hairline, over the top and back down (no bottom side), so the line under the strip
-	   steps around the front tab and the tab reads as a sheet lifted out of the bar, not a patch of colour in it */
+	/* the front tab's fill is the sliding marker: the page colour, rounded on top, with the two outward curves at its foot
+	   that melt it into the conversation below (Chrome's tab). No outline: the tone step alone lifts it out of the bar. */
 	.tabs > :global(.slide-ind) {
 		background: var(--bg);
-		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-		box-shadow:
-			inset 0 1px var(--tabbar-line),
-			inset 1px 0 var(--tabbar-line),
-			inset -1px 0 var(--tabbar-line);
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+	}
+	.tabs > :global(.slide-ind)::before,
+	.tabs > :global(.slide-ind)::after {
+		content: "";
+		position: absolute;
+		bottom: 0;
+		width: 8px;
+		height: 8px;
+	}
+	.tabs > :global(.slide-ind)::before {
+		left: -8px;
+		background: radial-gradient(circle at 0 0, transparent 8px, var(--bg) 8.5px); /* the foot's curve: --radius-sm, half a pixel of antialiasing */
+	}
+	.tabs > :global(.slide-ind)::after {
+		right: -8px;
+		background: radial-gradient(circle at 100% 0, transparent 8px, var(--bg) 8.5px); /* the mirror of ::before */
 	}
 
 	.tab {
@@ -386,8 +396,8 @@
 		height: 34px;
 		min-width: 136px; /* with the × always shown, room for about three syllables of title before the strip scrolls instead */
 		max-width: 200px;
-		padding: 0 8px 0 12px; /* the hover pill sits 4px in, so the icon and the close glyph both clear its edges by 8px */
-		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+		padding: 0 8px; /* the hover pill spans the tab's width, so the icon and the close glyph both clear its edges by 8px */
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel title beside the session logo (rule 3) */
@@ -401,22 +411,17 @@
 	}
 	.tab.on {
 		background: var(--bg); /* until the sliding marker is placed */
-		box-shadow:
-			inset 0 1px var(--tabbar-line),
-			inset 1px 0 var(--tabbar-line),
-			inset -1px 0 var(--tabbar-line);
 		color: var(--text);
 	}
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
-		box-shadow: none;
 	}
-	/* hover: a block inside the tab, 4px in, with the same small corners as the front tab */
+	/* hover: a rounded pill floating inside the tab, 4px off its top and bottom, as in Chrome */
 	.fill {
 		position: absolute;
-		inset: 4px 4px;
+		inset: 4px 0;
 		z-index: -1;
-		border-radius: var(--radius-xs);
+		border-radius: var(--radius-sm);
 		background: var(--bg-tabbar-hover);
 		opacity: 0;
 		pointer-events: none;
@@ -455,20 +460,19 @@
 		gap: 4px;
 		height: 34px;
 		padding: 0 8px;
-		border-radius: 8px; /* the frame drawn 4px in below comes out at --radius-xs, the tabs' corner */
+		border-radius: 12px; /* the frame drawn 4px in below comes out at --radius-sm, the tabs' corner */
 		outline: 1px solid var(--border-strong);
 		outline-offset: -4px;
 		transition:
 			margin var(--motion-fast) var(--ease-std),
 			outline-color var(--motion-fast) var(--ease-std);
 	}
-	.gbox + .gbox,
-	.gbox:first-child {
-		margin-left: 4px; /* first: the strip pads only 4px, so the chips still land on 16 */
+	.gbox + .gbox {
+		margin-left: 4px;
 	}
 	.gbox.on {
 		outline-color: transparent;
-		border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 	}
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
@@ -616,7 +620,7 @@
 		flex: none;
 		width: 20px;
 		height: 20px;
-		border-radius: var(--radius-xs);
+		border-radius: var(--radius-pill); /* a round close target, as in Chrome */
 		color: var(--text-faint);
 		opacity: 0;
 		transition: opacity var(--motion-fast) var(--ease-std);
@@ -660,7 +664,10 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
-			box-shadow: none;
+		}
+		.tabs > :global(.slide-ind)::before,
+		.tabs > :global(.slide-ind)::after {
+			display: none;
 		}
 		.tab {
 			flex: none;
@@ -672,7 +679,6 @@
 		}
 		.tab.on {
 			background: var(--bg-active);
-			box-shadow: none;
 		}
 		.t {
 			flex: 0 1 auto;
