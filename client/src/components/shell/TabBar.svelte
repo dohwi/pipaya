@@ -304,9 +304,9 @@
 {/if}
 
 <style>
-	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is the page's own
-	   colour, rounded on top (8px) with two outward curves at its foot, like Chrome's: it runs over the bar's bottom hairline into
-	   the conversation below, so the two read as one sheet lifted out of the bar. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px pill of
+	   the page's own colour (8px corners all round, a hairline ring and a soft shadow) floating in the middle of the bar, clear of
+	   its bottom hairline, as in Chrome's newer strips. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
 	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
@@ -340,8 +340,9 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		display: flex;
-		align-items: flex-end;
-		padding-left: 8px; /* the first tab's left foot curve draws here; with the tab's own 8px, the first icon lands on 16, the header title's line */
+		align-items: center;
+		gap: 4px;
+		padding-left: 8px; /* with the tab's own 8px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -349,12 +350,11 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the controls share the tabs' row: 4px down like the tabs, so the buttons centre on the titles (21px from the top) */
+	/* the controls share the tabs' row and centre on it like the tabs */
 	.ctlslot {
 		flex: none;
 		display: flex;
 		align-items: center;
-		padding-top: 4px;
 		padding-left: 8px;
 	}
 	@media (max-width: 600px) {
@@ -363,27 +363,14 @@
 		}
 	}
 
-	/* the front tab's fill is the sliding marker: the page colour, rounded on top, with the two outward curves at its foot
-	   that melt it into the conversation below (Chrome's tab). No outline: the tone step alone lifts it out of the bar. */
+	/* the front tab's fill is the sliding marker: a floating pill of the page colour, ringed in the strip's hairline tone
+	   and lifted by a soft shadow, so it reads as a card resting on the bar, not a sheet joined to the page */
 	.tabs > :global(.slide-ind) {
 		background: var(--bg);
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-	}
-	.tabs > :global(.slide-ind)::before,
-	.tabs > :global(.slide-ind)::after {
-		content: "";
-		position: absolute;
-		bottom: 0;
-		width: 8px;
-		height: 8px;
-	}
-	.tabs > :global(.slide-ind)::before {
-		left: -8px;
-		background: radial-gradient(circle at 0 0, transparent 8px, var(--bg) 8.5px); /* the foot's curve: --radius-sm, half a pixel of antialiasing */
-	}
-	.tabs > :global(.slide-ind)::after {
-		right: -8px;
-		background: radial-gradient(circle at 100% 0, transparent 8px, var(--bg) 8.5px); /* the mirror of ::before */
+		border-radius: var(--radius-sm);
+		box-shadow:
+			0 0 0 1px var(--tabbar-line),
+			var(--shadow-soft);
 	}
 
 	.tab {
@@ -393,11 +380,11 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 34px;
+		height: 28px;
 		min-width: 136px; /* with the × always shown, room for about three syllables of title before the strip scrolls instead */
 		max-width: 200px;
-		padding: 0 8px; /* the hover pill spans the tab's width, so the icon and the close glyph both clear its edges by 8px */
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		padding: 0 8px; /* the icon and the close glyph both clear the pill's edges by 8px */
+		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel title beside the session logo (rule 3) */
@@ -411,15 +398,19 @@
 	}
 	.tab.on {
 		background: var(--bg); /* until the sliding marker is placed */
+		box-shadow:
+			0 0 0 1px var(--tabbar-line),
+			var(--shadow-soft);
 		color: var(--text);
 	}
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
+		box-shadow: none;
 	}
-	/* hover: a rounded pill floating inside the tab, 4px off its top and bottom, as in Chrome */
+	/* hover: the same pill as the front tab, filled a step darker than the bar */
 	.fill {
 		position: absolute;
-		inset: 4px 0;
+		inset: 0;
 		z-index: -1;
 		border-radius: var(--radius-sm);
 		background: var(--bg-tabbar-hover);
@@ -458,11 +449,11 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 34px;
+		height: 28px;
 		padding: 0 8px;
-		border-radius: 12px; /* the frame drawn 4px in below comes out at --radius-sm, the tabs' corner */
+		border-radius: var(--radius-sm);
 		outline: 1px solid var(--border-strong);
-		outline-offset: -4px;
+		outline-offset: -1px;
 		transition:
 			margin var(--motion-fast) var(--ease-std),
 			outline-color var(--motion-fast) var(--ease-std);
@@ -472,7 +463,6 @@
 	}
 	.gbox.on {
 		outline-color: transparent;
-		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 	}
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
@@ -504,8 +494,8 @@
 	.gbox.after::after {
 		content: "";
 		position: absolute;
-		top: 8px;
-		bottom: 4px;
+		top: 0;
+		bottom: 0; /* the tab's own 28px */
 		width: 24px; /* the margin it fills */
 		background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 		z-index: 2;
@@ -527,8 +517,8 @@
 	.tail.over::before {
 		content: "";
 		position: absolute;
-		top: 8px;
-		bottom: 4px;
+		top: 5px;
+		bottom: 5px; /* 28px, centred in the 38px strip like the tabs */
 		left: 0;
 		width: 2px;
 		border-radius: 1px;
@@ -664,10 +654,7 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
-		}
-		.tabs > :global(.slide-ind)::before,
-		.tabs > :global(.slide-ind)::after {
-			display: none;
+			box-shadow: none;
 		}
 		.tab {
 			flex: none;
@@ -679,6 +666,7 @@
 		}
 		.tab.on {
 			background: var(--bg-active);
+			box-shadow: none;
 		}
 		.t {
 			flex: 0 1 auto;
