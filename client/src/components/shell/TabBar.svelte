@@ -351,7 +351,7 @@
 	.tabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* the controls share the tabs' row and centre on it like the tabs. "+" comes after the strip's 8px tail (the last tab's
+	/* the controls share the tabs' row and centre on it like the tabs. "+" comes after the strip's 4px tail (with the 4px gap, the last tab's
 	   pill and the button's box stand 8px apart); the count takes the rest of the bar's width and sits at its right end. */
 	.ctlslot {
 		flex: none;
