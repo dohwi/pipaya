@@ -101,7 +101,7 @@
 <aside class="rail" data-part="rail" aria-label={t("작업 폴더")}>
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
-		<IconButton icon="sidebar" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />
+		<IconButton icon="sidebar" size="sm" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />
 	</div>
 
 	<ul
@@ -125,7 +125,7 @@
 				{#if scheduled.count}<span class="cnt"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
 			</button>
 		{/if}
-		<IconButton icon="settings" label={t("설정")} tip onclick={() => app.openSettings()} />
+		<IconButton icon="settings" size="sm" label={t("설정")} tip onclick={() => app.openSettings()} />
 	</div>
 </aside>
 
@@ -151,14 +151,19 @@
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
+	/* the same band as the tab strip beside it (38px with its hairline), so the two lines meet; a 32px button fits it */
 	.tools {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
+		display: grid;
+		place-items: center;
 		width: 100%;
-		align-items: center;
-		padding: 8px 0;
+		box-sizing: content-box;
+		height: 37px; /* + the 1px hairline = the strip's 38px */
 		border-bottom: 1px solid var(--border);
+	}
+	@media (min-width: 601px) {
+		:global(:root:has(main > [data-part="tabbar"])) .tools {
+			border-bottom-color: var(--tabbar-line); /* the strip's own hairline colour, so the line runs on unbroken */
+		}
 	}
 	.agents {
 		position: relative;
@@ -253,15 +258,15 @@
 		background: transparent;
 		box-shadow: none;
 	}
-	/* the bottom's own buttons: the settings IconButton's 38px circle and 19px glyph, so the three line up; the graph
+	/* the bottom's own buttons: the settings IconButton's small 32px circle and 16px glyph (like the fold button on top), so the three line up; the graph
 	   view's, while it is the place shown, takes the selected folder tile's fill and edge bar */
 	.nav {
 		position: relative;
 		display: inline-grid;
 		place-items: center;
 		flex: none;
-		width: 38px;
-		height: 38px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		color: var(--text-dim);
 		transition:
@@ -270,8 +275,8 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 	.nav :global(.ic) {
-		width: 19px;
-		height: 19px;
+		width: 16px;
+		height: 16px;
 	}
 	@media (hover: hover) {
 		.nav:hover {
@@ -287,9 +292,9 @@
 	.nav.on::before {
 		content: "";
 		position: absolute;
-		left: -9px; /* on the rail's edge, where a folder tile's bar is */
-		top: 9px;
-		bottom: 9px;
+		left: -11.5px; /* on the rail's edge, where a folder tile's bar is: the 32px button sits (55 - 32) / 2 in from it */
+		top: 6px; /* a 20px bar on the 32px button */
+		bottom: 6px;
 		width: 3px;
 		border-radius: 0 2px 2px 0;
 		background: var(--text);
