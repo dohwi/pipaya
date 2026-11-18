@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
-import { isTransientUpstreamError, retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
+import { classifyUpstreamError, isTransientUpstreamError, retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
 
 const msg = (over: Partial<AssistantMessage>): AssistantMessage =>
 	({ role: "assistant", content: [], stopReason: "stop", timestamp: 0, ...over }) as AssistantMessage;
@@ -21,7 +21,7 @@ const ok = () => {
 	s.end(done);
 	return s;
 };
-const opts = (waits: number[]) => ({ maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100, sleep: async (ms: number) => { waits.push(ms); } });
+const opts = (waits: number[], unknown: string[] = []) => ({ maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100, sleep: async (ms: number) => { waits.push(ms); }, onUnknown: (m: string) => void unknown.push(m) });
 const call = (fn: any) => fn({}, {}, {});
 
 test("waits out a 502 and returns the later success", async () => {
@@ -90,4 +90,49 @@ test("isTransientUpstreamError covers socket failures but still refuses quota er
 	for (const m of ["insufficient_quota: connection reset by peer", "401 invalid api key", "unexpected token in JSON"])
 		expect(isTransientUpstreamError(err(m))).toBe(false);
 	expect(isTransientUpstreamError(msg({ stopReason: "stop", errorMessage: "connection reset by peer" }))).toBe(false);
+});
+
+test("classifyUpstreamError sorts errors into transient, permanent and unknown", () => {
+	const kind = (errorMessage: string) => classifyUpstreamError(msg({ stopReason: "error", errorMessage }));
+	for (const m of ["503 Service Unavailable", "429 Too Many Requests", "overloaded_error", "connect ECONNREFUSED 127.0.0.1:9", "getaddrinfo ENOTFOUND api.example.com", "read: connection reset by peer", "request timed out"])
+		expect([m, kind(m)]).toEqual([m, "transient"]);
+	for (const m of ["401 invalid api key", "403 Forbidden", "400 invalid_request_error: messages: field required", "404 model not found", "insufficient_quota", "quota exceeded: 500", "claude refusal (cyber): Cyber safeguards flagged this message", "prompt is too long: 250000 tokens > 200000 maximum"])
+		expect([m, kind(m)]).toEqual([m, "permanent"]);
+	for (const m of ["something odd happened", "upstream returned zero output with finishReason MALFORMED_FUNCTION_CALL", ""])
+		expect([m, kind(m)]).toEqual([m, "unknown"]);
+	expect(classifyUpstreamError(msg({ stopReason: "aborted", errorMessage: "503" }))).toBe("permanent");
+	expect(classifyUpstreamError(msg({ stopReason: "stop" }))).toBe("permanent");
+});
+
+test("an unclassified error is retried once, after the shortest wait, and reported", async () => {
+	const waits: number[] = [];
+	const unknown: string[] = [];
+	let n = 0;
+	const fn = withUpstreamRetry((() => (++n < 2 ? failing("something odd happened") : ok())) as any, opts(waits, unknown));
+	expect((await call(fn).result()).stopReason).toBe("stop");
+	expect(n).toBe(2);
+	expect(waits).toEqual([10]);
+	expect(unknown).toEqual(["something odd happened"]);
+});
+
+test("an unclassified error that repeats ends the run after the single retry", async () => {
+	let n = 0;
+	const fn = withUpstreamRetry((() => (n++, failing("something odd happened"))) as any, opts([]));
+	expect((await call(fn).result()).stopReason).toBe("error");
+	expect(n).toBe(2);
+});
+
+test("an unclassified error does not use up the transient retries", async () => {
+	let n = 0;
+	const seq = ["something odd happened", "503 Service Unavailable", "503 Service Unavailable"];
+	const fn = withUpstreamRetry((() => (n < seq.length ? failing(seq[n++]!) : (n++, ok()))) as any, { ...opts([]), maxRetries: 3 });
+	expect((await call(fn).result()).stopReason).toBe("stop");
+	expect(n).toBe(4);
+});
+
+test("a thrown unclassified error is retried once as well", async () => {
+	let n = 0;
+	const fn = withUpstreamRetry((() => { if (++n < 2) throw new Error("weird socket state"); return ok(); }) as any, opts([]));
+	expect((await call(fn).result()).stopReason).toBe("stop");
+	expect(n).toBe(2);
 });

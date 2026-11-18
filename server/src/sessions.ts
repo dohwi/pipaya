@@ -29,7 +29,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, subagentUsage, loadSubagents, SUBAGENT_NAME, subagentSystem, type SubagentDef } from "./subagents.ts";
-import { DEFAULT_UPSTREAM_RETRY, isTransientUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { classifyUpstreamError, DEFAULT_UPSTREAM_RETRY, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
@@ -994,9 +994,18 @@ export class SessionManager {
 			}
 			// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
 			// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
-			for (let attempt = 1; !error && !live.forceStopped && attempt <= STREAM_RETRY.maxRetries && this.droppedMidStream(live); attempt++) {
-				const delayMs = retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-				this.bus.publish(id, "run_retrying", { attempt, maxRetries: STREAM_RETRY.maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
+			// An unclassified error gets a single restart (and a log line), a transient one the full STREAM_RETRY budget.
+			for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && attempt <= STREAM_RETRY.maxRetries; attempt++) {
+				const kind = this.droppedMidStream(live);
+				if (!kind || (kind === "unknown" && unknownUsed)) break;
+				let maxRetries = STREAM_RETRY.maxRetries;
+				if (kind === "unknown") {
+					unknownUsed = true;
+					maxRetries = attempt;
+					logUnknownUpstreamError(this.lastErrorMessage(live));
+				}
+				const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
+				this.bus.publish(id, "run_retrying", { attempt, maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
 				const wait = new AbortController();
 				live.retryWait = wait;
 				await sleepAbortable(delayMs, wait.signal);
@@ -1103,14 +1112,20 @@ export class SessionManager {
 	}
 
 	/**
-	 * True when the run ended on a transient transport error (a gateway closing the socket mid-answer) *after* the model
+	 * The error kind when the run ended on a retryable transport error (a gateway closing the socket mid-answer) *after* the model
 	 * had already started replying. The reply is then half-written and cannot be resumed; the caller repeats the request.
 	 * An empty reply never gets here: withUpstreamRetry already retried it inside the stream call.
 	 */
-	private droppedMidStream(live: Live): boolean {
+	private droppedMidStream(live: Live): "transient" | "unknown" | undefined {
 		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return false;
-		return isTransientUpstreamError(last);
+		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return undefined;
+		const kind = classifyUpstreamError(last);
+		return kind === "permanent" ? undefined : kind;
+	}
+
+	private lastErrorMessage(live: Live): string {
+		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
+		return last?.role === "assistant" ? (last.errorMessage ?? "") : "";
 	}
 
 	/** `{ reason }` for run_retrying from the failed reply at the tail, or nothing. */

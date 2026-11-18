@@ -1,4 +1,4 @@
-import { createAssistantMessageEventStream, isRetryableAssistantError, retryDelayMs, type AssistantMessage, type AssistantMessageEventStream, type AssistantMessageEvent } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, isContextOverflow, isRetryableAssistantError, retryDelayMs, type AssistantMessage, type AssistantMessageEventStream, type AssistantMessageEvent } from "@earendil-works/pi-ai";
 
 type Stream<A extends unknown[]> = (...args: A) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
 
@@ -10,6 +10,8 @@ export interface UpstreamRetryOptions {
 	maxDelayMs: number;
 	sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 	onRetry?: (attempt: number, maxRetries: number, delayMs: number, errorMessage: string) => void;
+	/** Called once per error that is neither known transient nor known permanent (it gets a single retry). */
+	onUnknown?: (errorMessage: string) => void;
 }
 
 /** 2s, 4s, 8s, 16s, 30s, 30s: about 90 seconds of patience for a gateway that drops for a moment (502/503/504, reset, timeout). */
@@ -37,21 +39,66 @@ export function retryReason(message: string | undefined): string {
 }
 
 /**
+ * Failures that repeating the same request cannot fix: client-side HTTP statuses, bad credentials, quota and billing,
+ * policy refusals, unknown models. Checked before anything else, so "quota exceeded … 500" is still not retried.
+ */
+const PERMANENT_ERROR = new RegExp(
+	[
+		"(?<![a-z0-9.:])(?:400|401|402|403|404|405|409|410|413|415|422)(?![a-z0-9])",
+		"invalid.?(?:api.?key|request|x-api-key|token|model|argument|parameter)",
+		"invalid_request_error",
+		"unauthori[sz]ed",
+		"forbidden",
+		"permission.?denied",
+		"authentication",
+		"(?<![a-z])not.?found", // not ENOTFOUND (DNS), which is transient
+		"model .{0,60}(?:not (?:found|available|supported)|does not exist)",
+		"does not exist",
+		"insufficient_quota",
+		"quota exceeded",
+		"usage limit",
+		"available balance",
+		"out of budget",
+		"billing",
+		"credit balance",
+		"refusal", // not "connection refused", which is transient
+		"safeguard",
+		"content.?policy",
+		"flagged",
+		"safety",
+	].join("|"),
+	"i",
+);
+
+/**
  * Raw socket failures that pi-ai's retry list misses but that a gateway passes through verbatim, e.g. CLIProxyAPI
  * answering with Go's "read tcp a->b: read: connection reset by peer" when the provider drops the stream.
  */
-const TRANSPORT_ERROR = /reset by peer|ECONNRESET|ECONNABORTED|ETIMEDOUT|EPIPE|broken pipe|unexpected EOF|EHOSTUNREACH|ENETUNREACH|no route to host|network is unreachable/gi;
+const TRANSPORT_ERROR = /reset by peer|ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|EPIPE|broken pipe|unexpected EOF|EHOSTUNREACH|ENETUNREACH|no route to host|network is unreachable/i;
 
 /**
- * pi-ai's isRetryableAssistantError plus TRANSPORT_ERROR. The matched phrase is renamed to one pi-ai already retries,
- * so its never-retry rules (quota, billing) still win over a reset in the same message.
+ * How a failed reply should be handled:
+ * - `transient`: a gateway or provider hiccup (5xx, 429, reset, timeout …), retried with full backoff.
+ * - `permanent`: will fail the same way again (4xx, auth, quota, refusal, context overflow, abort), never retried.
+ * - `unknown`: anything else, e.g. a new wording from a proxy; retried once and logged so it can be classified later.
+ * A reply that did not end in an error is `permanent` (there is nothing to retry).
  */
-export function isTransientUpstreamError(message: AssistantMessage): boolean {
-	if (isRetryableAssistantError(message)) return true;
-	const text = message.errorMessage;
-	if (message.stopReason !== "error" || !text || !text.match(TRANSPORT_ERROR)) return false;
-	return isRetryableAssistantError({ ...message, errorMessage: text.replace(TRANSPORT_ERROR, "connection error") });
+export type UpstreamErrorKind = "transient" | "permanent" | "unknown";
+
+export function classifyUpstreamError(message: AssistantMessage): UpstreamErrorKind {
+	if (message.stopReason !== "error") return "permanent";
+	const text = message.errorMessage ?? "";
+	if (isContextOverflow(message) || PERMANENT_ERROR.test(text)) return "permanent";
+	if (isRetryableAssistantError(message) || TRANSPORT_ERROR.test(text)) return "transient";
+	return "unknown";
 }
+
+/** True for errors worth the full retry budget. */
+export const isTransientUpstreamError = (message: AssistantMessage) => classifyUpstreamError(message) === "transient";
+
+/** Logs an unclassified upstream error (retried once) so its wording can be added to the lists above. */
+export const logUnknownUpstreamError = (errorMessage: string) =>
+	console.warn(`[upstream-retry] unclassified upstream error, retrying once: ${retryReason(errorMessage) || "(no message)"}`);
 
 export const sleepAbortable = (ms: number, signal?: AbortSignal) =>
 	new Promise<void>((resolve) => {
@@ -66,7 +113,7 @@ export const sleepAbortable = (ms: number, signal?: AbortSignal) =>
  * happens before the model produced any content is retried with exponential backoff instead of ending the run.
  * Once content has streamed, an error is passed through as is: the caller owns the reply by then (SessionManager drops
  * the partial message and repeats the request — see STREAM_RETRY — because a half-streamed answer cannot be resumed).
- * Quota/billing errors and aborts are never retried.
+ * Quota/billing errors and aborts are never retried; an unclassified error gets one retry (see classifyUpstreamError).
  */
 export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortSignal }?]>(inner: Stream<A>, opts: UpstreamRetryOptions = DEFAULT_UPSTREAM_RETRY): Stream<A> {
 	const wait = opts.sleep ?? sleepAbortable;
@@ -75,7 +122,15 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 		const out = createAssistantMessageEventStream();
 		void (async () => {
 			let attempt = 0;
+			let unknownUsed = false;
+			// Worth another try: transient errors while the budget lasts, an unclassified one only once per call.
+			const retryable = (m: AssistantMessage) => {
+				if (attempt >= opts.maxRetries || signal?.aborted) return undefined;
+				const kind = classifyUpstreamError(m);
+				return kind === "transient" || (kind === "unknown" && !unknownUsed) ? kind : undefined;
+			};
 			for (;;) {
+				let kind: UpstreamErrorKind | undefined;
 				const pending: AssistantMessageEvent[] = [];
 				let committed = false;
 				let failure: AssistantMessage | undefined;
@@ -84,7 +139,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					for await (const ev of stream) {
 						if (committed) { out.push(ev); continue; }
 						if (ev.type === "start") { pending.push(ev); continue; }
-						if (ev.type === "error" && ev.reason === "error" && isTransientUpstreamError(ev.error) && attempt < opts.maxRetries && !signal?.aborted) {
+						if (ev.type === "error" && ev.reason === "error" && (kind = retryable(ev.error))) {
 							failure = ev.error;
 							break;
 						}
@@ -97,13 +152,18 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					if (committed) throw e;
 					const message = e instanceof Error ? e.message : String(e);
 					const probe = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
-					if (!isTransientUpstreamError(probe) || attempt >= opts.maxRetries || signal?.aborted) throw e;
+					if (!(kind = retryable(probe))) throw e;
 					failure = probe;
 				}
 				if (!failure) return out.end();
 				attempt++;
-				const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-				opts.onRetry?.(attempt, opts.maxRetries, delay, failure.errorMessage ?? "");
+				if (kind === "unknown") {
+					unknownUsed = true;
+					(opts.onUnknown ?? logUnknownUpstreamError)(failure.errorMessage ?? "");
+				}
+				// An unclassified error waits the shortest step and is announced as the last try.
+				const delay = kind === "unknown" ? opts.baseDelayMs : retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
+				opts.onRetry?.(attempt, kind === "unknown" ? attempt : opts.maxRetries, delay, failure.errorMessage ?? "");
 				await wait(delay, signal);
 				if (signal?.aborted) {
 					// Cancelled while waiting: report it like any other abort.
