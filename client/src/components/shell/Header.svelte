@@ -133,12 +133,13 @@
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 	}
-	/* Above a browser-style tab strip (wider than a phone) the header is the strip's own tone with no hairline between them,
-	   one chrome band like a browser's title bar over its tabs: the front tab is the only page-coloured thing up there and
-	   reads as the top of the sheet below. A white header over a grey strip stacked three tones (white, grey, white). */
+	/* Above a browser-style tab strip (wider than a phone) the header is the strip's own tone, one chrome band like a browser's
+	   title bar over its tabs (a white header over a grey strip stacked three tones). The hairline stays, in the strip's
+	   --tabbar-line (--border is lost on light's strip), so the title row and the tabs read as two rows; it meets the sidebar
+	   brand row's line at the same height. */
 	@media (min-width: 601px) {
 		:global(main:has(> [data-part="tabbar"])) > header {
-			border-bottom-color: transparent;
+			border-bottom-color: var(--tabbar-line);
 			background: var(--bg-tabbar);
 		}
 		@media (hover: hover) {

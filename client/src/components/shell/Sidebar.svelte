@@ -497,10 +497,11 @@
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
-	/* Over a tab strip the header drops its hairline (Header.svelte), so this one would end alone at the sidebar edge: drop it too */
+	/* Over a tab strip the header's hairline is the strip's --tabbar-line (Header.svelte): take the same colour so the line
+	   runs unbroken from under the logo to the window's right edge */
 	@media (min-width: 601px) {
 		:global(:root:has(main > [data-part="tabbar"])) .brandrow {
-			border-bottom-color: transparent;
+			border-bottom-color: var(--tabbar-line);
 		}
 	}
 	/* the same 44px strip as the brand row above it: the field is centred in the box, not padded into place */
