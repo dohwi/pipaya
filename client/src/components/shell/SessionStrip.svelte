@@ -68,10 +68,15 @@
 					}}
 				/>
 			{:else}
+				<span class="gitem">
 				<button class="gchip tap" tabindex={!open || x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>
+				<!-- a pane steps out into a tab of its own, like the × of a pane's title bar (Pane.svelte). A sibling of the chip, not
+				     inside it (no button in a button), laid over its right end like a tab's × (TabBar.svelte) -->
+				<button class="leave tap" tabindex="-1" onpointerdown={(e) => e.stopPropagation()} onclick={() => void app.leaveGroup(x.id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
+				</span>
 			{/if}
 		{/each}
 	</nav>
@@ -107,6 +112,13 @@
 	.gchip:focus-visible {
 		outline-offset: -2px;
 	}
+	.gitem {
+		position: relative;
+		flex: none;
+		display: flex;
+		align-items: center;
+		max-width: 220px;
+	}
 	.gchip {
 		position: relative;
 		z-index: 1;
@@ -115,7 +127,7 @@
 		align-items: center;
 		gap: 4px;
 		height: 22px;
-		max-width: 220px; /* the same cap as a tab of the bar it sits in */
+		max-width: 100%; /* .gitem caps it at a tab's width */
 		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
@@ -124,8 +136,9 @@
 		white-space: nowrap;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
+	/* the whole item, so the chip stays lit while the pointer is on its "leave" button */
 	@media (hover: hover) {
-		.gchip:hover {
+		.gitem:hover > .gchip {
 			background: var(--bg-hover);
 			color: var(--text);
 		}
@@ -137,6 +150,55 @@
 		background: var(--bg-active);
 		color: var(--text);
 		font-weight: 600;
+	}
+	/* "그룹에서 빼기" at the chip's right end, shown while the pointer is on the chip (or the button has focus): over the end
+	   of the title, on a backing of the chip's own colour (--xbg, set by the tab bar) with a fade, so the chip keeps its
+	   width and its title runs out under it, exactly like a tab's ×. Not on touch or the phone strip: the long-press menu
+	   has the same entry. */
+	.leave {
+		position: absolute;
+		right: 5px;
+		top: 4px; /* centred on the 28px chip: (28 - 20) / 2 */
+		z-index: 2;
+		display: none;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-pill);
+		background-color: var(--xbg, var(--bg));
+		color: var(--text-dim);
+		opacity: 0;
+		transition:
+			opacity var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
+	}
+	.leave::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 100%;
+		width: 24px;
+		background: linear-gradient(to right, color-mix(in srgb, var(--xbg, var(--bg)) 0%, transparent), color-mix(in srgb, var(--xbg, var(--bg)) 60%, transparent) 50%, var(--xbg, var(--bg)));
+		pointer-events: none;
+	}
+	.leave :global(svg) {
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.9;
+	}
+	@media (hover: hover) and (pointer: fine) and (min-width: 601px) {
+		.leave {
+			display: grid;
+		}
+		.gitem:hover > .leave,
+		.leave:focus-visible {
+			opacity: 1;
+		}
+		.leave:hover {
+			background-image: linear-gradient(color-mix(in srgb, var(--text) 10%, transparent), color-mix(in srgb, var(--text) 10%, transparent));
+			color: var(--text);
+		}
 	}
 	.rename {
 		flex: none;

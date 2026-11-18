@@ -475,11 +475,21 @@
 		.gbox :global(.gchip.on) {
 			background: var(--bg-tabbar-on);
 		}
+		/* the backing of a chip's "leave" button: the colour under it (the tray, the hover pill or the front chip's) */
+		.gbox :global(.gitem) {
+			--xbg: var(--bg-tabbar-group);
+		}
+		.gbox :global(.gitem:has(.gchip.on)) {
+			--xbg: var(--bg-tabbar-on);
+		}
 	}
 	/* a chip under the pointer on the strip's tone (SessionStrip's own hover is the page's --bg-hover) */
 	@media (hover: hover) and (min-width: 601px) {
-		.gbox :global(.gchip:not(.on):hover) {
+		.gbox :global(.gitem:hover > .gchip:not(.on)) {
 			background: var(--bg-tabbar-hover);
+		}
+		.gbox :global(.gitem:hover:not(:has(.gchip.on))) {
+			--xbg: var(--bg-tabbar-hover);
 		}
 	}
 	.gbox.carried {
