@@ -8,6 +8,7 @@
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { reveal } from "../../lib/reveal.svelte";
+	import { tapTitle } from "../../lib/touch-hints";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -71,7 +72,7 @@
 			<div class="txt" class:clamp={item.note?.collapse && !expanded}><TokenText text={shown.rest} images={item.images} sessionId={session?.id ?? null} /></div>
 		{/if}
 		{#if item.note}
-			<div class="tplnote" title={item.note.call}>
+			<div class="tplnote" title={item.note.call} use:tapTitle>
 				<span>{item.note.text}</span>
 				{#if item.note.collapse && (item.text.length > 400 || item.text.split("\n").length > 8)}
 					<button class="more" onclick={() => (expanded = !expanded)}>{expanded ? t("접기") : t("더 보기")}</button>
@@ -87,7 +88,7 @@
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
-		{#if item.ts}<time class="when" datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{timeOfDay(item.ts, localeTag())}</time>{/if}
+		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{timeOfDay(item.ts, localeTag())}</time>{/if}
 	</div>
 </div>
 

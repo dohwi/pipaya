@@ -3,6 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { pressMic, voice } from "../../lib/voice.svelte";
+	import { hintOnce } from "../../lib/touch-hints";
 
 	/**
 	 * The composer's microphone button. Shown whenever voice input is on (`voice.visible`), and disabled while it cannot
@@ -24,6 +25,8 @@
 		// no focus ring, text selection or touch emulation from the press: the press is followed on the window
 		e.preventDefault();
 		pressMic(e, paneId);
+		// the hold-to-talk half is invisible on a phone (it lived in the tooltip): say it once, at the first press
+		if (e.pointerType === "touch") hintOnce("mic-hold", t("길게 누르고 있으면 누르는 동안만 녹음합니다"));
 	}
 
 </script>

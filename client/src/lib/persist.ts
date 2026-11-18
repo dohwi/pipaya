@@ -35,6 +35,7 @@ export const K = {
   dirNames: "pipaya.dirnames", // names given to pinned folders, shown instead of the path's tail: { <serverId>: { <cwd>: name } }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
   projects: "pipaya.projects", // hand-made sidebar projects: { <serverId>: [{ id, name, dirs: [cwd, ...] }, ...] }
+  hints: "pipaya.hints.seen", // one-time touch hints already shown on this device: ["mic-hold", "steer-hold", ...]
   ungrouped: "pipaya.ungrouped", // folders taken out of their git repository's project: { <serverId>: [cwd, ...] }
 };
 

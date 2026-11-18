@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
+	import { hintOnce } from "../../lib/touch-hints";
 	import { chipIn, chipOut, surfaceIn, surfaceOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 
@@ -68,6 +69,8 @@
 			return;
 		}
 		onsteer();
+		// touch: the queue choice hides behind a long press, which nothing on screen shows; say it once
+		if (coarse()) hintOnce("steer-hold", t("끼워 넣기 버튼을 길게 누르면 대기열에 넣을 수도 있습니다"));
 	}
 	function pick(fn: () => void) {
 		menu = false;
