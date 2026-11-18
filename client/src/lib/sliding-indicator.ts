@@ -191,6 +191,9 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 	});
 	mutations.observe(container, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current", "aria-selected", "aria-checked", "aria-pressed", "data-state", "hidden"] });
 	view.addEventListener("resize", schedule);
+	// a scroll box inside the container (a group's chips in the tab strip) moves the target without moving the marker
+	const innerScroll = (e: Event) => e.target !== container && schedule();
+	container.addEventListener("scroll", innerScroll, { capture: true, passive: true });
 	void container.ownerDocument.fonts?.ready.then(schedule);
 
 	measure(); // first placement before paint
@@ -212,6 +215,7 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 			resize?.disconnect();
 			mutations.disconnect();
 			view.removeEventListener("resize", schedule);
+			container.removeEventListener("scroll", innerScroll, { capture: true });
 			el.remove();
 			container.removeAttribute("data-indicator-ready");
 		},
