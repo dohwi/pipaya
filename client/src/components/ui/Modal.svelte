@@ -100,7 +100,18 @@
 
 	const tokens = ["s", "m", "l", "xl"];
 	const w = $derived(tokens.includes(width) ? `var(--modal-w-${width})` : width);
-	const dismiss = () => dismissible && onclose();
+	/**
+	 * The backdrop closes on a press that starts on it. A dialog opened on `pointerup` (a tap on a graph card) is followed
+	 * by the touch's own `click`, which the browser aims at whatever is under the finger by then: the new backdrop. That
+	 * click must not close the dialog it just opened.
+	 */
+	let pressed = false;
+	const press = () => (pressed = true);
+	const dismiss = () => {
+		const own = pressed;
+		pressed = false;
+		if (own && dismissible) onclose();
+	};
 
 	/**
 	 * Keeps a centred panel on whole pixels. `left/top: 50%` + `translate: -50% -50%` puts the panel on a half pixel whenever the window
@@ -186,7 +197,7 @@
 {#snippet body()}
 	<!-- The backdrop is a pointer shortcut for closing; the keyboard closes the dialog with Esc (modalLayer). -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div class="scrim" style:z-index="var(--z-scrim-{layer})" onclick={dismiss} in:fadeIn|global out:fadeOut|global></div>
+	<div class="scrim" style:z-index="var(--z-scrim-{layer})" onpointerdown={press} onclick={dismiss} in:fadeIn|global out:fadeOut|global></div>
 	<div
 		class="modal {cls}"
 		data-part="modal"
