@@ -8,11 +8,12 @@
 	import TabCountButton from "./TabCountButton.svelte";
 
 	/**
-	 * The tab controls as one cluster, a browser's corner: "+" (a new chat or terminal in this folder) and the tab count
-	 * (opens the overview), 4px apart (none in the header, whose wider buttons already space them). `bar` sits pinned at the right end of the tab strip (wider screens), `header` at the
-	 * right end of the phone header, where the strip folds away. Both behave the same; only the button sizes differ.
+	 * The tab controls: "+" (a new chat or terminal in this folder) and the tab count (opens the overview). `header` puts
+	 * both at the right end of the phone header as one pair, where the strip folds away. On wider screens the tab strip
+	 * splits them like a browser: `part="add"` follows the last tab, `part="count"` stays pinned at the bar's right end.
+	 * Both places behave the same; only the button sizes differ.
 	 */
-	let { place = "bar" }: { place?: "bar" | "header" } = $props();
+	let { place = "bar", part = "both" }: { place?: "bar" | "header"; part?: "both" | "add" | "count" } = $props();
 
 	const dir = $derived(app.tabDir);
 	const path = $derived(dir?.path ?? app.workdirAbs);
@@ -29,7 +30,7 @@
 </script>
 
 <div class="ctl {place}" data-part="tab-controls">
-	<button
+	{#if part !== "count"}<button
 		class="add tap"
 		class:on={menuId === "new"}
 		onpointerenter={(e) => menu?.hover(e, "new", newItems())}
@@ -38,8 +39,8 @@
 		aria-label={t("새 대화 또는 터미널")}
 		aria-haspopup="menu"
 		title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button
-	>
-	{#if count}<TabCountButton {count} {place} />{/if}
+	>{/if}
+	{#if count && part !== "add"}<TabCountButton {count} {place} />{/if}
 </div>
 <RowMenu bind:this={menu} bind:open={menuId} />
 
