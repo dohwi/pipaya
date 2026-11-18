@@ -172,8 +172,8 @@
 			{#each steps as s, i (i)}
 				{#if s.kind === "think"}
 					<div class="thought">
-						<div class="thead"><Icon name="brain" /> {s.done ? t("생각 과정") : t("생각 중")}</div>
-						<div class="tbody">{s.text}</div>
+						<div class="thead"><Icon name="brain" /><span>{s.done ? t("생각 과정") : t("생각 중")}</span></div>
+						{#if s.text}<div class="tbody">{s.text}</div>{/if}
 					</div>
 				{:else if s.id}
 					<ToolCard id={s.id} name={s.name} args={s.args} />
@@ -225,12 +225,8 @@
 		{#if tools.length > 1}<span class="count mono">{finished}/{tools.length}</span>{/if}
 	{:else}
 		{#if failed}
-			<!-- the check turns into a red cross; with several calls, how many of them failed -->
-			<span class="fail" title={tools.length > 1 ? t("{n}개 실패", { n: failed }) : t("실패")}>
-				<span class="mark"><Icon name="x" /></span>{#if tools.length > 1}<span class="mono">{failed}</span>{/if}<span class="sr-only">{t("실패")}</span>
-			</span>
-		{:else if tools.length}
-			<span class="ok"><Icon name="check" /><span class="sr-only">{t("완료")}</span></span>
+			<!-- no check for work that went fine; a failure is only a short word in red, how many when there were several -->
+			<span class="fail">{tools.length > 1 ? t("{n}개 실패", { n: failed }) : t("실패")}</span>
 		{/if}
 		{#if total}
 			{#if endedAt}<time class="dur" datetime={new Date(endedAt).toISOString()} title={endedTitle}>{duration(total)}</time>
@@ -306,8 +302,6 @@
 		color: var(--text-faint);
 	}
 	.kind,
-	.ok,
-	.mark,
 	.chev {
 		flex: none;
 		display: grid;
@@ -317,8 +311,6 @@
 		color: var(--text-faint);
 	}
 	.kind :global(svg),
-	.ok :global(svg),
-	.mark :global(svg),
 	.chev :global(svg) {
 		width: 16px;
 		height: 16px;
@@ -334,14 +326,9 @@
 	.chev.open {
 		transform: rotate(90deg);
 	}
-	.mark {
-		color: var(--danger);
-	}
+	/* the light notice on a folded box: a short word, the same size as the time next to it */
 	.fail {
 		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--danger);
@@ -432,24 +419,11 @@
 		font-family: inherit;
 		font-style: italic;
 	}
+	/* the rows carry their own 4px padding: 4 + 4 + 4 = 12 between the summary's text and the first row's */
 	.steps {
 		margin-top: 4px;
 		margin-bottom: 8px;
-		padding-top: 4px;
-		padding-bottom: 4px;
 	}
-	/* Calls in a row read as one list: one outer frame, a hairline between rows, only the ends rounded. Separate cards
-	   stacked a box per call with an 8px gap each, which got heavy past three or four calls. */
-	.steps > :global([data-part="tool"] + [data-part="tool"]) {
-		margin-top: -1px; /* hairline: neighbours share one border, so a run of n rows is n * 45 + 1 tall */
-		border-top-left-radius: 0;
-		border-top-right-radius: 0;
-	}
-	.steps > :global([data-part="tool"]:has(+ [data-part="tool"])) {
-		border-bottom-left-radius: 0;
-		border-bottom-right-radius: 0;
-	}
-	/* a thought or the "preparing" line between two runs keeps its 8px margin from both (.thought, .prep) */
 	.steps > :global(:first-child) {
 		margin-top: 0;
 	}
@@ -538,41 +512,48 @@
 		}
 	}
 
+	/* a thought is a line like a call (icon, words), its text under it in the quiet colour instead of in a card */
 	.thought {
-		margin: 8px 0;
-		padding: 8px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
+		min-width: 0;
 	}
 	.thead {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: var(--fs-sm);
-		font-weight: 600;
+		padding: 4px 0;
+		font-size: var(--fs-xs);
+		line-height: 20px;
 		color: var(--text-dim);
 	}
 	.thead :global(svg) {
+		flex: none;
 		width: 16px;
 		height: 16px;
 		stroke-width: 1.8;
+		color: var(--text-faint);
 	}
 	.tbody {
-		margin-top: 4px;
+		padding: 0 0 8px 24px; /* 24: under the words, past the 16px icon and its 8px gap */
 		color: var(--text-dim);
-		font-size: var(--fs-sm);
+		font-size: var(--fs-xs);
+		line-height: 20px;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 		max-height: 300px;
 		overflow: auto;
 	}
+	/* a call still being written: the same line, three dots in the icon's 16px place */
 	.prep {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 8px 0;
+		padding: 4px 0;
 		color: var(--text-dim);
-		font-size: var(--fs-sm);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.prep .dots {
+		width: 16px;
+		justify-content: center;
 	}
 </style>

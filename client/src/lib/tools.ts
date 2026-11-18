@@ -20,18 +20,18 @@ export function toolKind(name: string, args: Record<string, unknown> = {}): Tool
 	return name in LOOK ? (name as ToolKind) : "other";
 }
 
-/** Icon and badge colour (an oklch hue angle) per kind, so each kind of work is recognisable at a glance. */
-const LOOK: Record<ToolKind, { icon: ToolIcon; hue: number }> = {
-	read: { icon: "file", hue: 240 },
-	ls: { icon: "folder", hue: 215 },
-	grep: { icon: "search", hue: 185 },
-	write: { icon: "pencil", hue: 150 },
-	edit: { icon: "pencil", hue: 60 },
-	bash: { icon: "terminal", hue: 300 }, // purple: the red of a failed call (hue ~25) must not look like plain shell work
-	skill: { icon: "skill", hue: 90 },
-	think: { icon: "brain", hue: 280 },
-	other: { icon: "bolt", hue: 265 },
-	image: { icon: "sparkles", hue: 320 },
+/** Icon per kind, so each kind of work is recognisable at a glance (the colour stays quiet: red is kept for a failure). */
+const LOOK: Record<ToolKind, { icon: ToolIcon }> = {
+	read: { icon: "file" },
+	ls: { icon: "folder" },
+	grep: { icon: "search" },
+	write: { icon: "pencil" },
+	edit: { icon: "pencil" },
+	bash: { icon: "terminal" },
+	skill: { icon: "skill" },
+	think: { icon: "brain" },
+	other: { icon: "bolt" },
+	image: { icon: "sparkles" },
 };
 
 /** The tool that draws pictures (the server's image model setting gives it to agents). */
@@ -40,10 +40,7 @@ export const isImageTool = (name: string) => name === IMAGE_TOOL;
 
 export const toolIcon = (name: string, args: Record<string, unknown> = {}): ToolIcon => LOOK[toolKind(name, args)].icon;
 
-/** Inline style that feeds `.tbadge` in app.css. */
-export const badgeStyle = (kind: ToolKind): string => `--th:${LOOK[kind].hue}`;
-
-/** Text on the badge: the tool name, except skills, which say what they are. */
+/** The name a call's line shows: the tool name, except skills, which say what they are. */
 export function toolLabel(name: string, args: Record<string, unknown> = {}): string {
 	const kind = toolKind(name, args);
 	if (kind === "skill") return `skill · ${skillOf(name, args)}`;

@@ -2,12 +2,11 @@
 	import { localeTag, t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
-	import ToolChip from "./ToolChip.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration } from "../../lib/format";
-	import { splitCd, toolIcon, toolKind, toolLabel, toolSummary } from "../../lib/tools";
+	import { splitCd, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import ExtensionView from "../extensions/ExtensionView.svelte";
@@ -18,8 +17,6 @@
 	const pane = getPane();
 	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
-	/** The kind of work (read, bash, edit …) tints the icon and the name, so a list of calls reads at a glance */
-	const kind = $derived(toolKind(name, args));
 
 	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
@@ -48,8 +45,6 @@
 	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
 	const asked = $derived(!!run.question || !!answer);
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
-	/** A call that simply succeeded shows no "완료" pill: the tinted icon and name carry it; only what needs attention gets a pill */
-	const quiet = $derived(run.state === "done" && !exitCode);
 	/** A failed call (error, or a non-zero exit code): a red cross by the time instead of a pill */
 	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
@@ -62,9 +57,7 @@
 			skipped: t("실행 안 됨"),
 		}[run.state],
 	);
-	const tone = $derived(
-		run.state === "done" && !exitCode ? "ok" : run.state === "awaiting_input" ? "warn" : run.state === "running" || run.state === "pending" ? "accent" : run.state === "skipped" ? "" : "danger",
-	);
+	const working = $derived(run.state === "running" || run.state === "pending");
 
 	/** A question tool that is still waiting has nothing else to show: the reply block under the card asks it (no empty body) */
 	const questionOnly = $derived(awaiting && asked && name !== "bash" && name !== "write" && name !== "edit");
@@ -82,19 +75,21 @@
 
 </script>
 
-<div class="card" data-part="tool" class:awaiting class:failed data-state={run.state}>
+<div class="call" data-part="tool" class:awaiting class:failed data-state={run.state}>
+	<!-- One quiet line, built like the work box's own summary line above it: icon, what, how it went, time, arrow -->
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
-		<span class="lead"><ToolChip {kind} icon={toolIcon(name, args)} label={toolLabel(name, args)} shimmer={run.state === "running" || run.state === "pending"} /></span>
-		<span class="what">{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}</span>
+		<span class="kind"><Icon name={toolIcon(name, args)} /></span>
+		<span class="name mono" class:shimmer={working} title={failed ? label : undefined}>{toolLabel(name, args)}</span>
+		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}
 		<span class="meta">
-			{#if run.state === "running" || run.state === "pending"}<span class="spinner"></span>{/if}
-			{#if !quiet && !failed && !awaiting}<span class="chip {tone}">{label}</span>{/if}
-			{#if failed}<span class="mark" title={label}><Icon name="x" /><span class="sr-only">{label}</span></span>{/if}
-			{#if run.durationMs != null && run.state !== "running"}
+			{#if working}<span class="dots" role="status" aria-label={label}><i></i><i></i><i></i></span>
+			{:else if awaiting}<span class="need">{label}</span>
+			{:else if failed}<span class="sr-only">{label}</span>
+			{:else if run.state === "skipped"}<span class="note">{label}</span>{/if}
+			{#if run.durationMs != null && !working}
 				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: new Date(run.endedAt).toLocaleString(localeTag()) })}>{duration(run.durationMs)}</time>
 				{:else}<span class="dur">{duration(run.durationMs)}</span>{/if}
 			{/if}
-			{#if awaiting}<span class="sr-only">{label}</span>{/if}
 			<span class="chev" class:open><Icon name="chevron-right" /></span>
 		</span>
 	</button>
@@ -128,93 +123,88 @@
 	{/if}
 
 	{#if awaiting && run.question}
-		<div in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
+		<div class="ask" in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
 	{/if}
 </div>
 
 <style>
 	.custom { margin-top: 8px; min-width: 0; }
-	/* A card alone; calls in a row are joined into one list by the work box (WorkBox.svelte, .steps) */
-	.card {
-		position: relative;
-		margin: 0;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		overflow: hidden;
-		transition: border-color var(--motion-fast) var(--ease-std);
-	}
-	/* a failed call: a red edge on the row's left, so it is found in a long list without reading every right end */
-	.card.failed::before {
-		content: "";
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: 2px;
-		background: var(--danger);
-		pointer-events: none;
-		z-index: 1; /* over the header's hover fill */
-	}
-	/* raised over its neighbours, so its warn border is whole where it shares a hairline with them */
-	.card.awaiting {
-		z-index: 1;
-		border-color: var(--warn);
-		box-shadow: 0 0 0 3px var(--warn-soft);
+	/* No card: each call is one line under the work box's guide line, the way the summary line above it is drawn */
+	.call {
+		min-width: 0;
 	}
 	.head {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		width: 100%;
-		padding: 8px 12px;
+		min-width: 0;
+		padding: 4px 0;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		color: var(--text-dim);
 		text-align: left;
-		min-height: 44px;
-		transition: background-color var(--motion-fast) var(--ease-std);
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.head:hover {
-			background-color: var(--bg-hover);
+		.head:hover,
+		.head:hover .sum {
+			color: var(--text);
 		}
 		.head:hover .chev {
 			color: var(--text-dim);
 		}
 	}
-	/* the card clips (overflow: hidden) and the header fills it, so an outer ring would be cut away entirely */
-	.head:focus-visible {
-		outline-offset: -2px;
-		border-radius: inherit; /* the card's: rounded at the ends of a run, square in its middle */
+	/* the row has no fill of its own, so the press tint of row buttons (app.css) would paint a bare block behind the text */
+	.head:active:not(:disabled) {
+		background-color: transparent;
 	}
-	/* the chips of the common tools (bash, read, grep, ls, edit, write) are 50 to 64px wide: a 64px slot starts every row's
-	   summary on one line down the list; a wider chip (a skill's name) just takes its room */
-	.lead {
+	.kind,
+	.chev {
 		flex: none;
-		display: flex;
-		min-width: 64px;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		color: var(--text-faint);
 	}
-	.what {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		height: 24px; /* the chip's height, with or without a summary (a skill has none) */
+	.kind :global(svg),
+	.chev :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke-width: 2;
 	}
-	.sum {
-		flex: 1;
-		min-width: 0;
-		font-size: var(--fs-xs);
-		line-height: 20px;
-		color: var(--text);
-		white-space: nowrap;
+	/* the same 16px glyph and stroke as the summary line's icon, so the two read as one family */
+	.kind :global(svg) {
+		stroke-width: 1.8;
+	}
+	/* the tool's name: what kind of work, in the quiet colour */
+	.name {
+		flex: none;
+		min-width: 4ch; /* ls and the four-letter names (bash, read, grep, edit) end on one line, so the commands after them start on one */
+		max-width: 40%;
 		overflow: hidden;
+		white-space: nowrap;
 		text-overflow: ellipsis;
+		color: var(--text-faint);
+	}
+	/* what it did: the part to read, so it takes the room and is the part that gets cut */
+	.sum {
+		flex: 1 1 0;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: var(--text-dim);
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	.meta {
+		flex: none;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		color: var(--text-dim);
+		margin-left: auto;
 	}
-	/* an even 16px box: the 11px text's own 17.05px height was odd, so the row's centring rounded it half a pixel up or down from row to row */
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -223,44 +213,53 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
+	/* an even 16px box like the icons: the 11px text's own 17.05px height is odd */
 	.dur {
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums; /* 940ms over 212ms: every digit as wide, so the times line up row to row */
 		color: var(--text-faint);
 	}
-	/* the failure mark: the same 16px box as the arrow next to it, in the danger colour */
-	.mark {
-		display: grid;
-		width: 16px;
-		height: 16px;
-		place-items: center;
+	.note {
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.need {
+		font-size: var(--fs-xs);
+		line-height: 16px;
+		color: var(--warn);
+	}
+	.dots {
+		color: var(--text-faint);
+	}
+	/* a failed call: only its name turns red (no cross, no frame); why it failed is under "출력" when it is opened */
+	.failed .name {
 		color: var(--danger);
 	}
-	.mark :global(svg) {
-		width: 16px;
-		height: 16px;
-		stroke-width: 2;
+	.awaiting .kind,
+	.awaiting .name {
+		color: var(--warn);
 	}
 	.chev {
-		display: grid;
-		width: 16px;
-		height: 16px;
-		place-items: center;
-		color: var(--text-faint);
 		transition: transform var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease-std);
 	}
 	.chev.open {
 		transform: rotate(90deg);
 	}
-	.chev :global(svg) {
-		width: 16px; /* the same 16px box as the tool icon on the left, so both ends of the row are built alike */
-		height: 16px;
-		stroke-width: 2;
+	/* the question a waiting call asks: the one framed block, in the warn colour */
+	.ask {
+		margin: 4px 0 8px 24px; /* 24: under the name, past the 16px icon and its 8px gap */
+		border: 1px solid var(--warn);
+		border-radius: var(--radius);
+		overflow: hidden;
 	}
-	/* 4 + the header's 8px bottom padding = 12 above the first block, matching the 12 at the sides and the bottom */
+	.ask :global(.reply) {
+		border-top: 0;
+	}
+	/* what the call carried and gave back, under its name (16px icon + 8px gap = 24 in), 8 below its line */
 	.body {
-		padding: 4px 12px 12px;
+		padding: 4px 0 8px 24px;
 	}
 	/* why it failed, next to "출력", in the failure colour (the pill that used to say it is gone) */
 	.label .why {
