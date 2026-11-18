@@ -626,21 +626,20 @@
 		height: 20px;
 		border-radius: var(--radius-pill); /* a round close target, as in Chrome */
 		color: var(--text-faint);
-		opacity: 0;
-		transition: opacity var(--motion-fast) var(--ease-std);
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
 	}
-	/* the close button shows on the front tab and the one under the pointer (as in VS Code); elsewhere it keeps its place
-	   unseen, so a tab never changes width on hover, and that blank after the title is what sets two tabs apart without a
-	   hairline. A touch screen has no hover, so there it always shows. */
+	/* the close button shows on every tab, as in Chrome: it closes each tab's right end, so the blank a hidden × left no
+	   longer reads as a gap of its own (that blank set "+" after the last tab apart like a tab without a title). Faint on
+	   the tabs behind, the title's dim on the front one and the one under the pointer. */
 	.tab.on .x,
-	.tab:hover .x,
-	.tab.menuopen .x,
-	.x:focus-visible {
-		opacity: 1;
+	.tab.menuopen .x {
+		color: var(--text-dim);
 	}
-	@media (pointer: coarse) {
-		.x {
-			opacity: 1;
+	@media (hover: hover) {
+		.tab:hover .x {
+			color: var(--text-dim);
 		}
 	}
 	@media (hover: hover) {
