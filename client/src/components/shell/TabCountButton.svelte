@@ -40,9 +40,9 @@
 	}
 	/* the header's tool buttons: 32 wide, 40 tall, round (Header.svelte `.tool` on a phone) */
 	.count.header {
-		width: 32px;
+		width: 28px; /* beside the 28px "+" (TabControls), so the pair sits tight */
 		height: 40px;
-		border-radius: 50%;
+		border-radius: 14px;
 	}
 	.count.header:focus-visible {
 		outline-offset: -2px; /* 40px in a 44px bar, like the header's other buttons */
