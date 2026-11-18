@@ -84,7 +84,7 @@
 		onclose();
 	}
 
-	/* ---- keyboard: the cards are one Tab stop, arrows move across the grid by its real column count ---- */
+	/* ---- keyboard: Tab walks the cards in order, arrows also move across the grid by its real column count ---- */
 	let grid: HTMLElement | undefined = $state();
 	let focusId = $state<string | null>(untrack(() => activeTab));
 	const current = $derived(tabs.some((x) => x.id === focusId) ? focusId : (tabs.find((x) => x.id === activeTab)?.id ?? tabs[0]?.id ?? null));
@@ -142,7 +142,7 @@
 							class:on
 							data-card={x.id}
 							role="button"
-							tabindex={x.id === current ? 0 : -1}
+							tabindex="0"
 							aria-current={on ? "page" : undefined}
 							aria-keyshortcuts={x.kind !== "group" ? "Delete" : undefined}
 							aria-label="{titleOf(x)}{st !== 'idle' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
@@ -211,6 +211,7 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		scroll-padding-block: 8px; /* a card focused at the edge (Tab, arrows) scrolls in with its 6px ring, not flush */
 		padding: 8px var(--dlg-px) var(--dlg-body-b); /* top: the scroll box clips, and a focused current card's ring reaches 6px out (2px frame + 4px offset); 4 lost its top */
 	}
 	@media (max-width: 640px) {

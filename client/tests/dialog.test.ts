@@ -2,17 +2,17 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { backLayer, handleBack, trapTab } from "../src/lib/dialog";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
-type Fake = { name: string; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
+type Fake = { name: string; tabIndex: number; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
 const g = globalThis as unknown as { document?: { activeElement: unknown } };
 const prevDoc = g.document;
 afterEach(() => {
 	g.document = prevDoc;
 });
 
-function setup(names: string[]) {
+function setup(names: string[], skipped: string[] = []) {
 	g.document = { activeElement: null };
 	const doc = g.document;
-	const items: Fake[] = names.map((name) => ({ name, focus: () => (doc.activeElement = items.find((i) => i.name === name)), getClientRects: () => [1], closest: () => null }));
+	const items: Fake[] = names.map((name) => ({ name, tabIndex: skipped.includes(name) ? -1 : 0, focus: () => (doc.activeElement = items.find((i) => i.name === name)), getClientRects: () => [1], closest: () => null }));
 	const root = {
 		querySelectorAll: () => items,
 		contains: (n: unknown) => items.includes(n as Fake),
@@ -60,6 +60,14 @@ describe("trapTab", () => {
 		const e = { ...key(), defaultPrevented: true };
 		expect(trapTab(e as unknown as KeyboardEvent, root)).toBe(false);
 		expect(doc.activeElement).toBe(items[1]);
+	});
+
+	test("a control Tab skips (tabindex -1) is not an end: Tab on the last real stop still wraps", () => {
+		const { doc, items, root, key } = setup(["a", "b", "x"], ["x"]);
+		doc.activeElement = items[1];
+		const e = key();
+		expect(trapTab(e as unknown as KeyboardEvent, root)).toBe(true);
+		expect(doc.activeElement).toBe(items[0]);
 	});
 
 	test("other keys are ignored", () => {
