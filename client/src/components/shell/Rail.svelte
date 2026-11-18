@@ -102,7 +102,6 @@
 	<div class="top"><PipayaMark color size={26} /></div>
 	<div class="tools">
 		<IconButton icon="sidebar" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />
-		<IconButton icon="plus" label={t("새 대화")} tip onclick={() => void app.startChat()} />
 	</div>
 
 	<ul
