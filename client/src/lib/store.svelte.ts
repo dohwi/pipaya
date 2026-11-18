@@ -47,7 +47,7 @@ import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
-import { Feedback, type Toast } from "./feedback.svelte";
+import { announces, Feedback, type Toast } from "./feedback.svelte";
 import type { SettingsTabId } from "./settings-search";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { ScheduleBook } from "./schedule-book.svelte";
@@ -492,13 +492,6 @@ class AppStore {
 
   groupOf(sessionId: string): Group | undefined {
     return this.groups.find((g) => layoutHas(g.layout, sessionId));
-  }
-
-  /** Is this session in front of the user right now? (a group shows all its panes, except on a narrow screen) */
-  private isShown(id: string): boolean {
-    if (id === this.activeId) return true;
-    const g = this.activeGroup;
-    return !viewport.narrow && !!g && layoutHas(g.layout, id);
   }
 
   /** The model and thinking level shown in the UI: the session's, or the draft's for a new chat. */
@@ -1149,8 +1142,8 @@ class AppStore {
           const quiet = e.data.origin === "peer" && this.serverPrefs.quietPeers;
           if (e.data.status !== "aborted" && !quiet)
             this.prefs.cue(bad ? "failed" : "done");
-          // Say it when the user is on another session (a phone shows only one) or on another pane of the group
-          if (!quiet && sid !== this.activeId && (viewport.narrow || this.isShown(sid)) && e.data.status !== "aborted")
+          // Say it whenever the user is on another session: a pane of the group, another tab, another folder
+          if (announces(sid, this.activeId, e.data.status, quiet))
             this.feedback.announce(sid, bad ? "failed" : "done");
         }
         break;

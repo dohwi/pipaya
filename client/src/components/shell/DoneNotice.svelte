@@ -7,7 +7,8 @@
 
 	/**
 	 * Strips under the nav (and under the group strip / connection banner, since the stage starts below them)
-	 * saying other sessions finished: on a phone any other session, on a wide screen another pane of the open group. Tap = go there; the ring around × counts down to the auto-dismiss.
+	 * saying other sessions finished: any session but the focused one (another pane of the group, another tab, another
+	 * folder or server). Tap = go there; the ring around × counts down to the auto-dismiss.
 	 */
 
 	// Whatever the user focuses no longer needs a strip, however they got there (a pane of a group needs one until focused).

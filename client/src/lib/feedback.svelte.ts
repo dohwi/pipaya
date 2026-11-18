@@ -16,7 +16,7 @@ export interface Toast {
   action?: { label: string; run: () => void };
 }
 
-/** A strip under the nav saying another session (or another pane of the open group) finished; a tap jumps to it. */
+/** A strip under the nav saying a session other than the focused one finished; a tap jumps to it. */
 export interface Notice {
   id: number;
   sid: string;
@@ -27,6 +27,15 @@ export interface Notice {
   ms: number;
 }
 export const NOTICE_MS = 6000;
+
+/**
+ * Does a finished run get a strip? Any session but the focused one: another pane of the group, another tab, another
+ * folder (its pane is not on screen at all, so the strip is the only thing that says so). A stopped run is the user's
+ * own doing and a quiet agent-to-agent run says nothing.
+ */
+export function announces(sid: string, focused: string | null, status: string | undefined, quiet: boolean): boolean {
+  return !quiet && sid !== focused && status !== "aborted";
+}
 /** Strips shown at once; a newer one pushes the oldest out. */
 export const NOTICE_MAX = 3;
 

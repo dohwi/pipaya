@@ -17,6 +17,7 @@ import { pinLocal } from "../src/lib/store-model";
 // Compile the real rune module with Svelte, rather than substituting fake $state globals (as tests/compaction.test.ts does).
 let Feedback: typeof FeedbackModule.Feedback;
 let NOTICE_MAX: number;
+let announces: typeof FeedbackModule.announces;
 let reorder: typeof SidebarModule.reorder;
 let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
@@ -44,7 +45,7 @@ async function loadRunes(name: string) {
 
 beforeAll(async () => {
 	dir = await mkdtemp(join(tmpdir(), "pipaya-store-parts-"));
-	({ Feedback, NOTICE_MAX } = await loadRunes("feedback"));
+	({ Feedback, NOTICE_MAX, announces } = await loadRunes("feedback"));
 	// sidebar.svelte.ts reads localStorage at construction only; reorder is a pure function
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };
 	({ reorder, SidebarState } = await loadRunes("sidebar"));
@@ -184,6 +185,14 @@ describe("feedback", () => {
 		expect(f.notices.length).toBe(NOTICE_MAX);
 		expect(f.notices[0]!.sid).toBe(`s${NOTICE_MAX + 1}`);
 		for (const n of [...f.notices]) f.dismissNotice(n.id);
+	});
+	test("a finished run is announced for any session but the focused one", () => {
+		// another folder's session is on no pane at all: it is announced too, not only a pane of the open group
+		expect(announces("other-folder", "here", "completed", false)).toBe(true);
+		expect(announces("here", "here", "completed", false)).toBe(false);
+		expect(announces("other", "here", "aborted", false)).toBe(false);
+		expect(announces("other", "here", "error", true)).toBe(false);
+		expect(announces("other", null, "error", false)).toBe(true);
 	});
 });
 
