@@ -16,7 +16,7 @@
 	let { steps, live = false }: { steps: Step[]; live?: boolean } = $props();
 	const uid = $props.id();
 
-	/** The "now" line changes by fading in place: no vertical shift, so a new call that looks like the old one (bash after bash) does not wobble. */
+	/** The "now" line's words change by fading in place: no vertical shift, so a new call that looks like the old one (bash after bash) does not wobble. */
 	const rollIn = (_: Element) => ({ duration: ms("normal"), easing: easeEnter, css: (t: number) => `opacity:${t.toFixed(3)}` });
 	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number) => `opacity:${t.toFixed(3)}` });
 
@@ -163,13 +163,14 @@
 	{/if}
 
 	{#if now && !open}
+		<!-- the icon stays put while the words fade in place: a new call of the same kind (bash after bash) must not make it blink -->
 		<div class="now" aria-live="polite">
-			{#key now.key}
-				<span class="nowline" in:rollIn out:rollOut>
-					<Icon name={now.icon} />
-					<span class="nowtext" class:mono={now.mono}>{now.text}</span>
-				</span>
-			{/key}
+			<Icon name={now.icon} />
+			<span class="nowwords">
+				{#key now.key}
+					<span class="nowtext" class:mono={now.mono} in:rollIn out:rollOut>{now.text}</span>
+				{/key}
+			</span>
 		</div>
 	{/if}
 
@@ -351,29 +352,33 @@
 
 	/* the step being worked on: its icon and one line of what it does, cut short rather than wrapped */
 	.now {
-		position: relative;
-		height: 20px;
-	}
-	.nowline {
-		position: absolute;
-		inset: 0;
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		height: 20px;
 		min-width: 0;
 		color: var(--text-dim);
 	}
-	.nowline :global(svg) {
+	.now :global(svg) {
 		flex: none;
 		width: 16px;
 		height: 16px;
 		stroke-width: 1.8;
 		color: var(--text-faint);
 	}
-	.warn .nowline :global(svg) {
+	.warn .now :global(svg) {
 		color: var(--warn);
 	}
+	/* the old and the new words cross-fade on top of each other in this box */
+	.nowwords {
+		position: relative;
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 20px;
+	}
 	.nowtext {
+		position: absolute;
+		inset: 0;
 		min-width: 0;
 		overflow: hidden;
 		white-space: nowrap;
