@@ -75,9 +75,9 @@
 
 </script>
 
-<div class="call" data-part="tool" class:awaiting class:failed data-state={run.state}>
+<div class="call" data-part="tool" data-fold class:awaiting class:failed data-state={run.state}>
 	<!-- One quiet line, built like the work box's own summary line above it: icon, what, how it went, time, arrow -->
-	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
+	<button class="head" data-fold-toggle onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="kind"><Icon name={toolIcon(name, args)} /></span>
 		<span class="name mono" class:shimmer={working}>{toolLabel(name, args)}</span>
 		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}

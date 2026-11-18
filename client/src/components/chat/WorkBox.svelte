@@ -153,9 +153,9 @@
 
 </script>
 
-<div class="work" class:live={active} class:warn={awaitingIdx >= 0}>
+<div class="work" data-fold class:live={active} class:warn={awaitingIdx >= 0}>
 	{#if steps.length}
-		<button class="sumrow" onclick={() => (open = !open)} aria-expanded={open} aria-controls={uid}>
+		<button class="sumrow" data-fold-toggle onclick={() => (open = !open)} aria-expanded={open} aria-controls={uid}>
 			{@render row()}
 		</button>
 	{:else}
@@ -194,7 +194,7 @@
 	{:else if active && shownPeek.lines.length}
 		<!-- A mouse shortcut to the same steps the summary line above opens (hidden from assistive tech on purpose). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="peek mono {shownPeek.kind}" onclick={() => (open = true)} aria-hidden="true" in:collapseIn out:collapseOut>
+		<div class="peek mono {shownPeek.kind}" data-fold-toggle onclick={() => (open = true)} aria-hidden="true" in:collapseIn out:collapseOut>
 			<div class="pin" class:clip={peekH > PEEK_LINES * LINE_H} style:height="{peekWin}px">
 				<div class="inner" bind:clientHeight={peekH}>
 					{#each shownPeek.lines as l, i (i)}

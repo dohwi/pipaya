@@ -9,7 +9,7 @@
 	import { localeTag, t } from "../../lib/i18n";
 	import { dayLabel, dayStart } from "../../lib/format";
 	import { today } from "../../lib/today.svelte";
-	import { fadeIn, fadeOut } from "../../lib/motion";
+	import { fadeIn, fadeOut, ms } from "../../lib/motion";
 	import { tick, untrack } from "svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Message from "./Message.svelte";
@@ -58,6 +58,12 @@
 
 	function onScroll() {
 		if (!scroller) return;
+		if (hold) {
+			// our own correction; following and unpinning are settled when the hold ends
+			lastTop = scroller.scrollTop;
+			showJump = gap() >= NEAR;
+			return;
+		}
 		if (smoothing) {
 			if (gap() < 2) smoothing = false;
 		} else if (stuck) {
@@ -133,6 +139,7 @@
 	// onScroll unpins. Otherwise onScroll would pin the view back to the bottom on every such event (a flicker).
 	let lastWheelUp = 0;
 	const onWheel = (e: WheelEvent) => {
+		if (hold && !e.ctrlKey) endHold();
 		if (e.ctrlKey || e.deltaY >= 0 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
 		if (e.deltaY > -2) lastWheelUp = performance.now();
 		else release();
@@ -150,7 +157,7 @@
 		release();
 	};
 	let touching = false;
-	const onTouchStart = (e: TouchEvent) => { touching = true; touchY = e.touches[0]?.clientY ?? 0; };
+	const onTouchStart = (e: TouchEvent) => { if (hold) endHold(); touching = true; touchY = e.touches[0]?.clientY ?? 0; };
 	const onTouchMove = (e: TouchEvent) => {
 		const y = e.touches[0]?.clientY ?? 0;
 		if (y > touchY + 4) release();
@@ -167,6 +174,59 @@
 		if (dragging && scroller && scroller.scrollTop < lastTop - 1) release();
 	}
 
+	/**
+	 * A fold opened or closed by hand (a `data-fold-toggle` inside a `data-fold` box: a work box, a tool card) grows or
+	 * shrinks below the row that was clicked: the box's top keeps its place on screen while the fold animates. Pinned,
+	 * following the bottom would push it up instead. Following is off for the hold, and our correction alone moves the view.
+	 */
+	let hold: { el: Element; top: number; until: number } | null = null;
+	let holdRaf = 0;
+	function onFoldClick(e: MouseEvent) {
+		const el = (e.target as Element | null)?.closest("[data-fold-toggle]")?.closest("[data-fold]");
+		if (!el || !scroller || !scroller.contains(el)) return;
+		cancelAnimationFrame(holdRaf);
+		smoothing = false;
+		stuck = false;
+		scroller.style.overflowAnchor = "none";
+		// the fold's transition plus a little for heights that settle a frame later
+		hold = { el, top: el.getBoundingClientRect().top, until: performance.now() + ms("normal") + 120 };
+		const step = () => {
+			if (!hold || !scroller) return;
+			if (!hold.el.isConnected) return endHold();
+			const d = hold.el.getBoundingClientRect().top - hold.top;
+			if (Math.abs(d) > 0.5) scroller.scrollTop += d; // the browser clamps it when a fold closes at the very end
+			lastTop = scroller.scrollTop;
+			if (performance.now() < hold.until) holdRaf = requestAnimationFrame(step);
+			else endHold();
+		};
+		holdRaf = requestAnimationFrame(step);
+	}
+	/** The hold ends (time is up, or the user scrolls): pinned again only if the view is still at the end. */
+	function endHold() {
+		cancelAnimationFrame(holdRaf);
+		if (!hold) return;
+		hold = null;
+		if (!scroller) return;
+		setStuck(gap() < 2);
+		lastTop = scroller.scrollTop;
+		showJump = gap() >= NEAR;
+		if (!firstOpen && !held) {
+			if (stuck) leftAt.delete(chat.id);
+			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
+		}
+	}
+	$effect(() => {
+		const el = scroller;
+		if (!el) return;
+		// capture: measured before the toggle's own handler changes anything
+		el.addEventListener("click", onFoldClick, true);
+		return () => {
+			el.removeEventListener("click", onFoldClick, true);
+			cancelAnimationFrame(holdRaf);
+			hold = null;
+		};
+	});
+
 	// The in-chat search scrolls away from the end: stop following the stream so the view stays on the match.
 	$effect(() => {
 		const el = scroller;
@@ -177,6 +237,8 @@
 
 	export function toBottom(smooth = false) {
 		if (!scroller) return;
+		cancelAnimationFrame(holdRaf);
+		hold = null;
 		setStuck(true);
 		if (smooth) {
 			smoothing = true;
