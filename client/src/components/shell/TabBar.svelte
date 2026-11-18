@@ -268,7 +268,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gbox.on" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
@@ -441,9 +441,9 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		height: 28px;
-		padding: 0 8px;
-		border-radius: var(--radius-sm);
+		height: 32px;
+		padding: 0 4px; /* the chips sit 4px in on every side, so the box's 12px corner and their 8px are concentric */
+		border-radius: 12px; /* --radius-sm + the 4px inset */
 		outline: 1px solid var(--border-strong);
 		outline-offset: -1px;
 		transition:
@@ -453,22 +453,23 @@
 	.gbox + .gbox {
 		margin-left: 4px;
 	}
-	.gbox.on {
-		outline-color: transparent;
-	}
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
 	}
-	/* the open group's box is the grey front-tab pill: its own open chip (SessionStrip's --bg-active) would vanish into it,
-	   so that chip takes the page colour, the pane it shows */
+	/* the group stays an outlined box whether open or not; open, its front chip is the front tab's own grey pill, the same
+	   height and corner as a lone tab's, so "this one is open" looks the same inside a group as outside */
 	@media (min-width: 601px) {
-		.gbox.on :global(.gchip.on) {
-			background: var(--bg);
+		.gbox :global(.gchip) {
+			height: 24px;
+		}
+		.gbox :global(.gchip.on),
+		.gbox :global(.strip > .slide-ind) {
+			background: var(--bg-tabbar-on);
 		}
 	}
 	/* a chip under the pointer on the strip's tone (SessionStrip's own hover is the page's --bg-hover) */
 	@media (hover: hover) and (min-width: 601px) {
-		.gbox:not(.on) :global(.gchip:hover) {
+		.gbox :global(.gchip:not(.on):hover) {
 			background: var(--bg-tabbar-hover);
 		}
 	}
