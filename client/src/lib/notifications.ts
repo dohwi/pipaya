@@ -100,7 +100,7 @@ export class NotificationClient {
   private home = new Map<string, Api>();
   private visible: () => string[] = () => [];
   private active: () => string | null = () => null;
-  private timer?: ReturnType<typeof setInterval>;
+  private timer?: ReturnType<typeof setTimeout>;
   private registration?: PushRegistration | null;
   private seen = new Set<string>();
 
@@ -112,11 +112,17 @@ export class NotificationClient {
   private providers: ("fcm" | "apns")[] = [];
   init(visible: () => string[], navigate: (sessionId: string, api?: Api) => void, native?: NativePushAdapter, active: () => string | null = () => null) {
     this.active = active; this.visible = visible; this.navigate = navigate; this.native = native;
-    const update = () => { void this.heartbeat(); };
+    // Looked at: every 10 s, shorter than the server's phone focus window (25 s), so a phone that stays in front keeps
+    // counting as looked at. Not looked at: every 30 s, just inside the server's 45 s presence lease, so a hidden desktop
+    // window still counts as the device that shows notifications without waking the radio three times as often.
+    const schedule = () => {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => { void this.heartbeat(); schedule(); }, attended() ? 10_000 : 30_000);
+    };
+    const update = () => { void this.heartbeat(); schedule(); };
     window.addEventListener("focus", update); window.addEventListener("blur", update); window.addEventListener("pagehide", update); document.addEventListener("visibilitychange", update);
     this.cleanup.push(() => { window.removeEventListener("focus", update); window.removeEventListener("blur", update); window.removeEventListener("pagehide", update); document.removeEventListener("visibilitychange", update); });
-    // Shorter than the server's phone focus window (25 s), so a phone that stays in front keeps counting as looked at.
-    this.timer = setInterval(update, 10_000);
+    schedule();
     if (isTauri() && isWindows()) void import("@tauri-apps/api/event").then(async ev => {
       const off = await ev.listen<string>("pipaya://open-session", e => { if (e.payload) this.openSession(e.payload); });
       this.cleanup.push(off);
@@ -276,7 +282,7 @@ export class NotificationClient {
     this.pendingTest?.({ ok: true });
     await from?.notificationReceived(payload.id).catch(() => {});
   }
-  stop() { clearInterval(this.timer); for (const fn of this.cleanup.splice(0)) fn(); this.connect(null); }
+  stop() { clearTimeout(this.timer); for (const fn of this.cleanup.splice(0)) fn(); this.connect(null); }
 }
 
 export const notifications = new NotificationClient();

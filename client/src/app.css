@@ -1406,15 +1406,12 @@ html .glow-working.glow-working {
 	}
 }
 
-/* Window hidden (set in main.ts): looping animations stop so they do not burn CPU in the background. */
-html.page-hidden .spinner,
-html.page-hidden .dots i,
-html.page-hidden .shimmer,
-html.page-hidden .skeleton-bar::after,
-html.page-hidden .sdot.checking,
-html.page-hidden .prompt-line .cursor,
-html.page-hidden .glow-working {
-	animation-play-state: paused;
+/* Window hidden (set in main.ts): every animation pauses, component ones included (status pulses, graph rings, the
+   streaming caret), so a minimised window with a working agent does not keep the GPU and CPU awake. They resume when shown. */
+html.page-hidden *,
+html.page-hidden *::before,
+html.page-hidden *::after {
+	animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

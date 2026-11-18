@@ -87,6 +87,20 @@ describe("notification client", () => {
     c.stop();
   });
 
+  test("presence is re-sent every 10 s while looked at and every 30 s while hidden (inside the server's 45 s lease)", async () => {
+    const delays: number[] = [];
+    const real = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void, ms?: number) => { if (ms === 10_000 || ms === 30_000) delays.push(ms); return real(fn, ms); }) as typeof setTimeout;
+    try {
+      const c = new NotificationClient(); c.init(() => [], () => {});
+      expect(delays.at(-1)).toBe(30_000);
+      state.visible = "visible"; state.focus = true;
+      for (const f of listeners.get("w:focus") ?? []) f();
+      expect(delays.at(-1)).toBe(10_000);
+      c.stop();
+    } finally { globalThis.setTimeout = real; }
+  });
+
   test("a notice from a server not in view is shown even while the app is looked at, and its click names that server", async () => {
     const c = new NotificationClient(); const open = fakeApi(), other = fakeApi();
     const opened: { sid: string; api?: unknown }[] = [];
