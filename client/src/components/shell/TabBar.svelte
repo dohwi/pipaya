@@ -304,9 +304,9 @@
 {/if}
 
 <style>
-	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px pill of
-	   the page's own colour (8px corners all round, a hairline ring and a soft shadow) floating in the middle of the bar, clear of
-	   its bottom hairline, as in Chrome's newer strips. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
+	/* A browser's tab strip (wider than a phone): the bar is a tone off the page (--bg-tabbar), the tab in front is a 28px grey pill
+	   (--bg-tabbar-on, 8px corners all round, no ring or shadow) set into the middle of the bar, clear of its bottom hairline:
+	   filled rather than outlined, so it never reads like a group's outlined box beside it. The other tabs have no fill and no hairline: each is as wide as its content (136 to 200px, the title
 	   ellipsised past that), so they sit edge to edge, and the strip scrolls sideways when they do not fit. "+" and the tab count are pinned to the bar's right end (TabControls), not after the
 	   last tab, so they stay where the hand found them whether one tab is open or twenty. */
 	.bar {
@@ -363,14 +363,10 @@
 		}
 	}
 
-	/* the front tab's fill is the sliding marker: a floating pill of the page colour, ringed in the strip's hairline tone
-	   and lifted by a soft shadow, so it reads as a card resting on the bar, not a sheet joined to the page */
+	/* the front tab's fill is the sliding marker: a grey pill sunk into the bar, a step past hover */
 	.tabs > :global(.slide-ind) {
-		background: var(--bg);
+		background: var(--bg-tabbar-on);
 		border-radius: var(--radius-sm);
-		box-shadow:
-			0 0 0 1px var(--tabbar-line),
-			var(--shadow-soft);
 	}
 
 	.tab {
@@ -397,15 +393,11 @@
 			margin var(--motion-fast) var(--ease-std);
 	}
 	.tab.on {
-		background: var(--bg); /* until the sliding marker is placed */
-		box-shadow:
-			0 0 0 1px var(--tabbar-line),
-			var(--shadow-soft);
+		background: var(--bg-tabbar-on); /* until the sliding marker is placed */
 		color: var(--text);
 	}
 	.tabs:global([data-indicator-ready]) .tab.on {
 		background: transparent;
-		box-shadow: none;
 	}
 	/* hover: the same pill as the front tab, filled a step darker than the bar */
 	.fill {
@@ -466,6 +458,13 @@
 	}
 	.gbox:not(.on).menuopen {
 		outline-color: var(--text-faint);
+	}
+	/* the open group's box is the grey front-tab pill: its own open chip (SessionStrip's --bg-active) would vanish into it,
+	   so that chip takes the page colour, the pane it shows */
+	@media (min-width: 601px) {
+		.gbox.on :global(.gchip.on) {
+			background: var(--bg);
+		}
 	}
 	/* a chip under the pointer on the strip's tone (SessionStrip's own hover is the page's --bg-hover) */
 	@media (hover: hover) and (min-width: 601px) {
@@ -654,7 +653,6 @@
 		.tabs > :global(.slide-ind) {
 			background: var(--bg-active);
 			border-radius: var(--radius-sm);
-			box-shadow: none;
 		}
 		.tab {
 			flex: none;
@@ -666,7 +664,6 @@
 		}
 		.tab.on {
 			background: var(--bg-active);
-			box-shadow: none;
 		}
 		.t {
 			flex: 0 1 auto;
