@@ -45,7 +45,7 @@
 	const answer = $derived(typeof run.details?.answer === "string" ? run.details.answer : "");
 	const asked = $derived(!!run.question || !!answer);
 	const exitCode = $derived(typeof run.details?.exitCode === "number" ? (run.details.exitCode as number) : null);
-	/** A failed call (error, or a non-zero exit code): a red cross by the time instead of a pill */
+	/** A failed call (error, or a non-zero exit code): said in a quiet word by the time ("종료 코드 2", "실패"), never in red here */
 	const failed = $derived(run.state === "error" || (run.state === "done" && !!exitCode));
 	const label = $derived(
 		{
@@ -79,13 +79,12 @@
 	<!-- One quiet line, built like the work box's own summary line above it: icon, what, how it went, time, arrow -->
 	<button class="head" onclick={() => (open = !open)} aria-expanded={open}>
 		<span class="kind"><Icon name={toolIcon(name, args)} /></span>
-		<span class="name mono" class:shimmer={working} title={failed ? label : undefined}>{toolLabel(name, args)}</span>
+		<span class="name mono" class:shimmer={working}>{toolLabel(name, args)}</span>
 		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}
 		<span class="meta">
 			{#if working}<span class="dots" role="status" aria-label={label}><i></i><i></i><i></i></span>
 			{:else if awaiting}<span class="need">{label}</span>
-			{:else if failed}<span class="sr-only">{label}</span>
-			{:else if run.state === "skipped"}<span class="note">{label}</span>{/if}
+			{:else if failed || run.state === "skipped"}<span class="note">{label}</span>{/if}
 			{#if run.durationMs != null && !working}
 				{#if run.endedAt}<time class="dur" datetime={new Date(run.endedAt).toISOString()} title={t("{when} 완료", { when: new Date(run.endedAt).toLocaleString(localeTag()) })}>{duration(run.durationMs)}</time>
 				{:else}<span class="dur">{duration(run.durationMs)}</span>{/if}
@@ -116,8 +115,8 @@
 			{#if custom}
 				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
 			{:else if run.output && !asked}
-				<div class="label">{t("출력")}{#if failed && exitCode}<span class="why">{label}</span>{/if}</div>
-				{#if run.output}<pre class="mono out" class:err={run.state === "error"}>{clip(run.output, 12000)}</pre>{/if}
+				<div class="label">{t("출력")}</div>
+				{#if run.output}<pre class="mono out">{clip(run.output, 12000)}</pre>{/if}
 			{/if}
 		</div>
 	{/if}
@@ -220,7 +219,10 @@
 		font-variant-numeric: tabular-nums; /* 940ms over 212ms: every digit as wide, so the times line up row to row */
 		color: var(--text-faint);
 	}
+	/* how it ended when that is not plain success: a faint word in the time's size. The one red notice is the folded
+	   work box's "N개 실패"; once it is opened the rows stay calm */
 	.note {
+		flex: none;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		color: var(--text-faint);
@@ -232,10 +234,6 @@
 	}
 	.dots {
 		color: var(--text-faint);
-	}
-	/* a failed call: only its name turns red (no cross, no frame); why it failed is under "출력" when it is opened */
-	.failed .name {
-		color: var(--danger);
 	}
 	.awaiting .kind,
 	.awaiting .name {
@@ -260,11 +258,6 @@
 	/* what the call carried and gave back, under its name (16px icon + 8px gap = 24 in), 8 below its line */
 	.body {
 		padding: 4px 0 8px 24px;
-	}
-	/* why it failed, next to "출력", in the failure colour (the pill that used to say it is gone) */
-	.label .why {
-		margin-left: 8px;
-		color: var(--danger);
 	}
 	.label {
 		margin: 8px 0 4px;
@@ -296,9 +289,6 @@
 	.cmd .prompt {
 		color: var(--text-faint);
 		user-select: none;
-	}
-	.out.err {
-		color: var(--danger);
 	}
 	.diff {
 		border-radius: var(--radius-sm);
