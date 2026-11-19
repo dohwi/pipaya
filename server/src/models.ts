@@ -6,7 +6,7 @@ import type { ServiceTier } from "./openrouter-catalog.ts";
 import { badRequest, HttpError } from "./errors.ts";
 
 /** Match the actual transport destination, not the provider name (custom connections can shadow built-ins). */
-export const isOpenRouterChat = (m: Model<Api> | undefined) => !!m && /^https:\/\/(?:us\.|eu\.)?openrouter\.ai\/api(?:\/v1)?\/?$/.test(m.baseUrl) && ["openai-completions", "openai-responses", "anthropic-messages"].includes(m.api);
+export const isOpenRouterChat = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined) => !!m && /^https:\/\/(?:us\.|eu\.)?openrouter\.ai\/api(?:\/v1)?\/?$/.test(m.baseUrl) && ["openai-completions", "openai-responses", "anthropic-messages"].includes(m.api);
 
 /** OpenRouter accepts service_tier on all three chat APIs. Check the final, auth-resolved target too. */
 export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: ServiceTier): SimpleStreamOptions {
@@ -19,7 +19,13 @@ export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: Ser
 
 export async function checkServiceTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
 	if (!isOpenRouterChat(reg.models.getModel(provider, id))) throw badRequest("service tier requires an OpenRouter connection");
-	const tiers = await reg.serviceTiers?.(id).catch(() => { throw new HttpError(502, "catalog_unavailable", "OpenRouter endpoint information unavailable"); });
+	await checkAdvertisedTier(reg.serviceTiers, id, tier);
+}
+
+/** Standard is an explicit routing instruction, not an optional paid endpoint in the catalog. */
+export async function checkAdvertisedTier(lookup: ModelRegistry["serviceTiers"], id: string, tier: ServiceTier) {
+	if (tier === "default") return;
+	const tiers = await lookup?.(id).catch(() => { throw new HttpError(502, "catalog_unavailable", "OpenRouter endpoint information unavailable"); });
 	if (!tiers?.includes(tier)) throw badRequest("service tier is not available for this model");
 }
 
@@ -47,6 +53,11 @@ export function reasoningOption(level: ThinkingLevel | undefined, model: Model<A
 export function modelDefaultLevel(m: Model<Api>): ThinkingLevel | undefined {
 	const v = (m as Model<Api> & { defaultThinkingLevel?: unknown }).defaultThinkingLevel;
 	return typeof v === "string" && (THINKING_LEVELS as readonly string[]).includes(v) ? (v as ThinkingLevel) : undefined;
+}
+
+/** Only a direct OpenRouter connection can declare a starting tier. */
+export function modelDefaultTier(m: Model<Api> | undefined): ServiceTier | undefined {
+	return isOpenRouterChat(m) ? (m as Model<Api> & { defaultServiceTier?: ServiceTier }).defaultServiceTier : undefined;
 }
 
 /** Starts with every pi-ai built-in provider (OpenAI, Anthropic, Google, OpenRouter, Copilot …); Configuration adds the user's own endpoints on top. */
@@ -77,6 +88,7 @@ export interface ModelInfo {
 	icon?: string;
 	/** Where a new chat with this model starts, when its owner chose a strength (absent = the device's last choice) */
 	defaultThinkingLevel?: ThinkingLevel;
+	defaultServiceTier?: ServiceTier;
 	configured: boolean;
 	/** false = the connection's own model list no longer contains this model */
 	available: boolean;
@@ -89,7 +101,7 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		id: m.id,
 		name: m.name,
 		api: m.api,
-		...(isOpenRouterChat(m) ? { openRouterTiers: true } : {}),
+		...(isOpenRouterChat(m) ? { openRouterTiers: true, defaultServiceTier: modelDefaultTier(m) } : {}),
 		reasoning: m.reasoning,
 		// Every strength the model accepts, `off` included: "empty" means the model has no reasoning at all.
 		thinkingLevels: m.reasoning ? getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [],

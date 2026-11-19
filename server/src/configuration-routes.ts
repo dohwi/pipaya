@@ -159,7 +159,7 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 		handler: async (req) => config.discover(req.body),
 	});
 	app.put("/configuration/providers/:id", {
-		schema: { params: IdParams, body: CustomProviderBody, response: { 200: CustomProviderPublic, ...errors(400, 401, 409) } },
+		schema: { params: IdParams, body: CustomProviderBody, response: { 200: CustomProviderPublic, ...errors(400, 401, 409, 502) } },
 		handler: async (req) => {
 			const saved = await config.save(req.params.id, req.body);
 			bus.publish(null, "configuration_updated", { scope: "provider", id: req.params.id, action: "saved" });

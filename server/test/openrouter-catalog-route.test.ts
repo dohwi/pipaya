@@ -117,3 +117,39 @@ test("only direct OpenRouter chats can save advertised tiers; default, reset and
 	expect((await call("PUT", "/configuration/defaults", { ...proxy, serviceTier: "priority" })).statusCode).toBe(400);
 	expect((await get(path)).serviceTier).toBeNull();
 });
+
+test("new chats snapshot the chosen speed: explicit session > new-chat setting > model default > workspace", async () => {
+	const call = async (method: "POST" | "PUT" | "PATCH", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
+	const id = "anthropic/claude-fable-5.2", provider = "starting-speed";
+	const selection = { provider, model: id, thinkingLevel: "high" };
+	const model = { id, contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false, defaultServiceTier: "priority" };
+	const conn = { name: "Router", baseUrl: "https://openrouter.ai/api/v1", api: "openai-completions", authRequired: false, models: [model] };
+	const save = (body: object) => call("PUT", `/configuration/providers/${provider}`, body);
+	const defaults = (body: object) => call("PUT", "/configuration/defaults", body);
+	const create = async (body = {}) => { const r = await call("POST", "/sessions", body); expect(r.statusCode).toBe(201); return r.json(); };
+	await get("/configuration/catalog");
+	expect((await save(conn)).json().models[0].defaultServiceTier).toBe("priority");
+	const inherited = (await defaults(selection)).json();
+	expect(inherited.defaults.serviceTier).toBeUndefined();
+	expect(inherited.effectiveDefaults.serviceTier).toBe("priority");
+	const existing = await create();
+	expect(existing).toMatchObject({ serviceTier: "priority", thinkingLevel: "high" });
+	expect((await defaults({ ...selection, serviceTier: "default" })).json().effectiveDefaults.serviceTier).toBe("default");
+	expect(await create()).toMatchObject({ serviceTier: "default", thinkingLevel: "high" });
+	expect((await create({ serviceTier: null })).serviceTier).toBeNull();
+	expect((await create({ serviceTier: "priority" })).serviceTier).toBe("priority");
+	expect((await get(`/sessions/${existing.id}`)).serviceTier).toBe("priority");
+	expect((await defaults({ ...selection, serviceTier: null })).json().effectiveDefaults.serviceTier).toBeNull();
+	expect((await create()).serviceTier).toBeNull();
+	await defaults(selection);
+	expect((await save({ ...conn, models: [{ ...model, defaultServiceTier: "default" }] })).statusCode).toBe(200);
+	expect((await create()).serviceTier).toBe("default");
+	for (const body of [{ ...conn, baseUrl: "https://proxy.invalid/v1" }, { ...conn, models: [{ ...model, imageGeneration: true }] }, { ...conn, models: [{ ...model, defaultServiceTier: "ultrafast" }] }]) {
+		expect((await save(body)).statusCode).toBe(400);
+	}
+	expect((await call("PATCH", `/sessions/${existing.id}`, { serviceTier: "default" })).json().serviceTier).toBe("default");
+	// A connection whose id sounds like OpenRouter still cannot pin a tier on a different transport.
+	const shadow = "openrouter-shadow";
+	expect((await call("PUT", `/configuration/providers/${shadow}`, { ...conn, baseUrl: "http://127.0.0.1:9/v1", models: [{ id, contextWindow: 10000, maxTokens: 200, reasoning: false, vision: false }] })).statusCode).toBe(200);
+	expect((await call("POST", "/sessions", { provider: shadow, model: id, serviceTier: "default" })).statusCode).toBe(400);
+});

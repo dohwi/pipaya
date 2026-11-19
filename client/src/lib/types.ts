@@ -14,8 +14,7 @@ export interface Group {
  * effort, or the provider's "none"), so a model that always reasons keeps its own default.
  */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-export type ServiceTier = "flex" | "priority" | "ultrafast";
-export const tierLabel = (t: ServiceTier) => ({ flex: "Flex", priority: "Fast", ultrafast: "Ultrafast" })[t];
+export type ServiceTier = "default" | "flex" | "priority" | "ultrafast";
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export type SendMode = "prompt" | "steer" | "follow_up";
 
@@ -317,6 +316,7 @@ export interface ModelInfo {
 	openRouterTiers?: boolean;
 	/** Where a new chat with this model starts, when its owner chose one */
 	defaultThinkingLevel?: ThinkingLevel;
+	defaultServiceTier?: ServiceTier;
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -396,6 +396,7 @@ export interface CustomModel {
 	catalogId?: string | null;
 	/** Where a new chat with this model starts; absent = this device's last choice */
 	defaultThinkingLevel?: ThinkingLevel;
+	defaultServiceTier?: ServiceTier;
 	/** Response only: the upstream's model list no longer contains this model */
 	unavailable?: boolean;
 	/** Response only: where the strengths come from. */

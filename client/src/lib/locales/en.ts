@@ -6,8 +6,13 @@
  */
 export const en: Record<string, string> = {
 	"응답 속도": "Response speed",
-	"연결 기본값": "Connection default",
-	"Fast와 Ultrafast는 추가 요금이 발생할 수 있습니다.": "Fast and Ultrafast may cost extra.",
+	"표준": "Standard",
+	"자동은 OpenRouter 설정을 따르고, 표준은 가속을 끕니다.": "Auto follows OpenRouter settings. Standard turns off acceleration.",
+	"고속 등급은 추가 요금이 들 수 있습니다.": "Faster tiers may cost extra.",
+	"모델의 기본 속도 따르기": "Use this model’s default speed",
+	"새 대화 기본 속도": "Default speed for new chats",
+	"새 대화는 {tier} 속도로 시작합니다.": "New chats start at {tier} speed.",
+	"새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.": "New chats follow OpenRouter’s speed settings.",
 	"OpenRouter 응답 등급: {tiers} (참고용)": "OpenRouter service tiers: {tiers} (reference only)",
 	"응답 등급을 확인하지 못했습니다.": "Could not check service tiers.",
 	/* ---- first run and empty conversation ---- */

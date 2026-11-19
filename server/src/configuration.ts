@@ -12,8 +12,8 @@ import { openAIImages } from "./openai-images.ts";
 import { sniffImage } from "./image-file.ts";
 import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
-import { builtinProvider, checkServiceTier, type ModelRegistry } from "./models.ts";
-import { OptionalTier, Thinking } from "./schemas.ts";
+import { builtinProvider, checkAdvertisedTier, checkServiceTier, isOpenRouterChat, modelDefaultTier, type ModelRegistry } from "./models.ts";
+import { OptionalTier, Thinking, Tier } from "./schemas.ts";
 import { createOpenRouterCatalog, type OpenRouterCatalog } from "./openrouter-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
@@ -41,6 +41,7 @@ export const CustomProviderBody = Type.Object({
 		thinkingLevels: Type.Optional(Type.Array(Thinking, { uniqueItems: true, description: "Reasoning strengths this model accepts. Left out or empty: looked up in the OpenRouter catalog (by catalogId, else by name), else minimal..high." })),
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
 		defaultThinkingLevel: Type.Optional(Thinking),
+		defaultServiceTier: Type.Optional(Tier),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
 /**
@@ -362,9 +363,13 @@ export class Configuration {
 	}
 
 	effectiveDefaults(): DefaultModelSelection | null {
-		const selection = this.defaults() ?? (this.cfg.defaultProvider && this.cfg.defaultModel
+		const selection: DefaultModelSelection | null = this.defaults() ?? (this.cfg.defaultProvider && this.cfg.defaultModel
 			? { provider: this.cfg.defaultProvider, model: this.cfg.defaultModel } : null);
-		return selection && this.registry.models.getModel(selection.provider, selection.model) ? selection : null;
+		if (!selection) return null;
+		const model = this.registry.models.getModel(selection.provider, selection.model);
+		if (!model) return null;
+		const own = modelDefaultTier(model);
+		return selection.serviceTier === undefined && own ? { ...selection, serviceTier: own } : selection;
 	}
 
 	async snapshot() {
@@ -403,6 +408,10 @@ export class Configuration {
 		if (input.models.some((m) => m.icon?.startsWith("img:") && !this.images.has(m.icon))) throw badRequest("icon image not found: upload it first");
 		for (const m of input.models) {
 			if (m.imageApi && !m.imageGeneration) throw badRequest(`${m.id.trim()}: only an image model can have an image API`);
+			if (m.defaultServiceTier) {
+				if (m.imageGeneration || !isOpenRouterChat({ baseUrl: url.toString(), api: input.api })) throw badRequest("a default service tier requires an OpenRouter chat model");
+				await checkAdvertisedTier(this.registry.serviceTiers, m.id.trim(), m.defaultServiceTier);
+			}
 			if (!m.defaultThinkingLevel) continue;
 			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
 			if (!supportedLevelsFor(this.catalog, m).includes(m.defaultThinkingLevel)) throw badRequest(`${m.id.trim()}: the default thinking level must be one of ${supportedLevelsFor(this.catalog, m).join(", ")}`);
@@ -579,6 +588,7 @@ export class Configuration {
 	private buildProvider(p: CustomProvider) {
 		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
+			...(m.defaultServiceTier ? { defaultServiceTier: m.defaultServiceTier } : {}),
 			...(m.imageApi ? { imageApi: m.imageApi } : {}),
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the OpenRouter catalog, and unknown names keep the defaults.
