@@ -196,6 +196,7 @@ export const PatchSessionBody = Type.Object({
 export const ListSessionsQuery = Type.Object({
 	limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, default: 50 })),
 	before: Type.Optional(Type.Integer({ minimum: 0, description: "Cursor: the previous page's nextBefore" })),
+	beforeId: Type.Optional(Type.String({ description: "Pair with before: the previous page's nextBeforeId" })),
 	closed: Type.Optional(Type.Boolean({ description: "true = only closed sessions, false = only active ones; omit for both" })),
 });
 
@@ -222,6 +223,7 @@ export const DeleteSessionsResult = Type.Object({ deleted: Type.Array(Type.Strin
 export const SessionList = Type.Object({
 	sessions: Type.Array(Session),
 	nextBefore: Nullable(Type.Integer()),
+	nextBeforeId: Nullable(Type.String()),
 });
 
 export const ForkBody = Type.Object({

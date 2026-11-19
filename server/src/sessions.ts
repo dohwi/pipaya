@@ -914,20 +914,18 @@ export class SessionManager {
 	delegateRuns(): DelegateRun[] {
 		const pol = this.delegatePolicy();
 		const roles = new Map<string, Map<string, SubagentDef>>(); // per cwd, read once per request
-		return this.store.delegateCalls().flatMap((c) => {
-			const rec = this.store.get(c.sessionId);
-			if (!rec) return [];
-			let defs = roles.get(rec.cwd);
-			if (!defs) roles.set(rec.cwd, (defs = loadSubagents(rec.cwd, this.home, this.disabledSubagents())));
+		return this.store.delegateCalls().map(({ cwd, provider, sessionModel, ...c }) => {
+			let defs = roles.get(cwd);
+			if (!defs) roles.set(cwd, (defs = loadSubagents(cwd, this.home, this.disabledSubagents())));
 			const def = defs.get(c.role);
 			const running = c.doneAt === null && (this.live.get(c.sessionId)?.agent.state.pendingToolCalls.has(c.callId) ?? false);
 			let model = c.model;
 			if (!model) {
 				const asked = c.asked && pol.policy !== "defined" ? c.asked : undefined;
 				const spec = asked ?? def?.model;
-				model = !spec ? `${rec.provider}/${rec.model}` : spec.includes("/") ? spec : `${rec.provider}/${spec}`;
+				model = !spec ? `${provider}/${sessionModel}` : spec.includes("/") ? spec : `${provider}/${spec}`;
 			}
-			return [{ ...c, free: !def, running, model }];
+			return { ...c, free: !def, running, model };
 		});
 	}
 

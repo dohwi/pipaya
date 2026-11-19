@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { untrack } from "svelte";
 	import RangeField from "../ui/RangeField.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { Api, errorText } from "../../lib/api";
+	import { modelSetting } from "../../lib/model-setting.svelte";
 	import ModelField from "./ModelField.svelte";
 	import type { CompactionSettings, ModelInfo, ProviderInfo } from "../../lib/types";
 
@@ -15,60 +14,17 @@
 	 */
 	let { serverId, models, providers }: { serverId: string; models: ModelInfo[]; providers: ProviderInfo[] } = $props();
 
-	let settings = $state<CompactionSettings | null>(null);
-	let defaults = $state<CompactionSettings | null>(null);
-	let pct = $state<number | null>(null); // slider value while dragging
-	let error = $state("");
-	let busy = $state(false);
-	let seq = 0;
-
 	const server = $derived(app.servers.find((s) => s.id === serverId));
-	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
-
-	async function load(reset: boolean) {
-		const mine = ++seq;
-		if (reset) settings = null; // only when the server changes: unmounting the section would reset the scroll
-		error = "";
-		const a = api();
-		if (!a) return;
-		try {
-			const r = await a.compactionSettings();
-			if (mine === seq) { settings = r.settings; defaults = r.defaults; }
-		} catch {
-			/* unreachable: the section stays hidden */
-		}
-	}
-	let loadedFor = "";
-	$effect(() => {
-		const id = serverId;
-		untrack(() => {
-			const changed = id !== loadedFor;
-			loadedFor = id;
-			void load(changed);
-		});
-	});
-
-	async function save(next: CompactionSettings) {
-		const a = api();
-		if (!a || !settings) return;
-		const before = settings;
-		settings = next; // shown at once; put back if the server refuses
-		busy = true;
-		error = "";
-		try {
-			settings = (await a.setCompactionSettings(next)).settings;
-		} catch (e) {
-			settings = before;
-			error = t("압축 설정을 저장하지 못했습니다: {error}", { error: errorText(e) });
-		} finally {
-			busy = false;
-		}
-	}
-
+	const setting = modelSetting<CompactionSettings>(
+		() => server, (a) => a.compactionSettings(), (a, next) => a.setCompactionSettings(next),
+		(error) => t("압축 설정을 저장하지 못했습니다: {error}", { error }),
+	);
+	const settings = $derived(setting.settings);
+	let pct = $state<number | null>(null); // slider value while dragging
 	const info = $derived(settings?.model ? models.find((m) => m.provider === settings!.model!.provider && m.id === settings!.model!.model) : undefined);
 	/** The saved model's connection exists but has no usable key (its models are then missing from the list). */
 	const noKey = $derived(Boolean(settings?.model) && providers.some((p) => p.id === settings!.model!.provider && !p.configured));
-	const def = $derived(defaults);
+	const def = $derived(setting.defaults);
 	const own = $derived(serverId === app.serverId); // favourites are the open server's
 </script>
 
@@ -89,10 +45,10 @@
 					allowUnset
 					unsetLabel={t("대화 모델 그대로 사용")}
 					placeholder={t("대화 모델 그대로 사용")}
-					disabled={busy}
+					disabled={setting.busy}
 					invalid={Boolean(s.model) && (noKey || !info || !info.configured)}
 					label={t("압축 모델")}
-					onpick={(c) => void save({ ...s, model: c })}
+					onpick={(c) => void setting.save({ ...s, model: c })}
 				/>
 			</div>
 		</div>
@@ -108,7 +64,7 @@
 			{/if}
 		</p>
 		<SettingRow label={t("자동 압축")} hint={t("컨텍스트가 가득 차면 자동으로 압축")}>
-			<Switch checked={s.auto} label={t("자동 압축")} disabled={busy} onchange={(on) => void save({ ...s, auto: on })} />
+			<Switch checked={s.auto} label={t("자동 압축")} disabled={setting.busy} onchange={(on) => void setting.save({ ...s, auto: on })} />
 		</SettingRow>
 		<RangeField
 			label={t("자동 압축 기준")}
@@ -116,12 +72,12 @@
 			max={95}
 			step={5}
 			value={pct ?? s.thresholdPercent}
-			disabled={busy || !s.auto}
+			disabled={setting.busy || !s.auto}
 			oninput={(v) => (pct = v)}
-			onchange={(v) => { pct = null; void save({ ...s, thresholdPercent: v }); }}
+			onchange={(v) => { pct = null; void setting.save({ ...s, thresholdPercent: v }); }}
 		/>
 		<p class="hint note">{t("컨텍스트가 {percent}%를 넘으면 다음 메시지 전에 압축합니다 (기본 {default}%)", { percent: pct ?? s.thresholdPercent, default: def?.thresholdPercent ?? 90 })}</p>
-		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
+		{#if setting.error}<p class="hint note" role="alert">{setting.error}</p>{/if}
 	</section>
 {/if}
 

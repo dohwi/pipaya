@@ -7,6 +7,7 @@
 	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
 	import { openExternal } from "../../lib/tauri";
+	import { MediaUrls } from "../../lib/media-urls";
 	import { patchHtml } from "../../lib/patch-html";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
 
@@ -40,21 +41,27 @@
 
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
 	// Only once the reply has settled: while streaming, the path may still be half written.
-	const loaded = new Map<string, string>();
+	let media = $derived.by(() => {
+		const api = app.api, id = sessionId;
+		return api && id ? { api, id, urls: new MediaUrls() } : null;
+	});
+	$effect(() => {
+		const owner = media;
+		return () => owner?.urls.dispose();
+	});
 	/** the video players this message drew: a player left on the whole screen goes away with the message */
 	const videos: HTMLDivElement[] = [];
 	$effect(() => {
 		// read `html` for real: a bare `html;` is not a dependency, so the pictures were looked for only before the text was in the DOM
 		const rendered = html;
 		const host = root;
-		const api = app.api;
-		if (!rendered || !host || !api || !sessionId || streaming) return;
-		const id = sessionId;
+		const owner = media;
+		if (!rendered || !host || !owner || streaming) return;
 		const ctl = new AbortController();
 		// the new HTML is put into the page after this effect runs: look for the picture slots once it is there
 		void tick().then(() => {
 			if (ctl.signal.aborted) return;
-			fillPictures(host, api, id, ctl);
+			fillPictures(host, owner, ctl.signal);
 		});
 		return () => ctl.abort();
 	});
@@ -70,72 +77,41 @@
 			g.append(badge);
 		}
 	}
-	function fillPictures(host: HTMLElement, api: NonNullable<typeof app.api>, id: string, ctl: AbortController) {
+	function fillPictures(host: HTMLElement, owner: NonNullable<typeof media>, signal: AbortSignal) {
 		setupGalleries(host);
-		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-media[data-wd-src]")) {
+		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-media[data-wd-src], span.wd-img[data-wd-src]")) {
 			const path = slot.dataset.wdSrc!;
-			const kind = slot.dataset.kind === "audio" ? "audio" : "video";
-			const show = (src: string) => {
-				if (!slot.isConnected) return;
+			const kind = slot.classList.contains("wd-img") ? "image" : slot.dataset.kind === "audio" ? "audio" : "video";
+			void owner.urls.get(path, async (lifetime) => {
+				const blob = await owner.api.fetchFile(owner.id, path, lifetime);
+				if (blob.type.startsWith(`${kind}/`)) return blob;
+				if (kind === "image") throw new Error("Not an image");
+				// Some servers return application/octet-stream; players need a media type to pick a decoder.
+				return new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
+			}).then((src) => {
+				if (signal.aborted || !slot.isConnected) return;
 				if (kind === "video") {
 					const player = videoPlayer(src);
 					videos.push(player);
 					slot.replaceWith(player);
-					return;
+				} else if (kind === "audio") {
+					const audio = document.createElement("audio");
+					audio.src = src;
+					audio.controls = true;
+					audio.preload = "metadata";
+					audio.className = "wd-audio";
+					slot.replaceWith(audio);
+				} else {
+					const img = document.createElement("img");
+					img.alt = slot.dataset.alt ?? "";
+					img.src = src;
+					img.className = "wd-pic";
+					slot.replaceWith(img);
 				}
-				const el = document.createElement("audio");
-				el.src = src;
-				el.controls = true;
-				el.preload = "metadata";
-				el.className = "wd-audio";
-				slot.replaceWith(el);
-			};
-			const key = `${id}\u0000${path}`;
-			const hit = loaded.get(key);
-			if (hit) {
-				show(hit);
-				continue;
-			}
-			api.fetchFile(id, path, ctl.signal)
-				.then((blob) => {
-					// some servers label a video application/octet-stream; the player needs the real type to pick a decoder
-					const typed = blob.type.startsWith(`${kind}/`) ? blob : new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
-					const src = URL.createObjectURL(typed);
-					loaded.set(key, src);
-					show(src);
-				})
-				.catch(() => slot.classList.add("missing"));
-		}
-		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
-			const path = slot.dataset.wdSrc!;
-			const alt = slot.dataset.alt ?? "";
-			const show = (src: string) => {
-				if (!slot.isConnected) return;
-				const img = document.createElement("img");
-				img.alt = alt;
-				img.src = src;
-				img.className = "wd-pic";
-				slot.replaceWith(img);
-			};
-			const key = `${id}\u0000${path}`;
-			const hit = loaded.get(key);
-			if (hit) {
-				show(hit);
-				continue;
-			}
-			api.fetchFile(id, path, ctl.signal)
-				.then((blob) => {
-					if (!blob.type.startsWith("image/")) return;
-					const src = URL.createObjectURL(blob);
-					loaded.set(key, src);
-					show(src);
-				})
-				.catch(() => slot.classList.add("missing"));
+			}).catch(() => { if (!signal.aborted) slot.classList.add("missing"); });
 		}
 	}
 	onDestroy(() => {
-		for (const src of loaded.values()) URL.revokeObjectURL(src);
-		loaded.clear();
 		for (const player of videos) closeVideoView(player);
 		videos.length = 0;
 	});
