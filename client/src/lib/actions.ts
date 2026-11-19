@@ -22,6 +22,7 @@ import {
   RENAME_KEY,
   renameShouldFallThrough,
   splitCombo,
+  tabComboYieldsFocus,
   type ActionId,
 } from "./keys";
 import { renameNow } from "./rename-places";
@@ -304,7 +305,7 @@ export function cancelChord() {
 }
 
 /**
- * Ctrl+B is bound itself *and* starts longer shortcuts (Ctrl+B+B, Ctrl+B+V). Waiting forever would make plain Ctrl+B
+ * Ctrl+B is bound itself *and* starts longer shortcuts (Ctrl+B+B, Ctrl+B+\). Waiting forever would make plain Ctrl+B
  * dead, so when no next key comes within this time the shortcut runs its own action (like a prefix key in tmux).
  */
 const PREFIX_WAIT_MS = 1500;
@@ -366,6 +367,9 @@ export function onShortcut(e: KeyboardEvent) {
   // shortcut the app took from a terminal wins over the IME too: a half-composed Korean syllable must not eat it.
   if (e.isComposing && e.key !== "Escape" && !fromTerminal) return;
   if (MODIFIER_CODE.test(e.code)) return;
+  // AltGr arrives as Ctrl+Alt on Windows and Linux: on a German layout AltGr+ß types "\", which must not run Ctrl+Alt+-.
+  // Where text is typed, a key with AltGr down is a character, not a shortcut.
+  if (e.getModifierState?.("AltGraph") && (fromTerminal || typingTarget(e))) return;
   // Esc is fixed to "stop the agent". It only acts when nothing else wants the key: an open dialog/menu keeps it
   // (it closes them), and so does a text field other than the composer. Handlers that already used the key
   // (e.g. the composer's slash menu) called preventDefault, which returned above.
@@ -455,6 +459,8 @@ export function onShortcut(e: KeyboardEvent) {
       }
     }
     if (!id && !starts) continue;
+    // Shift+Tab outside the composer moves focus backwards, as everywhere else.
+    if (tabComboYieldsFocus(combo, e.target as HTMLElement | null)) return;
     // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there.
     if (isBareCombo(combo) && typingTarget(e)) return;
     e.preventDefault();

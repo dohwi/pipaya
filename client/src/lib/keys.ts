@@ -117,31 +117,31 @@ const BASE: Omit<ActionDef, "group">[] = [
     id: "prevWorkspace",
     label: msg("이전 작업 폴더로 이동"),
     hint: msg("사이드바에서 한 줄 위 작업 폴더의 첫 탭을 엽니다"),
-    default: "Alt+ArrowUp",
+    default: "Mod+Alt+BracketLeft",
   },
   {
     id: "nextWorkspace",
     label: msg("다음 작업 폴더로 이동"),
     hint: msg("사이드바에서 한 줄 아래 작업 폴더의 첫 탭을 엽니다"),
-    default: "Alt+ArrowDown",
+    default: "Mod+Alt+BracketRight",
   },
   {
     id: "prevTab",
     label: msg("이전 탭으로 이동"),
     hint: msg("탭 바에서 왼쪽 탭으로"),
-    default: "Alt+ArrowLeft",
+    default: "Mod+Shift+BracketLeft",
   },
   {
     id: "nextTab",
     label: msg("다음 탭으로 이동"),
     hint: msg("탭 바에서 오른쪽 탭으로"),
-    default: "Alt+ArrowRight",
+    default: "Mod+Shift+BracketRight",
   },
   {
     id: "tabOverview",
     label: msg("탭 모두 보기"),
     hint: msg("열린 탭을 한 화면에 모아 보고 고르거나 닫습니다"),
-    default: "Mod+Shift+Backslash",
+    default: "Mod+Shift+A",
   },
   {
     id: "lastSession",
@@ -177,12 +177,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     id: "cycleModel",
     label: msg("즐겨찾기 모델 순환"),
     hint: msg("별표한 모델만 순서대로 넘깁니다"),
-    default: "Mod+P",
+    default: "Mod+Shift+M",
   },
   {
     id: "cycleThinking",
     label: msg("추론 강도 변경"),
-    hint: msg("minimal → … → max, 끝에서 처음으로 돌아갑니다"),
+    hint: msg("minimal → … → max, 끝에서 처음으로 돌아갑니다. 입력창 밖에서 Shift+Tab은 포커스를 뒤로 옮깁니다"),
     default: "Shift+Tab",
   },
   {
@@ -257,7 +257,7 @@ const BASE: Omit<ActionDef, "group">[] = [
     id: "splitRight",
     label: msg("오른쪽으로 분할 (좌우)"),
     hint: msg("선택한 창 오른쪽에 새 대화를 엽니다"),
-    default: "Mod+B+V",
+    default: "Mod+B+Backslash",
   },
   {
     id: "newTerminal",
@@ -269,13 +269,13 @@ const BASE: Omit<ActionDef, "group">[] = [
     id: "splitTerminal",
     label: msg("아래에 터미널 열기"),
     hint: msg("선택한 창 아래에 터미널을 엽니다"),
-    default: "",
+    default: "Mod+Alt+Minus",
   },
   {
     id: "splitTerminalRight",
     label: msg("오른쪽에 터미널 열기"),
     hint: msg("선택한 창 오른쪽에 터미널을 엽니다"),
-    default: "Mod+Alt+Shift+Backquote",
+    default: "Mod+Alt+Backslash",
   },
   {
     id: "splitDown",
@@ -287,31 +287,31 @@ const BASE: Omit<ActionDef, "group">[] = [
     id: "focusLeft",
     label: msg("왼쪽 창으로 포커스"),
     hint: msg("그룹 안에서 화면상 왼쪽에 있는 창을 선택합니다"),
-    default: "",
+    default: "Mod+B+ArrowLeft",
   },
   {
     id: "focusRight",
     label: msg("오른쪽 창으로 포커스"),
     hint: msg("그룹 안에서 화면상 오른쪽에 있는 창을 선택합니다"),
-    default: "",
+    default: "Mod+B+ArrowRight",
   },
   {
     id: "focusUp",
     label: msg("위쪽 창으로 포커스"),
     hint: msg("그룹 안에서 화면상 위에 있는 창을 선택합니다"),
-    default: "",
+    default: "Mod+B+ArrowUp",
   },
   {
     id: "focusDown",
     label: msg("아래쪽 창으로 포커스"),
     hint: msg("그룹 안에서 화면상 아래에 있는 창을 선택합니다"),
-    default: "",
+    default: "Mod+B+ArrowDown",
   },
   {
     id: "cyclePane",
     label: msg("다음 창으로 포커스"),
     hint: msg("그룹 안의 창을 순서대로 돌아가며 선택합니다"),
-    default: "",
+    default: "F6",
   },
   {
     id: "ungroup",
@@ -508,6 +508,23 @@ export function chordNext(prefix: Recording, bindings: Record<string, string>): 
   return out;
 }
 
+const FOCUS_ARROWS: [ActionId, string][] = [["focusLeft", "←"], ["focusUp", "↑"], ["focusRight", "→"], ["focusDown", "↓"]];
+
+/**
+ * `chordNext` for the waiting strip, which has room for a few options only: the four "focus a pane" moves, when each
+ * ends on its own arrow key, are one option ("←↑→↓ move between panes") instead of four.
+ */
+export type ChordOption = { id: ActionId; rest: string } | { id: "focusArrows"; rest: string };
+export function chordOptions(prefix: Recording, bindings: Record<string, string>): ChordOption[] {
+  const all = chordNext(prefix, bindings);
+  const arrows = FOCUS_ARROWS.map(([id, arrow]) => all.find((n) => n.id === id && n.rest === arrow));
+  if (arrows.some((n) => !n)) return all;
+  const at = all.findIndex((n) => FOCUS_ARROWS.some(([id]) => id === n.id));
+  const rest: ChordOption[] = all.filter((n) => !FOCUS_ARROWS.some(([id]) => id === n.id));
+  rest.splice(at, 0, { id: "focusArrows", rest: FOCUS_ARROWS.map(([, a]) => a).join(" ") });
+  return rest;
+}
+
 export const isModifierCode = (code: string) =>
   /^(Control|Shift|Alt|Meta|OS|AltGraph|CapsLock|Fn)/.test(code);
 
@@ -631,6 +648,20 @@ export function renameShouldFallThrough(o: {
   // Opening a conversation moves focus into its composer, and F2 types nothing there: it must still rename right after a switch
   if (tag === "TEXTAREA") return t.dataset?.composer !== undefined;
   return tag !== "INPUT" && tag !== "SELECT";
+}
+
+/**
+ * Tab and Shift+Tab move focus. Bound to an action (Shift+Tab cycles the thinking level by default) they only act where
+ * focus has nowhere to go: the composer, or nothing focused. On a sidebar row, a find field or a rename input the key
+ * keeps moving focus, or the keyboard could never step backwards. Combos with Ctrl/⌘/Alt are not affected.
+ */
+export function tabComboYieldsFocus(combo: string, target: { tagName?: string; isContentEditable?: boolean; dataset?: { composer?: string } } | null): boolean {
+  const { mods, keys } = splitCombo(combo);
+  if (keys.length !== 1 || keys[0] !== "Tab" || mods.includes("Mod") || mods.includes("Alt")) return false;
+  if (!target) return false;
+  const tag = target.tagName ?? "";
+  if (tag === "BODY" || tag === "HTML") return false;
+  return !(tag === "TEXTAREA" && target.dataset?.composer !== undefined);
 }
 
 /** True when the combo fires on keys alone, so it must not trigger while typing in a text field. */

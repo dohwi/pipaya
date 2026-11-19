@@ -8,7 +8,7 @@
 	import { appConflict } from "../../lib/extensions/shortcuts";
 	import { errorText } from "../../lib/api";
 	import Icon from "../ui/Icon.svelte";
-	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
+	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, isBareCombo, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
 
 	/** `filter` narrows the list by name, hint or key; the Settings search hands it over when a shortcut result is opened. */
 	let { filter = $bindable("") }: { filter?: string } = $props();
@@ -180,7 +180,7 @@
 				<div class="what">
 					<span class="name">{t(a.label)}</span>
 					{#if a.hint}<span class="sub">{t(a.hint)}</span>{/if}
-					{#if combo && !a.fixed && !/Mod|Alt/.test(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{/if}
+					{#if combo && !a.fixed && isBareCombo(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{/if}
 					{#if note?.id === a.id}<span class="note" class:bad={note.bad}>{note.text}</span>{/if}
 				</div>
 				{#if a.fixed}
