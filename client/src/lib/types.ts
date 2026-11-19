@@ -14,6 +14,8 @@ export interface Group {
  * effort, or the provider's "none"), so a model that always reasons keeps its own default.
  */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ServiceTier = "flex" | "priority" | "ultrafast";
+export const tierLabel = (t: ServiceTier) => ({ flex: "Flex", priority: "Fast", ultrafast: "Ultrafast" })[t];
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export type SendMode = "prompt" | "steer" | "follow_up";
 
@@ -70,6 +72,7 @@ export interface Session {
 	provider: string;
 	model: string;
 	thinkingLevel: ThinkingLevel;
+	serviceTier?: ServiceTier | null;
 	systemPrompt: string;
 	tools: string[];
 	parentId: string | null;
@@ -311,6 +314,7 @@ export interface ModelInfo {
 	reasoning: boolean;
 	/** Reasoning strengths the model accepts, weakest first; empty without reasoning. */
 	thinkingLevels: ThinkingLevel[];
+	openRouterTiers?: boolean;
 	/** Where a new chat with this model starts, when its owner chose one */
 	defaultThinkingLevel?: ThinkingLevel;
 	contextWindow: number;
@@ -447,6 +451,7 @@ export interface ModelSelection {
 
 /** The server's default for new chats: a model and, optionally, the reasoning strength to start it at. */
 export interface DefaultModelSelection extends ModelSelection {
+	serviceTier?: ServiceTier | null;
 	thinkingLevel?: ThinkingLevel;
 }
 

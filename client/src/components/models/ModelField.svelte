@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { modelDisplayName } from "../../lib/model-name";
+	import type { Api } from "../../lib/api";
+	import { tierLabel, type ServiceTier } from "../../lib/types";
 	import { t } from "../../lib/i18n";
 	import ModelLogo from "./ModelLogo.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -19,6 +21,8 @@
 		providers = [],
 		value,
 		level = null,
+		tier = null,
+		tierApi,
 		favs = [],
 		allowUnset = false,
 		unsetLabel,
@@ -37,6 +41,8 @@
 		providers?: ProviderInfo[];
 		value: { provider: string; model: string } | null;
 		level?: ThinkingLevel | null;
+		tier?: ServiceTier | null;
+		tierApi?: Api | null;
 		favs?: string[];
 		allowUnset?: boolean;
 		unsetLabel?: string;
@@ -46,7 +52,7 @@
 		label: string;
 		variant?: "field" | "inline";
 		open?: boolean;
-		onpick: (choice: { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null) => void;
+		onpick: (choice: { provider: string; model: string; thinkingLevel?: ThinkingLevel; serviceTier?: ServiceTier | null } | null) => void;
 		onfav?: (provider: string, id: string) => void;
 		onmanage?: () => void;
 		/** The server whose models these are (uploaded icon images live there); the open server when left out. */
@@ -73,6 +79,7 @@
 	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={variant === "inline" || Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
+	{#if current?.openRouterTiers && tier}<span class="chip">{tierLabel(tier)}</span>{/if}
 	{#if invalid}<span class="warnmark"><Icon name="alert" /></span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
 </button>
@@ -84,6 +91,8 @@
 		{providers}
 		{value}
 		{level}
+		{tier}
+		{tierApi}
 		{favs}
 		{allowUnset}
 		{unsetLabel}

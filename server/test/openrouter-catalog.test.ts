@@ -167,3 +167,25 @@ describe("the live list", () => {
 		expect(calls).toHaveLength(2);
 	});
 });
+
+test("model tiers are lazy, coalesced, canonical, expire, and retry after failed lookups", async () => {
+	let now = 0, requests = 0, reject = false;
+	const id = "openai/gpt-5";
+	const catalog = new OpenRouterCatalog({ now: () => now, cacheMs: 50, fetch: (async (url) => {
+		expect(String(url)).toEndWith(`/models/${id}/endpoints`);
+		requests++;
+		return reject ? new Response(null, { status: 503 }) : Response.json({ data: { endpoints: [null, "future", "priority", "priority", "flex", "ultrafast"].map(service_tier => ({ service_tier })) } });
+	}) as typeof fetch });
+	expect(await catalog.serviceTiers("../bad/path")).toEqual([]);
+	expect(requests).toBe(0);
+	const [a, b] = await Promise.all([catalog.serviceTiers(id), catalog.serviceTiers(id)]);
+	expect(a).toEqual(["flex", "priority", "ultrafast"]);
+	expect(b).toEqual(a);
+	expect(await catalog.serviceTiers(id)).toEqual(a);
+	expect(requests).toBe(1);
+	now = 50; reject = true;
+	await expect(catalog.serviceTiers(id)).rejects.toThrow();
+	reject = false;
+	expect(await catalog.serviceTiers(id)).toEqual(a);
+	expect(requests).toBe(3);
+});

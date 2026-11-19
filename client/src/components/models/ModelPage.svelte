@@ -7,7 +7,8 @@
 	import { isImageIcon } from "../../lib/model-icon-image";
 	import { ALL_LEVELS, isLastLevel, shownLevels, toggleLevel, type Row } from "../../lib/connection-form";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
-	import type { Api } from "../../lib/api";
+	import TierOptions from "./TierOptions.svelte";
+	import { Api } from "../../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
@@ -42,6 +43,7 @@
 	} = $props();
 
 	/** An upstream model keeps its fixed id, unless the upstream stopped listing it: then it is just a typed-in model. */
+	const catalogApi = $derived(connection ? new Api(connection) : null);
 	const locked = $derived(!!r.fromUpstream && !r.unavailable);
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
@@ -104,6 +106,9 @@
 				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") })}</p>
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.")}</p>
+			{/if}
+			{#if hit && !r.imageGeneration && catalogApi}
+				{#key hit.id}<TierOptions api={catalogApi} model={hit.id} />{/key}
 			{/if}
 		{/if}
 		<div class="namerow">

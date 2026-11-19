@@ -12,7 +12,7 @@ import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type Skill
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
-import { modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
+import { checkServiceTier, withServiceTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
@@ -284,7 +284,11 @@ export class SessionManager {
 		const id = randomUUID();
 		const cwd = this.resolveCwd(input.cwd);
 		const now = Date.now();
+		const saved = this.registry.defaultSelection?.();
+		const serviceTier = input.serviceTier !== undefined ? input.serviceTier : saved?.provider === provider && saved.model === model ? saved.serviceTier : undefined;
+		if (serviceTier) await checkServiceTier(this.registry, provider, model, serviceTier);
 		const record: SessionRecord = {
+			serviceTier: serviceTier ?? null,
 			id,
 			title: input.title?.trim() || "New session",
 			name: this.peers.newName(),
@@ -502,6 +506,16 @@ export class SessionManager {
 		return live ? { context: { messages: live.agent.state.messages.slice(), tools } } : undefined;
 	}
 
+	async configureSession(id: string, patch: SessionPatch): Promise<SessionRecord> {
+		if (patch.serviceTier) {
+			const current = this.get(id);
+			const { provider, model } = this.splitSpec(patch.provider, patch.model ?? current.model, current.provider);
+			await checkServiceTier(this.registry, provider ?? current.provider, model ?? current.model, patch.serviceTier);
+			patch = { ...patch, provider: provider ?? current.provider, model: model ?? current.model };
+		}
+		return this.update(id, patch);
+	}
+
 	update(id: string, patch: SessionPatch): SessionRecord {
 		const current = this.get(id);
 		if (patch.model !== undefined && patch.provider === undefined) patch = { ...patch, ...this.splitSpec(undefined, patch.model, current.provider) };
@@ -510,6 +524,7 @@ export class SessionManager {
 		if (patch.provider !== undefined || patch.model !== undefined) {
 			const provider = patch.provider ?? current.provider;
 			const model = patch.model ?? current.model;
+			if (patch.serviceTier === undefined && (model !== current.model || provider !== current.provider)) clean.serviceTier = null;
 			if (!this.registry.models.getModel(provider, model)) throw badRequest(`unknown model ${provider}/${model}`);
 			this.assertChatModel(provider, model);
 		}
@@ -585,6 +600,7 @@ export class SessionManager {
 				provider: src.provider,
 				model: src.model,
 				thinkingLevel: src.thinkingLevel,
+				serviceTier: src.serviceTier ?? null,
 				systemPrompt: src.systemPrompt,
 				tools: src.tools,
 			},
@@ -1174,7 +1190,13 @@ export class SessionManager {
 				messages: history,
 			},
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
-			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), {
+			streamFn: withUpstreamRetry(async (m, ctx, opts) => {
+				const current = this.get(record.id);
+				const tier = current.provider === m.provider && current.model === m.id ? current.serviceTier : null;
+				if (!tier) return this.registry.models.streamSimple(m, ctx, opts);
+				await checkServiceTier(this.registry, m.provider, m.id, tier);
+				return this.registry.models.streamSimple(m, ctx, withServiceTier(opts, tier));
+			}, {
 				...DEFAULT_UPSTREAM_RETRY,
 				onRetry: (attempt, maxRetries, delayMs, errorMessage) => this.bus.publish(record.id, "run_retrying", { attempt, maxRetries, delayMs, ...(retryReason(errorMessage) ? { reason: retryReason(errorMessage) } : {}) }, { ephemeral: true }),
 			}),

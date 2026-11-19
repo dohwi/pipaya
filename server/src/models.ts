@@ -1,13 +1,35 @@
-import { getSupportedThinkingLevels, type Api, type CredentialStore, type Model, type MutableModels } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, type Api, type CredentialStore, type Model, type MutableModels, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { builtinModels, builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
+import type { ServiceTier } from "./openrouter-catalog.ts";
+import { badRequest, HttpError } from "./errors.ts";
+
+/** Match the actual transport destination, not the provider name (custom connections can shadow built-ins). */
+export const isOpenRouterChat = (m: Model<Api> | undefined) => !!m && /^https:\/\/(?:us\.|eu\.)?openrouter\.ai\/api(?:\/v1)?\/?$/.test(m.baseUrl) && ["openai-completions", "openai-responses", "anthropic-messages"].includes(m.api);
+
+/** OpenRouter accepts service_tier on all three chat APIs. Check the final, auth-resolved target too. */
+export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: ServiceTier): SimpleStreamOptions {
+	return { ...opts, onPayload: async (body, target) => {
+		if (!isOpenRouterChat(target)) throw badRequest("service tier requires an OpenRouter connection");
+		const payload = await opts?.onPayload?.(body, target) ?? body;
+		return { ...(payload as object), service_tier: tier };
+	} };
+}
+
+export async function checkServiceTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
+	if (!isOpenRouterChat(reg.models.getModel(provider, id))) throw badRequest("service tier requires an OpenRouter connection");
+	const tiers = await reg.serviceTiers?.(id).catch(() => { throw new HttpError(502, "catalog_unavailable", "OpenRouter endpoint information unavailable"); });
+	if (!tiers?.includes(tier)) throw badRequest("service tier is not available for this model");
+}
+
 export interface ModelRegistry {
 	models: MutableModels;
+	serviceTiers?: (id: string) => Promise<ServiceTier[]>;
 	/** Whether this model makes pictures (image generation) instead of writing text. */
 	isImageModel?: (provider: string, id: string) => boolean;
 	/** Persisted defaults take priority over startup environment defaults. */
-	defaultSelection?: () => { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null;
+	defaultSelection?: () => { provider: string; model: string; thinkingLevel?: ThinkingLevel; serviceTier?: ServiceTier | null } | null;
 }
 
 /**
@@ -45,6 +67,7 @@ export interface ModelInfo {
 	reasoning: boolean;
 	/** Reasoning strengths this model accepts, weakest first. Empty when it has no reasoning. */
 	thinkingLevels: ThinkingLevel[];
+	openRouterTiers?: boolean;
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -66,6 +89,7 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		id: m.id,
 		name: m.name,
 		api: m.api,
+		...(isOpenRouterChat(m) ? { openRouterTiers: true } : {}),
 		reasoning: m.reasoning,
 		// Every strength the model accepts, `off` included: "empty" means the model has no reasoning at all.
 		thinkingLevels: m.reasoning ? getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [],

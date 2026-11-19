@@ -1,7 +1,7 @@
 /** Plain types and helpers for the app store: no reactive state, so they can be read (and tested) on their own. */
 import { K, read } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
-import { THINKING_LEVELS, type DefaultModelSelection, type ThinkingLevel } from "./types";
+import { THINKING_LEVELS, type DefaultModelSelection, type ServiceTier, type ThinkingLevel } from "./types";
 
 export interface PaletteItem {
   id: string;
@@ -29,6 +29,7 @@ export interface Draft {
   provider: string;
   model: string;
   thinkingLevel: ThinkingLevel;
+  serviceTier?: ServiceTier | null;
 }
 
 export interface Server {
@@ -69,6 +70,7 @@ export function draftFromDefault(d: DefaultModelSelection): Partial<Draft> {
   return {
     provider: d.provider,
     model: d.model,
+    serviceTier: d.serviceTier ?? null,
     ...(d.thinkingLevel ? { thinkingLevel: normalizeThinking(d.thinkingLevel) } : {}),
   };
 }

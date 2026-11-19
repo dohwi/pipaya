@@ -541,7 +541,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },
 	});
 	app.post("/sessions", {
-		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401) } },
+		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401, 502) } },
 		handler: async (req, reply) => reply.status(201).send(await sessions.create(req.body)),
 	});
 	app.get("/sessions", {
@@ -594,8 +594,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		handler: async (req) => { await sessions.refreshChatModels(); return sessions.previewContext(req.query.cwd); },
 	});
 	app.patch("/sessions/:id", {
-		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409) } },
-		handler: async (req) => sessions.update(req.params.id, req.body),
+		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409, 502) } },
+		handler: async (req) => sessions.configureSession(req.params.id, req.body),
 	});
 	app.delete("/sessions/:id", {
 		schema: { params: S.IdParams, response: { 204: Type.Null(), ...S.errors(401, 404) } },

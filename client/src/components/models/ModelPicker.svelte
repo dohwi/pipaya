@@ -3,7 +3,7 @@
 	import ModelField from "./ModelField.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
-	import type { ThinkingLevel } from "../../lib/types";
+	import type { DefaultModelSelection } from "../../lib/types";
 
 	/** The composer's model button: the shared ModelField, wired to this chat's model and the open-picker shortcut. */
 	let open = $state(false);
@@ -19,10 +19,10 @@
 		if (pane.focused) open = true;
 	});
 
-	function pick(c: { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null) {
+	function pick(c: DefaultModelSelection | null) {
 		if (!c) return;
 		// The model and its strength are one choice: send both together so the chat never holds a mismatched pair.
-		void app.configure({ provider: c.provider, model: c.model, ...(c.thinkingLevel ? { thinkingLevel: c.thinkingLevel } : {}) }, pane.id);
+		void app.configure(c, pane.id);
 	}
 </script>
 
@@ -33,6 +33,8 @@
 	providers={app.providers}
 	value={eff.model ? { provider: eff.provider, model: eff.model } : null}
 	level={eff.thinkingLevel}
+	tier={eff.serviceTier}
+	tierApi={app.api}
 	favs={app.favModels}
 	label={t("모델 설정")}
 	onfav={(p, id) => app.toggleFavModel(p, id)}

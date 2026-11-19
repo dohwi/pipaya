@@ -517,6 +517,7 @@ class AppStore {
           provider: s.provider,
           model: s.model,
           thinkingLevel: normalizeThinking(s.thinkingLevel),
+          serviceTier: s.serviceTier,
         }
       : this.draft;
   }
@@ -1036,6 +1037,7 @@ class AppStore {
     // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
     if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
       next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
+    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = null;
     this.draft = next;
     write(K.draft, this.draft);
   }
@@ -1253,7 +1255,7 @@ class AppStore {
     // The default was changed (here or from another client): new chats follow it, model and strength together.
     if (
       now &&
-      (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel) &&
+      (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel || now.serviceTier !== before?.serviceTier) &&
       this.models.some((m) => m.provider === now.provider && m.id === now.model && m.configured && m.available !== false)
     ) {
       this.updateDraft(draftFromDefault(now));
@@ -1674,6 +1676,7 @@ class AppStore {
         provider: d.provider,
         model: d.model,
         thinkingLevel: normalizeThinking(d.thinkingLevel),
+        serviceTier: d.serviceTier,
       });
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
       await this.openSession(s.id, true);
@@ -1698,6 +1701,7 @@ class AppStore {
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
+        serviceTier: from.serviceTier,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -1724,6 +1728,7 @@ class AppStore {
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
+        serviceTier: from.serviceTier,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -1944,6 +1949,7 @@ class AppStore {
           provider: d.provider,
           model: d.model,
           thinkingLevel: normalizeThinking(d.thinkingLevel),
+          serviceTier: d.serviceTier,
         });
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
@@ -2303,6 +2309,7 @@ class AppStore {
         provider: base?.provider ?? d.provider,
         model: base?.model ?? d.model,
         thinkingLevel: base?.thinkingLevel ?? normalizeThinking(d.thinkingLevel),
+        serviceTier: base ? base.serviceTier : d.serviceTier,
       });
       if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
       await this.dropSession(made.id, target, zone, focus);
@@ -2339,6 +2346,7 @@ class AppStore {
           provider: d.provider,
           model: d.model,
           thinkingLevel: normalizeThinking(d.thinkingLevel),
+          serviceTier: d.serviceTier,
         });
       } catch (e) {
         return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -2355,6 +2363,7 @@ class AppStore {
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
+        serviceTier: from.serviceTier,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
@@ -2433,7 +2442,7 @@ class AppStore {
     if (g && panesOf(g.layout).length >= MAX_PANES)
       return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
     try {
-      const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel) });
+      const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel), serviceTier: d.serviceTier });
       if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
       await this.dropSession(made.id, target, zone);
     } catch (e) {

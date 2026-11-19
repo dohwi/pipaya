@@ -1,3 +1,4 @@
+import type { ServiceTier } from "./openrouter-catalog.ts";
 import { parseJson } from "./json-column.ts";
 import type { Database } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -24,6 +25,7 @@ export interface SessionRecord {
 	provider: string;
 	model: string;
 	thinkingLevel: ThinkingLevel;
+	serviceTier?: ServiceTier | null;
 	systemPrompt: string;
 	tools: string[];
 	parentId: string | null;
@@ -42,6 +44,7 @@ interface SessionRow {
 	provider: string;
 	model: string;
 	thinking_level: string;
+	service_tier: ServiceTier | null;
 	system_prompt: string;
 	tools: string;
 	parent_id: string | null;
@@ -59,6 +62,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	provider: r.provider,
 	model: r.model,
 	thinkingLevel: r.thinking_level as ThinkingLevel,
+	serviceTier: r.service_tier,
 	systemPrompt: r.system_prompt,
 	tools: parseJson<string[]>(r.tools, []), // a damaged list reads as no tools rather than hiding the session
 	parentId: r.parent_id,
@@ -68,7 +72,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 });
 
 export type SessionPatch = Partial<
-	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "systemPrompt" | "tools" | "closed">
+	Pick<SessionRecord, "title" | "name" | "purpose" | "provider" | "model" | "thinkingLevel" | "serviceTier" | "systemPrompt" | "tools" | "closed">
 >;
 
 const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
@@ -78,6 +82,7 @@ const PATCH_COLUMNS: Record<keyof SessionPatch, string> = {
 	provider: "provider",
 	model: "model",
 	thinkingLevel: "thinking_level",
+	serviceTier: "service_tier",
 	systemPrompt: "system_prompt",
 	tools: "tools",
 	closed: "closed",
@@ -111,8 +116,8 @@ export class SessionStore {
 	create(r: SessionRecord): void {
 		this.db
 			.query(
-				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at)
-				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $system, $tools, $parent, $created, $updated)`,
+				`INSERT INTO sessions (id, title, name, purpose, cwd, provider, model, thinking_level, service_tier, system_prompt, tools, parent_id, created_at, updated_at)
+				 VALUES ($id, $title, $name, $purpose, $cwd, $provider, $model, $thinking, $tier, $system, $tools, $parent, $created, $updated)`,
 			)
 			.run({
 				id: r.id,
@@ -123,6 +128,7 @@ export class SessionStore {
 				provider: r.provider,
 				model: r.model,
 				thinking: r.thinkingLevel,
+				tier: r.serviceTier ?? null,
 				system: r.systemPrompt,
 				tools: JSON.stringify(r.tools),
 				parent: r.parentId,
@@ -231,7 +237,7 @@ export class SessionStore {
 
 	update(id: string, patch: SessionPatch): SessionRecord | undefined {
 		const sets: string[] = ["updated_at = $updated"];
-		const params: Record<string, string | number> = { id, updated: Date.now() };
+		const params: Record<string, string | number | null> = { id, updated: Date.now() };
 		for (const key of Object.keys(patch) as (keyof SessionPatch)[]) {
 			const value = patch[key];
 			// a field this server does not know (an older client, a newer extension): leave the row alone rather than build bad SQL

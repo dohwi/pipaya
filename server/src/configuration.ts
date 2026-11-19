@@ -12,8 +12,8 @@ import { openAIImages } from "./openai-images.ts";
 import { sniffImage } from "./image-file.ts";
 import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
-import { builtinProvider, type ModelRegistry } from "./models.ts";
-import { Thinking } from "./schemas.ts";
+import { builtinProvider, checkServiceTier, type ModelRegistry } from "./models.ts";
+import { OptionalTier, Thinking } from "./schemas.ts";
 import { createOpenRouterCatalog, type OpenRouterCatalog } from "./openrouter-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
@@ -89,6 +89,7 @@ export const DefaultSelection = Type.Object({
 	provider: Type.String({ minLength: 1 }),
 	model: Type.String({ minLength: 1 }),
 	thinkingLevel: Type.Optional(Thinking),
+	serviceTier: OptionalTier,
 }, { additionalProperties: false });
 export const DefaultsBody = Type.Union([DefaultSelection, Type.Null()]);
 /** Where a model's reasoning strengths come from (response only): the owner's own list, a catalog match by name, or the plain default. */
@@ -229,6 +230,7 @@ export class Configuration {
 		this.images = new ModelIcons(db);
 		this.catalog = createOpenRouterCatalog(cfg.dataDir);
 		for (const p of this.list()) this.registry.models.setProvider(this.buildProvider(p));
+		registry.serviceTiers = id => this.catalog.serviceTiers(id);
 		registry.defaultSelection = () => this.effectiveDefaults();
 		registry.isImageModel = (provider, id) => this.get(provider)?.models.some((m) => m.id === id && m.imageGeneration === true) ?? false;
 	}
@@ -530,9 +532,10 @@ export class Configuration {
 		if (builtin) this.registry.models.setProvider(builtin);
 	}
 
-	setDefaults(selection: DefaultModelSelection | null) {
+	async setDefaults(selection: DefaultModelSelection | null) {
 		if (selection && !this.registry.models.getModel(selection.provider, selection.model)) throw badRequest("unknown provider/model");
 		if (selection && this.registry.isImageModel?.(selection.provider, selection.model)) throw badRequest("an image model cannot be the chat default; set it as the image model instead");
+		if (selection?.serviceTier) await checkServiceTier(this.registry, selection.provider, selection.model, selection.serviceTier);
 		if (selection) this.db.query("INSERT INTO settings (key, data) VALUES ('default_model', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({ data: JSON.stringify(selection) });
 		else this.db.query("DELETE FROM settings WHERE key = 'default_model'").run();
 		return { defaults: this.defaults(), effectiveDefaults: this.effectiveDefaults() };

@@ -34,7 +34,7 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 	ToolInfo,
 	Usage,
 	WorkspaceInfo,
-	ThinkingLevel,
+	ThinkingLevel, ServiceTier,
 } from "./types";
 import { msg, t } from "./i18n";
 import type { RepoInfo } from "./projects";
@@ -92,6 +92,7 @@ export interface CreateSessionInput {
 	provider?: string;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
+	serviceTier?: ServiceTier | null;
 	systemPrompt?: string;
 	tools?: string[];
 }
@@ -101,6 +102,7 @@ export interface PatchSessionInput {
 	provider?: string;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
+	serviceTier?: ServiceTier | null;
 	closed?: boolean;
 }
 
@@ -343,6 +345,7 @@ export class Api {
 	/* ---------- model connection settings ---------- */
 	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
 	/** The OpenRouter catalog the model picker autocompletes from; `refresh` asks OpenRouter again now. */
+	catalogTiers = (model: string) => this.req<{ tiers: ServiceTier[] }>("GET", `/configuration/catalog/tiers?model=${encodeURIComponent(model)}`);
 	catalog = (refresh = false) => this.req<CatalogInfo>("GET", `/configuration/catalog${refresh ? "?refresh=1" : ""}`);
 	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string; apiKey?: string }) =>
 		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);

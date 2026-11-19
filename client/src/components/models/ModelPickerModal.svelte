@@ -1,5 +1,8 @@
 <script lang="ts">
 	import type { ActionId } from "../../lib/keys";
+	import type { Api } from "../../lib/api";
+	import TierOptions from "./TierOptions.svelte";
+	import type { ServiceTier } from "../../lib/types";
 	import { t } from "../../lib/i18n";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { collapseIn, collapseOut } from "../../lib/motion";
@@ -24,6 +27,8 @@
 		providers = [],
 		value,
 		level = null,
+		tier = null,
+		tierApi,
 		favs = [],
 		allowUnset = false,
 		unsetLabel,
@@ -39,11 +44,13 @@
 		providers?: ProviderInfo[];
 		value: { provider: string; model: string } | null;
 		level?: ThinkingLevel | null;
+		tier?: ServiceTier | null;
+		tierApi?: Api | null;
 		favs?: string[];
 		allowUnset?: boolean;
 		unsetLabel?: string;
 		title?: string;
-		onpick: (choice: { provider: string; model: string; thinkingLevel?: ThinkingLevel } | null) => void;
+		onpick: (choice: { provider: string; model: string; thinkingLevel?: ThinkingLevel; serviceTier?: ServiceTier | null } | null) => void;
 		/** Star a model; omit to hide the stars */
 		onfav?: (provider: string, id: string) => void;
 		onmanage?: () => void;
@@ -99,9 +106,10 @@
 	/** The row's tooltip: abilities, then sizes ("채팅 · 추론 · 이미지 읽기 — 컨텍스트 400,000 · 최대 출력 4,096"). */
 	const tipOf = (m: ModelInfo) => `${capsOf(m).map((c) => t(c.label)).join(" · ")}\n${limits(m)}`;
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;
-	function apply() {
+	const selectedTier = $derived(sel?.provider === value?.provider && sel?.model === value?.model ? tier : null);
+	function apply(speed = selectedTier) {
 		if (!sel) return onpick(null);
-		onpick({ provider: sel.provider, model: sel.model, ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
+		onpick({ provider: sel.provider, model: sel.model, ...(tierApi && (info?.openRouterTiers || tier) ? { serviceTier: info?.openRouterTiers ? speed : null } : {}), ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
 	}
 	function choose(m: ModelInfo) {
 		if (!m.configured || m.available === false || same(m)) return;
@@ -171,6 +179,9 @@
 				{/each}
 			</div>
 		</div>
+		{/if}
+		{#if tierApi && info && (info.openRouterTiers || selectedTier) && !info.imageGeneration}
+			{#key info.provider + ":" + info.id}<TierOptions api={tierApi} model={info.id} lookup={!!info.openRouterTiers} value={selectedTier} onchange={apply} />{/key}
 		{/if}
 	{/snippet}
 

@@ -35,6 +35,7 @@ export interface CreateSessionInput {
 	provider?: string;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
+	serviceTier?: import("./openrouter-catalog.ts").ServiceTier | null;
 	systemPrompt?: string;
 	tools?: string[];
 }
