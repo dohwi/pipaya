@@ -11,7 +11,7 @@
 	import { reveal } from "../../lib/reveal.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
-	import { compact, duration, timeOfDay } from "../../lib/format";
+	import { compact, duration, fullTime, timeOfDay } from "../../lib/format";
 	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
@@ -139,7 +139,7 @@
 				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
 				{#if n < segments.length - 1 && blockTs[seg.i]}
 					{@const ts = blockTs[seg.i]!}
-					<time class="note-when" use:tapTitle datetime={new Date(ts).toISOString()} title={new Date(ts).toLocaleString(localeTag())}>{timeOfDay(ts, localeTag())}</time>
+					<time class="note-when" use:tapTitle datetime={new Date(ts).toISOString()} title={fullTime(ts)}>{timeOfDay(ts, localeTag())}</time>
 				{/if}
 			{/if}
 		{/each}
@@ -175,7 +175,7 @@
 				<!-- the quiet line on the text's left line: when, then who wrote it and what it cost. The time comes first so a
 				     narrow pane cuts the model text, never the time -->
 				<span class="stats" title={statsTitle || undefined} use:tapTitle>
-					{#if tail.ts}<time class="when" use:tapTitle datetime={new Date(tail.ts).toISOString()} title={new Date(tail.ts).toLocaleString(localeTag())}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
+					{#if tail.ts}<time class="when" use:tapTitle datetime={new Date(tail.ts).toISOString()} title={fullTime(tail.ts)}>{timeOfDay(tail.ts, localeTag())}</time>{/if}
 					{#if tail.ts && (tail.model || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					<!-- at rest only who wrote it; the level, tokens and duration come with the buttons (hover, focus, or a tap on touch) -->

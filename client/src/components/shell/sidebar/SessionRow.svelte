@@ -8,7 +8,7 @@
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import type { Session } from "../../../lib/types";
 	import { app } from "../../../lib/store.svelte";
-	import { whenShort } from "../../../lib/schedules";
+	import { shortDateTime } from "../../../lib/format";
 	import Icon from "../../ui/Icon.svelte";
 	import PinMark from "../../ui/PinMark.svelte";
 	import AgentBadge from "../AgentBadge.svelte";
@@ -26,7 +26,7 @@
 	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
 	/** Switched-on scheduled tasks of this conversation. Only the open server's list is kept current, so only its rows show it. */
 	const sched = $derived(n.current ? app.schedules.of(n.server.id, x.id) : { count: 0, next: null });
-	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: whenShort(sched.next) })}`);
+	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: shortDateTime(sched.next) })}`);
 </script>
 
 {#snippet body(pinned: boolean)}

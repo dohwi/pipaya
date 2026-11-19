@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { localeTag, t } from "../../lib/i18n";
+	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
-	import { duration } from "../../lib/format";
+	import { duration, fullTime } from "../../lib/format";
 	import { isImageTool, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import { workIcon, workSummary } from "../../lib/work-summary";
 	import { peekLines } from "../../lib/peek-lines";
@@ -46,7 +46,7 @@
 	const total = $derived(runs.reduce((n, r) => n + (r?.durationMs ?? 0), 0));
 	/** When the last call finished: the duration shows how long the work took, hovering it says on which day and at what time. */
 	const endedAt = $derived(runs.reduce((n, r) => Math.max(n, r?.endedAt ?? 0), 0));
-	const endedTitle = $derived(endedAt ? t("{when} 완료", { when: new Date(endedAt).toLocaleString(localeTag()) }) : undefined);
+	const endedTitle = $derived(endedAt ? t("{when} 완료", { when: fullTime(endedAt) }) : undefined);
 
 	/** The quiet line: what the calls did, kind by kind ("명령 4개 실행 및 웹 1회 검색"). While nothing but thoughts came yet, "생각 중". */
 	const summary = $derived(active && !tools.length ? t("생각 중") : workSummary(steps));

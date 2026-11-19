@@ -1,7 +1,7 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import { localeTag, t } from "../../lib/i18n";
-	import { timeOfDay } from "../../lib/format";
+	import { fullTime, timeOfDay } from "../../lib/format";
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -88,7 +88,7 @@
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
-		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={new Date(item.ts).toLocaleString(localeTag())}>{timeOfDay(item.ts, localeTag())}</time>{/if}
+		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={fullTime(item.ts)}>{timeOfDay(item.ts, localeTag())}</time>{/if}
 	</div>
 </div>
 
