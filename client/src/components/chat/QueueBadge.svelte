@@ -25,9 +25,13 @@
 		gap: 4px;
 		padding: 0 1px;
 	}
+	/* 12px like the sender's chat glyph beside it. The badge's 1px bottom padding lifts its text, but it put an
+	   icon (odd 11px, then even 12px) 0.5-1px high of the pill's centre; -1px gives that padding back to the icon
+	   only, so it sits 3px from both pill edges (measured 1x-4x: within 0.33px of the row's centre). */
 	.in :global(svg) {
-		width: 11px;
-		height: 11px;
+		width: 12px;
+		height: 12px;
+		margin-bottom: -1px;
 		stroke-width: 2.2;
 	}
 	.n {
