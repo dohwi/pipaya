@@ -10,6 +10,7 @@ import type * as ServerPrefsModule from "../src/lib/server-prefs.svelte";
 import type * as ExtensionRequestsModule from "../src/lib/extension-requests.svelte";
 import type * as PairingFlowModule from "../src/lib/pairing-flow.svelte";
 import type * as CloseGuardModule from "../src/lib/close-guard.svelte";
+import type * as SessionCloseGuardModule from "../src/lib/session-close-guard.svelte";
 import type * as IdleModule from "../src/lib/idle-extension-stores.svelte";
 import { mergeServers, replaceServers } from "../src/lib/configuration-servers";
 import { pinLocal } from "../src/lib/store-model";
@@ -25,6 +26,7 @@ let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
 let IdleExtensionStores: typeof IdleModule.IdleExtensionStores;
 let PairingFlow: typeof PairingFlowModule.PairingFlow;
 let CloseGuard: typeof CloseGuardModule.CloseGuard;
+let SessionCloseGuard: typeof SessionCloseGuardModule.SessionCloseGuard;
 let dir: string;
 
 async function loadRunes(name: string) {
@@ -56,6 +58,7 @@ beforeAll(async () => {
 	({ IdleExtensionStores } = await loadRunes("idle-extension-stores"));
 	({ PairingFlow } = await loadRunes("pairing-flow"));
 	({ CloseGuard } = await loadRunes("close-guard"));
+	({ SessionCloseGuard } = await loadRunes("session-close-guard"));
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -459,5 +462,33 @@ describe("close guard", () => {
 		expect(await asked).toBe(true);
 		expect(aborted).toEqual(["a", "b"]);
 		expect(guard.confirm).toBeNull();
+	});
+});
+
+describe("session close guard", () => {
+	const holds: Record<string, "working" | "asking"> = { busy: "working", q: "asking" };
+	const make = () => new SessionCloseGuard((id) => holds[id] ?? null, (id) => `title ${id}`);
+
+	test("an idle conversation closes at once, without asking", async () => {
+		const guard = make();
+		expect(await guard.request("idle")).toBe(true);
+		expect(guard.ask).toBeNull();
+	});
+	test("a working one asks; cancel keeps it open", async () => {
+		const guard = make();
+		const asked = guard.request("busy");
+		expect(guard.ask).toMatchObject({ id: "busy", title: "title busy", hold: "working" });
+		guard.ask!.cancel();
+		expect(await asked).toBe(false);
+		expect(guard.ask).toBeNull();
+	});
+	test("confirming lets it close; a second request while asking is refused", async () => {
+		const guard = make();
+		const asked = guard.request("q");
+		expect(guard.ask?.hold).toBe("asking");
+		expect(await guard.request("busy")).toBe(false);
+		expect(guard.ask?.id).toBe("q");
+		guard.ask!.confirm();
+		expect(await asked).toBe(true);
 	});
 });
