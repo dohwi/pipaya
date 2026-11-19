@@ -25,7 +25,7 @@
 {#if onchange && (lookup || value)}
 	<div class="tier-row">
 		<div class="section-label">{label}</div>
-		<Segmented size="sm" {label} value={value ?? "auto"}
+		<Segmented variant="ring" {label} value={value ?? "auto"}
 			options={[{ id: "auto" as const, label: t("자동") }, ...choices.map(id => ({ id, label: tierLabel(id) })), ...(value && !choices.includes(value) ? [{ id: value, label: tierLabel(value), disabled: true }] : [])]}
 			onchange={id => onchange?.(id === "auto" ? null : id)} />
 		<small class="hint">{t("자동은 OpenRouter 설정을 따르고, 표준은 가속을 끕니다.")}{#if tiers.some(id => id === "priority" || id === "ultrafast")} {t("고속 등급은 추가 요금이 들 수 있습니다.")}{/if}</small>
@@ -37,4 +37,9 @@
 
 <style>
 	.tier-row { display: grid; gap: 4px; }
+	/* Match the adjacent effort row, including the five-option layout on phones. */
+	.tier-row :global(.seg button) {
+		padding: 0;
+		font-size: var(--fs-2xs);
+	}
 </style>
