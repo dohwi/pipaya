@@ -323,3 +323,24 @@ describe("sparks", () => {
 		expect(edgeLength(a, b, "elbow")).toBeCloseTo(200, 3);
 	});
 });
+
+describe("fitGraph widths", () => {
+	const srv = (n: number): GraphServer => ({
+		id: "a", name: "a", host: "a.local", online: true, activity: () => "idle", queued: () => 0, runs: null,
+		sessions: Array.from({ length: n }, (_, i) => ({ id: `s${i}`, title: `s${i}`, name: `s${i}`, purpose: "", cwd: "/w", provider: "p", model: `m${i}`, thinkingLevel: "off", systemPrompt: "", tools: [], parentId: null, closed: false, createdAt: 1, updatedAt: 1 }) as never),
+	});
+	test("long names widen columns only as far as the whole graph still fits the view at the smallest zoom", () => {
+		const wide = () => 999;
+		const roomy = fitGraph([srv(1)], { widths: wide }, 5000, 900);
+		expect(roomy.cards.get("v:a")!.w).toBe(CARD_W_MAX);
+		// server, provider, model, chat: 4 columns of 400 + 3 gaps = 1792 at 100%, 896 at 50%: too wide for an 800 view
+		const g = fitGraph([srv(1)], { widths: wide }, 800, 900);
+		expect(g.width * FIT_MIN).toBeLessThanOrEqual(800 - FIT_PAD.x * 2);
+		expect(g.cards.get("v:a")!.w).toBeLessThan(CARD_W_MAX);
+		expect(g.cards.get("v:a")!.w).toBeGreaterThanOrEqual(272);
+	});
+	test("a view too narrow for the plain widths keeps the full room (it pans anyway)", () => {
+		const g = fitGraph([srv(1)], { widths: () => 999 }, 390, 844);
+		expect(g.cards.get("v:a")!.w).toBe(CARD_W_MAX);
+	});
+});

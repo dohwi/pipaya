@@ -75,3 +75,44 @@ export function marquee(node: HTMLElement, _text: string) {
 	later();
 	return { update: later, destroy: () => (ro.disconnect(), unschedule(node)) };
 }
+
+/** `text` cut to `keep` characters with "…" in the middle: the start (a family, a host) and the end (a size, a port) stay. */
+export function middleCut(text: string, keep: number): string {
+	const chars = [...text];
+	if (keep >= chars.length) return text;
+	if (keep <= 1) return "…";
+	const head = Math.ceil((keep - 1) / 2);
+	const tail = keep - 1 - head;
+	return `${chars.slice(0, head).join("")}…${tail ? chars.slice(-tail).join("") : ""}`;
+}
+
+/**
+ * An id too long for its row (a model id, a host, a role name) loses its middle, not its end: `qwen3-coder…fp8-instruct`
+ * still tells two variants apart where `qwen3-coder-480b-a…` does not. The whole id belongs in the row's tooltip.
+ */
+export function middle(node: HTMLElement, text: string) {
+	let full = text;
+	const fit = () => {
+		node.textContent = full;
+		if (node.scrollWidth <= node.clientWidth) return;
+		// the longest cut that fits: binary search over the kept length
+		let lo = 1, hi = [...full].length - 1;
+		while (lo < hi) {
+			const mid = Math.ceil((lo + hi) / 2);
+			node.textContent = middleCut(full, mid);
+			if (node.scrollWidth <= node.clientWidth) lo = mid;
+			else hi = mid - 1;
+		}
+		node.textContent = middleCut(full, lo);
+	};
+	const ro = new ResizeObserver(() => schedule(node, () => fit()));
+	ro.observe(node);
+	fit();
+	return {
+		update(next: string) {
+			full = next;
+			fit();
+		},
+		destroy: () => (ro.disconnect(), unschedule(node)),
+	};
+}

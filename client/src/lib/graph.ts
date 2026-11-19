@@ -129,8 +129,11 @@ export interface Graph {
 /** Card sizes. Every card is two 20px lines in a 16px frame (72); a working chat adds its 40px activity line. */
 export const CARD_W: Record<CardKind, number> = { server: 208, provider: 184, model: 232, session: 272, subagent: 248 };
 export const CARD_H = 72;
-/** The widest a column grows for a long name or facts line; past it the name ends in "…" (the whole of it in the tooltip). */
-export const CARD_W_MAX = 360;
+/**
+ * The widest a column grows for a long name, facts line or chat title: past it an id loses its middle and a name or
+ * title its end (the whole of it in the tooltip). Wider would shrink the whole graph to fit the view.
+ */
+export const CARD_W_MAX = 400;
 export const CARD_H_LIVE = 112;
 export const COL_GAP = 64;
 export const ROW_GAP = 12;
@@ -159,6 +162,8 @@ export interface LayoutOpts {
 	pins?: Record<string, { x: number; y: number }>;
 	/** Up to how many columns many chats under one card may wrap into (1 = never). */
 	lanes?: number;
+	/** The widest a measured card may make its column (default `CARD_W_MAX`; `fitGraph` lowers it so the graph fits the view). */
+	maxW?: number;
 }
 
 export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph {
@@ -297,10 +302,10 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	});
 	for (const r of roles) r.col = maxCol + 1;
 
-	// one width per column, the widest card's (a long model id widens its column, up to CARD_W_MAX)
+	// one width per column, the widest card's (a long model id widens its column, up to `maxW`; never below its kind's width)
 	const cols: { x: number; w: number }[] = [];
 	for (const c of cards.values()) {
-		const w = Math.min(CARD_W_MAX, Math.max(c.w, opts.widths?.(c) ?? 0));
+		const w = Math.max(c.w, Math.min(opts.maxW ?? CARD_W_MAX, opts.widths?.(c) ?? 0));
 		cols[c.col] = { x: 0, w: Math.max(cols[c.col]?.w ?? 0, w) };
 	}
 	let x = 0;
@@ -592,12 +597,27 @@ export function fitView(g: Graph, w: number, h: number, pad = FIT_PAD): { k: num
  * graph show largest. Wrapping never makes it wider than the view at the smallest fitted zoom (the subagents on the
  * right must not fall off), and a graph that fits anyway keeps one column (fewer columns win a tie).
  */
-export function fitGraph(servers: GraphServer[], opts: Omit<LayoutOpts, "lanes">, w: number, h: number): Graph {
+export function fitGraph(servers: GraphServer[], opts: Omit<LayoutOpts, "lanes" | "maxW">, w: number, h: number): Graph {
 	let best = buildGraph(servers, { ...opts, lanes: 1 });
 	if (w <= 0 || h <= 0) return best;
+	// Long names widen their columns, but not past the view: the whole graph still fits at the smallest fitted zoom (the
+	// subagents on the right stay in sight). The widest columns give way first; a name that no longer fits ends in "…".
+	// A view too narrow for even the plain widths (a phone) pans anyway: there the names keep their full room.
+	let maxW = CARD_W_MAX;
+	const floor = Math.max(...Object.values(CARD_W));
+	if (fitScales(best, w, h).across < FIT_MIN && fitScales(buildGraph(servers, { ...opts, lanes: 1, maxW: floor }), w, h).across >= FIT_MIN) {
+		let lo = floor, hi = CARD_W_MAX;
+		while (hi - lo > 4) {
+			const mid = Math.round((lo + hi) / 2);
+			if (fitScales(buildGraph(servers, { ...opts, lanes: 1, maxW: mid }), w, h).across >= FIT_MIN) lo = mid;
+			else hi = mid;
+		}
+		maxW = lo;
+		best = buildGraph(servers, { ...opts, lanes: 1, maxW });
+	}
 	let score = Math.min(1, fitScale(best, w, h));
 	for (let lanes = 2; lanes <= 4 && score < 1; lanes++) {
-		const g = buildGraph(servers, { ...opts, lanes });
+		const g = buildGraph(servers, { ...opts, lanes, maxW });
 		const f = fitScales(g, w, h);
 		if (f.across < FIT_MIN) break; // wider still would only be worse
 		const s = Math.min(1, f.across, f.down);

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
 	import { glowFade } from "../../lib/motion";
+	import { middle } from "../../lib/fit-text";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { hostOf } from "../../lib/format";
@@ -77,13 +78,14 @@
 
 	let measure: HTMLDivElement | undefined = $state();
 	/**
-	 * A card wider than its kind's width (a long model id, a long host with "연결 안 됨" after it): its name line and its
-	 * facts line, measured once per text on hidden copies with the real styles. A chat's lines are free text (its title):
-	 * they keep the kind's width and end in "…".
+	 * A card wider than its kind's width (a long model id, a long host with "연결 안 됨" after it, a long chat title): its
+	 * name line and its second line, measured once per text on hidden copies with the real styles. Past `CARD_W_MAX` an id
+	 * loses its middle (`use:middle`) and a display name or title its end; the whole text is in the tooltip.
 	 */
 	const widthCache = new Map<string, number>();
 	function widthOf(c: Card): number {
-		if (!measure || c.kind === "session") return 0;
+		if (!measure) return 0;
+		if (c.kind === "session") return chatWidth(c);
 		// a model's id is set in mono; a name the owner gave it in the body face, like the card draws it
 		const kind = c.kind === "model" && c.name === c.label ? "model-id" : c.kind;
 		const facts = metaOf(c);
@@ -107,6 +109,31 @@
 		}));
 		// the name sits in the middle column, with the (empty) third column's 12px gap after it; the facts line spans both
 		const line = Math.max(nm.getBoundingClientRect().width + 12, meta.getBoundingClientRect().width + facts.extra);
+		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
+		widthCache.set(key, w);
+		return w;
+	}
+	/** A chat: its name with the time beside it, its title below (what it is doing while it works is live text: it never widens a column). */
+	function chatWidth(c: Card): number {
+		const s = c.session!;
+		const name = s.name ? `@${s.name}` : sessionTitle(s.title);
+		const title = sessionTitle(s.title);
+		const key = `session|${name}|${title}`;
+		const hit = widthCache.get(key);
+		if (hit !== undefined) return hit;
+		const nm = measure!.querySelector<HTMLElement>('[data-kind="session"]');
+		const tl = measure!.querySelector<HTMLElement>(".title");
+		const when = measure!.querySelector<HTMLElement>(".when");
+		if (!nm || !tl || !when) return 0;
+		nm.textContent = name;
+		tl.textContent = title;
+		// room for the longest time it shows before it turns into days ("59분 전", "23시간 전"), so the column does not twitch as it ages
+		let wWhen = 0;
+		for (const x of [t("{n}분 전", { n: 59 }), t("{n}시간 전", { n: 23 }), t("{n}일 전", { n: 30 })]) {
+			when.textContent = x;
+			wWhen = Math.max(wWhen, when.getBoundingClientRect().width);
+		}
+		const line = Math.max(nm.getBoundingClientRect().width + 12 + wWhen, tl.getBoundingClientRect().width);
 		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
 		widthCache.set(key, w);
 		return w;
@@ -690,26 +717,27 @@
 					{#if c.kind === "server"}
 						<span class="lead"><Icon name="server" /></span>
 						<span class="nm" title={c.label}>{c.label}</span>
-						<span class="meta"><span class="give" title={c.host}>{c.host}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
+						<span class="meta"><span class="give" title={c.host} use:middle={c.host ?? ""}></span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
 						<span class="nm" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name}>{c.name}</span>
 						<span class="meta"><span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
 						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, c.provider, c.label)} provider={c.provider} model={c.label} size={24} colored /></span>
-						<span class="nm" class:mono={c.name === c.label} title={c.name !== c.label ? `${c.name} · ${c.provider}/${c.label}` : c.name}>{c.name}</span>
+						{#if c.name === c.label}<span class="nm mono" title={c.name} use:middle={c.name}></span>
+						{:else}<span class="nm" title={`${c.name} · ${c.provider}/${c.label}`}>{c.name}</span>{/if}
 						<span class="meta"><span class="give">{modelSource(c)}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
 						{@const m = c.models?.[0]}
 						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
-						<span class="nm" title={c.label}>{c.label}</span>
+						<span class="nm" title={c.label} use:middle={c.label}></span>
 						<span class="meta">
 							{#if c.running}<em class="run">{t("실행 중 {n}", { n: c.running })}</em><i>·</i>{/if}
 							{#if m}
 								<span class="model" title={c.models!.map((x) => `${x.name} ${t("{n}회", { n: x.n })}`).join(" · ")}>
 									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
-									<span class="mn" class:mono={m.name === ref?.id}>{m.name}</span>
+									{#if m.name === ref?.id}<span class="mn mono" use:middle={m.name}></span>{:else}<span class="mn">{m.name}</span>{/if}
 									{#if c.asked}<span class="pick" title={t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: c.asked })}><Icon name="sparkles" /></span>{/if}
 									{#if c.models!.length > 1}<span class="more">{t("외 {n}", { n: c.models!.length - 1 })}</span>{/if}
 								</span><i>·</i>
@@ -760,8 +788,10 @@
 
 	<!-- hidden copies of the one-line names, to measure a long one -->
 	<div class="measure" bind:this={measure} aria-hidden="true">
-		{#each ["server", "provider", "model", "model-id", "subagent"] as k (k)}<span class="nm" class:mono={k === "model-id"} data-kind={k}></span>{/each}
+		{#each ["server", "provider", "model", "model-id", "subagent", "session"] as k (k)}<span class="nm" class:mono={k === "model-id"} data-kind={k}></span>{/each}
 		<span class="meta"></span>
+		<span class="title"></span>
+		<span class="when"></span>
 	</div>
 </section>
 
@@ -1367,7 +1397,9 @@
 		pointer-events: none;
 	}
 	.measure .nm,
-	.measure .meta {
+	.measure .meta,
+	.measure .title,
+	.measure .when {
 		display: block;
 		width: max-content;
 		overflow: visible;
