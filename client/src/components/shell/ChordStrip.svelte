@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { t } from "../../lib/i18n";
+	import { msg, t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { chord } from "../../lib/chord.svelte";
-	import { ACTIONS, chordNext, recordingCombo, recordingLabel } from "../../lib/keys";
+	import { ACTIONS, chordOptions, recordingCombo, recordingLabel } from "../../lib/keys";
 	import { fadeIn, fadeOut } from "../../lib/motion";
 
 	const MAX_SHOWN = 6;
 	const prefix = $derived(chord.prefix);
-	const next = $derived(prefix ? chordNext(prefix, app.prefs.bindings) : []);
-	const label = (id: string) => t(ACTIONS.find((a) => a.id === id)?.label ?? id);
+	const next = $derived(prefix ? chordOptions(prefix, app.prefs.bindings) : []);
+	const label = (id: string) => t(id === "focusArrows" ? msg("창 이동") : (ACTIONS.find((a) => a.id === id)?.label ?? id));
 	const alone = $derived(prefix ? ACTIONS.find((a) => !a.fixed && app.prefs.bindings[a.id] === recordingCombo(prefix)) : undefined);
 </script>
 

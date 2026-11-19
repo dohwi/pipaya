@@ -78,7 +78,7 @@ export function checkShortcutFree(existing: readonly { owner: string; id: string
 
 /**
  * The app action that takes this combo before any extension does (app shortcuts always win): bound to exactly it, or
- * starting a longer app shortcut (Ctrl+B of Ctrl+B+V waits for its next key). Shown to the user; the key handler applies
+ * starting a longer app shortcut (Ctrl+B of Ctrl+B+\ waits for its next key). Shown to the user; the key handler applies
  * the same order.
  */
 export function appConflict(combo: string, bindings: Record<string, string>): ActionId | undefined {

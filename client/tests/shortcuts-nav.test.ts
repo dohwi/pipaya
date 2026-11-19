@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { needsLook, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
 import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, chordOptions, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, tabComboYieldsFocus, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -168,6 +168,46 @@ describe("shortcut catalogue", () => {
 		expect(fixedActionFor("Escape")).toBe("stop");
 		expect(fixedActionFor("Mod+B")).toBeUndefined();
 		expect(fixedActionFor("")).toBeUndefined();
+	});
+
+	test("default shortcuts are unique, and none takes a key text fields or the OS use", () => {
+		const bound = ACTIONS.map((a) => a.default).filter(Boolean);
+		expect(new Set(bound).size).toBe(bound.length);
+		// Alt+arrows move by word / paragraph in a macOS text field; Mod+Alt+arrows switch workspaces in GNOME
+		for (const combo of bound) expect(combo).not.toMatch(/^(Mod\+)?Alt\+Arrow/);
+		// a prefix key must not also be its own single-key shortcut elsewhere by accident (Ctrl+B waits for its next key)
+		for (const combo of bound) if (combo.startsWith("Mod+B+")) expect(combo.split("+").length).toBe(3);
+	});
+
+	test("split keys pair up: \\ beside, - below, for conversations and terminals alike", () => {
+		expect(DEFAULT_BINDINGS.splitRight).toBe("Mod+B+Backslash");
+		expect(DEFAULT_BINDINGS.splitDown).toBe("Mod+B+Minus");
+		expect(DEFAULT_BINDINGS.splitTerminalRight).toBe("Mod+Alt+Backslash");
+		expect(DEFAULT_BINDINGS.splitTerminal).toBe("Mod+Alt+Minus");
+	});
+
+	test("the waiting strip folds the four Ctrl+B arrows into one option, and keeps every other one", () => {
+		const prefix = { mod: true, alt: false, shift: false, keys: ["B"] };
+		const opts = chordOptions(prefix, DEFAULT_BINDINGS);
+		expect(opts.filter((o) => o.id === "focusArrows")).toEqual([{ id: "focusArrows", rest: "← ↑ → ↓" }]);
+		expect(opts.some((o) => o.id === "focusLeft")).toBe(false);
+		expect(opts.length).toBe(chordNext(prefix, DEFAULT_BINDINGS).length - 3);
+		expect(opts.length).toBeLessThanOrEqual(6); // ChordStrip shows six before "+n"
+		// one arrow moved elsewhere: nothing is folded, each move is listed on its own
+		const moved = { ...DEFAULT_BINDINGS, focusUp: "Mod+B+K" };
+		expect(chordOptions(prefix, moved).some((o) => o.id === "focusArrows")).toBe(false);
+	});
+
+	test("Shift+Tab cycles the thinking level from the composer only; elsewhere it moves focus back", () => {
+		const composer = { tagName: "TEXTAREA", dataset: { composer: "" } };
+		expect(tabComboYieldsFocus("Shift+Tab", composer)).toBe(false);
+		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "BODY" })).toBe(false);
+		expect(tabComboYieldsFocus("Shift+Tab", null)).toBe(false);
+		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "BUTTON" })).toBe(true); // a sidebar row
+		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "INPUT" })).toBe(true); // find bar, rename field
+		expect(tabComboYieldsFocus("Tab", { tagName: "A" })).toBe(true);
+		expect(tabComboYieldsFocus("Mod+Shift+Tab", { tagName: "BUTTON" })).toBe(false); // a real chord stays global
+		expect(tabComboYieldsFocus("Mod+B+B", { tagName: "BUTTON" })).toBe(false);
 	});
 
 	test("steering is fixed to Enter; queueing is rebindable (Alt+Enter by default)", () => {

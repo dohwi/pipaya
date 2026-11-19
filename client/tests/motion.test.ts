@@ -147,7 +147,7 @@ describe("shortcut catalogue", () => {
 	test("the two split directions are bound", () => {
 		const by = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 		for (const id of ["splitRight", "splitDown"]) expect(by[id]?.group).toBe("layout");
-		expect(by.splitRight.default).toBe("Mod+B+V");
+		expect(by.splitRight.default).toBe("Mod+B+Backslash");
 		expect(by.splitDown.default).toBe("Mod+B+Minus");
 	});
 });
