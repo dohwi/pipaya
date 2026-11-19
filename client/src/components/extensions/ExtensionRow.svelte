@@ -62,7 +62,7 @@
 	.card.dim .line { opacity: 0.55; }
 	.line { display: flex; align-items: center; gap: 8px; }
 	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; margin: -4px; /* 4px of room for the hover and focus ring, taken back: the name and the arrow sit on the card's 12px line */ border-radius: var(--radius-sm); text-align: left; color: var(--text); }
-	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }
+	@media (hover: hover) { .expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; } } /* not on touch: a tap left the name underlined */
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }

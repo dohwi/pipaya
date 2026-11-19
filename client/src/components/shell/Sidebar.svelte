@@ -430,12 +430,13 @@
 			<span class="sico"><Icon name="fork" /></span> {t("그래프 뷰")}
 		</button>
 		{#if schedulesShown}
-			<button class="navbtn wide" onclick={() => (app.schedulesDialog = true)} title={schedulesTip}>
+			<button class="navbtn wide" onclick={() => ((app.schedulesDialog = true), (app.sidebar.open = false))} title={schedulesTip}>
 				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
 				{#if scheduled.count}<span class="salert"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
 			</button>
 		{/if}
-		<button class="settings navbtn wide" onclick={() => app.openSettings()}>
+		<!-- the phone drawer steps aside for the sheet (like the graph view does): it was left open behind it, two layers deep -->
+		<button class="settings navbtn wide" onclick={() => (app.openSettings(), (app.sidebar.open = false))}>
 			<span class="sico"><Icon name="settings" />{#if settingsAlert || extensionUpdates.any}<Pin tone={alertTone} label={settingsAlert || t("업데이트 있음")} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone={alertTone} size="sm">{settingsAlert}</Badge></span>{/if}
 			{#if updater.current}<span class="sver" class:push={!settingsAlert}>v{updater.current}</span>{/if}
@@ -572,11 +573,18 @@
 		transform: translate(calc(-50% - 4px), -50%);
 	}
 	}
-	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {
 		background: color-mix(in srgb, var(--text) 14%, transparent);
 		color: var(--text);
 		opacity: 1;
+	}
+	/* hover only with a real pointer: after a tap the "+" kept its grey disc on a phone (sticky :hover) */
+	@media (hover: hover) {
+		:global(:where(.side) .dirnew:hover) {
+			background: color-mix(in srgb, var(--text) 14%, transparent);
+			color: var(--text);
+			opacity: 1;
+		}
 	}
 	/* one lead column: the model's logo, or the terminal / split icon */
 	:global(:where(.side) .lead) {
