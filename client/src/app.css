@@ -1359,6 +1359,12 @@ dialog[data-closing]::backdrop {
 	}
 }
 
+/* A name that flows by (lib/fit-text `marquee`: sidebar rows, pane titles, graph cards) fades out at both edges while it
+   moves: with the right edge alone, the letter being cut at the left edge read as a text cursor in the row. */
+:root {
+	--mq-mask: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+}
+
 /* The angle a running light turns at round a working card's border (graph view). Registered so it can be animated;
    without @property support the light simply stands still. */
 @property --ring-a {

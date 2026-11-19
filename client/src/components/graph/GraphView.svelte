@@ -1452,8 +1452,8 @@
 	@media (hover: hover) and (prefers-reduced-motion: no-preference) {
 		.card:hover .fl:global([data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		.card:hover .fl:global([data-over]) .cut {
 			display: none;
