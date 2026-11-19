@@ -53,6 +53,12 @@
 	.face {
 		display: grid;
 	}
+	/* a phone on its side: the mark would push the start actions out of the short area above the composer (Welcome.svelte) */
+	@media (max-height: 480px) {
+		.face {
+			display: none;
+		}
+	}
 	.face > * {
 		grid-area: 1 / 1;
 	}

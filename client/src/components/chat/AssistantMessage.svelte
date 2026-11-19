@@ -325,9 +325,14 @@
 		opacity: 0;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	.row:hover .acts :global(.iconbtn),
 	.acts:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
+	}
+	/* hover only where it is a real pointer: a tap leaves :hover stuck on the row, and the buttons showed without taking taps */
+	@media (hover: hover) {
+		.row:hover .acts :global(.iconbtn) {
+			opacity: 1;
+		}
 	}
 	/* no hover on a touch screen: the newest answer keeps its buttons on, an older one shows them when tapped. Hidden ones
 	   take no taps, so a tap where they sit reveals them instead of copying blind */
@@ -345,14 +350,15 @@
 	.more {
 		display: none;
 	}
-	.row:hover .more,
 	.foot:has(:global(:focus-visible)) .more {
 		display: inline;
 	}
-	@media (pointer: coarse) {
+	@media (hover: hover) {
 		.row:hover .more {
-			display: none;
+			display: inline;
 		}
+	}
+	@media (pointer: coarse) {
 		.row.shown .more {
 			display: inline;
 		}
