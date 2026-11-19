@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { modelDisplayName } from "../../lib/model-name";
 	import { t } from "../../lib/i18n";
 	import ModelLogo from "./ModelLogo.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -55,7 +56,7 @@
 	} = $props();
 
 	const current = $derived(value ? models.find((m) => m.provider === value.provider && m.id === value.model) : undefined);
-	const shown = $derived(current?.name ?? (value ? value.model : (placeholder ?? t("모델 없음"))));
+	const shown = $derived(value ? modelDisplayName(models, value.provider, value.model) : (placeholder ?? t("모델 없음")));
 </script>
 
 <button

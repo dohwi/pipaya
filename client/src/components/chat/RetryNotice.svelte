@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { modelDisplayName, providerDisplayName } from "../../lib/model-name";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
@@ -15,8 +16,8 @@
 	const pane = getPane();
 	const eff = $derived(app.effectiveOf(pane.id));
 	const who = $derived.by(() => {
-		const model = app.effectiveModelOf(pane.id)?.name || eff.model || "";
-		const provider = app.providers.find((p) => p.id === eff.provider)?.name || eff.provider || "";
+		const model = modelDisplayName(app.models, eff.provider, eff.model);
+		const provider = providerDisplayName(app.providers, eff.provider);
 		return provider && model ? `${provider} / ${model}` : model || provider;
 	});
 

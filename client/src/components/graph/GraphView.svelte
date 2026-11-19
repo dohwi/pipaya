@@ -10,13 +10,14 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, growthPlan, leavePlan, modelName, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, growthPlan, leavePlan, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
 	import GraphQuick from "./GraphQuick.svelte";
 	import GraphDetail from "./GraphDetail.svelte";
 	import { released } from "../../lib/pointer";
+	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
@@ -40,6 +41,9 @@
 				activity: (id: string) => (d ? activityOf(d, id) : "idle"),
 				queued: (id: string) => d?.queued[id]?.length ?? 0,
 				runs: graphRuns.runs[s.id] ?? null,
+				// the names the owner gave models and connections (the ids when none)
+				modelName: (provider: string, id: string) => modelDisplayName(link?.models ?? [], provider, id),
+				providerName: (id: string) => providerDisplayName(link?.providers ?? [], id),
 			};
 		}),
 	);
@@ -76,12 +80,14 @@
 	const widthCache = new Map<string, number>();
 	function widthOf(c: Card): number {
 		if (!measure || c.kind === "session") return 0;
-		const key = `${c.kind}|${c.label}`;
+		// a model's id is set in mono; a name the owner gave it in the body face, like the card draws it
+		const kind = c.kind === "model" && c.name === c.label ? "model-id" : c.kind;
+		const key = `${kind}|${c.name}`;
 		const hit = widthCache.get(key);
 		if (hit !== undefined) return hit;
-		const nm = measure.querySelector<HTMLElement>(`[data-kind="${c.kind}"]`);
+		const nm = measure.querySelector<HTMLElement>(`[data-kind="${kind}"]`);
 		if (!nm) return 0;
-		nm.textContent = c.label;
+		nm.textContent = c.name;
 		const w = Math.ceil(nm.getBoundingClientRect().width) + 24 + 12 + 32 + 2; // mark + gap + padding + border
 		widthCache.set(key, w);
 		return w;
@@ -516,6 +522,8 @@
 		if (hour < 24) return t("{n}시간 전", { n: hour });
 		return t("{n}일 전", { n: Math.floor(hour / 24) });
 	}
+	/** The mark the owner picked for a model on that server, if any. */
+	const iconOf = (server: string, provider: string | undefined, id: string) => modelIcon(app.links[server]?.models ?? [], provider, id);
 	const toolNow = (c: Card) => app.links[c.server]?.data.tool[c.session!.id];
 	const summary = $derived.by(() => {
 		const up = servers.filter((v) => v.online).length;
@@ -642,22 +650,23 @@
 						<span class="meta"><span>{c.host}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
-						<span class="nm">{c.label}</span>
+						<span class="nm" title={c.name !== c.label ? c.label : undefined}>{c.name}</span>
 						<span class="meta"><span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
-						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} provider={c.provider} model={c.label} size={24} colored /></span>
-						<span class="nm mono">{c.label}</span>
-						<span class="meta"><span>{c.brand ? BRAND_LABEL[c.brand] : c.provider}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
+						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, c.provider, c.label)} provider={c.provider} model={c.label} size={24} colored /></span>
+						<span class="nm" class:mono={c.name === c.label} title={c.name !== c.label ? `${c.provider}/${c.label}` : undefined}>{c.name}</span>
+						<span class="meta"><span>{c.brand ? BRAND_LABEL[c.brand] : (graph.cards.get(c.parent ?? "")?.name ?? c.provider)}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
 						{@const m = c.models?.[0]}
+						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
 						<span class="nm">{c.label}</span>
 						<span class="meta">
 							{#if c.running}<em class="run">{t("실행 중 {n}", { n: c.running })}</em><i>·</i>{/if}
 							{#if m}
-								<span class="model" title={c.models!.map((x) => `${modelName(x.model)} ${t("{n}회", { n: x.n })}`).join(" · ")}>
-									<ModelLogo conn={app.links[c.server]?.conn} provider={m.model.split("/")[0]} model={modelName(m.model)} size={14} colored />
-									<span class="mono">{modelName(m.model)}</span>
+								<span class="model" title={c.models!.map((x) => `${x.name} ${t("{n}회", { n: x.n })}`).join(" · ")}>
+									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
+									<span class="mn" class:mono={m.name === ref?.id}>{m.name}</span>
 									{#if c.asked}<span class="pick" title={t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: c.asked })}><Icon name="sparkles" /></span>{/if}
 									{#if c.models!.length > 1}<span class="more">{t("외 {n}", { n: c.models!.length - 1 })}</span>{/if}
 								</span><i>·</i>
@@ -708,7 +717,7 @@
 
 	<!-- hidden copies of the one-line names, to measure a long one -->
 	<div class="measure" bind:this={measure} aria-hidden="true">
-		{#each ["server", "provider", "model", "subagent"] as k (k)}<span class="nm" class:mono={k === "model"} data-kind={k}></span>{/each}
+		{#each ["server", "provider", "model", "model-id", "subagent"] as k (k)}<span class="nm" class:mono={k === "model-id"} data-kind={k}></span>{/each}
 	</div>
 </section>
 
@@ -1137,7 +1146,7 @@
 		gap: 4px;
 		min-width: 0;
 	}
-	.meta .model .mono {
+	.meta .model .mn {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

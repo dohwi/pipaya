@@ -20,6 +20,21 @@ const server = (id: string, sessions: Session[], over: Partial<GraphServer> & { 
 });
 
 describe("buildGraph", () => {
+	test("providers, models and a role's models read by the names the owner gave them; ids stay the keys", () => {
+		const names: Record<string, string> = { "p/m": "Fast model", "p/sub": "Helper model" };
+		const g = buildGraph([server("a", [session("s1"), session("s2", { model: "m2" })], {
+			runs: [run("s1", "explore", { model: "p/sub" }), run("s1", "explore", { model: "q/raw" })],
+			modelName: (provider, id) => names[`${provider}/${id}`] ?? id,
+			providerName: (id) => (id === "p" ? "My Proxy" : id),
+		})]);
+		expect(g.cards.get("p:a/p")!.label).toBe("p");
+		expect(g.cards.get("p:a/p")!.name).toBe("My Proxy");
+		expect(g.cards.get("m:a/p/m")!.name).toBe("Fast model");
+		expect(g.cards.get("m:a/p/m2")!.name).toBe("m2"); // no name given: the id
+		expect(g.cards.get("r:a/explore")!.models!.map((m) => [m.model, m.name]).sort()).toEqual([["p/sub", "Helper model"], ["q/raw", "raw"]]);
+		expect(g.cards.get("v:a")!.name).toBe("a");
+	});
+
 	test("server → provider → model → chat, with counts on every hub", () => {
 		const g = buildGraph([server("a", [session("s1"), session("s2", { model: "m2" }), session("s3", { provider: "q" })])]);
 		const kinds = (k: string) => [...g.cards.values()].filter((c) => c.kind === k).map((c) => c.id).sort();
