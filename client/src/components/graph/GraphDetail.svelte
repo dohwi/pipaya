@@ -10,10 +10,9 @@
 	import { connectionState } from "../../lib/sidebar-model";
 	import type { Card, Graph } from "../../lib/graph";
 	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
-	import { callState, roleStats, under, type CallState } from "../../lib/graph-detail";
+	import { callState, roleStats, settingsTarget, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { activityOf } from "../../lib/activity";
-	import type { SettingsTabId } from "../../lib/settings-search";
 	import type { SubagentInfo } from "../../lib/types";
 	import Modal from "../ui/Modal.svelte";
 	import DialogBody from "../ui/DialogBody.svelte";
@@ -125,12 +124,15 @@
 	});
 
 	// ---- footer ----
-	const settingsTab = $derived<SettingsTabId>(card?.kind === "server" ? "info" : card?.kind === "subagent" ? "tools" : "models");
+	/** Opens the settings on this card's own row: its connection, its model in that connection's list, its role. */
 	function openSettings() {
 		if (!card) return;
+		const pid = card.kind === "model" ? card.provider : card.label;
+		const builtin = link?.providers.find((p) => p.id === pid && p.builtin);
+		const target = settingsTarget(card, { custom: link?.customProviders.find((p) => p.id === pid), builtin, roleScope: def?.scope ?? null });
 		const server = card.server;
 		onclose();
-		app.openSettings(settingsTab, server);
+		app.openSettings(target.tab, server, target.focus);
 	}
 	/** The server's address, or a connection's endpoint. */
 	async function copyAddress() {

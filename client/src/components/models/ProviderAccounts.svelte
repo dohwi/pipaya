@@ -65,7 +65,7 @@
 {#if connected.length}
 	<ul class="list">
 		{#each connected as p (p.id)}
-			<li>
+			<li data-provider={p.id}>
 				<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
 				<Badge variant="outline" size="sm" mono>{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</Badge>
 				{#if p.configured}<Badge tone="ok" size="sm"><Icon name="check" /> {t("사용 가능")}</Badge>{/if}
