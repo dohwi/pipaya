@@ -11,8 +11,12 @@
  * so stopping propagation here does not silence them (a plain addEventListener + stopPropagation would).
  */
 import { on } from "svelte/events";
+import { emptyRecording, isBareCombo, isModifierCode, recordKey, recordingCombo, tabComboYieldsFocus, type Recording } from "./keys";
 
 export interface LayerOpts {
+	/** Only this binding may dismiss the layer; never dispatch an action to the page behind it. */
+	closeBinding?: string;
+	onshortcutclose?: () => void;
 	onclose?: () => void;
 	/** false while closing must not happen (saving, a download in progress); Esc is still swallowed */
 	dismissible?: boolean;
@@ -23,7 +27,7 @@ export interface LayerOpts {
 	opener?: HTMLElement | null;
 }
 
-type Layer = { node: HTMLElement; opts: LayerOpts };
+type Layer = { node: HTMLElement; opts: LayerOpts; prefix?: Recording };
 const stack: Layer[] = [];
 type Back = { opts: { onclose?: () => void; dismissible?: boolean }; entry: boolean };
 const backs: Back[] = [];
@@ -165,12 +169,44 @@ function escapeLayer(e: KeyboardEvent, layer: Layer) {
 	if (layer.opts.dismissible !== false) layer.opts.onclose?.();
 }
 
+/** Match the opener locally, including ordered chords, without arming any other app shortcut. */
+function toggleLayer(e: KeyboardEvent, layer: Layer) {
+	const binding = layer.opts.closeBinding;
+	if (!binding || e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.getModifierState?.("AltGraph")) {
+		layer.prefix = undefined;
+		return;
+	}
+	if (isModifierCode(e.code)) return;
+	if (e.key === "Escape") {
+		if (layer.prefix) e.preventDefault(); // first Esc cancels an unfinished chord
+		layer.prefix = undefined;
+		return;
+	}
+	const target = e.target as HTMLElement | null;
+	const typing = target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? "");
+	const next = recordKey(layer.prefix ?? emptyRecording(), e).next;
+	const combo = recordingCombo(next);
+	if (!layer.prefix && ((typing && isBareCombo(combo)) || tabComboYieldsFocus(combo, target))) return;
+	if (binding === combo || binding.startsWith(`${combo}+`)) {
+		e.preventDefault();
+		if (e.repeat) return;
+		if (binding !== combo) { layer.prefix = next; return; }
+		layer.prefix = undefined;
+		if (layer.opts.dismissible !== false) (layer.opts.onshortcutclose ?? layer.opts.onclose)?.();
+	} else if (!e.repeat) layer.prefix = undefined;
+}
+
+function resetModalChord() {
+	for (const layer of stack) layer.prefix = undefined;
+}
+
 /** Focus was on <body> (a click on plain text inside the modal): the key never passed through a panel. */
 function onWindowKey(e: KeyboardEvent) {
 	const top = stack[stack.length - 1];
 	if (!top) return;
 	const target = e.target instanceof Node ? e.target : null;
 	if (target && stack.some((l) => l.node.contains(target))) return;
+	toggleLayer(e, top);
 	if (e.key === "Tab") return void trapTab(e, top.node);
 	escapeLayer(e, top);
 }
@@ -180,7 +216,12 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	const hist: Back = { opts, entry: false };
 	const current = document.activeElement instanceof HTMLElement && !node.contains(document.activeElement) ? document.activeElement : null;
 	const opener = opts.opener !== undefined ? opts.opener : current;
-	if (!stack.length) window.addEventListener("keydown", onWindowKey);
+	resetModalChord();
+	if (!stack.length) {
+		window.addEventListener("keydown", onWindowKey);
+		window.addEventListener("blur", resetModalChord);
+		window.addEventListener("pointerdown", resetModalChord, true);
+	}
 	stack.push(layer);
 	track(hist);
 	if (!node.hasAttribute("tabindex")) node.tabIndex = -1;
@@ -188,6 +229,7 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	const onKey = (e: KeyboardEvent) => {
 		// A modal underneath (not portalled) only sees keys that bubbled out of the one on top: leave them alone.
 		if (stack[stack.length - 1] === layer) {
+			toggleLayer(e, layer);
 			if (!trapTab(e, node)) escapeLayer(e, layer);
 		}
 		e.stopPropagation(); // the app's shortcuts stay quiet while a modal has the keyboard
@@ -216,7 +258,11 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 			const i = stack.indexOf(layer);
 			if (i >= 0) stack.splice(i, 1);
 			untrack(hist);
-			if (!stack.length) window.removeEventListener("keydown", onWindowKey);
+			if (!stack.length) {
+				window.removeEventListener("keydown", onWindowKey);
+				window.removeEventListener("blur", resetModalChord);
+				window.removeEventListener("pointerdown", resetModalChord, true);
+			}
 			const top = topLayer();
 			const back = opener?.isConnected && (!top || top.contains(opener)) ? opener : top;
 			if (back && (document.activeElement === document.body || node.contains(document.activeElement))) back.focus({ preventScroll: true });

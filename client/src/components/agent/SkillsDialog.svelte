@@ -180,7 +180,7 @@
 	</ul>
 {/snippet}
 
-<Modal {onclose} title={t("스킬")} sub={data ? `${t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · ${home(data.project)}` : null} width="xl" maxHeight="760px" safeArea>
+<Modal closeShortcut="skills" {onclose} title={t("스킬")} sub={data ? `${t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · ${home(data.project)}` : null} width="xl" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}

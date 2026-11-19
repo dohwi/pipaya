@@ -177,6 +177,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
         ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         ctx.set_default_timeout(TIMEOUT)
         ctx.add_init_script("if(!sessionStorage.__seeded){localStorage.setItem('pipaya.lang','ko');sessionStorage.__seeded=1}")
+        ctx.add_init_script("localStorage.setItem('pipaya.keys',JSON.stringify({skills:'Mod+B+S',workdir:'Alt+W'}))")
         page = ctx.new_page()
         page.on("request", lambda r: requests.append(r.url))
         page.on("websocket", lambda w: requests.append(w.url))
@@ -211,6 +212,43 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(page.locator('[data-part="message.user"]').get_by_text("hello smoke")).to_be_visible()
             expect(page.get_by_text("Echo: hello smoke")).to_be_visible()
             expect(composer()).to_have_value("")
+
+        def b_shortcut_toggles():
+            dialog = page.get_by_role("dialog")
+            for key, name in [("Control+Shift+a", re.compile("탭 .*개 모두 보기")), ("Control+k", "대화 찾기"),
+                              ("Control+m", "모델 설정"), ("Alt+w", "작업 폴더 선택"), ("Control+,", "설정")]:
+                composer().focus()
+                page.keyboard.press(key)
+                expect(page.get_by_role("dialog", name=name)).to_be_visible()
+                page.keyboard.press("Control+g")  # don't toggle the graph behind the dialog
+                expect(composer()).to_be_visible()
+                if name == "설정":
+                    settings = page.get_by_role("dialog", name="설정")
+                    settings.get_by_role("tab", name="모델", exact=True).click()
+                    settings.get_by_role("button", name="기본 모델", exact=True).click()
+                    picker = page.get_by_role("dialog", name="기본 모델")
+                    expect(picker).to_be_visible()
+                    page.keyboard.press(key)  # the settings shortcut must not dismiss the picker or settings
+                    expect(picker).to_be_visible()
+                    expect(settings).to_be_visible()
+                    page.keyboard.press("Escape")
+                    expect(picker).to_have_count(0)
+                page.keyboard.press(key)
+                expect(dialog).to_have_count(0)
+            for opening in [True, False]:
+                page.keyboard.press("Control+b")
+                page.keyboard.press("s")
+                if opening:
+                    expect(page.get_by_role("dialog", name="스킬", exact=True)).to_be_visible()
+                else:
+                    expect(dialog).to_have_count(0)
+            page.keyboard.press("Control+f")
+            find = page.get_by_role("textbox", name="대화에서 찾기")
+            expect(find).to_be_focused()
+            find.fill("hello")
+            page.keyboard.press("Control+f")
+            expect(find).to_have_count(0)
+            expect(composer()).to_be_focused()
 
         def b2_draft_survives_reload():
             composer().fill("kept across a reload")
@@ -316,6 +354,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
         try:
             step("a. first screen -> connect", a_first_screen)
             step("b. send a message, see the echo", b_send)
+            step("b1. view shortcuts open and close", b_shortcut_toggles)
             step("b2. unsent input survives a reload", b2_draft_survives_reload)
             step("b3. attached picture and file survive a reload", b3_attachments_survive_reload)
             step("c. stream auth (ticket, no token in URLs)", c_stream_auth)
