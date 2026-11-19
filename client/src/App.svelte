@@ -20,7 +20,7 @@
 	import Toasts from "./components/shell/Toasts.svelte";
 	import RowMenu from "./components/ui/RowMenu.svelte";
 	import { registerContextMenu } from "./lib/context-menu";
-	import Lazy from "./components/ui/Lazy.svelte";
+	import Lazy, { preload } from "./components/ui/Lazy.svelte";
 	import UpdateBanner from "./components/shell/UpdateBanner.svelte";
 	import DoneNotice from "./components/shell/DoneNotice.svelte";
 	import ChordStrip from "./components/shell/ChordStrip.svelte";
@@ -110,7 +110,11 @@
 	onMount(() => guardWindowClose(() => app.requestClose()));
 	// Cold markdown code is what the first reply stalls on (lib/markdown.ts): warm it once the first paint is done.
 	onMount(() => {
-		const run = () => void import("./lib/markdown").then((m) => m.warmMarkdown());
+		const run = () => {
+			void import("./lib/markdown").then((m) => m.warmMarkdown());
+			// Settings is the dialog people open most: fetched on the first click, its sheet arrived ~0.6s late on a phone.
+			void preload(load.settings).catch(() => {});
+		};
 		const idle = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
 		if (idle) idle(run, { timeout: 2000 });
 		else setTimeout(run, 500);
@@ -779,24 +783,53 @@
 		.grip:focus-visible {
 			outline: none;
 		}
+		/* Folding and unfolding cross-fade the two layers while the wrapper's width animates. Both are pinned to the left
+		   edge at their own width, so neither reflows nor slides: the rail used to fill the wrapper and shrink from 288 to
+		   56px, carrying its logo and icons from x 144 to 28 (the "wiggle"), and the full list popped in and out at once.
+		   The hidden layer is `visibility: hidden` once its fade ends, which keeps it out of the tab order. */
+		.side {
+			background: var(--bg-side); /* under the cross-fade, so the page does not show through at half opacity */
+		}
 		.full,
 		.rail-slot {
-			width: 100%;
+			position: absolute;
+			top: 0;
+			left: 0;
 			height: 100%;
 			overflow: hidden;
+			transition:
+				opacity var(--motion-normal) var(--ease-std),
+				visibility 0s;
+		}
+		.full {
+			width: 100%; /* clips the list, which keeps its own --sidebar-w (Sidebar.svelte) */
 		}
 		.rail-slot {
-			display: none;
+			width: var(--rail-w);
+		}
+		.side:not(.collapsed) .rail-slot,
+		.side.collapsed .full {
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+			transition:
+				opacity var(--motion-fast) var(--ease-std),
+				visibility 0s linear var(--motion-fast);
+		}
+		/* the edge line of the moving wrapper: the layers' own borders sit at their fixed widths and are clipped mid-way */
+		.side::after {
+			content: "";
+			position: absolute;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: 1px;
+			background: var(--border);
+			pointer-events: none;
 		}
 		/* Folded: not gone, but a slim rail of the active sessions' agents */
 		.side.collapsed {
 			width: var(--rail-w);
-		}
-		.side.collapsed .full {
-			display: none; /* out of the tab order too */
-		}
-		.side.collapsed .rail-slot {
-			display: block;
 		}
 	}
 

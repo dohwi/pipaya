@@ -261,9 +261,14 @@
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	/* the buttons are IconButton's markup: `:global`, or the compiler drops the rule and Tab never reveals them */
-	.row.user:hover .actions :global(.iconbtn),
 	.actions:has(:global(:focus-visible)) :global(.iconbtn) {
 		opacity: 1;
+	}
+	/* hover only where it is a real pointer: a tap leaves :hover stuck on the row (see AssistantMessage) */
+	@media (hover: hover) {
+		.row.user:hover .actions :global(.iconbtn) {
+			opacity: 1;
+		}
 	}
 	/* no hover on a phone: a tap on the message shows its buttons (the answer's do the same); hidden ones take no taps */
 	@media (pointer: coarse) {

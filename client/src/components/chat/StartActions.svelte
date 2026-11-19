@@ -41,4 +41,10 @@
 		word-break: keep-all;
 		text-wrap: balance;
 	}
+	/* a phone on its side: the composer's own placeholder already says "/ 명령"; the line only ran under the workdir chip */
+	@media (max-height: 480px) {
+		.hint {
+			display: none;
+		}
+	}
 </style>

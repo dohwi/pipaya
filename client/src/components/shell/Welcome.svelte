@@ -122,4 +122,11 @@
 		color: var(--text-dim);
 		text-wrap: balance;
 	}
+	/* a phone on its side leaves ~135px above the composer: the 72px mark pushed the title and the "model" notice out of
+	   view, so there the words come first and the mark steps aside */
+	@media (max-height: 480px) {
+		.face {
+			display: none;
+		}
+	}
 </style>
