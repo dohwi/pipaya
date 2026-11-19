@@ -1,8 +1,11 @@
 <script lang="ts" module>
 	import type { Attachment as DraftAttachment } from "../../lib/images";
 	import type { Outgoing } from "../../lib/chat.svelte";
-	/** Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. */
 	import type { FileDraft } from "../../lib/files";
+	/**
+	 * Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. The
+	 * text and reply are also saved on this device (saved-drafts.ts) so they survive a restart; attachments are not.
+	 */
 	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
 </script>
 
@@ -52,6 +55,7 @@
 	import { msg, t } from "../../lib/i18n";
 	import { uniqueBy } from "../../lib/unique";
 	import { voice } from "../../lib/voice.svelte";
+	import { forgetDraft, loadDraft, saveDraft } from "../../lib/composer/saved-drafts";
 
 	const domId = $props.id();
 	const menuListId = `${domId}-menu`;
@@ -63,7 +67,7 @@
 	const whereShown = $derived(!pane.id || freshSession);
 	const wherePath = $derived(pane.id ? (app.session(pane.id)?.cwd ?? app.workdirAbs) : app.workdirAbs);
 
-	// Unsent input survives switching to another session and back (kept per session, in memory; "" = new chat).
+	// Unsent input survives switching to another session and back (kept per session; "" = new chat), and a restart.
 	let text = $state("");
 	let ta: HTMLTextAreaElement | undefined = $state();
 	let mirror: HTMLDivElement | undefined = $state();
@@ -108,8 +112,34 @@
 
 	// Each conversation has its own input: stash the one being left, restore the one being entered.
 	let draftKey: string | null | undefined;
+	/** Saving to storage waits for a pause in typing; leaving the session, the page or the component saves at once. */
+	const SAVE_DELAY_MS = 300;
+	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	function saveNow() {
+		clearTimeout(saveTimer);
+		saveTimer = undefined;
+		if (draftKey !== undefined) saveDraft(draftKey ?? "", text, reply);
+	}
+	$effect(() => {
+		void text;
+		void reply;
+		untrack(() => {
+			clearTimeout(saveTimer);
+			saveTimer = setTimeout(saveNow, SAVE_DELAY_MS);
+		});
+	});
+	$effect(() => {
+		const hidden = () => { if (document.visibilityState === "hidden") saveNow(); };
+		window.addEventListener("pagehide", saveNow);
+		document.addEventListener("visibilitychange", hidden);
+		return () => {
+			window.removeEventListener("pagehide", saveNow);
+			document.removeEventListener("visibilitychange", hidden);
+		};
+	});
 	function stash() {
 		if (draftKey === undefined) return;
+		saveNow();
 		const k = draftKey ?? "";
 		if (text || attached.any || reply) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply });
 		else drafts.delete(k);
@@ -119,9 +149,9 @@
 		untrack(() => {
 			stash();
 			draftKey = id;
-			const d = drafts.get(id ?? "");
+			const d = drafts.get(id ?? "") ?? loadDraft(id ?? "");
 			text = d?.text ?? "";
-			attached.load(d?.attachments ?? [], d?.files ?? []);
+			attached.load(d && "attachments" in d ? d.attachments : [], d && "files" in d ? d.files : []);
 			reply = d?.reply ?? null;
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) ta?.focus(); });
@@ -446,6 +476,7 @@
 	 */
 	function clearSent(key: string | null) {
 		drafts.delete(key ?? "");
+		forgetDraft(key ?? "");
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
 		reply = null;

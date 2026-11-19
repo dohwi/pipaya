@@ -10,6 +10,7 @@ export const K = {
   theme: "pipaya.theme",
   active: "pipaya.active", // per server: pipaya.active.<serverId>
   draft: "pipaya.draft",
+  drafts: "pipaya.composer.drafts", // unsent composer text per session ("" = new chat): { <sessionId>: { text, reply, at } }
   sidebar: "pipaya.sidebar", // "1" when collapsed (desktop)
   sidebarW: "pipaya.sidebar.w", // desktop width in px
   workdir: "pipaya.workdir", // per server: pipaya.workdir.<serverId>

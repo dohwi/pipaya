@@ -209,6 +209,14 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(page.get_by_text("Echo: hello smoke")).to_be_visible()
             expect(composer()).to_have_value("")
 
+        def b2_draft_survives_reload():
+            composer().fill("kept across a reload")
+            expect(composer()).to_have_value("kept across a reload")
+            page.reload()  # a restart: the page and its memory are gone, only storage is left
+            expect(composer()).to_have_value("kept across a reload")
+            composer().fill("")
+            expect(composer()).to_have_value("")
+
         def c_stream_auth():
             events = [u for u in requests if re.search(r"/events(\?|$)", u)]
             assert events, "the page never opened /events"
@@ -273,6 +281,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
         try:
             step("a. first screen -> connect", a_first_screen)
             step("b. send a message, see the echo", b_send)
+            step("b2. unsent input survives a reload", b2_draft_survives_reload)
             step("c. stream auth (ticket, no token in URLs)", c_stream_auth)
             step("d. model call fails -> retry notice -> stop", d_retry_notice)
             step("e. phone settings: list -> section -> back", e_phone_settings)

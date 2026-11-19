@@ -86,6 +86,7 @@ import { draftFromDefault, loadServers, normalizeThinking, pinLocal, readDraft }
 import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ThinkingLevel } from "./types";
 import type { SettingsProblem } from "./settings-problems";
+import { forgetDraft } from "./composer/saved-drafts";
 
 const NO_DIRS: DirBlock[] = [];
 
@@ -2219,6 +2220,7 @@ class AppStore {
     try {
       const next = this.neighbourOf(id);
       await this.api.deleteSession(id);
+      forgetDraft(id);
       this.forgetInGroups(id);
       this.sessions = this.sessions.filter((x) => x.id !== id);
       if (this.activeId === id) this.leave(next);
