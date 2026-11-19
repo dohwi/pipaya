@@ -388,15 +388,30 @@ export class Api {
 	systemModelSettings = () => this.req<SystemModelSettingsInfo>("GET", "/system-model");
 	setSystemModelSettings = (settings: SystemModelSettings) => this.req<SystemModelSettingsInfo>("PUT", "/system-model", settings);
 
-	/** `closed`: false = active only (the sidebar), true = closed only (/resume). */
-	listSessions = (limit = 100, closed?: boolean) =>
-		this.req<{ sessions: Session[]; nextBefore: number | null }>(
-			"GET",
-			`/sessions?limit=${limit}${closed === undefined ? "" : `&closed=${closed}`}`,
-		);
-	/** One page of every session, active and closed, newest first. `before` is the previous page's `nextBefore`. */
-	listSessionsPage = (limit = 200, before?: number) =>
-		this.req<{ sessions: Session[]; nextBefore: number | null }>("GET", `/sessions?limit=${limit}${before === undefined ? "" : `&before=${before}`}`);
+	/** A legacy server returns only nextBefore; newer servers also disambiguate equal timestamps by id. */
+	listSessions = (limit = 100, closed?: boolean, before?: number, beforeId?: string) => {
+		const q = new URLSearchParams({ limit: String(limit) });
+		if (closed !== undefined) q.set("closed", String(closed));
+		if (before !== undefined) q.set("before", String(before));
+		if (beforeId !== undefined) q.set("beforeId", beforeId);
+		return this.req<{ sessions: Session[]; nextBefore: number | null; nextBeforeId?: string | null }>("GET", `/sessions?${q}`);
+	};
+	async allSessions(closed?: boolean): Promise<Session[]> {
+		const sessions = new Map<string, Session>();
+		let before: number | undefined, id: string | undefined;
+		for (;;) {
+			const page = await this.listSessions(200, closed, before, id);
+			for (const s of page.sessions) if (!sessions.has(s.id)) sessions.set(s.id, s);
+			const next = page.nextBefore, nextId = page.nextBeforeId ?? undefined;
+			if (next == null) break;
+			// A stale or incompatible server must not make the client fetch the same page forever.
+			if (before !== undefined && next > before) break;
+			if (next === before && (!id || !nextId || nextId >= id)) break;
+			before = next;
+			id = nextId;
+		}
+		return [...sessions.values()];
+	}
 	workspace = () => this.req<WorkspaceInfo>("GET", "/workspace");
 	createSession = (input: CreateSessionInput = {}) => this.req<Session>("POST", "/sessions", input);
 	getSession = (id: string) => this.req<SessionDetail>("GET", `/sessions/${id}`);

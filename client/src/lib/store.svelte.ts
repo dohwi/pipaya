@@ -1630,16 +1630,12 @@ class AppStore {
   }
 
   async listClosed(): Promise<Session[]> {
-    return this.api
-      ? (await this.api.listSessions(200, true)).sessions.filter(
-          (s) => s.closed,
-        )
-      : [];
+    return this.api ? this.api.allSessions(true) : [];
   }
 
   /** Every session, active and closed (for /tree). */
   async listAll(): Promise<Session[]> {
-    return this.api ? (await this.api.listSessions(200)).sessions : [];
+    return this.api ? this.api.allSessions() : [];
   }
 
   /* ---------- navigation ---------- */

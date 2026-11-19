@@ -255,6 +255,10 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	);
 	CREATE INDEX IF NOT EXISTS scheduled_tasks_due ON scheduled_tasks(enabled, next_run_at);
 	CREATE INDEX IF NOT EXISTS scheduled_tasks_session ON scheduled_tasks(session_id);`,
+	// v33: seek directly to the next session, including ties within a millisecond.
+	`DROP INDEX IF EXISTS sessions_updated; DROP INDEX IF EXISTS sessions_closed;
+	 CREATE INDEX sessions_updated ON sessions(updated_at DESC, id DESC);
+	 CREATE INDEX sessions_closed ON sessions(closed, updated_at DESC, id DESC);`,
 ];
 
 export function openDb(path: string): Database {

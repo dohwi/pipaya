@@ -659,6 +659,11 @@ export default (pi) => {
 		const one = (await request("GET", "/sessions", undefined, { limit: 1 })).json.result;
 		expect(one.body.sessions).toHaveLength(1);
 		expect(one.body.nextBefore).not.toBeNull();
+		expect(one.body.nextBeforeId).toBe(one.body.sessions[0].id);
+		const next = (await request("GET", "/sessions", undefined, { limit: 1, before: one.body.nextBefore, beforeId: one.body.nextBeforeId })).json.result;
+		expect(next.body.sessions).toHaveLength(1);
+		expect(next.body.sessions[0].id).not.toBe(one.body.nextBeforeId);
+		expect(next.body.nextBefore).toBeNull();
 	});
 
 	test("errors come back as a status, with the same validation as the public route", async () => {

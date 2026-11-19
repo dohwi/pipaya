@@ -139,6 +139,7 @@
 		if (k === "ArrowDown" || k === "ArrowUp") {
 			e.preventDefault();
 			if (!open) void show();
+			else if (active < 0) edge(k === "ArrowUp");
 			else move(k === "ArrowDown" ? 1 : -1);
 		} else if (k === "Escape") {
 			if (!open) return;
@@ -148,7 +149,7 @@
 		} else if (k === "Enter" || (k === " " && !editable)) {
 			if (open && active >= 0) (e.preventDefault(), pick(active));
 			else if (!editable) (e.preventDefault(), void show());
-			else commit();
+			else { e.preventDefault(); commit(); hide(); }
 		} else if (k === "Tab") {
 			if (open) hide();
 		} else if (!editable && (k === "Home" || k === "End") && open) {
@@ -163,7 +164,7 @@
 		if (draft === null) return;
 		const next = draft.trim();
 		draft = null;
-		if (next && next !== value) onchange(next as T);
+		if ((next || !required) && next !== value) onchange(next as T);
 	}
 	function onblur() {
 		if (editable) commit();
@@ -204,7 +205,7 @@
 				spellcheck="false"
 				autocomplete="off"
 				value={draft ?? shown}
-				oninput={(e) => (draft = e.currentTarget.value)}
+				oninput={(e) => { draft = e.currentTarget.value; active = -1; }}
 				{onkeydown}
 				onblur={onblur}
 			/>

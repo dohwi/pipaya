@@ -548,8 +548,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		schema: { querystring: S.ListSessionsQuery, response: { 200: S.SessionList, ...S.errors(400, 401) } },
 		handler: async (req) => {
 			const limit = req.query.limit ?? 50;
-			const list = store.list({ limit, before: req.query.before, closed: req.query.closed });
-			return { sessions: list, nextBefore: list.length === limit ? list[list.length - 1]!.updatedAt : null };
+			const list = store.list({ limit: limit + 1, before: req.query.before, beforeId: req.query.beforeId, closed: req.query.closed });
+			const cursor = list.length > limit ? list[limit - 1] : null;
+			return { sessions: list.slice(0, limit), nextBefore: cursor?.updatedAt ?? null, nextBeforeId: cursor?.id ?? null };
 		},
 	});
 	app.post("/sessions/delete", {

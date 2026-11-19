@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { Api, errorText } from "../../lib/api";
+	import { modelSetting } from "../../lib/model-setting.svelte";
 	import ModelField from "./ModelField.svelte";
 	import type { ModelInfo, ProviderInfo, SystemModelSettings } from "../../lib/types";
 
@@ -12,54 +11,12 @@
 	 */
 	let { serverId, models, providers }: { serverId: string; models: ModelInfo[]; providers: ProviderInfo[] } = $props();
 
-	let settings = $state<SystemModelSettings | null>(null);
-	let error = $state("");
-	let busy = $state(false);
-	let seq = 0;
-
 	const server = $derived(app.servers.find((s) => s.id === serverId));
-	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
-
-	async function load(reset: boolean) {
-		const mine = ++seq;
-		if (reset) settings = null; // only when the server changes: unmounting the section would reset the scroll
-		error = "";
-		const a = api();
-		if (!a) return;
-		try {
-			const r = await a.systemModelSettings();
-			if (mine === seq) settings = r.settings;
-		} catch {
-			/* unreachable: the section stays hidden */
-		}
-	}
-	let loadedFor = "";
-	$effect(() => {
-		const id = serverId;
-		untrack(() => {
-			const changed = id !== loadedFor;
-			loadedFor = id;
-			void load(changed);
-		});
-	});
-
-	async function save(next: SystemModelSettings) {
-		const a = api();
-		if (!a || !settings) return;
-		const before = settings;
-		settings = next; // shown at once; put back if the server refuses
-		busy = true;
-		error = "";
-		try {
-			settings = (await a.setSystemModelSettings(next)).settings;
-		} catch (e) {
-			settings = before;
-			error = t("시스템 모델을 저장하지 못했습니다: {error}", { error: errorText(e) });
-		} finally {
-			busy = false;
-		}
-	}
-
+	const setting = modelSetting<SystemModelSettings>(
+		() => server, (a) => a.systemModelSettings(), (a, next) => a.setSystemModelSettings(next),
+		(error) => t("시스템 모델을 저장하지 못했습니다: {error}", { error }),
+	);
+	const settings = $derived(setting.settings);
 	const info = $derived(settings?.model ? models.find((m) => m.provider === settings!.model!.provider && m.id === settings!.model!.model) : undefined);
 	/** The saved model's connection exists but has no usable key (its models are then missing from the list). */
 	const noKey = $derived(Boolean(settings?.model) && providers.some((p) => p.id === settings!.model!.provider && !p.configured));
@@ -81,10 +38,10 @@
 			allowUnset
 			unsetLabel={t("사용 안 함")}
 			placeholder={t("사용 안 함")}
-			disabled={busy}
+			disabled={setting.busy}
 			invalid={Boolean(s.model) && (noKey || !info || !info.configured)}
 			label={t("시스템 모델")}
-			onpick={(c) => void save({ model: c })}
+			onpick={(c) => void setting.save({ model: c })}
 		/>
 		<p class="hint note">
 			{#if !s.model}
@@ -97,7 +54,7 @@
 				{t("이 모델이 대화 이름과 역할을 붙입니다. 가볍고 저렴한 모델을 권장합니다.")}
 			{/if}
 		</p>
-		{#if error}<p class="hint note" role="alert">{error}</p>{/if}
+		{#if setting.error}<p class="hint note" role="alert">{setting.error}</p>{/if}
 	</section>
 {/if}
 

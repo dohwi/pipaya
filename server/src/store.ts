@@ -137,16 +137,17 @@ export class SessionStore {
 	}
 
 	/** `closed`: true = only closed, false = only active, undefined = both. */
-	list(opts: { limit: number; before?: number; closed?: boolean }): SessionRecord[] {
+	list(opts: { limit: number; before?: number; beforeId?: string; closed?: boolean }): SessionRecord[] {
 		const rows = this.db
 			.query(
-				`SELECT * FROM sessions WHERE updated_at < $before AND ($closed IS NULL OR closed = $closed)
-				 ORDER BY updated_at DESC LIMIT $limit`,
+				`SELECT * FROM sessions WHERE (updated_at, id) < ($before, $beforeId)${opts.closed === undefined ? "" : " AND closed = $closed"}
+				 ORDER BY updated_at DESC, id DESC LIMIT $limit`,
 			)
 			.all({
 				before: opts.before ?? Number.MAX_SAFE_INTEGER,
 				limit: opts.limit,
-				closed: opts.closed === undefined ? null : opts.closed ? 1 : 0,
+				beforeId: opts.beforeId ?? null, // a legacy timestamp alone excludes every row at that time
+				...(opts.closed === undefined ? {} : { closed: Number(opts.closed) }),
 			}) as SessionRow[];
 		return rows.map(toRecord);
 	}
@@ -189,17 +190,17 @@ export class SessionStore {
 	 * result's details say (the model it really ran on, its turns and tokens). For the graph of who hands work to which
 	 * subagent; the call and answer texts are left out. `instr` keeps SQLite from parsing the JSON of every message.
 	 */
-	delegateCalls(): DelegateCall[] {
+	delegateCalls(): (DelegateCall & { cwd: string; provider: string; sessionModel: string })[] {
 		const calls = this.db
 			.query(
-				`SELECT m.session_id AS sessionId, m.created_at AS at, json_extract(c.value, '$.id') AS callId,
+				`SELECT m.session_id AS sessionId, s.cwd, s.provider, s.model AS sessionModel, m.created_at AS at, json_extract(c.value, '$.id') AS callId,
 				        json_extract(c.value, '$.arguments.role') AS role, json_extract(c.value, '$.arguments.model') AS asked
 				 FROM messages m JOIN sessions s ON s.id = m.session_id AND s.closed = 0, json_each(m.data, '$.content') c
 				 WHERE m.role = 'assistant' AND instr(m.data, '"delegate"') > 0
 				   AND json_extract(c.value, '$.type') = 'toolCall' AND json_extract(c.value, '$.name') = 'delegate'
 				 ORDER BY m.created_at, m.seq`,
 			)
-			.all() as { sessionId: string; at: number; callId: unknown; role: unknown; asked: unknown }[];
+			.all() as { sessionId: string; cwd: string; provider: string; sessionModel: string; at: number; callId: unknown; role: unknown; asked: unknown }[];
 		type Result = { callId: string; at: number; isError: number | null; model: unknown; turns: unknown; tokens: unknown };
 		const results = new Map(
 			(
@@ -222,7 +223,7 @@ export class SessionStore {
 			if (!callId || !role) return []; // a call written without a role is refused before anything runs
 			const done = results.get(callId);
 			return [{
-				sessionId: c.sessionId, callId, role, asked: str(c.asked), at: c.at, doneAt: done?.at ?? null, error: !!done?.isError,
+				sessionId: c.sessionId, cwd: c.cwd, provider: c.provider, sessionModel: c.sessionModel, callId, role, asked: str(c.asked), at: c.at, doneAt: done?.at ?? null, error: !!done?.isError,
 				model: str(done?.model), turns: num(done?.turns), tokens: num(done?.tokens),
 			}];
 		});

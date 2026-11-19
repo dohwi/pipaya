@@ -33,7 +33,6 @@
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
-	const PAGE = 200;
 	const DAY = 24 * 3600_000;
 
 	let sessions = $state<Session[] | null>(null);
@@ -43,24 +42,11 @@
 	let folded = $state<Record<string, boolean>>({});
 	let now = $state(Date.now());
 
-	/** Every session of the server, newest first. The list is paged, so keep asking until it ends. */
-	async function loadAll(a: Api): Promise<Session[]> {
-		const all: Session[] = [];
-		let before: number | undefined;
-		for (let i = 0; i < 100; i++) {
-			const page = await a.listSessionsPage(PAGE, before);
-			all.push(...page.sessions);
-			if (page.nextBefore === null) break;
-			before = page.nextBefore;
-		}
-		return all;
-	}
-
 	async function load() {
 		if (!api) return;
 		error = "";
 		try {
-			const [list, ws] = await Promise.all([loadAll(api), api.workspace().catch(() => null)]);
+			const [list, ws] = await Promise.all([api.allSessions(), api.workspace().catch(() => null)]);
 			sessions = list;
 			home = ws?.home ?? null;
 			now = Date.now();

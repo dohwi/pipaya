@@ -346,6 +346,17 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             settings.get_by_role("button", name="뒤로").tap()
             expect(settings.get_by_role("tab", name="기기")).to_be_visible()
             expect(settings.get_by_role("button", name="뒤로")).to_have_count(0)
+            settings.get_by_role("tab", name="내 설정").tap()
+            font = settings.locator("#terminal-font")
+            font.press("ArrowDown")
+            font.fill("Smoke Mono")
+            font.press("Enter")
+            expect(font).to_have_value("Smoke Mono")
+            expect(font).to_have_attribute("aria-expanded", "false")
+            font.press("ArrowDown")
+            font.press("ArrowDown")
+            font.press("Enter")
+            expect(font).to_have_value("Maple Mono")
 
         def f_no_errors():
             bad = [e for e in errors if not any(ok in e for ok in ALLOWED_CONSOLE_ERRORS)]
