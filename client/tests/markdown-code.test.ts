@@ -48,4 +48,31 @@ describe("code blocks in answers", () => {
 		expect(blocks[1]).not.toContain("hljs-");
 		expect(awaitsHighlight(html)).toBe(false);
 	});
+
+	test("frames that only grow the last block give the same HTML as rendering each frame from scratch", () => {
+		const head = "# Title\n\nSome **bold** text.\n\n- a\n- b\n\n| x | y |\n| - | - |\n| 1 | 2 |\n\n";
+		let src = head;
+		const frames: string[] = [];
+		for (const piece of ["Writ", "ing ", "on\n", "\nNext ", "para", "\n\n```\nco", "de\n", "```\n\nend"]) frames.push((src += piece));
+		const seen = frames.map((f) => renderStreaming(f));
+		// a frame drawn again on its own (no earlier frame to reuse) reads the same
+		frames.forEach((f, i) => {
+			renderStreaming("reset\n\nother");
+			expect(renderStreaming(f)).toBe(seen[i]!);
+		});
+		expect(seen.at(-1)).toContain("<strong>bold</strong>");
+		expect(seen.at(-1)).toContain("<td>2</td>");
+		expect(seen.at(-1)).toContain("Next para");
+	});
+
+	test("a code block waiting for its grammar in the settled part is drawn in colour once it arrives", async () => {
+		const src = "intro\n\n```graphql\nquery Q { me { id } }\n```\n\nstill writ";
+		const done = ready();
+		const first = renderStreaming(src);
+		expect(awaitsHighlight(first)).toBe(true);
+		await done;
+		const second = renderStreaming(src);
+		expect(awaitsHighlight(second)).toBe(false);
+		expect(second).toContain("hljs-");
+	});
 });

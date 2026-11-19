@@ -24,6 +24,37 @@ describe("segmentsOf", () => {
 		expect(segmentsOf([], true)).toEqual([{ kind: "work", steps: [], i: -1 }]);
 		expect(segmentsOf([], false)).toEqual([]);
 	});
+	test("given the last result, segments that did not change come back as the same objects", () => {
+		const blocks = [think("a"), tool("1"), text("hi"), tool("2"), text("wr")];
+		const first = segmentsOf(blocks, true);
+		blocks[4] = text("writing");
+		const next = segmentsOf(blocks, true, first);
+		expect(next[0]).toBe(first[0]!);
+		expect(next[1]).toBe(first[1]!);
+		expect(next[2]).toBe(first[2]!);
+		expect(next[3]).not.toBe(first[3]!);
+		expect(next[3]).toEqual({ kind: "text", text: "writing", i: 4 });
+		expect(next).toEqual(segmentsOf(blocks, true));
+	});
+	test("a work box that gained a step, or whose thought or call changed, is a new object", () => {
+		const args = { path: "a" };
+		const blocks: AssistantBlock[] = [{ type: "thinking", text: "a", done: false }, { type: "tool", id: "1", name: "read", args }];
+		const first = segmentsOf(blocks, true);
+		expect(segmentsOf(blocks, true, first)[0]).toBe(first[0]!);
+		const grown = segmentsOf([...blocks, tool("2")], true, first);
+		expect(grown[0]).not.toBe(first[0]!);
+		expect((grown[0] as { steps: unknown[] }).steps).toHaveLength(3);
+		expect(segmentsOf([{ type: "thinking", text: "a", done: true }, blocks[1]!], true, first)[0]).not.toBe(first[0]!);
+		expect(segmentsOf([{ type: "thinking", text: "ab", done: false }, blocks[1]!], true, first)[0]).not.toBe(first[0]!);
+		expect(segmentsOf([blocks[0]!, { type: "tool", id: "1", name: "read", args: { path: "a" } }], true, first)[0]).not.toBe(first[0]!);
+	});
+	test("a segment is reused only in its own place: a reply that shrank or changed shape gets fresh ones", () => {
+		const first = segmentsOf([text("a"), tool("1")], false);
+		const other = segmentsOf([tool("1"), text("a")], false, first);
+		expect(other[0]).not.toBe(first[0]!);
+		expect(other[1]).not.toBe(first[1]!);
+		expect(segmentsOf([], true, first)).toEqual([{ kind: "work", steps: [], i: -1 }]);
+	});
 });
 
 describe("plainTextOf", () => {

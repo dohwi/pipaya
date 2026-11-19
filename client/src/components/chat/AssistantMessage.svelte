@@ -12,7 +12,7 @@
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
 	import { compact, duration, timeOfDay } from "../../lib/format";
-	import { plainTextOf, replyActions, segmentsOf } from "../../lib/reply-blocks";
+	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
@@ -93,7 +93,9 @@
 	onDestroy(() => copied.dispose());
 
 	/** Thoughts and tool calls between two pieces of text share one work box; text keeps its place around it. */
-	const segments = $derived(segmentsOf(parts.flatMap((p) => p.blocks), live));
+	// The last result goes back in, so the segments that did not change keep their identity (see segmentsOf).
+	let lastSegments: Segment[] = [];
+	const segments = $derived((lastSegments = segmentsOf(parts.flatMap((p) => p.blocks), live, lastSegments)));
 	/** Only the newest box of a streaming reply is live, and only while the reply has not moved on to writing text. */
 	const liveSeg = $derived(live ? segments.length - 1 : -1);
 	/** When each block was written: the time its message (one model call) started. A text the reply went on from (a
