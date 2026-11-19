@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
 	import { glowFade } from "../../lib/motion";
-	import { middle } from "../../lib/fit-text";
+	import { marquee, middle } from "../../lib/fit-text";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { hostOf } from "../../lib/format";
@@ -80,7 +80,8 @@
 	/**
 	 * A card wider than its kind's width (a long model id, a long host with "연결 안 됨" after it, a long chat title): its
 	 * name line and its second line, measured once per text on hidden copies with the real styles. Past `CARD_W_MAX` an id
-	 * loses its middle (`use:middle`) and a display name or title its end; the whole text is in the tooltip.
+	 * loses its middle (`use:middle`) and a display name or title its end; hovering the card flows the whole of it by
+	 * (`flow` below), and the tooltip holds it too.
 	 */
 	const widthCache = new Map<string, number>();
 	function widthOf(c: Card): number {
@@ -611,6 +612,12 @@
 	const keyHint = $derived(app.prefs.bindings.openGraph ? ` (${formatCombo(app.prefs.bindings.openGraph)})` : "");
 </script>
 
+<!-- One line of a card that may not fit: idle it ends in "…" (an id: loses its middle, `.cut`); while the card is hovered
+     or selected, one that does not fit flows by and loops back to its start (`marquee` measures it, CSS moves it). -->
+{#snippet flow(text: string, mid = false)}
+	{#if mid}<span class="cut" use:middle={text}></span>{/if}<span class="track" aria-hidden={mid ? "true" : undefined}><span class="mq">{text}</span><span class="dup" aria-hidden="true">{text}</span></span>
+{/snippet}
+
 <!-- A region the keyboard can reach: F fits, +/- zoom, Enter opens the selected card (a chat's quick look, Shift+Enter
      the chat itself; any other card its details). A click on a chat opens its dialog; Ctrl/⌘ + click goes to the chat. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -716,28 +723,28 @@
 				>
 					{#if c.kind === "server"}
 						<span class="lead"><Icon name="server" /></span>
-						<span class="nm" title={c.label}>{c.label}</span>
-						<span class="meta"><span class="give" title={c.host} use:middle={c.host ?? ""}></span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
+						<span class="nm fl" title={c.label} use:marquee={c.label}>{@render flow(c.label)}</span>
+						<span class="meta"><span class="give fl mid" title={c.host} use:marquee={c.host ?? ""}>{@render flow(c.host ?? "", true)}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
-						<span class="nm" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name}>{c.name}</span>
+						<span class="nm fl" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name} use:marquee={c.name}>{@render flow(c.name)}</span>
 						<span class="meta"><span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
 						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, c.provider, c.label)} provider={c.provider} model={c.label} size={24} colored /></span>
-						{#if c.name === c.label}<span class="nm mono" title={c.name} use:middle={c.name}></span>
-						{:else}<span class="nm" title={`${c.name} · ${c.provider}/${c.label}`}>{c.name}</span>{/if}
-						<span class="meta"><span class="give">{modelSource(c)}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
+						{#if c.name === c.label}<span class="nm mono fl mid" title={c.name} use:marquee={c.name}>{@render flow(c.name, true)}</span>
+						{:else}<span class="nm fl" title={`${c.name} · ${c.provider}/${c.label}`} use:marquee={c.name}>{@render flow(c.name)}</span>{/if}
+						<span class="meta"><span class="give fl" use:marquee={modelSource(c)}>{@render flow(modelSource(c))}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
 						{@const m = c.models?.[0]}
 						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
-						<span class="nm" title={c.label} use:middle={c.label}></span>
+						<span class="nm fl mid" title={c.label} use:marquee={c.label}>{@render flow(c.label, true)}</span>
 						<span class="meta">
 							{#if c.running}<em class="run">{t("실행 중 {n}", { n: c.running })}</em><i>·</i>{/if}
 							{#if m}
 								<span class="model" title={c.models!.map((x) => `${x.name} ${t("{n}회", { n: x.n })}`).join(" · ")}>
 									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
-									{#if m.name === ref?.id}<span class="mn mono" use:middle={m.name}></span>{:else}<span class="mn">{m.name}</span>{/if}
+									<span class="mn fl" class:mono={m.name === ref?.id} class:mid={m.name === ref?.id} use:marquee={m.name}>{@render flow(m.name, m.name === ref?.id)}</span>
 									{#if c.asked}<span class="pick" title={t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: c.asked })}><Icon name="sparkles" /></span>{/if}
 									{#if c.models!.length > 1}<span class="more">{t("외 {n}", { n: c.models!.length - 1 })}</span>{/if}
 								</span><i>·</i>
@@ -750,15 +757,16 @@
 						{@const tool = toolNow(c)}
 						{@const busy = c.activity === "working" || c.activity === "asking"}
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
-						<span class="nm" title={s.name ? `@${s.name}` : sessionTitle(s.title)}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
+						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
+						<span class="nm fl" title={name} use:marquee={name}>{@render flow(name)}</span>
 						{#if !busy}<span class="when">{ago(s.updatedAt)}</span>{/if}
-						<span class="title" title={sessionTitle(s.title)}>{sessionTitle(s.title)}</span>
+						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>
 								{#if c.activity === "asking"}
 									<Icon name="alert" /><span class="what">{t("답을 기다립니다")}</span>
 								{:else if tool}
-									<Icon name="bolt" /><b>{tool.name}</b><span class="what">{toolSummary(tool.name, tool.args)}</span>
+									<Icon name="bolt" /><b>{tool.name}</b><span class="what fl" use:marquee={toolSummary(tool.name, tool.args)}>{@render flow(toolSummary(tool.name, tool.args))}</span>
 								{:else}
 									<Icon name="brain" /><span class="what">{t("생각 중")}</span>
 								{/if}
@@ -1389,6 +1397,65 @@
 		color: var(--text-dim);
 	}
 
+	/* ---- a line that does not fit: "…" idle, flowing by while its card is hovered or selected ---- */
+	.fl .track {
+		display: inline;
+	}
+	.fl .dup {
+		display: none;
+	}
+	/* an id: idle it shows the middle cut; the whole text waits beside it (unseen, still measured) */
+	.fl.mid {
+		position: relative;
+	}
+	.fl.mid .cut {
+		display: block;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	.fl.mid .track {
+		position: absolute;
+		left: 0;
+		top: 0;
+		visibility: hidden;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.card:hover .fl:global([data-over]),
+		.card.sel .fl:global([data-over]) {
+			text-overflow: clip;
+			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+		}
+		.card:hover .fl:global([data-over]) .cut,
+		.card.sel .fl:global([data-over]) .cut {
+			display: none;
+		}
+		.card:hover .fl:global([data-over]) .track,
+		.card.sel .fl:global([data-over]) .track {
+			position: static;
+			display: flex;
+			width: max-content;
+			visibility: visible;
+			/* a beat on the start first, so a pointer passing over does not set every line moving */
+			animation: graph-mq var(--mq-d, 8s) linear 400ms infinite;
+		}
+		.card:hover .fl:global([data-over]) .mq,
+		.card:hover .fl:global([data-over]) .dup,
+		.card.sel .fl:global([data-over]) .mq,
+		.card.sel .fl:global([data-over]) .dup {
+			display: block;
+			flex: none;
+			padding-right: 32px;
+		}
+	}
+	@keyframes graph-mq {
+		from {
+			translate: 0;
+		}
+		to {
+			translate: -50%;
+		}
+	}
 	.measure {
 		position: absolute;
 		left: -9999px;
