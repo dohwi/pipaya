@@ -11,7 +11,7 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, related, springStep, staleRoles, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -583,6 +583,9 @@
 		const id = setInterval(() => (now = Date.now()), 30_000);
 		return () => clearInterval(id);
 	});
+	/** A role's cards on models it has moved off step back (with their lines), unless the pointer is on them or their callers. */
+	const stale = $derived(staleRoles(graph, now));
+	const faded = (id: string) => stale.has(id) && !focus?.has(id) && selected !== id;
 	function ago(at: number): string {
 		const sec = Math.max(0, Math.round((now - at) / 1000));
 		if (sec < 60) return t("방금");
@@ -673,7 +676,7 @@
 						{@const call = e.kind === "delegate"}
 						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
 						{@const full = r >= 1 && !ghost}
-						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on}>
+						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:stale={on && faded(e.to)}>
 							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
 							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
 							{#if call && full}
@@ -715,6 +718,7 @@
 					class:working={!ghost && ((c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running))}
 					class:asking={!ghost && c.kind === "session" && c.activity === "asking"}
 					class:dim={!!focus && !focus.has(c.id)}
+					class:stale={!ghost && faded(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
 					class:ghost
@@ -1058,6 +1062,9 @@
 	.edges g.dim {
 		opacity: 0.12;
 	}
+	.edges g.stale {
+		opacity: 0.4; /* the line to a faded role card steps back with it */
+	}
 	.edges g.dim .halo {
 		animation-play-state: paused;
 	}
@@ -1172,6 +1179,14 @@
 	}
 	.card.dim.arriving {
 		opacity: calc(0.45 * var(--in));
+	}
+	/* a role's card on a model it has moved off: quieter than the cards in use, still readable, full again on hover */
+	.card.stale:not(.dim) {
+		opacity: 0.6;
+	}
+	.card.stale:not(.dim) .lead,
+	.card.stale:not(.dim) .nm {
+		color: var(--text-dim);
 	}
 	.card.ghost {
 		pointer-events: none;

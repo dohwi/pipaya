@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, ROW_GAP, buildGraph, roleCardId, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, ROW_GAP, ROLE_STALE_MS, buildGraph, roleCardId, staleRoles, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -110,6 +110,22 @@ describe("buildGraph", () => {
 		const roles = [...g.cards.values()].filter((c) => c.kind === "subagent").sort((x, y) => x.y - y.y);
 		expect(roles.every((c) => c.col === g.cols.length - 1)).toBe(true);
 		expect(roles[1]!.y - roles[0]!.y).toBeGreaterThanOrEqual(CARD_H);
+	});
+
+	test("staleRoles: a role's card on a model it moved off fades after a while; its newest card and a running one never do", () => {
+		const now = 10 * ROLE_STALE_MS;
+		const runs = [
+			run("s1", "explore", { model: "p/old", at: now - 2 * ROLE_STALE_MS }),
+			run("s1", "explore", { model: "p/new", at: now - 3 * ROLE_STALE_MS }),
+			run("s1", "explore", { model: "p/newer", at: now - ROLE_STALE_MS / 2 }),
+			run("s1", "runner", { model: "p/a", at: now - 5 * ROLE_STALE_MS, running: true, doneAt: null }),
+			run("s1", "runner", { model: "p/b", at: now - 4 * ROLE_STALE_MS }),
+			run("s1", "lone", { model: "p/a", at: now - 9 * ROLE_STALE_MS }),
+		];
+		const g = buildGraph([server("a", [session("s1")], { runs })]);
+		expect([...staleRoles(g, now)].sort()).toEqual([roleCardId("a", "explore", "p/new"), roleCardId("a", "explore", "p/old")].sort());
+		// within the hour a moved-off model still counts as in use
+		expect(staleRoles(g, now - ROLE_STALE_MS).has(roleCardId("a", "explore", "p/old"))).toBe(false);
 	});
 
 	test("a server without the delegate route shows its chats and no subagents", () => {
