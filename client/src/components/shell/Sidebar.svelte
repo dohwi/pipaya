@@ -130,10 +130,33 @@
 			const row = offscreen(host);
 			return row ? () => row.scrollIntoView({ block: "nearest" }) : undefined;
 		});
-		// A folder unfolds over `normal` and the open row keeps moving under it: look once more when it has settled.
-		const settled = setTimeout(() => offscreen(host)?.scrollIntoView({ block: "nearest" }), ms("normal") + 50);
+		// A folder unfolds over `normal` and the open row keeps moving under it: look once more when it has settled. The
+		// folds can start late (the new row lands with the server's reply) and a folder above can fold away meanwhile, so the
+		// end of each (`introend` / `outroend`, caught on the way down since they do not bubble) is the real cue; the timer
+		// covers a change with no transition. Only until the user takes the list in hand (or a few seconds pass): a folder
+		// they open later must not pull the list back to the open row.
+		const look = () => offscreen(host)?.scrollIntoView({ block: "nearest" });
+		// an outro ends before its block leaves the DOM (and the gaps around it change with it): look on the next frame
+		let frame = 0;
+		const later = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(look);
+		};
+		const settled = setTimeout(look, ms("normal") + 50);
+		const ends = ["introend", "outroend"] as const;
+		const hands = ["wheel", "pointerdown", "touchstart", "keydown"] as const;
+		const off = () => {
+			for (const e of ends) host.removeEventListener(e, later, { capture: true });
+			for (const e of hands) host.removeEventListener(e, off, { capture: true });
+		};
+		for (const e of ends) host.addEventListener(e, later, { capture: true });
+		for (const e of hands) host.addEventListener(e, off, { capture: true, passive: true });
+		const stop = setTimeout(off, 3000);
 		return () => {
 			clearTimeout(settled);
+			clearTimeout(stop);
+			cancelAnimationFrame(frame);
+			off();
 			unschedule(host);
 		};
 	});

@@ -125,6 +125,17 @@ describe("sidebar auto-opened folder", () => {
 		expect(sb.openDirs).toEqual(["s\u0000/a"]);
 		expect(sb.isDirFolded("s\u0000/a")).toBe(false);
 	});
+	test("something new made in the folder folded by hand opens it again; other folders stay as they are", () => {
+		const sb = new SidebarState();
+		sb.setAutoDir("s\u0000/a");
+		sb.toggleDir("s\u0000/a");
+		sb.unshut("s\u0000/b");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(true);
+		expect(sb.isDirFolded("s\u0000/b")).toBe(true);
+		sb.unshut("s\u0000/a");
+		expect(sb.isDirFolded("s\u0000/a")).toBe(false);
+		expect(sb.openDirs).toEqual([]);
+	});
 	test("while the pointer is on the list the folder left behind stays open until it leaves", () => {
 		const sb = new SidebarState();
 		sb.setAutoDir("s\u0000/a");

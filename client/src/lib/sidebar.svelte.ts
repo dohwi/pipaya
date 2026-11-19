@@ -165,6 +165,15 @@ export class SidebarState {
     this.shut = null;
   }
 
+  /**
+   * Something new (a conversation, a terminal) was opened in folder `key`: a hand fold of the auto-opened folder no longer
+   * holds, so its new row shows. Focus stays in the folder, so `setAutoDir` alone would keep it folded. Folders the user
+   * never opened stay as they are: `setAutoDir` opens the folder focus moves to.
+   */
+  unshut(key: string) {
+    if (this.shut === key) this.shut = null;
+  }
+
   /** The pointer is on the sidebar's list (true) or left it (false: the lingering folders fold now). */
   hold(on: boolean) {
     this.holding = on;
