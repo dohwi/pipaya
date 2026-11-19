@@ -92,6 +92,8 @@ export interface Live {
 	stopCause?: RunStopCause;
 	/** The run-limit message, set together with stopCause "limit". */
 	limitReason?: string;
+	/** bash / edit / write calls started and not finished yet, so their end can tell where the agent works (see work-tree.ts). */
+	toolArgs?: Map<string, { tool: string; args: unknown }>;
 	/** Set by `before_agent_start` extensions; applies to the current run only. */
 	runSystem?: { replace?: string; append?: string };
 }

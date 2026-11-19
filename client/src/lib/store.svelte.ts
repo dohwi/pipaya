@@ -22,7 +22,7 @@ import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent, applyLiveEvent } from "./server-link-model";
 import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
-import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
+import { sessionOrder, sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "./nav";
 import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
@@ -1308,6 +1308,12 @@ class AppStore {
     }
   }
 
+  /** Where a conversation or terminal works now: the folder the sidebar lists it under (see `workDir`). */
+  memberDir(id: string | null | undefined): string | undefined {
+    const m = id ? (this.session(id) ?? this.terminal(id)) : undefined;
+    return m ? workDir(m) : undefined;
+  }
+
   setWorkdir(path: string) {
     this.workdir = path || ".";
     write(`${K.workdir}.${this.serverId}`, this.workdir);
@@ -1712,7 +1718,7 @@ class AppStore {
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: d.provider,
         model: d.model,
         thinkingLevel: d.thinkingLevel,
@@ -1739,7 +1745,7 @@ class AppStore {
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
@@ -1775,7 +1781,7 @@ class AppStore {
     const sid = this.serverId;
     if (!sid) return;
     // the folder as the sidebar lists it (a group's is the one it was placed under), else the pane's own directory
-    const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    const path = tabOf(this.dirs, id)?.dir.path ?? this.memberDir(id);
     const project = path ? this.blocksByServer[sid]?.find((b) => b.kind === "project" && b.dirs.some((d) => d.path === path)) : undefined;
     if (project?.kind === "project") this.sidebar.reveal(projectKey(sid, project.root));
     this.sidebar.reveal(sid);
@@ -1806,7 +1812,7 @@ class AppStore {
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
-    const cwd = this.sessions.find((s) => s.id === id)?.cwd ?? this.terminal(id)?.cwd;
+    const cwd = this.memberDir(id);
     if (cwd) this.setWorkdir(this.relPath(cwd));
     this.sidebar.open = false;
     if (isTerminalId(id)) return;
@@ -2320,7 +2326,7 @@ class AppStore {
     }
     try {
       const made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: base?.provider ?? d.provider,
         model: base?.model ?? d.model,
         thinkingLevel: base?.thinkingLevel ?? normalizeThinking(d.thinkingLevel),
@@ -2374,7 +2380,7 @@ class AppStore {
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
@@ -2441,7 +2447,7 @@ class AppStore {
   /** A terminal beside the focused pane: below by default, or the given side: it starts where that pane works. */
   async splitTerminal(zone: Zone = "bottom"): Promise<void> {
     const id = this.activeId;
-    const cwd = this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    const cwd = this.memberDir(id);
     if (!id || !cwd) return void (await this.openTerminal(this.workdir));
     await this.openTerminal(cwd, { target: id, zone });
   }
@@ -2503,7 +2509,7 @@ class AppStore {
     try {
       // the new group's tab takes the place of the tab the drop landed on (the pane split; `pair` puts it first or second)
       const before = this.dirs;
-      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.session(id)?.cwd), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
+      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.memberDir(id)), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
       this.replaceTabs(before, panesOf(layout), [g.id]);
       // the server moved these sessions out of any group they were in

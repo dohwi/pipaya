@@ -261,6 +261,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 CREATE INDEX sessions_closed ON sessions(closed, updated_at DESC, id DESC);`,
 	// A null service tier preserves the existing provider default; a tier is explicitly selected.
 	(db) => addColumn(db, "sessions", "service_tier", "TEXT"),
+	// The git worktree a session's agent moved into (null: its own cwd); the sidebar lists the session there.
+	(db) => addColumn(db, "sessions", "active_dir", "TEXT"),
 ];
 
 export function openDb(path: string): Database {

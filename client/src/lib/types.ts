@@ -68,6 +68,11 @@ export interface Session {
 	purpose: string;
 	/** Absolute path inside the workspace root */
 	cwd: string;
+	/**
+	 * Another git worktree of the cwd's repository the agent moved into and works in now; null (or missing, from an
+	 * older server) while it works in its own. The session is listed there: read it through `workDir`.
+	 */
+	activeDir?: string | null;
 	provider: string;
 	model: string;
 	thinkingLevel: ThinkingLevel;

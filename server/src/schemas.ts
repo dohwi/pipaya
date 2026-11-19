@@ -44,6 +44,7 @@ const sessionFields = {
 	name: Type.String({ description: "How other sessions address this one (@name), always in Korean (민수) whatever the UI language; unique among active sessions. Show it with nameInLang(name, uiLang) (Minsu in English)" }),
 	purpose: Type.String({ description: "What this session's agent works on, written by the system model (GET /system-model); empty until then" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
+	activeDir: Type.Optional(Nullable(Type.String({ description: "Absolute path of another git worktree of the cwd's repository the agent moved into and works in now; null while it works in its own. List the session under activeDir ?? cwd" }))),
 	provider: Type.String(),
 	model: Type.String(),
 	thinkingLevel: Thinking,
