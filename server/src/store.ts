@@ -22,6 +22,11 @@ export interface SessionRecord {
 	/** What this session's agent works on, written by the system model; "" until then. */
 	purpose: string;
 	cwd: string;
+	/**
+	 * Another git worktree of the cwd's repository the agent moved into and works in now (`cd ../app-x`, edits there);
+	 * null while it works in its own. The sidebar lists the session under it. Tools still start in `cwd`.
+	 */
+	activeDir?: string | null;
 	provider: string;
 	model: string;
 	thinkingLevel: ThinkingLevel;
@@ -41,6 +46,7 @@ interface SessionRow {
 	name: string;
 	purpose: string;
 	cwd: string;
+	active_dir: string | null;
 	provider: string;
 	model: string;
 	thinking_level: string;
@@ -59,6 +65,7 @@ const toRecord = (r: SessionRow): SessionRecord => ({
 	name: r.name ?? "",
 	purpose: r.purpose ?? "",
 	cwd: r.cwd,
+	activeDir: r.active_dir ?? null,
 	provider: r.provider,
 	model: r.model,
 	thinkingLevel: r.thinking_level as ThinkingLevel,
@@ -246,6 +253,12 @@ export class SessionStore {
 			params[key] = key === "tools" ? JSON.stringify(value) : key === "closed" ? (value ? 1 : 0) : (value as string);
 		}
 		this.db.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $id`).run(params);
+		return this.get(id);
+	}
+
+	/** Where the agent works now (see `SessionRecord.activeDir`); not a settings change, so the list order is left alone. */
+	setActiveDir(id: string, dir: string | null): SessionRecord | undefined {
+		this.db.query("UPDATE sessions SET active_dir = $dir WHERE id = $id").run({ id, dir });
 		return this.get(id);
 	}
 

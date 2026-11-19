@@ -11,6 +11,7 @@
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { panesOf } from "../../lib/layout";
+	import { workDir } from "../../lib/nav";
 	import { viewport } from "../../lib/viewport.svelte";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
@@ -66,9 +67,9 @@
 	}
 	/** What the title shows, also handed to an extension that replaces it. */
 	const heading = $derived(
-		group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? crumb.cwd.split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
+		group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? workDir(crumb).split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
 		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
-		: { title: sessionTitle(s?.title), sub: s ? s.cwd.split(/[\\/]/).slice(-2).join("/") : "" },
+		: { title: sessionTitle(s?.title), sub: s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : "" },
 	);
 </script>
 
@@ -109,7 +110,7 @@
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
 				<span class="t">{sessionTitle(s?.title)}</span>
-				{#if s}<span class="sub mono">{s.cwd.split("/").slice(-2).join("/")}</span>{/if}
+				{#if s}<span class="sub mono">{workDir(s).split("/").slice(-2).join("/")}</span>{/if}
 			{/if}
 		</div>
 

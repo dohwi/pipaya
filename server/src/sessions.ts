@@ -17,6 +17,7 @@ import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMess
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
+import { nextActiveDir, touchedDir } from "./work-tree.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
 import type { Scheduler } from "./scheduler.ts";
 import { sameName } from "./member-names.ts";
@@ -609,6 +610,7 @@ export class SessionManager {
 			src.id,
 		);
 		const copied = this.store.copyMessages(id, copy.id, atSeq);
+		if (src.activeDir) this.store.setActiveDir(copy.id, src.activeDir); // the copy goes on in the worktree its history moved to
 		this.bus.publish(copy.id, "session_forked", { from: id, atSeq: atSeq ?? null, messages: copied });
 		this.ext?.notify("session_fork", { sessionId: copy.id, from: id }, copy.id);
 		return this.get(copy.id);
@@ -1448,6 +1450,18 @@ export class SessionManager {
 			case "tool_execution_update":
 				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, true);
 				return;
+			case "tool_execution_start":
+				pub(event.type, event);
+				if (event.toolName === "bash" || event.toolName === "edit" || event.toolName === "write") (live.toolArgs ??= new Map()).set(event.toolCallId, { tool: event.toolName, args: event.args });
+				return;
+			case "tool_execution_end": {
+				pub(event.type, event);
+				const call = live.toolArgs?.get(event.toolCallId);
+				live.toolArgs?.delete(event.toolCallId);
+				// a failed command may still have moved (`cd ../x && false`), but most failures never got there
+				if (call && !event.isError) this.followWorkTree(sessionId, call.tool, call.args);
+				return;
+			}
 			case "message_end": {
 				const seq = live.nextSeq++;
 				// Remember the reasoning strength this reply was written with (the session's setting can change later).
@@ -1470,6 +1484,24 @@ export class SessionManager {
 			default:
 				pub(event.type, event);
 		}
+	}
+
+	/**
+	 * Moves the session's `activeDir` to the git worktree a finished tool call shows its agent working in (see
+	 * work-tree.ts), and tells the clients so the sidebar lists it there. Reading `.git` can fail on odd layouts: then
+	 * nothing changes.
+	 */
+	private followWorkTree(sessionId: string, tool: string, args: unknown): void {
+		const rec = this.store.get(sessionId);
+		if (!rec) return;
+		const current = rec.activeDir ?? null;
+		let next: string | null;
+		try {
+			next = nextActiveDir(rec.cwd, current, touchedDir(tool, args, rec.cwd, this.home), (dir) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir));
+		} catch { return; }
+		if (next === current) return;
+		const updated = this.store.setActiveDir(sessionId, next);
+		if (updated) this.bus.publish(sessionId, "session_updated", updated);
 	}
 
 	private forwardToExtensions(sessionId: string, event: AgentEvent): void {

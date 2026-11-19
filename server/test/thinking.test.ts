@@ -39,7 +39,7 @@ describe("thinking levels", () => {
 			db.close();
 			db = openDb(path);
 			const migrated = new SessionStore(db);
-			expect(migrated.get("legacy-off")).toEqual({ ...record, name: "미나", serviceTier: null }); // migrations name the active sessions that have none
+			expect(migrated.get("legacy-off")).toEqual({ ...record, name: "미나", serviceTier: null, activeDir: null }); // migrations name the active sessions that have none
 			expect(migrated.get("existing-high")?.thinkingLevel).toBe("high");
 			expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: MIGRATIONS.length });
 			db.close();
