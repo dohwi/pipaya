@@ -9,7 +9,7 @@ import { fingerprint, readListCache, readShape, toCache, writeListCache } from "
 import type { Server } from "./store-model";
 import type { TerminalInfo, TerminalSupport } from "./terminal";
 import type {
-	CompactionSettings, DefaultModelSelection, SystemModelSettings, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
+	CompactionSettings, CustomProvider, DefaultModelSelection, SystemModelSettings, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
 } from "./types";
 
 export type NetState = "idle" | "connecting" | "online" | "offline" | "unauthorized" | "incompatible";
@@ -89,6 +89,8 @@ export class ServerLink {
 	workdirInfo = $state<WorkdirInfo | null>(null);
 	toolsInfo = $state<ToolsInfo | null>(null);
 	serverDefault = $state<DefaultModelSelection | null>(null);
+	/** The connections the owner added (address, API format, key), from `/configuration`; empty on a server without it. */
+	customProviders = $state<CustomProvider[]>([]);
 	terminalSupport = $state<TerminalSupport | null>(null);
 	/** The compaction and system models, kept to flag the ones that stopped working (see settings-problems). */
 	compaction = $state<CompactionSettings | null>(null);
@@ -417,6 +419,7 @@ export class ServerLink {
 			this.providers = providers;
 			this.tools = tools.tools;
 			this.serverDefault = config?.effectiveDefaults ?? null;
+			this.customProviders = config?.providers ?? [];
 			this.workdirInfo = config?.workdir ?? null;
 			this.toolsInfo = config?.tools ?? null;
 			this.loaded = true;
@@ -474,6 +477,7 @@ export class ServerLink {
 			this.providers = providers;
 			this.models = models;
 			this.serverDefault = config?.effectiveDefaults ?? null;
+			if (config) this.customProviders = config.providers;
 			if (config?.workdir) this.workdirInfo = config.workdir;
 			if (config?.tools) this.toolsInfo = config.tools;
 			void this.refreshModelSettings();
