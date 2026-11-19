@@ -837,7 +837,7 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 4px; /* the app header's, between extension items and before the close button (the title keeps 12, below) */
 		/* the app header's box (44px + 1px hairline), so its line meets the sidebar brand row's */
 		box-sizing: content-box;
 		height: 44px;
@@ -847,6 +847,7 @@
 	.ttl {
 		min-width: 0;
 		flex: 1;
+		margin-right: 8px;
 		display: flex;
 		flex-direction: column;
 	}
@@ -863,8 +864,12 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	/* After extension items the close button joins them as the app header's "+" does: its 8px around the glyph is taken
+	   back to 4, so the last item's ink stands 2px (the slot's padding) + 4 + 4 = 10px from the "x", the header's
+	   2 + 4 + 4.5. Right after the title it keeps the 12px gap. */
 	.close {
 		flex: none;
+		margin-left: -4px;
 		display: inline-grid;
 		place-items: center;
 		width: 32px;
@@ -873,6 +878,9 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-dim);
 		font-size: 16px;
+	}
+	.ttl + .close {
+		margin-left: 0;
 	}
 	@media (hover: hover) {
 		.close:hover {
