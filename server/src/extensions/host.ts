@@ -427,7 +427,14 @@ export class ExtensionHost {
 			for (const n of names) if (!n.startsWith(".") && n !== "node_modules") fromPath(join(dir, n));
 		}
 		for (const p of this.opts.paths ?? []) fromPath(resolve(p));
-		return out;
+		// One extension per name: the same folder name in two places (installed into the data folder and also kept in
+		// ~/.agents/extensions) would load twice, run its hooks twice and list one name twice. The first place wins.
+		const names = new Set<string>();
+		return out.filter((e) => {
+			if (!names.has(e.name)) return names.add(e.name), true;
+			this.log(`extension ${e.name} is also at ${e.entry}; loading only the first one`);
+			return false;
+		});
 	}
 
 	async load(): Promise<ExtensionInfo[]> {

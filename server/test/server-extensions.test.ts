@@ -285,6 +285,24 @@ export default (pi) => { pi.on("extension_unload", () => appendFileSync(${JSON.s
 		expect(errs.every((e) => e.extension === "broken")).toBe(true);
 	});
 
+	test("an extension in two of the folders loads once, from the first folder", async () => {
+		const first = join(dir, "twice-a"), second = join(dir, "twice-b");
+		for (const [d, tag] of [[first, "a"], [second, "b"]] as const) {
+			mkdirSync(join(d, "twice"), { recursive: true });
+			writeFileSync(join(d, "twice", "index.js"), `export default (pi) => { pi.registerMethod("where", () => "${tag}"); };`);
+		}
+		const { ExtensionHost } = await import("../src/extensions/host.ts");
+		const logged: string[] = [];
+		const host = new ExtensionHost({ db: {} as any, bus: { publish() {}, subscribe: () => () => {} } as any, registry: { models: {} } as any, dataDir: dir, dirs: [first, second], log: (m: string) => logged.push(m) } as any);
+		const list = await host.load();
+		expect(list.filter((e) => e.name === "twice")).toHaveLength(1);
+		expect(await host.callMethod("twice", "where", null, null)).toMatchObject({ result: "a" });
+		expect(logged.some((m) => m.includes("twice") && m.includes("loading only the first one"))).toBe(true);
+		await host.shutdown();
+		rmSync(first, { recursive: true });
+		rmSync(second, { recursive: true });
+	});
+
 	test("method names are checked at registration and a method that never answers times out", async () => {
 		const exDir = join(dir, "method-exts");
 		mkdirSync(exDir, { recursive: true });
