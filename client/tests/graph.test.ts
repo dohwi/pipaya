@@ -89,6 +89,10 @@ describe("buildGraph", () => {
 		expect(r).toMatchObject({ kind: "subagent", count: 3, running: 1, asked: 1, free: false, live: true });
 		expect(r.models!.map((m) => [m.model, m.n])).toEqual([["p/new", 2], ["p/old", 1]]);
 		expect(g.cards.get("r:a/adhoc")!.free).toBe(true);
+		// a running role says who called it and on what model, and grows by the live line like a working chat
+		expect(r.calls).toEqual([{ sessionId: "s2", who: "@s2", model: "p/new", name: "new", at: 3 }]);
+		expect(r.h).toBe(CARD_H_LIVE);
+		expect(g.cards.get("r:a/adhoc")!.h).toBe(CARD_H);
 		const del = g.edges.filter((e) => e.kind === "delegate");
 		expect(del.map((e) => [e.from, e.to, e.weight, e.live]).sort()).toEqual([
 			["s:a/s1", "r:a/explore", 2, false],

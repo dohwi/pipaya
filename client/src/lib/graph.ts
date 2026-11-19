@@ -43,6 +43,17 @@ export interface GraphServer {
 
 export type CardKind = "server" | "provider" | "model" | "session" | "subagent";
 
+/** One call of a role still running: who made it and on what model (a running subagent card says it on its live line). */
+export interface RoleCall {
+	sessionId: string;
+	/** The caller as the app names it: `@name`, else its title. */
+	who: string;
+	/** `provider/model`, and what the app calls it. */
+	model: string;
+	name: string;
+	at: number;
+}
+
 /** A role's models, newest first: the model it ran on lately leads, the rest are "외 N". */
 export interface RoleModel {
 	/** `provider/model`, as the call recorded it. */
@@ -84,6 +95,8 @@ export interface Card {
 	queued?: number;
 	models?: RoleModel[];
 	running?: number;
+	/** A role's running calls, the newest first. */
+	calls?: RoleCall[];
 	/** Calls where the agent named the model itself. */
 	asked?: number;
 	/** No role file: a name the agent made up (role policy "any"). */
@@ -126,7 +139,7 @@ export interface Graph {
 	height: number;
 }
 
-/** Card sizes. Every card is two 20px lines in a 16px frame (72); a working chat adds its 40px activity line. */
+/** Card sizes. Every card is two 20px lines in a 16px frame (72); a working chat or a running role adds its 40px activity line. */
 export const CARD_W: Record<CardKind, number> = { server: 208, provider: 184, model: 232, session: 272, subagent: 248 };
 export const CARD_H = 72;
 /**
@@ -182,6 +195,7 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 		add({ id: vid, kind: "server", server: v.id, label: v.name, count: 0, parent: null, w: CARD_W.server, h: CARD_H, host: v.host, online: v.online });
 		const open = v.sessions.filter((s) => !s.closed);
 		const ids = new Set(open.map((s) => s.id));
+		const byId = new Map(open.map((s) => [s.id, s]));
 		for (const s of open) {
 			// provider and model cards are per server: one provider name on two servers is two connections
 			const pid = `p:${v.id}/${s.provider}`, mid = `m:${v.id}/${s.provider}/${s.model}`;
@@ -205,15 +219,19 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 			if (!cards.has(from)) continue; // a closed chat's calls are not on the map
 			// one card per role per server: role files and the delegate policy belong to a server
 			const rid = `r:${v.id}/${r.role}`;
-			const role = cards.get(rid) ?? add({ id: rid, kind: "subagent", server: v.id, label: r.role, count: 0, parent: null, w: CARD_W.subagent, h: CARD_H, models: [], running: 0, asked: 0, free: true });
+			const role = cards.get(rid) ?? add({ id: rid, kind: "subagent", server: v.id, label: r.role, count: 0, parent: null, w: CARD_W.subagent, h: CARD_H, models: [], running: 0, calls: [], asked: 0, free: true });
 			role.count++;
-			if (r.running) role.running!++;
+			const provider = r.model.includes("/") ? r.model.slice(0, r.model.indexOf("/")) : "";
+			if (r.running) {
+				role.running!++;
+				const s = byId.get(r.sessionId)!;
+				role.calls!.push({ sessionId: r.sessionId, who: s.name ? `@${s.name}` : s.title, model: r.model, name: nameOf(provider, modelName(r.model)), at: r.at });
+			}
 			if (r.asked) role.asked!++;
 			role.free = role.free! && r.free;
 			const m = role.models!.find((x) => x.model === r.model);
 			if (m) { m.n++; m.last = Math.max(m.last, r.at); }
 			else {
-				const provider = r.model.includes("/") ? r.model.slice(0, r.model.indexOf("/")) : "";
 				role.models!.push({ model: r.model, name: nameOf(provider, modelName(r.model)), brand: brandOf(provider, modelName(r.model)), n: 1, last: r.at });
 			}
 			const k = `${from}|${rid}`;
@@ -223,7 +241,12 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 			delegateEdges.set(k, e);
 		}
 	}
-	for (const c of cards.values()) if (c.kind === "subagent") c.models!.sort((a, b) => b.last - a.last);
+	for (const c of cards.values()) {
+		if (c.kind !== "subagent") continue;
+		c.models!.sort((a, b) => b.last - a.last);
+		c.calls!.sort((a, b) => b.at - a.at);
+		if (c.running) c.h = CARD_H_LIVE;
+	}
 	return layout(cards, servers, [...delegateEdges.values()], opts);
 }
 
@@ -296,8 +319,8 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 			r.y = Math.max(top + r.h / 2, ys.reduce((a, b) => a + b, 0) / ys.length);
 		}
 		mine.sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));
-		for (let k = 1; k < mine.length; k++) mine[k]!.y = Math.max(mine[k]!.y, mine[k - 1]!.y + CARD_H + ROW_GAP);
-		if (mine.length) cursor = Math.max(cursor, mine[mine.length - 1]!.y + CARD_H / 2 + ROW_GAP);
+		for (let k = 1; k < mine.length; k++) mine[k]!.y = Math.max(mine[k]!.y, mine[k - 1]!.y + mine[k - 1]!.h / 2 + mine[k]!.h / 2 + ROW_GAP);
+		if (mine.length) cursor = Math.max(cursor, mine[mine.length - 1]!.y + mine[mine.length - 1]!.h / 2 + ROW_GAP);
 		bands.push({ server: v.id, y0: top, y1: cursor - ROW_GAP, online: v.online });
 	});
 	for (const r of roles) r.col = maxCol + 1;

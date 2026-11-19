@@ -37,8 +37,16 @@ export interface RoleStats {
 	avgMs: number | null;
 	/** The chats that called it, the most recent caller first. */
 	callers: { sessionId: string; n: number; last: number }[];
-	/** Its calls, newest first, at most `limit`. */
+	/** Its calls running now, newest first (all of them: they are what the dialog leads with). */
+	active: DelegateRun[];
+	/** Its other calls, newest first, at most `limit`. */
 	recent: DelegateRun[];
+}
+
+/** A card's chats split the way the dialog lists them: the ones at work (or waiting on the user) first, then the rest. */
+export function splitLive(chats: Card[]): { live: Card[]; rest: Card[] } {
+	const live = chats.filter((c) => c.activity === "working" || c.activity === "asking");
+	return { live, rest: chats.filter((c) => !live.includes(c)) };
 }
 
 /** One role's calls on one server, counted the way its card counts them: only calls made from open chats. */
@@ -63,7 +71,8 @@ export function roleStats(runs: DelegateRun[], role: string, open: (sessionId: s
 		turns,
 		avgMs: finished ? ms / finished : null,
 		callers: [...callers.values()].sort((a, b) => b.last - a.last),
-		recent: [...mine].sort((a, b) => b.at - a.at).slice(0, limit),
+		active: mine.filter((r) => r.running).sort((a, b) => b.at - a.at),
+		recent: mine.filter((r) => !r.running).sort((a, b) => b.at - a.at).slice(0, limit),
 	};
 }
 

@@ -153,8 +153,8 @@
 		if (c.kind !== "subagent") return { parts: [], extra: 0 };
 		const m = c.models?.[0];
 		const more = c.models && c.models.length > 1 ? t("외 {n}", { n: c.models.length - 1 }) : "";
+		// a running call is told on the live line below (who called it, on what model), so the facts line keeps to the role
 		const parts = [
-			...(c.running ? [{ text: t("실행 중 {n}", { n: c.running }), bold: true }] : []),
 			...(m ? [{ text: m.name, mono: true }] : []), // `.mn` is always set in mono
 			...(more ? [n(more)] : []),
 			n(t("{n}회", { n: c.count })),
@@ -747,7 +747,6 @@
 						<span class="lead"><Icon name="bot" /></span>
 						<span class="nm fl mid" title={c.label} use:marquee={c.label}>{@render flow(c.label, true)}</span>
 						<span class="meta">
-							{#if c.running}<em class="run">{t("실행 중 {n}", { n: c.running })}</em><i>·</i>{/if}
 							{#if m}
 								<span class="model" title={c.models!.map((x) => `${x.name} ${t("{n}회", { n: x.n })}`).join(" · ")}>
 									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
@@ -759,13 +758,24 @@
 							<span>{t("{n}회", { n: c.count })}</span>
 							{#if c.free}<i>·</i><span title={t("역할 파일 없이 에이전트가 이름을 정한 서브에이전트입니다. 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다")}>{t("즉석")}</span>{/if}
 						</span>
+						{#if c.running && c.calls?.length}
+							<!-- the newest running call: the chat that called it (its handle in the working colour) and the model it runs on -->
+							{@const k = c.calls[0]!}
+							{@const kr = splitModelRef(k.model)}
+							<span class="doing" in:glowFade={{ delay: 120 }} title={c.calls.map((x) => `${x.who} · ${x.name}`).join("\n")}>
+								<Icon name="bolt" /><b class="by">{k.who}</b>
+								<span class="on"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, kr.provider, kr.id)} provider={kr.provider} model={kr.id} size={14} colored /></span>
+								<span class="what fl" use:marquee={k.name}>{@render flow(k.name)}</span>
+								{#if c.calls.length > 1}<span class="q" title={t("실행 중 {n}", { n: c.calls.length })}>{t("외 {n}", { n: c.calls.length - 1 })}</span>{/if}
+							</span>
+						{/if}
 					{:else}
 						{@const s = c.session!}
 						{@const tool = toolNow(c)}
 						{@const busy = c.activity === "working" || c.activity === "asking"}
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
-						<span class="nm fl" title={name} use:marquee={name}>{@render flow(name)}</span>
+						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
 						{#if !busy}<span class="when">{ago(s.updatedAt)}</span>{/if}
 						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
@@ -1240,9 +1250,6 @@
 	.meta .bad {
 		color: var(--danger);
 	}
-	.meta .run {
-		color: var(--info);
-	}
 	.meta .model {
 		flex: 0 1 auto; /* the model name gives way first */
 		display: inline-flex;
@@ -1278,6 +1285,19 @@
 		line-height: 16px;
 		color: var(--text-faint);
 		white-space: nowrap;
+	}
+	/* a chat's `@name` takes its badge's state colour, as the handle does in the sidebar, the tabs and the strip (Handle) */
+	.working .nm.who {
+		color: var(--info);
+	}
+	.asking .nm.who {
+		color: var(--warn);
+	}
+	.done .nm.who {
+		color: var(--ok);
+	}
+	.failed .nm.who {
+		color: var(--danger);
 	}
 	.done .when {
 		color: var(--ok); /* the time takes the logo's colour: no badge */
@@ -1326,6 +1346,17 @@
 		flex: none;
 		font-weight: 600;
 		color: var(--text-dim);
+	}
+	/* a running role's caller: a chat at work, so its handle reads in the working colour */
+	.doing b.by {
+		color: var(--info);
+	}
+	.doing .on {
+		flex: none;
+		display: inline-grid;
+		place-items: center;
+		width: 14px;
+		height: 14px;
 	}
 	.doing .what {
 		min-width: 0;

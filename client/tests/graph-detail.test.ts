@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildGraph, type DelegateRun, type GraphServer } from "../src/lib/graph";
-import { callState, roleStats, under } from "../src/lib/graph-detail";
+import { callState, roleStats, splitLive, under } from "../src/lib/graph-detail";
 import type { Session } from "../src/lib/types";
 
 const session = (id: string, over: Partial<Session> = {}): Session =>
@@ -39,13 +39,16 @@ describe("roleStats", () => {
 		expect(st.tokens).toBe(150);
 		expect(st.turns).toBe(3);
 		expect(st.avgMs).toBe(2000); // (1000 + 3000) / 2; the running call is left out
-		expect(st.recent.map((r) => r.at)).toEqual([30, 20, 10]);
+		// the running call leads on its own; the rest are the recent ones
+		expect(st.active.map((r) => r.at)).toEqual([30]);
+		expect(st.recent.map((r) => r.at)).toEqual([20, 10]);
 		expect(st.callers).toEqual([{ sessionId: "s2", n: 1, last: 30 }, { sessionId: "s1", n: 2, last: 20 }]);
 	});
 
-	test("keeps the newest `limit` calls and no average without a finished call", () => {
+	test("keeps the newest `limit` finished calls, every running one, and no average without a finished call", () => {
 		const runs = Array.from({ length: 5 }, (_, i) => run("s", "r", { at: i, doneAt: null, running: true }));
-		const st = roleStats(runs, "r", () => true, 2);
+		const st = roleStats([...runs, ...runs.map((r) => ({ ...r, callId: `${r.callId}-cut`, running: false }))], "r", () => true, 2);
+		expect(st.active.map((r) => r.at)).toEqual([4, 3, 2, 1, 0]);
 		expect(st.recent.map((r) => r.at)).toEqual([4, 3]);
 		expect(st.avgMs).toBeNull();
 	});
@@ -55,5 +58,15 @@ describe("roleStats", () => {
 		expect(callState(run("s", "r", { error: true }))).toBe("failed");
 		expect(callState(run("s", "r", { doneAt: null }))).toBe("cut");
 		expect(callState(run("s", "r"))).toBe("done");
+	});
+});
+
+describe("splitLive", () => {
+	test("puts the chats at work or waiting on the user first, in order, and keeps the rest", () => {
+		const state: Record<string, "working" | "asking" | "done" | "idle"> = { s1: "idle", s2: "working", s3: "done", s4: "asking" };
+		const g = buildGraph([{ ...server("a", ["s1", "s2", "s3", "s4"].map((id) => session(id))), activity: (id) => state[id]! }]);
+		const { live, rest } = splitLive(under(g, "v:a", "session"));
+		expect(live.map((c) => c.session!.id).sort()).toEqual(["s2", "s4"]);
+		expect(rest.map((c) => c.session!.id).sort()).toEqual(["s1", "s3"]);
 	});
 });

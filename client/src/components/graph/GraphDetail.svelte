@@ -8,9 +8,9 @@
 	import { agoText } from "../../lib/tab-overview";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { connectionState } from "../../lib/sidebar-model";
-	import type { Card, Graph } from "../../lib/graph";
+	import type { Card, DelegateRun, Graph } from "../../lib/graph";
 	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
-	import { callState, roleStats, settingsTarget, under, type CallState } from "../../lib/graph-detail";
+	import { callState, roleStats, settingsTarget, splitLive, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { activityOf } from "../../lib/activity";
 	import type { SubagentInfo } from "../../lib/types";
@@ -56,8 +56,19 @@
 
 	// ---- what each kind shows ----
 	const chats = $derived(card && card.kind !== "subagent" && card.kind !== "session" ? under(graph, card.id, "session") : []);
+	/** The chats at work lead in their own group, so what runs on this server, connection or model now reads first. */
+	const chatGroups = $derived(splitLive(chats));
 	const providers = $derived(card?.kind === "server" ? under(graph, card.id, "provider") : []);
 	const models = $derived(card?.kind === "provider" ? under(graph, card.id, "model") : []);
+	/** The roles that ran on this model, with how many of their calls did. */
+	const modelRoles = $derived.by(() => {
+		if (card?.kind !== "model") return [];
+		const ref = `${card.provider}/${card.label}`;
+		return [...graph.cards.values()].flatMap((c) => {
+			const m = c.kind === "subagent" && c.server === card.server ? c.models?.find((x) => x.model === ref) : undefined;
+			return m ? [{ c, n: m.n }] : [];
+		});
+	});
 	const roles = $derived(card?.kind === "server" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server) : []);
 
 	const STATE_TEXT = { online: () => t("연결됨"), offline: () => t("연결 안 됨"), unauthorized: () => t("토큰 거부됨"), incompatible: () => t("앱 업데이트 필요"), checking: () => t("확인 중") };
@@ -104,10 +115,13 @@
 	const def = $derived(role && role.key === roleKey ? role.def : null);
 
 	const CALL_TEXT: Record<CallState, () => string> = { running: () => t("실행 중"), failed: () => t("실패"), cut: () => t("중단됨"), done: () => t("완료") };
+	const chatOf = (server: string, sid: string) => app.links[server]?.sessionById.get(sid);
 	const chatName = (server: string, sid: string) => {
-		const s = app.links[server]?.sessionById.get(sid);
+		const s = chatOf(server, sid);
 		return s ? (s.name ? `@${s.name}` : sessionTitle(s.title)) : sid;
 	};
+	/** The model a role runs on when the call names none: its file's, else the calling chat's own. */
+	const roleModel = $derived(def ? (def.model ?? null) : null);
 
 	// ---- header ----
 	const title = $derived(card?.name ?? "");
@@ -148,9 +162,29 @@
 	<li>
 		<button class="row" onclick={() => onpeek(c.server, s.id)} title={t("빠른 보기")}>
 			<span class="mark"><AgentBadge id={s.id} server={c.server} state={c.activity} size={20} /></span>
-			<span class="nm">{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
+			<span class="nm {c.activity}" class:who={!!s.name}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 			{#if s.name}<span class="sub">{sessionTitle(s.title)}</span>{/if}
 			<span class="end">{ago(s.updatedAt)}</span>
+		</button>
+	</li>
+{/snippet}
+
+<!-- one delegate call: the chat that made it (its handle in its state colour), the model it ran on with its mark, how it went -->
+{#snippet callRow(server: string, r: DelegateRun)}
+	{@const st = callState(r)}
+	{@const act = link ? activityOf(link.data, r.sessionId) : "idle"}
+	{@const ref = splitModelRef(r.model)}
+	{@const mn = refName(r.model)}
+	<li>
+		<button class="row" onclick={() => onpeek(server, r.sessionId)} title={t("빠른 보기")}>
+			<span class="mark"><AgentBadge id={r.sessionId} {server} state={act} size={20} /></span>
+			<span class="nm {act}" class:who={!!chatOf(server, r.sessionId)?.name}>{chatName(server, r.sessionId)}</span>
+			<span class="sub model" title={r.model}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={mn === ref.id}>{mn}</span></span>
+			<span class="end">
+				<span class="st {st}">{CALL_TEXT[st]()}</span>
+				{#if r.doneAt !== null && !r.running}<i>·</i><span class="mono">{duration(Math.max(0, r.doneAt - r.at))}</span>{/if}
+				<i>·</i><span>{ago(r.at)}</span>
+			</span>
 		</button>
 	</li>
 {/snippet}
@@ -239,8 +273,13 @@
 						<dd><span class="mono">{def.tools.join(", ") || t("없음")}</span></dd>
 						<dt>{t("최대 턴")}</dt>
 						<dd><span class="mono">{def.maxTurns}</span></dd>
+						<dt>{t("기본 모델")}</dt>
+						<dd>
+							{#if roleModel}{@const ref = splitModelRef(roleModel)}<span class="model"><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={refName(roleModel) === ref.id}>{refName(roleModel)}</span></span>
+							{:else}{t("호출한 대화의 모델")}{/if}
+						</dd>
 					{/if}
-					<dt>{t("모델")}</dt>
+					<dt>{t("실행한 모델")}</dt>
 					<dd>
 						{#each card.models ?? [] as m (m.model)}
 							{@const ref = splitModelRef(m.model)}
@@ -269,35 +308,35 @@
 					<ul class="list">{#each models as c (c.id)}{@render cardRow(c, t("대화 {n}개", { n: c.count }))}{/each}</ul>
 				</ListGroup>
 			{/if}
+			{#if modelRoles.length}
+				<ListGroup title={t("서브에이전트")} count={String(modelRoles.length)}>
+					<ul class="list">{#each modelRoles as x (x.c.id)}{@render cardRow(x.c, t("{n}회", { n: x.n }))}{/each}</ul>
+				</ListGroup>
+			{/if}
 			{#if roles.length}
 				<ListGroup title={t("서브에이전트")} count={String(roles.length)}>
 					<ul class="list">{#each roles as c (c.id)}{@render cardRow(c, t("{n}회", { n: c.count }))}{/each}</ul>
 				</ListGroup>
 			{/if}
-			{#if chats.length}
-				<ListGroup title={t("대화")} count={String(chats.length)}>
-					<ul class="list">{#each chats as c (c.id)}{@render chatRow(c)}{/each}</ul>
+			{#if chatGroups.live.length}
+				<ListGroup title={t("작업 중")} count={String(chatGroups.live.length)}>
+					<ul class="list">{#each chatGroups.live as c (c.id)}{@render chatRow(c)}{/each}</ul>
+				</ListGroup>
+			{/if}
+			{#if chatGroups.rest.length}
+				<ListGroup title={chatGroups.live.length ? t("최근") : t("대화")} count={String(chatGroups.rest.length)}>
+					<ul class="list">{#each chatGroups.rest as c (c.id)}{@render chatRow(c)}{/each}</ul>
+				</ListGroup>
+			{/if}
+			{#if stats?.active.length}
+				<ListGroup title={t("실행 중")} count={String(stats.active.length)}>
+					<ul class="list">{#each stats.active as r (r.callId)}{@render callRow(card.server, r)}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if stats?.recent.length}
-				<ListGroup title={t("최근 호출")} count={stats.recent.length < stats.calls ? `${stats.recent.length}/${stats.calls}` : String(stats.calls)}>
-					<ul class="list">
-						{#each stats.recent as r (r.callId)}
-							{@const st = callState(r)}
-							<li>
-								<button class="row" onclick={() => onpeek(card.server, r.sessionId)} title={t("빠른 보기")}>
-									<span class="mark"><AgentBadge id={r.sessionId} server={card.server} state={link ? activityOf(link.data, r.sessionId) : "idle"} size={20} /></span>
-									<span class="nm">{chatName(card.server, r.sessionId)}</span>
-									<span class="sub" class:mono={refName(r.model) === splitModelRef(r.model).id}>{refName(r.model)}</span>
-									<span class="end">
-										<span class="st {st}">{CALL_TEXT[st]()}</span>
-										{#if r.doneAt !== null && !r.running}<i>·</i><span class="mono">{duration(Math.max(0, r.doneAt - r.at))}</span>{/if}
-										<i>·</i><span>{ago(r.at)}</span>
-									</span>
-								</button>
-							</li>
-						{/each}
-					</ul>
+				{@const done = stats.calls - stats.active.length}
+				<ListGroup title={t("최근 호출")} count={stats.recent.length < done ? `${stats.recent.length}/${done}` : String(done)}>
+					<ul class="list">{#each stats.recent as r (r.callId)}{@render callRow(card.server, r)}{/each}</ul>
 				</ListGroup>
 			{/if}
 		</DialogBody>
@@ -430,6 +469,29 @@
 	}
 	.row .nm.mono {
 		font-weight: 500;
+	}
+	/* a chat's `@name` in its badge's state colour, as the Handle shows it everywhere else */
+	.row .nm.who.working {
+		color: var(--info);
+	}
+	.row .nm.who.asking {
+		color: var(--warn);
+	}
+	.row .nm.who.done {
+		color: var(--ok);
+	}
+	.row .nm.who.failed {
+		color: var(--danger);
+	}
+	.row .sub.model {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.row .sub.model .mn {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.row .sub {
 		flex: 1;
