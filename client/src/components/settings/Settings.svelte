@@ -61,8 +61,9 @@
 	 * The server whose sections are shown. Picking one here only changes what this window shows: it never switches the
 	 * open server, and nothing in here touches the open chat.
 	 */
+	// opened for a given server (the graph view's "설정 열기"): its sections; otherwise the open server's
 	// svelte-ignore state_referenced_locally
-	let sid = $state<string | null>(app.serverId);
+	let sid = $state<string | null>(app.settingsServer && app.settingsServer !== "new" ? app.settingsServer : app.serverId);
 	function showServer(id: string) {
 		sid = id; // the section stays: a common one keeps showing, a server one now shows for this server
 	}

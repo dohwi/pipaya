@@ -15,13 +15,15 @@
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
 	import GraphQuick from "./GraphQuick.svelte";
+	import GraphDetail from "./GraphDetail.svelte";
 	import { released } from "../../lib/pointer";
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
 	 * between them moving while work flows. Drag the background to pan, a mouse wheel to zoom (a trackpad scrolls with
 	 * two fingers and zooms with a pinch), a card to move it. One click on a chat opens it in a large dialog
-	 * (read it, its tool calls, write to it) at once; Ctrl/⌘ + click goes to the chat itself.
+	 * (read it, its tool calls, write to it) at once; Ctrl/⌘ + click goes to the chat itself. A click on a server,
+	 * provider, model or subagent opens its details (`GraphDetail`).
 	 */
 
 	// ---- data: what every link keeps live, plus each server's delegate calls ----
@@ -364,6 +366,13 @@
 	/** The chat the quick look shows (the store keeps it: it opens that chat on its server under the dialog). */
 	const quick = $derived(app.graphPeek);
 	const peek = (server: string, session: string) => void app.peekChat(server, session);
+	/** The server, provider, model or subagent card whose details are open. */
+	let detail = $state<string | null>(null);
+	/** A click (or Enter) on a card: a chat opens its quick look, any other card its details. */
+	function openCard(c: Card) {
+		if (c.kind === "session") peek(c.server, c.session!.id);
+		else detail = c.id;
+	}
 	/** card: the one being moved (mouse or pen only); tapped: the one under the pointer, which a click selects */
 	let drag: { x: number; y: number; vx: number; vy: number; card: string | null; tapped: string | null; cx: number; cy: number; moved: boolean } | null = null;
 	let dragging = $state<string | null>(null);
@@ -457,10 +466,10 @@
 		if (!d || d.moved) return;
 		const c = d.tapped ? graph.cards.get(d.tapped) : undefined;
 		selected = c?.id ?? null;
-		if (c?.kind !== "session") return;
-		// a click opens the chat's dialog at once (no wait for a second click); Ctrl/⌘ + click goes to the chat
-		if (goKey(e)) app.openIn(c.server, { session: c.session!.id });
-		else peek(c.server, c.session!.id);
+		if (!c) return;
+		// a click opens the chat's dialog (or the card's details) at once, no wait for a second click; Ctrl/⌘ + click goes to the chat
+		if (c.kind === "session" && goKey(e)) app.openIn(c.server, { session: c.session!.id });
+		else openCard(c);
 	}
 	function arrange() {
 		pins = {};
@@ -469,14 +478,14 @@
 	function key(e: KeyboardEvent) {
 		if (e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, textarea, button")) return;
 		const c = selected ? graph.cards.get(selected) : undefined;
-		if (quick) return; // the dialog has the keys
+		if (quick || detail) return; // the dialog has the keys
 		if (e.key === "Escape" && selected) {
 			e.preventDefault();
 			selected = null;
-		} else if (e.key === "Enter" && c?.kind === "session") {
+		} else if (e.key === "Enter" && c) {
 			e.preventDefault();
-			if (e.shiftKey) app.openIn(c.server, { session: c.session!.id });
-			else peek(c.server, c.session!.id);
+			if (c.kind === "session" && e.shiftKey) app.openIn(c.server, { session: c.session!.id });
+			else openCard(c);
 		} else if (e.key === "f") refit();
 		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
 		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
@@ -520,11 +529,12 @@
 	});
 	/** On a chat card: what a click does, and the modifier that goes to the chat instead. */
 	const openHint = t("클릭: 빠른 보기 · {key}+클릭: 대화로 이동", { key: isMac ? "⌘" : "Ctrl" });
+	const detailHint = t("클릭: 자세히 보기");
 	const keyHint = $derived(app.prefs.bindings.openGraph ? ` (${formatCombo(app.prefs.bindings.openGraph)})` : "");
 </script>
 
-<!-- A region the keyboard can reach: F fits, +/- zoom, Enter opens the selected chat (Shift+Enter: the chat itself).
-     A click on a chat opens its dialog; Ctrl/⌘ + click goes to the chat. -->
+<!-- A region the keyboard can reach: F fits, +/- zoom, Enter opens the selected card (a chat's quick look, Shift+Enter
+     the chat itself; any other card its details). A click on a chat opens its dialog; Ctrl/⌘ + click goes to the chat. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <section class="graph" aria-label={t("그래프 뷰")} tabindex="0" onkeydown={key}>
 	<header class="head">
@@ -620,7 +630,7 @@
 					class:ghost
 					class:arriving={u < 1}
 					data-card={ghost ? undefined : c.id}
-					title={c.kind === "session" && !ghost ? openHint : undefined}
+					title={ghost ? undefined : c.kind === "session" ? openHint : detailHint}
 					style:--in={u}
 					style:width="{c.w}px"
 					style:height="{p.h}px"
@@ -702,6 +712,15 @@
 	</div>
 </section>
 
+{#if detail && !quick}
+	<GraphDetail
+		{graph}
+		id={detail}
+		onpick={(id) => { detail = id; selected = id; }}
+		onpeek={(server, session) => { detail = null; peek(server, session); }}
+		onclose={() => (detail = null)}
+	/>
+{/if}
 {#if quick}
 	{#key `${quick.server}/${quick.session}`}<GraphQuick server={quick.server} session={quick.session} onclose={() => app.closePeek()} />{/key}
 {/if}
